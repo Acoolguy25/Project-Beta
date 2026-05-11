@@ -19,7 +19,7 @@ namespace RyanAssets.Characters
         {
             Character = NewCharacter;
             OnCharacterAdded.Invoke(NewCharacter);
-            CharacterControl.gameObject.SetActive(NewCharacter != null);
+            CharacterControl?.gameObject?.SetActive(NewCharacter != null);
         }
     }
 }
