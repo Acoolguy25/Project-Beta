@@ -15,6 +15,10 @@ namespace RyanAssets.Characters
             Character = null;
             OnCharacterAdded = new();
         }
+        private void Start()
+        {
+            DontDestroyOnLoad(gameObject);
+        }
         public void SetCharacter(Transform NewCharacter)
         {
             Character = NewCharacter;
