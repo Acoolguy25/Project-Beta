@@ -82,5 +82,8 @@ namespace RyanAssets.Characters
             }
             SwitchCamera(activeIndex);
         }
+        private void OnDestroy() {
+            Instance = null;
+        }
     }
 }

@@ -60,14 +60,20 @@
         "*.asset": "yaml",
         "*.meta": "yaml",
         "*.prefab": "yaml",
-        "*.unity": "yaml",
+        "*.unity": "yaml"
     },
     "explorer.fileNesting.enabled": true,
     "explorer.fileNesting.patterns": {
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Project Beta.slnx",
+    "dotnet.defaultSolution": "Project-Beta.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false,
-    "dotnet.preferCSharpExtension": true
+    "dotnet.preferCSharpExtension": true,
+    "dotnet.server.useOmnisharp": true,
+    "csharp.format.enable": true,
+    "omnisharp.enableEditorConfigSupport": true,
+    "[csharp]": {
+        "editor.defaultFormatter": "ms-dotnettools.csharp"
+    }
 }
