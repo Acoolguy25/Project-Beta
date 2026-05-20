@@ -1,10 +1,13 @@
 ﻿<Solution>
   <Project Path="FishNet.Runtime.csproj" />
-  <Project Path="FishNet.Codegen.Cecil.csproj" />
   <Project Path="SynapseSocket.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="FishNet.Codegen.Cecil.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
+  <Project Path="RyanAssets.Characters.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="FishNet.Demos.csproj" />
+  <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="URPWizard.csproj" />
+  <Project Path="RyanAssets.Core.csproj" />
 </Solution>

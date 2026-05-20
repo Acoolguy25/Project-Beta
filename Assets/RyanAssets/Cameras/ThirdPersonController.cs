@@ -3,7 +3,7 @@ using System.Collections;
 using Unity.Cinemachine;
 using UnityEngine.InputSystem;
 
-namespace RyanAssets.Characters
+namespace RyanAssets.Cameras
 {
     public class ThirdPersonController : MonoBehaviour
     {

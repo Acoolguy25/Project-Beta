@@ -99,7 +99,7 @@ namespace RyanAssets.Characters
 
             // Rotate player to face movement direction
             if (_input.move != Vector2.zero) {
-                float CamEulerAngleY = CameraController.Instance.activeCamera.transform.eulerAngles.y;
+                float CamEulerAngleY = Camera.main.transform.eulerAngles.y;
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg + CamEulerAngleY;
                 float rotation = Mathf.SmoothDampAngle(LocalPlayer.Character.transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, RotationSmoothTime);
                 LocalPlayer.Character.transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);

@@ -1,0 +1,19 @@
+{
+    "name": "RyanAssets.Cameras",
+    "rootNamespace": "RyanAssets.Cameras",
+    "references": [
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:4307f53044263cf4b835bd812fc161a4",
+        "GUID:75469ad4d38634e559750d17036d5f7c",
+        "GUID:d81c570acb0546e47865a9bb58cc7645"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

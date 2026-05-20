@@ -1,0 +1,18 @@
+{
+    "name": "RyanAssets.Characters",
+    "rootNamespace": "RyanAssets.Characters",
+    "references": [
+        "Unity.InputSystem",
+        "FishNet.Runtime",
+        "RyanAssets.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

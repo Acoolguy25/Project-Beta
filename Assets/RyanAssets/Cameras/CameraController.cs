@@ -1,11 +1,12 @@
 using UnityEngine;
 using UnityEngine.Assertions;
-using Unity.Cinemachine;
+using RyanAssets.Characters;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using Unity.Cinemachine;
 
-namespace RyanAssets.Characters
+namespace RyanAssets.Cameras
 {
     public enum CameraType {
         OrbitCamera = 0,

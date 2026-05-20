@@ -1,5 +1,6 @@
 using UnityEngine;
 using FishNet.Object;
+using RyanAssets.Core;
 
 namespace RyanAssets.Characters
 {

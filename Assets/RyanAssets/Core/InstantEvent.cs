@@ -1,6 +1,6 @@
 using System;
 
-namespace RyanAssets
+namespace RyanAssets.Core
 {
     public sealed class InstantEvent<T>
     {

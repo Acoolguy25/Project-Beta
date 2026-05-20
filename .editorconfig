@@ -5,3 +5,8 @@ csharp_new_line_before_open_brace = none
 csharp_new_line_before_else = false
 csharp_new_line_before_catch = false
 csharp_new_line_before_finally = false
+
+dotnet_style_namespace_match_folder = true:suggestion
+dotnet_diagnostic.IDE0130.severity = warning
+dotnet_code_quality.CA1724.api_surface = private
+dotnet_style_namespace_match_folder_required_prefix = RyanAssets
