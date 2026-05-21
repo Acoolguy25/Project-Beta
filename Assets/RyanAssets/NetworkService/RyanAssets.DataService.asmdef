@@ -1,0 +1,16 @@
+{
+    "name": "RyanAssets.NetworkSettings",
+    "rootNamespace": "RyanAssets.NetworkSettings",
+    "references": [
+        ""
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

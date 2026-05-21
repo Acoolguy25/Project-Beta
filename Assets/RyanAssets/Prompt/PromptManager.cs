@@ -6,17 +6,22 @@ using Unity.VisualScripting;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
+using System.ComponentModel;
 
 namespace RyanAssets.Prompt {
     public enum PromptButton: sbyte {
         Unknown = -1,
         Ok = 0,
         Yes = 1,
-        Cancel = 2,
-        No = 3
+        Retry = 2,
+        Cancel = 3,
+        No = 4
     };
     public enum PromptId{
-        TestId
+        Protected,
+        Error,
+        NetworkLoginAwait,
+        LoginResponse
     }
     public struct PromptData {
         public string title, description;
@@ -32,7 +37,10 @@ namespace RyanAssets.Prompt {
         // Button Presets
         public static readonly PromptButton[] ButtonPreset_YesNo = {PromptButton.Yes, PromptButton.No};
         public static readonly PromptButton[] ButtonPreset_OkCancel = {PromptButton.Ok, PromptButton.Cancel};
+        public static readonly PromptButton[] ButtonPreset_RetryCancel = {PromptButton.Retry, PromptButton.Cancel};
         public static readonly PromptButton[] ButtonPreset_OkOnly = {PromptButton.Ok};
+        public static readonly PromptButton[] ButtonPreset_RetryOnly = {PromptButton.Retry};
+        public static readonly PromptButton[] ButtonPreset_None = {};
 
         List<PromptData> PromptList;
         // [SerializeField]
@@ -60,6 +68,7 @@ namespace RyanAssets.Prompt {
                         btn.anchorMax = new Vector2(((float) activeCnt + 1) / TopPrompt.buttons.Count(), 1);
                         activeCnt++;
                     }
+                    btn.gameObject.SetActive(visible);
                 }
             }
         }
@@ -88,12 +97,13 @@ namespace RyanAssets.Prompt {
         }
         public Task<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
             var promptResponse = new TaskCompletionSource<PromptButton>();
-            PromptData newPrompt = new();
-            newPrompt.title = title;
-            newPrompt.description = description;
-            newPrompt.buttons = buttons;
-            newPrompt.promptId = promptId;
-            newPrompt.response = promptResponse;
+            PromptData newPrompt = new() {
+                title = title,
+                description = description,
+                buttons = buttons,
+                promptId = promptId,
+                response = promptResponse
+            };
             PromptList.Add(newPrompt);
             if (!PromptInProgress)
                 UpdateRenderer();
@@ -105,6 +115,18 @@ namespace RyanAssets.Prompt {
         }
         void Start(){
             UpdateRenderer(0f);
+        }
+
+
+        // Useless helper functions
+        public static void PromptError(string title, System.Exception e){
+            Instance.PromptLocalUser(title + " Error", e.ToString(), PromptId.Error, ButtonPreset_OkOnly);
+        }
+        public static void PromptWait(string title, string description, PromptId promptId){
+            Instance.PromptLocalUser(title, description, promptId, ButtonPreset_None);
+        }
+        public static void PromptDelete(PromptId promptId){
+            Instance.CompleteAction(promptId, PromptButton.Unknown);
         }
     }
 }

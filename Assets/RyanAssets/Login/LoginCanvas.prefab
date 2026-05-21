@@ -968,6 +968,7 @@ GameObject:
   - component: {fileID: 5861247541980084448}
   - component: {fileID: 5429627040393280688}
   - component: {fileID: 2014124812158855259}
+  - component: {fileID: 822310345266449548}
   m_Layer: 5
   m_Name: LoginCanvas
   m_TagString: Untagged
@@ -1098,6 +1099,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 05ac90058c321f840948bc9d13fcdc99, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LoginAuthenticator
+--- !u!114 &822310345266449548
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4855746894705542107}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 825a292fe6bb3db49a6a0122ff2960ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Login::RyanAssets.Login.LoginManager
+  loginScreen: {fileID: 2353207249353527151}
 --- !u!1 &5262831474664032584
 GameObject:
   m_ObjectHideFlags: 0

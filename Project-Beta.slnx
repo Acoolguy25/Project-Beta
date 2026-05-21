@@ -13,4 +13,5 @@
   <Project Path="RyanAssets.Prompt.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
+  <Project Path="RyanAssets.NetworkSettings.csproj" />
 </Solution>
