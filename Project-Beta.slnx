@@ -5,6 +5,7 @@
   <Project Path="FishNet.Codegen.Cecil.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="RyanAssets.Characters.csproj" />
+  <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="RyanAssets.Login.csproj" />

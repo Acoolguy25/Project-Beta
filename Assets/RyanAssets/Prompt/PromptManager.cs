@@ -21,7 +21,11 @@ namespace RyanAssets.Prompt {
         Protected,
         Error,
         NetworkLoginAwait,
-        LoginResponse
+        LoginResponse,
+        UsernameCheckAwait,
+        UsernameChangeConfirm,
+        UsernameChangeAwait,
+        UsernameResponse
     }
     public struct PromptData {
         public string title, description;
@@ -120,6 +124,9 @@ namespace RyanAssets.Prompt {
 
         // Useless helper functions
         public static void PromptError(string title, System.Exception e){
+            Instance.PromptLocalUser(title + " Error", e.ToString(), PromptId.Error, ButtonPreset_OkOnly);
+        }
+        public static void PromptError(string title, string e){
             Instance.PromptLocalUser(title + " Error", e.ToString(), PromptId.Error, ButtonPreset_OkOnly);
         }
         public static void PromptWait(string title, string description, PromptId promptId){

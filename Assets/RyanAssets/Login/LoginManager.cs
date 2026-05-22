@@ -5,6 +5,9 @@ using UnityEngine;
 using System;
 using System.Net.Http;
 using Newtonsoft.Json.Linq;
+using System.Threading.Tasks;
+using RyanAssets.DataService;
+using UnityEngine.UI;
 
 namespace RyanAssets.Login {
     public class LoginManager : MonoBehaviour {
@@ -14,25 +17,31 @@ namespace RyanAssets.Login {
         }
         [SerializeField]
         LoginScreen loginScreen;
+        [SerializeField]
+        InputField usernameInputField;
+        async Task<(string, JObject)> LoadPlayerStats(){
+            return await ServerNetwork.PostRequest("/api/players/v1/me");
+        }
         async void SignedIn(){
-            ServerNetwork.SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
             loginScreen.RefreshScreen();
-            while (true){
-                PromptManager.PromptWait("Loading", "Connecting To Server", PromptId.NetworkLoginAwait);
-                (string errMsg, JObject res2) = await ServerNetwork.PostRequest("/api/players/v1/me");
-                PromptManager.PromptDelete(PromptId.NetworkLoginAwait);
-                if (errMsg != null){
-                    await PromptManager.Instance.PromptLocalUser("Login Failed", errMsg, PromptId.LoginResponse, PromptManager.ButtonPreset_RetryOnly);
-                }
-                else{
-                    // TODO: Do server manipulation here
-                    Debug.Log(res2);
-                    break;
-                }
-            }
+            // while (true){
+            //     PromptManager.PromptWait("Loading", "Connecting To Server", PromptId.NetworkLoginAwait);
+            //     PromptManager.PromptDelete(PromptId.NetworkLoginAwait);
+            (string res, JObject json) = await ServerNetwork.RequestAsync(LoadPlayerStats, "Login", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse);
+            //     if (errMsg != null){
+            //         await PromptManager.Instance.PromptLocalUser("Login Failed", errMsg, PromptId.LoginResponse, PromptManager.ButtonPreset_RetryOnly);
+            //     }
+            //     else{
+            //         Debug.Log(res2);
+            //         break;
+            //     }
+            // }
+            // TODO: Load player stats here
+            json["preferences"] = ServerNetwork.ParseJSON((string) json["preferences"]);
+            LocalPlayerData.PlayerInit(json);
+            usernameInputField.text = (string) json["username"];
         }
         void SignedOut(){
-            ServerNetwork.SetAuthorizationToken(null);
             loginScreen.RefreshScreen();
         }
         void Start(){
