@@ -7,7 +7,8 @@
         "GUID:9f589beecac4b0647ad2197f9cb3d505",
         "GUID:c9373f4d310a58847b1cf74cdb65d007",
         "GUID:9bc24441b1edc054a980e2afec52bdcc",
-        "GUID:fe264023cf80b5c4d970ee18f18982a1"
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:d62649f20bc2ba349a434c5eba6f7556"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -15,7 +16,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "!SERVER_BUILD"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

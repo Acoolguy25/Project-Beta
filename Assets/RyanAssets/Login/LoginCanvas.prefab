@@ -971,6 +971,7 @@ GameObject:
   - component: {fileID: 2014124812158855259}
   - component: {fileID: 822310345266449548}
   - component: {fileID: 3990969582851006258}
+  - component: {fileID: 3095861783328073489}
   m_Layer: 5
   m_Name: LoginCanvas
   m_TagString: Untagged
@@ -1113,8 +1114,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 825a292fe6bb3db49a6a0122ff2960ba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Login::RyanAssets.Login.LoginManager
-  loginScreen: {fileID: 2353207249353527151}
-  usernameInputField: {fileID: 0}
+  loginScreen: {fileID: 3095861783328073489}
+  usernameInputField: {fileID: 9100000000000000024}
 --- !u!114 &3990969582851006258
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1128,6 +1129,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Login::RyanAssets.Login.LoginModifyUsername
   usernameInputField: {fileID: 9100000000000000024}
+--- !u!114 &3095861783328073489
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4855746894705542107}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2a069afa7503844dadc13efdca44bc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LoginScreen
+  signin: {fileID: 2354734513870670883}
+  logout: {fileID: 1174502420052893829}
+  continueCanvas: {fileID: 0}
+  AnimationTime: 0
 --- !u!1 &5262831474664032584
 GameObject:
   m_ObjectHideFlags: 0
@@ -1249,9 +1266,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 2014124812158855259}
-        m_TargetAssemblyTypeName: LoginAuthenticator, Assembly-CSharp
-        m_MethodName: UnityLogout
+      - m_Target: {fileID: 3095861783328073489}
+        m_TargetAssemblyTypeName: RyanAssets.Login.LoginScreen, RyanAssets.Login
+        m_MethodName: Continue_ButtonPressed
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1714,7 +1731,6 @@ GameObject:
   - component: {fileID: 3962116517433604296}
   - component: {fileID: 7574981889865389697}
   - component: {fileID: 4703697852526318750}
-  - component: {fileID: 2353207249353527151}
   m_Layer: 5
   m_Name: AuthPanel
   m_TagString: Untagged
@@ -1781,20 +1797,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &2353207249353527151
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8731791526292995299}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c2a069afa7503844dadc13efdca44bc5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LoginScreen
-  signin: {fileID: 2354734513870670883}
-  logout: {fileID: 1174502420052893829}
 --- !u!1 &9089337067491006666
 GameObject:
   m_ObjectHideFlags: 0

@@ -78,8 +78,8 @@ namespace RyanAssets.Prompt {
         }
         public void CompleteAction(int idx, PromptButton resp){
             PromptData top_prompt = PromptList[idx];
-            Debug.Assert(top_prompt.response.TrySetResult(resp), $"Failed to set prompt result for: ${top_prompt.title}");
             PromptList.RemoveAt(idx);
+            Debug.Assert(top_prompt.response.TrySetResult(resp), $"Failed to set prompt result for: ${top_prompt.title}");
             if (idx == 0) // active index
                 UpdateRenderer();
         }
@@ -94,10 +94,12 @@ namespace RyanAssets.Prompt {
             return 0;
         }
         public void PromptButtonPressed(PromptButton btn){
-            CompleteAction(0, btn);
+            if (PromptInProgress)
+                CompleteAction(0, btn);
         }
         public void PromptButtonPressed(int btn){
-            CompleteAction(0, (PromptButton)btn);
+            if (PromptInProgress)
+                CompleteAction(0, (PromptButton)btn);
         }
         public Task<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
             var promptResponse = new TaskCompletionSource<PromptButton>();
@@ -131,6 +133,9 @@ namespace RyanAssets.Prompt {
         }
         public static void PromptWait(string title, string description, PromptId promptId){
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_None);
+        }
+        public static void PromptOk(string title, string description, PromptId promptId = PromptId.Protected){
+            Instance.PromptLocalUser(title, description, promptId, ButtonPreset_OkOnly);
         }
         public static void PromptDelete(PromptId promptId){
             Instance.CompleteAction(promptId, PromptButton.Unknown);

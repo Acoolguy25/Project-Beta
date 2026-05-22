@@ -1,6 +1,6 @@
 {
-    "name": "RyanAssets.UI",
-    "rootNamespace": "RyanAssets.UI",
+    "name": "Universes",
+    "rootNamespace": "Universes",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -8,9 +8,7 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [
-        "!SERVER_BUILD"
-    ],
+    "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false
 }

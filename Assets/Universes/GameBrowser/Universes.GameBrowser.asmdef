@@ -1,0 +1,18 @@
+{
+    "name": "Universes.GameBrowser",
+    "rootNamespace": "Universes.GameBrowser",
+    "references": [
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:dd31d11d621dbbc42a59f1e9db01cddf",
+        "GUID:c9373f4d310a58847b1cf74cdb65d007"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

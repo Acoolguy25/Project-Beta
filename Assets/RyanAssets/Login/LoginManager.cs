@@ -16,7 +16,7 @@ namespace RyanAssets.Login {
             Instance = this;
         }
         [SerializeField]
-        LoginScreen loginScreen;
+        public LoginScreen loginScreen;
         [SerializeField]
         InputField usernameInputField;
         async Task<(string, JObject)> LoadPlayerStats(){
@@ -24,22 +24,10 @@ namespace RyanAssets.Login {
         }
         async void SignedIn(){
             loginScreen.RefreshScreen();
-            // while (true){
-            //     PromptManager.PromptWait("Loading", "Connecting To Server", PromptId.NetworkLoginAwait);
-            //     PromptManager.PromptDelete(PromptId.NetworkLoginAwait);
             (string res, JObject json) = await ServerNetwork.RequestAsync(LoadPlayerStats, "Login", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse);
-            //     if (errMsg != null){
-            //         await PromptManager.Instance.PromptLocalUser("Login Failed", errMsg, PromptId.LoginResponse, PromptManager.ButtonPreset_RetryOnly);
-            //     }
-            //     else{
-            //         Debug.Log(res2);
-            //         break;
-            //     }
-            // }
-            // TODO: Load player stats here
-            json["preferences"] = ServerNetwork.ParseJSON((string) json["preferences"]);
+            json["preferences"] = ServerNetwork.ParseJSON(json["preferences"].ToString());
             LocalPlayerData.PlayerInit(json);
-            usernameInputField.text = (string) json["username"];
+            usernameInputField.text = json["username"].ToString();
         }
         void SignedOut(){
             loginScreen.RefreshScreen();

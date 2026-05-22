@@ -8,11 +8,13 @@
   <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="FishNet.Demos.csproj" />
+  <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
   <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="URPWizard.csproj" />
+  <Project Path="Universes.csproj" />
   <Project Path="RyanAssets.Prompt.csproj" />
-  <Project Path="RyanAssets.Core.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
+  <Project Path="RyanAssets.Core.csproj" />
   <Project Path="RyanAssets.NetworkSettings.csproj" />
 </Solution>

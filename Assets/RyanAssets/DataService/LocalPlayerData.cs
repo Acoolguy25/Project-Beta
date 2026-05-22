@@ -4,11 +4,13 @@ using RyanAssets.NetworkService;
 using RyanAssets.Prompt;
 using PlasticPipe.PlasticProtocol.Messages;
 using System.Threading.Tasks;
+using System;
 
 namespace RyanAssets.DataService {
     public static class LocalPlayerData {        
         public static PlayerData localData;
         public static PlayerSettings localSettings;
+        public static Action<string> username_changed_event;
         public static void PlayerInit(JObject json){
             localData.username = (string) json["username"];
             localData.xp       = (ulong)  json["xp"];
@@ -16,6 +18,7 @@ namespace RyanAssets.DataService {
             localSettings      = (json.TryGetValue("preferences", out JToken preferences) && (string) preferences != null)
                 ? preferences.ToObject<PlayerSettings>()
                 : default;
+            username_changed_event?.Invoke(localData.username);
         }
         static JObject pending_data;
         static async Task<(string, JObject)> ModifyUsernameNetworkRequest(){
@@ -26,8 +29,10 @@ namespace RyanAssets.DataService {
                 new JProperty("username", username)
             );
             (string res, JObject json) = await ServerNetwork.RequestAsync(ModifyUsernameNetworkRequest, "Modify Username", promptWaiting: PromptId.UsernameChangeAwait, promptResult: PromptId.UsernameResponse);
-            if (res == null)
+            if (res == null){
                 localData.username = username;
+                username_changed_event.Invoke(username);
+            }
         }
     }
 }
