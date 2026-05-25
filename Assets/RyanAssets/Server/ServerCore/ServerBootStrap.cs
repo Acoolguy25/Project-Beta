@@ -6,8 +6,10 @@ using UnityEngine.SceneManagement;
 using FishNet;
 using FishNet.Transporting;
 using RyanAssets.NetworkService;
+using RyanAssets.Shared.Broadcasts;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
+using Newtonsoft.Json;
 
 namespace RyanAssets.Server.ServerCore {
     public class ServerBootStrap {
@@ -21,11 +23,25 @@ namespace RyanAssets.Server.ServerCore {
                 return JObject.FromObject(this);
             }
         };
-        public static ServerInfo serverInfo;
+        public static Action StartServerEvent, StopServerEvent;
+        public static ServerInfo serverInfo = new();
         public static ushort MaxPlayers { get; private set; }
+        public static ushort ServerIdleTimeoutSeconds {get; private set; }
+        static bool _initalized;
+        static bool _startupArgumentsValid;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ConfigureStackTraces() {
+            Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+            Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
+            Application.SetStackTraceLogType(LogType.Error, StackTraceLogType.Full);
+            Application.SetStackTraceLogType(LogType.Exception, StackTraceLogType.Full);
+            Application.SetStackTraceLogType(LogType.Assert, StackTraceLogType.Full);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void BeforeSceneLoad() {
+            Debug.Log("============ ServerBootStrap ============");
             foreach (string arg in Environment.GetCommandLineArgs()) {
                 string[] split = arg.Split('=', 2);
 
@@ -44,12 +60,28 @@ namespace RyanAssets.Server.ServerCore {
                         break;
 
                     case "-server_port":
-                        serverInfo.server_port = ushort.Parse(split[1]);
+                        if (!ushort.TryParse(split[1], out ushort serverPort))
+                        {
+                            Debug.LogError($"Invalid server port: {split[1]}");
+                            break;
+                        }
+                        serverInfo.server_port = serverPort;
                         Debug.Log($"Server Port: {serverInfo.server_port}");
                         break;
 
                     case "-max_players":
-                        MaxPlayers = ushort.Parse(split[1]);
+                        if (!ushort.TryParse(split[1], out ushort maxPlayers))
+                        {
+                            Debug.LogError($"Invalid max players: {split[1]}");
+                            break;
+                        }
+                        MaxPlayers = maxPlayers;
+                        break;
+                    case "-server_idle_timeout":
+                        ushort.TryParse(split[1], out ushort idleTimeout);
+                        ServerIdleTimeoutSeconds = idleTimeout;
+                        break;
+                    case "-server_folder":
                         break;
                     
                     default:
@@ -57,28 +89,92 @@ namespace RyanAssets.Server.ServerCore {
                         break;
                 }
             }
+
+            _startupArgumentsValid = ValidateStartupArguments();
+            BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AfterSceneLoad(){
+            if (_initalized || !_startupArgumentsValid)
+                return;
+            _initalized = true;
+
+            if (InstanceFinder.NetworkManager == null || InstanceFinder.TransportManager == null)
+            {
+                Debug.LogError("Server startup failed: FishNet NetworkManager or TransportManager is not available in the loaded scene.");
+                Application.Quit(65);
+                return;
+            }
+
             Transport transport = InstanceFinder.TransportManager.Transport;
+            if (transport == null)
+            {
+                Debug.LogError("Server startup failed: FishNet transport is not assigned.");
+                Application.Quit(65);
+                return;
+            }
+
             transport.SetMaximumClients(MaxPlayers);
-            transport.SetServerBindAddress(NetworkSettings.YOUR_SERVER_IP, IPAddressType.IPv4);
+            #if DEVELOPMENT_BUILD
+                transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
+            #else
+                transport.SetServerBindAddress(NetworkSettings.YOUR_SERVER_IP, IPAddressType.IPv4);
+            #endif
             transport.SetPort(serverInfo.server_port);
 
             InstanceFinder.ServerManager.StartConnection();
+            StartServer();
         }
         static void StartServer()
         {
             NetworkManager nm = InstanceFinder.NetworkManager;
-
-            nm.ServerManager.StartConnection();
-
+            Debug.Assert(nm.ServerManager.StartConnection(), "ServerManager Failed To Start!");
             SceneLoadData sceneLoadData = new(serverInfo.universe_id + "_start")
             {
                 ReplaceScenes = ReplaceOption.All
             };
-
             nm.SceneManager.LoadGlobalScenes(sceneLoadData);
+            StartServerEvent?.Invoke();
+        }
+        static bool ValidateStartupArguments()
+        {
+            if (string.IsNullOrWhiteSpace(serverInfo.universe_id))
+            {
+                Debug.LogError("Server startup failed: missing -universe_id=<id> argument.");
+                Application.Quit(64);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(serverInfo.server_id))
+            {
+                Debug.LogError("Server startup failed: missing -server_id=<id> argument.");
+                Application.Quit(64);
+                return false;
+            }
+
+            if (serverInfo.server_port == 0)
+            {
+                Debug.LogError("Server startup failed: missing or invalid -server_port=<port> argument.");
+                Application.Quit(64);
+                return false;
+            }
+
+            if (MaxPlayers == 0)
+            {
+                Debug.LogError("Server startup failed: missing or invalid -max_players=<count> argument.");
+                Application.Quit(64);
+                return false;
+            }
+
+            return true;
+        }
+        public static void StopServer(){
+            InstanceFinder.ServerManager.Broadcast(new PromptBroadcast{
+                title = "Server Closed",
+                description = "The server has been closed"
+            });
+            StopServerEvent?.Invoke();
+            Application.Quit(67);
         }
     }
 }

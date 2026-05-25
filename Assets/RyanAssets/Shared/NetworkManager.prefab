@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &7761748750950967827
+--- !u!1 &5910158685828723263
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,13 +8,13 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 6563151813484744369}
-  - component: {fileID: 8103165912286893401}
-  - component: {fileID: 107092150693407910}
-  - component: {fileID: 3541532794705118960}
-  - component: {fileID: 3785947790194934117}
-  - component: {fileID: 5259542486818231107}
-  - component: {fileID: 1224477963956218363}
+  - component: {fileID: 6452689492563838916}
+  - component: {fileID: 2307535749750972156}
+  - component: {fileID: 7146518133760488486}
+  - component: {fileID: 7468159028027753767}
+  - component: {fileID: 7555192140164376897}
+  - component: {fileID: 3091997574892802734}
+  - component: {fileID: 3087723329973186617}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -22,13 +22,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &6563151813484744369
+--- !u!4 &6452689492563838916
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7761748750950967827}
+  m_GameObject: {fileID: 5910158685828723263}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -37,13 +37,13 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8103165912286893401
+--- !u!114 &2307535749750972156
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7761748750950967827}
+  m_GameObject: {fileID: 5910158685828723263}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
@@ -56,13 +56,13 @@ MonoBehaviour:
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 0}
   _persistence: 0
---- !u!114 &107092150693407910
+--- !u!114 &7146518133760488486
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7761748750950967827}
+  m_GameObject: {fileID: 5910158685828723263}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7d331f979d46e8e4a9fc90070c596d44, type: 3}
@@ -76,13 +76,13 @@ MonoBehaviour:
   _maximumTimedObserversDuration: 10
   _defaultConditions:
   - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
---- !u!114 &3541532794705118960
+--- !u!114 &7468159028027753767
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7761748750950967827}
+  m_GameObject: {fileID: 5910158685828723263}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 211a9f6ec51ddc14f908f5acc0cd0423, type: 3}
@@ -91,13 +91,13 @@ MonoBehaviour:
   _playerPrefab: {fileID: 9155375541221003514, guid: f7d1c294d492a5443b11033f22cc4673, type: 3}
   _addToDefaultScene: 1
   Spawns: []
---- !u!114 &3785947790194934117
+--- !u!114 &7555192140164376897
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7761748750950967827}
+  m_GameObject: {fileID: 5910158685828723263}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
@@ -112,19 +112,19 @@ MonoBehaviour:
   _port: 7770
   _maximumClients: 4095
   _clientAddress: localhost
---- !u!114 &5259542486818231107
+--- !u!114 &3091997574892802734
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7761748750950967827}
+  m_GameObject: {fileID: 5910158685828723263}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 68828c85278210948b9d50a8db3aab74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Managing.Server.ServerManager
-  _authenticator: {fileID: 1224477963956218363}
+  _authenticator: {fileID: 3087723329973186617}
   _remoteClientTimeout: 1
   _remoteClientTimeoutDuration: 600
   _allowPredictedSpawning: 0
@@ -138,13 +138,13 @@ MonoBehaviour:
   _frameRate: 500
   _shareIds: 1
   _startOnHeadless: 0
---- !u!114 &1224477963956218363
+--- !u!114 &3087723329973186617
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7761748750950967827}
+  m_GameObject: {fileID: 5910158685828723263}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3eece3509dba6fd46984d4f390259a1d, type: 3}

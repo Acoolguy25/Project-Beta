@@ -4,7 +4,7 @@ using RyanAssets.Login;
 using RyanAssets.UI.ButtonGrid;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
-using RyanAssets.ClientModules;
+using RyanAssets.Client.ClientModules;
 using UnityEngine.UI;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;

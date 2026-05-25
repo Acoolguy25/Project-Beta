@@ -1,12 +1,12 @@
 using Newtonsoft.Json.Linq;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
-using RyanAssets.ClientModules;
+using RyanAssets.Client.ClientModules;
 using RyanAssets.DataService;
 using System.Threading.Tasks;
 using System;
 
-namespace RyanAssets.ClientModules {
+namespace RyanAssets.Client.ClientModules {
     public static class LocalPlayerData {
         public static PlayerData localData;
         public static PlayerSettings localSettings;

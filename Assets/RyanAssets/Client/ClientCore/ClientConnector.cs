@@ -1,0 +1,75 @@
+using Newtonsoft.Json.Linq;
+using UnityEngine;
+
+using RyanAssets.NetworkService;
+using RyanAssets.PromptService;
+
+using FishNet;
+using FishNet.Transporting;
+namespace RyanAssets.Client.ClientCore {
+    public class ClientConnector: MonoBehaviour {
+        public static ClientConnector Instance;
+        void Awake(){
+            Instance = this;
+            InstanceFinder.ClientManager.OnClientConnectionState += OnClientState;
+            InstanceFinder.ClientManager.OnClientTimeOut += OnClientTimeOut;
+            InstanceFinder.ClientManager.OnAuthenticated += OnClientAuthenticated;
+        }
+        void SetJoiningMessage(string reason, string title = "Joining"){
+            PromptManager.PromptDelete(PromptId.JoinGameAwait);
+            if (reason != null)
+                PromptManager.PromptWait(title + " Server", reason, PromptId.JoinGameAwait);
+        }
+        void SetJoinResult(string reason, string title = "Join Failed"){
+            SetJoiningMessage(null);
+            PromptManager.PromptDelete(PromptId.JoinGameResponse);
+            if (reason != null)
+                PromptManager.PromptOk(title, reason, PromptId.JoinGameResponse);
+        }
+        public void JoinGameServer(JObject json){
+            SetJoiningMessage("Initializing...");
+            Transport transport = InstanceFinder.TransportManager.Transport;
+            transport.SetClientAddress(NetworkSettings.YOUR_SERVER_IP);
+            transport.SetPort((ushort)json["data"]["server_port"]);
+            Debug.Log($"Connecting To {transport.GetClientAddress()}:{transport.GetPort()}");
+            bool connectionStatus = InstanceFinder.ClientManager.StartConnection();
+            if (!connectionStatus)
+                SetJoinResult("Initialization Failed");
+            else
+                SetJoiningMessage("Connecting To Game Server...");
+        }
+        private void OnClientTimeOut(){
+            SetJoinResult("Client Timed Out");
+        }
+        private void OnClientState(ClientConnectionStateArgs args)
+        {
+            Debug.Log($"Client state: {args.ConnectionState}");
+
+            switch (args.ConnectionState)
+            {
+                case LocalConnectionState.Starting:
+                    Debug.Log("Connecting...");
+                    SetJoiningMessage("Connecting...");
+                    break;
+
+                case LocalConnectionState.Started:
+                    Debug.Log("Connected!");
+                    SetJoinResult(null);
+                    break;
+
+                case LocalConnectionState.Stopping:
+                    Debug.Log("Disconnecting...");
+                    // SetJoiningMessage("Disconnecting from server...", "Disconnecting");
+                    break;
+
+                case LocalConnectionState.Stopped:
+                    Debug.Log("Disconnected.");
+                    SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
+                    break;
+            }
+        }
+        private void OnClientAuthenticated(){
+            SetJoinResult("Authenticated!");
+        }
+    }
+}

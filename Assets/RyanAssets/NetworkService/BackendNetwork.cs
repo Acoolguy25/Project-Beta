@@ -6,7 +6,9 @@ using Newtonsoft.Json.Linq;
 using System.Net.Http.Headers;
 using System;
 using System.Text;
+#if UNITY_CLIENT
 using Unity.Services.Authentication;
+#endif
 using System.Net;
 
 namespace RyanAssets.NetworkService {
@@ -19,6 +21,7 @@ namespace RyanAssets.NetworkService {
         static readonly HttpClient client = new() {
             BaseAddress = new Uri(NetworkSettings.BackendAPIURL)
         };
+        static public string default_body = string.Empty;
         static string FormatException(string ExceptionString) {
             JObject json = ParseJSON(ExceptionString);
             if (json != null) {
@@ -57,9 +60,9 @@ namespace RyanAssets.NetworkService {
         }
         public static async Task<(string, JObject)> GetRequest(string url) {
             try {
-#if !IS_SERVER
+            #if UNITY_CLIENT
                 SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
-#endif
+            #endif
                 HttpResponseMessage response = await client.GetAsync(url);
                 return await HandleResponse(response);
             } catch (Exception e) {
@@ -68,14 +71,11 @@ namespace RyanAssets.NetworkService {
         }
         public static async Task<(string, JObject)> PostRequest(string url, JObject body = null) {
             try {
-#if !IS_SERVER
+            #if UNITY_CLIENT
                 SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
-#else
-                    if (body == null)
-                        body = ServerBootStrap.serverInfo.ToJObject();
-#endif
+            #endif
                 StringContent content = new(
-                    (body != null) ? body.ToString() : string.Empty,
+                    (body != null) ? body.ToString() : default_body,
                     Encoding.UTF8,
                     "application/json"
                 );

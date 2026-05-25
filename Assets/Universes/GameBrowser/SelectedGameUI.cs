@@ -3,12 +3,12 @@ using RyanAssets.UI;
 using UnityEngine.UI;
 using RyanAssets.PromptService;
 using RyanAssets.NetworkService;
-using RyanAssets.ClientModules;
+using RyanAssets.Client.ClientModules;
+using RyanAssets.Client.ClientCore;
 using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 
-using FishNet;
-using FishNet.Transporting;
+
 
 namespace Universes.GameBrowser {
     [RequireComponent(typeof(CanvasGroupController))]
@@ -40,13 +40,8 @@ namespace Universes.GameBrowser {
         public async Task PlayGame(string universe_id) {
             joining_universe_id = universe_id;
             (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm);
-            Debug.Log(json);
-        }
-        public void StartConnectingClient(JObject json) {
-            Transport transport = InstanceFinder.TransportManager.Transport;
-            transport.SetClientAddress(NetworkSettings.YOUR_SERVER_IP);
-            transport.SetPort((ushort)json["server_port"]);
-            InstanceFinder.ClientManager.StartConnection();
+            // Debug.Log(json);
+            ClientConnector.Instance.JoinGameServer(json);
         }
 
         // Button Clicks

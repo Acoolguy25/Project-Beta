@@ -10,21 +10,22 @@
   <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="FishNet.Demos.csproj" />
-  <Project Path="RyanAssets.ClientModules.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
   <Project Path="RyanAssets.UI.ButtonGrid.csproj" />
   <Project Path="RyanAssets.NetworkSettings.csproj" />
   <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
-  <Project Path="RyanAssets.Server.ServerCore.csproj" />
+  <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />
   <Project Path="URPWizard.csproj" />
   <Project Path="RyanAssets.Authentication.csproj" />
+  <Project Path="RyanAssets.Shared.Broadcasts.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
+  <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
   <Project Path="RyanAssets.Server.ServerModules.csproj" />
+  <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="Universes.csproj" />
-  <Project Path="RyanAssets.Editor.csproj" />
 </Solution>

@@ -1,21 +1,19 @@
 {
-    "name": "RyanAssets.Server.ServerCore",
-    "rootNamespace": "RyanAssets.Server.ServerCore",
+    "name": "RyanAssets.Client.ClientModules",
+    "rootNamespace": "RyanAssets.Client.ClientModules",
     "references": [
+        "GUID:c9373f4d310a58847b1cf74cdb65d007",
         "GUID:9bc24441b1edc054a980e2afec52bdcc",
-        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
-        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
+        "GUID:fe264023cf80b5c4d970ee18f18982a1"
     ],
     "includePlatforms": [],
-    "excludePlatforms": [
-        "Editor"
-    ],
+    "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "UNITY_SERVER"
+        "UNITY_CLIENT"
     ],
     "versionDefines": [],
     "noEngineReferences": false

@@ -1,7 +1,5 @@
-// Assets/RyanAssets/Editor/BuildServer.cs
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,71 +7,65 @@ using UnityEditor;
 using UnityEditor.Build.Reporting;
 using RyanAssets.NetworkService;
 using UnityDebug = UnityEngine.Debug;
-using UnityEditor.Build;
 
 namespace RyanAssets.Editor
 {
-    public static class BuildServer
+    public static class BuildRemoteServer
     {
+        const string PendingLinuxServerUploadKey = "RyanAssets.BuildServer.PendingLinuxServerUpload";
         const float ServerBuildProgress = 0.7f;
         static BuildTask currentTask;
 
-        public static void RemoveDefine(NamedBuildTarget target, string define)
+        [InitializeOnLoadMethod]
+        static void ResumePendingLinuxServerUpload()
         {
-            string defines = PlayerSettings.GetScriptingDefineSymbols(target);
-
-            string newDefines = string.Join(";",
-                defines
-                    .Split(';')
-                    .Where(x => x != define)
-            );
-
-            PlayerSettings.SetScriptingDefineSymbols(target, newDefines);
-        }
-
-        public static void AddDefine(NamedBuildTarget target, string define)
-        {
-            string defines = PlayerSettings.GetScriptingDefineSymbols(target);
-
-            if (defines.Split(';').Contains(define))
-                return;
-
-            string newDefines = string.IsNullOrWhiteSpace(defines)
-                ? define
-                : $"{defines};{define}";
-
-            PlayerSettings.SetScriptingDefineSymbols(target, newDefines);
-        }
-
-        [MenuItem("Build/Linux Server")]
-        public static void BuildLinuxServer()
-        {
-            if (!TryStartTask("Build/Linux Server", out BuildTask task))
+            if (!SessionState.GetBool(PendingLinuxServerUploadKey, false))
             {
                 return;
             }
 
-            task.Report(0.02f, "Preparing Linux server build");
-            
-            RemoveDefine(NamedBuildTarget.Server, "UNITY_CLIENT");
-
-            string[] scenes = EditorBuildSettings.scenes
-                .Select(x => x.path)
-                .ToArray();
-
-            scenes[0] = "Assets/Scenes/ServerInit.unity";
-
-            BuildPlayerOptions options = new()
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
             {
-                scenes = scenes,
-                locationPathName = "Builds/LinuxServer/GameServer.x86_64",
-                target = BuildTarget.StandaloneLinux64,
-                subtarget = (int)StandaloneBuildSubtarget.Server,
-                options = BuildOptions.None
-            };
+                EditorApplication.delayCall += ResumePendingLinuxServerUpload;
+                return;
+            }
 
-            task.Report(0.08f, "Building Linux server");
-            BuildReport report = BuildPipeline.BuildPlayer(options);
+            SessionState.SetBool(PendingLinuxServerUploadKey, false);
+
+            if (!TryStartTask("Upload Linux Server", out BuildTask task))
+            {
+                SessionState.SetBool(PendingLinuxServerUploadKey, true);
+                EditorApplication.delayCall += ResumePendingLinuxServerUpload;
+                return;
+            }
+
+            task.Report(ServerBuildProgress, "Client code restored, starting upload");
+            RunUploadInBackground(task);
+        }
+
+        [MenuItem("Build/Remote Linux Server")]
+        public static void BuildLinuxServer()
+        {
+            if (!TryStartTask("Build/Remote Linux Server", out BuildTask task))
+            {
+                return;
+            }
+
+            BuildReport report;
+
+            try
+            {
+                report = BuildLocalServer.BuildLinuxServer(
+                    (progress, phase) => task.Report(progress * ServerBuildProgress, phase)
+                );
+            }
+            catch (Exception e)
+            {
+                UnityDebug.LogError($"Linux server build failed.\n{e}");
+                task.Finish(Progress.Status.Failed, "Linux server build failed");
+                ClearCurrentTask(task);
+                return;
+            }
 
             if (task.IsCancellationRequested)
             {
@@ -86,6 +78,15 @@ namespace RyanAssets.Editor
             {
                 UnityDebug.LogError("Linux server build failed.");
                 task.Finish(Progress.Status.Failed, "Linux server build failed");
+                ClearCurrentTask(task);
+                return;
+            }
+
+            if (BuildLocalServer.LastBuildRestoredClientDefine)
+            {
+                task.Finish(Progress.Status.Succeeded, "Linux server build complete, restoring client code");
+                SessionState.SetBool(PendingLinuxServerUploadKey, true);
+                EditorApplication.delayCall += ResumePendingLinuxServerUpload;
                 ClearCurrentTask(task);
                 return;
             }
@@ -109,7 +110,7 @@ namespace RyanAssets.Editor
                     task.Report(0.72f, "Uploading Linux server files with scp compression");
                     RunCommand(
                         "scp",
-                        $"-C -i \"{keyPath}\" -r \"Builds/LinuxServer\" root@{NetworkSettings.DEPLOY_SERVER_IP}:/root/UnityBackend",
+                        $"-C -i \"{keyPath}\" -r \"{BuildLocalServer.LinuxServerUploadDirectory}\" root@{NetworkSettings.DEPLOY_SERVER_IP}:/root/UnityBackend",
                         task,
                         0.72f,
                         0.93f,
@@ -145,48 +146,6 @@ namespace RyanAssets.Editor
                     ClearCurrentTask(task);
                 }
             });
-        }
-
-        [MenuItem("Build/Windows Client")]
-        public static void BuildWindowsClient()
-        {
-            if (!TryStartTask("Build/Windows Client", out BuildTask task))
-            {
-                return;
-            }
-
-            task.Report(0.02f, "Preparing Windows client build");
-
-            BuildPlayerOptions options = new()
-            {
-                scenes = EditorBuildSettings.scenes
-                    .Select(x => x.path)
-                    .ToArray(),
-
-                locationPathName = "Builds/WindowsClient/Project Beta.exe",
-                target = BuildTarget.StandaloneWindows64,
-                subtarget = (int)StandaloneBuildSubtarget.Player,
-                options = BuildOptions.None
-            };
-
-            task.Report(0.08f, "Building Windows client");
-            BuildReport report = BuildPipeline.BuildPlayer(options);
-
-            if (task.IsCancellationRequested)
-            {
-                task.Finish(Progress.Status.Canceled, "Canceled after build");
-            }
-            else if (report.summary.result == BuildResult.Succeeded)
-            {
-                task.Finish(Progress.Status.Succeeded, "Windows client build complete");
-            }
-            else
-            {
-                UnityDebug.LogError("Windows client build failed.");
-                task.Finish(Progress.Status.Failed, "Windows client build failed");
-            }
-
-            ClearCurrentTask(task);
         }
 
         static bool TryStartTask(string name, out BuildTask task)

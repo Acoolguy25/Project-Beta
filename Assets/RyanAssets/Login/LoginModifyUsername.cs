@@ -4,7 +4,7 @@ using Newtonsoft.Json.Linq;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
 using RyanAssets.DataService;
-using RyanAssets.ClientModules;
+using RyanAssets.Client.ClientModules;
 using UnityEngine;
 using UnityEngine.UI;
 

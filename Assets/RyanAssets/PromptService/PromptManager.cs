@@ -29,7 +29,10 @@ namespace RyanAssets.PromptService {
         GamePageAwait,
         GamePageConfirm,
         PlayGameAwait,
-        PlayGameConfirm
+        PlayGameConfirm,
+        JoinGameAwait,
+        JoinGameResponse,
+        ServerPromptBroadcast
     }
     public struct PromptData {
         public string title, description;

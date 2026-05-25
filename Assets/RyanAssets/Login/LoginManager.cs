@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 using RyanAssets.DataService;
 using RyanAssets.PromptService;
-using RyanAssets.ClientModules;
+using RyanAssets.Client.ClientModules;
 using UnityEngine.UI;
 
 namespace RyanAssets.Login {

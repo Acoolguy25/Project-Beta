@@ -6,7 +6,7 @@ using UnityEngine;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
 
-namespace RyanAssets.ClientModules {
+namespace RyanAssets.Client.ClientModules {
     public static class BackendClient {
         public static async Task<(string, JObject)> RequestAsync(Func<Task<(string, JObject)>> requestFunc, string title, RetryPolicy retryPolicy = RetryPolicy.ForceRetry, PromptId promptWaiting = PromptId.Protected, PromptId promptResult = PromptId.Protected) {
             while (true) {
