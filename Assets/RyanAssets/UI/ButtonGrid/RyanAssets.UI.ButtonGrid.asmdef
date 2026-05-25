@@ -1,0 +1,16 @@
+{
+    "name": "RyanAssets.UI.ButtonGrid",
+    "rootNamespace": "RyanAssets.UI.ButtonGrid",
+    "references": [
+        "GUID:30b4aa37ab8e7994987c0bdb87f386dd"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,8 +1,6 @@
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
 using RyanAssets.NetworkService;
 using RyanAssets.Prompt;
-using PlasticPipe.PlasticProtocol.Messages;
 using System.Threading.Tasks;
 using System;
 
@@ -31,7 +29,7 @@ namespace RyanAssets.DataService {
             (string res, JObject json) = await ServerNetwork.RequestAsync(ModifyUsernameNetworkRequest, "Modify Username", promptWaiting: PromptId.UsernameChangeAwait, promptResult: PromptId.UsernameResponse);
             if (res == null){
                 localData.username = username;
-                username_changed_event.Invoke(username);
+                username_changed_event?.Invoke(username);
             }
         }
     }

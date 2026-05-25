@@ -4,14 +4,11 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Net.Http.Headers;
-using PlasticPipe.PlasticProtocol.Messages;
 using System;
 using System.Text;
 using RyanAssets.Prompt;
-using System.Linq.Expressions;
 using Unity.Services.Authentication;
 using System.Net;
-using log4net.Util;
 
 namespace RyanAssets.NetworkService {
     public enum RetryPolicy {
@@ -21,27 +18,26 @@ namespace RyanAssets.NetworkService {
     };
     public class ServerNetwork {
         static readonly HttpClient client = new() {
-            BaseAddress = new Uri(NetworkSettings.BackendURL)
+            BaseAddress = new Uri(NetworkSettings.BackendAPIURL)
         };
-        static string FormatException(string ExceptionString){
+        static string FormatException(string ExceptionString) {
             JObject json = ParseJSON(ExceptionString);
-            if (json != null){
-                if (json.TryGetValue("detail", out JToken detail)){
-                    try{
-                        return (string) detail[0]["msg"];
-                    } catch{
-                        return (string) detail;
+            if (json != null) {
+                if (json.TryGetValue("detail", out JToken detail)) {
+                    try {
+                        return (string)detail[0]["msg"];
+                    } catch {
+                        return (string)detail;
                     }
                 }
             }
             return ExceptionString;
         }
-        static public JObject ParseJSON(string text){
-            try{
+        static public JObject ParseJSON(string text) {
+            try {
                 JObject json = JObject.Parse(text);
                 return json;
-            }
-            catch{
+            } catch {
                 return null;
             }
         }
@@ -49,7 +45,7 @@ namespace RyanAssets.NetworkService {
             if (response.StatusCode == HttpStatusCode.NoContent)
                 return (null, null);
             string text = await response.Content.ReadAsStringAsync();
-           
+
             if (!response.IsSuccessStatusCode) {
                 return (text, null);
             }

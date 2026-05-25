@@ -1,0 +1,16 @@
+{
+    "name": "RyanAssets.TweenService",
+    "rootNamespace": "RyanAssets.TweenService",
+    "references": [
+        "GUID:a8e23967f92bb984dbade4a7176fb550"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

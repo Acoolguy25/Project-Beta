@@ -1,5 +1,8 @@
+using UnityEngine;
+using UnityEngine.Assertions;
+
 namespace Universes {
-    public enum UniverseAccess: sbyte{
+    public enum UniverseAccess : sbyte {
         Private = 0,
         Protected = 1,
         Public = 2
@@ -10,6 +13,14 @@ namespace Universes {
         public string description;
         public string creator_playerid;
         public UniverseAccess access;
+        public string GetResourcePath(string localPath) {
+            return $"UniverseDataPub/{id}/{localPath}";
+        }
+        public Sprite LoadSprite() {
+            Sprite thumbnail = Resources.Load<Sprite>(GetResourcePath("thumbnail"));
+            Assert.IsNotNull(thumbnail, $"{id} Thumnail Not Found!");
+            return thumbnail;
+        }
     };
     public static class UniverseCfg {
         public readonly static UniverseStruct[] ActiveUniverses = {
@@ -21,5 +32,13 @@ namespace Universes {
                 access = UniverseAccess.Public
             }
         };
+        public static UniverseStruct GetUniverseFromId(string id) {
+            foreach (UniverseStruct universe in ActiveUniverses) {
+                if (universe.id == id)
+                    return universe;
+            }
+            Debug.LogError($"Universe id lookup failed: {id}!");
+            return default;
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using UnityEngine;
 
 namespace RyanAssets.UI
@@ -5,6 +6,8 @@ namespace RyanAssets.UI
     [RequireComponent(typeof(CanvasGroup))]
     public class CanvasGroupController : MonoBehaviour {
         CanvasGroup canvasGroup;
+        [Description("Always Active")]
+        public bool alwaysActive;
         
         float timer, targetTime;
         float startAlpha, targetAlpha;
@@ -12,11 +15,13 @@ namespace RyanAssets.UI
         void Awake(){
             canvasGroup = GetComponent<CanvasGroup>();
             targetAlpha = canvasGroup.alpha;
+            SetAlpha(targetAlpha);
         }
         private void SetAlpha(float alpha){
             canvasGroup.alpha = alpha;
-            canvasGroup.interactable = alpha != 0f;
+            canvasGroup.interactable = targetAlpha != 0f;
             canvasGroup.blocksRaycasts = canvasGroup.interactable;
+            canvasGroup.gameObject.SetActive(alwaysActive || targetAlpha != 0f || alpha != 0f);
         }
         private void UpdateTimer(){
             SetAlpha(Mathf.Lerp(startAlpha, targetAlpha, timer == targetTime? 1f: timer/targetTime));

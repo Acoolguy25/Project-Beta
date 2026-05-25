@@ -25,7 +25,11 @@ namespace RyanAssets.Prompt {
         UsernameCheckAwait,
         UsernameChangeConfirm,
         UsernameChangeAwait,
-        UsernameResponse
+        UsernameResponse,
+        GamePageAwait,
+        GamePageConfirm,
+        PlayGameAwait,
+        PlayGameConfirm
     }
     public struct PromptData {
         public string title, description;
@@ -118,9 +122,8 @@ namespace RyanAssets.Prompt {
         void Awake(){
             Instance = this;
             PromptList = new();
-        }
-        void Start(){
             UpdateRenderer(0f);
+            DontDestroyOnLoad(this);
         }
 
 

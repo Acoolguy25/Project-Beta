@@ -1,0 +1,18 @@
+{
+    "name": "RyanAssets.Editor",
+    "rootNamespace": "RyanAssets.Editor",
+    "references": [
+        "GUID:9bc24441b1edc054a980e2afec52bdcc"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

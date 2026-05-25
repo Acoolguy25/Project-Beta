@@ -1,0 +1,14 @@
+{
+    "name": "RyanAssets.TweenService.TweenEasing",
+    "rootNamespace": "RyanAssets.TweenService.TweenEasing",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
