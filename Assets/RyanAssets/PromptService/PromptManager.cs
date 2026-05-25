@@ -8,7 +8,7 @@ using System.Linq;
 using TMPro;
 using System.ComponentModel;
 
-namespace RyanAssets.Prompt {
+namespace RyanAssets.PromptService {
     public enum PromptButton: sbyte {
         Unknown = -1,
         Ok = 0,

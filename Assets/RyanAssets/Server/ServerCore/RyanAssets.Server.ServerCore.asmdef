@@ -1,9 +1,9 @@
 {
-    "name": "RyanAssets.Prompt",
-    "rootNamespace": "RyanAssets.Prompt",
+    "name": "RyanAssets.Server.ServerCore",
+    "rootNamespace": "RyanAssets.Server.ServerCore",
     "references": [
-        "GUID:6055be8ebefd69e48b49212b09b47b2f",
-        "GUID:d62649f20bc2ba349a434c5eba6f7556"
+        "GUID:9bc24441b1edc054a980e2afec52bdcc",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -11,7 +11,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

@@ -9,6 +9,7 @@ using UnityEditor;
 using UnityEditor.Build.Reporting;
 using RyanAssets.NetworkService;
 using UnityDebug = UnityEngine.Debug;
+using UnityEditor.Build;
 
 namespace RyanAssets.Editor
 {
@@ -16,6 +17,33 @@ namespace RyanAssets.Editor
     {
         const float ServerBuildProgress = 0.7f;
         static BuildTask currentTask;
+
+        public static void RemoveDefine(NamedBuildTarget target, string define)
+        {
+            string defines = PlayerSettings.GetScriptingDefineSymbols(target);
+
+            string newDefines = string.Join(";",
+                defines
+                    .Split(';')
+                    .Where(x => x != define)
+            );
+
+            PlayerSettings.SetScriptingDefineSymbols(target, newDefines);
+        }
+
+        public static void AddDefine(NamedBuildTarget target, string define)
+        {
+            string defines = PlayerSettings.GetScriptingDefineSymbols(target);
+
+            if (defines.Split(';').Contains(define))
+                return;
+
+            string newDefines = string.IsNullOrWhiteSpace(defines)
+                ? define
+                : $"{defines};{define}";
+
+            PlayerSettings.SetScriptingDefineSymbols(target, newDefines);
+        }
 
         [MenuItem("Build/Linux Server")]
         public static void BuildLinuxServer()
@@ -26,6 +54,8 @@ namespace RyanAssets.Editor
             }
 
             task.Report(0.02f, "Preparing Linux server build");
+            
+            RemoveDefine(NamedBuildTarget.Server, "UNITY_CLIENT");
 
             string[] scenes = EditorBuildSettings.scenes
                 .Select(x => x.path)

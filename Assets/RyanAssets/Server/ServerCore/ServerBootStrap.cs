@@ -1,20 +1,31 @@
 using System;
 using UnityEngine;
+using Newtonsoft.Json.Linq;
+using UnityEngine.SceneManagement;
 
-namespace RyanAssets.Server {
+using FishNet;
+using FishNet.Transporting;
+using RyanAssets.NetworkService;
+using FishNet.Managing;
+using FishNet.Managing.Scened;
+
+namespace RyanAssets.Server.ServerCore {
     public class ServerBootStrap {
         public class ServerInfo
         {
             public string universe_id { get; set; }
             public string server_id { get; set; }
             public ushort server_port {get; set; }
+            public JObject ToJObject()
+            {
+                return JObject.FromObject(this);
+            }
         };
         public static ServerInfo serverInfo;
-        public string serverInfo_json;
         public static ushort MaxPlayers { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void Init() {
+        static void BeforeSceneLoad() {
             foreach (string arg in Environment.GetCommandLineArgs()) {
                 string[] split = arg.Split('=', 2);
 
@@ -46,7 +57,28 @@ namespace RyanAssets.Server {
                         break;
                 }
             }
-            serverInfo_json =             
+        }
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void AfterSceneLoad(){
+            Transport transport = InstanceFinder.TransportManager.Transport;
+            transport.SetMaximumClients(MaxPlayers);
+            transport.SetServerBindAddress(NetworkSettings.YOUR_SERVER_IP, IPAddressType.IPv4);
+            transport.SetPort(serverInfo.server_port);
+
+            InstanceFinder.ServerManager.StartConnection();
+        }
+        static void StartServer()
+        {
+            NetworkManager nm = InstanceFinder.NetworkManager;
+
+            nm.ServerManager.StartConnection();
+
+            SceneLoadData sceneLoadData = new(serverInfo.universe_id + "_start")
+            {
+                ReplaceScenes = ReplaceOption.All
+            };
+
+            nm.SceneManager.LoadGlobalScenes(sceneLoadData);
         }
     }
 }

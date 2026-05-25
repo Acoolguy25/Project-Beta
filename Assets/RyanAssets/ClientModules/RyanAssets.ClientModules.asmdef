@@ -1,15 +1,10 @@
 {
-    "name": "RyanAssets.Login",
-    "rootNamespace": "RyanAssets.Login",
+    "name": "RyanAssets.ClientModules",
+    "rootNamespace": "RyanAssets.ClientModules",
     "references": [
-        "GUID:fe25561d224ed4743af4c60938a59d0b",
         "GUID:c9373f4d310a58847b1cf74cdb65d007",
-        "GUID:5540e30183c82e84b954c033c388e06c",
-        "GUID:9f589beecac4b0647ad2197f9cb3d505",
         "GUID:9bc24441b1edc054a980e2afec52bdcc",
-        "GUID:fe264023cf80b5c4d970ee18f18982a1",
-        "GUID:d62649f20bc2ba349a434c5eba6f7556",
-        "GUID:337a3d99b76fb9c4985f49b4ce19cfdb"
+        "GUID:fe264023cf80b5c4d970ee18f18982a1"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

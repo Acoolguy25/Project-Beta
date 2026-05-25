@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace RyanAssets.Prompt {
+namespace RyanAssets.PromptService {
     public class PromptTest: MonoBehaviour{
         async void Start(){
             while (true){

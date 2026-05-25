@@ -1,4 +1,4 @@
-using RyanAssets.Prompt;
+// using RyanAssets.PromptService;
 using Unity.Services.Authentication;
 using RyanAssets.NetworkService;
 using UnityEngine;
@@ -7,6 +7,8 @@ using System.Net.Http;
 using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 using RyanAssets.DataService;
+using RyanAssets.PromptService;
+using RyanAssets.ClientModules;
 using UnityEngine.UI;
 
 namespace RyanAssets.Login {
@@ -19,20 +21,20 @@ namespace RyanAssets.Login {
         public LoginScreen loginScreen;
         [SerializeField]
         InputField usernameInputField;
-        async Task<(string, JObject)> LoadPlayerStats(){
-            return await ServerNetwork.PostRequest("/api/players/v1/me");
+        async Task<(string, JObject)> LoadPlayerStats() {
+            return await BackendNetwork.PostRequest("/api/players/v1/me");
         }
-        async void SignedIn(){
+        async void SignedIn() {
             loginScreen.RefreshScreen();
-            (string res, JObject json) = await ServerNetwork.RequestAsync(LoadPlayerStats, "Login", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse);
-            json["preferences"] = ServerNetwork.ParseJSON(json["preferences"].ToString());
+            (string res, JObject json) = await BackendClient.RequestAsync(LoadPlayerStats, "Login", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse);
+            json["preferences"] = BackendNetwork.ParseJSON(json["preferences"].ToString());
             LocalPlayerData.PlayerInit(json);
             usernameInputField.text = json["username"].ToString();
         }
-        void SignedOut(){
+        void SignedOut() {
             loginScreen.RefreshScreen();
         }
-        void Start(){
+        void Start() {
             AuthenticationService.Instance.SignedIn += SignedIn;
             AuthenticationService.Instance.Expired += SignedOut;
             AuthenticationService.Instance.SignedOut += SignedOut;

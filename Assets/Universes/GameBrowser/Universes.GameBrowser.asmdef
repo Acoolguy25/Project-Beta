@@ -12,7 +12,9 @@
         "GUID:ed67ee73c62f4dd4086a7f7f2bbde5ed",
         "GUID:5b7b4c192f382b045bac8ca1197e2b45",
         "GUID:a8e23967f92bb984dbade4a7176fb550",
-        "GUID:73a16be7f19393b4788c31d868fbbded"
+        "GUID:337a3d99b76fb9c4985f49b4ce19cfdb",
+        "GUID:73a16be7f19393b4788c31d868fbbded",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -20,7 +22,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "UNITY_CLIENT"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

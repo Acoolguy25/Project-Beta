@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8103165912286893401}
   - component: {fileID: 107092150693407910}
   - component: {fileID: 3541532794705118960}
+  - component: {fileID: 3785947790194934117}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -88,3 +89,24 @@ MonoBehaviour:
   _playerPrefab: {fileID: 9155375541221003514, guid: f7d1c294d492a5443b11033f22cc4673, type: 3}
   _addToDefaultScene: 1
   Spawns: []
+--- !u!114 &3785947790194934117
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7761748750950967827}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Transporting.Tugboat.Tugboat
+  _stopSocketsOnThread: 0
+  _dontRoute: 0
+  _reuseAddress: 1
+  _ipv4BindAddress: 
+  _enableIpv6: 0
+  _ipv6BindAddress: 
+  _port: 7770
+  _maximumClients: 4095
+  _clientAddress: localhost

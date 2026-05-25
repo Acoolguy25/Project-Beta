@@ -1,13 +1,10 @@
 {
-    "name": "RyanAssets.Server",
-    "rootNamespace": "RyanAssets.Server",
-    "references": [],
-    "includePlatforms": [
-        "LinuxStandalone64Server",
-        "CloudRendering",
-        "WindowsStandalone32Server",
-        "WindowsStandalone64Server"
+    "name": "RyanAssets.Server.ServerModules",
+    "rootNamespace": "RyanAssets.Server.ServerModules",
+    "references": [
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
     ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
