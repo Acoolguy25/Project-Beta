@@ -3,9 +3,14 @@ using UnityEngine;
 
 namespace RyanAssets.Server {
     public class ServerBootStrap {
-        public static string UniverseId { get; private set; }
-        public static string ServerId { get; private set; }
-        public static ushort ServerPort { get; private set; }
+        public class ServerInfo
+        {
+            public string universe_id { get; set; }
+            public string server_id { get; set; }
+            public ushort server_port {get; set; }
+        };
+        public static ServerInfo serverInfo;
+        public string serverInfo_json;
         public static ushort MaxPlayers { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -18,15 +23,18 @@ namespace RyanAssets.Server {
 
                 switch (split[0]) {
                     case "-universe_id":
-                        UniverseId = split[1];
+                        serverInfo.universe_id = split[1];
+                        Debug.Log($"Universe ID: {serverInfo.universe_id}");
                         break;
 
                     case "-server_id":
-                        ServerId = split[1];
+                        serverInfo.server_id = split[1];
+                        Debug.Log($"Server ID: {serverInfo.server_id}");
                         break;
 
                     case "-server_port":
-                        ServerPort = ushort.Parse(split[1]);
+                        serverInfo.server_port = ushort.Parse(split[1]);
+                        Debug.Log($"Server Port: {serverInfo.server_port}");
                         break;
 
                     case "-max_players":
@@ -38,11 +46,7 @@ namespace RyanAssets.Server {
                         break;
                 }
             }
-
-            Debug.Log($"Universe ID: {UniverseId}");
-            Debug.Log($"Server ID: {ServerId}");
-            Debug.Log($"Server Port: {ServerPort}");
-            
+            serverInfo_json =             
         }
     }
 }

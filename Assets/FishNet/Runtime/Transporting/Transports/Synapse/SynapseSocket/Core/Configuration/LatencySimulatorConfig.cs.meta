@@ -9,3 +9,10 @@ MonoImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 207815
+  packageName: 'FishNet: Networking Evolved'
+  packageVersion: 
+  assetPath: Assets/FishNet/Runtime/Transporting/Transports/Synapse/SynapseSocket/Core/Configuration/LatencySimulatorConfig.cs
+  uploadId: 0

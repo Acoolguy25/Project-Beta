@@ -58,7 +58,9 @@ namespace RyanAssets.NetworkService {
         }
         public static async Task<(string, JObject)> GetRequest(string url) {
             try {
-                SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
+                #if !IS_SERVER
+                    SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
+                #endif
                 HttpResponseMessage response = await client.GetAsync(url);
                 return await HandleResponse(response);
             } catch (Exception e) {
@@ -67,7 +69,9 @@ namespace RyanAssets.NetworkService {
         }
         public static async Task<(string, JObject)> PostRequest(string url, JObject body = null) {
             try {
-                SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
+                #if !IS_SERVER
+                    SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
+                #endif
                 StringContent content = new(
                     (body != null) ? body.ToString() : string.Empty,
                     Encoding.UTF8,
