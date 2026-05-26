@@ -27,6 +27,7 @@ namespace RyanAssets.Server.ServerCore {
         public static ServerInfo serverInfo = new();
         public static ushort MaxPlayers { get; private set; }
         public static ushort ServerIdleTimeoutSeconds {get; private set; }
+        public static ushort ServerHeartbeatIntvSeconds {get; private set; }
         static bool _initalized;
         static bool _startupArgumentsValid;
 
@@ -81,6 +82,10 @@ namespace RyanAssets.Server.ServerCore {
                         ushort.TryParse(split[1], out ushort idleTimeout);
                         ServerIdleTimeoutSeconds = idleTimeout;
                         break;
+                    case "-heartbeat_interval":
+                        ushort.TryParse(split[1], out ushort intvl);
+                        ServerHeartbeatIntvSeconds = intvl;
+                        break;
                     case "-server_folder":
                         break;
                     
@@ -116,8 +121,10 @@ namespace RyanAssets.Server.ServerCore {
 
             transport.SetMaximumClients(MaxPlayers);
             #if DEVELOPMENT_BUILD
+                Debug.Log("Hosting at 0.0.0.0");
                 transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
             #else
+                Debug.Log($"Hosting at {NetworkSettings.YOUR_SERVER_IP}");
                 transport.SetServerBindAddress(NetworkSettings.YOUR_SERVER_IP, IPAddressType.IPv4);
             #endif
             transport.SetPort(serverInfo.server_port);

@@ -37,7 +37,7 @@ namespace RyanAssets.Server.ServerCore {
                 }
 
                 try {
-                    await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), token);
+                    await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerHeartbeatIntvSeconds), token);
                 }
                 catch (TaskCanceledException) {
                     break;

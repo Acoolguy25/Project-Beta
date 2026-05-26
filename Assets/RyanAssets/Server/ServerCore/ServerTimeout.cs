@@ -19,7 +19,7 @@ namespace RyanAssets.Server.ServerCore {
         }
         static async Task IdleTimeoutLoop(CancellationToken token) {
             Debug.LogWarning("No Players Online; Server Will Stop Soon Due To Idle Timeout!");
-            await Task.Delay(TimeSpan.FromSeconds(NetworkSettings.IdleShutdownSeconds), token);
+            await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), token);
             Debug.LogWarning("Stopping Server Due To Idle Timeout!");
             ServerBootStrap.StopServer();
         }

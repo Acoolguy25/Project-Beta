@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 using System.Net.Http.Headers;
 using System;
 using System.Text;
-#if UNITY_CLIENT
+#if !SERVER_BUILD
 using Unity.Services.Authentication;
 #endif
 using System.Net;
@@ -60,7 +60,7 @@ namespace RyanAssets.NetworkService {
         }
         public static async Task<(string, JObject)> GetRequest(string url) {
             try {
-            #if UNITY_CLIENT
+            #if !SERVER_BUILD
                 SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
             #endif
                 HttpResponseMessage response = await client.GetAsync(url);
@@ -71,7 +71,7 @@ namespace RyanAssets.NetworkService {
         }
         public static async Task<(string, JObject)> PostRequest(string url, JObject body = null) {
             try {
-            #if UNITY_CLIENT
+            #if !SERVER_BUILD
                 SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
             #endif
                 StringContent content = new(

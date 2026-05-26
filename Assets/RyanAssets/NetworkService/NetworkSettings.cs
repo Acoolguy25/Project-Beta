@@ -8,7 +8,5 @@ namespace RyanAssets.NetworkService {
             public static readonly string YOUR_SERVER_IP = DEPLOY_SERVER_IP;
         #endif
         public static readonly string BackendAPIURL = "http://" + YOUR_SERVER_IP + ":" + BackendAPIPort;
-
-        public static ushort IdleShutdownSeconds = 60;
     }
 }

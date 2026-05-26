@@ -12,36 +12,8 @@ namespace RyanAssets.Editor
 {
     public static class BuildRemoteServer
     {
-        const string PendingLinuxServerUploadKey = "RyanAssets.BuildServer.PendingLinuxServerUpload";
         const float ServerBuildProgress = 0.7f;
         static BuildTask currentTask;
-
-        [InitializeOnLoadMethod]
-        static void ResumePendingLinuxServerUpload()
-        {
-            if (!SessionState.GetBool(PendingLinuxServerUploadKey, false))
-            {
-                return;
-            }
-
-            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
-            {
-                EditorApplication.delayCall += ResumePendingLinuxServerUpload;
-                return;
-            }
-
-            SessionState.SetBool(PendingLinuxServerUploadKey, false);
-
-            if (!TryStartTask("Upload Linux Server", out BuildTask task))
-            {
-                SessionState.SetBool(PendingLinuxServerUploadKey, true);
-                EditorApplication.delayCall += ResumePendingLinuxServerUpload;
-                return;
-            }
-
-            task.Report(ServerBuildProgress, "Client code restored, starting upload");
-            RunUploadInBackground(task);
-        }
 
         [MenuItem("Build/Remote Linux Server")]
         public static void BuildLinuxServer()
@@ -78,15 +50,6 @@ namespace RyanAssets.Editor
             {
                 UnityDebug.LogError("Linux server build failed.");
                 task.Finish(Progress.Status.Failed, "Linux server build failed");
-                ClearCurrentTask(task);
-                return;
-            }
-
-            if (BuildLocalServer.LastBuildRestoredClientDefine)
-            {
-                task.Finish(Progress.Status.Succeeded, "Linux server build complete, restoring client code");
-                SessionState.SetBool(PendingLinuxServerUploadKey, true);
-                EditorApplication.delayCall += ResumePendingLinuxServerUpload;
                 ClearCurrentTask(task);
                 return;
             }
