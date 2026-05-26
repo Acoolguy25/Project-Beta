@@ -175,13 +175,15 @@ namespace RyanAssets.Server.ServerCore {
 
             return true;
         }
-        public static void StopServer(){
+        public static void StopServer(string reason){
+            if (!InstanceFinder.ServerManager.Started)
+                return;
+            Debug.Log($"Stopping server because {reason}");
             InstanceFinder.ServerManager.Broadcast(new PromptBroadcast{
                 title = "Server Closed",
                 description = "The server has been closed"
             });
-            StopServerEvent?.Invoke();
-            Application.Quit(67);
+            InstanceFinder.ServerManager.StopConnection(true);
         }
     }
 }

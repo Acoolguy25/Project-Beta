@@ -4,6 +4,7 @@
   <Project Path="SynapseSocket.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="RyanAssets.Cameras.csproj" />
+  <Project Path="RyanAssets.Shared.Player.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="RyanAssets.Characters.csproj" />
@@ -16,6 +17,7 @@
   <Project Path="RyanAssets.NetworkSettings.csproj" />
   <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
+  <Project Path="RyanAssets.Server.ServerCore.csproj" />
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />

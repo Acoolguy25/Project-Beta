@@ -4,9 +4,7 @@ using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using System;
-using System.Collections;
 using UnityEngine;
-using UnityEngine.Networking;
 #if !UNITY_SERVER
 using RyanAssets.PromptService;
 #endif
@@ -17,25 +15,43 @@ using Newtonsoft.Json.Linq;
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {
         public override event Action<NetworkConnection, bool> OnAuthenticationResult;
+#if UNITY_SERVER
+        public static event Action<NetworkConnection, JObject> OnAuthenticationSucceeded;
+#endif
 
         public override void InitializeOnce(NetworkManager networkManager) {
             base.InitializeOnce(networkManager);
 
-            NetworkManager.ServerManager.RegisterBroadcast<AuthRequest>(OnAuthRequest);
+#if UNITY_SERVER
+            Debug.Log("Initialize Auth Server");
+            NetworkManager.ServerManager.RegisterBroadcast<AuthRequest>(OnAuthRequest, false);
+#else
+            Debug.Log("Initialize Auth Client");
             NetworkManager.ClientManager.RegisterBroadcast<AuthResponse>(OnAuthResponse);
 
             NetworkManager.ClientManager.OnClientConnectionState += ClientConnectionState;
+#endif
         }
 
         public override void OnRemoteConnection(NetworkConnection conn) {
             // Wait for AuthRequest.
+            Debug.Log("Remote Connection Received");
         }
 
         private void ClientConnectionState(ClientConnectionStateArgs args) {
+            Debug.Log("Client state: " + args.ConnectionState);
+
             if (args.ConnectionState != LocalConnectionState.Started)
                 return;
 
+            Debug.Log("Sending AuthRequest");
+
             string token = Unity.Services.Authentication.AuthenticationService.Instance.AccessToken;
+            if (string.IsNullOrWhiteSpace(token)) {
+                Debug.LogWarning("Cannot authenticate with server because the Unity access token is empty.");
+                NetworkManager.ClientManager.StopConnection();
+                return;
+            }
 
             NetworkManager.ClientManager.Broadcast(new AuthRequest {
                 Token = token
@@ -43,7 +59,13 @@ namespace RyanAssets.Authentication {
         }
 
         private void OnAuthRequest(NetworkConnection conn, AuthRequest req, Channel channel) {
-            Task.Run(() => ValidateToken(conn, req.Token));
+            Debug.Log("Received OnAuthRequest");
+            if (conn.IsAuthenticated) {
+                conn.Disconnect(true);
+                return;
+            }
+
+            _ = ValidateToken(conn, req.Token);
         }
 
         private async Task ValidateToken(NetworkConnection conn, string token) {
@@ -52,39 +74,43 @@ namespace RyanAssets.Authentication {
                 return;
             }
 
-            (string res, JObject json) = await BackendNetwork.PostRequest("/api/internal/v1/user/register");
+            var (res, json) = await BackendNetwork.PostRequest("/api/internal/v1/user/add", accessToken: token);
 
             if (res == null) {
-                OnAuthenticationResult?.Invoke(conn, true);
-
                 NetworkManager.ServerManager.Broadcast(conn, new AuthResponse {
                     Success = true
-                });
+                }, false);
+
+                OnAuthenticationResult?.Invoke(conn, true);
+                #if UNITY_SERVER
+                    OnAuthenticationSucceeded.Invoke(conn, json);
+                #endif
             } else {
                 Fail(conn, res);
             }
         }
 
         private void Fail(NetworkConnection conn, string reason) {
-            OnAuthenticationResult?.Invoke(conn, false);
+            Debug.Log("Auth Failed: " + reason);
 
             NetworkManager.ServerManager.Broadcast(conn, new AuthResponse {
                 Success = false,
                 Reason = reason
-            });
+            }, false);
 
+            OnAuthenticationResult?.Invoke(conn, false);
             conn.Disconnect(true);
         }
 
         private void OnAuthResponse(AuthResponse res, Channel channel) {
             if (res.Success) {
-                Debug.Log("Authentcation Succeeded!");
+                Debug.Log("Authentication Succeeded!");
             } else {
-                NetworkManager.ClientManager.StopConnection();
-                #if !UNITY_SERVER
-                    PromptManager.Instance.PromptLocalUser("Authentication Failed", res.Reason, PromptId.Protected, PromptManager.ButtonPreset_OkOnly);
-                #endif
                 Debug.Log("Authentication Failed: " + res.Reason);
+                NetworkManager.ClientManager.StopConnection();
+#if !UNITY_SERVER
+                PromptManager.Instance.PromptLocalUser("Authentication Failed", res.Reason, PromptId.Protected, PromptManager.ButtonPreset_OkOnly);
+#endif
             }
         }
     }

@@ -10,3 +10,6 @@ dotnet_style_namespace_match_folder = true:suggestion
 dotnet_diagnostic.IDE0130.severity = warning
 dotnet_code_quality.CA1724.api_surface = private
 dotnet_style_namespace_match_folder_required_prefix = RyanAssets
+
+[Assets/FishNet/**.cs]
+dotnet_analyzer_diagnostic.severity = none

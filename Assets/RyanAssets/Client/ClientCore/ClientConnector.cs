@@ -29,7 +29,7 @@ namespace RyanAssets.Client.ClientCore {
         public void JoinGameServer(JObject json){
             SetJoiningMessage("Initializing...");
             Transport transport = InstanceFinder.TransportManager.Transport;
-            transport.SetClientAddress(NetworkSettings.YOUR_SERVER_IP);
+            transport.SetClientAddress((string) json["data"]["server_ip"]);
             transport.SetPort((ushort)json["data"]["server_port"]);
             Debug.Log($"Connecting To {transport.GetClientAddress()}:{transport.GetPort()}");
             bool connectionStatus = InstanceFinder.ClientManager.StartConnection();
@@ -41,29 +41,22 @@ namespace RyanAssets.Client.ClientCore {
         private void OnClientTimeOut(){
             SetJoinResult("Client Timed Out");
         }
-        private void OnClientState(ClientConnectionStateArgs args)
-        {
-            Debug.Log($"Client state: {args.ConnectionState}");
-
+        private void OnClientState(ClientConnectionStateArgs args){
             switch (args.ConnectionState)
             {
                 case LocalConnectionState.Starting:
-                    Debug.Log("Connecting...");
                     SetJoiningMessage("Connecting...");
                     break;
 
                 case LocalConnectionState.Started:
-                    Debug.Log("Connected!");
                     SetJoinResult(null);
                     break;
 
                 case LocalConnectionState.Stopping:
-                    Debug.Log("Disconnecting...");
                     // SetJoiningMessage("Disconnecting from server...", "Disconnecting");
                     break;
 
                 case LocalConnectionState.Stopped:
-                    Debug.Log("Disconnected.");
                     SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
                     break;
             }

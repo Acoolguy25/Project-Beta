@@ -69,17 +69,29 @@ namespace RyanAssets.NetworkService {
                 return (e.ToString(), null);
             }
         }
-        public static async Task<(string, JObject)> PostRequest(string url, JObject body = null) {
+        public static async Task<(string, JObject)> PostRequest(string url, JObject body = null, string accessToken = null) {
             try {
             #if !SERVER_BUILD
-                SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
+                if (accessToken == null)
+                    SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
             #endif
                 StringContent content = new(
                     (body != null) ? body.ToString() : default_body,
                     Encoding.UTF8,
                     "application/json"
                 );
-                HttpResponseMessage response = await client.PostAsync(url, content);
+
+                HttpResponseMessage response;
+                if (accessToken == null) {
+                    response = await client.PostAsync(url, content);
+                } else {
+                    using HttpRequestMessage request = new(HttpMethod.Post, url) {
+                        Content = content
+                    };
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                    response = await client.SendAsync(request);
+                }
+
                 return await HandleResponse(response);
             } catch (Exception e) {
                 return (e.ToString(), null);

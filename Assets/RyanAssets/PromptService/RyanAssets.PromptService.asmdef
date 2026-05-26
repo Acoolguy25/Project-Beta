@@ -6,14 +6,16 @@
         "GUID:d62649f20bc2ba349a434c5eba6f7556"
     ],
     "includePlatforms": [],
-    "excludePlatforms": [],
+    "excludePlatforms": [
+        "LinuxStandalone64Server",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [
-        "UNITY_CLIENT"
-    ],
+    "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false
 }

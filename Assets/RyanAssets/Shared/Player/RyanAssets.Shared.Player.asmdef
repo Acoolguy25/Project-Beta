@@ -1,0 +1,16 @@
+{
+    "name": "RyanAssets.Shared.Player",
+    "rootNamespace": "RyanAssets.Shared.Player",
+    "references": [
+        "GUID:fe264023cf80b5c4d970ee18f18982a1"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
