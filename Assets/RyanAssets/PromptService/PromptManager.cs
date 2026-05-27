@@ -50,6 +50,7 @@ namespace RyanAssets.PromptService {
         public static readonly PromptButton[] ButtonPreset_OkCancel = {PromptButton.Ok, PromptButton.Cancel};
         public static readonly PromptButton[] ButtonPreset_RetryCancel = {PromptButton.Retry, PromptButton.Cancel};
         public static readonly PromptButton[] ButtonPreset_OkOnly = {PromptButton.Ok};
+        public static readonly PromptButton[] ButtonPreset_CancelOnly = {PromptButton.Cancel};
         public static readonly PromptButton[] ButtonPreset_RetryOnly = {PromptButton.Retry};
         public static readonly PromptButton[] ButtonPreset_None = {};
 
@@ -139,6 +140,9 @@ namespace RyanAssets.PromptService {
         }
         public static void PromptWait(string title, string description, PromptId promptId){
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_None);
+        }
+        public static Task<PromptButton> PromptCancelableWait(string title, string description, PromptId promptId){
+            return Instance.PromptLocalUser(title, description, promptId, ButtonPreset_CancelOnly);
         }
         public static void PromptOk(string title, string description, PromptId promptId = PromptId.Protected){
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_OkOnly);

@@ -12,15 +12,8 @@ using Unity.Services.Authentication;
 using System.Net;
 
 namespace RyanAssets.NetworkService {
-    public enum RetryPolicy {
-        NoRetry,
-        RetryOrCancel,
-        ForceRetry
-    };
     public static class BackendNetwork {
-        static readonly HttpClient client = new() {
-            BaseAddress = new Uri(NetworkSettings.BackendAPIURL)
-        };
+        static HttpClient client;
         static public string default_body = string.Empty;
         static string FormatException(string ExceptionString) {
             JObject json = ParseJSON(ExceptionString);
@@ -105,6 +98,12 @@ namespace RyanAssets.NetworkService {
                     "Bearer",
                     accessToken
                 );
+        }
+        public static void SetBackendURL(string backend_url){
+            Debug.Log($"Initialized Backend URL: {backend_url}");
+            client = new() {
+                BaseAddress = new Uri(backend_url)
+            };
         }
     }
 }

@@ -1,5 +1,5 @@
 using FishNet.Managing;
 
-namespace Server.ServerModules {
+namespace RyanAssets.Server.ServerModules {
     
 }

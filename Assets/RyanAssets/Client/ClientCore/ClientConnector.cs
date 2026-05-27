@@ -3,22 +3,34 @@ using UnityEngine;
 
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
+using UnityEngine.SceneManagement;
 
 using FishNet;
 using FishNet.Transporting;
+using System.Threading.Tasks;
 namespace RyanAssets.Client.ClientCore {
     public class ClientConnector: MonoBehaviour {
         public static ClientConnector Instance;
+        static bool wasAuthenticated, isConnecting, hasCanceled;
         void Awake(){
+            if (Instance != null){
+                Destroy(gameObject);
+                return;
+            }
             Instance = this;
             InstanceFinder.ClientManager.OnClientConnectionState += OnClientState;
             InstanceFinder.ClientManager.OnClientTimeOut += OnClientTimeOut;
             InstanceFinder.ClientManager.OnAuthenticated += OnClientAuthenticated;
+            DontDestroyOnLoad(gameObject);
         }
         void SetJoiningMessage(string reason, string title = "Joining"){
             PromptManager.PromptDelete(PromptId.JoinGameAwait);
             if (reason != null)
-                PromptManager.PromptWait(title + " Server", reason, PromptId.JoinGameAwait);
+                _ = PromptManager.PromptCancelableWait(title + " Server", reason, PromptId.JoinGameAwait).ContinueWith(async task => {
+                    PromptButton button = await task;
+                    if (button == PromptButton.Cancel)
+                        CancelJoinGameServer();
+                });
         }
         void SetJoinResult(string reason, string title = "Join Failed"){
             SetJoiningMessage(null);
@@ -37,6 +49,14 @@ namespace RyanAssets.Client.ClientCore {
                 SetJoinResult("Initialization Failed");
             else
                 SetJoiningMessage("Connecting To Game Server...");
+            isConnecting = true;
+            hasCanceled = false;
+        }
+        public void CancelJoinGameServer(){
+            if (isConnecting){
+                hasCanceled = true;
+                InstanceFinder.ClientManager.StopConnection();
+            }
         }
         private void OnClientTimeOut(){
             SetJoinResult("Client Timed Out");
@@ -49,7 +69,7 @@ namespace RyanAssets.Client.ClientCore {
                     break;
 
                 case LocalConnectionState.Started:
-                    SetJoinResult(null);
+                    SetJoiningMessage("Authenticating...");
                     break;
 
                 case LocalConnectionState.Stopping:
@@ -57,12 +77,22 @@ namespace RyanAssets.Client.ClientCore {
                     break;
 
                 case LocalConnectionState.Stopped:
-                    SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
+                    isConnecting = false;
+                    if (wasAuthenticated){
+                        wasAuthenticated = false;
+                        SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
+                        if (SceneManager.GetActiveScene().name != "MainMenu")
+                            SceneManager.LoadScene("MainMenu");
+                    } else if (!hasCanceled) {
+                        SetJoinResult("Join Game Failed!");
+                    }
                     break;
             }
         }
         private void OnClientAuthenticated(){
-            SetJoinResult("Authenticated!");
+            // SetJoinResult("Authenticated!", "Join Success");
+            SetJoinResult(null);
+            wasAuthenticated = true;
         }
     }
 }

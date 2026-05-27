@@ -65,7 +65,6 @@ namespace RyanAssets.Cameras
             SetCameraAvailable(CameraType.ThirdPersonCamera, character != null);
         }
         private void Start() {
-            DontDestroyOnLoad(gameObject);
             LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
             activeCamera = null;
             activeIndex = -1;

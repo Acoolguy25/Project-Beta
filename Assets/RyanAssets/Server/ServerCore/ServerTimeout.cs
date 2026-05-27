@@ -32,7 +32,7 @@ namespace RyanAssets.Server.ServerCore {
         // }
         private static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
             if (args.ConnectionState == RemoteConnectionState.Started) {
-                Debug.Log($"Player joined: ClientId={conn.ClientId}");
+                Debug.Log($"Player joined: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} total)");
                 idleTimeoutCts.Cancel();
             } else if (args.ConnectionState == RemoteConnectionState.Stopped && InstanceFinder.ServerManager.Clients.Count == 0) {
                 Debug.Log($"Player left: ClientId={conn.ClientId}");

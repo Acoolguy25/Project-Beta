@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityDebug = UnityEngine.Debug;
+using UnityEditor.Build.Profile;
 
 namespace RyanAssets.Editor {
     public static class BuildLocalServer {
@@ -34,6 +35,24 @@ namespace RyanAssets.Editor {
             }
         }
 
+        [MenuItem("Build/Run Linux Server")]
+        public static void RunLinuxServer(){
+            BuildReport report = BuildLinuxServer(null);
+
+            if (report.summary.result == BuildResult.Succeeded) {
+                UnityDebug.Log($"Linux server build complete");
+                BuildProfile active = BuildProfile.GetActiveBuildProfile();
+                if (active.name.Contains("Server")){
+                    BuildProfile profile = AssetDatabase.LoadAssetAtPath<BuildProfile>(
+                        "Assets/Settings/Build Profiles/Windows.asset"
+                    );
+                    BuildProfile.SetActiveBuildProfile(profile);
+                }
+            }else {
+                UnityDebug.LogError("Linux server build failed.");
+            }
+        }
+
         public static BuildReport BuildLinuxServer(Action<float, string> reportProgress) {
             reportProgress?.Invoke(0.02f, "Preparing Linux server build");
 
@@ -43,7 +62,7 @@ namespace RyanAssets.Editor {
                 .Select(x => x.path)
                 .ToArray();
 
-            scenes[0] = ServerInitScene;
+            scenes[0] = ServerInitScene; // Replace Main Scene with ServerInit scene
 
             BuildPlayerOptions options = new() {
                 scenes = scenes,

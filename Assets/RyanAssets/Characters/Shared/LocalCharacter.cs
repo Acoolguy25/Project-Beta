@@ -14,7 +14,7 @@ namespace RyanAssets.Characters
             LocalPlayer.Instance.SetCharacter(transform);
             gameObject.name = "LocalCharacter (" + gameObject.name + ")";
         }
-        public override void OnStopClient()
+        void OnDestroy()
         {
             if (!IsOwner)
                 return;

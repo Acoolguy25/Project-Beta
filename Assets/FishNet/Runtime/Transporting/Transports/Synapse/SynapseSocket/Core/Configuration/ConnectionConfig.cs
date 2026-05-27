@@ -15,7 +15,7 @@ namespace SynapseSocket.Core.Configuration
         /// <summary>
         /// Time in milliseconds after which an idle connection is considered timed out.
         /// </summary>
-        public uint TimeoutMilliseconds = 15000;
+        public uint TimeoutMilliseconds = 100;
 
         /// <summary>
         /// Width of the maintenance sweep window in milliseconds.

@@ -7,6 +7,11 @@ using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
 
 namespace RyanAssets.Client.ClientModules {
+    public enum RetryPolicy {
+        NoRetry,
+        RetryOrCancel,
+        ForceRetry
+    };
     public static class BackendClient {
         public static async Task<(string, JObject)> RequestAsync(Func<Task<(string, JObject)>> requestFunc, string title, RetryPolicy retryPolicy = RetryPolicy.ForceRetry, PromptId promptWaiting = PromptId.Protected, PromptId promptResult = PromptId.Protected) {
             while (true) {

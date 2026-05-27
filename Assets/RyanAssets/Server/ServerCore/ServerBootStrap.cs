@@ -10,6 +10,7 @@ using RyanAssets.Shared.Broadcasts;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
 using Newtonsoft.Json;
+using System.Data;
 
 namespace RyanAssets.Server.ServerCore {
     public class ServerBootStrap {
@@ -87,6 +88,7 @@ namespace RyanAssets.Server.ServerCore {
                         ServerHeartbeatIntvSeconds = intvl;
                         break;
                     case "-server_folder":
+                    // case "-backend_local":
                         break;
                     
                     default:
@@ -128,20 +130,27 @@ namespace RyanAssets.Server.ServerCore {
                 transport.SetServerBindAddress(NetworkSettings.YOUR_SERVER_IP, IPAddressType.IPv4);
             #endif
             transport.SetPort(serverInfo.server_port);
+            InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;
 
-            InstanceFinder.ServerManager.StartConnection();
-            StartServer();
+            bool start_status = InstanceFinder.ServerManager.StartConnection();
+            Debug.Assert(start_status, "ServerManager Failed To Start!");
         }
         static void StartServer()
         {
-            NetworkManager nm = InstanceFinder.NetworkManager;
-            Debug.Assert(nm.ServerManager.StartConnection(), "ServerManager Failed To Start!");
             SceneLoadData sceneLoadData = new(serverInfo.universe_id + "_start")
             {
                 ReplaceScenes = ReplaceOption.All
             };
-            nm.SceneManager.LoadGlobalScenes(sceneLoadData);
+            InstanceFinder.NetworkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
             StartServerEvent?.Invoke();
+        }
+        static void OnServerConnectionState(ServerConnectionStateArgs args){
+            if (args.ConnectionState == LocalConnectionState.Started){
+                StartServer();
+            }
+            // else if (args.ConnectionState == LocalConnectionState.Stopping){
+            //     StopServer();
+            // }
         }
         static bool ValidateStartupArguments()
         {
