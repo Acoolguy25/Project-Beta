@@ -126,8 +126,8 @@ namespace RyanAssets.Server.ServerCore {
                 Debug.Log("Hosting at 0.0.0.0");
                 transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
             #else
-                Debug.Log($"Hosting at {NetworkSettings.YOUR_SERVER_IP}");
-                transport.SetServerBindAddress(NetworkSettings.YOUR_SERVER_IP, IPAddressType.IPv4);
+                Debug.Log($"Hosting at {NetworkSettings.activeConfig.backend_server_ip}");
+                transport.SetServerBindAddress(NetworkSettings.activeConfig.backend_server_ip, IPAddressType.IPv4);
             #endif
             transport.SetPort(serverInfo.server_port);
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;

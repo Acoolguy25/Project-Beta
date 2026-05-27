@@ -4,14 +4,17 @@ using UnityEngine;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
 using UnityEngine.SceneManagement;
+using RyanAssets.Client.ClientCore;
 
 using FishNet;
 using FishNet.Transporting;
 using System.Threading.Tasks;
+using RyanAssets.Client.ClientModules;
 namespace RyanAssets.Client.ClientCore {
     public class ClientConnector: MonoBehaviour {
         public static ClientConnector Instance;
         static bool wasAuthenticated, isConnecting, hasCanceled;
+        static string joinServerId;
         void Awake(){
             if (Instance != null){
                 Destroy(gameObject);
@@ -38,7 +41,20 @@ namespace RyanAssets.Client.ClientCore {
             if (reason != null)
                 PromptManager.PromptOk(title, reason, PromptId.JoinGameResponse);
         }
-        public void JoinGameServer(JObject json){
+        async Task<(string, JObject)> WaitForServerLoad() {
+            return await BackendNetwork.GetRequest($"/api/servers/v1/{joinServerId}/wait");
+        }
+        public async void JoinGameServer(JObject json){
+            string status = json["data"]["status"].ToString();
+            joinServerId = json["data"]["server_id"].ToString();
+            if (status == "starting"){
+                (string response, JObject obj) = await BackendClient.RequestAsync(WaitForServerLoad, "Waiting For Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel);
+                if (response != null)
+                    return;
+            } else if (status != "ready"){
+                SetJoinResult($"Unknown Join Status: {status}");
+                return;
+            }
             SetJoiningMessage("Initializing...");
             Transport transport = InstanceFinder.TransportManager.Transport;
             transport.SetClientAddress((string) json["data"]["server_ip"]);
