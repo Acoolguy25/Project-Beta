@@ -14,21 +14,19 @@ using System.Data;
 
 namespace RyanAssets.Server.ServerCore {
     public class ServerBootStrap {
-        public class ServerInfo
-        {
+        public class ServerInfo {
             public string universe_id { get; set; }
             public string server_id { get; set; }
-            public ushort server_port {get; set; }
-            public JObject ToJObject()
-            {
+            public ushort server_port { get; set; }
+            public JObject ToJObject() {
                 return JObject.FromObject(this);
             }
         };
         public static Action StartServerEvent, StopServerEvent;
         public static ServerInfo serverInfo = new();
         public static ushort MaxPlayers { get; private set; }
-        public static ushort ServerIdleTimeoutSeconds {get; private set; }
-        public static ushort ServerHeartbeatIntvSeconds {get; private set; }
+        public static ushort ServerIdleTimeoutSeconds { get; private set; }
+        public static ushort ServerHeartbeatIntvSeconds { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ConfigureStackTraces() {
@@ -60,8 +58,7 @@ namespace RyanAssets.Server.ServerCore {
                         break;
 
                     case "-server_port":
-                        if (!ushort.TryParse(split[1], out ushort serverPort))
-                        {
+                        if (!ushort.TryParse(split[1], out ushort serverPort)) {
                             Debug.LogError($"Invalid server port: {split[1]}");
                             break;
                         }
@@ -70,8 +67,7 @@ namespace RyanAssets.Server.ServerCore {
                         break;
 
                     case "-max_players":
-                        if (!ushort.TryParse(split[1], out ushort maxPlayers))
-                        {
+                        if (!ushort.TryParse(split[1], out ushort maxPlayers)) {
                             Debug.LogError($"Invalid max players: {split[1]}");
                             break;
                         }
@@ -86,9 +82,9 @@ namespace RyanAssets.Server.ServerCore {
                         ServerHeartbeatIntvSeconds = intvl;
                         break;
                     case "-server_folder":
-                    // case "-backend_local":
+                        // case "-backend_local":
                         break;
-                    
+
                     default:
                         Debug.LogWarning($"Unable to find {split[0]}");
                         break;
@@ -99,78 +95,70 @@ namespace RyanAssets.Server.ServerCore {
             BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        static void AfterSceneLoad(){
-            if (InstanceFinder.NetworkManager == null || InstanceFinder.TransportManager == null)
-            {
+        static void AfterSceneLoad() {
+            if (InstanceFinder.NetworkManager == null || InstanceFinder.TransportManager == null) {
                 Debug.LogError("Server startup failed: FishNet NetworkManager or TransportManager is not available in the loaded scene.");
                 Application.Quit(65);
                 return;
             }
 
             Transport transport = InstanceFinder.TransportManager.Transport;
-            if (transport == null)
-            {
+            if (transport == null) {
                 Debug.LogError("Server startup failed: FishNet transport is not assigned.");
                 Application.Quit(65);
                 return;
             }
 
             transport.SetMaximumClients(MaxPlayers);
-            #if DEVELOPMENT_BUILD
+#if DEVELOPMENT_BUILD
                 Debug.Log("Hosting at 0.0.0.0");
                 transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
-            #else
-                Debug.Log($"Hosting at {NetworkSettings.activeConfig.backend_server_ip}");
-                transport.SetServerBindAddress(NetworkSettings.activeConfig.backend_server_ip, IPAddressType.IPv4);
-            #endif
+#else
+            Debug.Log($"Hosting at {NetworkSettings.activeConfig.backend_server_ip}");
+            transport.SetServerBindAddress(NetworkSettings.activeConfig.backend_server_ip, IPAddressType.IPv4);
+#endif
             transport.SetPort(serverInfo.server_port);
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;
 
             bool start_status = InstanceFinder.ServerManager.StartConnection();
             Debug.Assert(start_status, "ServerManager Failed To Start!");
+            Application.quitting += OnQuit;
         }
-        static void StartServer()
-        {
-            SceneLoadData sceneLoadData = new(serverInfo.universe_id + "_start")
-            {
+        static void StartServer() {
+            SceneLoadData sceneLoadData = new(serverInfo.universe_id + "_start") {
                 ReplaceScenes = ReplaceOption.All
             };
             InstanceFinder.NetworkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
             StartServerEvent?.Invoke();
         }
-        static void OnServerConnectionState(ServerConnectionStateArgs args){
-            if (args.ConnectionState == LocalConnectionState.Started){
+        static void OnServerConnectionState(ServerConnectionStateArgs args) {
+            if (args.ConnectionState == LocalConnectionState.Started) {
                 StartServer();
             }
             // else if (args.ConnectionState == LocalConnectionState.Stopping){
             //     StopServer();
             // }
         }
-        static bool ValidateStartupArguments()
-        {
-            if (string.IsNullOrWhiteSpace(serverInfo.universe_id))
-            {
+        static bool ValidateStartupArguments() {
+            if (string.IsNullOrWhiteSpace(serverInfo.universe_id)) {
                 Debug.LogError("Server startup failed: missing -universe_id=<id> argument.");
                 Application.Quit(64);
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(serverInfo.server_id))
-            {
+            if (string.IsNullOrWhiteSpace(serverInfo.server_id)) {
                 Debug.LogError("Server startup failed: missing -server_id=<id> argument.");
                 Application.Quit(64);
                 return false;
             }
 
-            if (serverInfo.server_port == 0)
-            {
+            if (serverInfo.server_port == 0) {
                 Debug.LogError("Server startup failed: missing or invalid -server_port=<port> argument.");
                 Application.Quit(64);
                 return false;
             }
 
-            if (MaxPlayers == 0)
-            {
+            if (MaxPlayers == 0) {
                 Debug.LogError("Server startup failed: missing or invalid -max_players=<count> argument.");
                 Application.Quit(64);
                 return false;
@@ -178,15 +166,18 @@ namespace RyanAssets.Server.ServerCore {
 
             return true;
         }
-        public static void StopServer(string reason){
-            if (!InstanceFinder.ServerManager.Started)
+        public static void StopServer(string reason) {
+            if (!InstanceFinder.IsServerStarted)
                 return;
             Debug.Log($"Stopping server because {reason}");
-            InstanceFinder.ServerManager.Broadcast(new PromptBroadcast{
+            InstanceFinder.ServerManager.Broadcast(new PromptBroadcast {
                 title = "Server Closed",
-                description = "The server has been closed"
+                description = $"The server was closed because {reason}"
             });
             InstanceFinder.ServerManager.StopConnection(true);
+        }
+        static void OnQuit() {
+            StopServer("the backend server expired a shutdown");
         }
     }
 }

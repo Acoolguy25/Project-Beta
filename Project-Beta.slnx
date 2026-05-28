@@ -30,4 +30,5 @@
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
   <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="Universes.csproj" />
+  <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
 </Solution>

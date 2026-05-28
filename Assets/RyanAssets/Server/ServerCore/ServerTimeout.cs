@@ -13,24 +13,26 @@ namespace RyanAssets.Server.ServerCore {
     public static class ServerTimeout {
         readonly static CancellationTokenSource idleTimeoutCts = new();
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void Init(){
+        static void Init() {
             ServerBootStrap.StartServerEvent += OnStartServer;
-            // ServerBootStrap.StopServerEvent += OnStopServer;
+            ServerBootStrap.StopServerEvent += OnStopServer;
         }
         static async Task IdleTimeoutLoop(CancellationToken token) {
             Debug.LogWarning("No Players Online; Server Will Stop Soon Due To Idle Timeout!");
             await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), token);
             ServerBootStrap.StopServer("Idle Timeout");
         }
-        public static void OnStartServer() {
+        static void OnStartServer() {
             InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
             if (InstanceFinder.ServerManager.Clients.Count == 0)
                 _ = IdleTimeoutLoop(idleTimeoutCts.Token);
         }
-        // public static void OnStopServer() {
-
-        // }
+        static void OnStopServer() {
+            idleTimeoutCts.Cancel();
+        }
         private static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
+            if (!InstanceFinder.IsServerStarted)
+                return;
             if (args.ConnectionState == RemoteConnectionState.Started) {
                 Debug.Log($"Player joined: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} total)");
                 idleTimeoutCts.Cancel();

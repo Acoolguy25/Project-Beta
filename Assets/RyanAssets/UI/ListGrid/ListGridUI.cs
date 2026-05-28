@@ -12,6 +12,8 @@ namespace RyanAssets.UI.ListGrid {
         [SerializeField]
         ScrollRect scrollRect;
         Transform contentTarget;
+        GridLayoutGroup gridLayoutGroup;
+        VerticalLayoutGroup verticalLayoutGroup;
 
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
@@ -19,19 +21,19 @@ namespace RyanAssets.UI.ListGrid {
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
 
         RectTransform contentRT;
-        public void ClearPrefabs(){
+        public void ClearPrefabs() {
             // Cancel all pending operations
             foreach (AsyncInstantiateOperation op in pending_ops)
                 op.Cancel();
             pending_ops.Clear();
 
             // Destroy all remaining created objects
-            foreach (Transform obj in contentTarget){
+            foreach (Transform obj in contentTarget) {
                 OnDeletePrefab?.Invoke(obj.gameObject);
                 Destroy(obj.gameObject);
             }
         }
-        public void AddPrefab(T data){
+        public void AddPrefab(T data) {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
@@ -44,7 +46,7 @@ namespace RyanAssets.UI.ListGrid {
             };
             pending_ops.Add(op);
         }
-        public void AddPrefabs(T[] objects){
+        public void AddPrefabs(T[] objects) {
             foreach (T data in objects) {
                 AddPrefab(data);
             }
@@ -53,38 +55,34 @@ namespace RyanAssets.UI.ListGrid {
             ClearPrefabs();
             AddPrefabs(objects);
         }
-        private void UpdateLayout()
-        {
+        private void UpdateLayout() {
             Canvas.ForceUpdateCanvases();
 
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
 
             float height = 0f;
 
-            foreach (RectTransform child in contentRT)
-            {
+            foreach (RectTransform child in contentRT) {
                 if (!child.gameObject.activeInHierarchy)
                     continue;
 
                 height += child.rect.height;
             }
 
-            var grid = contentRT.GetComponent<GridLayoutGroup>();
-            if (grid != null)
-            {
+            if (gridLayoutGroup != null) {
                 int count = contentRT.childCount;
                 int columns = Mathf.Max(1, Mathf.FloorToInt(
-                    (contentRT.rect.width + grid.spacing.x) /
-                    (grid.cellSize.x + grid.spacing.x)
+                    (contentRT.rect.width + gridLayoutGroup.spacing.x) /
+                    (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)
                 ));
 
                 int rows = Mathf.CeilToInt(count / (float)columns);
 
                 height =
-                    grid.padding.top +
-                    grid.padding.bottom +
-                    rows * grid.cellSize.y +
-                    Mathf.Max(0, rows - 1) * grid.spacing.y;
+                    gridLayoutGroup.padding.top +
+                    gridLayoutGroup.padding.bottom +
+                    rows * gridLayoutGroup.cellSize.y +
+                    Mathf.Max(0, rows - 1) * gridLayoutGroup.spacing.y;
             }
 
             contentRT.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
@@ -92,6 +90,8 @@ namespace RyanAssets.UI.ListGrid {
         virtual protected void Start() {
             contentTarget = scrollRect.content;
             contentRT = contentTarget.GetComponent<RectTransform>();
+            gridLayoutGroup = contentRT.GetComponent<GridLayoutGroup>();
+            verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
         }
     }
 }

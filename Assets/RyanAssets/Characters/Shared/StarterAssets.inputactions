@@ -1,4 +1,5 @@
 {
+    "version": 1,
     "name": "StarterAssets",
     "maps": [
         {
@@ -222,13 +223,31 @@
             ]
         },
         {
-            "name": "Menu",
+            "name": "Core",
             "id": "037ee4b1-ce2f-443e-97ec-2e2c6c517425",
             "actions": [
                 {
                     "name": "ToggleMenu",
                     "type": "Button",
                     "id": "67e6292e-fc0f-42d3-8c8e-ef92456e9054",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "ActivateChat",
+                    "type": "Button",
+                    "id": "86f89447-35b8-47a8-8026-cd5362385767",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "TogglePlayerList",
+                    "type": "Button",
+                    "id": "ad209c26-dabb-46b6-afeb-97bf320079cf",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -255,6 +274,28 @@
                     "processors": "",
                     "groups": "",
                     "action": "ToggleMenu",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b8ff9820-6dca-4ee6-8e35-66ce6b609de7",
+                    "path": "<Keyboard>/slash",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ActivateChat",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "f29e4e66-6377-4f1b-936e-620e3e5ce362",
+                    "path": "<Keyboard>/tab",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "TogglePlayerList",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }
