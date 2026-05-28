@@ -29,8 +29,6 @@ namespace RyanAssets.Server.ServerCore {
         public static ushort MaxPlayers { get; private set; }
         public static ushort ServerIdleTimeoutSeconds {get; private set; }
         public static ushort ServerHeartbeatIntvSeconds {get; private set; }
-        static bool _initalized;
-        static bool _startupArgumentsValid;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ConfigureStackTraces() {
@@ -97,15 +95,11 @@ namespace RyanAssets.Server.ServerCore {
                 }
             }
 
-            _startupArgumentsValid = ValidateStartupArguments();
+            ValidateStartupArguments();
             BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AfterSceneLoad(){
-            if (_initalized || !_startupArgumentsValid)
-                return;
-            _initalized = true;
-
             if (InstanceFinder.NetworkManager == null || InstanceFinder.TransportManager == null)
             {
                 Debug.LogError("Server startup failed: FishNet NetworkManager or TransportManager is not available in the loaded scene.");

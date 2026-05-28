@@ -3,7 +3,6 @@ using UnityEngine;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Transporting;
-using Shared.Player;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
@@ -11,17 +10,18 @@ using RyanAssets.Authentication;
 using RyanAssets.Server.ServerModules;
 using RyanAssets.NetworkService;
 using RyanAssets.DataService;
+using RyanAssets.Shared.Player;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerPlayerEvents {
         public static Action<NetworkConnection> OnPlayerAddedEvent, OnPlayerRemovedEvent;
         public static Dictionary<NetworkConnection, ServerPlayerStats> Players = new();
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        static void Init(){
+        static void Init() {
             InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
             UnityTokenAuthenticator.OnAuthenticationSucceeded += OnAuthenticationSucceeded;
         }
-        static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args){
+        static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
             if (args.ConnectionState != RemoteConnectionState.Stopped)
                 return;
 
@@ -31,11 +31,12 @@ namespace RyanAssets.Server.ServerCore {
             string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id}";
             _ = BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect");
         }
-        static void OnAuthenticationSucceeded(NetworkConnection conn, JObject json){
+        static void OnAuthenticationSucceeded(NetworkConnection conn, JObject json) {
             Debug.Log("Auth Succeeded: " + json);
             ServerPlayerStats stats = ParsePlayerStats(json);
             Debug.Log("PlayerAuthenticated: " + JsonConvert.SerializeObject(stats));
             Players.Add(conn, stats);
+            SharedGlobalEvents.Instance.Players.Add(new(conn, stats));
             OnPlayerAddedEvent?.Invoke(conn);
         }
 

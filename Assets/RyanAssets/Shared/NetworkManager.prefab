@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 3091997574892802734}
   - component: {fileID: 3087723329973186617}
   - component: {fileID: 1960467471069559613}
+  - component: {fileID: 2137556692718558911}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -167,3 +168,16 @@ MonoBehaviour:
   _lightProbeUpdating: 0
   _moveClientObjects: 1
   _setActiveScene: 1
+--- !u!114 &2137556692718558911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5910158685828723263}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2ae1e1275c10b514bbe1e64eb563c114, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Server.ServerCore::RyanAssets.Server.ServerCore.ServerHelperInit
+  helperInitPrefab: {fileID: 3025266736829428925, guid: 18cce67ae1c65de48b16fcf7bfad499d, type: 3}

@@ -27,7 +27,7 @@ namespace RyanAssets.Login {
         async void SignedIn() {
             loginScreen.RefreshScreen();
             (string res, JObject json) = await BackendClient.RequestAsync(LoadPlayerStats, "Login", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse);
-            json["preferences"] = BackendNetwork.ParseJSON(json["preferences"].ToString());
+            // json["preferences"] = BackendNetwork.ParseJSON(json["preferences"].ToString());
             LocalPlayerData.PlayerInit(json);
             usernameInputField.text = json["username"].ToString();
         }

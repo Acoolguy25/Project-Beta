@@ -1,0 +1,20 @@
+{
+    "name": "RyanAssets.Server.ServerFeatures",
+    "rootNamespace": "RyanAssets.Server.ServerFeatures",
+    "references": [
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
+        "GUID:aecf8615d7e72ef4291bf847c34b8e7c"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace RyanAssets.Login {
     public class LoginAuthenticator : MonoBehaviour {
+        static bool _initialized;
         public async void UnityLogin() {
             try {
                 await PlayerAccountService.Instance.StartSignInAsync();
@@ -25,7 +26,14 @@ namespace RyanAssets.Login {
                 PlayerAccountService.Instance.AccessToken
             );
         }
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Init() {
+            _initialized = false;
+        }
         async void Start() {
+            if (_initialized)
+                return;
+            _initialized = true;
             await UnityServices.InitializeAsync();
 
             PlayerAccountService.Instance.SignedIn += UnityLogin_Complete;

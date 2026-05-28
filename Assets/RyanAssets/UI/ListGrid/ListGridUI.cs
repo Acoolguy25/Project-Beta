@@ -19,7 +19,7 @@ namespace RyanAssets.UI.ListGrid {
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
 
         RectTransform contentRT;
-        public void RefreshPrefabs(T[] objects) {
+        public void ClearPrefabs(){
             // Cancel all pending operations
             foreach (AsyncInstantiateOperation op in pending_ops)
                 op.Cancel();
@@ -30,20 +30,28 @@ namespace RyanAssets.UI.ListGrid {
                 OnDeletePrefab?.Invoke(obj.gameObject);
                 Destroy(obj.gameObject);
             }
+        }
+        public void AddPrefab(T data){
+            AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
+            op.completed += _ => {
+                GameObject prefabClone = op.Result[0];
+                prefabClone.transform.SetParent(contentTarget, false);
+                pending_ops.Remove(op);
+                UpdateLayout();
+
+                OnCreatePrefab?.Invoke(prefabClone.gameObject, data);
+            };
+            pending_ops.Add(op);
+        }
+        public void AddPrefabs(T[] objects){
             foreach (T data in objects) {
-                AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
-
-                op.completed += _ => {
-                    GameObject prefabClone = op.Result[0];
-                    prefabClone.transform.SetParent(contentTarget, false);
-                    pending_ops.Remove(op);
-                    UpdateLayout();
-
-                    OnCreatePrefab?.Invoke(prefabClone.gameObject, data);
-                };
-                pending_ops.Add(op);
+                AddPrefab(data);
             }
+        }
+        public void RefreshPrefabs(T[] objects) {
+            ClearPrefabs();
+            AddPrefabs(objects);
         }
         private void UpdateLayout()
         {

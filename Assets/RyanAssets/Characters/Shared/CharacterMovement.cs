@@ -2,8 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using FishNet;
 
-namespace RyanAssets.Characters
-{
+namespace RyanAssets.Characters {
     public class CharacterMovement : MonoBehaviour {
         [Header("Player")]
         public float MoveSpeed = 2.0f;
@@ -36,7 +35,7 @@ namespace RyanAssets.Characters
         private int _animIDJump;
         private int _animIDFreeFall;
         private int _animIDMotionSpeed;
-        
+
         private Animator _animator;
         private Rigidbody _rb;
         private SharedInputController _input;
@@ -59,7 +58,7 @@ namespace RyanAssets.Characters
             _fallTimeoutDelta = FallTimeout;
         }
         private void FixedUpdate() {
-            if (_animator != null && !_animator.enabled) return;
+            if (_animator == null || !_animator.enabled) return;
             if (!_input) return;
 
             JumpAndGravity();
@@ -142,14 +141,12 @@ namespace RyanAssets.Characters
 
                 if (_jumpTimeoutDelta >= 0.0f)
                     _jumpTimeoutDelta -= Time.fixedDeltaTime;
-            }
-            else {
+            } else {
                 _jumpTimeoutDelta = JumpTimeout;
 
                 if (_fallTimeoutDelta >= 0.0f) {
                     _fallTimeoutDelta -= Time.fixedDeltaTime;
-                }
-                else {
+                } else {
                     if (_hasAnimator) {
                         _animator.SetBool(_animIDFreeFall, true);
                         _animator.SetBool(_animIDJump, false);
