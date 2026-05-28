@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 9100000000000000003}
   - component: {fileID: 9100000000000000004}
   - component: {fileID: 9100000000000000005}
+  - component: {fileID: 5959534216556885059}
   m_Layer: 5
   m_Name: PlayerListCanvas
   m_TagString: Untagged
@@ -103,6 +104,20 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &5959534216556885059
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000000000000002}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3424fc3d098dce2448f4497a66d781b8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Client.ClientUI.PlayerList::RyanAssets.Client.ClientUI.PlayerList.ClientPlayerList
+  modelPrefab: {fileID: 9100000000000000002, guid: 1bf6557e59c045f6af9cf2b4f7c6f83e, type: 3}
+  scrollRect: {fileID: 898951070834908153}
 --- !u!1 &9100000000000000007
 GameObject:
   m_ObjectHideFlags: 0
@@ -697,3 +712,14 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8228084169341426672, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
   m_PrefabInstance: {fileID: 9100000000000000026}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &898951070834908153 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8228084169341426659, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
+  m_PrefabInstance: {fileID: 9100000000000000026}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1aa08ab6e0800fa44ae55d278d1423e3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ScrollRect

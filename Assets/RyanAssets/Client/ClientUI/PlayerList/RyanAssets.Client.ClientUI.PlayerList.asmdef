@@ -2,7 +2,11 @@
     "name": "RyanAssets.Client.ClientUI.PlayerList",
     "rootNamespace": "RyanAssets.Client.ClientUI.PlayerList",
     "references": [
-        "GUID:343deaaf83e0cee4ca978e7df0b80d21"
+        "GUID:343deaaf83e0cee4ca978e7df0b80d21",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:30b4aa37ab8e7994987c0bdb87f386dd"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

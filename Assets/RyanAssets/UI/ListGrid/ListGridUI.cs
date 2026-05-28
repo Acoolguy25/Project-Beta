@@ -11,9 +11,9 @@ namespace RyanAssets.UI.ListGrid {
         GameObject modelPrefab;
         [SerializeField]
         ScrollRect scrollRect;
-        Transform contentTarget;
+        protected Transform contentTarget;
         GridLayoutGroup gridLayoutGroup;
-        VerticalLayoutGroup verticalLayoutGroup;
+        // VerticalLayoutGroup verticalLayoutGroup;
 
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
@@ -23,15 +23,18 @@ namespace RyanAssets.UI.ListGrid {
         RectTransform contentRT;
         public void ClearPrefabs() {
             // Cancel all pending operations
-            foreach (AsyncInstantiateOperation op in pending_ops)
+            foreach (var op in pending_ops)
                 op.Cancel();
             pending_ops.Clear();
 
             // Destroy all remaining created objects
             foreach (Transform obj in contentTarget) {
-                OnDeletePrefab?.Invoke(obj.gameObject);
-                Destroy(obj.gameObject);
+                RemovePrefab(obj);
             }
+        }
+        public void RemovePrefab(Transform obj) {
+            OnDeletePrefab?.Invoke(obj.gameObject);
+            Destroy(obj.gameObject);
         }
         public void AddPrefab(T data) {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
@@ -40,9 +43,9 @@ namespace RyanAssets.UI.ListGrid {
                 GameObject prefabClone = op.Result[0];
                 prefabClone.transform.SetParent(contentTarget, false);
                 pending_ops.Remove(op);
-                UpdateLayout();
 
                 OnCreatePrefab?.Invoke(prefabClone.gameObject, data);
+                UpdateLayout();
             };
             pending_ops.Add(op);
         }
@@ -55,7 +58,7 @@ namespace RyanAssets.UI.ListGrid {
             ClearPrefabs();
             AddPrefabs(objects);
         }
-        private void UpdateLayout() {
+        protected void UpdateLayout() {
             Canvas.ForceUpdateCanvases();
 
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
@@ -91,7 +94,7 @@ namespace RyanAssets.UI.ListGrid {
             contentTarget = scrollRect.content;
             contentRT = contentTarget.GetComponent<RectTransform>();
             gridLayoutGroup = contentRT.GetComponent<GridLayoutGroup>();
-            verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
+            // verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
         }
     }
 }
