@@ -23,7 +23,7 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             }
             string username = player.data.data.username;
             prefab.name = player.data.player_id;
-            prefab.GetComponent<Text>().text = username;
+            prefab.transform.GetChild(1).GetComponent<Text>().text = username;
         }
         private void OnPlayerAdded(NetworkConnection conn, ServerPlayerStats data) {
             AddPrefab((conn, data));

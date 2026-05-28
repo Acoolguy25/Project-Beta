@@ -10,12 +10,12 @@ namespace RyanAssets.Shared.Player {
         public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
         void Awake() {
             Instance = this;
+#if !UNITY_SERVER
+            Players.OnChange += OnPlayerChanged;
+#endif
         }
 #if !UNITY_SERVER
         public static Action<NetworkConnection, ServerPlayerStats> OnPlayerAdded, OnPlayerRemoved;
-        void Start() {
-            Players.OnChange += OnPlayerChanged;
-        }
         void OnPlayerChanged(SyncDictionaryOperation op, NetworkConnection key, ServerPlayerStats value, bool asServer) {
             switch (op) {
                 case SyncDictionaryOperation.Add:
