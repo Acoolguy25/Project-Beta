@@ -10,7 +10,7 @@ namespace RyanAssets.UI.ListGrid {
         [SerializeField]
         GameObject modelPrefab;
         [SerializeField]
-        ScrollRect scrollRect;
+        protected ScrollRect scrollRect;
         protected Transform contentTarget;
         GridLayoutGroup gridLayoutGroup;
         // VerticalLayoutGroup verticalLayoutGroup;

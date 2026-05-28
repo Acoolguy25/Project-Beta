@@ -10,9 +10,10 @@ using RyanAssets.UI.ListGrid;
 using UnityEngine.UI;
 using RyanAssets.Characters;
 using TMPro;
+using UnityEngine.EventSystems;
 
 namespace RyanAssets.Client.ClientUI.Chat {
-    public class ClientChat : ListGridUI<MessageBroadcast> {
+    public class ClientChat : ListGridUI<MessageBroadcast>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
         [SerializeField]
         TMP_InputField chatBox;
         protected override void Start() {
@@ -48,6 +49,18 @@ namespace RyanAssets.Client.ClientUI.Chat {
         }
         public void OnChatUnselected() {
             SharedInputController.Instance.SetControlsEnabled("Player", true);
+        }
+        public void OnScroll(PointerEventData eventData) {
+            scrollRect.OnScroll(eventData);
+        }
+        public void OnBeginDrag(PointerEventData eventData) {
+            scrollRect.OnBeginDrag(eventData);
+        }
+        public void OnDrag(PointerEventData eventData) {
+            scrollRect.OnDrag(eventData);
+        }
+        public void OnEndDrag(PointerEventData eventData) {
+            scrollRect.OnEndDrag(eventData);
         }
     }
 }
