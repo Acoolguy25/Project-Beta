@@ -12,6 +12,8 @@ GameObject:
   - component: {fileID: 9100000000000000003}
   - component: {fileID: 9100000000000000004}
   - component: {fileID: 9100000000000000005}
+  - component: {fileID: 3048848055118869538}
+  - component: {fileID: 1420625601298902378}
   m_Layer: 5
   m_Name: GameSettingsCanvas
   m_TagString: Untagged
@@ -104,6 +106,31 @@ MonoBehaviour:
   m_BlockingMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!225 &3048848055118869538
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000000000000002}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0
+--- !u!114 &1420625601298902378
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000000000000002}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1cb026ca7d0fb114fa2f12c48bbe7ae2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
+  alwaysActive: 0
 --- !u!1 &9100000000000000007
 GameObject:
   m_ObjectHideFlags: 0
@@ -2179,6 +2206,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 9100000000000000080}
     m_Modifications:
+    - target: {fileID: 8228084169341426342, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426342, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426342, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426410, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
       propertyPath: m_Size
       value: 0.49555555

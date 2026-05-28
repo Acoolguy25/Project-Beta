@@ -35,6 +35,5 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
                 UpdateLayout();
             }
         }
-
     }
 }

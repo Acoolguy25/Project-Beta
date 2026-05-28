@@ -1163,11 +1163,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 898951070834907838, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_Size
-      value: 0.49555555
+      value: 0.49555558
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907838, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_Value
-      value: 0.59691614
+      value: 1.0000001
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907890, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchorMax.x
@@ -1183,7 +1183,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907980, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 183.00002
+      value: -0.000045776367
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_Pivot.x
@@ -1274,6 +1274,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+--- !u!114 &1120765809775446551 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1420625601298902378, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+  m_PrefabInstance: {fileID: 2034168966480308093}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1cb026ca7d0fb114fa2f12c48bbe7ae2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
 --- !u!224 &7094119582350223228 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 9100000000000000001, guid: 7a40623e161b44308195701e053a48d3, type: 3}
@@ -1287,6 +1298,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 4531000923429442748}
     m_Modifications:
+    - target: {fileID: 512075336484954258, guid: a7799a4ceab14f9bb3942fac9c4d24eb, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 512075336484954509, guid: a7799a4ceab14f9bb3942fac9c4d24eb, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -1384,6 +1399,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a7799a4ceab14f9bb3942fac9c4d24eb, type: 3}
+--- !u!114 &6578475742538719290 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4987543597855201933, guid: a7799a4ceab14f9bb3942fac9c4d24eb, type: 3}
+  m_PrefabInstance: {fileID: 2196666655422397111}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1cb026ca7d0fb114fa2f12c48bbe7ae2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
 --- !u!224 &6932607068787161782 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 9100000000000000001, guid: a7799a4ceab14f9bb3942fac9c4d24eb, type: 3}
@@ -1397,6 +1423,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 4531000923429442748}
     m_Modifications:
+    - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: chatCanvas
+      value: 
+      objectReference: {fileID: 80756124940246763}
+    - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: playerListCanvas
+      value: 
+      objectReference: {fileID: 6578475742538719290}
+    - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: gameSettingsCanvas
+      value: 
+      objectReference: {fileID: 1120765809775446551}
     - target: {fileID: 9100000000000000001, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
       propertyPath: m_Pivot.x
       value: 0
@@ -1513,7 +1551,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907900, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Size
-      value: 0.999995
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907900, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Value
@@ -1521,7 +1559,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907918, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.00037384033
+      value: 0.0002975464
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Pivot.x
@@ -1612,6 +1650,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+--- !u!114 &80756124940246763 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7390684155822474385, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+  m_PrefabInstance: {fileID: 7461931669560760954}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1cb026ca7d0fb114fa2f12c48bbe7ae2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
 --- !u!224 &1857640944453950075 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 9100000000000000001, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
