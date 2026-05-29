@@ -10,6 +10,7 @@ using RyanAssets.DataService;
 using RyanAssets.PromptService;
 using RyanAssets.Client.ClientModules;
 using UnityEngine.UI;
+using System.Linq;
 
 namespace RyanAssets.Login {
     public class LoginManager : MonoBehaviour {
@@ -42,7 +43,7 @@ namespace RyanAssets.Login {
             AuthenticationService.Instance.Expired += SignedOut;
             AuthenticationService.Instance.SignedOut += SignedOut;
             AuthenticationService.Instance.SignInFailed += SignInErr;
-            usernameInputField.text = LocalPlayerData.localData.username || "PlayerName";
+            usernameInputField.text = LocalPlayerData.localData.username;
         }
         void OnDestroy() {
             AuthenticationService.Instance.SignedIn -= SignedIn;

@@ -1851,7 +1851,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907918, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.0004119873
+      value: 0.0007171631
       objectReference: {fileID: 0}
     - target: {fileID: 4157554397622734917, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Sprite
@@ -1876,6 +1876,14 @@ PrefabInstance:
     - target: {fileID: 5614910597484933578, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_TargetGraphic
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 5614910597484933578, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_OnSelect.m_PersistentCalls.m_Calls.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5614910597484933578, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_OnDeselect.m_PersistentCalls.m_Calls.Array.size
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7390684155822474385, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: alwaysActive

@@ -34,7 +34,9 @@ namespace RyanAssets.Characters {
             Instance = null;
         }
         private void Awake() {
-            Assert.IsTrue(Instance == null || Instance != this, "StarterAssetInputs is valid in Awake()");
+            if (Instance != null)
+                return;
+            // Assert.IsTrue(Instance == null || Instance != this, "StarterAssetInputs is valid in Awake()");
             Instance = this;
             _inputAction = GetComponent<PlayerInput>();
         }

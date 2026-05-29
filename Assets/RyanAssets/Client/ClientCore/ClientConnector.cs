@@ -16,7 +16,7 @@ namespace RyanAssets.Client.ClientCore {
         GameObject[] gameOnlyObjects;
         static bool wasAuthenticated, isConnecting, hasCanceled;
         public static string joinServerId, joinUniverseId;
-        void Awake() {
+        void OnEnable() {
             Instance = this;
             InstanceFinder.ClientManager.OnClientConnectionState += OnClientState;
             InstanceFinder.ClientManager.OnClientTimeOut += OnClientTimeOut;
