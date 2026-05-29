@@ -59,6 +59,8 @@ namespace RyanAssets.UI.ListGrid {
             AddPrefabs(objects);
         }
         protected void UpdateLayout() {
+            if (contentRT == null) // ignore if destroyed or deleted
+                return;
             Canvas.ForceUpdateCanvases();
 
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);

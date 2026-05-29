@@ -8,14 +8,12 @@ using System.Text;
 using FishNet.Managing.Timing;
 using UnityEngine;
 
-namespace FishNet.Managing.Logging
-{
+namespace FishNet.Managing.Logging {
     /// <summary>
     /// Configuration ScriptableObject specifying which data to log. Used in conjuction with NetworkManager.
     /// </summary>
     [CreateAssetMenu(fileName = "New LevelLoggingConfiguration", menuName = "FishNet/Logging/Level Logging Configuration")]
-    public class LevelLoggingConfiguration : LoggingConfiguration
-    {
+    public class LevelLoggingConfiguration : LoggingConfiguration {
         #region Serialized.
         /// <summary>
         /// True to add localtick to logs.
@@ -71,8 +69,7 @@ namespace FishNet.Managing.Logging
         #endregion
 
         [APIExclude]
-        public void LoggingConstructor(bool loggingEnabled, LoggingType development, LoggingType gui, LoggingType headless)
-        {
+        public void LoggingConstructor(bool loggingEnabled, LoggingType development, LoggingType gui, LoggingType headless) {
             IsEnabled = loggingEnabled;
             _developmentLogging = development;
             _guiLogging = gui;
@@ -83,8 +80,7 @@ namespace FishNet.Managing.Logging
         /// Initializes script for use.
         /// </summary>
         /// <param name = "manager"></param>
-        public override void InitializeOnce()
-        {
+        public override void InitializeOnce() {
             byte currentHighest = (byte)LoggingType.Off;
 #if UNITY_SERVER
             currentHighest = Math.Max(currentHighest, (byte)_headlessLogging);
@@ -102,13 +98,11 @@ namespace FishNet.Managing.Logging
         /// </summary>
         /// <param name = "loggingType">Type of logging being filtered.</param>
         /// <returns></returns>
-        public override bool CanLog(LoggingType loggingType)
-        {
+        public override bool CanLog(LoggingType loggingType) {
             if (!IsEnabled)
                 return false;
 
-            if (!_initialized)
-            {
+            if (!_initialized) {
 #if DEVELOPMENT
                 if (Application.isPlaying)
                     NetworkManagerExtensions.LogError("CanLog called before being initialized.");
@@ -124,17 +118,15 @@ namespace FishNet.Managing.Logging
         /// <summary>
         /// Logs a common value if can log.
         /// </summary>
-        public override void Log(string value)
-        {
-            if (CanLog(LoggingType.Common))
-                Debug.Log(AddSettingsToLog(value));
+        public override void Log(string value) {
+            // if (CanLog(LoggingType.Common))
+            // Debug.Log(AddSettingsToLog(value));
         }
 
         /// <summary>
         /// Logs a warning value if can log.
         /// </summary>
-        public override void LogWarning(string value)
-        {
+        public override void LogWarning(string value) {
             if (CanLog(LoggingType.Warning))
                 Debug.LogWarning(AddSettingsToLog(value));
         }
@@ -142,8 +134,7 @@ namespace FishNet.Managing.Logging
         /// <summary>
         /// Logs an error value if can log.
         /// </summary>
-        public override void LogError(string value)
-        {
+        public override void LogError(string value) {
             if (CanLog(LoggingType.Error))
                 Debug.LogError(AddSettingsToLog(value));
         }
@@ -152,8 +143,7 @@ namespace FishNet.Managing.Logging
         /// Clones this logging configuration.
         /// </summary>
         /// <returns></returns>
-        public override LoggingConfiguration Clone()
-        {
+        public override LoggingConfiguration Clone() {
             LevelLoggingConfiguration copy = CreateInstance<LevelLoggingConfiguration>();
             copy.LoggingConstructor(IsEnabled, _developmentLogging, _guiLogging, _headlessLogging);
             copy._addTimestamps = _addTimestamps;
@@ -166,24 +156,21 @@ namespace FishNet.Managing.Logging
         /// <summary>
         /// Adds onto logging message if settings are enabled to.
         /// </summary>
-        private string AddSettingsToLog(string value)
-        {
+        private string AddSettingsToLog(string value) {
             _stringBuilder.Clear();
 
 
             if (_addTimestamps && (!Application.isEditor || _enableTimestampsInEditor))
                 _stringBuilder.Append($"[{DateTime.Now:yyyy.MM.dd HH:mm:ss}] ");
 
-            if (_addLocalTick)
-            {
+            if (_addLocalTick) {
                 TimeManager tm = InstanceFinder.TimeManager;
                 uint tick = tm == null ? TimeManager.UNSET_TICK : tm.LocalTick;
                 _stringBuilder.Append($"LocalTick [{tick}] ");
             }
 
             // If anything was added onto string builder then add value, and set value to string builder.
-            if (_stringBuilder.Length > 0)
-            {
+            if (_stringBuilder.Length > 0) {
                 _stringBuilder.Append(value);
                 value = _stringBuilder.ToString();
             }

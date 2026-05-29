@@ -23,15 +23,15 @@ namespace RyanAssets.Server.ServerFeatures {
             InstanceFinder.ServerManager.Broadcast<MessageBroadcast>(message_broadcast);
         }
         public static bool IsChatMessageValid(string s) {
-            if (string.IsNullOrEmpty(s))
+            if (string.IsNullOrWhiteSpace(s))
                 return false;
 
             for (int i = 1; i < s.Length; i++) {
                 if (s[i] == ' ' && s[i - 1] == ' ')
-                    return true;
+                    return false;
             }
 
-            return false;
+            return true;
         }
     }
 }

@@ -3,11 +3,13 @@ using FishNet;
 using FishNet.Object;
 using FishNet.Transporting;
 
-namespace RyanAssets.Shared.Server {
-    public class ServerHelperInit : MonoBehaviour {
-#if UNITY_SERVER
+namespace RyanAssets.Shared.Server
+{
+    public class ServerHelperInit : MonoBehaviour
+    {
         [SerializeField]
         private NetworkObject helperInitPrefab;
+#if UNITY_SERVER
         void Awake() {
             // ServerBootStrap.StartServerEvent += OnStartServer;
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;

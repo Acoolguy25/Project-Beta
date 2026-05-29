@@ -34,11 +34,21 @@ namespace RyanAssets.Login {
         void SignedOut() {
             loginScreen.RefreshScreen();
         }
+        void SignInErr(Exception err) {
+            PromptManager.PromptError("SignIn", err);
+        }
         void Start() {
             AuthenticationService.Instance.SignedIn += SignedIn;
             AuthenticationService.Instance.Expired += SignedOut;
             AuthenticationService.Instance.SignedOut += SignedOut;
-            AuthenticationService.Instance.SignInFailed += err => PromptManager.PromptError("SignIn", err);
+            AuthenticationService.Instance.SignInFailed += SignInErr;
+            usernameInputField.text = LocalPlayerData.localData.username || "PlayerName";
+        }
+        void OnDestroy() {
+            AuthenticationService.Instance.SignedIn -= SignedIn;
+            AuthenticationService.Instance.Expired -= SignedOut;
+            AuthenticationService.Instance.SignedOut -= SignedOut;
+            AuthenticationService.Instance.SignInFailed -= SignInErr;
         }
     }
 }

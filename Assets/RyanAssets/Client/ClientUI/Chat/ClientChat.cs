@@ -50,12 +50,6 @@ namespace RyanAssets.Client.ClientUI.Chat {
                 InstanceFinder.ClientManager.Broadcast<MessageRequest>(new() { message = text });
             chatBox.text = string.Empty;
         }
-        public void OnChatSelected() {
-            SharedInputController.Instance.LockControls();
-        }
-        public void OnChatUnselected() {
-            SharedInputController.Instance.UnlockControls();
-        }
         public void OnScroll(PointerEventData eventData) {
             scrollRect.OnScroll(eventData);
         }
