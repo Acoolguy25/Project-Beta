@@ -32,4 +32,5 @@
   <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="Universes.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
+  <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
 </Solution>

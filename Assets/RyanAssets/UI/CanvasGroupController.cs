@@ -20,10 +20,12 @@ namespace RyanAssets.UI {
             SetAlpha(targetAlpha);
         }
         private void SetAlpha(float alpha) {
+            bool newActive = targetAlpha != 0f || alpha != 0f;
             canvasGroup.alpha = alpha;
             canvasGroup.interactable = targetAlpha != 0f;
             canvasGroup.blocksRaycasts = canvasGroup.interactable;
-            canvasGroup.gameObject.SetActive(alwaysActive || targetAlpha != 0f || alpha != 0f);
+            canvasGroup.gameObject.SetActive(alwaysActive || newActive);
+            enabled = targetAlpha != alpha;
         }
         private void UpdateTimer() {
             SetAlpha(Mathf.Lerp(startAlpha, targetAlpha, timer == targetTime ? 1f : timer / targetTime));

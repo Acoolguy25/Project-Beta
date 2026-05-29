@@ -33,7 +33,7 @@ namespace RyanAssets.Server.ServerCore {
             _ = BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect");
         }
         static void OnAuthenticationSucceeded(NetworkConnection conn, JObject json) {
-            Debug.Log("Auth Succeeded: " + json);
+            // Debug.Log("Auth Succeeded: " + json);
             ServerPlayerStats stats = ParsePlayerStats(json);
             Debug.Log("PlayerAuthenticated: " + JsonConvert.SerializeObject(stats));
             Players.Add(conn, stats);

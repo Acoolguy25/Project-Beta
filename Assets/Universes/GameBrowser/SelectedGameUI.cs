@@ -41,7 +41,7 @@ namespace Universes.GameBrowser {
             joining_universe_id = universe_id;
             (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm);
             // Debug.Log(json);
-            ClientConnector.Instance.JoinGameServer(json);
+            ClientConnector.Instance.JoinGameServer(joining_universe_id, json);
         }
 
         // Button Clicks

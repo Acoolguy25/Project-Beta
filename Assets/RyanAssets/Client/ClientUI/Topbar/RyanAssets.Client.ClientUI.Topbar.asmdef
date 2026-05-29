@@ -4,7 +4,8 @@
     "references": [
         "GUID:2bafac87e7f4b9b418d9448d219b01ab",
         "GUID:d62649f20bc2ba349a434c5eba6f7556",
-        "GUID:d81c570acb0546e47865a9bb58cc7645"
+        "GUID:d81c570acb0546e47865a9bb58cc7645",
+        "GUID:d80e5027280713447b70339fca3efe66"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -12,7 +13,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

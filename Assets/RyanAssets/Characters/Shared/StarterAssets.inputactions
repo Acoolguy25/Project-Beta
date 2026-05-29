@@ -268,17 +268,6 @@
                 },
                 {
                     "name": "",
-                    "id": "4a4aaa7c-ba11-480a-9f48-1cfe26868303",
-                    "path": "*/{Menu}",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "ToggleMenu",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
                     "id": "b8ff9820-6dca-4ee6-8e35-66ce6b609de7",
                     "path": "<Keyboard>/slash",
                     "interactions": "",

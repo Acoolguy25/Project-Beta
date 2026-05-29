@@ -27,13 +27,16 @@ namespace RyanAssets.Characters {
         public static Action menuToggledEvent, playerListEvent, chatActivateEvent;
         private PlayerInput _inputAction;
         private Dictionary<string, int> mapLocks = new();
+        private int globalLocks;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             Instance = null;
         }
         private void Awake() {
-            Assert.IsNull(Instance, "StarterAssetInputs is not null in Awake()");
+            // Assert.IsNull(Instance, "StarterAssetInputs is not null in Awake()");
+            if (Instance)
+                return;
             Instance = this;
             _inputAction = GetComponent<PlayerInput>();
         }
@@ -52,6 +55,15 @@ namespace RyanAssets.Characters {
                 map.Disable();
             Assert.IsTrue(mapLocks[actionName] >= 0, $"Maplock {actionName} is negative!");
         }
+        public void LockControls() {
+            globalLocks += 1;
+            gameObject.SetActive(false);
+        }
+        public void UnlockControls() {
+            globalLocks -= 1;
+            gameObject.SetActive(globalLocks == 0);
+            Assert.IsTrue(globalLocks >= 0, $"Globallock is negative {globalLocks}!");
+        }
         public bool GetControlsEnabled(string actionName) {
             var map = _inputAction.actions.FindActionMap(actionName);
             return map.enabled;
@@ -59,46 +71,35 @@ namespace RyanAssets.Characters {
         public void OnMove(InputValue value) {
             MoveInput(value.Get<Vector2>());
         }
-
         public void OnLook(InputValue value) {
             if (cursorInputForLook) {
                 LookInput(value.Get<Vector2>());
             }
         }
-
         public void OnJump(InputValue value) {
             JumpInput(value.isPressed);
         }
-
         public void OnSprint(InputValue value) {
             SprintInput(value.isPressed);
         }
-
-
         public void MoveInput(Vector2 newMoveDirection) {
             move = newMoveDirection;
         }
-
         public void LookInput(Vector2 newLookDirection) {
             look = newLookDirection;
         }
-
         public void JumpInput(bool newJumpState) {
             jump = newJumpState;
         }
-
         public void SprintInput(bool newSprintState) {
             sprint = newSprintState;
         }
-
         private void OnApplicationFocus(bool hasFocus) {
             SetCursorState(cursorLocked);
         }
-
         private void SetCursorState(bool newState) {
             Cursor.lockState = newState ? CursorLockMode.Locked : CursorLockMode.None;
         }
-
         public void OnToggleMenu() {
             menuToggledEvent.Invoke();
         }
@@ -108,7 +109,6 @@ namespace RyanAssets.Characters {
         public void OnTogglePlayerList() {
             playerListEvent.Invoke();
         }
-
     }
 
 }

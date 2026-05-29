@@ -11,6 +11,8 @@ using UnityEngine.UI;
 using RyanAssets.Characters;
 using TMPro;
 using UnityEngine.EventSystems;
+using RyanAssets.Client.ClientUI.Topbar;
+using RyanAssets.UI;
 
 namespace RyanAssets.Client.ClientUI.Chat {
     public class ClientChat : ListGridUI<MessageBroadcast>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
@@ -38,17 +40,21 @@ namespace RyanAssets.Client.ClientUI.Chat {
             SharedInputController.chatActivateEvent -= OnChatToggle;
         }
         private void OnChatToggle() {
+            ClientTopbar.Instance.EnsureCanvasVisibility(GetComponent<CanvasGroupController>());
             chatBox.Select();
         }
         public void OnMessageSend_ButtonPressed(string text) {
+            chatBox.DeactivateInputField();
+            EventSystem.current.SetSelectedGameObject(null);
             if (text.Length > 0)
                 InstanceFinder.ClientManager.Broadcast<MessageRequest>(new() { message = text });
+            chatBox.text = string.Empty;
         }
         public void OnChatSelected() {
-            SharedInputController.Instance.SetControlsEnabled("Player", false);
+            SharedInputController.Instance.LockControls();
         }
         public void OnChatUnselected() {
-            SharedInputController.Instance.SetControlsEnabled("Player", true);
+            SharedInputController.Instance.UnlockControls();
         }
         public void OnScroll(PointerEventData eventData) {
             scrollRect.OnScroll(eventData);

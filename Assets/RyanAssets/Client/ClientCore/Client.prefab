@@ -766,6 +766,88 @@ MonoBehaviour:
   m_PointerBehavior: 0
   m_CursorLockBehavior: 0
   m_ScrollDeltaPerTick: 6
+--- !u!1 &4737745143679322053
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6160134068358634409}
+  - component: {fileID: 2169664757215655472}
+  - component: {fileID: 6002820967340758286}
+  m_Layer: 0
+  m_Name: InputSystem
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6160134068358634409
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4737745143679322053}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 468.3694, y: 618.85016, z: -59.5336}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 5871290092194674182}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2169664757215655472
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4737745143679322053}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62899f850307741f2a39c98a8b639597, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.PlayerInput
+  m_Actions: {fileID: -944628639613478452, guid: 6a761ea8f5a587a408522821dcad4763, type: 3}
+  m_NotificationBehavior: 0
+  m_UIInputModule: {fileID: 0}
+  m_DeviceLostEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_DeviceRegainedEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ControlsChangedEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ActionEvents: []
+  m_NeverAutoSwitchControlSchemes: 1
+  m_DefaultControlScheme: KeyboardMouse
+  m_DefaultActionMap: Player
+  m_SplitScreenIndex: -1
+  m_Camera: {fileID: 0}
+--- !u!114 &6002820967340758286
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4737745143679322053}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 110b994b60610e146a3fd286dc0ce410, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RyanAssets.Characters.SharedInputController
+  move: {x: 0, y: 0}
+  look: {x: 0, y: 0}
+  jump: 0
+  sprint: 0
+  analogMovement: 0
+  cursorLocked: 0
+  cursorInputForLook: 1
 --- !u!1 &6815256693069096343
 GameObject:
   m_ObjectHideFlags: 0
@@ -797,6 +879,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6914050140731632812}
+  - {fileID: 6160134068358634409}
   m_Father: {fileID: 3998357339619525873}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4997144533380573531
@@ -1269,6 +1352,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: GameSettingsCanvas
       objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000003, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_SortingOrder
+      value: 50
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000009, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1424,13 +1515,25 @@ PrefabInstance:
     m_TransformParent: {fileID: 4531000923429442748}
     m_Modifications:
     - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: chatButton
+      value: 
+      objectReference: {fileID: 2424885555528797313}
+    - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
       propertyPath: chatCanvas
       value: 
       objectReference: {fileID: 80756124940246763}
     - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: playerListButton
+      value: 
+      objectReference: {fileID: 2424885555528797347}
+    - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
       propertyPath: playerListCanvas
       value: 
       objectReference: {fileID: 6578475742538719290}
+    - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: gameSettingsButton
+      value: 
+      objectReference: {fileID: 2424885555528797336}
     - target: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
       propertyPath: gameSettingsCanvas
       value: 
@@ -1519,16 +1622,156 @@ PrefabInstance:
       propertyPath: m_Name
       value: TopbarCanvas
       objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000003, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_SortingOrder
+      value: 100
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000011, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_Name
+      value: GameSettingsButton
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 7048560042194768430}
+    - target: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: ToggleGameSettingsCanvas_ButtonPressed
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: RyanAssets.Client.ClientUI.Topbar.ClientTopbar, RyanAssets.Client.ClientUI.Topbar
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 7048560042194768430}
+    - target: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: ToggleChatCanvas_ButtonPressed
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: RyanAssets.Client.ClientUI.Topbar.ClientTopbar, RyanAssets.Client.ClientUI.Topbar
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000050, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_Name
+      value: PlayerListButton
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 7048560042194768430}
+    - target: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: TogglePlayerListCanvas_ButtonPressed
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: RyanAssets.Client.ClientUI.Topbar.ClientTopbar, RyanAssets.Client.ClientUI.Topbar
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+--- !u!114 &2424885555528797313 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9100000000000000023, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+  m_PrefabInstance: {fileID: 6912846593868369046}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!224 &2424885555528797335 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 9100000000000000001, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
   m_PrefabInstance: {fileID: 6912846593868369046}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2424885555528797336 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9100000000000000014, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+  m_PrefabInstance: {fileID: 6912846593868369046}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
+--- !u!114 &2424885555528797347 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9100000000000000053, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+  m_PrefabInstance: {fileID: 6912846593868369046}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
+--- !u!114 &7048560042194768430 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4485261262082743992, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+  m_PrefabInstance: {fileID: 6912846593868369046}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a6bdddd1506c2c47b6e8e4ad44100b7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Client.ClientUI.Topbar::RyanAssets.Client.ClientUI.Topbar.ClientTopbar
 --- !u!1001 &7461931669560760954
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1559,7 +1802,35 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907918, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.0002975464
+      value: 0.00006866455
+      objectReference: {fileID: 0}
+    - target: {fileID: 4157554397622734917, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+    - target: {fileID: 4157554397622734917, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_Color.a
+      value: 0.72
+      objectReference: {fileID: 0}
+    - target: {fileID: 4157554397622734917, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_Color.b
+      value: 0.02
+      objectReference: {fileID: 0}
+    - target: {fileID: 4157554397622734917, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_Color.g
+      value: 0.02
+      objectReference: {fileID: 0}
+    - target: {fileID: 4157554397622734917, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_Color.r
+      value: 0.02
+      objectReference: {fileID: 0}
+    - target: {fileID: 5614910597484933578, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_TargetGraphic
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 7390684155822474385, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: alwaysActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Pivot.x
@@ -1645,7 +1916,16 @@ PrefabInstance:
       propertyPath: m_Name
       value: ChatCanvas
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    - target: {fileID: 9100000000000000028, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: -10
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000032, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: -10
+      objectReference: {fileID: 0}
+    m_RemovedComponents:
+    - {fileID: 9100000000000000027, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

@@ -1,0 +1,16 @@
+{
+    "name": "RyanAssets.Client.ClientUI.GameSettings",
+    "rootNamespace": "RyanAssets.Client.ClientUI.GameSettings",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -4,7 +4,6 @@ using UnityEngine;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
 using UnityEngine.SceneManagement;
-using RyanAssets.Client.ClientCore;
 
 using FishNet;
 using FishNet.Transporting;
@@ -16,7 +15,7 @@ namespace RyanAssets.Client.ClientCore {
         [SerializeField]
         GameObject[] gameOnlyObjects;
         static bool wasAuthenticated, isConnecting, hasCanceled;
-        static string joinServerId;
+        public static string joinServerId, joinUniverseId;
         void Awake() {
             if (Instance != null) {
                 Destroy(gameObject);
@@ -52,7 +51,7 @@ namespace RyanAssets.Client.ClientCore {
         async Task<(string, JObject)> WaitForServerLoad() {
             return await BackendNetwork.GetRequest($"/api/servers/v1/{joinServerId}/wait");
         }
-        public async void JoinGameServer(JObject json) {
+        public async void JoinGameServer(string universe_id, JObject json) {
             string status = json["data"]["status"].ToString();
             joinServerId = json["data"]["server_id"].ToString();
             if (status == "starting") {
@@ -64,6 +63,7 @@ namespace RyanAssets.Client.ClientCore {
                 return;
             }
             SetJoiningMessage("Initializing...");
+            joinUniverseId = universe_id;
             Transport transport = InstanceFinder.TransportManager.Transport;
             transport.SetClientAddress((string)json["data"]["server_ip"]);
             transport.SetPort((ushort)json["data"]["server_port"]);

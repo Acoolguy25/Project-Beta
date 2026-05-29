@@ -177,7 +177,7 @@ namespace RyanAssets.Server.ServerCore {
             InstanceFinder.ServerManager.StopConnection(true);
         }
         static void OnQuit() {
-            StopServer("the backend server expired a shutdown");
+            StopServer("the backend server experienced a shutdown");
         }
     }
 }
