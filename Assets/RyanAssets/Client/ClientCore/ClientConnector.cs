@@ -17,15 +17,10 @@ namespace RyanAssets.Client.ClientCore {
         static bool wasAuthenticated, isConnecting, hasCanceled;
         public static string joinServerId, joinUniverseId;
         void Awake() {
-            if (Instance != null) {
-                Destroy(gameObject);
-                return;
-            }
             Instance = this;
             InstanceFinder.ClientManager.OnClientConnectionState += OnClientState;
             InstanceFinder.ClientManager.OnClientTimeOut += OnClientTimeOut;
             InstanceFinder.ClientManager.OnAuthenticated += OnClientAuthenticated;
-            DontDestroyOnLoad(gameObject);
             SetGameActive(false);
         }
         void SetGameActive(bool active) {

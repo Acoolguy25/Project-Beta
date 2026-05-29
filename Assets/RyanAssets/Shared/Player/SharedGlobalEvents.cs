@@ -11,6 +11,9 @@ namespace RyanAssets.Shared.Player {
         void Awake() {
             Instance = this;
 #if !UNITY_SERVER
+            // foreach (var pair in Players) {
+            //     OnPlayerAdded?.Invoke(pair.Key, pair.Value);
+            // }
             Players.OnChange += OnPlayerChanged;
 #endif
         }
@@ -28,6 +31,16 @@ namespace RyanAssets.Shared.Player {
                     Debug.LogError("PlayerList was cleared!");
                     break;
             }
+        }
+        // private void SyncLatePlayerAdd(Action<NetworkConnection, ServerPlayerStats> func) {
+        //     foreach (var pair in Players) {
+        //         func(pair.Key, pair.Value);
+        //     }
+        // }
+        public static void RegisterLatePlayerAdd(Action<NetworkConnection, ServerPlayerStats> func) {
+            // if (Instance != null)
+            //     Instance.SyncLatePlayerAdd(func);
+            OnPlayerAdded += func;
         }
 #endif
     }

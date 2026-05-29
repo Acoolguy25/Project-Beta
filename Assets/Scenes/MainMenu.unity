@@ -179,23 +179,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1cb026ca7d0fb114fa2f12c48bbe7ae2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
---- !u!1 &393923649 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 8559162089105919674, guid: e431e71087a954a4098220c184290ef0, type: 3}
-  m_PrefabInstance: {fileID: 7483865862500381802}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &393923651
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 393923649}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6dbd4c6743011a24091ff74bbef2d53e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Client.ClientCore::RyanAssets.Client.ClientCore.ClientBroadcasts
 --- !u!114 &655234709 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
@@ -207,23 +190,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d199490a83bb2b844b9695cbf13b01ef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.InputField
---- !u!1 &714353421 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1857640944453950051, guid: e431e71087a954a4098220c184290ef0, type: 3}
-  m_PrefabInstance: {fileID: 7483865862500381802}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &714353425
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 714353421}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9307a04a390f95f47ab2870089721408, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.TextboxHelper
 --- !u!1 &1712923314
 GameObject:
   m_ObjectHideFlags: 0
@@ -452,17 +418,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
---- !u!114 &1885646838 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2424885555528797374, guid: e431e71087a954a4098220c184290ef0, type: 3}
-  m_PrefabInstance: {fileID: 7483865862500381802}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
 --- !u!1001 &2327931591145062436
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -648,14 +603,6 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2424885555528797368, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2424885555528797372, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 3930267237715561541, guid: e431e71087a954a4098220c184290ef0, type: 3}
       propertyPath: m_Name
       value: Client
@@ -700,22 +647,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 4782487647155487498, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      propertyPath: ZoomMultiplier
-      value: 1.5
-      objectReference: {fileID: 0}
-    - target: {fileID: 6031029229260311832, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      propertyPath: m_ControllerManager.Controllers.Array.data[2].Input.Gain
-      value: -1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7048560042194768430, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      propertyPath: experienceText
-      value: 
-      objectReference: {fileID: 1885646838}
-    - target: {fileID: 7048560042194768430, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      propertyPath: currentUniverseText
-      value: 
-      objectReference: {fileID: 1885646838}
     - target: {fileID: 7779876469382725766, guid: e431e71087a954a4098220c184290ef0, type: 3}
       propertyPath: m_Value
       value: 1
@@ -734,7 +665,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7779876469382726004, guid: e431e71087a954a4098220c184290ef0, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.0004119873
+      value: 0.0007171631
       objectReference: {fileID: 0}
     - target: {fileID: 7779876469382726101, guid: e431e71087a954a4098220c184290ef0, type: 3}
       propertyPath: m_AnchorMax.x
@@ -747,13 +678,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 8559162089105919674, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 393923651}
-    - targetCorrespondingSourceObject: {fileID: 1857640944453950051, guid: e431e71087a954a4098220c184290ef0, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 714353425}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: e431e71087a954a4098220c184290ef0, type: 3}
 --- !u!1001 &8125114074414780783
 PrefabInstance:

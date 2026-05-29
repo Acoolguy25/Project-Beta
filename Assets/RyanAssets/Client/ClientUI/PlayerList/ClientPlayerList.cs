@@ -12,7 +12,8 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
     public class ClientPlayerList : ListGridUI<(NetworkConnection conn, ServerPlayerStats data)> {
         protected override void Start() {
             base.Start();
-            SharedGlobalEvents.OnPlayerAdded += OnPlayerAdded;
+            // SharedGlobalEvents.OnPlayerAdded += OnPlayerAdded;
+            SharedGlobalEvents.RegisterLatePlayerAdd(OnPlayerAdded);
             SharedGlobalEvents.OnPlayerRemoved += OnPlayerRemoved;
             OnCreatePrefab += OnAddPrefab;
         }

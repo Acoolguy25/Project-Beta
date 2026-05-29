@@ -34,9 +34,7 @@ namespace RyanAssets.Characters {
             Instance = null;
         }
         private void Awake() {
-            // Assert.IsNull(Instance, "StarterAssetInputs is not null in Awake()");
-            if (Instance)
-                return;
+            Assert.IsTrue(Instance == null || Instance != this, "StarterAssetInputs is valid in Awake()");
             Instance = this;
             _inputAction = GetComponent<PlayerInput>();
         }
@@ -57,12 +55,14 @@ namespace RyanAssets.Characters {
         }
         public void LockControls() {
             globalLocks += 1;
-            gameObject.SetActive(false);
+            if (globalLocks == 1)
+                SetControlsEnabled("Player", false);
         }
         public void UnlockControls() {
             globalLocks -= 1;
-            gameObject.SetActive(globalLocks == 0);
             Assert.IsTrue(globalLocks >= 0, $"Globallock is negative {globalLocks}!");
+            if (globalLocks == 0)
+                SetControlsEnabled("Player", true);
         }
         public bool GetControlsEnabled(string actionName) {
             var map = _inputAction.actions.FindActionMap(actionName);

@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
 using UnityEngine.SceneManagement;
+using System.Threading.Tasks;
 
 using FishNet;
 using FishNet.Transporting;
@@ -24,6 +25,7 @@ namespace RyanAssets.Server.ServerCore {
         };
         public static Action StartServerEvent, StopServerEvent;
         public static ServerInfo serverInfo = new();
+        static bool isStopping;
         public static ushort MaxPlayers { get; private set; }
         public static ushort ServerIdleTimeoutSeconds { get; private set; }
         public static ushort ServerHeartbeatIntvSeconds { get; private set; }
@@ -167,13 +169,24 @@ namespace RyanAssets.Server.ServerCore {
             return true;
         }
         public static void StopServer(string reason) {
-            if (!InstanceFinder.IsServerStarted)
+            _ = StopServerAsync(reason);
+        }
+
+        static async Task StopServerAsync(string reason) {
+            if (isStopping || !InstanceFinder.IsServerStarted)
                 return;
+            isStopping = true;
+
             Debug.Log($"Stopping server because {reason}");
+            StopServerEvent?.Invoke();
+
             InstanceFinder.ServerManager.Broadcast(new PromptBroadcast {
                 title = "Server Closed",
                 description = $"The server was closed because {reason}"
             });
+
+            await Task.Delay(500);
+
             InstanceFinder.ServerManager.StopConnection(true);
         }
         static void OnQuit() {
