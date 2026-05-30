@@ -1,7 +1,9 @@
 namespace RyanAssets.DataService {
     [System.Serializable]
     public struct PlayerSettings {
-        public float ZoomSensitivity;
+        public int BidirectionalZoomSensitivity;
+        public int VerticalZoomSensitivity;
+        public int HorizontalZoomSensitivity;
         public bool InvertedControls;
     };
     [System.Serializable]

@@ -67,7 +67,7 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Project-Beta.slnx",
+    "dotnet.defaultSolution": "Project Beta.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false,
     "dotnet.preferCSharpExtension": true,
     "dotnet.server.useOmnisharp": true,

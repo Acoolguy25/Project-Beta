@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using Unity.Cinemachine;
 using UnityEngine.InputSystem;
+using RyanAssets.Client.ClientUI.GameSettings;
 
 namespace RyanAssets.Cameras
 {
@@ -10,7 +11,7 @@ namespace RyanAssets.Cameras
         [Header("Scrollwheel Settings")]
         public float MinZoom = 1f;
         public float MaxZoom = 20.0f;
-        public float ZoomMultiplier = 300.0f;
+        // public float ZoomMultiplier = 300.0f;
         public float ZoomPercentage = 0.3f;
         [Header("Force Scroll Settings")]
         public float ForceScrollOffset = 0.5f;
@@ -27,6 +28,8 @@ namespace RyanAssets.Cameras
         private Vector2 cursor_pos;
 
         private LayerMask layerMask;
+        private IntGameSetting zoomMultiplierSensitivity;
+
         void Start()
         {
             forceScroll = MaxZoom;
@@ -35,6 +38,7 @@ namespace RyanAssets.Cameras
             cinemachineInputAxisController = GetComponent<CinemachineInputAxisController>();
             newScroll = orbitalFollow.Radius;
             cinemachineCamera = GetComponent<CinemachineCamera>();
+            GameSettingsClient.GetSetting<IntGameSetting>(zoomMultiplierSensitivity);
             UpdateCameraZoom(true);
         }
         void OnEnable()
@@ -81,7 +85,7 @@ namespace RyanAssets.Cameras
         }
         void UpdateCameraZoom(bool started = false) { 
             if (cinemachineCamera.Follow == null) return;
-            float zoomDelta = scrollWheel.ReadValue<float>() * ZoomMultiplier;
+            float zoomDelta = scrollWheel.ReadValue<float>() * zoomMultiplierSensitivity.value;
             if (zoomDelta != 0)
             {
                 newScroll += zoomDelta;
