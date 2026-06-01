@@ -1,8 +1,6 @@
 using UnityEngine;
 using TMPro;
-using UnityEngine;
 using UnityEngine.EventSystems;
-using RyanAssets.Characters;
 
 namespace RyanAssets.UI {
     public class TextboxHelper : MonoBehaviour {

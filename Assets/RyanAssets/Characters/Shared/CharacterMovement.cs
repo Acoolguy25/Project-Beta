@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FishNet;
+using RyanAssets.Core;
 using RyanAssets.Client.ClientUI.GameSettings;
 
 namespace RyanAssets.Characters {
