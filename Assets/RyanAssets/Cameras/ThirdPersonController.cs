@@ -28,7 +28,6 @@ namespace RyanAssets.Cameras
         private Vector2 cursor_pos;
 
         private LayerMask layerMask;
-        private IntGameSetting zoomMultiplierSensitivity;
 
         void Start()
         {
@@ -38,7 +37,6 @@ namespace RyanAssets.Cameras
             cinemachineInputAxisController = GetComponent<CinemachineInputAxisController>();
             newScroll = orbitalFollow.Radius;
             cinemachineCamera = GetComponent<CinemachineCamera>();
-            GameSettingsClient.GetSetting<IntGameSetting>(zoomMultiplierSensitivity);
             UpdateCameraZoom(true);
         }
         void OnEnable()
@@ -59,8 +57,25 @@ namespace RyanAssets.Cameras
         }
         void ToggleRightClick(bool newVal) {
             isRotating = newVal;
-            if (cinemachineInputAxisController)
+            if (cinemachineInputAxisController){
                 cinemachineInputAxisController.enabled = newVal;
+                foreach (var c in cinemachineInputAxisController.Controllers){
+                    switch (c.Name)
+                    {
+                        case "Look Orbit X":
+                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("HorizontalTurnSensitivity");
+                            break;
+
+                        case "Look Orbit Y":
+                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("VerticalTurnSensitivity");
+                            break;
+
+                        case "Orbit Scale":
+                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("TurnSensitivity");
+                            break;
+                    }
+                }
+            }
             Cursor.lockState = newVal ? CursorLockMode.Confined : CursorLockMode.None;
             Cursor.visible = !newVal;
             //Mouse.current.position.value;
@@ -85,7 +100,7 @@ namespace RyanAssets.Cameras
         }
         void UpdateCameraZoom(bool started = false) { 
             if (cinemachineCamera.Follow == null) return;
-            float zoomDelta = scrollWheel.ReadValue<float>() * zoomMultiplierSensitivity.value;
+            float zoomDelta = scrollWheel.ReadValue<float>() * GameSettingsClient.GetSettingValue<int>("ZoomSensitivity") / 100f;//zoomMultiplierSensitivity.value;
             if (zoomDelta != 0)
             {
                 newScroll += zoomDelta;

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FishNet;
+using RyanAssets.Client.ClientUI.GameSettings;
 
 namespace RyanAssets.Characters {
     public class CharacterMovement : MonoBehaviour {
@@ -80,13 +81,19 @@ namespace RyanAssets.Characters {
                 _animator.SetBool(_animIDGrounded, Grounded);
             }
         }
-
+        private Vector3 GetAdaptedMoveVector(){
+            Vector3 move = _input.move;
+            if (GameSettingsClient.GetSettingValue<bool>("InvertedMovementControls"))
+                move *= -1;
+            return move;
+        }
         private void Move() {
             float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
+            Vector3 moveVec = GetAdaptedMoveVector();
 
-            if (_input.move == Vector2.zero) targetSpeed = 0.0f;
+            if (moveVec == Vector2.zero) targetSpeed = 0.0f;
 
-            float inputMagnitude = _input.analogMovement ? _input.move.magnitude : 1f;
+            float inputMagnitude = _input.analogMovement ? moveVec.magnitude : 1f;
 
             // Smooth animation blend
             float currentSpeed = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z).magnitude;
@@ -94,10 +101,10 @@ namespace RyanAssets.Characters {
             if (_animationBlend < 0.01f) _animationBlend = 0f;
 
             // Movement direction
-            Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
+            Vector3 inputDirection = new Vector3(moveVec.x, 0.0f, moveVec.y).normalized;
 
             // Rotate player to face movement direction
-            if (_input.move != Vector2.zero) {
+            if (moveVec != Vector2.zero) {
                 float CamEulerAngleY = Camera.main.transform.eulerAngles.y;
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg + CamEulerAngleY;
                 float rotation = Mathf.SmoothDampAngle(LocalPlayer.Character.transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, RotationSmoothTime);

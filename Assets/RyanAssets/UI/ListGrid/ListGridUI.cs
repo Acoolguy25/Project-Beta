@@ -67,8 +67,8 @@ namespace RyanAssets.UI.ListGrid {
 
             float height = 0f;
 
-            foreach (RectTransform child in contentRT) {
-                if (!child.gameObject.activeInHierarchy)
+            foreach (Transform transform_child in contentRT) {
+                if (!transform_child.gameObject.activeInHierarchy || !transform_child.TryGetComponent<RectTransform>(out RectTransform child))
                     continue;
 
                 height += child.rect.height;

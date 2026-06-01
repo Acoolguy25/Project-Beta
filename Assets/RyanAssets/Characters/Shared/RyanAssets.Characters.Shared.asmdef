@@ -4,7 +4,8 @@
     "references": [
         "Unity.InputSystem",
         "FishNet.Runtime",
-        "RyanAssets.Core"
+        "RyanAssets.Core",
+        "RyanAssets.Client.ClientUI.GameSettings"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

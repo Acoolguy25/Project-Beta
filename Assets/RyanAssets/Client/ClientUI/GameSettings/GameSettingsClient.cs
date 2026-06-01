@@ -3,17 +3,34 @@ using RyanAssets.UI.ListGrid;
 using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
+using System.Linq;
 
 namespace RyanAssets.Client.ClientUI.GameSettings {
     public class GameSettingsClient: ListGridUI<GameSettingsInstance> {
-        public static readonly GameSettingsInstance[] gameSettingsConfigUI = new GameSettingsInstance[]{
-            new IntGameSetting(){
-                name = "BidirectionalZoomSensitivity",
-                title = "Birdirectional Zoom Sensitivity",
-                min = 1, max = 250,
-                on_update = (val) => {
+        public static readonly Dictionary<string, GameSettingsInstance> gameSettingsConfigUI = new(){
+            ["ZoomSensitivity"] = new IntGameSetting(){
+                // name = "BidirectionalZoomSensitivity",
+                title = "Zoom Sensitivity",
+                min = 1, max = 250, start = 100
+                // on_update = (val) => {
                     
-                }
+                // }
+            },
+            ["TurnSensitivity"] = new IntGameSetting(){
+                title = "Turn Sensitivity",
+                min = 1, max = 250, start = 100
+            },
+            ["VerticalTurnSensitivity"] = new IntGameSetting(){
+                title = "Vertical Turn Sensitivity",
+                min = 1, max = 250, start = 100
+            },
+            ["HorizontalTurnSensitivity"] = new IntGameSetting(){
+                title = "Horizontal Turn Sensitivity",
+                min = 1, max = 250, start = 100
+            },
+            ["InvertedMovementControls"] = new BoolGameSetting(){
+                title = "Inverted Movement Controls",
+                start = false
             },
             // new IntGameSetting(){
             //     name = "VerticalZoomSensitivity",
@@ -32,22 +49,33 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             // }
         };
         public static T GetSetting<T>(string name) where T : GameSettingsInstance {
-            foreach (GameSettingsInstance instance in gameSettingsConfigUI) {
-                if (instance.name == name) {
-                    Debug.Assert(instance is T, $"Setting '{name}' is not of type {typeof(T).Name}");
-                    return (T) instance;
-                }
+            if (gameSettingsConfigUI.TryGetValue(name, out GameSettingsInstance setting)){
+                Debug.Assert(setting is T, $"Setting '{name}' is not of type {typeof(T).Name}");
+                return (T) setting;
             }
             Debug.LogError($"Setting '{name}' not found.");
             return null;
         }
+        public static T GetSettingValue<T>(string name){
+            if (gameSettingsConfigUI.TryGetValue(name, out GameSettingsInstance setting)){
+                return (T) setting.GetValue();
+            }
+            Debug.LogError($"Setting '{name}' not found.");
+            return default;
+        }
 
         [SerializeField]
         List<GameObject> settingToAdditionalPrefab;
-        protected override void Start(){
+        protected void Awake(){
             base.Start();
             OnCreatePrefab += OnPrefabAdded;
-            AddPrefabs(gameSettingsConfigUI);
+            foreach (var keyVal in gameSettingsConfigUI) {
+                keyVal.Value.name = keyVal.Key; // Assign the names!
+            }
+            AddPrefabs(gameSettingsConfigUI.Values.ToArray());
+        }
+        protected override void Start(){
+            // disabled
         }
         void OnPrefabAdded(GameObject prefab, GameSettingsInstance setting){
             GameObject additionalObj = Instantiate(settingToAdditionalPrefab[(int) setting.type]);
@@ -67,6 +95,7 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
                     break;
             }
             setting.Load();
+            setting.InitDone();
             Destroy(prefab);
         }
     }

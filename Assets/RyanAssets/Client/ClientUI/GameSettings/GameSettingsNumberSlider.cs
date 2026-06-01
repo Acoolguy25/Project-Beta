@@ -6,7 +6,7 @@ using UnityEngine.UI;
 namespace RyanAssets.Client.ClientUI.GameSettings {
     [DisallowMultipleComponent]
     public class GameSettingsNumberSlider : MonoBehaviour {
-        [SerializeField] Slider slider;
+        [SerializeField] public Slider slider;
         [SerializeField] InputField numberInput;
         [SerializeField] string numberFormat = "0.##";
         [SerializeField] bool wholeNumbers;
