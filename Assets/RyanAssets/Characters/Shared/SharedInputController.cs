@@ -6,9 +6,10 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.InputSystem;
+using RyanAssets.ControlLocking;
 
 namespace RyanAssets.Characters {
-    public class SharedInputController : MonoBehaviour {
+    public class SharedInputController : MonoBehaviour, IControlLockProvider {
         public static SharedInputController Instance { get; private set; }
 
         [Header("Character Input Values")]
@@ -39,6 +40,12 @@ namespace RyanAssets.Characters {
             // Assert.IsTrue(Instance == null || Instance != this, "StarterAssetInputs is valid in Awake()");
             Instance = this;
             _inputAction = GetComponent<PlayerInput>();
+            ControlLockService.Register(this);
+        }
+        private void OnDestroy() {
+            if (Instance == this)
+                Instance = null;
+            ControlLockService.Unregister(this);
         }
         private void Start() {
             foreach (InputActionMap map in _inputAction.actions.actionMaps) {

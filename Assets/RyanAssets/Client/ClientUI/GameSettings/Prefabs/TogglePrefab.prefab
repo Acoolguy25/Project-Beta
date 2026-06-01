@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 9100000000000000003}
   - component: {fileID: 9100000000000000004}
   - component: {fileID: 9100000000000000005}
+  - component: {fileID: 9100000000000000010}
   m_Layer: 5
   m_Name: TogglePrefab
   m_TagString: Untagged
@@ -121,6 +122,25 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &9100000000000000010
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000000000000002}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d2f0958a10a4d94aa940b99e7059162, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  button: {fileID: 9100000000000000005}
+  backgroundImage: {fileID: 9100000000000000004}
+  knob: {fileID: 9100000000000000006}
+  value: 1
+  onColor: {r: 0.08, g: 0.62, b: 0.28, a: 1}
+  offColor: {r: 0.32, g: 0.32, b: 0.36, a: 1}
+  knobInset: 18
 --- !u!1 &9100000000000000007
 GameObject:
   m_ObjectHideFlags: 0

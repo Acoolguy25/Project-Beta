@@ -82,15 +82,15 @@ namespace RyanAssets.Characters {
                 _animator.SetBool(_animIDGrounded, Grounded);
             }
         }
-        private Vector3 GetAdaptedMoveVector(){
-            Vector3 move = _input.move;
+        private Vector2 GetAdaptedMoveVector(){
+            Vector2 move = _input.move;
             if (GameSettingsClient.GetSettingValue<bool>("InvertedMovementControls"))
                 move *= -1;
             return move;
         }
         private void Move() {
             float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
-            Vector3 moveVec = GetAdaptedMoveVector();
+            Vector2 moveVec = GetAdaptedMoveVector();
 
             if (moveVec == Vector2.zero) targetSpeed = 0.0f;
 

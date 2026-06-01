@@ -90,8 +90,8 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
                     break;
 
                 case BoolGameSetting boolSetting:
-                    var toggleButton = additionalObj.transform.GetChild(1).GetComponent<Button>();
-                    boolSetting.Init(toggleButton.gameObject);
+                    var toggle = additionalObj.transform.GetChild(1).GetComponent<GameSettingsToggle>();
+                    boolSetting.Init(toggle.gameObject);
                     break;
             }
             setting.Load();

@@ -5,7 +5,9 @@
         "Unity.InputSystem",
         "FishNet.Runtime",
         "RyanAssets.Core",
-        "RyanAssets.Client.ClientUI.GameSettings"
+        "RyanAssets.ControlLocking",
+        "RyanAssets.Client.ClientUI.GameSettings",
+        "RyanAssets.UI.ListGrid"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

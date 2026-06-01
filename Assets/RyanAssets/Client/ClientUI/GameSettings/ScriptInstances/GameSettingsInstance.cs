@@ -33,7 +33,8 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             // it can do nothing
         }
         public override bool TrySet(object new_value){
-            return TrySet((T) new_value);
+            value = (T) new_value;
+            return true;
         }
         public override object GetValue(){
             return (object) value;

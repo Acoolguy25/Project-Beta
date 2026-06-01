@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.EventSystems;
+using RyanAssets.ControlLocking;
 
 namespace RyanAssets.UI {
     public class TextboxHelper : MonoBehaviour {
@@ -17,11 +18,11 @@ namespace RyanAssets.UI {
             tmp_inputfield.onDeselect.RemoveListener(OnTextInputUnselected);
         }
         void OnTextInputSelected(string text) {
-            SharedInputController.Instance?.LockControls();
+            ControlLockService.LockControls();
             tmp_inputfield.placeholder.gameObject.SetActive(false);
         }
         void OnTextInputUnselected(string text) {
-            SharedInputController.Instance?.UnlockControls();
+            ControlLockService.UnlockControls();
             tmp_inputfield.placeholder.gameObject.SetActive(true);
         }
     }

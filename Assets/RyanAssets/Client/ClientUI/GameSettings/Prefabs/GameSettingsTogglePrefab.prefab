@@ -90,7 +90,6 @@ GameObject:
   - component: {fileID: 7865965766018436402}
   - component: {fileID: 9118616397773218611}
   - component: {fileID: 137985477581255709}
-  - component: {fileID: 3415198569267125605}
   m_Layer: 5
   m_Name: GameSettingsTogglePrefab
   m_TagString: Untagged
@@ -157,22 +156,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &3415198569267125605
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5129439638430744528}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2d2fcb1b5b8140c49a4f7af27683b2a8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Client.ClientUI.GameSettings::RyanAssets.Client.ClientUI.GameSettings.GameSettingsNumberSlider
-  slider: {fileID: 0}
-  numberInput: {fileID: 0}
-  numberFormat: 0.##
-  wholeNumbers: 0
 --- !u!1001 &6113041326405608548
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -183,7 +166,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 9100000000000000001, guid: 9009d6b3ca0749478bf177d66c99df74, type: 3}
       propertyPath: m_Pivot.x
-      value: 1.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: 9009d6b3ca0749478bf177d66c99df74, type: 3}
       propertyPath: m_Pivot.y
@@ -243,7 +226,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: 9009d6b3ca0749478bf177d66c99df74, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -14
+      value: -18
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: 9009d6b3ca0749478bf177d66c99df74, type: 3}
       propertyPath: m_AnchoredPosition.y
