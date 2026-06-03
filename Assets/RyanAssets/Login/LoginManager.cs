@@ -36,20 +36,26 @@ namespace RyanAssets.Login {
             loginScreen.RefreshScreen();
         }
         void SignInErr(Exception err) {
-            PromptManager.PromptError("SignIn", err);
+            PromptManager.PromptError("SignIn", err.Message);
         }
         void Start() {
+#if !UNITY_EDITOR || NETWORK_LOGIN
             AuthenticationService.Instance.SignedIn += SignedIn;
             AuthenticationService.Instance.Expired += SignedOut;
             AuthenticationService.Instance.SignedOut += SignedOut;
             AuthenticationService.Instance.SignInFailed += SignInErr;
+#else
+            SignedIn();
+#endif
             usernameInputField.text = LocalPlayerData.localData.username;
         }
         void OnDestroy() {
+#if !UNITY_EDITOR || NETWORK_LOGIN
             AuthenticationService.Instance.SignedIn -= SignedIn;
             AuthenticationService.Instance.Expired -= SignedOut;
             AuthenticationService.Instance.SignedOut -= SignedOut;
             AuthenticationService.Instance.SignInFailed -= SignInErr;
+#endif
         }
     }
 }

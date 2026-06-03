@@ -16,24 +16,22 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         Text experienceText;
         void Awake() {
             Instance = this;
-        }
-        void Start() {
             topbarCanvas = GetComponent<CanvasGroupController>();
+        }
+        void OnEnable() {
+            SharedInputController.menuToggledEvent += ToggleGameSettingsCanvas_ButtonPressed;
+            SharedInputController.playerListEvent += TogglePlayerListCanvas_ButtonPressed;
             SetCanvasVisibility(chatCanvas, chatButton, true, 0f);
             SetCanvasVisibility(gameSettingsCanvas, gameSettingsButton, false, 0f);
             SetCanvasVisibility(playerListCanvas, playerListButton, true, 0f);
             SetCanvasVisibility(topbarCanvas, null, true, 0f);
             experienceText.text = ClientConnector.joinUniverseId;
         }
-        void OnEnable() {
-            SharedInputController.menuToggledEvent += ToggleGameSettingsCanvas_ButtonPressed;
-            SharedInputController.playerListEvent += TogglePlayerListCanvas_ButtonPressed;
-        }
         void OnDisable() {
             SharedInputController.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
             SharedInputController.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
         }
-        public void EnsureCanvasVisibility(CanvasGroupController canvas) {
+        public Button GetButton(CanvasGroupController canvas){
             Button button;
             button = canvas switch {
                 var c when c == chatCanvas => chatButton,
@@ -41,7 +39,13 @@ namespace RyanAssets.Client.ClientUI.Topbar {
                 var c when c == playerListCanvas => playerListButton,
                 _ => null
             };
-            SetCanvasVisibility(canvas, button, true, 0f);
+            return button;
+        }
+        public void EnsureCanvasVisibility(CanvasGroupController canvas, bool visibility = true, bool instant = true) {
+            SetCanvasVisibility(canvas, GetButton(canvas), visibility, instant? 0f: 1/3f);
+        }
+        public void CloseCanvasVisibility(CanvasGroupController canvas){
+            SetCanvasVisibility(canvas, GetButton(canvas), false, 1/3f);
         }
         public void SetCanvasVisibility(CanvasGroupController canvas, Button button, bool newVisible, float duration) {
             canvas.SetVisible(newVisible, duration);

@@ -1,3 +1,4 @@
+#if !UNITY_SERVER
 using UnityEngine;
 using System.Collections;
 using Unity.Cinemachine;
@@ -124,3 +125,4 @@ namespace RyanAssets.Cameras
         }
     }
 }
+#endif

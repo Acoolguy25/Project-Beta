@@ -12,8 +12,13 @@ namespace RyanAssets.Login {
         [SerializeField, Range(0f, 1f)]
         float AnimationTime;
         public void RefreshScreen(){
-            signin.SetActive(!AuthenticationService.Instance.IsSignedIn);
-            logout.SetActive(AuthenticationService.Instance.IsSignedIn);
+            #if !UNITY_EDITOR || NETWORK_LOGIN
+                bool isSignedIn = AuthenticationService.Instance.IsSignedIn;
+            #else
+                bool isSignedIn = true;
+            #endif
+            signin.SetActive(!isSignedIn);
+            logout.SetActive(isSignedIn);
         }
         public void SetLoginScreenVisible(bool visible, bool instant = false){
             // if (visible)

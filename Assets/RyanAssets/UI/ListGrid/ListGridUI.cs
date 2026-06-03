@@ -21,16 +21,21 @@ namespace RyanAssets.UI.ListGrid {
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
 
         RectTransform contentRT;
-        public void ClearPrefabs() {
+        protected void ClearPendingPrefabs(){
             // Cancel all pending operations
             foreach (var op in pending_ops)
                 op.Cancel();
             pending_ops.Clear();
-
+        }
+        protected void ClearActivePrefabs(){
             // Destroy all remaining created objects
             foreach (Transform obj in contentTarget) {
                 RemovePrefab(obj);
             }
+        }
+        public void ClearPrefabs() {
+            ClearPendingPrefabs();
+            ClearActivePrefabs();
         }
         public void RemovePrefab(Transform obj) {
             OnDeletePrefab?.Invoke(obj.gameObject);
@@ -40,9 +45,11 @@ namespace RyanAssets.UI.ListGrid {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
+                if (!pending_ops.Remove(op))
+                    return; // cancelled
                 GameObject prefabClone = op.Result[0];
                 prefabClone.transform.SetParent(contentTarget, false);
-                pending_ops.Remove(op);
+                
 
                 OnCreatePrefab?.Invoke(prefabClone.gameObject, data);
                 UpdateLayout();
@@ -97,6 +104,9 @@ namespace RyanAssets.UI.ListGrid {
             contentRT = contentTarget.GetComponent<RectTransform>();
             gridLayoutGroup = contentRT.GetComponent<GridLayoutGroup>();
             // verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
+        }
+        void OnDestroy(){
+            ClearPendingPrefabs();
         }
     }
 }

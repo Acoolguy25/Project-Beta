@@ -96,14 +96,16 @@ namespace RyanAssets.Client.ClientCore {
 
                 case LocalConnectionState.Stopped:
                     isConnecting = false;
-                    if (wasAuthenticated) {
-                        wasAuthenticated = false;
-                        SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
-                        if (SceneManager.GetActiveScene().name != "MainMenu")
-                            SceneManager.LoadScene("MainMenu");
-                    } else if (!hasCanceled) {
-                        SetJoinResult("Join Game Failed!");
+                    if (!PromptManager.PromptDelete(PromptId.LeaveGameAwait)){
+                        if (wasAuthenticated) {
+                            wasAuthenticated = false;
+                            SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
+                        } else if (!hasCanceled) {
+                            SetJoinResult("Join Game Failed!");
+                        }
                     }
+                    if (!SceneManager.GetSceneByName("MainMenu").isLoaded)
+                        SceneManager.LoadScene("MainMenu");
                     SetGameActive(false);
                     break;
             }

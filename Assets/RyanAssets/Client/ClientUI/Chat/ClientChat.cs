@@ -40,7 +40,7 @@ namespace RyanAssets.Client.ClientUI.Chat {
             SharedInputController.chatActivateEvent -= OnChatToggle;
         }
         private void OnChatToggle() {
-            ClientTopbar.Instance.EnsureCanvasVisibility(GetComponent<CanvasGroupController>());
+            ClientTopbar.Instance.EnsureCanvasVisibility(GetComponent<CanvasGroupController>(), true, true);
             chatBox.Select();
         }
         public void OnMessageSend_ButtonPressed(string text) {

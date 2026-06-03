@@ -38,6 +38,7 @@ namespace RyanAssets.Authentication {
             Debug.Log("Remote Connection Received");
         }
 
+#if !UNITY_SERVER
         private void ClientConnectionState(ClientConnectionStateArgs args) {
             Debug.Log("Client state: " + args.ConnectionState);
 
@@ -46,7 +47,7 @@ namespace RyanAssets.Authentication {
 
             Debug.Log("Sending AuthRequest");
 
-            string token = Unity.Services.Authentication.AuthenticationService.Instance.AccessToken;
+            string token = BackendNetwork.GetAuthorizationToken();
             if (string.IsNullOrWhiteSpace(token)) {
                 Debug.LogWarning("Cannot authenticate with server because the Unity access token is empty.");
                 NetworkManager.ClientManager.StopConnection();
@@ -57,7 +58,7 @@ namespace RyanAssets.Authentication {
                 Token = token
             });
         }
-
+#endif
         private void OnAuthRequest(NetworkConnection conn, AuthRequest req, Channel channel) {
             Debug.Log("Received OnAuthRequest");
             if (conn.IsAuthenticated) {

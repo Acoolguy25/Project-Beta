@@ -28,6 +28,7 @@ namespace RyanAssets.Server.ServerCore {
             if (!Players.TryGetValue(conn, out ServerPlayerStats stats))
                 return;
             Players.Remove(conn);
+            SharedGlobalEvents.Instance.Players.Remove(conn);
             OnPlayerRemovedEvent?.Invoke(conn);
             string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id}";
             _ = BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect");

@@ -51,10 +51,19 @@ namespace RyanAssets.NetworkService {
             else
                 return (null, json);
         }
+#if !SERVER_BUILD
+        public static string GetAuthorizationToken(){
+            #if !UNITY_EDITOR || NETWORK_LOGIN
+                return AuthenticationService.Instance.AccessToken;
+            #else
+                return "Uvr2xiFAyUZJDybNdBEKcPOsMvjR";
+            #endif
+        }
+#endif
         public static async Task<(string, JObject)> GetRequest(string url) {
             try {
             #if !SERVER_BUILD
-                SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
+                SetAuthorizationToken(GetAuthorizationToken());
             #endif
                 HttpResponseMessage response = await client.GetAsync(url);
                 return await HandleResponse(response);
@@ -66,7 +75,7 @@ namespace RyanAssets.NetworkService {
             try {
             #if !SERVER_BUILD
                 if (accessToken == null)
-                    SetAuthorizationToken(AuthenticationService.Instance.AccessToken);
+                    SetAuthorizationToken(GetAuthorizationToken());
             #endif
                 StringContent content = new(
                     (body != null) ? body.ToString() : default_body,

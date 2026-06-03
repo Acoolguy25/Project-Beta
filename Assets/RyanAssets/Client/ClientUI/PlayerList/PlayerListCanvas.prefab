@@ -145,6 +145,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
   alwaysActive: 0
+  targetAlpha: 0
 --- !u!1 &9100000000000000007
 GameObject:
   m_ObjectHideFlags: 0
@@ -621,26 +622,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 9100000000000000022}
     m_Modifications:
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_Spacing.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_Spacing.y
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_CellSize.x
-      value: 210
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_CellSize.y
-      value: 24
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_ConstraintCount
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 1698325380526222616, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -711,7 +692,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426617, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_SizeDelta.x
-      value: -26
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426637, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_Name
@@ -780,6 +761,26 @@ PrefabInstance:
     - target: {fileID: 8228084169341426672, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Spacing.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Spacing.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_CellSize.x
+      value: 210
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_CellSize.y
+      value: 24
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_ConstraintCount
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

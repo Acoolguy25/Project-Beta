@@ -32,7 +32,9 @@ namespace RyanAssets.PromptService {
         PlayGameConfirm,
         JoinGameAwait,
         JoinGameResponse,
-        ServerPromptBroadcast
+        ServerPromptBroadcast,
+        LeaveGameConfirm,
+        LeaveGameAwait
     }
     public struct PromptData {
         public string title, description;
@@ -91,15 +93,15 @@ namespace RyanAssets.PromptService {
             if (idx == 0) // active index
                 UpdateRenderer();
         }
-        public int CompleteAction(PromptId promptId, PromptButton resp){
+        public bool CompleteAction(PromptId promptId, PromptButton resp){
             for (int idx = 0; idx < PromptList.Count; idx++){
                 PromptData prompt = PromptList[idx];
                 if (prompt.promptId == promptId){
                     CompleteAction(idx, resp);
-                    return 1;
+                    return true;
                 }
             }
-            return 0;
+            return false;
         }
         public void PromptButtonPressed(PromptButton btn){
             if (PromptInProgress)
@@ -147,8 +149,8 @@ namespace RyanAssets.PromptService {
         public static void PromptOk(string title, string description, PromptId promptId = PromptId.Protected){
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_OkOnly);
         }
-        public static void PromptDelete(PromptId promptId){
-            Instance.CompleteAction(promptId, PromptButton.Unknown);
+        public static bool PromptDelete(PromptId promptId){
+            return Instance.CompleteAction(promptId, PromptButton.Unknown);
         }
     }
 }

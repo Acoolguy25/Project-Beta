@@ -1,5 +1,8 @@
 using UnityEngine;
 using RyanAssets.UI.ListGrid;
+using RyanAssets.PromptService;
+using FishNet;
+using FishNet.Managing;
 using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
@@ -82,6 +85,7 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             additionalObj.transform.SetParent(prefab.transform.parent, false);
             additionalObj.name = prefab.name;
             additionalObj.transform.GetChild(0).GetComponent<Text>().text = setting.title;
+            additionalObj.name = setting.name;
             switch (setting) {
                 case IntGameSetting intSetting:
                     // additionalObj.transform.GetChild(1)
@@ -97,6 +101,14 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             setting.Load();
             setting.InitDone();
             Destroy(prefab);
+        }
+
+        public async void OnLeaveGame_ButtonPressed(){
+            PromptButton res = await PromptManager.Instance.PromptLocalUser("Leave Game?", "Are you sure you want to leave this game?", PromptId.LeaveGameConfirm, PromptManager.ButtonPreset_YesNo);
+            if (res != PromptButton.Yes)
+                return;
+            PromptManager.PromptWait("Disconnecting", "Disconnecting\nThis should only take a second", PromptId.LeaveGameAwait);
+            InstanceFinder.ClientManager.StopConnection();
         }
     }
 }

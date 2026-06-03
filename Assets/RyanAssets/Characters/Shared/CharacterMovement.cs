@@ -1,3 +1,4 @@
+#if !UNITY_SERVER
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FishNet;
@@ -168,3 +169,4 @@ namespace RyanAssets.Characters {
         }
     }
 }
+#endif

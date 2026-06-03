@@ -64,7 +64,7 @@ Canvas:
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 100
   m_TargetDisplay: 0
 --- !u!114 &9100000000000000004
 MonoBehaviour:
@@ -147,6 +147,10 @@ MonoBehaviour:
   chatCanvas: {fileID: 0}
   gameSettingsCanvas: {fileID: 0}
   playerListCanvas: {fileID: 0}
+  chatButton: {fileID: 9100000000000000023}
+  gameSettingsButton: {fileID: 9100000000000000014}
+  playerListButton: {fileID: 9100000000000000053}
+  experienceText: {fileID: 9100000000000000040}
 --- !u!1 &9100000000000000007
 GameObject:
   m_ObjectHideFlags: 0
@@ -242,7 +246,7 @@ GameObject:
   - component: {fileID: 9100000000000000013}
   - component: {fileID: 9100000000000000014}
   m_Layer: 5
-  m_Name: MenuButton
+  m_Name: GameSettingsButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -349,7 +353,20 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 9100000000000000013}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 4485261262082743992}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.Topbar.ClientTopbar,
+          RyanAssets.Client.ClientUI.Topbar
+        m_MethodName: ToggleGameSettingsCanvas_ButtonPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &9100000000000000016
 GameObject:
   m_ObjectHideFlags: 0
@@ -545,7 +562,20 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 9100000000000000022}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 4485261262082743992}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.Topbar.ClientTopbar,
+          RyanAssets.Client.ClientUI.Topbar
+        m_MethodName: ToggleChatCanvas_ButtonPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &9100000000000000025
 GameObject:
   m_ObjectHideFlags: 0
@@ -913,7 +943,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &9100000000000000041
 RectTransform:
   m_ObjectHideFlags: 0
@@ -988,7 +1018,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &9100000000000000045
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1063,7 +1093,7 @@ GameObject:
   - component: {fileID: 9100000000000000052}
   - component: {fileID: 9100000000000000053}
   m_Layer: 5
-  m_Name: SettingsButton
+  m_Name: PlayerListButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1170,7 +1200,20 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 9100000000000000052}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 4485261262082743992}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.Topbar.ClientTopbar,
+          RyanAssets.Client.ClientUI.Topbar
+        m_MethodName: TogglePlayerListCanvas_ButtonPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &9100000000000000055
 GameObject:
   m_ObjectHideFlags: 0
