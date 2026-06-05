@@ -48,6 +48,9 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             SetCanvasVisibility(canvas, GetButton(canvas), false, 1/3f);
         }
         public void SetCanvasVisibility(CanvasGroupController canvas, Button button, bool newVisible, float duration) {
+            if (canvas == gameSettingsCanvas)
+                InputService.SetInputScreenActive(InputScreen.GameSettings, newVisible);
+
             canvas.SetVisible(newVisible, duration);
             if (button)
                 button.GetComponent<Image>().color = newVisible ? new Color32(0x14, 0x7D, 0xC5, 0x73) : new Color32(0x14, 0x14, 0x14, 0x73);
