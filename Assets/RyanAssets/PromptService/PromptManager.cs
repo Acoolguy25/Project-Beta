@@ -11,6 +11,7 @@ using RyanAssets.Input;
 
 namespace RyanAssets.PromptService {
     public enum PromptButton: sbyte {
+        ErrorDuplicate = -10,
         Unknown = -1,
         Ok = 0,
         Yes = 1,
@@ -139,6 +140,13 @@ namespace RyanAssets.PromptService {
             }
         }
         public Task<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
+            if (promptId != PromptId.Protected){
+                foreach (PromptData prompt in PromptList){
+                    if (prompt.promptId == promptId){
+                        return Task.FromResult(PromptButton.ErrorDuplicate);
+                    }
+                }
+            }
             var promptResponse = new TaskCompletionSource<PromptButton>();
             PromptData newPrompt = new() {
                 title = title,
