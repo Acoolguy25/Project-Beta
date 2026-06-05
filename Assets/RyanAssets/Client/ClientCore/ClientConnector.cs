@@ -9,9 +9,12 @@ using FishNet;
 using FishNet.Transporting;
 using System.Threading.Tasks;
 using RyanAssets.Client.ClientModules;
+using System;
 namespace RyanAssets.Client.ClientCore {
     public class ClientConnector : MonoBehaviour {
         public static ClientConnector Instance;
+        public static Action OnConnected, OnDisconnected;
+        public static bool IsConnected;
         [SerializeField]
         GameObject[] gameOnlyObjects;
         static bool wasAuthenticated, isConnecting, hasCanceled;
@@ -81,6 +84,13 @@ namespace RyanAssets.Client.ClientCore {
             SetJoinResult("Client Timed Out");
         }
         private void OnClientState(ClientConnectionStateArgs args) {
+            if (args.ConnectionState == LocalConnectionState.Started){
+                OnConnected?.Invoke();
+                IsConnected = true;
+            } else if (args.ConnectionState == LocalConnectionState.Stopped){
+                OnDisconnected?.Invoke();
+                IsConnected = false;
+            }
             switch (args.ConnectionState) {
                 case LocalConnectionState.Starting:
                     SetJoiningMessage("Connecting...");
@@ -115,6 +125,11 @@ namespace RyanAssets.Client.ClientCore {
             SetJoinResult(null);
             wasAuthenticated = true;
             SetGameActive(true);
+        }
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Init(){
+            OnConnected = null;
+            OnDisconnected = null;
         }
     }
 }

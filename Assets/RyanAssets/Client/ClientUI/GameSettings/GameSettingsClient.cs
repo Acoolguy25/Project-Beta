@@ -1,6 +1,7 @@
 using UnityEngine;
 using RyanAssets.UI.ListGrid;
 using RyanAssets.PromptService;
+using RyanAssets.Input;
 using FishNet;
 using FishNet.Managing;
 using System.Collections.Generic;
@@ -109,6 +110,12 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
                 return;
             PromptManager.PromptWait("Disconnecting", "Disconnecting\nThis should only take a second", PromptId.LeaveGameAwait);
             InstanceFinder.ClientManager.StopConnection();
+        }
+        private void OnEnable(){
+            InputService.FocusControls(InputControl.GameSettings);
+        }
+        private void OnDisable(){
+            InputService.UnfocusControls(InputControl.GameSettings);
         }
     }
 }

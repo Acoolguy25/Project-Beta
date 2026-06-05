@@ -7,13 +7,13 @@ using FishNet.Transporting;
 using FishNet.Connection;
 using RyanAssets.UI.ListGrid;
 using System.Collections.Generic;
+using RyanAssets.Client.ClientCore;
 
 namespace RyanAssets.Client.ClientUI.PlayerList {
     public class ClientPlayerList : ListGridUI<(NetworkConnection conn, ServerPlayerStats data)> {
         protected override void Start() {
             base.Start();
-            // SharedGlobalEvents.OnPlayerAdded += OnPlayerAdded;
-            SharedGlobalEvents.RegisterLatePlayerAdd(OnPlayerAdded);
+            SharedGlobalEvents.OnPlayerAdded += OnPlayerAdded;
             SharedGlobalEvents.OnPlayerRemoved += OnPlayerRemoved;
             OnCreatePrefab += OnAddPrefab;
         }

@@ -29,6 +29,8 @@ namespace RyanAssets.UI.ListGrid {
         }
         protected void ClearActivePrefabs(){
             // Destroy all remaining created objects
+            if (contentTarget == null)
+                return;
             foreach (Transform obj in contentTarget) {
                 RemovePrefab(obj);
             }
@@ -105,7 +107,7 @@ namespace RyanAssets.UI.ListGrid {
             gridLayoutGroup = contentRT.GetComponent<GridLayoutGroup>();
             // verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
         }
-        void OnDestroy(){
+        virtual protected void OnDestroy(){
             ClearPendingPrefabs();
         }
     }

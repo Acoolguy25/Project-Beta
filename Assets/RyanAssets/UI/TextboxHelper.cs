@@ -1,29 +1,46 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.EventSystems;
-using RyanAssets.ControlLocking;
+using RyanAssets.Input;
+using UnityEngine.UI;
 
 namespace RyanAssets.UI {
-    public class TextboxHelper : MonoBehaviour {
-        private TMP_InputField tmp_inputfield;
-        void Awake() {
-            tmp_inputfield = GetComponent<TMP_InputField>();
+    public class TextboxHelper : MonoBehaviour, ISelectHandler, IDeselectHandler
+    {
+        private TMP_InputField tmpInputField;
+        private InputField inputField;
+        private void Awake(){
+            tmpInputField = GetComponent<TMP_InputField>();
+            inputField = GetComponent<InputField>();
         }
-        void OnEnable() {
-            tmp_inputfield.onSelect.AddListener(OnTextInputSelected);
-            tmp_inputfield.onDeselect.AddListener(OnTextInputUnselected);
+        void OnSelected(string text) {
+            InputService.FocusControls(InputControl.None);
+            tmpInputField?.placeholder.gameObject.SetActive(false);
+            inputField?.placeholder.gameObject.SetActive(false);
         }
-        void OnDisable() {
-            tmp_inputfield.onSelect.RemoveListener(OnTextInputSelected);
-            tmp_inputfield.onDeselect.RemoveListener(OnTextInputUnselected);
+        void OnDeselected(string text) {
+            InputService.UnfocusControls(InputControl.None);
+            tmpInputField?.placeholder.gameObject.SetActive(true);
+            inputField?.placeholder.gameObject.SetActive(true);
         }
-        void OnTextInputSelected(string text) {
-            ControlLockService.LockControls();
-            tmp_inputfield.placeholder.gameObject.SetActive(false);
+        public void OnSelect(BaseEventData eventData){
+            OnSelected(inputField? inputField.text: tmpInputField.text);
         }
-        void OnTextInputUnselected(string text) {
-            ControlLockService.UnlockControls();
-            tmp_inputfield.placeholder.gameObject.SetActive(true);
+        public void OnDeselect(BaseEventData eventData){
+            OnDeselected(inputField? inputField.text: tmpInputField.text);
+        }
+        void OnEnable(){
+            // tmpInputField?.onSubmit.AddListener(OnSubmitted);
+            tmpInputField?.onEndEdit.AddListener(OnSubmitted);
+
+            inputField?.onEndEdit.AddListener(OnSubmitted);
+        }
+        void OnSubmitted(string text){
+            tmpInputField?.DeactivateInputField();
+            inputField?.DeactivateInputField();
+            
+            if (tmpInputField && EventSystem.current != null)
+                EventSystem.current.SetSelectedGameObject(null);
         }
     }
 }

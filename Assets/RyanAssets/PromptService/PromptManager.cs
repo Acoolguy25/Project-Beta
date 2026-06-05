@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using System.ComponentModel;
+using RyanAssets.Input;
 
 namespace RyanAssets.PromptService {
     public enum PromptButton: sbyte {
@@ -67,7 +68,15 @@ namespace RyanAssets.PromptService {
         Transform buttons;
         bool PromptInProgress;
         private void UpdateRenderer(float duration = 0.5f){
-            PromptInProgress = PromptList.Count > 0;
+            bool NewPromptInProgress = PromptList.Count > 0;
+            if (!PromptInProgress && NewPromptInProgress){
+                InputService.FocusControls(InputControl.Prompt);
+                InputService.UnlockControls(InputControl.Prompt);
+            } else if (PromptInProgress && !NewPromptInProgress){
+                InputService.UnfocusControls(InputControl.Prompt);
+                InputService.LockControls(InputControl.Prompt);
+            }
+            PromptInProgress = NewPromptInProgress;
             canvasGroupUI.SetVisible(PromptInProgress, duration);
             if (PromptInProgress){
                 PromptData TopPrompt = PromptList[0];
@@ -111,6 +120,26 @@ namespace RyanAssets.PromptService {
             if (PromptInProgress)
                 CompleteAction(0, (PromptButton)btn);
         }
+        public void PromptConfirmPressed(){
+            if (!PromptInProgress)
+                return;
+
+            PromptData prompt = PromptList[0];
+            foreach (PromptButton button in new[]{PromptButton.Ok, PromptButton.Yes, PromptButton.Retry}){
+                if (prompt.buttons.Contains(button))
+                    CompleteAction(0, button);
+            }
+        }
+        public void PromptDenyPressed(){
+            if (!PromptInProgress)
+                return;
+
+            PromptData prompt = PromptList[0];
+            foreach (PromptButton button in new[]{PromptButton.Cancel, PromptButton.No}){
+                if (prompt.buttons.Contains(button))
+                    CompleteAction(0, button);
+            }
+        }
         public Task<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
             var promptResponse = new TaskCompletionSource<PromptButton>();
             PromptData newPrompt = new() {
@@ -127,7 +156,10 @@ namespace RyanAssets.PromptService {
         }
         void Awake(){
             Instance = this;
+            PromptInProgress = false;
             PromptList = new();
+            PromptControls.confirmEvent += PromptConfirmPressed;
+            PromptControls.denyEvent += PromptDenyPressed;
             UpdateRenderer(0f);
             DontDestroyOnLoad(this);
         }
@@ -135,7 +167,7 @@ namespace RyanAssets.PromptService {
 
         // Useless helper functions
         public static void PromptError(string title, System.Exception e){
-            Instance.PromptLocalUser(title + " Error", e.ToString(), PromptId.Error, ButtonPreset_OkOnly);
+            Instance.PromptLocalUser(title + " Error", e.Message, PromptId.Error, ButtonPreset_OkOnly);
         }
         public static void PromptError(string title, string e){
             Instance.PromptLocalUser(title + " Error", e.ToString(), PromptId.Error, ButtonPreset_OkOnly);

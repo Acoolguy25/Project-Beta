@@ -1,6 +1,6 @@
 using UnityEngine;
 using RyanAssets.UI;
-using RyanAssets.Characters;
+using RyanAssets.Input;
 using UnityEngine.UI;
 using RyanAssets.Client.ClientCore;
 
@@ -19,8 +19,8 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             topbarCanvas = GetComponent<CanvasGroupController>();
         }
         void OnEnable() {
-            SharedInputController.menuToggledEvent += ToggleGameSettingsCanvas_ButtonPressed;
-            SharedInputController.playerListEvent += TogglePlayerListCanvas_ButtonPressed;
+            MenuControls.menuToggledEvent += ToggleGameSettingsCanvas_ButtonPressed;
+            MenuControls.playerListEvent += TogglePlayerListCanvas_ButtonPressed;
             SetCanvasVisibility(chatCanvas, chatButton, true, 0f);
             SetCanvasVisibility(gameSettingsCanvas, gameSettingsButton, false, 0f);
             SetCanvasVisibility(playerListCanvas, playerListButton, true, 0f);
@@ -28,8 +28,8 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             experienceText.text = ClientConnector.joinUniverseId;
         }
         void OnDisable() {
-            SharedInputController.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
-            SharedInputController.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
+            MenuControls.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
+            MenuControls.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
         }
         public Button GetButton(CanvasGroupController canvas){
             Button button;

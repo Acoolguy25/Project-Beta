@@ -23,10 +23,10 @@
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />
-  <Project Path="RyanAssets.ControlLocking.csproj" />
   <Project Path="URPWizard.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Chat.csproj" />
   <Project Path="RyanAssets.Authentication.csproj" />
+  <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="RyanAssets.Editor.csproj" />

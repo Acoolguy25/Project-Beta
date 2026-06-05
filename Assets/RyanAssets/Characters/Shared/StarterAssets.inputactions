@@ -3,7 +3,7 @@
     "name": "StarterAssets",
     "maps": [
         {
-            "name": "Player",
+            "name": "Character",
             "id": "f62a4b92-ef5e-4175-8f4c-c9075429d32c",
             "actions": [
                 {
@@ -223,22 +223,13 @@
             ]
         },
         {
-            "name": "Core",
+            "name": "Client",
             "id": "037ee4b1-ce2f-443e-97ec-2e2c6c517425",
             "actions": [
                 {
-                    "name": "ToggleMenu",
-                    "type": "Button",
-                    "id": "67e6292e-fc0f-42d3-8c8e-ef92456e9054",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
                     "name": "ActivateChat",
                     "type": "Button",
-                    "id": "86f89447-35b8-47a8-8026-cd5362385767",
+                    "id": "9e668ac7-13f9-4aa5-b3ff-e0ac5bd3fae4",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -247,7 +238,7 @@
                 {
                     "name": "TogglePlayerList",
                     "type": "Button",
-                    "id": "ad209c26-dabb-46b6-afeb-97bf320079cf",
+                    "id": "1d5f6422-54af-4177-8ea7-3312aa7934b3",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -257,18 +248,7 @@
             "bindings": [
                 {
                     "name": "",
-                    "id": "c6ebda47-933f-4d1f-92e4-4043b1d64344",
-                    "path": "<Keyboard>/escape",
-                    "interactions": "Press",
-                    "processors": "",
-                    "groups": "",
-                    "action": "ToggleMenu",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "b8ff9820-6dca-4ee6-8e35-66ce6b609de7",
+                    "id": "7b403e7c-0fdd-45f9-8529-ee3724e0037f",
                     "path": "<Keyboard>/slash",
                     "interactions": "",
                     "processors": "",
@@ -279,12 +259,110 @@
                 },
                 {
                     "name": "",
-                    "id": "f29e4e66-6377-4f1b-936e-620e3e5ce362",
+                    "id": "d79d9bfd-ff5f-44da-ab34-e206c41d5ae1",
                     "path": "<Keyboard>/tab",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "TogglePlayerList",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "GameSettings",
+            "id": "b7e805e7-49de-4bef-834f-14cd68c6e002",
+            "actions": [
+                {
+                    "name": "ToggleMenu",
+                    "type": "Button",
+                    "id": "85f1bc81-52a5-4e0e-9d31-58033d65012a",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "fd679e2b-b9e5-45ac-9dc5-220b4e61a907",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "Press",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleMenu",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "Prompt",
+            "id": "70fd3288-3934-4081-be7e-0199598faef1",
+            "actions": [
+                {
+                    "name": "ConfirmPrompt",
+                    "type": "Button",
+                    "id": "a5281baa-d8bc-4b5f-8341-3cee1ef0db02",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "DenyPrompt",
+                    "type": "Button",
+                    "id": "f2a2b384-fe51-4785-8141-5a2808a5295a",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "fb02676e-78c5-4b2e-afff-afbaf2a5302d",
+                    "path": "<Keyboard>/enter",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ConfirmPrompt",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "ced8e8da-ed87-4629-8d97-a80e55b39896",
+                    "path": "<Keyboard>/space",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ConfirmPrompt",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "ce92cca9-8262-4710-9c87-607b33ffbd42",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DenyPrompt",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "af8767e2-cce7-4f63-a36a-4ccad5699c9a",
+                    "path": "<Keyboard>/backspace",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DenyPrompt",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

@@ -1065,10 +1065,6 @@ PrefabInstance:
       propertyPath: m_Size
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426410, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
-      propertyPath: m_Value
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_SizeDelta.x
       value: 0

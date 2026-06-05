@@ -89,7 +89,8 @@ Transform:
   m_LocalPosition: {x: 6.9687614, y: 4.598196, z: 6.394285}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 4585530836569560174}
   m_Father: {fileID: 3056283355629000863}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &305468512397510506
@@ -668,7 +669,7 @@ Transform:
   m_Children:
   - {fileID: 5871290092194674182}
   - {fileID: 3056283355629000863}
-  - {fileID: 4585530836569560174}
+  - {fileID: 6160134068358634409}
   - {fileID: 2486671933043618066}
   - {fileID: 4531000923429442748}
   m_Father: {fileID: 0}
@@ -758,7 +759,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.EventSystem
   m_FirstSelected: {fileID: 0}
-  m_sendNavigationEvents: 1
+  m_sendNavigationEvents: 0
   m_DragThreshold: 10
 --- !u!114 &2807757297865222799
 MonoBehaviour:
@@ -801,7 +802,10 @@ GameObject:
   m_Component:
   - component: {fileID: 6160134068358634409}
   - component: {fileID: 2169664757215655472}
-  - component: {fileID: 6002820967340758286}
+  - component: {fileID: 79512044521863135}
+  - component: {fileID: 3185046619265411470}
+  - component: {fileID: 4380132949909584447}
+  - component: {fileID: 8009184999102591650}
   m_Layer: 0
   m_Name: InputSystem
   m_TagString: Untagged
@@ -817,12 +821,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4737745143679322053}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 468.3694, y: 618.85016, z: -59.5336}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 468.61792, y: 618.57916, z: -59.09399}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5871290092194674182}
+  m_Father: {fileID: 3998357339619525873}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2169664757215655472
 MonoBehaviour:
@@ -851,10 +855,10 @@ MonoBehaviour:
   m_ActionEvents: []
   m_NeverAutoSwitchControlSchemes: 1
   m_DefaultControlScheme: KeyboardMouse
-  m_DefaultActionMap: Player
+  m_DefaultActionMap: 
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
---- !u!114 &6002820967340758286
+--- !u!114 &79512044521863135
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -863,9 +867,33 @@ MonoBehaviour:
   m_GameObject: {fileID: 4737745143679322053}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 110b994b60610e146a3fd286dc0ce410, type: 3}
+  m_Script: {fileID: 11500000, guid: 2bfb89ce2b7f38f4da00f62c3b606c14, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RyanAssets.Characters.SharedInputController
+  m_EditorClassIdentifier: RyanAssets.Input::RyanAssets.Input.InputService
+--- !u!114 &3185046619265411470
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4737745143679322053}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63416ac250682de4d8be1aca9108054e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Input::RyanAssets.Input.MenuControls
+--- !u!114 &4380132949909584447
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4737745143679322053}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63cdf44f6ac00b8499f462837aca4363, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Input::RyanAssets.Input.CharacterControls
   move: {x: 0, y: 0}
   look: {x: 0, y: 0}
   jump: 0
@@ -873,6 +901,18 @@ MonoBehaviour:
   analogMovement: 0
   cursorLocked: 0
   cursorInputForLook: 1
+--- !u!114 &8009184999102591650
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4737745143679322053}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d9fecb3580d82144bb699acbd33cbc9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Input::RyanAssets.Input.PromptControls
 --- !u!1 &6815256693069096343
 GameObject:
   m_ObjectHideFlags: 0
@@ -904,7 +944,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6914050140731632812}
-  - {fileID: 6160134068358634409}
   m_Father: {fileID: 3998357339619525873}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4997144533380573531
@@ -1175,12 +1214,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8815875015094455205}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.53902286, y: -0.45183, z: 0.43062228, w: 0.56556916}
-  m_LocalPosition: {x: -2.645073, y: 19.883507, z: 2.3575048}
+  m_LocalRotation: {x: 0.000000029802322, y: -0.00000011920929, z: 0.00000035762787, w: 1}
+  m_LocalPosition: {x: -6.5009265, y: 9.3548565, z: -15.124386}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 3998357339619525873}
+  m_Father: {fileID: 2803108463025821720}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1443617869049302154
 MonoBehaviour:
@@ -1273,6 +1312,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1894304943560295429, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_Value
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1894304943560295497, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -1295,7 +1338,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1894304943560295927, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.00079345703
+      value: -0.0004119873
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_Pivot.x
@@ -1766,7 +1809,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907918, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.0009689331
+      value: 0.0004043579
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834908079, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchorMax.x

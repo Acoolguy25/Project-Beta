@@ -22,10 +22,12 @@ namespace RyanAssets.Shared.Player {
         void OnPlayerChanged(SyncDictionaryOperation op, NetworkConnection key, ServerPlayerStats value, bool asServer) {
             switch (op) {
                 case SyncDictionaryOperation.Add:
+                    Debug.Log($"{key} player added");
                     OnPlayerAdded?.Invoke(key, value);
                     break;
                 case SyncDictionaryOperation.Remove:
-                    OnPlayerAdded?.Invoke(key, value);
+                    Debug.Log($"{key} player removed");
+                    OnPlayerRemoved?.Invoke(key, value);
                     break;
                 case SyncDictionaryOperation.Clear:
                     Debug.LogError("PlayerList was cleared!");
@@ -41,6 +43,11 @@ namespace RyanAssets.Shared.Player {
             // if (Instance != null)
             //     Instance.SyncLatePlayerAdd(func);
             OnPlayerAdded += func;
+        }
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Init(){
+            OnPlayerAdded = null;
+            OnPlayerRemoved = null;
         }
 #endif
     }

@@ -8,7 +8,7 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using RyanAssets.UI.ListGrid;
 using UnityEngine.UI;
-using RyanAssets.Characters;
+using RyanAssets.Input;
 using TMPro;
 using UnityEngine.EventSystems;
 using RyanAssets.Client.ClientUI.Topbar;
@@ -34,10 +34,10 @@ namespace RyanAssets.Client.ClientUI.Chat {
             usernameText.text = $"{ClientChatHelper.ColorNameRichText(username)}: {ClientChatHelper.EscapeRichText(message.message)}";
         }
         private void OnEnable() {
-            SharedInputController.chatActivateEvent += OnChatToggle;
+            MenuControls.chatActivateEvent += OnChatToggle;
         }
         private void OnDisable() {
-            SharedInputController.chatActivateEvent -= OnChatToggle;
+            MenuControls.chatActivateEvent -= OnChatToggle;
         }
         private void OnChatToggle() {
             ClientTopbar.Instance.EnsureCanvasVisibility(GetComponent<CanvasGroupController>(), true, true);
@@ -45,7 +45,6 @@ namespace RyanAssets.Client.ClientUI.Chat {
         }
         public void OnMessageSend_ButtonPressed(string text) {
             chatBox.DeactivateInputField();
-            EventSystem.current.SetSelectedGameObject(null);
             if (text.Length > 0)
                 InstanceFinder.ClientManager.Broadcast<MessageRequest>(new() { message = text });
             chatBox.text = string.Empty;

@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using FishNet;
 using RyanAssets.Core;
+using RyanAssets.Input;
 using RyanAssets.Client.ClientUI.GameSettings;
 
 namespace RyanAssets.Characters {
@@ -41,7 +42,7 @@ namespace RyanAssets.Characters {
 
         private Animator _animator;
         private Rigidbody _rb;
-        private SharedInputController _input;
+        private CharacterControls _input;
         // private MovementControl _movementControl;
 
 
@@ -52,7 +53,7 @@ namespace RyanAssets.Characters {
             _hasAnimator = LocalPlayer.Character.TryGetComponent(out _animator);
             _rb = LocalPlayer.Character.GetComponent<Rigidbody>();
             _rb.constraints = RigidbodyConstraints.FreezeRotation & ~RigidbodyConstraints.FreezeRotationY;
-            _input = SharedInputController.Instance;
+            _input = InputService.characterControls;
             //_playerInput = GetComponent<PlayerInput>();
             // _movementControl = GetComponent<MovementControl>();
 
