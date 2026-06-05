@@ -19,8 +19,8 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             topbarCanvas = GetComponent<CanvasGroupController>();
         }
         void OnEnable() {
-            MenuControls.menuToggledEvent += ToggleGameSettingsCanvas_ButtonPressed;
-            MenuControls.playerListEvent += TogglePlayerListCanvas_ButtonPressed;
+            TopbarControls.menuToggledEvent += ToggleGameSettingsCanvas_ButtonPressed;
+            TopbarControls.playerListEvent += TogglePlayerListCanvas_ButtonPressed;
             SetCanvasVisibility(chatCanvas, chatButton, true, 0f);
             SetCanvasVisibility(gameSettingsCanvas, gameSettingsButton, false, 0f);
             SetCanvasVisibility(playerListCanvas, playerListButton, true, 0f);
@@ -28,8 +28,8 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             experienceText.text = ClientConnector.joinUniverseId;
         }
         void OnDisable() {
-            MenuControls.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
-            MenuControls.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
+            TopbarControls.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
+            TopbarControls.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
         }
         public Button GetButton(CanvasGroupController canvas){
             Button button;

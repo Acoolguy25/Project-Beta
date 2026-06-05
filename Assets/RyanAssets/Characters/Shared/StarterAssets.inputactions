@@ -236,6 +236,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "ToggleMenu",
+                    "type": "Button",
+                    "id": "34f5a51b-6b42-4b57-8df0-ee8ff193bc3b",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "TogglePlayerList",
                     "type": "Button",
                     "id": "1d5f6422-54af-4177-8ea7-3312aa7934b3",
@@ -254,6 +263,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "ActivateChat",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "83b32e03-43c3-4f27-b7a4-98d712d03a5b",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "Press",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleMenu",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -282,6 +302,24 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "ToggleReset",
+                    "type": "Button",
+                    "id": "d5f5e973-c4be-44ff-a423-346619f18495",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "ToggleLeave",
+                    "type": "Button",
+                    "id": "c3bcd786-8479-4625-95b1-9338cd85ba9a",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -293,6 +331,28 @@
                     "processors": "",
                     "groups": "",
                     "action": "ToggleMenu",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "87ea31eb-e031-46eb-87a2-8058da9e0111",
+                    "path": "<Keyboard>/r",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleReset",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "7e8b6a96-3f4a-4c42-81dd-d5a222f2f03b",
+                    "path": "<Keyboard>/l",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleLeave",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

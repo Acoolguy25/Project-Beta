@@ -13,6 +13,7 @@
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
+  <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
   <Project Path="RyanAssets.UI.ButtonGrid.csproj" />
   <Project Path="RyanAssets.NetworkSettings.csproj" />
@@ -27,7 +28,6 @@
   <Project Path="RyanAssets.Client.ClientUI.Chat.csproj" />
   <Project Path="RyanAssets.Authentication.csproj" />
   <Project Path="RyanAssets.Client.ClientCore.csproj" />
-  <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="RyanAssets.Editor.csproj" />

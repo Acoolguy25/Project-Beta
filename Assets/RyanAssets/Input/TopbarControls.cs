@@ -2,7 +2,7 @@ using UnityEngine;
 using System;
 
 namespace RyanAssets.Input {
-    public class MenuControls: MonoBehaviour {
+    public class TopbarControls: MonoBehaviour {
         public static Action menuToggledEvent, playerListEvent, chatActivateEvent;
         public void OnToggleMenu() {
             menuToggledEvent?.Invoke();

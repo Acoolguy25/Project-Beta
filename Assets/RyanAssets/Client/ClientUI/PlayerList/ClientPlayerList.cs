@@ -15,6 +15,7 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             base.Start();
             SharedGlobalEvents.OnPlayerAdded += OnPlayerAdded;
             SharedGlobalEvents.OnPlayerRemoved += OnPlayerRemoved;
+            ClientConnector.OnDisconnected += OnDisconnected;
             OnCreatePrefab += OnAddPrefab;
         }
         private void OnAddPrefab(GameObject prefab, (NetworkConnection conn, ServerPlayerStats data) player) {
@@ -35,6 +36,9 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
                 RemovePrefab(item);
                 UpdateLayout();
             }
+        }
+        private void OnDisconnected(){
+            ClearPrefabs();
         }
     }
 }

@@ -28,10 +28,7 @@ namespace RyanAssets.Characters {
             InstanceFinder.ClientManager.OnClientConnectionState += OnClientConnectionState;
         }
         public void SetCharacter(Transform NewCharacter) {
-            if (Character == null && NewCharacter != null)
-                InputService.UnlockControls(InputControl.Character);
-            else if (Character != null && NewCharacter == null)
-                InputService.LockControls(InputControl.Character);
+            // InputService.SetInputScreenActive(InputScreen.Character, NewCharacter != null);
             Character = NewCharacter;
             OnCharacterAdded.Invoke(NewCharacter);
             CharacterControl.gameObject.SetActive(NewCharacter != null);
@@ -41,12 +38,14 @@ namespace RyanAssets.Characters {
                 SetCharacter(null);
         }
         void OnEnable(){
-            InputService.UnlockControls(InputControl.Client);
-            InputService.UnlockControls(InputControl.GameSettings);
+            InputService.SetInputScreenActive(InputScreen.Client, true);
+            InputService.SetInputScreenActive(InputScreen.GameMenu, false);
+            InputService.SetInputScreenActive(InputScreen.GameSettings, false);
         }
         void OnDisable(){
-            InputService.LockControls(InputControl.Client);
-            InputService.LockControls(InputControl.GameSettings);
+            InputService.SetInputScreenActive(InputScreen.Client, false);
+            InputService.SetInputScreenActive(InputScreen.GameMenu, true);
+            InputService.SetInputScreenActive(InputScreen.GameSettings, false);
         }
     }
 }

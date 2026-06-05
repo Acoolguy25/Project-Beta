@@ -77,6 +77,8 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
                 keyVal.Value.name = keyVal.Key; // Assign the names!
             }
             AddPrefabs(gameSettingsConfigUI.Values.ToArray());
+            GameSettingsControls.leaveToggledEvent += OnLeaveGame_ButtonPressed;
+            GameSettingsControls.resetToggledEvent += OnReset_ButtonPressed;
         }
         protected override void Start(){
             // disabled
@@ -111,11 +113,14 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             PromptManager.PromptWait("Disconnecting", "Disconnecting\nThis should only take a second", PromptId.LeaveGameAwait);
             InstanceFinder.ClientManager.StopConnection();
         }
+        public async void OnReset_ButtonPressed(){
+
+        }
         private void OnEnable(){
-            InputService.FocusControls(InputControl.GameSettings);
+            InputService.SetInputScreenActive(InputScreen.GameSettings, true);
         }
         private void OnDisable(){
-            InputService.UnfocusControls(InputControl.GameSettings);
+            InputService.SetInputScreenActive(InputScreen.GameSettings, false);
         }
     }
 }

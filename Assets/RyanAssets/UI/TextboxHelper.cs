@@ -14,12 +14,12 @@ namespace RyanAssets.UI {
             inputField = GetComponent<InputField>();
         }
         void OnSelected(string text) {
-            InputService.FocusControls(InputControl.None);
+            InputService.SetInputScreenActive(InputScreen.Textbox, true);
             tmpInputField?.placeholder.gameObject.SetActive(false);
             inputField?.placeholder.gameObject.SetActive(false);
         }
         void OnDeselected(string text) {
-            InputService.UnfocusControls(InputControl.None);
+            InputService.SetInputScreenActive(InputScreen.Textbox, false);
             tmpInputField?.placeholder.gameObject.SetActive(true);
             inputField?.placeholder.gameObject.SetActive(true);
         }

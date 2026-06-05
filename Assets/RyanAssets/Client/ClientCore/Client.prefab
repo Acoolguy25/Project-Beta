@@ -794,6 +794,7 @@ GameObject:
   - component: {fileID: 3185046619265411470}
   - component: {fileID: 4380132949909584447}
   - component: {fileID: 8009184999102591650}
+  - component: {fileID: 4748522709334955041}
   m_Layer: 0
   m_Name: InputSystem
   m_TagString: Untagged
@@ -901,6 +902,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d9fecb3580d82144bb699acbd33cbc9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Input::RyanAssets.Input.PromptControls
+--- !u!114 &4748522709334955041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4737745143679322053}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 78291c1e7de745d498eaba2409370528, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Input::RyanAssets.Input.GameSettingsControls
 --- !u!1 &6815256693069096343
 GameObject:
   m_ObjectHideFlags: 0

@@ -70,11 +70,9 @@ namespace RyanAssets.PromptService {
         private void UpdateRenderer(float duration = 0.5f){
             bool NewPromptInProgress = PromptList.Count > 0;
             if (!PromptInProgress && NewPromptInProgress){
-                InputService.FocusControls(InputControl.Prompt);
-                InputService.UnlockControls(InputControl.Prompt);
+                InputService.SetInputScreenActive(InputScreen.Prompt, true);
             } else if (PromptInProgress && !NewPromptInProgress){
-                InputService.UnfocusControls(InputControl.Prompt);
-                InputService.LockControls(InputControl.Prompt);
+                InputService.SetInputScreenActive(InputScreen.Prompt, false);
             }
             PromptInProgress = NewPromptInProgress;
             canvasGroupUI.SetVisible(PromptInProgress, duration);

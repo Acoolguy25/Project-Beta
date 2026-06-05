@@ -13,6 +13,7 @@ using TMPro;
 using UnityEngine.EventSystems;
 using RyanAssets.Client.ClientUI.Topbar;
 using RyanAssets.UI;
+using RyanAssets.Client.ClientCore;
 
 namespace RyanAssets.Client.ClientUI.Chat {
     public class ClientChat : ListGridUI<MessageBroadcast>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
@@ -23,6 +24,7 @@ namespace RyanAssets.Client.ClientUI.Chat {
             OnCreatePrefab += OnCreateMessage;
             InstanceFinder.ClientManager.RegisterBroadcast<MessageBroadcast>(OnReceiveMessage);
             chatBox.onSubmit.AddListener(OnMessageSend_ButtonPressed);
+            ClientConnector.OnDisconnected += OnDisconnected;
             ClearPrefabs();
         }
         private void OnReceiveMessage(MessageBroadcast message, Channel channel) {
@@ -34,10 +36,10 @@ namespace RyanAssets.Client.ClientUI.Chat {
             usernameText.text = $"{ClientChatHelper.ColorNameRichText(username)}: {ClientChatHelper.EscapeRichText(message.message)}";
         }
         private void OnEnable() {
-            MenuControls.chatActivateEvent += OnChatToggle;
+            TopbarControls.chatActivateEvent += OnChatToggle;
         }
         private void OnDisable() {
-            MenuControls.chatActivateEvent -= OnChatToggle;
+            TopbarControls.chatActivateEvent -= OnChatToggle;
         }
         private void OnChatToggle() {
             ClientTopbar.Instance.EnsureCanvasVisibility(GetComponent<CanvasGroupController>(), true, true);
@@ -60,6 +62,9 @@ namespace RyanAssets.Client.ClientUI.Chat {
         }
         public void OnEndDrag(PointerEventData eventData) {
             scrollRect.OnEndDrag(eventData);
+        }
+        private void OnDisconnected(){
+            ClearPrefabs();
         }
     }
 }
