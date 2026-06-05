@@ -26,12 +26,12 @@
   <Project Path="URPWizard.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Chat.csproj" />
   <Project Path="RyanAssets.Authentication.csproj" />
+  <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
-  <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="Universes.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
 </Solution>

@@ -89,13 +89,6 @@ namespace RyanAssets.Client.ClientCore {
             SetJoinResult("Client Timed Out");
         }
         private void OnClientState(ClientConnectionStateArgs args) {
-            if (args.ConnectionState == LocalConnectionState.Started){
-                OnConnected?.Invoke();
-                IsConnected = true;
-            } else if (args.ConnectionState == LocalConnectionState.Stopped){
-                OnDisconnected?.Invoke();
-                IsConnected = false;
-            }
             switch (args.ConnectionState) {
                 case LocalConnectionState.Starting:
                     SetJoiningMessage("Connecting...");
@@ -111,6 +104,8 @@ namespace RyanAssets.Client.ClientCore {
 
                 case LocalConnectionState.Stopped:
                     isConnecting = false;
+                    OnDisconnected?.Invoke();
+                    IsConnected = false;
                     if (!PromptManager.PromptDelete(PromptId.LeaveGameAwait)){
                         if (wasAuthenticated) {
                             wasAuthenticated = false;
@@ -130,6 +125,8 @@ namespace RyanAssets.Client.ClientCore {
             SetJoinResult(null);
             wasAuthenticated = true;
             SetGameActive(true);
+            OnConnected?.Invoke();
+            IsConnected = true;
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init(){

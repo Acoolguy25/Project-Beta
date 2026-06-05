@@ -5,6 +5,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using Unity.Cinemachine;
+using RyanAssets.Client.ClientCore;
 
 namespace RyanAssets.Cameras
 {
@@ -64,8 +65,15 @@ namespace RyanAssets.Cameras
             SetCameraTarget(CharacterCamera);
             SetCameraAvailable(CameraType.ThirdPersonCamera, character != null);
         }
-        private void Start() {
+        private void OnConnected(){
             LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+        }
+        private void OnDisconnected(){
+            LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+        }
+        private void Start() {
+            ClientConnector.OnConnected += OnConnected;
+            ClientConnector.OnDisconnected += OnDisconnected;
             activeCamera = null;
             activeIndex = -1;
             for (int i = 0; i < transform.childCount; i++){

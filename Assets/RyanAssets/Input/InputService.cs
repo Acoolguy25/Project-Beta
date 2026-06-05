@@ -64,6 +64,8 @@ namespace RyanAssets.Input {
                 map.Enable();
             else
                 map.Disable();
+            if (actionName == InputControl.Character)
+                Debug.Log($"Char +{(enabled? "up": "down")} total: {mapLocks[actionName]}");
             Assert.IsTrue(mapLocks[actionName] >= 0, $"Maplock {actionName} is negative!");
         }
         public void SetFocusControls(InputControl exclude, bool focused){
