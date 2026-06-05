@@ -583,6 +583,10 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 5559731338903789527, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_SortingOrder
+      value: -1200
+      objectReference: {fileID: 0}
     - target: {fileID: 5861247541980084448, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
       propertyPath: m_Alpha
       value: 1

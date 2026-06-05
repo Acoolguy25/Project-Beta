@@ -158,8 +158,8 @@ namespace RyanAssets.PromptService {
             Instance = this;
             PromptInProgress = false;
             PromptList = new();
-            PromptControls.confirmEvent += PromptConfirmPressed;
-            PromptControls.denyEvent += PromptDenyPressed;
+            PromptControls.confirmEvent = PromptConfirmPressed;
+            PromptControls.denyEvent = PromptDenyPressed;
             UpdateRenderer(0f);
             DontDestroyOnLoad(this);
         }

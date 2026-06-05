@@ -1416,6 +1416,10 @@ PrefabInstance:
       propertyPath: m_fontSize
       value: 26.8
       objectReference: {fileID: 0}
+    - target: {fileID: 4066911039856087898, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
+      propertyPath: m_SortingOrder
+      value: 1300
+      objectReference: {fileID: 0}
     - target: {fileID: 4734970586635056570, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_Name
       value: PromptCanvas
@@ -1465,6 +1469,10 @@ PrefabInstance:
     - target: {fileID: 1894304943560295766, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1894304943560295889, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1894304943560295927, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -1591,6 +1599,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 4531000923429442748}
     m_Modifications:
+    - target: {fileID: 512075336484954133, guid: a7799a4ceab14f9bb3942fac9c4d24eb, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 512075336484954509, guid: a7799a4ceab14f9bb3942fac9c4d24eb, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -1860,6 +1872,10 @@ PrefabInstance:
     - target: {fileID: 898951070834907918, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0.00074768066
+      objectReference: {fileID: 0}
+    - target: {fileID: 898951070834907944, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834908079, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchorMax.x

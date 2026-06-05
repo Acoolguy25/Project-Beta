@@ -436,7 +436,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 8848980123312211940}
-        m_TargetAssemblyTypeName: RyanAssets.Prompt.PromptManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: RyanAssets.PromptService.PromptManager, RyanAssets.PromptService
         m_MethodName: PromptButtonPressed
         m_Mode: 3
         m_Arguments:
@@ -569,7 +569,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 8848980123312211940}
-        m_TargetAssemblyTypeName: RyanAssets.Prompt.PromptManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: RyanAssets.PromptService.PromptManager, RyanAssets.PromptService
         m_MethodName: PromptButtonPressed
         m_Mode: 3
         m_Arguments:
@@ -702,7 +702,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 8848980123312211940}
-        m_TargetAssemblyTypeName: RyanAssets.Prompt.PromptManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: RyanAssets.PromptService.PromptManager, RyanAssets.PromptService
         m_MethodName: PromptButtonPressed
         m_Mode: 3
         m_Arguments:
@@ -1008,7 +1008,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 8848980123312211940}
-        m_TargetAssemblyTypeName: RyanAssets.Prompt.PromptManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: RyanAssets.PromptService.PromptManager, RyanAssets.PromptService
         m_MethodName: PromptButtonPressed
         m_Mode: 3
         m_Arguments:
@@ -1673,7 +1673,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 8848980123312211940}
-        m_TargetAssemblyTypeName: RyanAssets.Prompt.PromptManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: RyanAssets.PromptService.PromptManager, RyanAssets.PromptService
         m_MethodName: PromptButtonPressed
         m_Mode: 3
         m_Arguments:
