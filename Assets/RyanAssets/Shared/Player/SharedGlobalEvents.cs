@@ -22,11 +22,11 @@ namespace RyanAssets.Shared.Player {
         void OnPlayerChanged(SyncDictionaryOperation op, NetworkConnection key, ServerPlayerStats value, bool asServer) {
             switch (op) {
                 case SyncDictionaryOperation.Add:
-                    Debug.Log($"{key} player added");
+                    // Debug.Log($"{key} player added");
                     OnPlayerAdded?.Invoke(key, value);
                     break;
                 case SyncDictionaryOperation.Remove:
-                    Debug.Log($"{key} player removed");
+                    // Debug.Log($"{key} player removed");
                     OnPlayerRemoved?.Invoke(key, value);
                     break;
                 case SyncDictionaryOperation.Clear:

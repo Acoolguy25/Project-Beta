@@ -23,10 +23,10 @@ namespace RyanAssets.Authentication {
             base.InitializeOnce(networkManager);
 
 #if UNITY_SERVER
-            Debug.Log("Initialize Auth Server");
+            // Debug.Log("Initialize Auth Server");
             NetworkManager.ServerManager.RegisterBroadcast<AuthRequest>(OnAuthRequest, false);
 #else
-            Debug.Log("Initialize Auth Client");
+            // Debug.Log("Initialize Auth Client");
             NetworkManager.ClientManager.RegisterBroadcast<AuthResponse>(OnAuthResponse);
 
             NetworkManager.ClientManager.OnClientConnectionState += ClientConnectionState;
@@ -40,12 +40,12 @@ namespace RyanAssets.Authentication {
 
 #if !UNITY_SERVER
         private void ClientConnectionState(ClientConnectionStateArgs args) {
-            Debug.Log("Client state: " + args.ConnectionState);
+            // Debug.Log("Client state: " + args.ConnectionState);
 
             if (args.ConnectionState != LocalConnectionState.Started)
                 return;
 
-            Debug.Log("Sending AuthRequest");
+            // Debug.Log("Sending AuthRequest");
 
             string token = BackendNetwork.GetAuthorizationToken();
             if (string.IsNullOrWhiteSpace(token)) {
@@ -105,7 +105,7 @@ namespace RyanAssets.Authentication {
 
         private void OnAuthResponse(AuthResponse res, Channel channel) {
             if (res.Success) {
-                Debug.Log("Authentication Succeeded!");
+                // Debug.Log("Authentication Succeeded!");
             } else {
                 Debug.Log("Authentication Failed: " + res.Reason);
                 NetworkManager.ClientManager.StopConnection();
