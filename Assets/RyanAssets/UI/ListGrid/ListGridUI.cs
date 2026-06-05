@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
+
 
 namespace RyanAssets.UI.ListGrid {
     public class ListGridUI<T> : MonoBehaviour {
@@ -11,6 +13,8 @@ namespace RyanAssets.UI.ListGrid {
         GameObject modelPrefab;
         [SerializeField]
         protected ScrollRect scrollRect;
+        [SerializeField]
+        protected bool AutoScroll;
         protected Transform contentTarget;
         GridLayoutGroup gridLayoutGroup;
         // VerticalLayoutGroup verticalLayoutGroup;
@@ -67,40 +71,63 @@ namespace RyanAssets.UI.ListGrid {
             ClearPrefabs();
             AddPrefabs(objects);
         }
-        protected void UpdateLayout() {
-            if (contentRT == null) // ignore if destroyed or deleted
-                return;
-            Canvas.ForceUpdateCanvases();
+        protected void UpdateLayout()
+{
+    if (contentRT == null)
+        return;
 
-            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
+    bool wasAtBottom = AutoScroll &&
+                       scrollRect != null &&
+                       scrollRect.verticalNormalizedPosition <= 0.01f;
 
-            float height = 0f;
+    Canvas.ForceUpdateCanvases();
+    LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
 
-            foreach (Transform transform_child in contentRT) {
-                if (!transform_child.gameObject.activeInHierarchy || !transform_child.TryGetComponent<RectTransform>(out RectTransform child))
-                    continue;
+    float height;
 
-                height += child.rect.height;
-            }
+    if (gridLayoutGroup != null)
+    {
+        int count = 0;
 
-            if (gridLayoutGroup != null) {
-                int count = contentRT.childCount;
-                int columns = Mathf.Max(1, Mathf.FloorToInt(
-                    (contentRT.rect.width + gridLayoutGroup.spacing.x) /
-                    (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)
-                ));
+        foreach (RectTransform child in contentRT)
+            if (child.gameObject.activeInHierarchy)
+                count++;
 
-                int rows = Mathf.CeilToInt(count / (float)columns);
+        int columns = Mathf.Max(1, Mathf.FloorToInt(
+            (contentRT.rect.width + gridLayoutGroup.spacing.x) /
+            (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)));
 
-                height =
-                    gridLayoutGroup.padding.top +
-                    gridLayoutGroup.padding.bottom +
-                    rows * gridLayoutGroup.cellSize.y +
-                    Mathf.Max(0, rows - 1) * gridLayoutGroup.spacing.y;
-            }
+        int rows = Mathf.CeilToInt(count / (float)columns);
 
-            contentRT.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
-        }
+        height =
+            gridLayoutGroup.padding.vertical +
+            rows * gridLayoutGroup.cellSize.y +
+            Mathf.Max(0, rows - 1) * gridLayoutGroup.spacing.y;
+    }
+    else
+    {
+        height = 0f;
+
+        foreach (Transform child in contentRT)
+            if (child.TryGetComponent(out RectTransform rt) && child.gameObject.activeInHierarchy)
+                height += rt.rect.height;
+    }
+
+    contentRT.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+
+    LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
+
+    if (AutoScroll && wasAtBottom && scrollRect != null)
+        StartCoroutine(ScrollBottomNextFrame());
+}
+private IEnumerator ScrollBottomNextFrame()
+{
+    yield return new WaitForEndOfFrame();
+
+    Canvas.ForceUpdateCanvases();
+    scrollRect.StopMovement();
+    scrollRect.verticalNormalizedPosition = 0f;
+}
         virtual protected void Start() {
             contentTarget = scrollRect.content;
             contentRT = contentTarget.GetComponent<RectTransform>();

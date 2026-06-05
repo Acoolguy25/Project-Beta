@@ -179,6 +179,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1cb026ca7d0fb114fa2f12c48bbe7ae2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
+--- !u!114 &643041136 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 409605290905112966, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+  m_PrefabInstance: {fileID: 8125114074414780783}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!114 &655234709 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
@@ -362,50 +373,6 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
---- !u!1 &1841955760
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1841955762}
-  - component: {fileID: 1841955761}
-  m_Layer: 0
-  m_Name: TweenManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1841955761
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1841955760}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 039eb8fd72188f0448306a2eed32e066, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.TweenService::RyanAssets.TweenService.TweenManager
---- !u!4 &1841955762
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1841955760}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1018.1291, y: 889.59314, z: -27.29231}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1861543914
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -463,6 +430,52 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
+--- !u!1 &1955165350
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1955165352}
+  - component: {fileID: 1955165351}
+  m_Layer: 0
+  m_Name: Debug
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1955165351
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955165350}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e6495cf6e9073c41a76dabfdb4e8347, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Debug::EasyDebug.DebugPlayGame
+  PlayGameUniverseId: empty_baseplate
+  continueButton: {fileID: 643041136}
+--- !u!4 &1955165352
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955165350}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &8125114074414780783
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -608,5 +621,5 @@ SceneRoots:
   - {fileID: 8125114074414780783}
   - {fileID: 274022416}
   - {fileID: 1861543914}
-  - {fileID: 1841955762}
   - {fileID: 1277819621}
+  - {fileID: 1955165352}

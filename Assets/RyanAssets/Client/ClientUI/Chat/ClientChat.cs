@@ -25,21 +25,23 @@ namespace RyanAssets.Client.ClientUI.Chat {
             InstanceFinder.ClientManager.RegisterBroadcast<MessageBroadcast>(OnReceiveMessage);
             chatBox.onSubmit.AddListener(OnMessageSend_ButtonPressed);
             ClientConnector.OnDisconnected += OnDisconnected;
+            ClientConnector.OnConnected += OnConnected;
+            TopbarControls.chatActivateEvent += OnChatToggle;
             ClearPrefabs();
+            OnConnected();
         }
         private void OnReceiveMessage(MessageBroadcast message, Channel channel) {
             AddPrefab(message);
         }
         private void OnCreateMessage(GameObject prefab, MessageBroadcast message) {
             TextMeshProUGUI usernameText = prefab.GetComponent<TextMeshProUGUI>();
-            string username = SharedGlobalEvents.Instance.Players[message.player].data.username;
-            usernameText.text = $"{ClientChatHelper.ColorNameRichText(username)}: {ClientChatHelper.EscapeRichText(message.message)}";
-        }
-        private void OnEnable() {
-            TopbarControls.chatActivateEvent += OnChatToggle;
-        }
-        private void OnDisable() {
-            TopbarControls.chatActivateEvent -= OnChatToggle;
+            if (message.player == null){
+                usernameText.text = message.message;
+            }
+            else {
+                string username = SharedGlobalEvents.Instance.Players[message.player].data.username;
+                usernameText.text = $"{ClientChatHelper.ColorNameRichText(username)}: {ClientChatHelper.EscapeRichText(message.message)}";
+            }
         }
         private void OnChatToggle() {
             ClientTopbar.Instance.EnsureCanvasVisibility(GetComponent<CanvasGroupController>(), true, true);
@@ -65,6 +67,12 @@ namespace RyanAssets.Client.ClientUI.Chat {
         }
         private void OnDisconnected(){
             ClearPrefabs();
+        }
+        private void OnConnected(){
+            AddPrefab(new MessageBroadcast(){
+                // player = InstanceFinder.ClientManager.Connection,
+                message = "{System} Chat messages will appear here."
+            });
         }
     }
 }

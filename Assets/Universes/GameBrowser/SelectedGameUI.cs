@@ -21,7 +21,7 @@ namespace Universes.GameBrowser {
         Image thumbnailImage;
         [SerializeField]
         Text title, description, active_players;
-        string joining_universe_id;
+        static string joining_universe_id;
 
         public void OpenUniversePage(UniverseStruct universe, ulong player_count) {
             activeUniverse = universe;
@@ -34,10 +34,10 @@ namespace Universes.GameBrowser {
         public void CloseUniversePage() {
             selectedGameCanvasUI.SetVisible(false, 0.5f);
         }
-        async Task<(string, JObject)> GetMyServer() {
+        static async Task<(string, JObject)> GetMyServer() {
             return await BackendNetwork.PostRequest($"/api/universes/v1/play?universe_id={joining_universe_id}");
         }
-        public async Task PlayGame(string universe_id) {
+        public static async Task PlayGame(string universe_id) {
             joining_universe_id = universe_id;
             (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm);
             // Debug.Log(json);

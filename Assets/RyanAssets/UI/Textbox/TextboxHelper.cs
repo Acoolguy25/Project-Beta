@@ -4,7 +4,7 @@ using UnityEngine.EventSystems;
 using RyanAssets.Input;
 using UnityEngine.UI;
 
-namespace RyanAssets.UI {
+namespace RyanAssets.UI.Textbox {
     public class TextboxHelper : MonoBehaviour, ISelectHandler, IDeselectHandler
     {
         private TMP_InputField tmpInputField;

@@ -7,6 +7,7 @@ namespace RyanAssets.Client.ClientCore {
         void Awake(){
             if (ClientConnector.Instance == null)
                 Instantiate(ClientPrefab);
+            Destroy(gameObject);
         }
     }
 }

@@ -57,6 +57,7 @@ namespace Universes.GameBrowser {
                 obj.transform.GetChild(0).GetComponent<Image>().sprite = data.LoadSprite();
                 obj.transform.GetChild(1).GetComponent<Text>().text = data.title;
                 obj.transform.GetChild(2).GetComponent<Text>().text = $"{JSONuniverse.active_players} active";
+                obj.name = data.id;
             };
             OnClickPrefab += (GameObject obj, UniverseStruct data) => {
                 JSONUniverseData JSONuniverse = GetUniverseFromJSONResponse(universeResponse, data.id);
