@@ -71,63 +71,78 @@ namespace RyanAssets.UI.ListGrid {
             ClearPrefabs();
             AddPrefabs(objects);
         }
-        protected void UpdateLayout()
-{
-    if (contentRT == null)
-        return;
+        protected void UpdateLayout(){
+            if (contentRT == null || !isActiveAndEnabled)
+                return;
 
-    bool wasAtBottom = AutoScroll &&
-                       scrollRect != null &&
-                       scrollRect.verticalNormalizedPosition <= 0.01f;
+            if (layoutRoutine != null)
+                StopCoroutine(layoutRoutine);
 
-    Canvas.ForceUpdateCanvases();
-    LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
+            layoutRoutine = StartCoroutine(UpdateLayoutRoutine());
+        }
+        private Coroutine layoutRoutine;
 
-    float height;
+        private IEnumerator UpdateLayoutRoutine()
+        {
+            bool wasAtBottom = AutoScroll &&
+                            scrollRect != null &&
+                            scrollRect.verticalNormalizedPosition <= 0.01f;
 
-    if (gridLayoutGroup != null)
-    {
-        int count = 0;
+            yield return new WaitForEndOfFrame();
 
-        foreach (RectTransform child in contentRT)
-            if (child.gameObject.activeInHierarchy)
-                count++;
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
 
-        int columns = Mathf.Max(1, Mathf.FloorToInt(
-            (contentRT.rect.width + gridLayoutGroup.spacing.x) /
-            (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)));
+            float height;
 
-        int rows = Mathf.CeilToInt(count / (float)columns);
+            if (gridLayoutGroup != null)
+            {
+                int count = 0;
 
-        height =
-            gridLayoutGroup.padding.vertical +
-            rows * gridLayoutGroup.cellSize.y +
-            Mathf.Max(0, rows - 1) * gridLayoutGroup.spacing.y;
-    }
-    else
-    {
-        height = 0f;
+                foreach (RectTransform child in contentRT)
+                {
+                    if (child.gameObject.activeInHierarchy)
+                        count++;
+                }
 
-        foreach (Transform child in contentRT)
-            if (child.TryGetComponent(out RectTransform rt) && child.gameObject.activeInHierarchy)
-                height += rt.rect.height;
-    }
+                int columns = Mathf.Max(1, Mathf.FloorToInt(
+                    (contentRT.rect.width + gridLayoutGroup.spacing.x) /
+                    (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)));
 
-    contentRT.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+                int rows = Mathf.CeilToInt(count / (float)columns);
 
-    LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
+                height =
+                    gridLayoutGroup.padding.vertical +
+                    rows * gridLayoutGroup.cellSize.y +
+                    Mathf.Max(0, rows - 1) * gridLayoutGroup.spacing.y;
+            }
+            else
+            {
+                height = 0f;
 
-    if (AutoScroll && wasAtBottom && scrollRect != null)
-        StartCoroutine(ScrollBottomNextFrame());
-}
-private IEnumerator ScrollBottomNextFrame()
-{
-    yield return new WaitForEndOfFrame();
+                foreach (Transform child in contentRT)
+                {
+                    if (child.TryGetComponent(out RectTransform childRT) &&
+                        child.gameObject.activeInHierarchy)
+                    {
+                        height += childRT.rect.height;
+                    }
+                }
+            }
 
-    Canvas.ForceUpdateCanvases();
-    scrollRect.StopMovement();
-    scrollRect.verticalNormalizedPosition = 0f;
-}
+            contentRT.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
+
+            if (AutoScroll && wasAtBottom && scrollRect != null)
+            {
+                scrollRect.StopMovement();
+                scrollRect.verticalNormalizedPosition = 0f;
+            }
+
+            layoutRoutine = null;
+        }
         virtual protected void Start() {
             contentTarget = scrollRect.content;
             contentRT = contentTarget.GetComponent<RectTransform>();
