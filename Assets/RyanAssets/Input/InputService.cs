@@ -44,12 +44,15 @@ namespace RyanAssets.Input {
             if (Instance == this)
                 Instance = null;
         }
+        public static void ResetAction(InputControl action){
+            mapLocks[action] = 0;
+            Instance.SetControlsEnabled(action, false);
+        }
         private void Reset() {
             foreach (InputActionMap map in _inputAction.actions.actionMaps) {
                 bool valid = Enum.TryParse<InputControl>(map.name, out InputControl action);
                 Debug.Assert(valid, $"Action {map.name} does not have a valid enum!");
-                mapLocks.Add(action, 1);
-                map.Disable();
+                ResetAction(action);
             }
         }
         public void SetControlsEnabled(InputControl actionName, bool enabled, int amount = 1) {
@@ -81,10 +84,10 @@ namespace RyanAssets.Input {
         public static void UnfocusControls(InputControl action){
             Instance.SetFocusControls(action, false);
         }
-        public static void ResetControls(InputControl action){
-            mapLocks.Clear();
-            Instance.Reset();
-        }
+        // public static void ResetControls(InputControl action){
+        //     mapLocks.Clear();
+        //     Instance.Reset();
+        // }
         // private void OnApplicationFocus(bool hasFocus) {
         //     SetCursorState(cursorLocked);
         // }

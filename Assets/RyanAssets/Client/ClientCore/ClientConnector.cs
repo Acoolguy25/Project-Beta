@@ -10,6 +10,7 @@ using FishNet.Transporting;
 using System.Threading.Tasks;
 using RyanAssets.Client.ClientModules;
 using System;
+using RyanAssets.Input;
 namespace RyanAssets.Client.ClientCore {
     public class ClientConnector : MonoBehaviour {
         public static ClientConnector Instance;
@@ -27,6 +28,10 @@ namespace RyanAssets.Client.ClientCore {
             SetGameActive(false);
         }
         void SetGameActive(bool active) {
+            // if (!active){
+            //     InputService.ResetAction(InputControl.Character);
+            //     InputService.ResetAction(InputControl.Client);
+            // }
             foreach (GameObject gameObj in gameOnlyObjects) {
                 gameObj.SetActive(active);
             }

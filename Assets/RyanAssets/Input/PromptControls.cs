@@ -4,10 +4,10 @@ using System;
 namespace RyanAssets.Input {
     public class PromptControls: MonoBehaviour {
         public static Action confirmEvent, denyEvent;
-        public void ConfirmPrompt(){
+        public void OnConfirmPrompt(){
             confirmEvent?.Invoke();
         }
-        public void DenyPrompt(){
+        public void OnDenyPrompt(){
             denyEvent?.Invoke();
         }
     }
