@@ -3,6 +3,7 @@ using UnityEngine;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 using System.Net.Http.Headers;
 using System;
 using System.Text;
@@ -41,11 +42,21 @@ namespace RyanAssets.NetworkService {
                 return (null, null);
             string text = await response.Content.ReadAsStringAsync();
 
-            if (!response.IsSuccessStatusCode) {
-                return (text, null);
-            }
 
             JObject json = ParseJSON(text);
+            if (!response.IsSuccessStatusCode) {
+                if (json == null)
+                    return (text, null);
+                else{
+                    // UnityEngine.Debug.LogError($"{text}");
+                    if (json.TryGetValue("detail", out JToken detailToken)){
+                        return (detailToken.Value<string>(), null);
+                    }
+                    else{
+                        return (JsonConvert.SerializeObject(json, Formatting.Indented), null);
+                    }
+                }
+            }
             if (json == null)
                 return ($"JSON Parse Failed | Got: {text}", null);
             else
