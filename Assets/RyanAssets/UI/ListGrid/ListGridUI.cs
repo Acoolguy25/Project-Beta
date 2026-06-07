@@ -10,7 +10,7 @@ using System.Collections;
 namespace RyanAssets.UI.ListGrid {
     public class ListGridUI<T> : MonoBehaviour {
         [SerializeField]
-        GameObject modelPrefab;
+        protected GameObject modelPrefab;
         [SerializeField]
         protected ScrollRect scrollRect;
         [SerializeField]

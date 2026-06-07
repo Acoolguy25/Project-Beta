@@ -10,7 +10,7 @@ using System;
 namespace RyanAssets.Client.ClientModules {
     public static class LocalPlayerData {
         public static PlayerData localData;
-        public static PlayerSettings localSettings;
+        // public static PlayerSettings localSettings;
         public static Action<string> username_changed_event;
         public static void PlayerInit(JObject json) {
             localData.username = (string)json["username"];

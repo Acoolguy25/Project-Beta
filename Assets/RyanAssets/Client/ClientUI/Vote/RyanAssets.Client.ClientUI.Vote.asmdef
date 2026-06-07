@@ -1,12 +1,13 @@
 {
-    "name": "RyanAssets.Server.ServerFeatures",
-    "rootNamespace": "RyanAssets.Server.ServerFeatures",
+    "name": "RyanAssets.Client.ClientUI.Vote",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Vote",
     "references": [
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
-        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
         "GUID:aecf8615d7e72ef4291bf847c34b8e7c",
         "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
-        "GUID:39cf4af17d22e66448d4cd56fe623fa9"
+        "GUID:d80e5027280713447b70339fca3efe66",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
+        "GUID:30b4aa37ab8e7994987c0bdb87f386dd"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -15,7 +16,7 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "UNITY_SERVER"
+        "!UNITY_SERVER"
     ],
     "versionDefines": [],
     "noEngineReferences": false

@@ -14,13 +14,14 @@
   <Project Path="RyanAssets.Core.csproj" />
   <Project Path="RyanAssets.Levels.Client.csproj" />
   <Project Path="RyanAssets.Input.csproj" />
+  <Project Path="RyanAssets.Client.ClientUI.Vote.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
   <Project Path="RyanAssets.UI.ButtonGrid.csproj" />
   <Project Path="RyanAssets.NetworkSettings.csproj" />
+  <Project Path="RyanAssets.Shared.Requests.csproj" />
   <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
   <Project Path="RyanAssets.Shared.Broadcasts.csproj" />
-  <Project Path="RyanAssets.Shared.Requests.csproj" />
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />
