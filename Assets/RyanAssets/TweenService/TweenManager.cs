@@ -48,7 +48,6 @@ namespace RyanAssets.TweenService {
         }
         void Awake() {
             Instance = this;
-            DontDestroyOnLoad(this);
         }
         void UpdateAllTimers(TweenUpdateMethod method, float scaled_delta_time, float real_delta_time){
             // foreach (TweenTimer timer in ActiveTweens){
