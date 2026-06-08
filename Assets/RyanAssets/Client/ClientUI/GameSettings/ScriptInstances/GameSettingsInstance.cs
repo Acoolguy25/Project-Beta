@@ -6,10 +6,16 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         IntGameSetting,
         BoolGameSetting
     };
+    public enum GameSettingCategory {
+        Controls,
+        Camera,
+        Audio
+    };
     public abstract class GameSettingsInstance {
         // just for polymorphism
         public string name, title, description;
         public GameSettingType type;
+        public GameSettingCategory category;
         public abstract void Init(GameObject obj);
         public abstract bool Load();
         public abstract void Save();

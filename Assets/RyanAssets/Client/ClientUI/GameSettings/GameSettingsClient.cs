@@ -7,14 +7,19 @@ using FishNet.Managing;
 using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
-using System.Linq;
 
 namespace RyanAssets.Client.ClientUI.GameSettings {
     public class GameSettingsClient: ListGridUI<GameSettingsInstance> {
         public static readonly Dictionary<string, GameSettingsInstance> gameSettingsConfigUI = new(){
+            ["InvertedMovementControls"] = new BoolGameSetting(){
+                title = "Inverted Movement Controls",
+                category = GameSettingCategory.Controls,
+                start = false
+            },
             ["ZoomSensitivity"] = new IntGameSetting(){
                 // name = "BidirectionalZoomSensitivity",
                 title = "Zoom Sensitivity",
+                category = GameSettingCategory.Camera,
                 min = 1, max = 250, start = 100
                 // on_update = (val) => {
                     
@@ -22,19 +27,38 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             },
             ["TurnSensitivity"] = new IntGameSetting(){
                 title = "Turn Sensitivity",
+                category = GameSettingCategory.Camera,
                 min = 1, max = 250, start = 100
             },
             ["VerticalTurnSensitivity"] = new IntGameSetting(){
                 title = "Vertical Turn Sensitivity",
+                category = GameSettingCategory.Camera,
                 min = 1, max = 250, start = 100
             },
             ["HorizontalTurnSensitivity"] = new IntGameSetting(){
                 title = "Horizontal Turn Sensitivity",
+                category = GameSettingCategory.Camera,
                 min = 1, max = 250, start = 100
             },
-            ["InvertedMovementControls"] = new BoolGameSetting(){
-                title = "Inverted Movement Controls",
-                start = false
+            ["MasterVolume"] = new IntGameSetting(){
+                title = "Master Volume",
+                category = GameSettingCategory.Audio,
+                min = 1, max = 100, start = 50
+            },
+            ["MenuMusic"] = new IntGameSetting(){
+                title = "Menu Music",
+                category = GameSettingCategory.Audio,
+                min = 1, max = 100, start = 50
+            },
+            ["GameMusic"] = new IntGameSetting(){
+                title = "Game Music",
+                category = GameSettingCategory.Audio,
+                min = 1, max = 100, start = 50
+            },
+            ["UIVolume"] = new IntGameSetting(){
+                title = "UI Volume",
+                category = GameSettingCategory.Audio,
+                min = 1, max = 100, start = 50
             },
             // new IntGameSetting(){
             //     name = "VerticalZoomSensitivity",
@@ -70,18 +94,39 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
 
         [SerializeField]
         List<GameObject> settingToAdditionalPrefab;
+        [SerializeField]
+        GameObject categoryHeaderPrefab;
+
+        readonly HashSet<GameSettingCategory> createdCategories = new();
         protected void Awake(){
             base.Start();
-            OnCreatePrefab += OnPrefabAdded;
             foreach (var keyVal in gameSettingsConfigUI) {
                 keyVal.Value.name = keyVal.Key; // Assign the names!
             }
-            AddPrefabs(gameSettingsConfigUI.Values.ToArray());
+            AddSettingsPrefabs();
             GameSettingsControls.leaveToggledEvent += OnLeaveGame_ButtonPressed;
             GameSettingsControls.resetToggledEvent += OnReset_ButtonPressed;
         }
         protected override void Start(){
             // disabled
+        }
+        void AddSettingsPrefabs(){
+            foreach (GameSettingsInstance setting in gameSettingsConfigUI.Values) {
+                if (createdCategories.Add(setting.category))
+                    CreateCategoryHeader(setting.category);
+
+                GameObject placeholder = Instantiate(modelPrefab, contentTarget, false);
+                OnPrefabAdded(placeholder, setting);
+            }
+            UpdateLayout();
+        }
+        void CreateCategoryHeader(GameSettingCategory category) {
+            GameObject header = Instantiate(categoryHeaderPrefab, contentTarget, false);
+            header.name = category.ToString();
+
+            Text text = header.GetComponentInChildren<Text>(true);
+            if (text != null)
+                text.text = category.ToString();
         }
         void OnPrefabAdded(GameObject prefab, GameSettingsInstance setting){
             GameObject additionalObj = Instantiate(settingToAdditionalPrefab[(int) setting.type]);
