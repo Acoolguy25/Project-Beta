@@ -111,11 +111,11 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1468066584009207601}
-  m_Father: {fileID: 9100000000000000010}
+  m_Father: {fileID: 9100000000000000110}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 122, y: 34}
+  m_AnchoredPosition: {x: 122, y: 0}
   m_SizeDelta: {x: 180, y: 42}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1157500394034835264
@@ -302,7 +302,7 @@ MonoBehaviour:
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96
   m_DynamicPixelsPerUnit: 1
-  m_PresetInfoIsWorld: 0
+  m_PresetInfoIsWorld: 1
 --- !u!114 &9100000000000000005
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -360,10 +360,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.Client.ClientUI.GameSettings::RyanAssets.Client.ClientUI.GameSettings.GameSettingsClient
   modelPrefab: {fileID: 5284603660741424744, guid: cde42d9e69da2d34995db897a7b07c53, type: 3}
   scrollRect: {fileID: 1894304943560295692}
+  AutoScroll: 0
   settingToAdditionalPrefab:
   - {fileID: 5353221908039646243, guid: bbfc346cb6ec7d04bb296e5b3f772cc0, type: 3}
   - {fileID: 5129439638430744528, guid: 813acaa4f6f0a46478cb91b8d5b0cf38, type: 3}
   categoryHeaderPrefab: {fileID: 9100000000000000002, guid: 2db4cd15a6b94754a8d8a41e8e659a25, type: 3}
+  gameActionButtonsContainer: {fileID: 9100000000000000111}
+  hideGameActionButtons: 0
 --- !u!1 &9100000000000000007
 GameObject:
   m_ObjectHideFlags: 0
@@ -474,9 +477,7 @@ RectTransform:
   - {fileID: 9100000000000000022}
   - {fileID: 9100000000000000031}
   - {fileID: 9100000000000000080}
-  - {fileID: 9100000000000000086}
-  - {fileID: 8694862780056253693}
-  - {fileID: 9100000000000000095}
+  - {fileID: 9100000000000000110}
   m_Father: {fileID: 9100000000000000001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -797,15 +798,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.Topbar.ClientTopbar,
-          RyanAssets.Client.ClientUI.Topbar
-        m_MethodName: CloseCanvasVisibility
-        m_Mode: 2
+      - m_Target: {fileID: 2396861670928556661}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.GameSettings.GameSettingsClient,
+          RyanAssets.Client.ClientUI.GameSettings
+        m_MethodName: CloseSettingsCanvas_ButtonPressed
+        m_Mode: 1
         m_Arguments:
-          m_ObjectArgument: {fileID: 1420625601298902378}
-          m_ObjectArgumentAssemblyTypeName: RyanAssets.UI.CanvasGroupController,
-            RyanAssets.UI
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -2079,11 +2079,11 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 9100000000000000091}
-  m_Father: {fileID: 9100000000000000010}
+  m_Father: {fileID: 9100000000000000110}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 405.7, y: 34}
+  m_AnchoredPosition: {x: 405.7, y: 0}
   m_SizeDelta: {x: 180, y: 42}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &9100000000000000088
@@ -2279,11 +2279,11 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 9100000000000000100}
-  m_Father: {fileID: 9100000000000000010}
+  m_Father: {fileID: 9100000000000000110}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0}
   m_AnchorMax: {x: 1, y: 0}
-  m_AnchoredPosition: {x: -122, y: 34}
+  m_AnchoredPosition: {x: -122, y: 0}
   m_SizeDelta: {x: 180, y: 42}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &9100000000000000097
@@ -2368,15 +2368,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.Topbar.ClientTopbar,
-          RyanAssets.Client.ClientUI.Topbar
-        m_MethodName: CloseCanvasVisibility
-        m_Mode: 2
+      - m_Target: {fileID: 2396861670928556661}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.GameSettings.GameSettingsClient,
+          RyanAssets.Client.ClientUI.GameSettings
+        m_MethodName: CloseSettingsCanvas_ButtonPressed
+        m_Mode: 1
         m_Arguments:
-          m_ObjectArgument: {fileID: 1420625601298902378}
-          m_ObjectArgumentAssemblyTypeName: RyanAssets.UI.CanvasGroupController,
-            RyanAssets.UI
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -2461,6 +2460,44 @@ MonoBehaviour:
     m_VerticalOverflow: 0
     m_LineSpacing: 1
   m_Text: Resume
+--- !u!1 &9100000000000000111
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9100000000000000110}
+  m_Layer: 5
+  m_Name: GameActionButtons
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &9100000000000000110
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000000000000111}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 9100000000000000086}
+  - {fileID: 8694862780056253693}
+  - {fileID: 9100000000000000095}
+  m_Father: {fileID: 9100000000000000010}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: 0, y: 34}
+  m_SizeDelta: {x: 0, y: 56}
+  m_Pivot: {x: 0.5, y: 0}
 --- !u!1001 &7528306338434244335
 PrefabInstance:
   m_ObjectHideFlags: 0

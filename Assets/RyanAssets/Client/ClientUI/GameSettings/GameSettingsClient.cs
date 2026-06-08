@@ -1,5 +1,6 @@
 using UnityEngine;
 using RyanAssets.UI.ListGrid;
+using RyanAssets.UI;
 using RyanAssets.PromptService;
 using RyanAssets.Input;
 using FishNet;
@@ -96,6 +97,10 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         List<GameObject> settingToAdditionalPrefab;
         [SerializeField]
         GameObject categoryHeaderPrefab;
+        [SerializeField]
+        GameObject gameActionButtonsContainer;
+        [SerializeField]
+        bool hideGameActionButtons;
 
         readonly HashSet<GameSettingCategory> createdCategories = new();
         protected void Awake(){
@@ -103,6 +108,7 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             foreach (var keyVal in gameSettingsConfigUI) {
                 keyVal.Value.name = keyVal.Key; // Assign the names!
             }
+            SetGameActionButtonsVisible(!hideGameActionButtons);
             AddSettingsPrefabs();
             GameSettingsControls.leaveToggledEvent += OnLeaveGame_ButtonPressed;
             GameSettingsControls.resetToggledEvent += OnReset_ButtonPressed;
@@ -150,6 +156,10 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             setting.InitDone();
             Destroy(prefab);
         }
+        void SetGameActionButtonsVisible(bool visible) {
+            if (gameActionButtonsContainer != null)
+                gameActionButtonsContainer.SetActive(visible);
+        }
 
         public async void OnLeaveGame_ButtonPressed(){
             PromptButton res = await PromptManager.Instance.PromptLocalUser("Leave Game?", "Are you sure you want to leave this game?", PromptId.LeaveGameConfirm, PromptManager.ButtonPreset_YesNo);
@@ -160,6 +170,9 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         }
         public async void OnReset_ButtonPressed(){
 
+        }
+        public void CloseSettingsCanvas_ButtonPressed(){
+            GetComponent<CanvasGroupController>().SetVisible(false, 1 / 3f);
         }
         private void OnEnable(){
             InputService.SetInputScreenActive(InputScreen.GameSettings, true);
