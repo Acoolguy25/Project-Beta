@@ -106,7 +106,7 @@ namespace RyanAssets.Client.ClientCore {
                     isConnecting = false;
                     OnDisconnected?.Invoke();
                     IsConnected = false;
-                    if (!PromptManager.PromptDelete(PromptId.LeaveGameAwait)){
+                    if (!PromptManager.PromptDelete(PromptId.LeaveGameAwait) && !hasCanceled){
                         if (wasAuthenticated) {
                             wasAuthenticated = false;
                             SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
@@ -116,6 +116,7 @@ namespace RyanAssets.Client.ClientCore {
                     }
                     if (!SceneManager.GetSceneByName("MainMenu").isLoaded)
                         SceneManager.LoadScene("MainMenu");
+                    hasCanceled = false;
                     SetGameActive(false);
                     break;
             }
