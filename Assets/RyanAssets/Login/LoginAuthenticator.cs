@@ -26,6 +26,7 @@ namespace RyanAssets.Login {
                 PlayerAccountService.Instance.AccessToken
             );
         }
+#if !UNITY_EDITOR || NETWORK_LOGIN
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
             _initialized = false;
@@ -34,7 +35,6 @@ namespace RyanAssets.Login {
             if (_initialized)
                 return;
             _initialized = true;
-#if !UNITY_EDITOR || NETWORK_LOGIN
             await UnityServices.InitializeAsync();
 
             PlayerAccountService.Instance.SignedIn += UnityLogin_Complete;
@@ -49,7 +49,7 @@ namespace RyanAssets.Login {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
                 return;
             }
-#endif
         }
+#endif
     }
 }

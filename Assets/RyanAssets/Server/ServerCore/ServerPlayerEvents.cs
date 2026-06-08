@@ -3,7 +3,6 @@ using UnityEngine;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Transporting;
-using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using RyanAssets.Authentication;
@@ -15,7 +14,6 @@ using RyanAssets.Shared.Player;
 namespace RyanAssets.Server.ServerCore {
     public static class ServerPlayerEvents {
         public static Action<NetworkConnection> OnPlayerAddedEvent, OnPlayerRemovedEvent;
-        public static Dictionary<NetworkConnection, ServerPlayerStats> Players = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
@@ -27,13 +25,11 @@ namespace RyanAssets.Server.ServerCore {
             if (args.ConnectionState != RemoteConnectionState.Stopped)
                 return;
 
-            if (!Players.TryGetValue(conn, out ServerPlayerStats stats))
+            if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
                 return;
 
             await ServerPlayerSave.Save(conn);
-            Players.Remove(conn);
-            if (SharedGlobalEvents.Instance != null)
-                SharedGlobalEvents.Instance.Players.Remove(conn);
+            SharedGlobalEvents.Instance.Players.Remove(conn);
             ServerPlayerSave.Forget(conn);
             OnPlayerRemovedEvent?.Invoke(conn);
             string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id}";
@@ -44,9 +40,12 @@ namespace RyanAssets.Server.ServerCore {
             // Debug.Log("Auth Succeeded: " + json);
             ServerPlayerStats stats = ParsePlayerStats(json);
             Debug.Log("PlayerAuthenticated: " + JsonConvert.SerializeObject(stats));
-            Players.Add(conn, stats);
-            if (SharedGlobalEvents.Instance != null)
-                SharedGlobalEvents.Instance.Players.Add(new(conn, stats));
+            if (SharedGlobalEvents.Instance == null) {
+                Debug.LogError("Cannot add authenticated player. SharedGlobalEvents.Instance is missing.");
+                return;
+            }
+
+            SharedGlobalEvents.Instance.Players.Add(new(conn, stats));
             OnPlayerAddedEvent?.Invoke(conn);
         }
 

@@ -58,14 +58,17 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         public static Task Save(NetworkConnection conn) {
-            if (!ServerPlayerEvents.Players.ContainsKey(conn))
+            if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.ContainsKey(conn))
                 return Task.CompletedTask;
 
             return SavePlayers(new List<NetworkConnection> { conn }, removeDirtyOnSuccess: true);
         }
 
         public static Task SaveAll() {
-            return SavePlayers(new List<NetworkConnection>(ServerPlayerEvents.Players.Keys), removeDirtyOnSuccess: true);
+            if (SharedGlobalEvents.Instance == null)
+                return Task.CompletedTask;
+
+            return SavePlayers(new List<NetworkConnection>(SharedGlobalEvents.Instance.Players.Keys), removeDirtyOnSuccess: true);
         }
 
         static Task SaveDirty() {
@@ -78,7 +81,7 @@ namespace RyanAssets.Server.ServerCore {
             Dictionary<NetworkConnection, int> savedDirtyVersions = new();
 
             foreach (NetworkConnection conn in connections) {
-                if (!ServerPlayerEvents.Players.TryGetValue(conn, out ServerPlayerStats stats))
+                if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
                     continue;
 
                 if (string.IsNullOrWhiteSpace(stats.player_id))

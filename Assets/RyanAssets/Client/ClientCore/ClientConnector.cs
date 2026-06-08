@@ -58,7 +58,7 @@ namespace RyanAssets.Client.ClientCore {
             string status = json["data"]["status"].ToString();
             joinServerId = json["data"]["server_id"].ToString();
             if (status == "starting") {
-                (string response, JObject obj) = await BackendClient.RequestAsync(WaitForServerLoad, "Waiting For Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel);
+                (string response, JObject obj) = await BackendClient.RequestAsync(WaitForServerLoad, "Waiting For Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel, desc: "Server Is Starting Up, Please Wait");
                 if (response != null)
                     return;
             } else if (status != "ready") {

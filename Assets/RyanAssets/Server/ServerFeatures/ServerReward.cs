@@ -6,7 +6,7 @@ using RyanAssets.Shared.Player;
 namespace RyanAssets.Server.ServerFeatures {
     public static class ServerReward {
         public static bool AddXPReward(NetworkConnection conn, ulong xpReward) {
-            if (!ServerPlayerEvents.Players.TryGetValue(conn, out ServerPlayerStats stats))
+            if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
                 return false;
 
             return AddXPReward(conn, stats, xpReward);
@@ -16,7 +16,10 @@ namespace RyanAssets.Server.ServerFeatures {
             NetworkConnection matchedConn = null;
             ServerPlayerStats matchedStats = default;
 
-            foreach (KeyValuePair<NetworkConnection, ServerPlayerStats> pair in ServerPlayerEvents.Players) {
+            if (SharedGlobalEvents.Instance == null)
+                return false;
+
+            foreach (KeyValuePair<NetworkConnection, ServerPlayerStats> pair in SharedGlobalEvents.Instance.Players) {
                 if (pair.Value.player_id != playerId)
                     continue;
 
@@ -34,9 +37,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 ? ulong.MaxValue
                 : previousXp + xpReward;
 
-            ServerPlayerEvents.Players[conn] = stats;
-            if (SharedGlobalEvents.Instance != null)
-                SharedGlobalEvents.Instance.Players[conn] = stats;
+            SharedGlobalEvents.Instance.Players[conn] = stats;
             ServerPlayerSave.MarkDirty(conn);
             return true;
         }
