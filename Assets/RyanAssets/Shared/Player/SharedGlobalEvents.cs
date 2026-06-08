@@ -47,7 +47,7 @@ namespace RyanAssets.Shared.Player {
 #endif
         }
 #if !UNITY_SERVER
-        public static Action<NetworkConnection, ServerPlayerStats> OnPlayerAdded, OnPlayerRemoved;
+        public static Action<NetworkConnection, ServerPlayerStats> OnPlayerAdded, OnPlayerRemoved, OnPlayerUpdated;
         public static Action OnVoteChanged;
         public static Action<SharedVoteInfo> OnCurrentVoteChangedEvent;
 
@@ -56,6 +56,9 @@ namespace RyanAssets.Shared.Player {
                 case SyncDictionaryOperation.Add:
                     // Debug.Log($"{key} player added");
                     OnPlayerAdded?.Invoke(key, value);
+                    break;
+                case SyncDictionaryOperation.Set:
+                    OnPlayerUpdated?.Invoke(key, value);
                     break;
                 case SyncDictionaryOperation.Remove:
                     // Debug.Log($"{key} player removed");
@@ -90,6 +93,7 @@ namespace RyanAssets.Shared.Player {
         static void Init(){
             OnPlayerAdded = null;
             OnPlayerRemoved = null;
+            OnPlayerUpdated = null;
             OnVoteChanged = null;
             OnCurrentVoteChangedEvent = null;
         }

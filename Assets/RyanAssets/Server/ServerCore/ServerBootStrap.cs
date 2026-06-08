@@ -24,6 +24,7 @@ namespace RyanAssets.Server.ServerCore {
             }
         };
         public static Action StartServerEvent, StopServerEvent;
+        public static event Func<Task> StopServerAsyncEvent;
         public static ServerInfo serverInfo = new();
         static bool isStopping;
         public static ushort MaxPlayers { get; private set; }
@@ -179,6 +180,7 @@ namespace RyanAssets.Server.ServerCore {
 
             Debug.Log($"Stopping server because {reason}");
             StopServerEvent?.Invoke();
+            await InvokeStopServerAsyncEvent();
 
             InstanceFinder.ServerManager.Broadcast(new PromptBroadcast {
                 title = "Server Closed",
@@ -191,6 +193,19 @@ namespace RyanAssets.Server.ServerCore {
         }
         static void OnQuit() {
             StopServer("the backend server experienced a shutdown");
+        }
+
+        static async Task InvokeStopServerAsyncEvent() {
+            if (StopServerAsyncEvent == null)
+                return;
+
+            Delegate[] handlers = StopServerAsyncEvent.GetInvocationList();
+            Task[] tasks = new Task[handlers.Length];
+
+            for (int i = 0; i < handlers.Length; i++)
+                tasks[i] = ((Func<Task>)handlers[i]).Invoke();
+
+            await Task.WhenAll(tasks);
         }
     }
 }

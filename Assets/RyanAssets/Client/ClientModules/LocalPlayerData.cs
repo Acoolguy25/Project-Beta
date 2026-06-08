@@ -6,12 +6,34 @@ using RyanAssets.Levels.Client;
 using RyanAssets.DataService;
 using System.Threading.Tasks;
 using System;
+using FishNet;
+using FishNet.Connection;
+using RyanAssets.Shared.Player;
+using UnityEngine;
 
 namespace RyanAssets.Client.ClientModules {
     public static class LocalPlayerData {
         public static PlayerData localData;
-        // public static PlayerSettings localSettings;
+        public static PlayerSettings localSettings;
         public static Action<string> username_changed_event;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void Init() {
+            SharedGlobalEvents.OnPlayerAdded += OnSyncedPlayerData;
+            SharedGlobalEvents.OnPlayerUpdated += OnSyncedPlayerData;
+        }
+
+        static void OnSyncedPlayerData(NetworkConnection conn, ServerPlayerStats stats) {
+            if (InstanceFinder.ClientManager == null || conn != InstanceFinder.ClientManager.Connection)
+                return;
+
+            bool usernameChanged = localData.username != stats.data.username;
+            localData = stats.data;
+            LevelClient.UpdateLevelInstances(localData);
+            if (usernameChanged)
+                username_changed_event?.Invoke(localData.username);
+        }
+
         public static void PlayerInit(JObject json) {
             localData.username = (string)json["username"];
             localData.xp = (ulong)json["xp"];
