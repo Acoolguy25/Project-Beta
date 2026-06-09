@@ -1,6 +1,6 @@
 {
-    "name": "RyanAssets.Characters",
-    "rootNamespace": "RyanAssets.Characters",
+    "name": "RyanAssets.Characters.Shared",
+    "rootNamespace": "RyanAssets.Characters.Shared",
     "references": [
         "Unity.InputSystem",
         "FishNet.Runtime",

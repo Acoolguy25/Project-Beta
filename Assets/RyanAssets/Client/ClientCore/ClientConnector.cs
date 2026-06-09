@@ -55,6 +55,8 @@ namespace RyanAssets.Client.ClientCore {
             return await BackendNetwork.GetRequest($"/api/servers/v1/{joinServerId}/wait");
         }
         public async void JoinGameServer(string universe_id, JObject json) {
+            await StopActiveClientConnection();
+
             string status = json["data"]["status"].ToString();
             joinServerId = json["data"]["server_id"].ToString();
             if (status == "starting") {
@@ -79,6 +81,18 @@ namespace RyanAssets.Client.ClientCore {
             isConnecting = true;
             hasCanceled = false;
         }
+
+        async Task StopActiveClientConnection() {
+            Transport transport = InstanceFinder.TransportManager.Transport;
+            if (transport.GetConnectionState(false) == LocalConnectionState.Stopped)
+                return;
+
+            InstanceFinder.ClientManager.StopConnection();
+            float stopDeadline = Time.realtimeSinceStartup + 2f;
+            while (transport.GetConnectionState(false) != LocalConnectionState.Stopped && Time.realtimeSinceStartup < stopDeadline)
+                await Task.Delay(50);
+        }
+
         public void CancelJoinGameServer() {
             if (isConnecting) {
                 hasCanceled = true;

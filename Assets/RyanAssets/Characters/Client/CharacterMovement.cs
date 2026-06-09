@@ -1,12 +1,12 @@
-#if !UNITY_SERVER
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FishNet;
 using RyanAssets.Core;
 using RyanAssets.Input;
+using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientUI.GameSettings;
 
-namespace RyanAssets.Characters {
+namespace RyanAssets.Characters.Client {
     public class CharacterMovement : MonoBehaviour {
         [Header("Player")]
         public float MoveSpeed = 2.0f;
@@ -170,4 +170,3 @@ namespace RyanAssets.Characters {
         }
     }
 }
-#endif

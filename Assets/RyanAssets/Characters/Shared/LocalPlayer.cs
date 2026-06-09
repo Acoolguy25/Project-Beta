@@ -5,7 +5,7 @@ using FishNet;
 using FishNet.Transporting;
 using RyanAssets.Input;
 
-namespace RyanAssets.Characters {
+namespace RyanAssets.Characters.Shared {
     public class LocalPlayer : MonoBehaviour {
         public static LocalPlayer Instance { get; private set; }
         public static Transform Character;

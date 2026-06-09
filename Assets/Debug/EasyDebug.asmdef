@@ -2,7 +2,8 @@
     "name": "Debug",
     "rootNamespace": "Debug",
     "references": [
-        "GUID:71f0a500b6e334a4f967523cdb520a01"
+        "GUID:71f0a500b6e334a4f967523cdb520a01",
+        "GUID:73a16be7f19393b4788c31d868fbbded"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -11,7 +12,8 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "UNITY_EDITOR"
+        "UNITY_EDITOR",
+        "!UNITY_SERVER"
     ],
     "versionDefines": [],
     "noEngineReferences": false

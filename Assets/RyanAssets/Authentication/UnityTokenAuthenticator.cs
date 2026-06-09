@@ -85,7 +85,7 @@ namespace RyanAssets.Authentication {
 
                 OnAuthenticationResult?.Invoke(conn, true);
                 #if UNITY_SERVER
-                    OnAuthenticationSucceeded.Invoke(conn, json);
+                    OnAuthenticationSucceeded?.Invoke(conn, json);
                 #endif
             } else {
                 Fail(conn, res);

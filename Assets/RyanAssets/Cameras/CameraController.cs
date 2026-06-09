@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.Assertions;
-using RyanAssets.Characters;
+using RyanAssets.Characters.Shared;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Specialized;

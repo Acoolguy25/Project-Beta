@@ -45,8 +45,33 @@ namespace RyanAssets.Server.ServerCore {
                 return;
             }
 
+            RemoveDuplicatePlayerConnection(conn, stats.player_id);
             SharedGlobalEvents.Instance.Players.Add(new(conn, stats));
             OnPlayerAddedEvent?.Invoke(conn);
+        }
+
+        static void RemoveDuplicatePlayerConnection(NetworkConnection newConn, string playerId) {
+            if (string.IsNullOrWhiteSpace(playerId))
+                return;
+
+            NetworkConnection duplicateConn = null;
+            foreach (var pair in SharedGlobalEvents.Instance.Players) {
+                if (pair.Key == newConn || pair.Value.player_id != playerId)
+                    continue;
+
+                duplicateConn = pair.Key;
+                break;
+            }
+
+            if (duplicateConn == null)
+                return;
+
+            Debug.LogWarning($"Replacing duplicate player connection: PlayerId={playerId}, OldClientId={duplicateConn.ClientId}, NewClientId={newConn.ClientId}");
+            _ = ServerPlayerSave.Save(duplicateConn);
+            SharedGlobalEvents.Instance.Players.Remove(duplicateConn);
+            ServerPlayerSave.Forget(duplicateConn);
+            OnPlayerRemovedEvent?.Invoke(duplicateConn);
+            duplicateConn.Disconnect(true);
         }
 
         static ServerPlayerStats ParsePlayerStats(JObject json) {

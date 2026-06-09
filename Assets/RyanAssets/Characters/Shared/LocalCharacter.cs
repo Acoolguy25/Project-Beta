@@ -3,7 +3,7 @@ using FishNet.Object;
 using FishNet.Connection;
 using UnityEngine;
 
-namespace RyanAssets.Characters
+namespace RyanAssets.Characters.Shared
 {
     public class LocalCharacter : NetworkBehaviour
     {

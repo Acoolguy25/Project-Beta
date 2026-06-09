@@ -8,7 +8,8 @@
   <Project Path="RyanAssets.Shared.Player.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
-  <Project Path="RyanAssets.Characters.csproj" />
+  <Project Path="RyanAssets.Characters.Client.csproj" />
+  <Project Path="RyanAssets.Characters.Shared.csproj" />
   <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="FishNet.Demos.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
