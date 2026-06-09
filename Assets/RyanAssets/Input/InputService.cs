@@ -33,16 +33,21 @@ namespace RyanAssets.Input {
             {InputScreen.GameMenu, new(){}},
             {InputScreen.Prompt, new(){RyanAssetsActionMap.Prompt}}
         };
-        private static bool[] activeInputScreen;
+        private static bool[] activeInputScreen = CreateActiveInputScreenState();
         private PlayerInput _inputAction;
         public static CharacterControls characterControls;
+
+        private static bool[] CreateActiveInputScreenState() {
+            return new bool[Enum.GetValues(typeof(InputScreen)).Length];
+        }
 
         private void Awake() {
             Instance = this;
             _inputAction = GetComponent<PlayerInput>();
-            activeInputScreen = new bool[Enum.GetValues(typeof(InputScreen)).Length];
+            // activeInputScreen ??= CreateActiveInputScreenState();
             characterControls = GetComponent<CharacterControls>();
             SetInputScreenActive(InputScreen.GameMenu, true);
+            RefreshActiveScreen();
         }
         private void ApplyActiveScreen(InputScreen screen){
             // foreach (string map_string in InputScreenToActiveMaps[screen]){
@@ -64,10 +69,11 @@ namespace RyanAssets.Input {
             }
         }
         public static void SetInputScreenActive(InputScreen screen, bool active){
-            Debug.Assert(activeInputScreen != null, "ActiveInputScreen is not initalized!");
-            Debug.Assert((int) screen < activeInputScreen.Count(), $"Input screen {screen} does not exist");
+            // activeInputScreen ??= CreateActiveInputScreenState();
+            Debug.Assert((int) screen < activeInputScreen.Length, $"Input screen {screen} does not exist");
             activeInputScreen[((int)screen)] = active;
-            Instance.RefreshActiveScreen();
+            if (Instance != null)
+                Instance.RefreshActiveScreen();
         }
 
         // private void OnApplicationFocus(bool hasFocus) {

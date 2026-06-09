@@ -39,7 +39,9 @@ namespace Universes.GameBrowser {
         }
         public static async Task PlayGame(string universe_id) {
             joining_universe_id = universe_id;
-            (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm);
+            (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel);
+            if (res != null)
+                return;
             // Debug.Log(json);
             ClientConnector.Instance.JoinGameServer(joining_universe_id, json);
         }

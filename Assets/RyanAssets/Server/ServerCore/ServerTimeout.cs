@@ -36,9 +36,10 @@ namespace RyanAssets.Server.ServerCore {
             if (args.ConnectionState == RemoteConnectionState.Started) {
                 Debug.Log($"Player joined: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} total)");
                 idleTimeoutCts.Cancel();
-            } else if (args.ConnectionState == RemoteConnectionState.Stopped && InstanceFinder.ServerManager.Clients.Count == 0) {
-                Debug.Log($"Player left: ClientId={conn.ClientId}");
-                _ = IdleTimeoutLoop(idleTimeoutCts.Token);
+            } else if (args.ConnectionState == RemoteConnectionState.Stopped) {
+                Debug.Log($"Player left: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} left)");
+                if (InstanceFinder.ServerManager.Clients.Count == 0)
+                    _ = IdleTimeoutLoop(idleTimeoutCts.Token);
             }
         }
     }

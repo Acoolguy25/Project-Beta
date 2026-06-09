@@ -106,6 +106,7 @@ namespace RyanAssets.Client.ClientCore {
                     isConnecting = false;
                     OnDisconnected?.Invoke();
                     IsConnected = false;
+                    SetJoinResult(null); // remove any other prompts!
                     if (!PromptManager.PromptDelete(PromptId.LeaveGameAwait) && !hasCanceled){
                         if (wasAuthenticated) {
                             wasAuthenticated = false;

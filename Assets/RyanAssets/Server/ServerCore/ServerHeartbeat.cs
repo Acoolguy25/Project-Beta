@@ -29,8 +29,8 @@ namespace RyanAssets.Server.ServerCore {
 
                     if (res != null)
                         Debug.LogWarning($"Heartbeat failed: {res}");
-                    else
-                        Debug.Log("Heartbeat sent");
+                    // else
+                        // Debug.Log("Heartbeat sent");
                 }
                 catch (Exception e) {
                     Debug.LogWarning($"Heartbeat exception: {e.Message}");

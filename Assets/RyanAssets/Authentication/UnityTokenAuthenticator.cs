@@ -35,7 +35,7 @@ namespace RyanAssets.Authentication {
 
         public override void OnRemoteConnection(NetworkConnection conn) {
             // Wait for AuthRequest.
-            Debug.Log("Remote Connection Received");
+            Debug.Log("Initializing Player...");
         }
 
 #if !UNITY_SERVER
@@ -60,8 +60,9 @@ namespace RyanAssets.Authentication {
         }
 #endif
         private void OnAuthRequest(NetworkConnection conn, AuthRequest req, Channel channel) {
-            Debug.Log("Received OnAuthRequest");
+            // Debug.Log("Received OnAuthRequest");
             if (conn.IsAuthenticated) {
+                Debug.LogWarning($"Received authentication req from {conn}, kicking..");
                 conn.Disconnect(true);
                 return;
             }
