@@ -4,7 +4,7 @@ namespace RyanAssets.Client.ClientCore {
     public class ClientInit: MonoBehaviour {
         [SerializeField]
         GameObject ClientPrefab;
-        void Awake(){
+        void Start(){
             if (ClientConnector.Instance == null)
                 Instantiate(ClientPrefab);
             Destroy(gameObject);

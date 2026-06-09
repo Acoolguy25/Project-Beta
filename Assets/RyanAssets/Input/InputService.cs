@@ -64,6 +64,8 @@ namespace RyanAssets.Input {
             }
         }
         public static void SetInputScreenActive(InputScreen screen, bool active){
+            Debug.Assert(activeInputScreen != null, "ActiveInputScreen is not initalized!");
+            Debug.Assert((int) screen < activeInputScreen.Count(), $"Input screen {screen} does not exist");
             activeInputScreen[((int)screen)] = active;
             Instance.RefreshActiveScreen();
         }

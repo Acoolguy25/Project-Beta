@@ -35,6 +35,7 @@
   <Project Path="RyanAssets.Levels.Shared.csproj" />
   <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
+  <Project Path="RyanAssets.Client.Audio.csproj" />
   <Project Path="Debug.csproj" />
   <Project Path="Universes.csproj" />
   <Project Path="RyanAssets.UI.Textbox.csproj" />

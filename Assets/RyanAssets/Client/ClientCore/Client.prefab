@@ -1620,6 +1620,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: GameSettingsCanvas
       objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000004, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_PresetInfoIsWorld
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000026, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 

@@ -30,6 +30,13 @@ namespace Universes {
                 description = "This is your very first creation. Check it out, then make it your own with Ryan's help!",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
+            },
+            new(){
+                id = "murder_mystery",
+                title = "Murder In Plain Sight",
+                description = "As the murderer, kill everyone else to win. As a sheriff, fend off the murderer. As an survivor, try to survive to win",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
             }
         };
         public static UniverseStruct GetUniverseFromId(string id) {
