@@ -23,7 +23,7 @@ namespace RyanAssets.NetworkService {
                     try {
                         return (string)detail[0]["msg"];
                     } catch {
-                        return (string)detail;
+                        return detail.ToString();
                     }
                 }
             }
@@ -50,7 +50,7 @@ namespace RyanAssets.NetworkService {
                 else{
                     // UnityEngine.Debug.LogError($"{text}");
                     if (json.TryGetValue("detail", out JToken detailToken)){
-                        return (detailToken.Value<string>(), null);
+                        return (FormatException(text), null);
                     }
                     else{
                         return (JsonConvert.SerializeObject(json, Formatting.Indented), null);

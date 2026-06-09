@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace RyanAssets.Characters.Client
+namespace RyanAssets.Characters.Shared
 {
     public class AnimationHelper: MonoBehaviour
     {

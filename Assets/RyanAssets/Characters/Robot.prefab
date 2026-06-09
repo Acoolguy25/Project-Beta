@@ -2151,7 +2151,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 20f542e1819ee2e459d62a8fd9286a75, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RyanAssets.Characters.LocalCharacter
+  m_EditorClassIdentifier: Assembly-CSharp::RyanAssets.Characters.Shared.LocalCharacter
   _componentIndexCache: 1
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
@@ -2167,7 +2167,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0ff2350129a577a4c8c76d71116eb639, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RyanAssets.Characters.AnimationHelper
+  m_EditorClassIdentifier: Assembly-CSharp::RyanAssets.Characters.Client.AnimatorHelper
   LandingAudioClip: {fileID: 8300000, guid: ff697d3070687ce4583faa0561a145a2, type: 3}
   FootstepAudioClips:
   - {fileID: 8300000, guid: 72f526a6a9890f643a88e85a61c86c8a, type: 3}
