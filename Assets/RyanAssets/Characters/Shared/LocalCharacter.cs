@@ -28,6 +28,9 @@ namespace RyanAssets.Characters.Shared
         {
             AnyCharacterRemoved?.Invoke((transform, IsOwner));
         }
+        void Awake(){
+            CharacterCamera = transform.Find("CharacterCamera");
+        }
 #endif
     }
 }
