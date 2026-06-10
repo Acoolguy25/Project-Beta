@@ -7,18 +7,18 @@ namespace RyanAssets.Characters.Shared
 {
     public class LocalCharacter : NetworkBehaviour
     {
-#if !UNITY_SERVER
-        [SerializeField]
+        // [SerializeField]
         public Transform CharacterCamera;
+#if !UNITY_SERVER
         public static event Action<(Transform, bool)> AnyCharacterAdded;
         public static event Action<(Transform, bool)> AnyCharacterRemoved;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        public void Init(){
+        private static void Init(){
             AnyCharacterAdded = null;
             AnyCharacterRemoved = null;
         }
         public override void OnOwnershipClient(NetworkConnection prevOwner){
-            AnyCharacterAdded.Invoke((transform, IsOwner));
+            AnyCharacterAdded?.Invoke((transform, IsOwner));
             if (!IsOwner)
                 gameObject.name = $"{base.Owner}";
             else
@@ -26,7 +26,7 @@ namespace RyanAssets.Characters.Shared
         }
         void OnDestroy()
         {
-            AnyCharacterRemoved.Invoke((transform, IsOwner));
+            AnyCharacterRemoved?.Invoke((transform, IsOwner));
         }
 #endif
     }

@@ -32,7 +32,7 @@ namespace RyanAssets.Core
         {
             Handlers -= handler;
         }
-
+        
         public void ClearLastValue()
         {
             hasLastValue = false;

@@ -37,6 +37,10 @@ namespace RyanAssets.Characters.Client {
             if (clientConnection.ConnectionState == LocalConnectionState.Stopped)
                 SetCharacter(null);
         }
+        private void OnDestroy() {
+            if (InstanceFinder.ClientManager != null)
+                InstanceFinder.ClientManager.OnClientConnectionState -= OnClientConnectionState;
+        }
         void OnEnable(){
             InputService.SetInputScreenActive(InputScreen.Client, true);
             InputService.SetInputScreenActive(InputScreen.GameMenu, false);

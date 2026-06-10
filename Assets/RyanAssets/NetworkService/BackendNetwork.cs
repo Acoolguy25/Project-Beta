@@ -73,10 +73,11 @@ namespace RyanAssets.NetworkService {
 #endif
         public static async Task<(string, JObject)> GetRequest(string url) {
             try {
+                using HttpRequestMessage request = new(HttpMethod.Get, url);
             #if !SERVER_BUILD
-                SetAuthorizationToken(GetAuthorizationToken());
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GetAuthorizationToken());
             #endif
-                HttpResponseMessage response = await client.GetAsync(url);
+                HttpResponseMessage response = await client.SendAsync(request);
                 return await HandleResponse(response);
             } catch (Exception e) {
                 return (e.ToString(), null);
@@ -84,40 +85,30 @@ namespace RyanAssets.NetworkService {
         }
         public static async Task<(string, JObject)> PostRequest(string url, JObject body = null, string accessToken = null) {
             try {
-            #if !SERVER_BUILD
-                if (accessToken == null)
-                    SetAuthorizationToken(GetAuthorizationToken());
-            #endif
                 StringContent content = new(
                     (body != null) ? body.ToString() : default_body,
                     Encoding.UTF8,
                     "application/json"
                 );
 
-                HttpResponseMessage response;
-                if (accessToken == null) {
-                    response = await client.PostAsync(url, content);
-                } else {
-                    using HttpRequestMessage request = new(HttpMethod.Post, url) {
-                        Content = content
-                    };
+                using HttpRequestMessage request = new(HttpMethod.Post, url) {
+                    Content = content
+                };
+                if (accessToken != null) {
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                    response = await client.SendAsync(request);
                 }
+            #if !SERVER_BUILD
+                else {
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GetAuthorizationToken());
+                }
+            #endif
+
+                HttpResponseMessage response = await client.SendAsync(request);
 
                 return await HandleResponse(response);
             } catch (Exception e) {
                 return (e.ToString(), null);
             }
-        }
-        // Removed because AccessToken can be refreshed!
-        public static void SetAuthorizationToken(string accessToken) {
-            // Debug.Log($"Access Token: {accessToken[..20]}..");
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue(
-                    "Bearer",
-                    accessToken
-                );
         }
         public static void SetBackendURL(string backend_url){
             Debug.Log($"Initialized Backend URL: {backend_url}");
