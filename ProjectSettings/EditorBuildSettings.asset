@@ -11,6 +11,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Universes/UniverseData/empty_baseplate/empty_baseplate_start.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/Universes/UniverseData/murder_mystery/murder_mystery_start.unity
+    guid: 0c5f9e3fac7c44bbb5d23f0f4dd1f698
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings: {fileID: 11400000, guid: bee50ad3dad20d7419a6ba40ca5d2baf, type: 2}

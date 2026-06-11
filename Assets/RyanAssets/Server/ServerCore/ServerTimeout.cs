@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerTimeout {
-        readonly static CancellationTokenSource idleTimeoutCts = new();
+        static CancellationTokenSource idleTimeoutCts;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
             ServerBootStrap.StartServerEvent += OnStartServer;
@@ -19,27 +19,54 @@ namespace RyanAssets.Server.ServerCore {
         }
         static async Task IdleTimeoutLoop(CancellationToken token) {
             Debug.LogWarning("No Players Online; Server Will Stop Soon Due To Idle Timeout!");
-            await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), token);
-            ServerBootStrap.StopServer("Idle Timeout");
+            try {
+                await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), token);
+                ServerBootStrap.StopServer("Idle Timeout");
+            } catch (TaskCanceledException) { }
         }
         static void OnStartServer() {
             InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
             if (InstanceFinder.ServerManager.Clients.Count == 0)
-                _ = IdleTimeoutLoop(idleTimeoutCts.Token);
+                StartIdleTimeout();
         }
         static void OnStopServer() {
+            StopIdleTimeout();
+        }
+        static void StartIdleTimeout() {
+            StopIdleTimeout();
+            idleTimeoutCts = new();
+            _ = IdleTimeoutLoop(idleTimeoutCts.Token);
+        }
+        static void StopIdleTimeout() {
+            if (idleTimeoutCts == null)
+                return;
+
             idleTimeoutCts.Cancel();
+            idleTimeoutCts.Dispose();
+            idleTimeoutCts = null;
         }
         private static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
-            if (!InstanceFinder.IsServerStarted)
+            if (!InstanceFinder.IsServerStarted){
+                Debug.LogWarning($"Ignoring because server never started!");
                 return;
+            }
             if (args.ConnectionState == RemoteConnectionState.Started) {
                 Debug.Log($"Player joined: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} total)");
-                idleTimeoutCts.Cancel();
+                foreach (NetworkConnection clientConn in InstanceFinder.ServerManager.Clients.Values){
+                    Debug.Log(
+                        $"ClientId={clientConn.ClientId} " +
+                        $"Connected={clientConn.IsActive} " +
+                        $"Objects={clientConn.Objects.Count}"
+                    );
+                }
+                StopIdleTimeout();
             } else if (args.ConnectionState == RemoteConnectionState.Stopped) {
-                Debug.Log($"Player left: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} left)");
-                if (InstanceFinder.ServerManager.Clients.Count == 0)
-                    _ = IdleTimeoutLoop(idleTimeoutCts.Token);
+                int clientsLeft = InstanceFinder.ServerManager.Clients.ContainsKey(conn.ClientId)
+                    ? InstanceFinder.ServerManager.Clients.Count - 1
+                    : InstanceFinder.ServerManager.Clients.Count;
+                Debug.Log($"Player left: ClientId={conn.ClientId} ({clientsLeft} left)");
+                if (clientsLeft == 0)
+                    StartIdleTimeout();
             }
         }
     }

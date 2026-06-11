@@ -15,9 +15,7 @@ using Newtonsoft.Json.Linq;
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {
         public override event Action<NetworkConnection, bool> OnAuthenticationResult;
-#if UNITY_SERVER
         public static event Action<NetworkConnection, JObject> OnAuthenticationSucceeded;
-#endif
 
         public override void InitializeOnce(NetworkManager networkManager) {
             base.InitializeOnce(networkManager);

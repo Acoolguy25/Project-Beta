@@ -39,7 +39,7 @@ namespace RyanAssets.UI.Textbox {
             tmpInputField?.DeactivateInputField();
             inputField?.DeactivateInputField();
             
-            if (tmpInputField && EventSystem.current != null)
+            if (tmpInputField && !EventSystem.current.alreadySelecting)
                 EventSystem.current.SetSelectedGameObject(null);
         }
     }

@@ -5,8 +5,8 @@ using FishNet;
 using FishNet.Transporting;
 
 namespace RyanAssets.Client.ClientCore {
-    public class ClientBroadcasts : MonoBehaviour {
-        public static ClientBroadcasts Instance;
+    public class ClientEvents : MonoBehaviour {
+        public static ClientEvents Instance;
 
         private void Awake() {
             if (Instance != null) {
@@ -30,7 +30,7 @@ namespace RyanAssets.Client.ClientCore {
         }
 
         private void OnPromptBroadcast(PromptBroadcast msg, Channel channel) {
-            Debug.Log($"Received prompt broadcast: {msg.title}");
+            //Debug.Log($"Received prompt broadcast: {msg.title}");
             PromptManager.Instance.PromptLocalUser(msg.title, msg.description, PromptId.ServerPromptBroadcast, PromptManager.ButtonPreset_OkOnly);
         }
     }

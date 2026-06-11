@@ -45,17 +45,19 @@ namespace RyanAssets.NetworkService {
 
             JObject json = ParseJSON(text);
             if (!response.IsSuccessStatusCode) {
-                if (json == null)
-                    return (text, null);
-                else{
+                // if (json == null)
+                //     return (text, json);
+                // else{
                     // UnityEngine.Debug.LogError($"{text}");
-                    if (json.TryGetValue("detail", out JToken detailToken)){
-                        return (FormatException(text), null);
-                    }
-                    else{
-                        return (JsonConvert.SerializeObject(json, Formatting.Indented), null);
-                    }
-                }
+                    // if (json.TryGetValue("detail", out JToken detailToken)){
+                    //     return (FormatException(text), json);
+                    // }
+                    // else{
+                    //     return (JsonConvert.SerializeObject(json, Formatting.Indented), json);
+                    // }
+
+                // }
+                return (FormatException(text), json);
             }
             if (json == null)
                 return ($"JSON Parse Failed | Got: {text}", null);
@@ -80,7 +82,7 @@ namespace RyanAssets.NetworkService {
                 HttpResponseMessage response = await client.SendAsync(request);
                 return await HandleResponse(response);
             } catch (Exception e) {
-                return (e.ToString(), null);
+                return (e.Message, null);
             }
         }
         public static async Task<(string, JObject)> PostRequest(string url, JObject body = null, string accessToken = null) {
@@ -107,7 +109,7 @@ namespace RyanAssets.NetworkService {
 
                 return await HandleResponse(response);
             } catch (Exception e) {
-                return (e.ToString(), null);
+                return (e.Message, null);
             }
         }
         public static void SetBackendURL(string backend_url){

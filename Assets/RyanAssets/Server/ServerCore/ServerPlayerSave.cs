@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
+using FishNet.Transporting;
 using Newtonsoft.Json.Linq;
 using RyanAssets.NetworkService;
 using RyanAssets.Server.ServerModules;
@@ -13,14 +14,15 @@ using UnityEngine;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerPlayerSave {
-        static readonly Dictionary<NetworkConnection, int> dirtyVersions = new();
+        static readonly Dictionary<NetworkConnection, bool> dirtyConnections = new();
         static CancellationTokenSource saveLoopCts;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
             ServerBootStrap.StartServerEvent += OnStartServer;
             ServerBootStrap.StopServerEvent += OnStopServer;
-            ServerBootStrap.StopServerAsyncEvent += SaveAll;
+            ServerBootStrap.StopServerAsyncEvent += SaveDirty;
+            ServerPlayerEvents.OnPlayerRemovedEvent += (conn) => Save(conn);
         }
 
         static void OnStartServer() {
@@ -35,7 +37,7 @@ namespace RyanAssets.Server.ServerCore {
 
         static async Task SaveLoop(CancellationToken token) {
             while (!token.IsCancellationRequested) {
-                try {
+                try { 
                     await Task.Delay(TimeSpan.FromSeconds(60), token);
                     await Save();
                 } catch (TaskCanceledException) {
@@ -45,12 +47,11 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         public static void MarkDirty(NetworkConnection conn) {
-            dirtyVersions.TryGetValue(conn, out int version);
-            dirtyVersions[conn] = version + 1;
+            dirtyConnections[conn] = true;
         }
 
         public static void Forget(NetworkConnection conn) {
-            dirtyVersions.Remove(conn);
+            dirtyConnections.Remove(conn);
         }
 
         public static Task Save() {
@@ -60,40 +61,40 @@ namespace RyanAssets.Server.ServerCore {
         public static Task Save(NetworkConnection conn) {
             if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.ContainsKey(conn))
                 return Task.CompletedTask;
-
-            return SavePlayers(new List<NetworkConnection> { conn }, removeDirtyOnSuccess: true);
-        }
-
-        public static Task SaveAll() {
-            if (SharedGlobalEvents.Instance == null)
+            if (!dirtyConnections.ContainsKey(conn) || !dirtyConnections[conn])
                 return Task.CompletedTask;
 
-            return SavePlayers(new List<NetworkConnection>(SharedGlobalEvents.Instance.Players.Keys), removeDirtyOnSuccess: true);
+            return SavePlayers(new List<NetworkConnection> { conn });
         }
 
         static Task SaveDirty() {
-            return SavePlayers(new List<NetworkConnection>(dirtyVersions.Keys), removeDirtyOnSuccess: true);
+            return SavePlayers(new List<NetworkConnection>(dirtyConnections.Keys));
         }
 
-        static async Task SavePlayers(List<NetworkConnection> connections, bool removeDirtyOnSuccess) {
-            JObject payload = new();
+        static async Task SavePlayers(List<NetworkConnection> connections) {
+            //InstanceFinder.ServerManager.Broadcast<PromptBroadcast>(new() {
+            //    title = "PromptError",
+            //    description = $"i am really annoying!"
+            //});
+            //Debug.Log($"broadcasted!");
+
+            JObject payload = new() {
+                ["players"] = new JObject()
+            };
             List<NetworkConnection> savedConnections = new();
-            Dictionary<NetworkConnection, int> savedDirtyVersions = new();
 
             foreach (NetworkConnection conn in connections) {
-                if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
+                if (!SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
                     continue;
 
                 if (string.IsNullOrWhiteSpace(stats.player_id))
                     continue;
 
-                payload[stats.player_id] = JObject.FromObject(stats.data);
+                payload["players"][stats.player_id] = JObject.FromObject(stats.data);
                 savedConnections.Add(conn);
-                if (dirtyVersions.TryGetValue(conn, out int version))
-                    savedDirtyVersions[conn] = version;
             }
 
-            if (savedConnections.Count == 0)
+            if (savedConnections.Count == 0)    
                 return;
 
             (string res, JObject _) = await BackendServer.RequestAsync(
@@ -102,12 +103,8 @@ namespace RyanAssets.Server.ServerCore {
             );
 
             if (res == null) {
-                if (removeDirtyOnSuccess) {
-                    foreach (NetworkConnection conn in savedConnections) {
-                        bool hadSavedVersion = savedDirtyVersions.TryGetValue(conn, out int savedVersion);
-                        if (!hadSavedVersion || dirtyVersions.TryGetValue(conn, out int currentVersion) && currentVersion == savedVersion)
-                            dirtyVersions.Remove(conn);
-                    }
+                foreach (NetworkConnection conn in savedConnections) {
+                    dirtyConnections.Remove(conn);                        
                 }
                 return;
             }

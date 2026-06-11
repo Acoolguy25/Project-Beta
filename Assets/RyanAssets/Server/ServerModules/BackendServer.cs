@@ -3,6 +3,7 @@ using RyanAssets.NetworkService;
 using System;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 
 namespace RyanAssets.Server.ServerModules {
     public static class BackendServer {
@@ -22,7 +23,8 @@ namespace RyanAssets.Server.ServerModules {
                     return (null, j);
                 } else { // failed
                     string retriesText = (retries>0)?($"/{retries}"):"";
-                    Debug.LogError($"{title} {res} ({i}{retriesText})");
+                    string jsonDisplay = (j != null)?$"\nJSON: {JsonConvert.SerializeObject(j, Formatting.Indented)}":"";
+                    Debug.LogError($"{title} {res} ({i}{retriesText}){jsonDisplay}");
                 }
             }
             return (res, null);

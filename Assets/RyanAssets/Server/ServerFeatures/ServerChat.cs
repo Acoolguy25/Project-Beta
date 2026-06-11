@@ -16,11 +16,11 @@ namespace RyanAssets.Server.ServerFeatures {
                 conn.Kick(FishNet.Managing.Server.KickReason.ExploitAttempt);
                 return;
             }
-            MessageBroadcast message_broadcast = new() {
+            ChatMessageBroadcast message_broadcast = new() {
                 message = message.message,
                 player = conn
             };
-            InstanceFinder.ServerManager.Broadcast<MessageBroadcast>(message_broadcast);
+            InstanceFinder.ServerManager.Broadcast<ChatMessageBroadcast>(message_broadcast);
         }
         public static bool IsChatMessageValid(string s) {
             if (string.IsNullOrWhiteSpace(s))

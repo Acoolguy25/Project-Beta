@@ -1625,13 +1625,53 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000026, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000026, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
       objectReference: {fileID: 7048560042194768430}
+    - target: {fileID: 9100000000000000026, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: CloseCanvasVisibility
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000026, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: RyanAssets.Client.ClientUI.Topbar.ClientTopbar, RyanAssets.Client.ClientUI.Topbar
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000026, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgument
+      value: 
+      objectReference: {fileID: 1120765809775446551}
+    - target: {fileID: 9100000000000000026, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: RyanAssets.UI.CanvasGroupController, RyanAssets.UI
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000099, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000099, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
       objectReference: {fileID: 7048560042194768430}
+    - target: {fileID: 9100000000000000099, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: CloseCanvasVisibility
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000099, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: RyanAssets.Client.ClientUI.Topbar.ClientTopbar, RyanAssets.Client.ClientUI.Topbar
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000099, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgument
+      value: 
+      objectReference: {fileID: 1120765809775446551}
+    - target: {fileID: 9100000000000000099, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: RyanAssets.UI.CanvasGroupController, RyanAssets.UI
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

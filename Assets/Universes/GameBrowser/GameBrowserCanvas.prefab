@@ -573,6 +573,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
   alwaysActive: 0
+  targetAlpha: 0
 --- !u!114 &3374670981608101093
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -587,6 +588,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Universes.GameBrowser::Universes.GameBrowser.GameListUI
   modelPrefab: {fileID: 5731677610784897225, guid: f1786d7509dbc2f4a92bc5cf8bcda0a2, type: 3}
   scrollRect: {fileID: 2000000000000001083}
+  AutoScroll: 0
   UsernameTextUI: {fileID: 2000000000000001026}
   selectedGameUI: {fileID: 7845956060144586742}
   refreshImage: {fileID: 6726965459729942909}
@@ -768,6 +770,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
   alwaysActive: 0
+  targetAlpha: 0
 --- !u!114 &7845956060144586742
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3397,6 +3400,18 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426342, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
       propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426410, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Size
+      value: 0.7607307
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426410, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Constraint
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426637, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}

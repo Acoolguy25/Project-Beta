@@ -16,13 +16,13 @@ using RyanAssets.UI;
 using RyanAssets.Client.ClientCore;
 
 namespace RyanAssets.Client.ClientUI.Chat {
-    public class ClientChat : ListGridUI<MessageBroadcast>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
+    public class ClientChat : ListGridUI<ChatMessageBroadcast>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
         [SerializeField]
         TMP_InputField chatBox;
         protected override void Start() {
             base.Start();
             OnCreatePrefab += OnCreateMessage;
-            InstanceFinder.ClientManager.RegisterBroadcast<MessageBroadcast>(OnReceiveMessage);
+            InstanceFinder.ClientManager.RegisterBroadcast<ChatMessageBroadcast>(OnReceiveMessage);
             chatBox.onSubmit.AddListener(OnMessageSend_ButtonPressed);
             ClientConnector.OnDisconnected += OnDisconnected;
             ClientConnector.OnConnected += OnConnected;
@@ -30,10 +30,10 @@ namespace RyanAssets.Client.ClientUI.Chat {
             ClearPrefabs();
             OnConnected();
         }
-        private void OnReceiveMessage(MessageBroadcast message, Channel channel) {
+        private void OnReceiveMessage(ChatMessageBroadcast message, Channel channel) {
             AddPrefab(message);
         }
-        private void OnCreateMessage(GameObject prefab, MessageBroadcast message) {
+        private void OnCreateMessage(GameObject prefab, ChatMessageBroadcast message) {
             TextMeshProUGUI usernameText = prefab.GetComponent<TextMeshProUGUI>();
             if (message.player == null){
                 usernameText.text = message.message;
@@ -69,7 +69,7 @@ namespace RyanAssets.Client.ClientUI.Chat {
             ClearPrefabs();
         }
         private void OnConnected(){
-            AddPrefab(new MessageBroadcast(){
+            AddPrefab(new ChatMessageBroadcast(){
                 // player = InstanceFinder.ClientManager.Connection,
                 message = "{System} Chat messages will appear here."
             });

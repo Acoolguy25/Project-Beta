@@ -175,7 +175,7 @@ namespace RyanAssets.PromptService {
             Instance.PromptLocalUser(title + " Error", e.Message, PromptId.Error, ButtonPreset_OkOnly);
         }
         public static void PromptError(string title, string e){
-            Instance.PromptLocalUser(title + " Error", e.ToString(), PromptId.Error, ButtonPreset_OkOnly);
+            Instance.PromptLocalUser(title + " Error", e, PromptId.Error, ButtonPreset_OkOnly);
         }
         public static void PromptWait(string title, string description, PromptId promptId){
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_None);
