@@ -18,7 +18,7 @@ GameObject:
   - component: {fileID: 1960467471069559613}
   - component: {fileID: 2137556692718558911}
   m_Layer: 0
-  m_Name: NetworkManager
+  m_Name: RyanNetworkManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -127,8 +127,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Managing.Server.ServerManager
   _authenticator: {fileID: 3087723329973186617}
-  _remoteClientTimeout: 1
-  _remoteClientTimeoutDuration: 600
+  _remoteClientTimeout: 2
+  _remoteClientTimeoutDuration: 60
   _allowPredictedSpawning: 0
   _reservedObjectIds: 15
   _syncTypeRate: 0.1

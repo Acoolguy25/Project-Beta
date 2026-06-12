@@ -10,7 +10,6 @@ using RyanAssets.Server.ServerModules;
 using RyanAssets.NetworkService;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Player;
-using RyanAssets.Server.ServerFeatures;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerPlayerEvents {
