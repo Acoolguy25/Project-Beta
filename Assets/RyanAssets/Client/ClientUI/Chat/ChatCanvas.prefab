@@ -196,6 +196,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.Client.ClientUI.Chat::RyanAssets.Client.ClientUI.ClientChat
   modelPrefab: {fileID: 9100000000000000002, guid: 56d26f8b3fc2437da2e13789255c204a, type: 3}
   scrollRect: {fileID: 898951070834908149}
+  AutoScroll: 1
   chatBox: {fileID: 5614910597484933578}
 --- !u!225 &5683709899323602274
 CanvasGroup:
@@ -984,6 +985,26 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 9100000000000000018}
     m_Modifications:
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Spacing.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Spacing.y
+      value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_CellSize.x
+      value: 520
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_CellSize.y
+      value: 28
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_ConstraintCount
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 266543242037520658, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_ChildAlignment
       value: 0
@@ -1094,7 +1115,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426410, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_Size
-      value: 1
+      value: 0.9999677
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_SizeDelta.x
@@ -1106,7 +1127,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.0009994507
+      value: 0.00060272217
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426465, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.x
@@ -1162,26 +1183,6 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426672, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_Spacing.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_Spacing.y
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_CellSize.x
-      value: 520
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_CellSize.y
-      value: 28
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_ConstraintCount
       value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents:

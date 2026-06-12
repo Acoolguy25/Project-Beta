@@ -13,6 +13,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 207815
   packageName: 'FishNet: Networking Evolved'
-  packageVersion: 
+  packageVersion: 4.7.2R
   assetPath: Assets/FishNet/Runtime/Transporting/Transports/Synapse/SynapseSocket/CodeBoost/Logging/ConsoleLogger.cs
-  uploadId: 0
+  uploadId: 901598

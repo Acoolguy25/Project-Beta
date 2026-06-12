@@ -120,6 +120,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.Client.ClientUI.PlayerList::RyanAssets.Client.ClientUI.PlayerList.ClientPlayerList
   modelPrefab: {fileID: 9100000000000000002, guid: 1bf6557e59c045f6af9cf2b4f7c6f83e, type: 3}
   scrollRect: {fileID: 512075336484954312}
+  AutoScroll: 0
 --- !u!225 &2734802407931793214
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -622,6 +623,26 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 9100000000000000022}
     m_Modifications:
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Spacing.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_Spacing.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_CellSize.x
+      value: 210
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_CellSize.y
+      value: 24
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_ConstraintCount
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1698325380526222616, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -761,26 +782,6 @@ PrefabInstance:
     - target: {fileID: 8228084169341426672, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_Spacing.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_Spacing.y
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_CellSize.x
-      value: 210
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_CellSize.y
-      value: 24
-      objectReference: {fileID: 0}
-    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
-      propertyPath: m_ConstraintCount
-      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

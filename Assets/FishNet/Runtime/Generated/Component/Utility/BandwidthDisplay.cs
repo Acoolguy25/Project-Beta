@@ -5,25 +5,30 @@ using FishNet.Managing.Timing;
 using GameKit.Dependencies.Utilities.Types;
 using UnityEngine;
 
-namespace FishNet.Component.Utility {
+namespace FishNet.Component.Utility
+{
     /// <summary>
     /// Add to any object to display current ping(round trip time).
     /// </summary>
     [AddComponentMenu("FishNet/Component/BandwidthDisplay")]
-    public class BandwidthDisplay : MonoBehaviour {
+    public class BandwidthDisplay : MonoBehaviour
+    {
         #region Types.
-        private enum Corner {
+        private enum Corner
+        {
             TopLeft,
             TopRight,
             BottomLeft,
             BottomRight
         }
 
-        public class InOutAverage {
+        public class InOutAverage
+        {
             private RingBuffer<ulong> _in;
             private RingBuffer<ulong> _out;
 
-            public InOutAverage(int ticks) {
+            public InOutAverage(int ticks)
+            {
                 _in = new(ticks);
                 _out = new(ticks);
             }
@@ -31,35 +36,39 @@ namespace FishNet.Component.Utility {
             public void AddIn(ulong value) => _in.Add(value);
             public void AddOut(ulong value) => _out.Add(value);
 
-            public float GetAverage(bool inBuffer) {
+            public float GetAverage(bool inBuffer)
+            {
                 RingBuffer<ulong> buffer = GetBuffer(inBuffer);
 
                 int bufferCount = buffer.Count;
                 if (bufferCount == 0)
                     return 0;
-
+                
                 ulong total = GetTotal(inBuffer);
                 return (float)total / bufferCount;
             }
 
-            public ulong GetTotal(bool inBuffer) {
+            public ulong GetTotal(bool inBuffer)
+            {
                 RingBuffer<ulong> buffer = GetBuffer(inBuffer);
-
+                
                 ulong total = 0;
                 foreach (ulong v in buffer)
                     total += v;
-
+                
                 return total;
             }
-
+            
             private RingBuffer<ulong> GetBuffer(bool inBuffer) => inBuffer ? _in : _out;
-
-            public void ResetState() {
+            
+            public void ResetState()
+            {
                 _in.Clear();
                 _out.Clear();
             }
 
-            public void InitializeState(int capacity) {
+            public void InitializeState(int capacity)
+            {
                 _in.Initialize(capacity);
                 _out.Initialize(capacity);
             }
@@ -67,7 +76,7 @@ namespace FishNet.Component.Utility {
         #endregion
 
         #region Public.
-#if UNITY_EDITOR || !UNITY_SERVER
+        #if UNITY_EDITOR || !UNITY_SERVER
         /// <summary>
         /// Averages for client.
         /// </summary>
@@ -76,7 +85,7 @@ namespace FishNet.Component.Utility {
         /// Averages for server.
         /// </summary>
         public InOutAverage ServerAverages { get; private set; }
-#endif
+        #endif
         #endregion
 
         #region Serialized.
@@ -142,7 +151,7 @@ namespace FishNet.Component.Utility {
         public void SetShowIncoming(bool value) => _showIncoming = value;
         #endregion
 
-#if UNITY_EDITOR || !UNITY_SERVER
+        #if UNITY_EDITOR || !UNITY_SERVER
 
         #region Private.
         /// <summary>
@@ -175,22 +184,24 @@ namespace FishNet.Component.Utility {
         private bool _initialized;
         #endregion
 
-        private void Start() {
+        private void Start()
+        {
             // Requires a UI, so exit if server build.
-#if UNITY_SERVER
+            #if UNITY_SERVER
             return;
-#endif
+            #endif
             // If release build, check if able to run in release.
-#if !DEVELOPMENT_BUILD && !UNITY_EDITOR
+            #if !DEVELOPMENT_BUILD && !UNITY_EDITOR
             if (!_runInRelease)
                 return;
-#endif
+            #endif
 
             // Not enabled.
             if (!InstanceFinder.NetworkManager.StatisticsManager.TryGetNetworkTrafficStatistics(out _networkTrafficStatistics))
                 return;
 
-            if (!_networkTrafficStatistics.UpdateClient && !_networkTrafficStatistics.UpdateServer) {
+            if (!_networkTrafficStatistics.UpdateClient && !_networkTrafficStatistics.UpdateServer)
+            {
                 Debug.LogWarning($"StatisticsManager.NetworkTraffic is not updating for client nor server. To see results ensure your NetworkManager has a StatisticsManager component added with the NetworkTraffic values configured.");
                 return;
             }
@@ -202,7 +213,8 @@ namespace FishNet.Component.Utility {
             _initialized = true;
         }
 
-        private void OnDestroy() {
+        private void OnDestroy()
+        {
             if (_networkTrafficStatistics != null)
                 _networkTrafficStatistics.OnNetworkTraffic -= NetworkTrafficStatistics_OnNetworkTraffic;
         }
@@ -210,7 +222,8 @@ namespace FishNet.Component.Utility {
         /// <summary>
         /// Sets a new number of seconds to average from.
         /// </summary>
-        public void SetSecondsAveraged(byte seconds) {
+        public void SetSecondsAveraged(byte seconds)
+        {
             // Get to ticks.
             NetworkManager manager = InstanceFinder.NetworkManager;
             if (manager == null)
@@ -221,9 +234,9 @@ namespace FishNet.Component.Utility {
 
             //Convert to milliseconds.
             long ms = seconds * 1000;
-
+            
             uint ticks = manager.TimeManager.TimeToTicks(ms, TickRounding.RoundUp);
-
+            
             // Should not ever be possible.
             if (ticks <= 0)
                 ticks = 60;
@@ -235,7 +248,8 @@ namespace FishNet.Component.Utility {
         /// <summary>
         /// Called when new traffic statistics are received.
         /// </summary>
-        private void NetworkTrafficStatistics_OnNetworkTraffic(uint tick, BidirectionalNetworkTraffic serverTraffic, BidirectionalNetworkTraffic clientTraffic) {
+        private void NetworkTrafficStatistics_OnNetworkTraffic(uint tick, BidirectionalNetworkTraffic serverTraffic, BidirectionalNetworkTraffic clientTraffic)
+        {
             if (!_initialized)
                 return;
 
@@ -243,9 +257,9 @@ namespace FishNet.Component.Utility {
             ServerAverages.AddOut(serverTraffic.OutboundTraffic.Bytes);
 
             ClientAverages.AddIn(clientTraffic.InboundTraffic.Bytes);
-
+             
             ClientAverages.AddOut(clientTraffic.OutboundTraffic.Bytes);
-
+            
             if (Time.time < _nextServerTextUpdateTime)
                 return;
 
@@ -274,7 +288,8 @@ namespace FishNet.Component.Utility {
         /// <summary>
         /// Called when client network traffic is updated.
         /// </summary>
-        private void NetworkTraffic_OnClientNetworkTraffic(BidirectionalNetworkTraffic traffic) {
+        private void NetworkTraffic_OnClientNetworkTraffic(BidirectionalNetworkTraffic traffic)
+        {
             if (!_initialized)
                 return;
 
@@ -299,7 +314,8 @@ namespace FishNet.Component.Utility {
         /// <summary>
         /// Called when server network traffic is updated.
         /// </summary>
-        private void NetworkTraffic_OnBackendNetworkTraffic(BidirectionalNetworkTraffic traffic) {
+        private void NetworkTraffic_OnServerNetworkTraffic(BidirectionalNetworkTraffic traffic)
+        {
             if (!_initialized)
                 return;
 
@@ -321,7 +337,8 @@ namespace FishNet.Component.Utility {
             _serverText = result;
         }
 
-        private void OnGUI() {
+        private void OnGUI()
+        {
             _style.normal.textColor = _color;
             _style.fontSize = 15;
 
@@ -346,19 +363,26 @@ namespace FishNet.Component.Utility {
             float horizontal;
             float vertical;
 
-            if (_placement == Corner.TopLeft) {
+            if (_placement == Corner.TopLeft)
+            {
                 horizontal = 10f;
                 vertical = 10f;
                 _style.alignment = TextAnchor.UpperLeft;
-            } else if (_placement == Corner.TopRight) {
+            }
+            else if (_placement == Corner.TopRight)
+            {
                 horizontal = Screen.width - width - edge;
                 vertical = 10f;
                 _style.alignment = TextAnchor.UpperRight;
-            } else if (_placement == Corner.BottomLeft) {
+            }
+            else if (_placement == Corner.BottomLeft)
+            {
                 horizontal = 10f;
                 vertical = Screen.height - height - edge;
                 _style.alignment = TextAnchor.LowerLeft;
-            } else {
+            }
+            else
+            {
                 horizontal = Screen.width - width - edge;
                 vertical = Screen.height - height - edge;
                 _style.alignment = TextAnchor.LowerRight;
@@ -368,23 +392,28 @@ namespace FishNet.Component.Utility {
         }
 
         [ContextMenu("Reset Averages")]
-        public void ResetAverages() {
+        public void ResetAverages()
+        {
             ResetCalculationsAndDisplay(forServer: true);
             ResetCalculationsAndDisplay(forServer: false);
         }
 
-        private void ResetCalculationsAndDisplay(bool forServer) {
+        private void ResetCalculationsAndDisplay(bool forServer)
+        {
             if (!_initialized)
                 return;
 
-            if (forServer) {
+            if (forServer)
+            {
                 _serverText = string.Empty;
                 ServerAverages.ResetState();
-            } else {
+            }
+            else
+            {
                 _clientText = string.Empty;
                 ClientAverages.ResetState();
             }
         }
-#endif
+        #endif
     }
 }

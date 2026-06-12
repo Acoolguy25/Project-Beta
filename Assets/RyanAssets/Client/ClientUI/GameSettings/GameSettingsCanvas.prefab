@@ -302,7 +302,7 @@ MonoBehaviour:
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96
   m_DynamicPixelsPerUnit: 1
-  m_PresetInfoIsWorld: 1
+  m_PresetInfoIsWorld: 0
 --- !u!114 &9100000000000000005
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -798,14 +798,15 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 2396861670928556661}
-        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.GameSettings.GameSettingsClient,
-          RyanAssets.Client.ClientUI.GameSettings
-        m_MethodName: CloseSettingsCanvas_ButtonPressed
-        m_Mode: 1
+      - m_Target: {fileID: 0}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.Topbar.ClientTopbar,
+          RyanAssets.Client.ClientUI.Topbar
+        m_MethodName: CloseCanvasVisibility
+        m_Mode: 2
         m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_ObjectArgument: {fileID: 1420625601298902378}
+          m_ObjectArgumentAssemblyTypeName: RyanAssets.UI.CanvasGroupController,
+            RyanAssets.UI
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -2368,14 +2369,15 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 2396861670928556661}
-        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.GameSettings.GameSettingsClient,
-          RyanAssets.Client.ClientUI.GameSettings
-        m_MethodName: CloseSettingsCanvas_ButtonPressed
-        m_Mode: 1
+      - m_Target: {fileID: 0}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.Topbar.ClientTopbar,
+          RyanAssets.Client.ClientUI.Topbar
+        m_MethodName: CloseCanvasVisibility
+        m_Mode: 2
         m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_ObjectArgument: {fileID: 1420625601298902378}
+          m_ObjectArgumentAssemblyTypeName: RyanAssets.UI.CanvasGroupController,
+            RyanAssets.UI
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -2536,7 +2538,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.0002593994
+      value: -0.00024414062
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426617, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.x
