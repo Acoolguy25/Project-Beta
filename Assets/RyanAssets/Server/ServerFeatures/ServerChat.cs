@@ -4,6 +4,7 @@ using RyanAssets.Shared.Broadcasts;
 using RyanAssets.Shared.Requests;
 using FishNet.Connection;
 using FishNet.Transporting;
+using System.Collections.Generic;
 
 namespace RyanAssets.Server.ServerFeatures {
     public static class ServerChat {
@@ -32,6 +33,12 @@ namespace RyanAssets.Server.ServerFeatures {
             }
 
             return true;
+        }
+        public static void SendSystemMessage(SystemMessageBroadcast message){
+            InstanceFinder.ServerManager.Broadcast<SystemMessageBroadcast>(message);
+        }
+        public static void SendSystemMessage(NetworkConnection conn, SystemMessageBroadcast message){
+            InstanceFinder.ServerManager.Broadcast<SystemMessageBroadcast>(conn, message);
         }
     }
 }

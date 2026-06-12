@@ -10,6 +10,7 @@ using RyanAssets.Server.ServerModules;
 using RyanAssets.NetworkService;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Player;
+using RyanAssets.Server.ServerFeatures;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerPlayerEvents {
@@ -27,7 +28,6 @@ namespace RyanAssets.Server.ServerCore {
 
             if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
                 return;
-
             RemovePlayerConnection(conn);
             string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id}";
             _ = BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect");

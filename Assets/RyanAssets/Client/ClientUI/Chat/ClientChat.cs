@@ -1,28 +1,41 @@
-using UnityEngine;
 using FishNet;
-using RyanAssets.Shared.Broadcasts;
-using RyanAssets.Shared.Requests;
-using RyanAssets.Shared.Player;
-using RyanAssets.DataService;
+using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Transporting;
-using RyanAssets.UI.ListGrid;
-using UnityEngine.UI;
-using RyanAssets.Input;
-using TMPro;
-using UnityEngine.EventSystems;
-using RyanAssets.Client.ClientUI.Topbar;
-using RyanAssets.UI;
 using RyanAssets.Client.ClientCore;
+using RyanAssets.Client.ClientUI.Topbar;
+using RyanAssets.DataService;
+using RyanAssets.Input;
+using RyanAssets.Shared.Broadcasts;
+using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Requests;
+using RyanAssets.UI;
+using RyanAssets.UI.ListGrid;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace RyanAssets.Client.ClientUI.Chat {
-    public class ClientChat : ListGridUI<ChatMessageBroadcast>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
+    public struct LocalChatMessage : IBroadcast {
+        public NetworkConnection player;
+        public string message;
+        public SystemMessageSource type;
+    }
+    public class ClientChat : ListGridUI<LocalChatMessage>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
         [SerializeField]
         TMP_InputField chatBox;
+        public static ClientChat Instance;
+        private void Awake(){
+            Instance = this;
+        }
         protected override void Start() {
             base.Start();
             OnCreatePrefab += OnCreateMessage;
-            InstanceFinder.ClientManager.RegisterBroadcast<ChatMessageBroadcast>(OnReceiveMessage);
+            InstanceFinder.ClientManager.RegisterBroadcast<ChatMessageBroadcast>(OnReceiveChatMessage);
+            InstanceFinder.ClientManager.RegisterBroadcast<SystemMessageBroadcast>(OnReceiveSystemMessage);
+            SharedGlobalEvents.OnPlayerAdded += OnPlayerAdded;
+            SharedGlobalEvents.OnPlayerRemoved += OnPlayerRemoved;
             chatBox.onSubmit.AddListener(OnMessageSend_ButtonPressed);
             ClientConnector.OnDisconnected += OnDisconnected;
             ClientConnector.OnConnected += OnConnected;
@@ -30,18 +43,35 @@ namespace RyanAssets.Client.ClientUI.Chat {
             ClearPrefabs();
             OnConnected();
         }
-        private void OnReceiveMessage(ChatMessageBroadcast message, Channel channel) {
-            AddPrefab(message);
+        private void OnReceiveChatMessage(ChatMessageBroadcast message, Channel channel) {
+            AddPrefab(new() { message = message.message, player = message.player });
         }
-        private void OnCreateMessage(GameObject prefab, ChatMessageBroadcast message) {
+        private void OnReceiveSystemMessage(SystemMessageBroadcast message, Channel channel){
+            CreateSystemMessage(message);
+        }
+        private void OnCreateMessage(GameObject prefab, LocalChatMessage message) {
             TextMeshProUGUI usernameText = prefab.GetComponent<TextMeshProUGUI>();
-            if (message.player == null){
-                usernameText.text = message.message;
+            string displayText = message.message;
+            if (message.player == null){ // System / Custom Message
+                switch (message.type) {
+                    case SystemMessageSource.LocalPlayerJoinMessage:
+                        displayText = "{System}: " + message.message;
+                        break;
+                    case SystemMessageSource.PlayerAdd:
+                        usernameText.color = Color.teal;
+                        break;
+                    case SystemMessageSource.PlayerRemove:
+                        usernameText.color = Color.teal;
+                        break;
+                    default:
+                        break;
+                }
             }
-            else {
+            else { // Player message
                 string username = SharedGlobalEvents.Instance.Players[message.player].data.username;
-                usernameText.text = $"{ClientChatHelper.ColorNameRichText(username)}: {ClientChatHelper.EscapeRichText(message.message)}";
+                displayText= $"{ClientChatHelper.ColorNameRichText(username)}: {ClientChatHelper.EscapeRichText(message.message)}";
             }
+            usernameText.text = displayText;
         }
         private void OnChatToggle() {
             ClientTopbar.Instance.EnsureCanvasVisibility(GetComponent<CanvasGroupController>(), true, true);
@@ -69,10 +99,21 @@ namespace RyanAssets.Client.ClientUI.Chat {
             ClearPrefabs();
         }
         private void OnConnected(){
-            AddPrefab(new ChatMessageBroadcast(){
-                // player = InstanceFinder.ClientManager.Connection,
-                message = "{System} Chat messages will appear here."
-            });
+            CreateSystemMessage(new("Chat messages will appear here.", SystemMessageSource.LocalPlayerJoinMessage));
+        }
+        
+        private void OnPlayerAdded(NetworkConnection conn, ServerPlayerStats stats){
+            if (conn.IsLocalClient)
+                return;
+            CreateSystemMessage(new($"{stats.data.username} has joined the game!", SystemMessageSource.PlayerAdd));
+        }
+        private void OnPlayerRemoved(NetworkConnection conn, ServerPlayerStats stats){
+            if (conn.IsLocalClient)
+                return;
+            CreateSystemMessage(new($"{stats.data.username} has left the game!", SystemMessageSource.PlayerRemove));
+        }
+        public void CreateSystemMessage(SystemMessageBroadcast message){
+            AddPrefab(new() { message = message.message, type = message.type });
         }
     }
 }

@@ -21,6 +21,8 @@ namespace RyanAssets.UI.ListGrid {
 
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
+        private Dictionary<Transform, uint> prefabOrder = new();
+        private uint globalOrder;
 
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
 
@@ -46,14 +48,16 @@ namespace RyanAssets.UI.ListGrid {
         public void RemovePrefab(Transform obj) {
             OnDeletePrefab?.Invoke(obj.gameObject);
             Destroy(obj.gameObject);
+            prefabOrder.Remove(obj);
         }
-        public void AddPrefab(T data) {
+        private void AddPrefab(T data, uint order) {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
                 if (!pending_ops.Remove(op))
                     return; // cancelled
                 GameObject prefabClone = op.Result[0];
+                prefabOrder.Add(prefabClone.transform, order);
                 prefabClone.transform.SetParent(contentTarget, false);
                 
 
@@ -62,10 +66,16 @@ namespace RyanAssets.UI.ListGrid {
             };
             pending_ops.Add(op);
         }
+        public void AddPrefab(T data) {
+            AddPrefab(data, globalOrder++);
+        }
         public void AddPrefabs(T[] objects) {
-            foreach (T data in objects) {
-                AddPrefab(data);
+            //foreach (T data in objects) {
+            for (uint i = 0; i < objects.Length; i++) {
+                T data = objects[i];
+                AddPrefab(data, globalOrder + i);
             }
+            globalOrder += ((uint)objects.Length);
         }
         public void RefreshPrefabs(T[] objects) {
             ClearPrefabs();
@@ -81,7 +91,15 @@ namespace RyanAssets.UI.ListGrid {
             layoutRoutine = StartCoroutine(UpdateLayoutRoutine());
         }
         private Coroutine layoutRoutine;
+        private void UpdateLayoutOrder() {
+            var children = contentTarget.Cast<Transform>()
+                .OrderBy(t => prefabOrder[t])
+                .ToList();
 
+            for (int i = 0; i < children.Count; i++) {
+                children[i].SetSiblingIndex(i);
+            }
+        }
         private IEnumerator UpdateLayoutRoutine()
         {
             bool wasAtBottom = AutoScroll &&
@@ -90,6 +108,7 @@ namespace RyanAssets.UI.ListGrid {
 
             yield return new WaitForEndOfFrame();
 
+            UpdateLayoutOrder();
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
 
@@ -147,6 +166,7 @@ namespace RyanAssets.UI.ListGrid {
             contentTarget = scrollRect.content;
             contentRT = contentTarget.GetComponent<RectTransform>();
             gridLayoutGroup = contentRT.GetComponent<GridLayoutGroup>();
+            globalOrder = 0;
             // verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
         }
         virtual protected void OnDestroy(){
