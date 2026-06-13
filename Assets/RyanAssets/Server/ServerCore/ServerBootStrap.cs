@@ -12,6 +12,9 @@ using FishNet.Managing;
 using FishNet.Managing.Scened;
 using Newtonsoft.Json;
 using System.Data;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace RyanAssets.Server.ServerCore {
     public class ServerBootStrap {
@@ -42,6 +45,9 @@ namespace RyanAssets.Server.ServerCore {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void BeforeSceneLoad() {
+            #if UNITY_EDITOR
+                EditorApplication.isPlaying = false;
+            #endif
             Debug.Log("============ ServerBootStrap ============");
             foreach (string arg in Environment.GetCommandLineArgs()) {
                 string[] split = arg.Split('=', 2);
@@ -178,16 +184,15 @@ namespace RyanAssets.Server.ServerCore {
                 return;
             isStopping = true;
 
-            Debug.Log($"Stopping server because {reason}");
-            StopServerEvent?.Invoke();
-            await InvokeStopServerAsyncEvent();
-
             InstanceFinder.ServerManager.Broadcast(new PromptBroadcast {
                 title = "Server Closed",
                 description = $"The server was closed because {reason}"
             });
 
-            await Task.Delay(500);
+            Debug.Log($"Stopping server because {reason}");
+            StopServerEvent?.Invoke();
+            await InvokeStopServerAsyncEvent();
+
 
             InstanceFinder.ServerManager.StopConnection(true);
         }

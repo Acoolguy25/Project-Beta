@@ -70,7 +70,7 @@ namespace RyanAssets.Cameras
             LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
         }
         private void OnDisconnected(){
-            LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+            LocalPlayer.Instance?.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
         }
         private void Start() {
             ClientConnector.OnConnected += OnConnected;

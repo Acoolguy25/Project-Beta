@@ -6,11 +6,13 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityDebug = UnityEngine.Debug;
 using UnityEditor.Build.Profile;
+using System.Collections.Generic;
 
 namespace RyanAssets.Editor {
     public static class BuildLocalServer {
         const string ServerBuildDefine = "SERVER_BUILD";
         const string ServerInitScene = "Assets/Scenes/ServerInit.unity";
+        static readonly string[] RemoveScenes = {"Assets/Scenes/MainMenu.unity"};
         const string ServerExecutableName = "GameServer.x86_64";
 
         public static string LinuxServerDirectory {
@@ -58,14 +60,15 @@ namespace RyanAssets.Editor {
 
             Directory.CreateDirectory(LinuxServerDirectory);
 
-            string[] scenes = EditorBuildSettings.scenes
-                .Select(x => x.path)
-                .ToArray();
+            List<string> scenes = new(EditorBuildSettings.scenes
+                .Select(x => x.path));
 
-            scenes[0] = ServerInitScene; // Replace Main Scene with ServerInit scene
+            scenes.Add(ServerInitScene);
+            foreach (string scene in RemoveScenes)
+                scenes.Remove(scene); // remove all scenes in list
 
             BuildPlayerOptions options = new() {
-                scenes = scenes,
+                scenes = scenes.ToArray(),
                 locationPathName = LinuxServerExecutablePath,
                 target = BuildTarget.StandaloneLinux64,
                 subtarget = (int)StandaloneBuildSubtarget.Server,
