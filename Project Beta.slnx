@@ -110,6 +110,7 @@
   <Project Path="Unity.DedicatedServer.MultiplayerRoles.Editor.csproj" />
   <Project Path="Unity.InternalAPIEngineBridge.RenderPipelines.Core.Runtime.Shared.csproj" />
   <Project Path="Unity.Sysroot.Linux_arm64.csproj" />
+  <Project Path="endel.nativewebsocket.csproj" />
   <Project Path="Unity.CollabProxy.Editor.csproj" />
   <Project Path="Unity.DedicatedServer.CliArguments.Editor.csproj" />
   <Project Path="RyanAssets.Server.ServerFeatures.csproj" />

@@ -72,6 +72,10 @@ namespace RyanAssets.NetworkService {
                 return "Uvr2xiFAyUZJDybNdBEKcPOsMvjR";
             #endif
         }
+#else
+        public static void SetServerHeader(string header_name, string header_value){
+            client.DefaultRequestHeaders.Add(header_name, header_value);
+        }
 #endif
         public static async Task<(string, JObject)> GetRequest(string url) {
             try {

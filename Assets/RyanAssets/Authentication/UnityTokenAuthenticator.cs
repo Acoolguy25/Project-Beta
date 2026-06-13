@@ -11,6 +11,7 @@ using RyanAssets.PromptService;
 using RyanAssets.NetworkService;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {
@@ -21,6 +22,8 @@ namespace RyanAssets.Authentication {
             base.InitializeOnce(networkManager);
 
 #if UNITY_SERVER
+            IsShuttingDown = false;
+            KickPlayers = new();
             // Debug.Log("Initialize Auth Server");
             NetworkManager.ServerManager.RegisterBroadcast<AuthRequest>(OnAuthRequest, false);
 #else
@@ -56,7 +59,9 @@ namespace RyanAssets.Authentication {
                 Token = token
             });
         }
-#endif
+#else
+        public static Dictionary<string, string> KickPlayers;
+        public static bool IsShuttingDown;
         private void OnAuthRequest(NetworkConnection conn, AuthRequest req, Channel channel) {
             // Debug.Log("Received OnAuthRequest");
             if (conn.IsAuthenticated) {
@@ -67,13 +72,17 @@ namespace RyanAssets.Authentication {
 
             _ = ValidateToken(conn, req.Token);
         }
-
         private async Task ValidateToken(NetworkConnection conn, string token) {
-            if (string.IsNullOrWhiteSpace(token)) {
+            if (IsShuttingDown) {
+                Fail(conn, "This server is shutting down!");
+                return;
+            } else if (string.IsNullOrWhiteSpace(token)) {
                 Fail(conn, "No access token provided");
                 return;
+            } else if (KickPlayers.TryGetValue(token, out string KickReason)) {
+                Fail(conn, KickReason != null ? KickReason : "You do not have permission to join this server");
+                return;
             }
-
             var (res, json) = await BackendNetwork.PostRequest("/api/internal/v1/user/add", accessToken: token);
 
             if (res == null) {
@@ -82,14 +91,12 @@ namespace RyanAssets.Authentication {
                 }, false);
 
                 OnAuthenticationResult?.Invoke(conn, true);
-                #if UNITY_SERVER
-                    OnAuthenticationSucceeded?.Invoke(conn, json);
-                #endif
+                OnAuthenticationSucceeded?.Invoke(conn, json);
             } else {
                 Fail(conn, res);
             }
         }
-
+#endif
         private void Fail(NetworkConnection conn, string reason) {
             Debug.Log("Auth Failed: " + reason);
 
@@ -99,7 +106,7 @@ namespace RyanAssets.Authentication {
             }, false);
 
             OnAuthenticationResult?.Invoke(conn, false);
-            conn.Disconnect(true);
+            conn.Disconnect(false);
         }
 
         private void OnAuthResponse(AuthResponse res, Channel channel) {

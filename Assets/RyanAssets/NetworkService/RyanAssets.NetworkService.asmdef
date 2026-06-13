@@ -3,7 +3,9 @@
     "rootNamespace": "RyanAssets.NetworkSettings",
     "references": [
         "RyanAssets.Prompt",
-        "Unity.Services.Authentication"
+        "Unity.Services.Authentication",
+        "endel.nativewebsocket",
+        "RyanAssets.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

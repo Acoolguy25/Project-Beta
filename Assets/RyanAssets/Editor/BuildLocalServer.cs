@@ -1,18 +1,14 @@
 using System;
 using System.IO;
-using System.Linq;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityDebug = UnityEngine.Debug;
 using UnityEditor.Build.Profile;
-using System.Collections.Generic;
 
 namespace RyanAssets.Editor {
     public static class BuildLocalServer {
-        const string ServerBuildDefine = "SERVER_BUILD";
-        const string ServerInitScene = "Assets/Scenes/ServerInit.unity";
-        static readonly string[] RemoveScenes = {"Assets/Scenes/MainMenu.unity"};
+        const string LinuxServerBuildProfilePath = "Assets/Settings/Build Profiles/Linux Server.asset";
         const string ServerExecutableName = "GameServer.x86_64";
 
         public static string LinuxServerDirectory {
@@ -60,21 +56,16 @@ namespace RyanAssets.Editor {
 
             Directory.CreateDirectory(LinuxServerDirectory);
 
-            List<string> scenes = new(EditorBuildSettings.scenes
-                .Select(x => x.path));
+            BuildProfile profile = AssetDatabase.LoadAssetAtPath<BuildProfile>(LinuxServerBuildProfilePath);
 
-            scenes.Add(ServerInitScene);
-            foreach (string scene in RemoveScenes)
-                scenes.Remove(scene); // remove all scenes in list
+            if (profile == null) {
+                throw new FileNotFoundException("Linux server build profile not found.", LinuxServerBuildProfilePath);
+            }
 
-            BuildPlayerOptions options = new() {
-                scenes = scenes.ToArray(),
+            BuildPlayerWithProfileOptions options = new() {
+                buildProfile = profile,
                 locationPathName = LinuxServerExecutablePath,
-                target = BuildTarget.StandaloneLinux64,
-                subtarget = (int)StandaloneBuildSubtarget.Server,
-                options = BuildOptions.Development | BuildOptions.AllowDebugging,
-                // Scoped to this BuildPlayer call; it is not left in PlayerSettings after the build.
-                extraScriptingDefines = new[] { ServerBuildDefine }
+                options = BuildOptions.Development | BuildOptions.AllowDebugging
             };
 
             reportProgress?.Invoke(0.08f, "Building Linux server");

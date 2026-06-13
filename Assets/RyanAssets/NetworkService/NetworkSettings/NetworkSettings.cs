@@ -33,6 +33,7 @@ namespace RyanAssets.NetworkService {
             #endif
             InitConfig();
             BackendNetwork.SetBackendURL(BackendAPIURL);
+            BackendSocket.SetBaseAddress(BackendAPIURL);
         }
         static NetworkScriptableObject loadResource(string name){
             return Resources.Load<NetworkScriptableObject>("NetworkSettings/" + name);

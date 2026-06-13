@@ -4,6 +4,7 @@ using System;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using RyanAssets.Core;
 
 namespace RyanAssets.Server.ServerModules {
     public static class BackendServer {
@@ -22,9 +23,11 @@ namespace RyanAssets.Server.ServerModules {
                 if (res == null) { // succeeded
                     return (null, j);
                 } else { // failed
-                    string retriesText = (retries>0)?($"/{retries}"):"";
-                    string jsonDisplay = (j != null)?$"\nJSON: {JsonConvert.SerializeObject(j, Formatting.Indented)}":"";
+                    string retriesText = (retries > 0) ? ($"/{retries}") : "";
+                    string jsonDisplay = (j != null) ? $"\nJSON: {JsonConvert.SerializeObject(j, Formatting.Indented)}" : "";
                     Debug.LogError($"{title} {res} ({i}{retriesText}){jsonDisplay}");
+                    if (retries > 0)
+                        await Task.Delay(TimeSpan.FromSeconds(RequestHelper.GetRetryDelay(i)));
                 }
             }
             return (res, null);

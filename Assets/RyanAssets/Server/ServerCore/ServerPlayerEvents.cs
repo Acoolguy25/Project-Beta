@@ -10,6 +10,7 @@ using RyanAssets.Server.ServerModules;
 using RyanAssets.NetworkService;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Broadcasts;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerPlayerEvents {
@@ -63,6 +64,24 @@ namespace RyanAssets.Server.ServerCore {
             }
 
             return normalizedJson.ToObject<ServerPlayerStats>();
+        }
+
+        public static void KickPlayer(NetworkConnection conn, string message = null) {
+            if (message != null)
+                InstanceFinder.ServerManager.Broadcast<PromptBroadcast>(conn, new() {
+                    title = "Disconnected",
+                    description = message
+                }, requireAuthenticated: false);
+            conn.Disconnect(message == null);
+        }
+        public static void KickPlayer(string playerId, string message = null) {
+            foreach ((NetworkConnection conn, ServerPlayerStats stats) in SharedGlobalEvents.Instance.Players) {
+                if (stats.player_id == playerId) {
+                    KickPlayer(conn, message);
+                    return;
+                }
+            }
+
         }
     }
 }

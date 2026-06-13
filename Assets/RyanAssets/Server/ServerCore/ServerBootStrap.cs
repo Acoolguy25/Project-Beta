@@ -12,6 +12,11 @@ using FishNet.Managing;
 using FishNet.Managing.Scened;
 using Newtonsoft.Json;
 using System.Data;
+using FishNet.Connection;
+using RyanAssets.Authentication;
+
+
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -101,7 +106,14 @@ namespace RyanAssets.Server.ServerCore {
             }
 
             ValidateStartupArguments();
-            BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
+            // BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
+            BackendNetwork.SetServerHeader("universe-id", serverInfo.universe_id);
+            BackendNetwork.SetServerHeader("server-id", serverInfo.server_id);
+            BackendNetwork.SetServerHeader("server-port", serverInfo.server_port.ToString());
+
+            BackendSocket.SetServerHeader("universe-id", serverInfo.universe_id);
+            BackendSocket.SetServerHeader("server-id", serverInfo.server_id);
+            BackendSocket.SetServerHeader("server-port", serverInfo.server_port.ToString());
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AfterSceneLoad() {
@@ -183,6 +195,7 @@ namespace RyanAssets.Server.ServerCore {
             if (isStopping || !InstanceFinder.IsServerStarted)
                 return;
             isStopping = true;
+            UnityTokenAuthenticator.IsShuttingDown = true; // prevent future connections
 
             InstanceFinder.ServerManager.Broadcast(new PromptBroadcast {
                 title = "Server Closed",
@@ -193,6 +206,9 @@ namespace RyanAssets.Server.ServerCore {
             StopServerEvent?.Invoke();
             await InvokeStopServerAsyncEvent();
 
+            foreach (NetworkConnection conn in InstanceFinder.ServerManager.Clients.Values) {
+                conn.Disconnect(false);
+            }
 
             InstanceFinder.ServerManager.StopConnection(true);
         }
