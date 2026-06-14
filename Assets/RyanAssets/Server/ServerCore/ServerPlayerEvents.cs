@@ -10,7 +10,7 @@ using RyanAssets.Server.ServerModules;
 using RyanAssets.NetworkService;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Player;
-using RyanAssets.Shared.Broadcasts;
+using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerPlayerEvents {
@@ -22,7 +22,7 @@ namespace RyanAssets.Server.ServerCore {
             UnityTokenAuthenticator.OnAuthenticationSucceeded += OnAuthenticationSucceeded;
         }
 
-        static async void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
+        static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
             if (args.ConnectionState != RemoteConnectionState.Stopped)
                 return;
 
@@ -47,6 +47,7 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         static void RemovePlayerConnection(NetworkConnection conn) {
+            InstanceFinder.ServerManager.BroadcastExcept<PlayerLeaveBroadcast>(conn, new() { player = conn, stats = SharedGlobalEvents.Instance.Players[conn] });
             SharedGlobalEvents.Instance.Players.Remove(conn);
             ServerPlayerSave.Forget(conn);
             OnPlayerRemovedEvent?.Invoke(conn);

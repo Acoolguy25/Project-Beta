@@ -8,7 +8,7 @@ using FishNet.Transporting;
 using Newtonsoft.Json.Linq;
 using RyanAssets.NetworkService;
 using RyanAssets.Server.ServerModules;
-using RyanAssets.Shared.Broadcasts;
+using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
 using UnityEngine;
 
@@ -37,7 +37,7 @@ namespace RyanAssets.Server.ServerCore {
 
         static async Task SaveLoop(CancellationToken token) {
             while (!token.IsCancellationRequested) {
-                try { 
+                try {
                     await Task.Delay(TimeSpan.FromSeconds(60), token);
                     await Save();
                 } catch (TaskCanceledException) {
@@ -94,7 +94,7 @@ namespace RyanAssets.Server.ServerCore {
                 savedConnections.Add(conn);
             }
 
-            if (savedConnections.Count == 0)    
+            if (savedConnections.Count == 0)
                 return;
 
             (string res, JObject _) = await BackendServer.RequestAsync(
@@ -104,7 +104,7 @@ namespace RyanAssets.Server.ServerCore {
 
             if (res == null) {
                 foreach (NetworkConnection conn in savedConnections) {
-                    dirtyConnections.Remove(conn);                        
+                    dirtyConnections.Remove(conn);
                 }
                 return;
             }

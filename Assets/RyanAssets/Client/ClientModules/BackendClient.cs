@@ -43,7 +43,7 @@ namespace RyanAssets.Client.ClientModules {
                     if (res == null) { // succeeded
                         return (null, j);
                     } else { // failed
-                        Debug.LogError(res);
+                        Debug.LogError($"{title} - {res}");
                         PromptButton userResult = await PromptManager.Instance.PromptLocalUser(title + " Failed", res, promptResult,
                             (retryPolicy == RetryPolicy.NoRetry) ? PromptManager.ButtonPreset_OkOnly :
                             (retryPolicy == RetryPolicy.RetryOrCancel) ? PromptManager.ButtonPreset_RetryCancel :

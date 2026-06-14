@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <CscToolPath>$(MSBuildThisFileDirectory)Tools\UnityRoslyn</CscToolPath>
+    <CscToolExe>csc.cmd</CscToolExe>
+    <UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+</Project>

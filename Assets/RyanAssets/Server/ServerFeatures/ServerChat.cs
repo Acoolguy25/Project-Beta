@@ -1,6 +1,6 @@
 using UnityEngine;
 using FishNet;
-using RyanAssets.Shared.Broadcasts;
+using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Requests;
 using FishNet.Connection;
 using FishNet.Transporting;
@@ -34,10 +34,10 @@ namespace RyanAssets.Server.ServerFeatures {
 
             return true;
         }
-        public static void SendSystemMessage(SystemMessageBroadcast message){
+        public static void SendSystemMessage(SystemMessageBroadcast message) {
             InstanceFinder.ServerManager.Broadcast<SystemMessageBroadcast>(message);
         }
-        public static void SendSystemMessage(NetworkConnection conn, SystemMessageBroadcast message){
+        public static void SendSystemMessage(NetworkConnection conn, SystemMessageBroadcast message) {
             InstanceFinder.ServerManager.Broadcast<SystemMessageBroadcast>(conn, message);
         }
     }

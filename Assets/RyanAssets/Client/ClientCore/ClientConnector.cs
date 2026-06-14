@@ -113,8 +113,8 @@ namespace RyanAssets.Client.ClientCore {
                         if (wasAuthenticated) {
                             wasAuthenticated = false;
                             SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
-                        } else if (!hasCanceled) {
-                            SetJoinResult("Join Game Failed!");
+                        } else if (!hasCanceled && !PromptManager.HasPrompt(PromptId.AuthenticationFail)) { // make sure not handled by UnityTokenAuthenticator
+                             SetJoinResult("Join Game Failed!");
                         }
                     }
                     if (!SceneManager.GetSceneByName("MainMenu").isLoaded)

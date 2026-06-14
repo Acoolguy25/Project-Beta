@@ -18,8 +18,7 @@ namespace RyanAssets.Server.ServerCore {
                     ServerBootStrap.StopServer(res.j["reason"].ToString());
                     break;
                 case "kick":
-                    res.j.TryGetValue("reason", out string message);
-                    ServerPlayerEvents.KickPlayer(((string)res.j["player_id"]), message);
+                    ServerPlayerEvents.KickPlayer(((string)res.j["player_id"]), message: res.j["reason"]?.ToString());
                     break;
                 default:
                     Debug.LogError($"Unknown Server WebSocket Request: {res.j["type"].ToString()}");

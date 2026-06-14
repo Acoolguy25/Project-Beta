@@ -34,6 +34,7 @@ namespace RyanAssets.PromptService {
         PlayGameConfirm,
         JoinGameAwait,
         JoinGameResponse,
+        AuthenticationFail,
         ServerPromptBroadcast,
         LeaveGameConfirm,
         LeaveGameAwait
@@ -188,6 +189,9 @@ namespace RyanAssets.PromptService {
         }
         public static bool PromptDelete(PromptId promptId){
             return Instance.CompleteAction(promptId, PromptButton.Unknown);
+        }
+        public static bool HasPrompt(PromptId promptId) {
+            return Instance.PromptList.Any((promptData) => promptData.promptId == promptId);
         }
     }
 }

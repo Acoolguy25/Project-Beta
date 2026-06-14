@@ -1,7 +1,7 @@
 using FishNet.Broadcast;
 using FishNet.Connection;
 
-namespace RyanAssets.Shared.Broadcasts {
+namespace RyanAssets.Shared.Declarations {
     public enum SystemMessageSource {
         // Client-side
         LocalPlayerJoinMessage,
@@ -10,8 +10,7 @@ namespace RyanAssets.Shared.Broadcasts {
         // Server-side
         CustomMessage
     }
-    public struct SystemMessageBroadcast : IBroadcast
-    {
+    public struct SystemMessageBroadcast : IBroadcast {
         public string message;
         public SystemMessageSource type;
         public SystemMessageBroadcast(string message, SystemMessageSource type)

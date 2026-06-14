@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FishNet.Connection;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Server.ServerFeatures {
     public static class ServerReward {

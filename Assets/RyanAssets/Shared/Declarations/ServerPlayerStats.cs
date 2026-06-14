@@ -1,7 +1,7 @@
 using FishNet.Connection;
 using RyanAssets.DataService;
 
-namespace RyanAssets.Shared.Player {
+namespace RyanAssets.Shared.Declarations {
     [System.Serializable]
     public struct ServerPlayerStats {
         // public NetworkConnection conn;

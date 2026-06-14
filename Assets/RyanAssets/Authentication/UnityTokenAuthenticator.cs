@@ -16,7 +16,6 @@ using System.Collections.Generic;
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {
         public override event Action<NetworkConnection, bool> OnAuthenticationResult;
-        public static event Action<NetworkConnection, JObject> OnAuthenticationSucceeded;
 
         public override void InitializeOnce(NetworkManager networkManager) {
             base.InitializeOnce(networkManager);
@@ -60,6 +59,7 @@ namespace RyanAssets.Authentication {
             });
         }
 #else
+        public static event Action<NetworkConnection, JObject> OnAuthenticationSucceeded;
         public static Dictionary<string, string> KickPlayers;
         public static bool IsShuttingDown;
         private void OnAuthRequest(NetworkConnection conn, AuthRequest req, Channel channel) {
@@ -96,7 +96,6 @@ namespace RyanAssets.Authentication {
                 Fail(conn, res);
             }
         }
-#endif
         private void Fail(NetworkConnection conn, string reason) {
             Debug.Log("Auth Failed: " + reason);
 
@@ -108,6 +107,7 @@ namespace RyanAssets.Authentication {
             OnAuthenticationResult?.Invoke(conn, false);
             conn.Disconnect(false);
         }
+#endif
 
         private void OnAuthResponse(AuthResponse res, Channel channel) {
             if (res.Success) {
@@ -116,7 +116,7 @@ namespace RyanAssets.Authentication {
                 Debug.Log("Authentication Failed: " + res.Reason);
                 NetworkManager.ClientManager.StopConnection();
 #if !UNITY_SERVER
-                PromptManager.Instance.PromptLocalUser("Authentication Failed", res.Reason, PromptId.Protected, PromptManager.ButtonPreset_OkOnly);
+                PromptManager.Instance.PromptLocalUser("Authentication Failed", res.Reason, PromptId.AuthenticationFail, PromptManager.ButtonPreset_OkOnly);
 #endif
             }
         }

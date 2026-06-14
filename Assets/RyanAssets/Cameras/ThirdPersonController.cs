@@ -64,16 +64,16 @@ namespace RyanAssets.Cameras
                     switch (c.Name)
                     {
                         case "Look Orbit X":
-                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("HorizontalTurnSensitivity");
+                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("TurnSensitivity") / 100f * GameSettingsClient.GetSettingValue<int>("HorizontalTurnSensitivity") / 900f;
                             break;
 
                         case "Look Orbit Y":
-                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("VerticalTurnSensitivity");
+                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("TurnSensitivity")  / 100f * -1f * GameSettingsClient.GetSettingValue<int>("VerticalTurnSensitivity") / 900f; // Invert Y direction
                             break;
 
-                        case "Orbit Scale":
-                            c.Input.Gain = GameSettingsClient.GetSettingValue<int>("TurnSensitivity");
-                            break;
+                        //case "Orbit Scale":
+                        //    c.Input.Gain = GameSettingsClient.GetSettingValue<int>("TurnSensitivity") / 500f;
+                        //    break;
                     }
                 }
             }

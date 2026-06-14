@@ -31,7 +31,7 @@ namespace RyanAssets.NetworkService {
         public async void StartSocket(string url, Action<(string, JObject)> onMessage = null, Action onClose = null, Dictionary<string, string> headers = null) {
             for (int i = 0; /* no condition */; i++) { 
                 try {
-                    Debug.Log($"URL: ws://{base_address}{url}");
+                    //Debug.Log($"URL: ws://{base_address}{url}");
                     WebSocket ws = new($"ws://{base_address}{url}", headers != null ? headers : socket_headers);
                     ws.OnMessage += (bytes) => onMessage?.Invoke(OnSocketMessage(bytes));
                     ws.OnClose += (_) => {

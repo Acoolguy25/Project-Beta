@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using FishNet;
 using FishNet.Transporting;
 using RyanAssets.NetworkService;
-using RyanAssets.Shared.Broadcasts;
+using RyanAssets.Shared.Declarations;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
 using Newtonsoft.Json;
@@ -41,19 +41,28 @@ namespace RyanAssets.Server.ServerCore {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ConfigureStackTraces() {
+#if !UNITY_EDITOR
             Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
             Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
             Application.SetStackTraceLogType(LogType.Error, StackTraceLogType.Full);
             Application.SetStackTraceLogType(LogType.Exception, StackTraceLogType.Full);
             Application.SetStackTraceLogType(LogType.Assert, StackTraceLogType.Full);
+#endif
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void BeforeSceneLoad() {
-            #if UNITY_EDITOR
-                EditorApplication.isPlaying = false;
-            #endif
             Debug.Log("============ ServerBootStrap ============");
+#if UNITY_EDITOR
+            serverInfo = new(){
+                universe_id = "empty_baseplate",
+                server_id = "unity-test-server",
+                server_port = 20000
+            };
+            MaxPlayers = 10;
+            ServerIdleTimeoutSeconds = ushort.MaxValue;
+            ServerHeartbeatIntvSeconds = ushort.MaxValue;
+#else
             foreach (string arg in Environment.GetCommandLineArgs()) {
                 string[] split = arg.Split('=', 2);
 
@@ -104,8 +113,8 @@ namespace RyanAssets.Server.ServerCore {
                         break;
                 }
             }
-
             ValidateStartupArguments();
+#endif
             // BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
             BackendNetwork.SetServerHeader("universe-id", serverInfo.universe_id);
             BackendNetwork.SetServerHeader("server-id", serverInfo.server_id);
@@ -131,13 +140,13 @@ namespace RyanAssets.Server.ServerCore {
             }
 
             transport.SetMaximumClients(MaxPlayers);
-#if DEVELOPMENT_BUILD
-                Debug.Log("Hosting at 0.0.0.0");
-                transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
-#else
-            Debug.Log($"Hosting at {NetworkSettings.activeConfig.backend_server_ip}");
-            transport.SetServerBindAddress(NetworkSettings.activeConfig.backend_server_ip, IPAddressType.IPv4);
-#endif
+            //#if DEVELOPMENT_BUILD
+            Debug.Log("Hosting at 0.0.0.0");
+            transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
+            //#else
+            //            Debug.Log($"Hosting at {NetworkSettings.activeConfig.backend_server_ip}");
+            //            transport.SetServerBindAddress(NetworkSettings.activeConfig.backend_server_ip.Replace($":{serverInfo.server_port}", ""), IPAddressType.IPv4);
+            //#endif
             transport.SetPort(serverInfo.server_port);
             InstanceFinder.ServerManager.OnServerConnectionState += OnServerConnectionState;
 

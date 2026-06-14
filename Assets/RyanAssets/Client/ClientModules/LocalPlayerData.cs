@@ -9,6 +9,7 @@ using System;
 using FishNet;
 using FishNet.Connection;
 using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
 namespace RyanAssets.Client.ClientModules {
@@ -19,7 +20,7 @@ namespace RyanAssets.Client.ClientModules {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
-            SharedGlobalEvents.OnPlayerAdded += OnSyncedPlayerData;
+            SharedGlobalEvents.OnPlayerAdded += (conn, stats, _) => OnSyncedPlayerData(conn, stats);
             SharedGlobalEvents.OnPlayerUpdated += OnSyncedPlayerData;
         }
 

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
 using RyanAssets.DataService;
 using FishNet;
@@ -27,7 +28,7 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             prefab.name = player.data.player_id;
             prefab.transform.GetChild(1).GetComponent<Text>().text = username;
         }
-        private void OnPlayerAdded(NetworkConnection conn, ServerPlayerStats data) {
+        private void OnPlayerAdded(NetworkConnection conn, ServerPlayerStats data, bool synced) {
             AddPrefab((conn, data));
         }
         private void OnPlayerRemoved(NetworkConnection conn, ServerPlayerStats data) {

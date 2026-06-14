@@ -29,6 +29,8 @@ namespace RyanAssets.Server.ServerCore {
 
                     if (res != null)
                         Debug.LogWarning($"Heartbeat failed: {res}");
+                    if (token.IsCancellationRequested)
+                        break;
                     // else
                         // Debug.Log("Heartbeat sent");
                 }
