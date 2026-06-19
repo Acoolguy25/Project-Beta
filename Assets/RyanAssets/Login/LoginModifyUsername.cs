@@ -7,12 +7,14 @@ using RyanAssets.DataService;
 using RyanAssets.Client.ClientModules;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Text.RegularExpressions;
 
 namespace RyanAssets.Login {
     public class LoginModifyUsername : MonoBehaviour {
         [SerializeField]
         InputField usernameInputField;
         string newUsername;
+        static string usernameRegexPattern = @"^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$";
         public void EditButtonClicked() {
             usernameInputField.Select();
         }
@@ -23,6 +25,10 @@ namespace RyanAssets.Login {
             newUsername = usernameInputField.text;
             if (newUsername == LocalPlayerData.localData.username)
                 return;
+            else if (!Regex.IsMatch(newUsername, usernameRegexPattern)) {
+                await PromptManager.Instance.PromptLocalUser("Invalid Username", "Username cannot contain spaces or non alphanumeric characters", PromptId.UsernameResponse, PromptManager.ButtonPreset_CancelOnly);
+                return;
+            }
 
             (string res, JObject json) = await BackendClient.RequestAsync(CheckUsernameAvailability, "Username Availability", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse, retryPolicy: RetryPolicy.RetryOrCancel);
             // Debug.Log(json);

@@ -1,6 +1,6 @@
 {
-    "name": "Debug",
-    "rootNamespace": "Debug",
+    "name": "EasyDebug.Client",
+    "rootNamespace": "EasyDebug.Client",
     "references": [
         "GUID:71f0a500b6e334a4f967523cdb520a01",
         "GUID:73a16be7f19393b4788c31d868fbbded"

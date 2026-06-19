@@ -88,6 +88,7 @@
   <Project Path="endel.nativewebsocket.csproj" />
   <Project Path="Unity.CollabProxy.Editor.csproj" />
   <Project Path="Unity.DedicatedServer.CliArguments.Editor.csproj" />
+  <Project Path="EasyDebug.Client.csproj" />
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />
@@ -110,7 +111,6 @@
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
   <Project Path="RyanAssets.Client.Audio.csproj" />
   <Project Path="Unity.VisualScripting.DocCodeExamples.csproj" />
-  <Project Path="Debug.csproj" />
   <Project Path="Unity.PlasticSCM.Editor.Entities.csproj" />
   <Project Path="Universes.csproj" />
   <Project Path="RyanAssets.UI.Textbox.csproj" />

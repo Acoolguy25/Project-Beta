@@ -1,10 +1,11 @@
-using UnityEngine;
-using UnityEngine.InputSystem;
 using FishNet;
-using RyanAssets.Core;
-using RyanAssets.Input;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientUI.GameSettings;
+using RyanAssets.Core;
+using RyanAssets.Input;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.HID;
 
 namespace RyanAssets.Characters.Client {
     public class CharacterMovement : MonoBehaviour {
@@ -19,11 +20,12 @@ namespace RyanAssets.Characters.Client {
         public float Gravity = -15.0f;
 
         [Space(10)]
-        public float JumpTimeout = 0.50f;
+        public float JumpTimeout = 0.35f;
         public float FallTimeout = 0.15f;
 
         [Header("Player Grounded")]
-        public bool Grounded = true;
+        public bool Grounded = false;
+        static private LayerMask GroundMask;
 
         private float _animationBlend;
         private float _targetRotation = 0.0f;
@@ -43,6 +45,7 @@ namespace RyanAssets.Characters.Client {
         private Animator _animator;
         private Rigidbody _rb;
         private CharacterControls _input;
+        private BoxCollider boxCollider;
         // private MovementControl _movementControl;
 
 
@@ -54,8 +57,10 @@ namespace RyanAssets.Characters.Client {
             _rb = LocalPlayer.Character.GetComponent<Rigidbody>();
             _rb.constraints = RigidbodyConstraints.FreezeRotation & ~RigidbodyConstraints.FreezeRotationY;
             _input = InputService.characterControls;
+            boxCollider = LocalPlayer.Character.GetComponent<BoxCollider>();
             //_playerInput = GetComponent<PlayerInput>();
             // _movementControl = GetComponent<MovementControl>();
+            GroundMask = ~LayerMask.GetMask("Character");
 
             AssignAnimationIDs();
             _jumpTimeoutDelta = JumpTimeout;
@@ -65,8 +70,8 @@ namespace RyanAssets.Characters.Client {
             if (_animator == null || !_animator.enabled) return;
             if (!_input) return;
 
-            JumpAndGravity();
             GroundedCheck();
+            JumpAndGravity();
             Move();
         }
 
@@ -77,12 +82,46 @@ namespace RyanAssets.Characters.Client {
             _animIDFreeFall = Animator.StringToHash("FreeFall");
             _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
         }
-
         private void GroundedCheck() {
-            Grounded = true; //_movementControl.IsGrounded;
-            if (_hasAnimator) {
-                _animator.SetBool(_animIDGrounded, Grounded);
+            Bounds b = boxCollider.bounds;
+
+            // Four bottom corners of the box
+            Vector3[] origins = new Vector3[]{
+                new Vector3(b.min.x, b.min.y, b.min.z),
+                new Vector3(b.max.x, b.min.y, b.min.z),
+                new Vector3(b.min.x, b.min.y, b.max.z),
+                new Vector3(b.max.x, b.min.y, b.max.z),
+            };
+
+            Grounded = false;
+
+            foreach (Vector3 origin in origins) {
+                Vector3 targetOrigin = origin + Vector3.up * 0.01f;
+                bool hit = Physics.Raycast(
+                    targetOrigin,
+                    Vector3.down,
+                    out RaycastHit rayHit,
+                    0.05f,
+                    GroundMask,
+                    QueryTriggerInteraction.Ignore
+                );
+
+                // DEBUG RAY
+                Debug.DrawRay(
+                    targetOrigin,
+                    Vector3.down * 0.05f,
+                    hit ? Color.green : Color.red
+                );
+                if (hit) {
+                    Grounded |= true;
+#if !UNITY_EDITOR
+    break;
+#endif
+                }
             }
+
+            if (_hasAnimator)
+                _animator.SetBool(_animIDGrounded, Grounded);
         }
         private Vector2 GetAdaptedMoveVector(){
             Vector2 move = _input.move;
@@ -112,10 +151,12 @@ namespace RyanAssets.Characters.Client {
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg + CamEulerAngleY;
                 float rotation = Mathf.SmoothDampAngle(LocalPlayer.Character.transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, RotationSmoothTime);
                 LocalPlayer.Character.transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
-            }
+            } else
+                _rb.angularVelocity = Vector3.zero;
 
             Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
             Vector3 move = targetDirection.normalized * (_animationBlend * inputMagnitude);
+            //if (!Grounded)
             move.y = _rb.linearVelocity.y;
             _rb.linearVelocity = move;
 
@@ -127,6 +168,7 @@ namespace RyanAssets.Characters.Client {
         }
         //private float wasJumping = 0f;
         private void JumpAndGravity() {
+            _jumpTimeoutDelta -= Time.fixedDeltaTime;
             if (Grounded) {
                 _fallTimeoutDelta = FallTimeout;
 
@@ -135,10 +177,9 @@ namespace RyanAssets.Characters.Client {
                     _animator.SetBool(_animIDFreeFall, false);
                 }
 
-                if (_verticalVelocity < 0.0f)
-                    _verticalVelocity = -2f;
-
                 if (_input.jump && _jumpTimeoutDelta <= 0.0f) {
+                    _jumpTimeoutDelta = JumpTimeout;
+
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
                     Vector3 velocity = _rb.linearVelocity;
                     velocity.y = _verticalVelocity;
@@ -148,11 +189,7 @@ namespace RyanAssets.Characters.Client {
                         _animator.SetBool(_animIDJump, true);
                     //wasJumping = Time.fixedTime;
                 }
-
-                if (_jumpTimeoutDelta >= 0.0f)
-                    _jumpTimeoutDelta -= Time.fixedDeltaTime;
             } else {
-                _jumpTimeoutDelta = JumpTimeout;
 
                 if (_fallTimeoutDelta >= 0.0f) {
                     _fallTimeoutDelta -= Time.fixedDeltaTime;

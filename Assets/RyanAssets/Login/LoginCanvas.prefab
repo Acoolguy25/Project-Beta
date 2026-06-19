@@ -2114,7 +2114,7 @@ MonoBehaviour:
     m_MaxSize: 24
     m_Alignment: 3
     m_AlignByGeometry: 0
-    m_RichText: 1
+    m_RichText: 0
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
@@ -2168,7 +2168,7 @@ MonoBehaviour:
   m_KeyboardType: 1
   m_LineType: 0
   m_HideMobileInput: 0
-  m_CharacterValidation: 0
+  m_CharacterValidation: 3
   m_CharacterLimit: 20
   m_OnSubmit:
     m_PersistentCalls:
@@ -2485,7 +2485,7 @@ MonoBehaviour:
     m_MaxSize: 22
     m_Alignment: 3
     m_AlignByGeometry: 0
-    m_RichText: 1
+    m_RichText: 0
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
@@ -2715,6 +2715,14 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1894304943560295497, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1894304943560295766, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1894304943560295766, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}

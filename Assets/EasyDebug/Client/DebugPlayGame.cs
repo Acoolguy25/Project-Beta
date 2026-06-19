@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Universes.GameBrowser;
 
-namespace EasyDebug {
+namespace EasyDebug.Debug {
     public class DebugPlayGame: MonoBehaviour {
         [SerializeField]
         string PlayGameUniverseId;

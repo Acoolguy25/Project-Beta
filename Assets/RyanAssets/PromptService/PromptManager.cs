@@ -11,6 +11,7 @@ using RyanAssets.Input;
 
 namespace RyanAssets.PromptService {
     public enum PromptButton: sbyte {
+        ErrorPromptId = -20,
         ErrorDuplicate = -10,
         Unknown = -1,
         Ok = 0,
@@ -20,8 +21,9 @@ namespace RyanAssets.PromptService {
         No = 4
     };
     public enum PromptId{
-        Protected,
-        Error,
+        None, // Will not display
+        Protected, // Cannot be deleted
+        Error, // Error state
         NetworkLoginAwait,
         LoginResponse,
         UsernameCheckAwait,
@@ -141,6 +143,8 @@ namespace RyanAssets.PromptService {
             }
         }
         public Task<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
+            if (promptId == PromptId.None)
+                return Task.FromResult(PromptButton.ErrorPromptId);
             if (promptId != PromptId.Protected){
                 foreach (PromptData prompt in PromptList){
                     if (prompt.promptId == promptId){

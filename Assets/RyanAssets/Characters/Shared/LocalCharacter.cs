@@ -22,7 +22,7 @@ namespace RyanAssets.Characters.Shared
             if (!IsOwner)
                 gameObject.name = $"{base.Owner}";
             else
-                gameObject.name = "LocalCharacter (" + gameObject.name + ")";
+                gameObject.name = $"LocalCharacter";
         }
         void OnDestroy()
         {

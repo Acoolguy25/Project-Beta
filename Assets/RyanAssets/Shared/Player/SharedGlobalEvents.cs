@@ -111,6 +111,8 @@ namespace RyanAssets.Shared.Player {
             OnCurrentVoteChangedEvent = null;
         }
         private void OnDestroy() {
+            if (InstanceFinder.ClientManager == null)
+                return;
             InstanceFinder.ClientManager.UnregisterBroadcast<PlayerLeaveBroadcast>(OnPlayerRemovedHandler);
         }
 #endif
