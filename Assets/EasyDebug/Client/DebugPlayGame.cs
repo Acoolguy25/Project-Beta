@@ -17,7 +17,7 @@ namespace EasyDebug.Debug {
         }
         IEnumerator Start(){
             yield return PressButton(continueButton);
-            SelectedGameUI.PlayGame(PlayGameUniverseId);
+            _ = SelectedGameUI.PlayGame(PlayGameUniverseId);
         }
     }
 }

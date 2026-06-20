@@ -7,7 +7,8 @@
         "RyanAssets.Core",
         "RyanAssets.Input",
         "RyanAssets.Client.ClientUI.GameSettings",
-        "RyanAssets.UI.ListGrid"
+        "RyanAssets.UI.ListGrid",
+        "RyanAssets.Shared.Declarations"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

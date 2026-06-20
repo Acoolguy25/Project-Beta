@@ -8,6 +8,7 @@ using FishNet.Managing;
 using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
+using RyanAssets.Shared.Requests;
 
 namespace RyanAssets.Client.ClientUI.GameSettings {
     public class GameSettingsClient: ListGridUI<GameSettingsInstance> {
@@ -101,6 +102,8 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         GameObject gameActionButtonsContainer;
         [SerializeField]
         bool hideGameActionButtons;
+        [SerializeField]
+        Button resumeButton;
 
         readonly HashSet<GameSettingCategory> createdCategories = new();
         protected void Awake(){
@@ -110,8 +113,6 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             }
             SetGameActionButtonsVisible(!hideGameActionButtons);
             AddSettingsPrefabs();
-            GameSettingsControls.leaveToggledEvent += OnLeaveGame_ButtonPressed;
-            GameSettingsControls.resetToggledEvent += OnReset_ButtonPressed;
         }
         protected override void Start(){
             // disabled
@@ -169,16 +170,26 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             InstanceFinder.ClientManager.StopConnection();
         }
         public async void OnReset_ButtonPressed(){
-
+            PromptButton res = await PromptManager.Instance.PromptLocalUser("Reset Character?", "Are you sure you want to reset your character?", PromptId.ResetCharacterConfirm, PromptManager.ButtonPreset_YesNo);
+            if (res != PromptButton.Yes)
+                return;
+            resumeButton.onClick.Invoke();
+            InstanceFinder.ClientManager.Broadcast<MenuActionRequest>(new() {
+                type = MenuActionType.ResetCharacter
+            });
         }
-        public void CloseSettingsCanvas_ButtonPressed(){
-            GetComponent<CanvasGroupController>().SetVisible(false, 1 / 3f);
-        }
+        //public void CloseSettingsCanvas_ButtonPressed(){
+        //    GetComponent<CanvasGroupController>().SetVisible(false, 1 / 3f);
+        //}
         private void OnEnable(){
             InputService.SetInputScreenActive(InputScreen.GameSettings, true);
+            GameSettingsControls.leaveToggledEvent += OnLeaveGame_ButtonPressed;
+            GameSettingsControls.resetToggledEvent += OnReset_ButtonPressed;
         }
         private void OnDisable(){
             InputService.SetInputScreenActive(InputScreen.GameSettings, false);
+            GameSettingsControls.leaveToggledEvent -= OnLeaveGame_ButtonPressed;
+            GameSettingsControls.resetToggledEvent -= OnReset_ButtonPressed;
         }
     }
 }

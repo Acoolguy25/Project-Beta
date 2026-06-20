@@ -2,34 +2,48 @@ using System;
 using FishNet.Object;
 using FishNet.Connection;
 using UnityEngine;
+using System.Collections.Generic;
 
-namespace RyanAssets.Characters.Shared
-{
-    public class LocalCharacter : NetworkBehaviour
-    {
-        // [SerializeField]
+namespace RyanAssets.Characters.Shared {
+    public class LocalCharacter : TrackedGameCharacter {
         public Transform CharacterCamera;
+        public static Dictionary<NetworkConnection, NetworkObject> Characters = new();
+        public void InstantiateSelf(NetworkConnection prevOwner) {
+            if (Characters.TryGetValue(prevOwner, out NetworkObject newCharacter) && newCharacter != NetworkObject)
+                Characters.Remove(prevOwner);
+            Characters[Owner] = NetworkObject;
+        }
 #if !UNITY_SERVER
         public static event Action<(Transform, bool)> AnyCharacterAdded;
         public static event Action<(Transform, bool)> AnyCharacterRemoved;
+        public static event Action<(Transform, bool)> AnyCharacterDied;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void Init(){
+        private static void Init() {
             AnyCharacterAdded = null;
             AnyCharacterRemoved = null;
         }
-        public override void OnOwnershipClient(NetworkConnection prevOwner){
+        public override void OnOwnershipClient(NetworkConnection prevOwner) {
             AnyCharacterAdded?.Invoke((transform, IsOwner));
             if (!IsOwner)
                 gameObject.name = $"{base.Owner}";
             else
                 gameObject.name = $"LocalCharacter";
+            InstantiateSelf(prevOwner);
         }
-        void OnDestroy()
-        {
+        void OnDestroy() {
             AnyCharacterRemoved?.Invoke((transform, IsOwner));
         }
-        void Awake(){
+        void OnDiedEvent() {
+            AnyCharacterDied?.Invoke((transform, IsOwner));
+        }
+        protected override void Awake() {
+            base.Awake();
             CharacterCamera = transform.Find("CharacterCamera");
+            OnDied += OnDiedEvent;
+        }
+#else
+        public override void OnOwnershipServer(NetworkConnection prevOwner) {
+            InstantiateSelf(prevOwner);
         }
 #endif
     }

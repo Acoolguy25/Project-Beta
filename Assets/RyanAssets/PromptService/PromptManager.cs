@@ -39,7 +39,9 @@ namespace RyanAssets.PromptService {
         AuthenticationFail,
         ServerPromptBroadcast,
         LeaveGameConfirm,
-        LeaveGameAwait
+        LeaveGameAwait,
+        ResetCharacterConfirm,
+        ResetCharAwait
     }
     public struct PromptData {
         public string title, description;

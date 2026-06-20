@@ -165,36 +165,6 @@ namespace RyanAssets.Server.ServerCore {
             if (args.ConnectionState == LocalConnectionState.Started) {
                 StartServer();
             }
-            // else if (args.ConnectionState == LocalConnectionState.Stopping){
-            //     StopServer();
-            // }
-        }
-        static bool ValidateStartupArguments() {
-            if (string.IsNullOrWhiteSpace(serverInfo.universe_id)) {
-                Debug.LogError("Server startup failed: missing -universe_id=<id> argument.");
-                Application.Quit(64);
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(serverInfo.server_id)) {
-                Debug.LogError("Server startup failed: missing -server_id=<id> argument.");
-                Application.Quit(64);
-                return false;
-            }
-
-            if (serverInfo.server_port == 0) {
-                Debug.LogError("Server startup failed: missing or invalid -server_port=<port> argument.");
-                Application.Quit(64);
-                return false;
-            }
-
-            if (MaxPlayers == 0) {
-                Debug.LogError("Server startup failed: missing or invalid -max_players=<count> argument.");
-                Application.Quit(64);
-                return false;
-            }
-
-            return true;
         }
         public static void StopServer(string reason) {
             _ = StopServerAsync(reason);

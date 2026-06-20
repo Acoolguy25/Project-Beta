@@ -75,6 +75,9 @@ namespace RyanAssets.Input {
             if (Instance != null)
                 Instance.RefreshActiveScreen();
         }
+        public static bool GetInputScreenActive(RyanAssetsActionMap inputMap) {
+            return Instance._inputAction.actions.actionMaps.Any(map => map.name == inputMap.ToString() && map.enabled);
+        }
 
         // private void OnApplicationFocus(bool hasFocus) {
         //     SetCursorState(cursorLocked);

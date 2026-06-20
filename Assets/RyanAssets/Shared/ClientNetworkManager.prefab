@@ -11,15 +11,13 @@ GameObject:
   - component: {fileID: 6452689492563838916}
   - component: {fileID: 2307535749750972156}
   - component: {fileID: 7146518133760488486}
-  - component: {fileID: 7468159028027753767}
   - component: {fileID: 7555192140164376897}
   - component: {fileID: 3091997574892802734}
   - component: {fileID: 3087723329973186617}
   - component: {fileID: 1960467471069559613}
-  - component: {fileID: 2137556692718558911}
   - component: {fileID: 3107104895039911108}
   m_Layer: 0
-  m_Name: RyanNetworkManager
+  m_Name: ClientNetworkManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -79,21 +77,6 @@ MonoBehaviour:
   _maximumTimedObserversDuration: 10
   _defaultConditions:
   - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
---- !u!114 &7468159028027753767
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5910158685828723263}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 211a9f6ec51ddc14f908f5acc0cd0423, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _playerPrefab: {fileID: 9155375541221003514, guid: f7d1c294d492a5443b11033f22cc4673, type: 3}
-  _addToDefaultScene: 1
-  Spawns: []
 --- !u!114 &7555192140164376897
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -169,19 +152,6 @@ MonoBehaviour:
   _lightProbeUpdating: 0
   _moveClientObjects: 1
   _setActiveScene: 1
---- !u!114 &2137556692718558911
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5910158685828723263}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2ae1e1275c10b514bbe1e64eb563c114, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Server.ServerCore::RyanAssets.Server.ServerCore.ServerHelperInit
-  helperInitPrefab: {fileID: 3025266736829428925, guid: 18cce67ae1c65de48b16fcf7bfad499d, type: 3}
 --- !u!114 &3107104895039911108
 MonoBehaviour:
   m_ObjectHideFlags: 0

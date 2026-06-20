@@ -1,0 +1,20 @@
+{
+    "name": "Universes.murder_mystery.Server",
+    "rootNamespace": "",
+    "references": [
+        "GUID:39cf4af17d22e66448d4cd56fe623fa9",
+        "GUID:9a84ec9673600fb4cbb1544ed2172dd8",
+        "GUID:2b2629be14d020e46b3cd9e44f6dc4c0"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

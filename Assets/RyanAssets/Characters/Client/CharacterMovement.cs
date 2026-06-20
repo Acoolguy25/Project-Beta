@@ -21,10 +21,11 @@ namespace RyanAssets.Characters.Client {
 
         [Space(10)]
         public float JumpTimeout = 0.35f;
-        public float FallTimeout = 0.15f;
+        public float LandJumpTimeout = 0.15f;
+        public float FallTimeout = 0.20f;
 
         [Header("Player Grounded")]
-        public bool Grounded = false;
+        public bool LastGrounded, Grounded;
         static private LayerMask GroundMask;
 
         private float _animationBlend;
@@ -33,7 +34,7 @@ namespace RyanAssets.Characters.Client {
         private float _verticalVelocity;
         private float _terminalVelocity = 53.0f;
 
-        private float _jumpTimeoutDelta;
+        private float _jumpTimeoutDelta, _landTimeoutDelta;
         private float _fallTimeoutDelta;
 
         private int _animIDSpeed;
@@ -52,12 +53,19 @@ namespace RyanAssets.Characters.Client {
         private bool _hasAnimator;
 
         //private bool IsCurrentDeviceMouse => _playerInput != null && _playerInput.currentControlScheme == "KeyboardMouse";
-        public void OnEnable() {
+        void OnEnable() {
+            LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+        }
+        void OnDisable() {
+            LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+        }
+        private void OnCharacterAdded(Transform c) {
             _hasAnimator = LocalPlayer.Character.TryGetComponent(out _animator);
             _rb = LocalPlayer.Character.GetComponent<Rigidbody>();
             _rb.constraints = RigidbodyConstraints.FreezeRotation & ~RigidbodyConstraints.FreezeRotationY;
             _input = InputService.characterControls;
             boxCollider = LocalPlayer.Character.GetComponent<BoxCollider>();
+
             //_playerInput = GetComponent<PlayerInput>();
             // _movementControl = GetComponent<MovementControl>();
             GroundMask = ~LayerMask.GetMask("Character");
@@ -84,19 +92,29 @@ namespace RyanAssets.Characters.Client {
         }
         private void GroundedCheck() {
             Bounds b = boxCollider.bounds;
+            float upOff = 0.01f;
 
-            // Four bottom corners of the box
+            Grounded = Physics.BoxCast(
+                b.center + Vector3.down * (b.extents.y - upOff),   // same origin shift you used
+                new Vector3(b.extents.x, 0.0f, b.extents.z), // thin "bottom slice"
+                Vector3.down,
+                out RaycastHit _,
+                boxCollider.transform.rotation,
+                0.05f,
+                GroundMask,
+                QueryTriggerInteraction.Ignore
+            );
+
+#if UNITY_EDITOR
+            // Four bottom corners of the box for debug purposes
             Vector3[] origins = new Vector3[]{
                 new Vector3(b.min.x, b.min.y, b.min.z),
                 new Vector3(b.max.x, b.min.y, b.min.z),
                 new Vector3(b.min.x, b.min.y, b.max.z),
                 new Vector3(b.max.x, b.min.y, b.max.z),
             };
-
-            Grounded = false;
-
             foreach (Vector3 origin in origins) {
-                Vector3 targetOrigin = origin + Vector3.up * 0.01f;
+                Vector3 targetOrigin = origin + Vector3.up * upOff;
                 bool hit = Physics.Raycast(
                     targetOrigin,
                     Vector3.down,
@@ -112,13 +130,8 @@ namespace RyanAssets.Characters.Client {
                     Vector3.down * 0.05f,
                     hit ? Color.green : Color.red
                 );
-                if (hit) {
-                    Grounded |= true;
-#if !UNITY_EDITOR
-    break;
-#endif
-                }
             }
+#endif
 
             if (_hasAnimator)
                 _animator.SetBool(_animIDGrounded, Grounded);
@@ -170,6 +183,10 @@ namespace RyanAssets.Characters.Client {
         private void JumpAndGravity() {
             _jumpTimeoutDelta -= Time.fixedDeltaTime;
             if (Grounded) {
+                if (LastGrounded)
+                    _landTimeoutDelta -= Time.fixedDeltaTime;
+                else
+                    _landTimeoutDelta = LandJumpTimeout;
                 _fallTimeoutDelta = FallTimeout;
 
                 if (_hasAnimator) {
@@ -177,7 +194,7 @@ namespace RyanAssets.Characters.Client {
                     _animator.SetBool(_animIDFreeFall, false);
                 }
 
-                if (_input.jump && _jumpTimeoutDelta <= 0.0f) {
+                if (_input.jump && _jumpTimeoutDelta <= 0.0f && _landTimeoutDelta <= 0.0f) {
                     _jumpTimeoutDelta = JumpTimeout;
 
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
@@ -190,7 +207,6 @@ namespace RyanAssets.Characters.Client {
                     //wasJumping = Time.fixedTime;
                 }
             } else {
-
                 if (_fallTimeoutDelta >= 0.0f) {
                     _fallTimeoutDelta -= Time.fixedDeltaTime;
                 } else {
@@ -204,6 +220,7 @@ namespace RyanAssets.Characters.Client {
             if (_rb.linearVelocity.y < _terminalVelocity) {
                 _rb.linearVelocity += new Vector3(0f, Gravity * Time.fixedDeltaTime, 0f);
             }
+            LastGrounded = Grounded;
         }
     }
 }

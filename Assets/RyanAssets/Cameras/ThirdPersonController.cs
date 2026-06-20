@@ -1,14 +1,15 @@
 #if !UNITY_SERVER
-using UnityEngine;
+using RyanAssets.Client.ClientUI.GameSettings;
+using RyanAssets.Input;
+using RyanAssets.Shared.Declarations;
 using System.Collections;
 using Unity.Cinemachine;
+using UnityEngine;
 using UnityEngine.InputSystem;
-using RyanAssets.Client.ClientUI.GameSettings;
 
 namespace RyanAssets.Cameras
 {
-    public class ThirdPersonController : MonoBehaviour
-    {
+    public class ThirdPersonController : ICamera {
         [Header("Scrollwheel Settings")]
         public float MinZoom = 1f;
         public float MaxZoom = 20.0f;
@@ -100,7 +101,7 @@ namespace RyanAssets.Cameras
             Mouse.current.WarpCursorPosition(cursor_pos);
         }
         void UpdateCameraZoom(bool started = false) { 
-            if (cinemachineCamera.Follow == null) return;
+            if (cinemachineCamera.Follow == null || !InputService.GetInputScreenActive(RyanAssetsActionMap.Character)) return;
             float zoomDelta = scrollWheel.ReadValue<float>() * GameSettingsClient.GetSettingValue<int>("ZoomSensitivity") / 100f;//zoomMultiplierSensitivity.value;
             if (zoomDelta != 0)
             {
