@@ -11,8 +11,7 @@ namespace RyanAssets.Characters.Shared {
         private bool RagdollOnDeath = true;
         [SerializeField]
         private LayerMask ExcludeColliderMask;
-        private readonly static System.Type[] disableObjects = {  typeof(Animator), typeof(Collider), typeof(AnimationHelper) };
-        //typeof(Rigidbody),
+        private readonly static System.Type[] disableObjects = {  typeof(Animator), typeof(Collider), typeof(Rigidbody), typeof(AnimationHelper) };
         private GameCharacter GameCharacter;
         // Ragdoll internals
         private Rigidbody[] rigidBodies;
