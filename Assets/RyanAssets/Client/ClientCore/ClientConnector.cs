@@ -129,6 +129,9 @@ namespace RyanAssets.Client.ClientCore {
             SetJoinResult(null);
             wasAuthenticated = true;
             SetGameActive(true);
+            //var MainMenu = SceneManager.GetSceneByName("MainMenu");
+            //if (MainMenu.isLoaded)
+            //    SceneManager.UnloadSceneAsync(MainMenu);
             OnConnected?.Invoke();
             IsConnected = true;
         }

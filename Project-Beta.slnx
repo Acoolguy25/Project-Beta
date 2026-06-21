@@ -46,6 +46,7 @@
   <Project Path="Unity.AI.Navigation.Editor.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="Unity.Recorder.csproj" />
+  <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="Unity.Services.Core.Configuration.Editor.csproj" />
   <Project Path="Unity.Services.Core.Configuration.csproj" />
   <Project Path="RyanAssets.Characters.Client.csproj" />
@@ -101,7 +102,6 @@
   <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="Unity.Services.Core.Registration.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
-  <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="Unity.InputSystem.DocCodeSamples.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Unity.Services.Core.Networking.csproj" />

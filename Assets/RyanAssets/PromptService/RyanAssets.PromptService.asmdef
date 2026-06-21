@@ -8,7 +8,6 @@
     ],
     "includePlatforms": [],
     "excludePlatforms": [
-        "LinuxStandalone64Server",
         "WindowsStandalone32Server",
         "WindowsStandalone64Server"
     ],
@@ -16,7 +15,9 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

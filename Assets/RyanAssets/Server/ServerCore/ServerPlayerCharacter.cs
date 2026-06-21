@@ -15,13 +15,18 @@ namespace RyanAssets.Server.ServerCore {
         [SerializeField]
         NetworkObject characterPrefab;
         //public static event Action<Transform> 
+        public static Func<NetworkConnection, bool> CanSpawnFunction;
+        public static event Action<NetworkConnection, LocalCharacter> OnPlayerCharacterAdded;
 
         public void SpawnPlayerCharacter(NetworkConnection player, long health = 100){
+            if (CanSpawnFunction != null && !CanSpawnFunction(player))
+                return;
             GameObject newCharacter = Instantiate(characterPrefab.gameObject);
             newCharacter.transform.position = Vector3.zero;
             LocalCharacter localChar = newCharacter.GetComponent<LocalCharacter>();
             localChar.OnDied += () => OnPlayerCharacterDied(player, newCharacter.transform);
             localChar.Init(health);
+            OnPlayerCharacterAdded?.Invoke(player, localChar);
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
         }
         public async void OnPlayerCharacterDied(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){

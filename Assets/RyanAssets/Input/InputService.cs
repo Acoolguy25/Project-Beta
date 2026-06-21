@@ -75,7 +75,7 @@ namespace RyanAssets.Input {
             if (Instance != null)
                 Instance.RefreshActiveScreen();
         }
-        public static bool GetInputScreenActive(RyanAssetsActionMap inputMap) {
+        public static bool GetActionMapActive(RyanAssetsActionMap inputMap) {
             return Instance._inputAction.actions.actionMaps.Any(map => map.name == inputMap.ToString() && map.enabled);
         }
 

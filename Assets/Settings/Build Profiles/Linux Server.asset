@@ -27,8 +27,14 @@ MonoBehaviour:
     m_path: Assets/Universes/UniverseData/empty_baseplate/empty_baseplate_start.unity
     m_guid: 99c9720ab356a0642a771bea13969a05
   - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/empty_baseplate/empty_baseplate_server.unity
+    m_guid: 50cae50313cfe7849a2c1aed65f46ab0
+  - m_enabled: 1
     m_path: Assets/Universes/UniverseData/murder_mystery/murder_mystery_start.unity
     m_guid: 0c5f9e3fac7c44bbb5d23f0f4dd1f698
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/murder_mystery/murder_mystery_server.unity
+    m_guid: 4704b165457fc0b4ca3a5f9435cb189f
   m_HasScriptingDefines: 0
   m_ScriptingDefines: []
   m_PlayerSettingsYaml:

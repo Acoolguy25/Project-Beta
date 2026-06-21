@@ -60,6 +60,12 @@ namespace RyanAssets.Characters.Shared {
         public virtual void Kill() {
             Died();
         }
+        public bool IsDead() {
+            return Health.Value == 0 && MaxHealth.Value != 0;
+        }
+        public bool IsFullHealth() {
+            return Health.Value == MaxHealth.Value && !IsDead();
+        }
 
         public virtual void Init(long hp, long maxHP) {
             MaxHealth.Value = maxHP;

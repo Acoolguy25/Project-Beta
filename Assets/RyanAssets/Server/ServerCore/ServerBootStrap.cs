@@ -55,7 +55,7 @@ namespace RyanAssets.Server.ServerCore {
             Debug.Log("============ ServerBootStrap ============");
 #if UNITY_EDITOR
             serverInfo = new(){
-                universe_id = "empty_baseplate",
+                universe_id = "murder_mystery",
                 server_id = "unity-test-server",
                 server_port = 20000
             };
@@ -159,6 +159,7 @@ namespace RyanAssets.Server.ServerCore {
                 ReplaceScenes = ReplaceOption.All
             };
             InstanceFinder.NetworkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
+            UnityEngine.SceneManagement.SceneManager.LoadScene(serverInfo.universe_id + "_server", LoadSceneMode.Additive);
             StartServerEvent?.Invoke();
         }
         static void OnServerConnectionState(ServerConnectionStateArgs args) {

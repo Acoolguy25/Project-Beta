@@ -92,7 +92,7 @@ namespace RyanAssets.Characters.Client {
         }
         private void GroundedCheck() {
             Bounds b = boxCollider.bounds;
-            float upOff = 0.01f;
+            float upOff = 0.03f;
 
             Grounded = Physics.BoxCast(
                 b.center + Vector3.down * (b.extents.y - upOff),   // same origin shift you used
@@ -100,7 +100,7 @@ namespace RyanAssets.Characters.Client {
                 Vector3.down,
                 out RaycastHit _,
                 boxCollider.transform.rotation,
-                0.05f,
+                0.085f,
                 GroundMask,
                 QueryTriggerInteraction.Ignore
             );
@@ -119,7 +119,7 @@ namespace RyanAssets.Characters.Client {
                     targetOrigin,
                     Vector3.down,
                     out RaycastHit rayHit,
-                    0.05f,
+                    0.085f,
                     GroundMask,
                     QueryTriggerInteraction.Ignore
                 );

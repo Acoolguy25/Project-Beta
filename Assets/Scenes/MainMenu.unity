@@ -459,7 +459,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e6495cf6e9073c41a76dabfdb4e8347, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Debug::EasyDebug.DebugPlayGame
-  PlayGameUniverseId: empty_baseplate
+  PlayGameUniverseId: murder_mystery
   continueButton: {fileID: 643041136}
 --- !u!4 &1955165352
 Transform:

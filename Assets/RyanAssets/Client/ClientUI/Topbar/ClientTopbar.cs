@@ -3,6 +3,7 @@ using RyanAssets.UI;
 using RyanAssets.Input;
 using UnityEngine.UI;
 using RyanAssets.Client.ClientCore;
+using RyanAssets.Shared.Player;
 
 namespace RyanAssets.Client.ClientUI.Topbar {
     public class ClientTopbar : MonoBehaviour {
@@ -25,11 +26,13 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             SetCanvasVisibility(gameSettingsCanvas, gameSettingsButton, false, 0f);
             SetCanvasVisibility(playerListCanvas, playerListButton, true, 0f);
             SetCanvasVisibility(topbarCanvas, null, true, 0f);
-            experienceText.text = ClientConnector.joinUniverseId;
+            SharedGlobalEvents.TopMessageChanged += OnTopMessageChanged;
+            OnTopMessageChanged(SharedGlobalEvents.Instance?.TopMessage);
         }
         void OnDisable() {
             TopbarControls.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
             TopbarControls.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
+            SharedGlobalEvents.TopMessageChanged -= OnTopMessageChanged;
         }
         public Button GetButton(CanvasGroupController canvas){
             Button button;
@@ -67,6 +70,9 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         }
         public void TogglePlayerListCanvas_ButtonPressed() {
             ToggleCanvasVisibility(playerListCanvas, playerListButton);
+        }
+        void OnTopMessageChanged(string str) {
+            experienceText.text = str != string.Empty? str: ClientConnector.joinUniverseId;
         }
     }
 }

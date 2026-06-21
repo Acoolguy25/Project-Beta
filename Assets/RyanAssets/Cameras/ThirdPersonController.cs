@@ -18,6 +18,12 @@ namespace RyanAssets.Cameras
         [Header("Force Scroll Settings")]
         public float ForceScrollOffset = 0.5f;
         public float ForceScrollPercentage = 0.1f;
+        private float _radiusVelocity = 0f;
+
+        // Replace ForceScrollPercentage / ZoomPercentage with smooth times (seconds)
+        // Tune these — 0.05f is snappy, 0.15f is buttery
+        [SerializeField] private float ForceScrollSmoothTime = 0.05f;  // fast push-in near walls
+        [SerializeField] private float ZoomSmoothTime = 0.12f;          // gentle ease for normal zoom
 
         private CinemachineCamera cinemachineCamera;
         private CinemachineInputAxisController cinemachineInputAxisController;
@@ -100,28 +106,47 @@ namespace RyanAssets.Cameras
         void SetCameraPos() {
             Mouse.current.WarpCursorPosition(cursor_pos);
         }
-        void UpdateCameraZoom(bool started = false) { 
-            if (cinemachineCamera.Follow == null || !InputService.GetInputScreenActive(RyanAssetsActionMap.Character)) return;
-            float zoomDelta = scrollWheel.ReadValue<float>() * GameSettingsClient.GetSettingValue<int>("ZoomSensitivity") / 100f;//zoomMultiplierSensitivity.value;
-            if (zoomDelta != 0)
-            {
+        void UpdateCameraZoom(bool started = false) {
+            if (cinemachineCamera.Follow == null || !InputService.GetActionMapActive(RyanAssetsActionMap.Character)) return;
+
+            // --- Input ---
+            float zoomDelta = scrollWheel.ReadValue<float>() * GameSettingsClient.GetSettingValue<int>("ZoomSensitivity") / 100f;
+            if (zoomDelta != 0) {
                 newScroll += zoomDelta;
                 newScroll = Mathf.Clamp(newScroll, MinZoom, MaxZoom);
             }
+
+            // --- Wall detection ---
+            // Determine the hard ceiling this frame from geometry
+            float wallCeiling = MaxZoom;
             RaycastHit hit;
-            if (Physics.Raycast(cinemachineCamera.Follow.position, 
-                transform.TransformDirection(Vector3.back), 
-                out hit, 
-                MaxZoom, layerMask)){
-                forceScroll = Mathf.Floor(Mathf.Clamp(newScroll, 0, hit.distance - ForceScrollOffset));
-                //Debug.Log("Hit: " + hit.collider.name + " at distance: " + hit.distance);
-                orbitalFollow.Radius = Mathf.Lerp(orbitalFollow.Radius, forceScroll, started? 1: ForceScrollPercentage);
-                Debug.DrawRay(cinemachineCamera.Follow.position, transform.TransformDirection(Vector3.back) * 1000, Color.white);
+            if (Physics.Raycast(
+                    cinemachineCamera.Follow.position,
+                    transform.TransformDirection(Vector3.back),
+                    out hit,
+                    MaxZoom + ForceScrollOffset,   // cast a little further so offset doesn't blind us
+                    layerMask)) {
+                // Subtract offset from the raw hit distance to keep the camera clear of the surface
+                wallCeiling = Mathf.Max(MinZoom, hit.distance - ForceScrollOffset);
+                Debug.DrawRay(cinemachineCamera.Follow.position,
+                    transform.TransformDirection(Vector3.back) * hit.distance, Color.white);
             }
-            else
-            {
-                orbitalFollow.Radius = Mathf.Lerp(orbitalFollow.Radius, newScroll, started ? 1 : ZoomPercentage);
-                //Debug.Log("Did not Hit");
+
+            // --- Target radius ---
+            // Player's desired zoom, hard-clamped by the wall — never let the target exceed geometry
+            float targetRadius = Mathf.Min(newScroll, wallCeiling);
+
+            // --- Smooth ---
+            // Use SmoothDamp instead of framerate-dependent Lerp percentage
+            if (started) {
+                orbitalFollow.Radius = targetRadius;
+                _radiusVelocity = 0f;
+            } else {
+                // Push in fast when a wall forces it, ease out gently when the wall clears
+                bool wallForcing = wallCeiling < newScroll;
+                float smoothTime = wallForcing ? ForceScrollSmoothTime : ZoomSmoothTime;
+                orbitalFollow.Radius = Mathf.SmoothDamp(
+                    orbitalFollow.Radius, targetRadius, ref _radiusVelocity, smoothTime);
             }
         }
     }

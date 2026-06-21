@@ -32,11 +32,17 @@ namespace RyanAssets.Shared.Player {
         public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
         public readonly SyncList<SharedVoteOption> VoteOptions = new();
         readonly SyncVar<SharedVoteInfo> _currentVote = new();
+        readonly SyncVar<string> _topMessage = new();
 
         public SharedVoteInfo CurrentVote {
             get => _currentVote.Value;
             set => _currentVote.Value = value;
         }
+        public string TopMessage {
+            get => _topMessage.Value;
+            set => _topMessage.Value = value;
+        }
+        public static Action<string> TopMessageChanged;
 
         void Awake() {
             Instance = this;
@@ -48,6 +54,7 @@ namespace RyanAssets.Shared.Player {
             Players.OnChange += OnPlayerChanged;
             VoteOptions.OnChange += OnVoteOptionsChanged;
             _currentVote.OnChange += OnCurrentVoteChanged;
+            _topMessage.OnChange += (_, msg, _) => TopMessageChanged?.Invoke(msg);
             PlayerListSynced = false;
 #endif
         }
