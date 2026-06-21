@@ -4128,6 +4128,7 @@ GameObject:
   - component: {fileID: 2508271702602764159}
   - component: {fileID: 8624230890759636101}
   - component: {fileID: 5344553774358299964}
+  - component: {fileID: 3883740265124568592}
   m_Layer: 12
   m_Name: Robot
   m_TagString: Player
@@ -4411,6 +4412,18 @@ MonoBehaviour:
   ExcludeColliderMask:
     serializedVersion: 2
     m_Bits: 0
+--- !u!114 &3883740265124568592
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7ac91ac0a31d97489e97b3212b62e2d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.CharacterScaler
 --- !u!1 &6939272679828119506
 GameObject:
   m_ObjectHideFlags: 0

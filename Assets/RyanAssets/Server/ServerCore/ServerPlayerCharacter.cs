@@ -17,6 +17,7 @@ namespace RyanAssets.Server.ServerCore {
         //public static event Action<Transform> 
         public static Func<NetworkConnection, bool> CanSpawnFunction;
         public static event Action<NetworkConnection, LocalCharacter> OnPlayerCharacterAdded;
+        public static float RespawnTime = 5f;
 
         public void SpawnPlayerCharacter(NetworkConnection player, long health = 100){
             if (CanSpawnFunction != null && !CanSpawnFunction(player))
@@ -30,7 +31,7 @@ namespace RyanAssets.Server.ServerCore {
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
         }
         public async void OnPlayerCharacterDied(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){
-            await Awaitable.WaitForSecondsAsync(5f, cancellationToken);
+            await Awaitable.WaitForSecondsAsync(RespawnTime, cancellationToken);
             if (!cancellationToken.IsCancellationRequested){
                 DespawnPlayerCharacter(player);
                 SpawnPlayerCharacter(player);

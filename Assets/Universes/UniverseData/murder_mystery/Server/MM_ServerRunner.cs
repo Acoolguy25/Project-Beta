@@ -14,8 +14,9 @@ namespace Universes.murder_mystery.Server {
             return true;
         }
         void OnCharacterAdded(NetworkConnection player, LocalCharacter character){
-            character.transform.position = new Vector3(80f, 5f, 7.6f);
-            character.transform.localScale = 0.7f * Vector3.one;
+            character.transform.position = new Vector3(85f, 5f, 7.6f);
+            //character.transform.localScale = 0.7f * Vector3.one;
+            //character.GetComponent<CharacterScaler>().SetScale(0.7f * Vector3.one);
         }
         async void Start(){
             while(true) {
