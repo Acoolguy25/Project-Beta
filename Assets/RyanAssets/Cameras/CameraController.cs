@@ -71,7 +71,7 @@ namespace RyanAssets.Cameras
             SetCameraAvailable(GameCameraType.DeathCamera, false);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, character != null);
         }
-        private void OnCharacterDied() {
+        private void OnCharacterDied(DamageSource source) {
             SetCameraAvailable(GameCameraType.DeathCamera, true);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
         }

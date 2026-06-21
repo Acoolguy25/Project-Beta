@@ -9,10 +9,10 @@ namespace Universes.murder_mystery.Server
     public class MM_NPC : MonoBehaviour
     {
         Dictionary<NavMeshAgent, GameObject> PrevTargets = new();
-        void Update()
-        {
+        void Update(){
             foreach (GameObject obj in GameObject.FindGameObjectsWithTag("NPC")){
                 var agent = obj.GetComponent<NavMeshAgent>();
+                agent.enabled = true;
                 PrevTargets.TryGetValue(agent, out GameObject target);
                 ServerPathfindingHelper.UpdateTarget(
                     agent,

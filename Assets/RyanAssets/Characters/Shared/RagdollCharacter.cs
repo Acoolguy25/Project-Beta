@@ -20,7 +20,7 @@ namespace RyanAssets.Characters.Shared {
         void Start() {
             GameCharacter = GetComponent<GameCharacter>();
             if (RagdollOnDeath)
-                GameCharacter.OnDied += () => SetRagdoll(true);
+                GameCharacter.OnDied += (_) => SetRagdoll(true);
 
             RagdollInit();
             SetRagdoll(RagdollEnabled);

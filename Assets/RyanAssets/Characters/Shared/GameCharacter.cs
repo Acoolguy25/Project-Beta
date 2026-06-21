@@ -5,6 +5,12 @@ using UnityEngine;
 using FishNet.Object.Synchronizing;
 
 namespace RyanAssets.Characters.Shared {
+    public enum DamageSource {
+        None,
+        Fall,
+        Firearm,
+        Kill
+    };
     public class GameCharacter : NetworkBehaviour {
         public readonly SyncVar<long> Health = new();
         public readonly SyncVar<long> MaxHealth = new();
@@ -28,8 +34,8 @@ namespace RyanAssets.Characters.Shared {
             MaxHealthEditor = MaxHealth.Value;
         }
 #endif
-        public Action OnDied;
-        public virtual void TakeDamage(long Damage) {
+        public Action<DamageSource> OnDied;
+        public virtual void TakeDamage(long Damage, DamageSource source = DamageSource.None) {
             if (Health.Value == 0)
                 return;
             if (Damage < 0) {
@@ -37,7 +43,7 @@ namespace RyanAssets.Characters.Shared {
                 return;
             }
             if (Damage >= Health.Value && MaxHealth.Value >= 0) {
-                Died();
+                Died(source);
             } else {
                 SetHealth(Health.Value - Damage);
             }
@@ -53,12 +59,12 @@ namespace RyanAssets.Characters.Shared {
             MaxHealthEditor = MaxHealth.Value;
 #endif
         }
-        protected virtual void Died() {
+        protected virtual void Died(DamageSource source) {
             SetHealth(0);
-            OnDied?.Invoke();
+            OnDied?.Invoke(source);
         }
-        public virtual void Kill() {
-            Died();
+        public virtual void Kill(DamageSource source) {
+            Died(source);
         }
         public bool IsDead() {
             return Health.Value == 0 && MaxHealth.Value != 0;
@@ -76,7 +82,7 @@ namespace RyanAssets.Characters.Shared {
         }
         protected virtual void Start() {
             if (Health.Value == 0 && MaxHealth.Value > 0)
-                Kill();
+                Kill(DamageSource.Kill);
         }
     }
 }

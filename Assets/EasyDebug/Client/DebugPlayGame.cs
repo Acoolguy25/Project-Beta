@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Universes.GameBrowser;
 
@@ -18,6 +19,15 @@ namespace EasyDebug.Debug {
         IEnumerator Start(){
             yield return PressButton(continueButton);
             _ = SelectedGameUI.PlayGame(PlayGameUniverseId);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Init() {
+#if UNITY_SERVER
+            SceneManager.LoadScene("ServerInit");
+#else
+            SceneManager.LoadScene("MainMenu");
+#endif
         }
     }
 }

@@ -56,7 +56,6 @@
   <Project Path="Unity.InputSystem.ForUI.csproj" />
   <Project Path="Unity.Toolchain.Win-x86_64-Linux.csproj" />
   <Project Path="Unity.DedicatedServer.Editor.Bridge.csproj" />
-  <Project Path="FishNet.Demos.csproj" />
   <Project Path="Unity.Services.Core.Scheduler.csproj" />
   <Project Path="Unity.AI.Navigation.csproj" />
   <Project Path="Unity.DedicatedServer.Editor.csproj" />
@@ -103,12 +102,12 @@
   <Project Path="Unity.Services.Core.Registration.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
   <Project Path="Unity.InputSystem.DocCodeSamples.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Unity.Services.Core.Networking.csproj" />
   <Project Path="RyanAssets.Shared.Player.csproj" />
   <Project Path="RyanAssets.Levels.Shared.csproj" />
   <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="RyanAssets.Client.Audio.csproj" />
   <Project Path="Unity.VisualScripting.DocCodeExamples.csproj" />
   <Project Path="Unity.PlasticSCM.Editor.Entities.csproj" />

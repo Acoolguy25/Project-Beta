@@ -33,11 +33,10 @@ namespace RyanAssets.Characters.Shared {
         void OnDestroy() {
             AnyCharacterRemoved?.Invoke((transform, IsOwner));
         }
-        void OnDiedEvent() {
+        void OnDiedEvent(DamageSource source) {
             AnyCharacterDied?.Invoke((transform, IsOwner));
         }
-        protected override void Awake() {
-            base.Awake();
+        protected void Awake() {
             CharacterCamera = transform.Find("CharacterCamera");
             OnDied += OnDiedEvent;
         }
