@@ -24,9 +24,6 @@ namespace RyanAssets.Characters.Client {
         public float LandJumpTimeout = 0.15f;
         public float FallTimeout = 0.20f;
 
-        [Header("Player Grounded")]
-        public bool LastGrounded, Grounded;
-        static private LayerMask GroundMask;
 
         private float _animationBlend;
         private float _targetRotation = 0.0f;
@@ -37,16 +34,13 @@ namespace RyanAssets.Characters.Client {
         private float _jumpTimeoutDelta, _landTimeoutDelta;
         private float _fallTimeoutDelta;
 
-        private int _animIDSpeed;
-        private int _animIDGrounded;
-        private int _animIDJump;
-        private int _animIDFreeFall;
-        private int _animIDMotionSpeed;
 
         private Animator _animator;
         private Rigidbody _rb;
         private CharacterControls _input;
         private BoxCollider boxCollider;
+        private CharacterAnimator characterAnimator;
+        private bool LastGrounded;
         // private MovementControl _movementControl;
 
 
@@ -65,12 +59,12 @@ namespace RyanAssets.Characters.Client {
             _rb.constraints = RigidbodyConstraints.FreezeRotation & ~RigidbodyConstraints.FreezeRotationY;
             _input = InputService.characterControls;
             boxCollider = LocalPlayer.Character.GetComponent<BoxCollider>();
+            characterAnimator = LocalPlayer.Character.GetComponent<CharacterAnimator>();
 
             //_playerInput = GetComponent<PlayerInput>();
             // _movementControl = GetComponent<MovementControl>();
-            GroundMask = ~LayerMask.GetMask("Character");
 
-            AssignAnimationIDs();
+            //AssignAnimationIDs();
             _jumpTimeoutDelta = JumpTimeout;
             _fallTimeoutDelta = FallTimeout;
         }
@@ -78,63 +72,17 @@ namespace RyanAssets.Characters.Client {
             if (_animator == null || !_animator.enabled) return;
             if (!_input) return;
 
-            GroundedCheck();
             JumpAndGravity();
             Move();
         }
 
-        private void AssignAnimationIDs() {
-            _animIDSpeed = Animator.StringToHash("Speed");
-            _animIDGrounded = Animator.StringToHash("Grounded");
-            _animIDJump = Animator.StringToHash("Jump");
-            _animIDFreeFall = Animator.StringToHash("FreeFall");
-            _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
-        }
-        private void GroundedCheck() {
-            Bounds b = boxCollider.bounds;
-            float upOff = 0.03f;
-            Grounded = Physics.BoxCast(
-                b.center + Vector3.down * (b.extents.y - upOff),
-                new Vector3(b.extents.x, 0.01f, b.extents.z),
-                Vector3.down,
-                out _,
-                Quaternion.identity,
-                0.085f,
-                GroundMask,
-                QueryTriggerInteraction.Ignore
-            );
-
-#if UNITY_EDITOR
-            // Four bottom corners of the box for debug purposes
-            Vector3[] origins = new Vector3[]{
-                new Vector3(b.min.x, b.min.y, b.min.z),
-                new Vector3(b.max.x, b.min.y, b.min.z),
-                new Vector3(b.min.x, b.min.y, b.max.z),
-                new Vector3(b.max.x, b.min.y, b.max.z),
-            };
-            foreach (Vector3 origin in origins) {
-                Vector3 targetOrigin = origin + Vector3.up * upOff;
-                bool hit = Physics.Raycast(
-                    targetOrigin,
-                    Vector3.down,
-                    out RaycastHit rayHit,
-                    0.085f,
-                    GroundMask,
-                    QueryTriggerInteraction.Ignore
-                );
-
-                // DEBUG RAY
-                Debug.DrawRay(
-                    targetOrigin,
-                    Vector3.down * 0.05f,
-                    hit ? Color.green : Color.red
-                );
-            }
-#endif
-
-            if (_hasAnimator)
-                _animator.SetBool(_animIDGrounded, Grounded);
-        }
+        //private void AssignAnimationIDs() {
+        //    _animIDSpeed = Animator.StringToHash("Speed");
+        //    _animIDGrounded = Animator.StringToHash("Grounded");
+        //    _animIDJump = Animator.StringToHash("Jump");
+        //    _animIDFreeFall = Animator.StringToHash("FreeFall");
+        //    _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
+        //}
         private Vector2 GetAdaptedMoveVector(){
             Vector2 move = _input.move;
             if (GameSettingsClient.GetSettingValue<bool>("InvertedMovementControls"))
@@ -173,25 +121,25 @@ namespace RyanAssets.Characters.Client {
             _rb.linearVelocity = move;
 
             // Animation updates
-            if (_hasAnimator) {
-                _animator.SetFloat(_animIDSpeed, _animationBlend); // smoothed
-                _animator.SetFloat(_animIDMotionSpeed, inputMagnitude);
-            }
+            //if (_hasAnimator) {
+            //    _animator.SetFloat(_animIDSpeed, _animationBlend); // smoothed
+            //    _animator.SetFloat(_animIDMotionSpeed, inputMagnitude);
+            //}
         }
         //private float wasJumping = 0f;
         private void JumpAndGravity() {
             _jumpTimeoutDelta -= Time.fixedDeltaTime;
-            if (Grounded) {
+            if (characterAnimator.Grounded) {
                 if (LastGrounded)
                     _landTimeoutDelta -= Time.fixedDeltaTime;
                 else
                     _landTimeoutDelta = LandJumpTimeout;
                 _fallTimeoutDelta = FallTimeout;
 
-                if (_hasAnimator) {
-                    _animator.SetBool(_animIDJump, false);
-                    _animator.SetBool(_animIDFreeFall, false);
-                }
+                //if (_hasAnimator) {
+                //    _animator.SetBool(_animIDJump, false);
+                //    _animator.SetBool(_animIDFreeFall, false);
+                //}
 
                 if (_input.jump && _jumpTimeoutDelta <= 0.0f && _landTimeoutDelta <= 0.0f) {
                     _jumpTimeoutDelta = JumpTimeout;
@@ -200,26 +148,26 @@ namespace RyanAssets.Characters.Client {
                     Vector3 velocity = _rb.linearVelocity;
                     velocity.y = _verticalVelocity;
                     _rb.linearVelocity = velocity;
-
-                    if (_hasAnimator)
-                        _animator.SetBool(_animIDJump, true);
+                    characterAnimator.Jump();
+                    //if (_hasAnimator)
+                    //    _animator.SetBool(_animIDJump, true);
                     //wasJumping = Time.fixedTime;
                 }
             } else {
                 if (_fallTimeoutDelta >= 0.0f) {
                     _fallTimeoutDelta -= Time.fixedDeltaTime;
                 } else {
-                    if (_hasAnimator) {
-                        _animator.SetBool(_animIDFreeFall, true);
-                        _animator.SetBool(_animIDJump, false);
-                    }
+                    //if (_hasAnimator) {
+                    //    _animator.SetBool(_animIDFreeFall, true);
+                    //    _animator.SetBool(_animIDJump, false);
+                    //}
                 }
             }
 
             if (_rb.linearVelocity.y < _terminalVelocity) {
                 _rb.linearVelocity += new Vector3(0f, Gravity * Time.fixedDeltaTime, 0f);
             }
-            LastGrounded = Grounded;
+            LastGrounded = characterAnimator.Grounded;
         }
     }
 }

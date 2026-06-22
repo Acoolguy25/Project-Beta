@@ -44,8 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 585f14fbe99da4f4796cdd07b2984a15, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RyanAssets.Characters.CharMovement
-  MoveSpeed: 2
-  SprintSpeed: 5.335
+  MoveSpeed: 10
+  SprintSpeed: 30
   RotationSmoothTime: 0.12
   SpeedChangeRate: 10
   JumpHeight: 1.2
@@ -422,6 +422,8 @@ MonoBehaviour:
   ZoomPercentage: 0.23
   ForceScrollOffset: 1
   ForceScrollPercentage: 1
+  ForceScrollSmoothTime: 0.05
+  ZoomSmoothTime: 0.12
   rightClick:
     m_Name: Right Click
     m_Type: 0
@@ -1564,11 +1566,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2116724677564175234, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_fontSize
-      value: 41.75
+      value: 47.2
       objectReference: {fileID: 0}
     - target: {fileID: 3111625660306725814, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_fontSize
-      value: 25.4
+      value: 28.75
       objectReference: {fileID: 0}
     - target: {fileID: 4066911039856087898, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_SortingOrder
@@ -1603,6 +1605,10 @@ PrefabInstance:
     - target: {fileID: 1894304943560295429, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_Size
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1894304943560295429, guid: 7a40623e161b44308195701e053a48d3, type: 3}
+      propertyPath: m_Value
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1894304943560295497, guid: 7a40623e161b44308195701e053a48d3, type: 3}
       propertyPath: m_AnchorMax.x

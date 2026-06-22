@@ -9,7 +9,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 420314417922096227}
-  - component: {fileID: 2078859814234586131}
   - component: {fileID: 6119158067740291384}
   - component: {fileID: 9172638451029384756}
   m_Layer: 0
@@ -46,6 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6df339f87bbce240bb2fa1bbbb2d454, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  RobotNPC_Prefab: {fileID: 6865002775998532502, guid: 464ffb59118c58248a4e3c9bc1c665f9, type: 3}
 --- !u!114 &9172638451029384756
 MonoBehaviour:
   m_ObjectHideFlags: 0

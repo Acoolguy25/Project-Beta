@@ -1,13 +1,12 @@
 {
-    "name": "Universes.murder_mystery.Server",
-    "rootNamespace": "",
+    "name": "RyanAssets.Characters.Server",
+    "rootNamespace": "RyanAssets.Characters.Server",
     "references": [
         "GUID:39cf4af17d22e66448d4cd56fe623fa9",
         "GUID:9a84ec9673600fb4cbb1544ed2172dd8",
         "GUID:2b2629be14d020e46b3cd9e44f6dc4c0",
-        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
         "GUID:d81c570acb0546e47865a9bb58cc7645",
-        "GUID:48c360a9b7b348249897eb4e49d403b4"
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

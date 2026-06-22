@@ -95,5 +95,93 @@ namespace RyanAssets.Server.ServerFeatures{
 
             return length;
         }
+
+
+
+        private static NavMeshTriangulation triangulation;
+        private static float[] cumulativeAreas;
+        private static float totalArea;
+        private static bool didBuild;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Init() {
+            didBuild = false;
+        }
+        public static void Build() {
+            if (didBuild)
+                return;
+            didBuild = true;
+            triangulation = NavMesh.CalculateTriangulation();
+
+            int triangleCount = triangulation.indices.Length / 3;
+            cumulativeAreas = new float[triangleCount];
+
+            totalArea = 0f;
+
+            for (int i = 0; i < triangleCount; i++)
+            {
+                int t = i * 3;
+
+                Vector3 a = triangulation.vertices[triangulation.indices[t]];
+                Vector3 b = triangulation.vertices[triangulation.indices[t + 1]];
+                Vector3 c = triangulation.vertices[triangulation.indices[t + 2]];
+
+                float area = Vector3.Cross(b - a, c - a).magnitude * 0.5f;
+
+                totalArea += area;
+                cumulativeAreas[i] = totalArea;
+            }
+        }
+
+        public static Vector3 GetRandomPosition()
+        {
+            if (!didBuild)
+                Build();
+
+            if (totalArea <= 0f || cumulativeAreas == null || cumulativeAreas.Length == 0)
+            {
+                Debug.LogWarning("NavMeshSampler: no valid navmesh area.");
+                return Vector3.zero;
+            }
+
+            float r = Random.value * totalArea;
+
+            int tri = System.Array.BinarySearch(cumulativeAreas, r);
+            if (tri < 0)
+                tri = ~tri;
+
+            tri = Mathf.Clamp(tri, 0, cumulativeAreas.Length - 1);
+
+            int t = tri * 3;
+
+            // Guard against malformed triangulation data from Unity
+            if (t + 2 >= triangulation.indices.Length)
+            {
+                Debug.LogWarning($"NavMeshSampler: tri index {t} out of range for indices array ({triangulation.indices.Length}). Returning zero.");
+                return Vector3.zero;
+            }
+
+            int ia = triangulation.indices[t];
+            int ib = triangulation.indices[t + 1];
+            int ic = triangulation.indices[t + 2];
+
+            // Guard against vertex index overflow too
+            if (ia >= triangulation.vertices.Length ||
+                ib >= triangulation.vertices.Length ||
+                ic >= triangulation.vertices.Length)
+            {
+                Debug.LogWarning("NavMeshSampler: vertex index out of range. Returning zero.");
+                return Vector3.zero;
+            }
+
+            Vector3 a = triangulation.vertices[ia];
+            Vector3 b = triangulation.vertices[ib];
+            Vector3 c = triangulation.vertices[ic];
+
+            float u = Mathf.Sqrt(Random.value);
+            float v = Random.value;
+
+            return (1 - u) * a + u * (1 - v) * b + u * v * c;
+        }
     }
 }

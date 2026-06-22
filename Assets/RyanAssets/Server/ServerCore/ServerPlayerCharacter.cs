@@ -25,7 +25,7 @@ namespace RyanAssets.Server.ServerCore {
             GameObject newCharacter = Instantiate(characterPrefab.gameObject);
             newCharacter.transform.position = Vector3.zero;
             LocalCharacter localChar = newCharacter.GetComponent<LocalCharacter>();
-            localChar.OnDied += () => OnPlayerCharacterDied(player, newCharacter.transform);
+            localChar.OnDied += (_) => OnPlayerCharacterDied(player, newCharacter.transform);
             localChar.Init(health);
             OnPlayerCharacterAdded?.Invoke(player, localChar);
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
@@ -49,7 +49,7 @@ namespace RyanAssets.Server.ServerCore {
                 ResetPlayerCharacter(character);
         }
         public void ResetPlayerCharacter(NetworkObject character){
-            character.GetComponent<LocalCharacter>().Kill();
+            character.GetComponent<LocalCharacter>().Kill(DamageSource.Kill);
         }
         public void OnMenuActionRequest(NetworkConnection conn, MenuActionRequest request, Channel channel = Channel.Reliable){
             if (request.type == MenuActionType.ResetCharacter)

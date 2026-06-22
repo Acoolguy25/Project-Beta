@@ -60,6 +60,8 @@ namespace RyanAssets.Characters.Shared {
 #endif
         }
         protected virtual void Died(DamageSource source) {
+            if (!transform.tag.StartsWith("Dead"))
+                transform.tag = "Dead" + transform.tag;
             SetHealth(0);
             OnDied?.Invoke(source);
         }

@@ -7,12 +7,22 @@ using UnityEngine;
     [InitializeOnLoad]
     public static class EditorStartup {
         static EditorStartup() {
-            UnityEngine.Debug.Log("Editor loaded or scripts recompiled");
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             if (ClonesManager.IsClone()) {
                 if (ClonesManager.GetArgument() == "server") {
                     EditorApplication.EnterPlaymode();
+                    EditorWindow.FocusWindowIfItsOpen<SceneView>();
                 }
             }
         }
+        static void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state != PlayModeStateChange.EnteredPlayMode)
+                return;
+
+            EditorWindow.GetWindow<SceneView>().Focus();
+        }
+
     }
 #endif

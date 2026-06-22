@@ -171,8 +171,7 @@ PrefabInstance:
       propertyPath: m_Name
       value: ServerRunner
       objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 2078859814234586131, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
