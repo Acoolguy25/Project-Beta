@@ -6,7 +6,7 @@ namespace RyanAssets.Characters.Shared
 {
     [RequireComponent(typeof(AudioSource))]
     [RequireComponent(typeof(Animator))]
-    public class CharacterAnimator: MonoBehaviour {
+    public class CharacterAnimator: NetworkBehaviour {
         public AudioClip LandingAudioClip;
         public AudioClip[] FootstepAudioClips;
 
@@ -14,7 +14,7 @@ namespace RyanAssets.Characters.Shared
         public bool GroundCheck;
         public bool Grounded;
         public static float JumpThreshold = 0.4f;
-        public static float SpeedThreshold = 0.17f;
+        public static float SpeedThreshold = 0.14f;
 
         Animator _animator;
         LayerMask GroundMask;
@@ -55,6 +55,8 @@ namespace RyanAssets.Characters.Shared
             _animator.SetBool("Jump", false);
         }
         void FixedUpdate(){
+            if (!IsController)
+                return;
             if (GroundCheck) {
                 FixedUpdateGround();
                 _animator.SetBool("Grounded", Grounded);
