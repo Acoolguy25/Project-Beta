@@ -56,8 +56,8 @@ namespace RyanAssets.Commands.Client {
                     return true;
                 }
                 var str2Cmd = GetCommands();
-                CommandConfig commandCfg = str2Cmd[commandName];
-                if (commandCfg.arguments.Length > 0 && args.Length - 1 == commandCfg.arguments.Length && commandCfg.arguments[commandCfg.arguments.Length - 1].optional)
+                if (str2Cmd.TryGetValue(commandName, out CommandConfig commandCfg) && commandCfg.arguments.Length > 0 && args.Length + 1 == commandCfg.arguments.Length && 
+                    (commandCfg.arguments[commandCfg.arguments.Length - 1].type == CommandArgumentType.Player || commandCfg.arguments[commandCfg.arguments.Length - 1].type == CommandArgumentType.Players))
                     args = args.Append("me").ToArray();
                 if (!CommandVerification.VerifyCommand(str2Cmd.Values, commandName, args, SharedGlobalEvents.Instance.GetPlayerNames(), out errorMessage)) {
                     ShowCommandError(errorMessage);

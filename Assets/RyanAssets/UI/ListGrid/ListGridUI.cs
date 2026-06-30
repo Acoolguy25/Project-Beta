@@ -17,7 +17,7 @@ namespace RyanAssets.UI.ListGrid {
         protected bool AutoScroll;
         protected Transform contentTarget;
         GridLayoutGroup gridLayoutGroup;
-        // VerticalLayoutGroup verticalLayoutGroup;
+        VerticalLayoutGroup verticalLayoutGroup;
 
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
@@ -124,18 +124,51 @@ namespace RyanAssets.UI.ListGrid {
                         count++;
                 }
 
-                float availableWidth = contentRT.rect.width - gridLayoutGroup.padding.horizontal;
+                int columns;
+                int rows;
 
-                int columns = Mathf.Max(1, Mathf.FloorToInt(
-                    (availableWidth + gridLayoutGroup.spacing.x + 0.001f) /
-                    (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)));
+                if (gridLayoutGroup.constraint == GridLayoutGroup.Constraint.FixedColumnCount)
+                {
+                    columns = Mathf.Max(1, gridLayoutGroup.constraintCount);
+                    rows = Mathf.CeilToInt(count / (float)columns);
+                }
+                else if (gridLayoutGroup.constraint == GridLayoutGroup.Constraint.FixedRowCount)
+                {
+                    rows = count == 0 ? 0 : Mathf.Min(count, Mathf.Max(1, gridLayoutGroup.constraintCount));
+                }
+                else
+                {
+                    float availableWidth = contentRT.rect.width - gridLayoutGroup.padding.horizontal;
 
-                int rows = Mathf.CeilToInt(count / (float)columns);
+                    columns = Mathf.Max(1, Mathf.FloorToInt(
+                        (availableWidth + gridLayoutGroup.spacing.x + 0.001f) /
+                        (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)));
+
+                    rows = Mathf.CeilToInt(count / (float)columns);
+                }
 
                 height =
                     gridLayoutGroup.padding.vertical +
                     rows * gridLayoutGroup.cellSize.y +
                     Mathf.Max(0, rows - 1) * gridLayoutGroup.spacing.y;
+            }
+            else if (verticalLayoutGroup != null)
+            {
+                int count = 0;
+                height = verticalLayoutGroup.padding.vertical;
+
+                foreach (Transform child in contentRT)
+                {
+                    if (child.TryGetComponent(out RectTransform childRT) &&
+                        child.gameObject.activeInHierarchy)
+                    {
+                        float preferredHeight = LayoutUtility.GetPreferredHeight(childRT);
+                        height += preferredHeight >= 0f ? preferredHeight : childRT.rect.height;
+                        count++;
+                    }
+                }
+
+                height += Mathf.Max(0, count - 1) * verticalLayoutGroup.spacing;
             }
             else
             {
@@ -209,8 +242,8 @@ namespace RyanAssets.UI.ListGrid {
             contentTarget = scrollRect.content;
             contentRT = contentTarget.GetComponent<RectTransform>();
             gridLayoutGroup = contentRT.GetComponent<GridLayoutGroup>();
+            verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
             globalOrder = 0;
-            // verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
         }
         virtual protected void OnDestroy(){
             ClearPendingPrefabs();
