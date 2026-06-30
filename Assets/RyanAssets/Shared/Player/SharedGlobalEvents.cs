@@ -6,6 +6,7 @@ using FishNet.Object.Synchronizing;
 using UnityEngine;
 using RyanAssets.Shared.Declarations;
 using FishNet.Transporting;
+using RyanAssets.Commands.Shared;
 
 namespace RyanAssets.Shared.Player {
     [Serializable]
@@ -29,7 +30,9 @@ namespace RyanAssets.Shared.Player {
 
     public class SharedGlobalEvents : NetworkBehaviour {
         public static SharedGlobalEvents Instance;
+        public static Action OnInstanceReady;
         public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
+        public readonly SyncList<CommandConfig> Commands = new();
         public readonly SyncList<SharedVoteOption> VoteOptions = new();
         readonly SyncVar<SharedVoteInfo> _currentVote = new();
         readonly SyncVar<string> _topMessage = new();
@@ -46,21 +49,30 @@ namespace RyanAssets.Shared.Player {
 
         void Awake() {
             Instance = this;
+            OnInstanceReady?.Invoke();
 #if !UNITY_SERVER
             // foreach (var pair in Players) {
             //     OnPlayerAdded?.Invoke(pair.Key, pair.Value);
             // }
             InstanceFinder.ClientManager.RegisterBroadcast<PlayerLeaveBroadcast>(OnPlayerRemovedHandler);
             Players.OnChange += OnPlayerChanged;
+            Commands.OnChange += OnCommandsChanged;
             VoteOptions.OnChange += OnVoteOptionsChanged;
             _currentVote.OnChange += OnCurrentVoteChanged;
             _topMessage.OnChange += (_, msg, _) => TopMessageChanged?.Invoke(msg);
             PlayerListSynced = false;
 #endif
         }
+
+        public override void OnStartServer() {
+            base.OnStartServer();
+            Instance = this;
+            OnInstanceReady?.Invoke();
+        }
 #if !UNITY_SERVER
         public static Action<NetworkConnection, ServerPlayerStats> OnPlayerRemoved, OnPlayerUpdated;
         public static Action<NetworkConnection, ServerPlayerStats, bool> OnPlayerAdded;
+        public static Action OnCommandsUpdated;
         public static Action OnVoteChanged;
         public static Action<SharedVoteInfo> OnCurrentVoteChangedEvent;
         public static bool PlayerListSynced;
@@ -88,15 +100,23 @@ namespace RyanAssets.Shared.Player {
         }
 
         void OnVoteOptionsChanged(SyncListOperation op, int index, SharedVoteOption oldItem, SharedVoteOption newItem, bool asServer) {
+            if (op != SyncListOperation.Complete)
+                return;
             OnVoteChanged?.Invoke();
+        }
+
+        void OnCommandsChanged(SyncListOperation op, int index, CommandConfig oldItem, CommandConfig newItem, bool asServer) {
+            if (op != SyncListOperation.Complete)
+                return;
+            OnCommandsUpdated?.Invoke();
         }
 
         void OnCurrentVoteChanged(SharedVoteInfo previous, SharedVoteInfo next, bool asServer) {
             OnCurrentVoteChangedEvent?.Invoke(next);
             OnVoteChanged?.Invoke();
         }
-        void OnPlayerRemovedHandler(PlayerLeaveBroadcast data, Channel channel) {
-            OnPlayerRemoved?.Invoke(data.player, data.stats);
+        void OnPlayerRemovedHandler(PlayerLeaveBroadcast msg, FishNet.Transporting.Channel channel) {
+            OnPlayerRemoved?.Invoke(msg.player, msg.stats);
         }
 
         // private void SyncLatePlayerAdd(Action<NetworkConnection, ServerPlayerStats> func) {
@@ -111,11 +131,14 @@ namespace RyanAssets.Shared.Player {
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init(){
+            Instance = null;
+            OnInstanceReady = null;
             OnPlayerAdded = null;
             OnPlayerRemoved = null;
             OnPlayerUpdated = null;
             OnVoteChanged = null;
             OnCurrentVoteChangedEvent = null;
+            OnCommandsUpdated = null;
         }
         private void OnDestroy() {
             if (InstanceFinder.ClientManager == null)

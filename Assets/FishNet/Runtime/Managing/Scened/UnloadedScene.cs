@@ -10,7 +10,7 @@ namespace FishNet.Managing.Scened
         public UnloadedScene(Scene s)
         {
             Name = s.name;
-            Handle = s.handle;
+            Handle = unchecked((int)s.handle.GetRawData());
         }
 
         public UnloadedScene(string name, int handle)
@@ -30,7 +30,7 @@ namespace FishNet.Managing.Scened
             for (int i = 0; i < loadedScenes; i++)
             {
                 Scene s = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
-                if (s.IsValid() && s.handle == Handle)
+                if (s.IsValid() && unchecked((int)s.handle.GetRawData()) == Handle)
                     return s;
             }
 

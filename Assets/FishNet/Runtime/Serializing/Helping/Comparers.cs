@@ -48,8 +48,8 @@ namespace FishNet.Serializing.Helping
             if (!a.IsValid() || !b.IsValid())
                 return false;
 
-            if (a.handle != 0 || b.handle != 0)
-                return a.handle == b.handle;
+            if (a.handle.GetRawData() != 0 || b.handle.GetRawData() != 0)
+                return a.handle.GetRawData() == b.handle.GetRawData();
 
             return a.name == b.name;
         }

@@ -7,12 +7,12 @@ namespace FishNet.Serializing.Helping
     {
         public override bool Equals(Scene a, Scene b)
         {
-            return a.handle == b.handle;
+            return a.handle.GetRawData() == b.handle.GetRawData();
         }
 
         public override int GetHashCode(Scene obj)
         {
-            return obj.handle;
+            return obj.handle.GetRawData().GetHashCode();
         }
     }
 }

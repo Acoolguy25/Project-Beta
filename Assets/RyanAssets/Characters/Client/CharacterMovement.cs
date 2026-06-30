@@ -111,14 +111,14 @@ namespace RyanAssets.Characters.Client {
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg + CamEulerAngleY;
                 float rotation = Mathf.SmoothDampAngle(LocalPlayer.Character.transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, RotationSmoothTime);
                 LocalPlayer.Character.transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
-            } else
-                _rb.angularVelocity = Vector3.zero;
+            }
 
             Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
             Vector3 move = targetDirection.normalized * (_animationBlend * inputMagnitude);
             //if (!Grounded)
             move.y = _rb.linearVelocity.y;
             _rb.linearVelocity = move;
+            _rb.angularVelocity = Vector3.zero;
 
             // Animation updates
             //if (_hasAnimator) {

@@ -22,12 +22,13 @@ namespace RyanAssets.Input {
         Prompt,
         GameSettings,
         Character,
-        Client
+        Client,
+        Textbox
     }
     public class InputService : MonoBehaviour {
         public static InputService Instance { get; private set; }
         private static Dictionary<InputScreen, List<RyanAssetsActionMap>> InputScreenToActiveMaps = new(){
-            {InputScreen.Textbox, new(){}},
+            {InputScreen.Textbox, new(){RyanAssetsActionMap.Textbox}},
             {InputScreen.Client, new(){RyanAssetsActionMap.Client, RyanAssetsActionMap.Character}},
             {InputScreen.GameSettings, new(){RyanAssetsActionMap.GameSettings}},
             {InputScreen.GameMenu, new(){}},

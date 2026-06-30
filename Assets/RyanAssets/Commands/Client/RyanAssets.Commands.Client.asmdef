@@ -1,0 +1,26 @@
+{
+    "name": "RyanAssets.Commands.Client",
+    "rootNamespace": "RyanAssets.Commands.Client",
+    "references": [
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
+        "GUID:a3b180a6f5474ea4a80ed95b8af4670f",
+        "GUID:bfd322f9e92d453cb49ee5c0a75355a7",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
+        "GUID:30b4aa37ab8e7994987c0bdb87f386dd",
+        "GUID:a225d37a9b46aa14a967ffdeff667c71",
+        "GUID:c885424bd5995334d8ecb22c328f83a6"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

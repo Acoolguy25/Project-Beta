@@ -4,6 +4,7 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using RyanAssets.Client.ClientCore;
 using RyanAssets.Client.ClientUI.Topbar;
+using RyanAssets.Commands.Client;
 using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
@@ -78,8 +79,14 @@ namespace RyanAssets.Client.ClientUI.Chat {
         }
         public void OnMessageSend_ButtonPressed(string text) {
             chatBox.DeactivateInputField();
-            if (text.Length > 0)
+            if (text.Length > 0) {
+                //if (commandController != null && commandController.TrySubmit(text, out bool clearInput)) {
+                //    if (clearInput)
+                //        chatBox.text = string.Empty;
+                //    return;
+                //}
                 InstanceFinder.ClientManager.Broadcast<MessageRequest>(new() { message = text });
+            }
             chatBox.text = string.Empty;
         }
         public void OnScroll(PointerEventData eventData) {

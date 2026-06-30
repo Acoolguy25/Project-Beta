@@ -11,7 +11,6 @@ namespace RyanAssets.UI {
         float timer, targetTime;
         float startAlpha;
         public float targetAlpha;
-
         void Awake() {
             if (canvasGroup != null)
                 return; // already initalized
@@ -31,6 +30,8 @@ namespace RyanAssets.UI {
             SetAlpha(Mathf.Lerp(startAlpha, targetAlpha, timer == targetTime ? 1f : timer / targetTime));
         }
         public void TweenAlpha(float newAlpha, float duration = 0f) {
+            if (canvasGroup == null)
+                Awake();
             if (newAlpha == targetAlpha) // Ignore same set
                 return;
             startAlpha = canvasGroup.alpha;

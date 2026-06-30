@@ -22,7 +22,7 @@ namespace RyanAssets.UI.ListGrid {
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
         private Dictionary<Transform, uint> prefabOrder = new();
-        private uint globalOrder;
+        protected uint globalOrder;
 
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
 
@@ -50,7 +50,7 @@ namespace RyanAssets.UI.ListGrid {
             Destroy(obj.gameObject);
             prefabOrder.Remove(obj);
         }
-        private void AddPrefab(T data, uint order) {
+        protected void AddPrefab(T data, uint order) {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
@@ -66,7 +66,7 @@ namespace RyanAssets.UI.ListGrid {
             };
             pending_ops.Add(op);
         }
-        public void AddPrefab(T data) {
+        public virtual void AddPrefab(T data) {
             AddPrefab(data, globalOrder++);
         }
         public void AddPrefabs(T[] objects) {
@@ -161,6 +161,46 @@ namespace RyanAssets.UI.ListGrid {
             }
 
             layoutRoutine = null;
+        }
+        public void ScrollIntoView(GameObject obj, float time = 0f) {
+            Canvas.ForceUpdateCanvases();
+
+            var item = (RectTransform)obj.transform;
+            var view = scrollRect.viewport;
+
+            Vector3[] itemCorners = new Vector3[4];
+            Vector3[] viewCorners = new Vector3[4];
+
+            item.GetWorldCorners(itemCorners);
+            view.GetWorldCorners(viewCorners);
+
+            float delta = 0f;
+
+            if (itemCorners[1].y > viewCorners[1].y)          // above view
+                delta = itemCorners[1].y - viewCorners[1].y;
+            else if (itemCorners[0].y < viewCorners[0].y)     // below view
+                delta = itemCorners[0].y - viewCorners[0].y;
+            else
+                return; // already fully visible
+
+            float hidden = contentRT.rect.height - view.rect.height;
+            float target = Mathf.Clamp01(scrollRect.verticalNormalizedPosition + delta / hidden);
+
+            if (time <= 0f)
+                scrollRect.verticalNormalizedPosition = target;
+            else
+                StartCoroutine(ScrollRoutine(target, time));
+        }
+
+        private IEnumerator ScrollRoutine(float target, float time) {
+            float start = scrollRect.verticalNormalizedPosition;
+
+            for (float t = 0; t < time; t += Time.unscaledDeltaTime) {
+                scrollRect.verticalNormalizedPosition = Mathf.Lerp(start, target, t / time);
+                yield return null;
+            }
+
+            scrollRect.verticalNormalizedPosition = target;
         }
         virtual protected void Start() {
             contentTarget = scrollRect.content;

@@ -21,7 +21,7 @@ using UnityEngine;
             if (state != PlayModeStateChange.EnteredPlayMode)
                 return;
 
-            EditorWindow.GetWindow<SceneView>().Focus();
+            //EditorWindow.GetWindow<SceneView>().Focus();
         }
 
     }
