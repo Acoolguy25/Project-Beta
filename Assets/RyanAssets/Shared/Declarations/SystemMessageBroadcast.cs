@@ -7,8 +7,11 @@ namespace RyanAssets.Shared.Declarations {
         LocalPlayerJoinMessage,
         PlayerAdd,
         PlayerRemove,
+        ClientCommand,
         // Server-side
-        CustomMessage
+        CustomMessage,
+        // Either-side
+        CommandError
     }
     public struct SystemMessageBroadcast : IBroadcast {
         public string message;

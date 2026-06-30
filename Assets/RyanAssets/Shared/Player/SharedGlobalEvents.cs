@@ -1,12 +1,15 @@
-using System;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
-using UnityEngine;
-using RyanAssets.Shared.Declarations;
 using FishNet.Transporting;
+using Ionic.Zlib;
 using RyanAssets.Commands.Shared;
+using RyanAssets.Shared.Declarations;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
 namespace RyanAssets.Shared.Player {
     [Serializable]
@@ -72,6 +75,7 @@ namespace RyanAssets.Shared.Player {
 #if !UNITY_SERVER
         public static Action<NetworkConnection, ServerPlayerStats> OnPlayerRemoved, OnPlayerUpdated;
         public static Action<NetworkConnection, ServerPlayerStats, bool> OnPlayerAdded;
+        public static Action<ServerPlayerStats> OnMyPlayerUpdated;
         public static Action OnCommandsUpdated;
         public static Action OnVoteChanged;
         public static Action<SharedVoteInfo> OnCurrentVoteChangedEvent;
@@ -82,9 +86,13 @@ namespace RyanAssets.Shared.Player {
                 case SyncDictionaryOperation.Add:
                     // Debug.Log($"{key} player added");
                     OnPlayerAdded?.Invoke(key, value, PlayerListSynced);
+                    if (key.IsLocalClient)
+                        OnMyPlayerUpdated?.Invoke(value);
                     break;
                 case SyncDictionaryOperation.Set:
                     OnPlayerUpdated?.Invoke(key, value);
+                    if (key.IsLocalClient)
+                        OnMyPlayerUpdated?.Invoke(value);
                     break;
                 case SyncDictionaryOperation.Remove:
                     // Debug.Log($"{key} player removed");
@@ -136,6 +144,7 @@ namespace RyanAssets.Shared.Player {
             OnPlayerAdded = null;
             OnPlayerRemoved = null;
             OnPlayerUpdated = null;
+            OnMyPlayerUpdated = null;
             OnVoteChanged = null;
             OnCurrentVoteChangedEvent = null;
             OnCommandsUpdated = null;
@@ -146,5 +155,20 @@ namespace RyanAssets.Shared.Player {
             InstanceFinder.ClientManager.UnregisterBroadcast<PlayerLeaveBroadcast>(OnPlayerRemovedHandler);
         }
 #endif
+        public List<string> GetPlayerNames(Func<KeyValuePair<NetworkConnection, ServerPlayerStats>, bool> selector = null) {
+            List<string> strings = new();
+            foreach (var item in Players) {
+                if (selector != null && !selector(item))
+                    continue;
+                strings.Add(item.Value.data.username);
+            }
+            return strings;
+        }
+        public static string GetPlayerName(NetworkConnection connection) {
+            if (Instance && Instance.Players.TryGetValue(connection, out ServerPlayerStats serverPlayerStats)){
+                return serverPlayerStats.data.username;
+            }
+            return null;
+        }
     }
 }

@@ -4,18 +4,19 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using RyanAssets.Client.ClientCore;
 using RyanAssets.Client.ClientUI.Topbar;
-using RyanAssets.Commands.Client;
 using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
 using RyanAssets.Shared.Requests;
 using RyanAssets.UI;
+using RyanAssets.UI.Textbox;
 using RyanAssets.UI.ListGrid;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.UI;
+using System;
+using System.Collections.Generic;
 
 namespace RyanAssets.Client.ClientUI.Chat {
     public struct LocalChatMessage : IBroadcast {
@@ -25,7 +26,8 @@ namespace RyanAssets.Client.ClientUI.Chat {
     }
     public class ClientChat : ListGridUI<LocalChatMessage>, IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
         [SerializeField]
-        TMP_InputField chatBox;
+        CustomInputField chatBox;
+        public static List<Func<string, bool>> cancelSendMessageFuncs = new();
         public static ClientChat Instance;
         private void Awake() {
             Instance = this;
@@ -78,13 +80,18 @@ namespace RyanAssets.Client.ClientUI.Chat {
             chatBox.Select();
         }
         public void OnMessageSend_ButtonPressed(string text) {
-            chatBox.DeactivateInputField();
             if (text.Length > 0) {
                 //if (commandController != null && commandController.TrySubmit(text, out bool clearInput)) {
                 //    if (clearInput)
                 //        chatBox.text = string.Empty;
                 //    return;
                 //}
+                foreach (var func in cancelSendMessageFuncs) {
+                    if (func(text)) {
+                        chatBox.text = string.Empty;
+                        return;
+                    }
+                }
                 InstanceFinder.ClientManager.Broadcast<MessageRequest>(new() { message = text });
             }
             chatBox.text = string.Empty;

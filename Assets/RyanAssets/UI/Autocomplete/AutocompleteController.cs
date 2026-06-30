@@ -7,12 +7,17 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using RyanAssets.UI.Textbox;
 using UnityEngine.Windows;
+using System.Linq;
 
 namespace RyanAssets.UI.Autocomplete {
     public class AutocompleteUI : ButtonGridUI<AutocompleteElementData> {
+        public string AutocompletePrefix = "/";
         [SerializeField]
-        TMP_InputField inputField;
+        protected CustomInputField inputField;
+        static Color32 selected_color = Color.greenYellow;
+        static Color32 not_selected_color = Color.grey;
         Dictionary<GameObject, AutocompleteElementData> elementToPrefab = new();
         List<GameObject> activeElementToPrefabs = new();
         GameObject selectedElement;
@@ -26,9 +31,9 @@ namespace RyanAssets.UI.Autocomplete {
             inputField.onValueChanged.AddListener(OnInputFieldValueChanged);
             Refresh();
         }
-        public override void AddPrefab(AutocompleteElementData autocompleteElementData) {
-            AddPrefab(autocompleteElementData, globalOrder--);
-        }
+        //public override void AddPrefab(AutocompleteElementData autocompleteElementData) {
+        //    AddPrefab(autocompleteElementData, globalOrder--);
+        //}
         void OnPrefabAdded(GameObject prefabClone, AutocompleteElementData element) {
             prefabClone.GetComponentInChildren<TextMeshProUGUI>().text = element.display;
 
@@ -45,17 +50,21 @@ namespace RyanAssets.UI.Autocomplete {
         }
         void RefreshSelection() {
             activeElementToPrefabs.Clear();
-            foreach (var kvp in elementToPrefab) {
-                if (kvp.Value.display.ToLower().Contains(inputField.text.Substring(1).ToLower())) {
-                    if (selectedElement == null) {
-                        selectedElement = kvp.Key;
-                    }
-                    kvp.Key.GetComponent<Image>().color = kvp.Key == selectedElement ? Color.green : Color.grey;
+            string parsedText = inputField.text.Substring(AutocompletePrefix.Length);
+            parsedText = parsedText.Substring(parsedText.LastIndexOf(' ') + 1); // Get last space-separated word
+            foreach (var kvp in elementToPrefab.Reverse()) {
+                if (kvp.Value.display.ToLower().Contains(parsedText.ToLower())) {
+                    kvp.Key.GetComponent<Image>().color = kvp.Key == selectedElement ? selected_color : not_selected_color;
                     kvp.Key.SetActive(true);
                     activeElementToPrefabs.Add(kvp.Key);
                 } else {
                     kvp.Key.SetActive(false);
                 }
+            }
+            activeElementToPrefabs.Sort((a, b) => prefabOrder[a.transform].CompareTo(prefabOrder[b.transform]));
+            if (selectedElement == null && activeElementToPrefabs.Count > 0) {
+                selectedElement = activeElementToPrefabs[0];
+                selectedElement.GetComponent<Image>().color = selected_color;
             }
             UpdateLayout(); // handles scrollbars
         }
@@ -75,7 +84,7 @@ namespace RyanAssets.UI.Autocomplete {
             OnInputFieldValueChanged(inputField.text);
         }
         void OnInputFieldValueChanged(string _text) {
-            if (_text == string.Empty || _text[0] != '/') {
+            if (_text == string.Empty || !_text.StartsWith(AutocompletePrefix)) {
                 gameObject.SetActive(false);
                 return;
             }
@@ -95,27 +104,40 @@ namespace RyanAssets.UI.Autocomplete {
             inputField.selectionStringFocusPosition = inputField.text.Length;
         }
         void OnUp() {
-            SelectDeltaElement(1);
-            //StartCoroutine(SetToEnd());
+            SelectDeltaElement(-1);
         }
         void OnDown() {
-            SelectDeltaElement(-1);
-            //StartCoroutine(SetToEnd());
+            SelectDeltaElement(1);
         }
         void OnTab() {
             if (!selectedElement) return;
-            inputField.text = "/" + elementToPrefab[selectedElement].display;
+            string display = elementToPrefab[selectedElement].display;
+            string text = inputField.text;
+
+            int lastSpace = text.LastIndexOf(' ');
+
+            if (lastSpace == -1) {
+                // First argument
+                inputField.text = AutocompletePrefix + display;
+            } else {
+                // Replace only the current argument
+                inputField.text = text[..(lastSpace + 1)] + display;
+            }
+
+            inputField.caretPosition = inputField.text.Length;
             SetToEnd();
         }
         void OnEnable() {
             TextboxControls.upEvent += OnUp;
             TextboxControls.downEvent += OnDown;
             TextboxControls.tabEvent += OnTab;
+            inputField.AutocompleteActive = true;
         }
         void OnDisable() {
             TextboxControls.upEvent -= OnUp;
             TextboxControls.downEvent -= OnDown;
             TextboxControls.tabEvent -= OnTab;
+            inputField.AutocompleteActive = false;
         }
     }
 }

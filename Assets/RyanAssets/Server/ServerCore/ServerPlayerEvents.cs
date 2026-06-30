@@ -36,6 +36,7 @@ namespace RyanAssets.Server.ServerCore {
         static void OnAuthenticationSucceeded(NetworkConnection conn, JObject json) {
             // Debug.Log("Auth Succeeded: " + json);
             ServerPlayerStats stats = ParsePlayerStats(json);
+            stats.gamePlayerStats ??= new GamePlayerStats();
             Debug.Log("PlayerAuthenticated: " + JsonConvert.SerializeObject(stats));
             if (SharedGlobalEvents.Instance == null) {
                 Debug.LogError("Cannot add authenticated player. SharedGlobalEvents.Instance is missing.");

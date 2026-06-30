@@ -3,6 +3,10 @@ using UnityEngine;
 using UnityEngine.AI;
 using RyanAssets.Server.ServerFeatures;
 using System.Collections.Generic;
+using RyanAssets.Server.ServerCore;
+using FishNet.Connection;
+using RyanAssets.Characters.Shared;
+using RyanAssets.Characters.Server;
 
 namespace Universes.murder_mystery.Server
 {
@@ -25,5 +29,38 @@ namespace Universes.murder_mystery.Server
         //        PrevTargets[agent] = target;
         //    }
         //}
+        List<Transform> characters = new();
+        private void Awake()
+        {
+            ServerPlayerCharacter.OnPlayerCharacterAdded += OnCharacterAdded;
+            ServerPlayerCharacter.OnPlayerCharacterDied += OnCharacterDied;
+        }
+        private void OnCharacterAdded(NetworkConnection conn, LocalCharacter character)
+        {
+            characters.Add(character.transform);
+            ApplyTargets();
+        }
+        private void OnCharacterDied(NetworkConnection conn, LocalCharacter character)
+        {
+            if (characters.Remove(character.transform)) // if it existed
+                ApplyTargets();
+        }
+        private void ApplyTargets(){
+            var char_arr = characters.ToArray();
+            foreach (GameObject obj in GameObject.FindGameObjectsWithTag("NPC")){
+                if (obj.TryGetComponent(out LocalNPC npc)){
+                    npc.FleeTargets = char_arr;
+                }
+            }
+        }
+        public static void RefreshNPCSpeeds(){
+            foreach (GameObject obj in GameObject.FindGameObjectsWithTag("NPC"))
+            {
+                if (obj.TryGetComponent(out LocalNPC npc))
+                {
+                    npc.UpdateSpeed();
+                }
+            }
+        }
     }
 }

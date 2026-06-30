@@ -9,7 +9,11 @@ namespace RyanAssets.Characters.Shared {
         None,
         Fall,
         Firearm,
-        Kill
+        Despawn,
+        
+        Reset,
+        
+        Command
     };
     public class GameCharacter : NetworkBehaviour {
         public readonly SyncVar<long> Health = new();
@@ -60,6 +64,7 @@ namespace RyanAssets.Characters.Shared {
 #endif
         }
         protected virtual void Died(DamageSource source) {
+            if (IsDead()) return;
             if (!transform.tag.StartsWith("Dead"))
                 transform.tag = "Dead" + transform.tag;
             SetHealth(0);
@@ -84,7 +89,7 @@ namespace RyanAssets.Characters.Shared {
         }
         protected virtual void Start() {
             if (Health.Value == 0 && MaxHealth.Value > 0)
-                Kill(DamageSource.Kill);
+                Kill(DamageSource.None);
         }
     }
 }

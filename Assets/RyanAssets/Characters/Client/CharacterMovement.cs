@@ -3,6 +3,8 @@ using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientUI.GameSettings;
 using RyanAssets.Core;
 using RyanAssets.Input;
+using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Player;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.HID;
@@ -49,9 +51,17 @@ namespace RyanAssets.Characters.Client {
         //private bool IsCurrentDeviceMouse => _playerInput != null && _playerInput.currentControlScheme == "KeyboardMouse";
         void OnEnable() {
             LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            SharedGlobalEvents.OnMyPlayerUpdated += Refresh;
+             if (SharedGlobalEvents.Instance && SharedGlobalEvents.Instance.Players.TryGetValue(InstanceFinder.ClientManager.Connection, out ServerPlayerStats serverPlayerStats))
+                Refresh(serverPlayerStats);
         }
         void OnDisable() {
             LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+            SharedGlobalEvents.OnMyPlayerUpdated -= Refresh;
+        }
+        private void Refresh(ServerPlayerStats playerStats) {
+            MoveSpeed = playerStats.gamePlayerStats.walkSpeed;
+            SprintSpeed = playerStats.gamePlayerStats.sprintSpeed;
         }
         private void OnCharacterAdded(Transform c) {
             _hasAnimator = LocalPlayer.Character.TryGetComponent(out _animator);

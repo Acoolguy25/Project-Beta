@@ -7,9 +7,68 @@ namespace RyanAssets.Commands.Shared {
                 arguments = new CommandArgumentConfig[0]
             },
             new() {
-                commandName = "sayhi",
-                description = "Sends a server-validated hello.",
-                arguments = new CommandArgumentConfig[0]
+                commandName = "player_setwalkspeed",
+                description = "Sets player walkspeed.",
+                arguments = new CommandArgumentConfig[] {
+                    new() {
+                        name = "players",
+                        type = CommandArgumentType.Players
+                    },
+                    new()
+                    {
+                        name = "speed",
+                        type = CommandArgumentType.Float,
+                        min = 0f,
+                        max = 500f
+                    }
+                }
+            },
+            new() {
+                commandName = "player_setsprintspeed",
+                description = "Sets player sprintspeed.",
+                arguments = new CommandArgumentConfig[] {
+                    new() {
+                        name = "players",
+                        type = CommandArgumentType.Players
+                    },
+                    new()
+                    {
+                        name = "speed",
+                        type = CommandArgumentType.Float,
+                        min = 0f,
+                        max = 500f
+                    }
+                }
+            },
+            new() {
+                commandName = "player_kill",
+                description = "Kill player character.",
+                arguments = new CommandArgumentConfig[] {
+                    new() {
+                        name = "players",
+                        type = CommandArgumentType.Players
+                    }
+                }
+            },
+            new() {
+                commandName = "player_respawn",
+                description = "Respawn player character.",
+                arguments = new CommandArgumentConfig[] {
+                    new() {
+                        name = "players",
+                        type = CommandArgumentType.Players
+                    }
+                }
+            },
+            new() {
+                commandName = "player_kick",
+                description = "Kick player.",
+                arguments = new CommandArgumentConfig[] {
+                    new() {
+                        name = "players",
+                        type = CommandArgumentType.Players
+                    }
+                }
             }
         };
     }

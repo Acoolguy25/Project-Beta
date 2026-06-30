@@ -1,9 +1,14 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using FishNet;
 using FishNet.Connection;
 using RyanAssets.Commands.Shared;
+using RyanAssets.Server.ServerCore;
+using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Player;
 
 namespace RyanAssets.Commands.Server {
     public static class ServerCommandsActions {
@@ -58,10 +63,55 @@ namespace RyanAssets.Commands.Server {
 
             ServerCommandService.SendSystemMessage(caller, $"Commands: {commandList}");
         }
-
-        static void SayHi(NetworkConnection caller, string commandName, string[] args) {
-            string username = ServerCommandService.GetPlayerUsername(caller);
-            ServerCommandService.SendSystemMessage(caller, $"{username} says hi.");
+        public static void Player_SetWalkspeed(NetworkConnection caller, string commandName, string[] args) {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            foreach (NetworkConnection conn in conns)
+            {
+                if (SharedGlobalEvents.Instance.Players.TryGetValue(conn, out var player))
+                {
+                    player.gamePlayerStats.walkSpeed = float.Parse(args[1]);
+                    SharedGlobalEvents.Instance.Players.Dirty(conn);
+                }
+            }
+        }
+        public static void Player_SetSprintspeed(NetworkConnection caller, string commandName, string[] args)
+        {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            foreach (NetworkConnection conn in conns)
+            {
+                if (SharedGlobalEvents.Instance.Players.TryGetValue(conn, out var player))
+                {
+                    player.gamePlayerStats.sprintSpeed = float.Parse(args[1]);
+                    SharedGlobalEvents.Instance.Players.Dirty(conn);
+                }
+            }
+        }
+        public static void Player_Kill(NetworkConnection caller, string commandName, string[] args)
+        {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            foreach (NetworkConnection conn in conns)
+            {
+                if (ServerPlayerCharacter.ClientToCharacter.TryGetValue(conn, out var character))
+                {
+                    character.Kill(Characters.Shared.DamageSource.Command);
+                }
+            }
+        }
+        public static void Player_Respawn(NetworkConnection caller, string commandName, string[] args)
+        {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            foreach (NetworkConnection conn in conns)
+            {
+                ServerPlayerCharacter.Instance.SpawnPlayerCharacter(conn);
+            }
+        }
+        public static void Player_Kick(NetworkConnection caller, string commandName, string[] args)
+        {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            foreach (NetworkConnection conn in conns)
+            {
+                ServerPlayerEvents.KickPlayer(conn, $"Kicked by {SharedGlobalEvents.GetPlayerName(caller) ?? "anonymous"}");
+            }
         }
     }
 }

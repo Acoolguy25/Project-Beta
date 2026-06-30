@@ -21,7 +21,7 @@ namespace RyanAssets.UI.ListGrid {
 
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
-        private Dictionary<Transform, uint> prefabOrder = new();
+        protected Dictionary<Transform, uint> prefabOrder = new();
         protected uint globalOrder;
 
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
@@ -124,8 +124,10 @@ namespace RyanAssets.UI.ListGrid {
                         count++;
                 }
 
+                float availableWidth = contentRT.rect.width - gridLayoutGroup.padding.horizontal;
+
                 int columns = Mathf.Max(1, Mathf.FloorToInt(
-                    (contentRT.rect.width + gridLayoutGroup.spacing.x) /
+                    (availableWidth + gridLayoutGroup.spacing.x + 0.001f) /
                     (gridLayoutGroup.cellSize.x + gridLayoutGroup.spacing.x)));
 
                 int rows = Mathf.CeilToInt(count / (float)columns);
@@ -165,26 +167,27 @@ namespace RyanAssets.UI.ListGrid {
         public void ScrollIntoView(GameObject obj, float time = 0f) {
             Canvas.ForceUpdateCanvases();
 
-            var item = (RectTransform)obj.transform;
-            var view = scrollRect.viewport;
+            RectTransform item = (RectTransform)obj.transform;
+            RectTransform view = scrollRect.viewport;
+            RectTransform content = contentRT;
 
-            Vector3[] itemCorners = new Vector3[4];
-            Vector3[] viewCorners = new Vector3[4];
+            Bounds itemBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(view, item);
 
-            item.GetWorldCorners(itemCorners);
-            view.GetWorldCorners(viewCorners);
+            float offset = 0f;
 
-            float delta = 0f;
-
-            if (itemCorners[1].y > viewCorners[1].y)          // above view
-                delta = itemCorners[1].y - viewCorners[1].y;
-            else if (itemCorners[0].y < viewCorners[0].y)     // below view
-                delta = itemCorners[0].y - viewCorners[0].y;
+            if (itemBounds.max.y > view.rect.yMax)
+                offset = itemBounds.max.y - view.rect.yMax;
+            else if (itemBounds.min.y < view.rect.yMin)
+                offset = itemBounds.min.y - view.rect.yMin;
             else
-                return; // already fully visible
+                return;
 
-            float hidden = contentRT.rect.height - view.rect.height;
-            float target = Mathf.Clamp01(scrollRect.verticalNormalizedPosition + delta / hidden);
+            float hidden = content.rect.height - view.rect.height;
+            if (hidden <= 0f)
+                return;
+
+            float target = Mathf.Clamp01(
+                scrollRect.verticalNormalizedPosition + offset / hidden);
 
             if (time <= 0f)
                 scrollRect.verticalNormalizedPosition = target;

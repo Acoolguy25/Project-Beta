@@ -16,6 +16,7 @@ namespace RyanAssets.Commands.Shared {
         public float min;
         public float max;
         public string[] suggestions;
+        public bool optional;
     }
 
     [Serializable]

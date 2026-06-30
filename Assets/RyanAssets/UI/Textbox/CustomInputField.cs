@@ -10,11 +10,17 @@ using UnityEngine.EventSystems;
 using UnityEngine.Serialization;
 using TMPro;
 using System.Threading;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace RyanAssets.UI.Textbox {
 
     [AddComponentMenu("UI (Canvas)/TextMeshPro - Input Field", 11)]
-    public class TMP_InputField : Selectable, IUpdateSelectedHandler, IEventSystemHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, ISubmitHandler, ICancelHandler, ICanvasElement, ILayoutElement, IScrollHandler {
+    public class CustomInputField : Selectable, IUpdateSelectedHandler, IEventSystemHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, ISubmitHandler, ICancelHandler, ICanvasElement, ILayoutElement, IScrollHandler {
+        // RYAN ENTIIES
+        public bool AutocompleteActive;
+
         public enum ContentType {
             Standard,
             Autocorrected,
@@ -341,7 +347,7 @@ namespace RyanAssets.UI.Textbox {
             }
         }
 
-        private string compositionString => (inputSystem != null) ? inputSystem.compositionString : Input.compositionString;
+        private string compositionString => (inputSystem != null) ? inputSystem.compositionString : UnityEngine.Input.compositionString;
 
         private int compositionLength {
             get {
@@ -405,9 +411,9 @@ namespace RyanAssets.UI.Textbox {
                     case RuntimePlatform.IPhonePlayer:
                     case RuntimePlatform.Android:
                     case RuntimePlatform.WebGLPlayer:
-                    case RuntimePlatform.MetroPlayerX86:
-                    case RuntimePlatform.MetroPlayerX64:
-                    case RuntimePlatform.MetroPlayerARM:
+                    case RuntimePlatform.WSAPlayerX86:
+                    case RuntimePlatform.WSAPlayerX64:
+                    case RuntimePlatform.WSAPlayerARM:
                     case RuntimePlatform.PS4:
                     case RuntimePlatform.tvOS:
                     case RuntimePlatform.Switch:
@@ -426,9 +432,9 @@ namespace RyanAssets.UI.Textbox {
                     case RuntimePlatform.IPhonePlayer:
                     case RuntimePlatform.Android:
                     case RuntimePlatform.WebGLPlayer:
-                    case RuntimePlatform.MetroPlayerX86:
-                    case RuntimePlatform.MetroPlayerX64:
-                    case RuntimePlatform.MetroPlayerARM:
+                    case RuntimePlatform.WSAPlayerX86:
+                    case RuntimePlatform.WSAPlayerX64:
+                    case RuntimePlatform.WSAPlayerARM:
                     case RuntimePlatform.PS4:
                     case RuntimePlatform.tvOS:
                     case RuntimePlatform.Switch:
@@ -437,7 +443,7 @@ namespace RyanAssets.UI.Textbox {
                     case RuntimePlatform.PS5:
                     case RuntimePlatform.VisionOS:
                     case RuntimePlatform.Switch2:
-                        SetPropertyUtility.SetStruct(ref m_HideSoftKeyboard, value);
+                SetPropertyUtility.SetStruct(ref m_HideSoftKeyboard, value);
                         break;
                     default:
                         m_HideSoftKeyboard = true;
@@ -1023,7 +1029,7 @@ namespace RyanAssets.UI.Textbox {
 
         public virtual int layoutPriority => 1;
 
-        protected TMP_InputField() {
+        protected CustomInputField() {
             SetTextComponentWrapMode();
         }
 
@@ -1050,7 +1056,7 @@ namespace RyanAssets.UI.Textbox {
         }
 
         private bool isUWP() {
-            return Application.platform == RuntimePlatform.MetroPlayerX86 || Application.platform == RuntimePlatform.MetroPlayerX64 || Application.platform == RuntimePlatform.MetroPlayerARM;
+            return Application.platform == RuntimePlatform.WSAPlayerX86 || Application.platform == RuntimePlatform.WSAPlayerX64 || Application.platform == RuntimePlatform.WSAPlayerARM;
         }
 
         public void SetTextWithoutNotify(string input) {
@@ -2296,6 +2302,8 @@ namespace RyanAssets.UI.Textbox {
         }
 
         private void MoveDown(bool shift, bool goToLastChar) {
+            if (AutocompleteActive)
+                return;
             int num;
             if (hasSelection && !shift) {
                 num = (caretSelectPositionInternal = Mathf.Max(caretPositionInternal, caretSelectPositionInternal));
@@ -2320,6 +2328,8 @@ namespace RyanAssets.UI.Textbox {
         }
 
         private void MoveUp(bool shift, bool goToFirstChar) {
+            if (AutocompleteActive)
+                return;
             int num;
             if (hasSelection && !shift) {
                 num = (caretSelectPositionInternal = Mathf.Min(caretPositionInternal, caretSelectPositionInternal));
@@ -2826,7 +2836,7 @@ namespace RyanAssets.UI.Textbox {
         }
 
         private void MarkGeometryAsDirty() {
-            if (Application.isPlaying && !PrefabUtility.IsPartOfPrefabAsset(this)) {
+            if (Application.isPlaying && !IsPartOfPrefabAsset(this)) {
                 CanvasUpdateRegistry.RegisterCanvasElementForGraphicRebuild(this);
             }
         }
@@ -2938,7 +2948,7 @@ namespace RyanAssets.UI.Textbox {
             float num4 = zero.y + num;
             float y = num4 - num;
             TMP_FontAsset font = m_TextComponent.font;
-            float num5 = m_TextComponent.fontSize / font.m_FaceInfo.pointSize * font.m_FaceInfo.scale;
+            float num5 = m_TextComponent.fontSize / font.faceInfo.pointSize * font.faceInfo.scale;
             float a = (float)m_CaretWidth * font.faceInfo.lineHeight * num5 * 0.05f;
             a = Mathf.Max(a, 1f);
             m_CursorVerts[0].position = new Vector3(zero.x, y, 0f);
@@ -3526,6 +3536,43 @@ namespace RyanAssets.UI.Textbox {
             }
 
             textComponent.font = fontAsset;
+        }
+
+        private static bool IsPartOfPrefabAsset(UnityEngine.Object target) {
+#if UNITY_EDITOR
+            return PrefabUtility.IsPartOfPrefabAsset(target);
+#else
+            return false;
+#endif
+        }
+    }
+
+    internal static class SetPropertyUtility {
+        public static bool SetColor(ref Color currentValue, Color newValue) {
+            if (currentValue.r == newValue.r && currentValue.g == newValue.g && currentValue.b == newValue.b && currentValue.a == newValue.a) {
+                return false;
+            }
+
+            currentValue = newValue;
+            return true;
+        }
+
+        public static bool SetStruct<T>(ref T currentValue, T newValue) where T : struct {
+            if (EqualityComparer<T>.Default.Equals(currentValue, newValue)) {
+                return false;
+            }
+
+            currentValue = newValue;
+            return true;
+        }
+
+        public static bool SetClass<T>(ref T currentValue, T newValue) where T : class {
+            if (EqualityComparer<T>.Default.Equals(currentValue, newValue)) {
+                return false;
+            }
+
+            currentValue = newValue;
+            return true;
         }
     }
 }

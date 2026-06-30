@@ -4,11 +4,13 @@ using FishNet;
 using FishNet.Transporting;
 using RyanAssets.Input;
 using RyanAssets.Characters.Shared;
+using System;
 
 namespace RyanAssets.Characters.Client {
     public class LocalPlayer : MonoBehaviour {
         public static LocalPlayer Instance { get; private set; }
         public static Transform Character;
+        [NonSerialized]
         public InstantEvent<Transform> OnCharacterAdded;
         [SerializeField] private Transform CharacterControl;
         private void Awake() {

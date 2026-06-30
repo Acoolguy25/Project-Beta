@@ -9,15 +9,19 @@ using System.Threading;
 using FishNet.Object;
 using System;
 using FishNet.Transporting;
+using System.Collections.Generic;
 
 namespace RyanAssets.Server.ServerCore {
     public class ServerPlayerCharacter: MonoBehaviour {
         [SerializeField]
         NetworkObject characterPrefab;
         //public static event Action<Transform> 
+        public static Dictionary<NetworkConnection, LocalCharacter> ClientToCharacter;
         public static Func<NetworkConnection, bool> CanSpawnFunction;
         public static event Action<NetworkConnection, LocalCharacter> OnPlayerCharacterAdded;
+        public static event Action<NetworkConnection, LocalCharacter> OnPlayerCharacterDied;
         public static float RespawnTime = 5f;
+        public static ServerPlayerCharacter Instance { get; private set; }
 
         public void SpawnPlayerCharacter(NetworkConnection player, long health = 100){
             if (CanSpawnFunction != null && !CanSpawnFunction(player))
@@ -25,31 +29,36 @@ namespace RyanAssets.Server.ServerCore {
             GameObject newCharacter = Instantiate(characterPrefab.gameObject);
             newCharacter.transform.position = Vector3.zero;
             LocalCharacter localChar = newCharacter.GetComponent<LocalCharacter>();
-            localChar.OnDied += (_) => OnPlayerCharacterDied(player, newCharacter.transform);
+            localChar.OnDied += (_) => OnPlayerCharacterDie(player, newCharacter.transform);
             localChar.Init(health);
+            ClientToCharacter[player] = localChar;
             OnPlayerCharacterAdded?.Invoke(player, localChar);
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
         }
-        public async void OnPlayerCharacterDied(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){
+        public async void OnPlayerCharacterDie(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){
+            OnPlayerCharacterDied?.Invoke(player, character.GetComponent<LocalCharacter>());
             await Awaitable.WaitForSecondsAsync(RespawnTime, cancellationToken);
             if (!cancellationToken.IsCancellationRequested){
                 DespawnPlayerCharacter(player);
                 SpawnPlayerCharacter(player);
             }
         }
-        public void DespawnPlayerCharacter(NetworkConnection player) {
+        public static void DespawnPlayerCharacter(NetworkConnection player) {
             if (LocalCharacter.Characters.TryGetValue(player, out NetworkObject character))
                 DespawnPlayerCharacter(character);
         }
-        public void DespawnPlayerCharacter(NetworkObject character){
+        public static void DespawnPlayerCharacter(NetworkObject character){
+            ClientToCharacter.Remove(character.Owner);
+            if (character.TryGetComponent(out LocalCharacter localCharacter) && !localCharacter.IsDead())
+                localCharacter.Kill(DamageSource.Despawn);
             InstanceFinder.ServerManager.Despawn(character);
         }
-        public void ResetPlayerCharacter(NetworkConnection player) {
+        public static void ResetPlayerCharacter(NetworkConnection player) {
             if (LocalCharacter.Characters.TryGetValue(player, out NetworkObject character))
                 ResetPlayerCharacter(character);
         }
-        public void ResetPlayerCharacter(NetworkObject character){
-            character.GetComponent<LocalCharacter>().Kill(DamageSource.Kill);
+        public static void ResetPlayerCharacter(NetworkObject character){
+            character.GetComponent<LocalCharacter>().Kill(DamageSource.Reset);
         }
         public void OnMenuActionRequest(NetworkConnection conn, MenuActionRequest request, Channel channel = Channel.Reliable){
             if (request.type == MenuActionType.ResetCharacter)
@@ -59,12 +68,22 @@ namespace RyanAssets.Server.ServerCore {
         void PlayerAdded(NetworkConnection player){
             SpawnPlayerCharacter(player);
         }
+        void PlayerRemoved(NetworkConnection player){
+            DespawnPlayerCharacter(player);
+        }
+        void Awake()
+        {
+            Instance = this;
+            ClientToCharacter = new();
+        }
         void OnEnable(){
             ServerPlayerEvents.OnPlayerAddedEvent += PlayerAdded;
+            ServerPlayerEvents.OnPlayerRemovedEvent += PlayerRemoved;
             InstanceFinder.ServerManager.RegisterBroadcast<MenuActionRequest>(OnMenuActionRequest);
         }
         void OnDisable(){
             ServerPlayerEvents.OnPlayerAddedEvent -= PlayerAdded;
+            ServerPlayerEvents.OnPlayerRemovedEvent -= PlayerRemoved;
             InstanceFinder.ServerManager.UnregisterBroadcast<MenuActionRequest>(OnMenuActionRequest);
         }
     }

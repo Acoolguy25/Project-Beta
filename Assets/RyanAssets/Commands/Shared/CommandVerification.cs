@@ -1,3 +1,7 @@
+using FishNet.Connection;
+using FishNet.Object.Synchronizing;
+using NUnit.Framework;
+using RyanAssets.Shared.Declarations;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -71,9 +75,21 @@ namespace RyanAssets.Commands.Shared {
                 errorMessage = $"Command '{config.commandName}' expects {expectedArgs.Length} argument(s), got {providedArgs.Length}.";
                 return false;
             }
+            //for (int i = 0; i < expectedArgs.Length; i++)
+            //{
+            //    if (i >= providedArgs.Length)
+            //    {
+            //        if (!expectedArgs[i].optional)
+            //        {
+            //            errorMessage = $"Command '{config.commandName}' expects at least {expectedArgs.Length} argument(s), got {providedArgs.Length}.";
+            //            return false;
+            //        }
+            //    }
+            //}
+
 
             HashSet<string> names = new(playerNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < expectedArgs.Length; i++) {
+            for (int i = 0; i < providedArgs.Length; i++) {
                 if (!VerifyArgument(expectedArgs[i], providedArgs[i], names, out errorMessage))
                     return false;
             }
@@ -84,9 +100,9 @@ namespace RyanAssets.Commands.Shared {
         public static List<string> GetCommandPredictions(IEnumerable<CommandConfig> commands, string typedCommand) {
             string typed = typedCommand ?? string.Empty;
             return commands
-                .Where(command => !string.IsNullOrWhiteSpace(command.commandName))
+                //.Where(command => !string.IsNullOrWhiteSpace(command.commandName))
                 .Select(command => command.commandName)
-                .Where(commandName => commandName.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+                //.Where(commandName => commandName.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(commandName => commandName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
@@ -116,8 +132,8 @@ namespace RyanAssets.Commands.Shared {
             }
 
             return suggestions
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Where(value => value.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+                //.Distinct(StringComparer.OrdinalIgnoreCase)
+                //.Where(value => value.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
@@ -174,6 +190,59 @@ namespace RyanAssets.Commands.Shared {
             }
         }
 
+        public static List<string> GetPlayerNamesFromArgument(string arg, List<string> playerNames)
+        {
+            List<string> result = new();
+            foreach (string value in SplitPlayersArgument(arg))
+            {
+                if (string.Equals(value, "me", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add("me");
+                }
+                else if (string.Equals(value, "others", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add("others");
+                }
+                else if (string.Equals(value, "all", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add("all");
+                }
+                else if (playerNames.Contains(value))
+                {
+                    result.Add(value);
+                }
+            }
+            return result;
+        }
+        public static List<NetworkConnection> GetPlayersFromArgument(string arg, SyncDictionary<NetworkConnection, ServerPlayerStats> allPlayers, NetworkConnection caller)
+        {
+            HashSet<NetworkConnection> result = new();
+            foreach (string value in SplitPlayersArgument(arg))
+            {
+                if (string.Equals(value, "me", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add(caller);
+                }
+                else if (string.Equals(value, "others", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.UnionWith(allPlayers.Keys.Where(conn => conn != caller));
+                }
+                else if (string.Equals(value, "all", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.UnionWith(allPlayers.Keys);
+                }
+                else
+                {
+                    var playerConn = allPlayers.FirstOrDefault(conn => string.Equals(conn.Value.data.username, value, StringComparison.OrdinalIgnoreCase));
+                    if (playerConn.Key.IsValid())
+                    {
+                        result.Add(playerConn.Key);
+                    }
+                }
+            }
+            return result.ToList();
+        }
+
         static bool IsPlayerReferenceValid(string value, HashSet<string> playerNames) {
             if (string.IsNullOrWhiteSpace(value))
                 return false;
@@ -183,7 +252,7 @@ namespace RyanAssets.Commands.Shared {
 
             return playerNames.Contains(value);
         }
-
+        
         static IEnumerable<string> SplitPlayersArgument(string arg) {
             return (arg ?? string.Empty)
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
