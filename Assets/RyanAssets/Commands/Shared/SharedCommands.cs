@@ -69,6 +69,11 @@ namespace RyanAssets.Commands.Shared {
                         type = CommandArgumentType.Players
                     }
                 }
+            },
+            new() {
+                commandName = "server_shutdown",
+                description = "Closes current server.",
+                arguments = new CommandArgumentConfig[0]
             }
         };
     }

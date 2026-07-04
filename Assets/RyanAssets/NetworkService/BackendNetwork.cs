@@ -66,11 +66,11 @@ namespace RyanAssets.NetworkService {
         }
 #if !SERVER_BUILD
         public static string GetAuthorizationToken(){
-            #if !UNITY_EDITOR || NETWORK_LOGIN
+            if (!NetworkSettings.noNetworkLogin) {
                 return AuthenticationService.Instance.AccessToken;
-            #else
+            } else {
                 return "Uvr2xiFAyUZJDybNdBEKcPOsMvjR";
-            #endif
+            }
         }
 #else
         public static void SetServerHeader(string header_name, string header_value){

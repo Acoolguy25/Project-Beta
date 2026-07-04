@@ -1,21 +1,32 @@
 using FishNet.Connection;
+using NUnit.Framework;
 using RyanAssets.DataService;
+using System.Collections.Generic;
 
 namespace RyanAssets.Shared.Declarations {
     [System.Serializable]
     public enum TeamColor: short {
         Lobby,
         Blue, // Sheriff
-        Red,  // 
-        Green
+        Red,  // Murderer
+        Green // Innocent
     };
+    public enum ToolEnum: short
+    {
+        Unknown = 0,
+        Dagger,
+        Pistol
+    }
     [System.Serializable]
     public class GamePlayerStats {
+        // player data
         public int lives = -1;
         public int deaths = 0;
         public TeamColor team = TeamColor.Lobby;
+        // character data
+        public List<ToolEnum> tools = new() { ToolEnum.Dagger };
         public float walkSpeed = 10f;
-        public float sprintSpeed = 30f;
+        public float sprintSpeed = 23f;
     }
     [System.Serializable]
     public struct ServerPlayerStats {

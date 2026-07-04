@@ -3,7 +3,6 @@ using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
-using Ionic.Zlib;
 using RyanAssets.Commands.Shared;
 using RyanAssets.Shared.Declarations;
 using System;

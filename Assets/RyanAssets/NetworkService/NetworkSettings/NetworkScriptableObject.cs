@@ -9,6 +9,7 @@ namespace RyanAssets.NetworkService {
         [SerializeField] public bool backend_server_encrypted = false;
     #if UNITY_EDITOR
         [SerializeField] public bool use_in_debug = false;
-    #endif
+        [SerializeField] public bool no_login = false;
+#endif
     }
 }

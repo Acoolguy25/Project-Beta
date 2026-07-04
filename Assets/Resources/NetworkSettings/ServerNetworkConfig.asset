@@ -15,3 +15,4 @@ MonoBehaviour:
   backend_server_ip: 127.0.0.1:8212
   backend_server_encrypted: 0
   use_in_debug: 1
+  no_login: 1

@@ -14,7 +14,8 @@ using Newtonsoft.Json;
 using System.Data;
 using FishNet.Connection;
 using RyanAssets.Authentication;
-
+using System.Threading;
+using RyanAssets.Core;
 
 
 #if UNITY_EDITOR
@@ -113,7 +114,6 @@ namespace RyanAssets.Server.ServerCore {
                         break;
                 }
             }
-            ValidateStartupArguments();
 #endif
             // BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
             BackendNetwork.SetServerHeader("universe-id", serverInfo.universe_id);
@@ -184,13 +184,42 @@ namespace RyanAssets.Server.ServerCore {
 
             Debug.Log($"Stopping server because {reason}");
             StopServerEvent?.Invoke();
-            await InvokeStopServerAsyncEvent();
+            bool passed = await TaskHelper.AwaitTaskTimeout(Task.WhenAll(WaitForNetworkFlush(2), InvokeStopServerAsyncEvent()));
+            if (!passed)
+            {
+                Debug.LogError("StopServerAsyncEvent did not complete in time, proceeding with shutdown.");
+            }
 
             foreach (NetworkConnection conn in InstanceFinder.ServerManager.Clients.Values) {
                 conn.Disconnect(false);
             }
 
             InstanceFinder.ServerManager.StopConnection(true);
+            Application.Quit(0);
+        }
+        private static Task WaitForNetworkFlush(int postTicks = 3)
+        {
+            TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
+            int remaining = postTicks;
+
+            void OnPostTick()
+            {
+                if (--remaining > 0) return;
+
+                InstanceFinder.TimeManager.OnPostTick -= OnPostTick;
+
+                // Wait for the next pre-tick to confirm we're at a clean cycle boundary
+                void OnPreTick()
+                {
+                    InstanceFinder.TimeManager.OnPreTick -= OnPreTick;
+                    tcs.SetResult(true);
+                }
+
+                InstanceFinder.TimeManager.OnPreTick += OnPreTick;
+            }
+
+            InstanceFinder.TimeManager.OnPostTick += OnPostTick;
+            return tcs.Task;
         }
         static void OnQuit() {
             StopServer("the backend server experienced a shutdown");

@@ -26,9 +26,9 @@ namespace RyanAssets.Server.ServerCore {
             if (args.ConnectionState != RemoteConnectionState.Stopped)
                 return;
 
+            RemovePlayerConnection(conn);
             if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
                 return;
-            RemovePlayerConnection(conn);
             string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id}";
             _ = BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect");
         }

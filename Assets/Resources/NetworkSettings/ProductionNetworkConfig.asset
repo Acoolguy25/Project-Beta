@@ -15,3 +15,4 @@ MonoBehaviour:
   backend_server_ip: project-beta.duckdns.org
   backend_server_encrypted: 1
   use_in_debug: 0
+  no_login: 0

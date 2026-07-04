@@ -1,0 +1,18 @@
+{
+    "name": "RyanAssets.Tools.Client",
+    "rootNamespace": "RyanAssets.Tools.Client",
+    "references": [
+        "GUID:8658255f531113649bacf96894a008e1"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

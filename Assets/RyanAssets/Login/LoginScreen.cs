@@ -1,3 +1,4 @@
+using RyanAssets.NetworkService;
 using RyanAssets.UI;
 using Unity.Services.Authentication;
 using UnityEngine;
@@ -14,10 +15,10 @@ namespace RyanAssets.Login {
         [SerializeField, Range(0f, 1f)]
         float AnimationTime;
         public void RefreshScreen(){
-            #if !UNITY_EDITOR || NETWORK_LOGIN
+            #if !UNITY_EDITOR
                 bool isSignedIn = AuthenticationService.Instance.IsSignedIn;
             #else
-                bool isSignedIn = true;
+                bool isSignedIn = NetworkSettings.noNetworkLogin? true: AuthenticationService.Instance.IsSignedIn;
             #endif
             signin.SetActive(!isSignedIn);
             logout.SetActive(isSignedIn);

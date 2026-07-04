@@ -102,6 +102,7 @@ namespace RyanAssets.Commands.Server {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
+                ServerPlayerCharacter.DespawnPlayerCharacter(conn);
                 ServerPlayerCharacter.Instance.SpawnPlayerCharacter(conn);
             }
         }
@@ -112,6 +113,10 @@ namespace RyanAssets.Commands.Server {
             {
                 ServerPlayerEvents.KickPlayer(conn, $"Kicked by {SharedGlobalEvents.GetPlayerName(caller) ?? "anonymous"}");
             }
+        }
+        public static void Server_Shutdown(NetworkConnection caller, string commandName, string[] args)
+        {
+            ServerBootStrap.StopServer($"Shutdown by {SharedGlobalEvents.GetPlayerName(caller) ?? "anonymous"}");
         }
     }
 }

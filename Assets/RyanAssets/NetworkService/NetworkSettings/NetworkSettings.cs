@@ -14,6 +14,7 @@ namespace RyanAssets.NetworkService {
         public static string BackendAPIURL { get; private set; }
 
         public static NetworkScriptableObject activeConfig;
+        public static bool noNetworkLogin;
         // public static NetworkScriptableObject productionConfig;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init(){
@@ -27,8 +28,10 @@ namespace RyanAssets.NetworkService {
                     } else {
                         activeConfig = productionConfig;
                     }
+                    noNetworkLogin = activeConfig.no_login;
                 #else
                     activeConfig = productionConfig;
+                    noNetworkLogin = false;
                 #endif
             #endif
             InitConfig();

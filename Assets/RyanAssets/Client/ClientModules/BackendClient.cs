@@ -43,6 +43,8 @@ namespace RyanAssets.Client.ClientModules {
                     if (res == null) { // succeeded
                         return (null, j);
                     } else { // failed
+                        if (res == null || res == string.Empty)
+                            res = "Request failed for unknown reason";
                         Debug.LogError($"{title} - {res}");
                         PromptButton userResult = await PromptManager.Instance.PromptLocalUser(title + " Failed", res, promptResult,
                             (retryPolicy == RetryPolicy.NoRetry) ? PromptManager.ButtonPreset_OkOnly :

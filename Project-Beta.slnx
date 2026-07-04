@@ -6,7 +6,9 @@
   <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
+  <Project Path="RyanAssets.Tools.Client.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
+  <Project Path="RyanAssets.Tools.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="RyanAssets.Characters.Client.csproj" />
   <Project Path="RyanAssets.Characters.Shared.csproj" />
@@ -43,5 +45,4 @@
   <Project Path="RyanAssets.Client.Audio.csproj" />
   <Project Path="Universes.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
-  <Project Path="RyanAssets.Declarations.csproj" />
 </Solution>

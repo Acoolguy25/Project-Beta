@@ -14,7 +14,7 @@ namespace RyanAssets.Characters.Shared
         public bool GroundCheck;
         public bool Grounded;
         public static float JumpThreshold = 0.4f;
-        public static float SpeedThreshold = 0.12f;
+        public static float SpeedThreshold = 0.125f;
 
         Animator _animator;
         LayerMask GroundMask;

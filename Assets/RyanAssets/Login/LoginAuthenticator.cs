@@ -4,6 +4,7 @@ using Unity.Services.Authentication.PlayerAccounts;
 using System.Threading.Tasks;
 using RyanAssets.PromptService;
 using UnityEngine;
+using RyanAssets.NetworkService;
 
 namespace RyanAssets.Login {
     public class LoginAuthenticator : MonoBehaviour {
@@ -26,15 +27,16 @@ namespace RyanAssets.Login {
                 PlayerAccountService.Instance.AccessToken
             );
         }
-#if !UNITY_EDITOR || NETWORK_LOGIN
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
             _initialized = false;
         }
-        async void Start() {
+        async void OnEnable() {
             if (_initialized)
                 return;
             _initialized = true;
+            if (NetworkSettings.noNetworkLogin)
+                return;
             await UnityServices.InitializeAsync();
 
             PlayerAccountService.Instance.SignedIn += UnityLogin_Complete;
@@ -50,6 +52,5 @@ namespace RyanAssets.Login {
                 return;
             }
         }
-#endif
     }
 }
