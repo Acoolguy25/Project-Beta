@@ -20,7 +20,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &9197304929209225574
 Transform:
   m_ObjectHideFlags: 0
@@ -132,6 +132,8 @@ MonoBehaviour:
   toolEnum: 1
   toolName: Rough Dagger
   toolDesc: Rusty dagger that can stick wound someone.
+  toolImage: {fileID: 0}
+  ParentObjectName: RightHand
   clientScript: {fileID: 11500000, guid: 682cafef70093aa4ba60061119a727d1, type: 3}
   clientObserver: {fileID: 0}
 --- !u!114 &3519154818253025011

@@ -24,9 +24,9 @@ namespace RyanAssets.Server.ServerCore
                 return;
             }
             ToolBaseShared toolBase = Instantiate(toolPrefab[toolEnumIndex]);
-            toolBase.connectedCharacter.Value = networkObject.GetComponent<LocalCharacter>();
             toolBase.transform.localPosition = Vector3.zero;
             toolBase.transform.localRotation = Quaternion.identity;
+            toolBase.connectedCharacter.Value = networkObject.GetComponent<GameCharacter>();
             InstanceFinder.ServerManager.Spawn(toolBase, ownerConnection: networkObject.Owner);
         }
         public void AddTool(NetworkConnection player, ToolEnum tool) {

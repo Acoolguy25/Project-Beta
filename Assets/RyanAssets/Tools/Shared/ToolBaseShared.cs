@@ -1,5 +1,6 @@
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using RyanAssets.Core;
 using RyanAssets.Shared.Declarations;
 using System;
 using UnityEditor;
@@ -15,6 +16,8 @@ namespace RyanAssets.Tools.Shared {
         public string toolName, toolDesc;
         [SerializeField]
         public Sprite toolImage;
+        [SerializeField]
+        public string ParentObjectName = "RightHand";
 
         readonly public SyncVar<NetworkBehaviour> connectedCharacter = new();
 
@@ -84,8 +87,22 @@ namespace RyanAssets.Tools.Shared {
         [SerializeField]
         private MonoScript clientScript, clientObserver;
         public override void OnStartClient() {
-            base.OnStartClient();
-            if (IsOwner){
+            if (connectedCharacter.Value != null)
+                StartClient();
+            else {
+                connectedCharacter.OnChange += OnChangeFunction;
+            }
+            
+        }
+        void OnChangeFunction(NetworkBehaviour oldval, NetworkBehaviour newval, bool asServer)  {
+            if (newval != null) {
+                StartClient();
+                connectedCharacter.OnChange -= OnChangeFunction;
+            }
+        }
+        void StartClient() {
+            StartNetwork();
+            if (IsOwner) {
                 gameObject.AddComponent(clientScript.GetClass());
                 gameObject.SetActive(false); // unequipped by default
             } else if (clientObserver != null)
@@ -101,11 +118,13 @@ namespace RyanAssets.Tools.Shared {
                 gameObject.AddComponent(serverScript.GetClass());
             gameObject.SetActive(false);
             createEvent?.Invoke(this);
+            StartNetwork();
         }
 #endif
-        public override void OnStartNetwork() {
-            base.OnStartNetwork();
-            transform.SetParent(connectedCharacter.Value.transform, false);
+        public void StartNetwork() {
+            Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.Value.transform, ParentObjectName);
+            Debug.Assert(rightHand != null, "RightHand not found!");
+            transform.SetParent(rightHand, false);
         }
         public void OnDestroy() {
             destroyEvent?.Invoke(this);
