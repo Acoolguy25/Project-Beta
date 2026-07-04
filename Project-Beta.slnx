@@ -1,7 +1,6 @@
 ﻿<Solution>
   <Project Path="FishNet.Runtime.csproj" />
   <Project Path="FishNet.Codegen.Cecil.csproj" />
-  <Project Path="SynapseSocket.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
