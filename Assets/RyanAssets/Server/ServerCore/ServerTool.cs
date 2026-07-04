@@ -23,11 +23,12 @@ namespace RyanAssets.Server.ServerCore
                 Debug.LogWarning($"Tried to add tool {tool} but no prefab exists for it");
                 return;
             }
-            ToolBaseShared toolBase = Instantiate(toolPrefab[toolEnumIndex]);
+            GameObject toolClone = Instantiate(toolPrefab[toolEnumIndex].gameObject);
+            ToolBaseShared toolBase = toolClone.GetComponent<ToolBaseShared>();
             toolBase.transform.localPosition = Vector3.zero;
             toolBase.transform.localRotation = Quaternion.identity;
-            toolBase.connectedCharacter.Value = networkObject.GetComponent<GameCharacter>();
-            InstanceFinder.ServerManager.Spawn(toolBase, ownerConnection: networkObject.Owner);
+            toolBase.connectedCharacter.Value = networkObject.GetComponent<NetworkObject>();
+            InstanceFinder.ServerManager.Spawn(toolClone, ownerConnection: networkObject.Owner);
         }
         public void AddTool(NetworkConnection player, ToolEnum tool) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {

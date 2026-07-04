@@ -3,6 +3,8 @@ using FishNet.Object.Synchronizing;
 using RyanAssets.Core;
 using RyanAssets.Shared.Declarations;
 using System;
+using System.Collections;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -19,7 +21,7 @@ namespace RyanAssets.Tools.Shared {
         [SerializeField]
         public string ParentObjectName = "RightHand";
 
-        readonly public SyncVar<NetworkBehaviour> connectedCharacter = new();
+        readonly public SyncVar<NetworkObject> connectedCharacter = new();
 
         public bool equipped => gameObject.activeInHierarchy;
 
@@ -87,6 +89,7 @@ namespace RyanAssets.Tools.Shared {
         [SerializeField]
         private MonoScript clientScript, clientObserver;
         public override void OnStartClient() {
+            _ = test();
             if (connectedCharacter.Value != null)
                 StartClient();
             else {
@@ -94,7 +97,11 @@ namespace RyanAssets.Tools.Shared {
             }
             
         }
-        void OnChangeFunction(NetworkBehaviour oldval, NetworkBehaviour newval, bool asServer)  {
+        async Task test() {
+            await Awaitable.WaitForSecondsAsync(1f);
+            StartClient();
+        }
+        void OnChangeFunction(NetworkObject oldval, NetworkObject newval, bool asServer)  {
             if (newval != null) {
                 StartClient();
                 connectedCharacter.OnChange -= OnChangeFunction;
@@ -116,7 +123,7 @@ namespace RyanAssets.Tools.Shared {
             base.OnStartServer();
             if (serverScript != null)
                 gameObject.AddComponent(serverScript.GetClass());
-            gameObject.SetActive(false);
+            //gameObject.SetActive(false);
             createEvent?.Invoke(this);
             StartNetwork();
         }
