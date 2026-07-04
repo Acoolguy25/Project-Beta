@@ -22,6 +22,7 @@ namespace RyanAssets.Input {
         Prompt,
         GameSettings,
         Character,
+        Tool,
         Client,
         Textbox
     }
@@ -29,7 +30,7 @@ namespace RyanAssets.Input {
         public static InputService Instance { get; private set; }
         private static Dictionary<InputScreen, List<RyanAssetsActionMap>> InputScreenToActiveMaps = new(){
             {InputScreen.Textbox, new(){RyanAssetsActionMap.Textbox}},
-            {InputScreen.Client, new(){RyanAssetsActionMap.Client, RyanAssetsActionMap.Character}},
+            {InputScreen.Client, new(){RyanAssetsActionMap.Client, RyanAssetsActionMap.Character, RyanAssetsActionMap.Tool}},
             {InputScreen.GameSettings, new(){RyanAssetsActionMap.GameSettings}},
             {InputScreen.GameMenu, new(){}},
             {InputScreen.Prompt, new(){RyanAssetsActionMap.Prompt}}

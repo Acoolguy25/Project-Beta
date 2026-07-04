@@ -2,7 +2,8 @@
     "name": "RyanAssets.Tools.Client",
     "rootNamespace": "RyanAssets.Tools.Client",
     "references": [
-        "GUID:8658255f531113649bacf96894a008e1"
+        "GUID:8658255f531113649bacf96894a008e1",
+        "GUID:00196c2529079474c8ba52d5e10eae13"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

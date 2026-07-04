@@ -2,7 +2,9 @@ using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using RyanAssets.Shared.Declarations;
 using System;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 
 namespace RyanAssets.Tools.Shared {
@@ -11,6 +13,8 @@ namespace RyanAssets.Tools.Shared {
         public ToolEnum toolEnum;
         [SerializeField]
         public string toolName, toolDesc;
+        [SerializeField]
+        public Sprite toolImage;
 
         readonly public SyncVar<NetworkBehaviour> connectedCharacter = new();
 
@@ -20,7 +24,17 @@ namespace RyanAssets.Tools.Shared {
         public static Action<ToolBaseShared> equippedStaticEvent, unequippedStaticEvent;
         public static Action<ToolBaseShared> createEvent, destroyEvent;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Init() {
+            equippedStaticEvent = null;
+            unequippedStaticEvent = null;
+            createEvent = null;
+            destroyEvent = null;
+        }
         void Equip() {
+            ToolBaseShared otherTool = transform.parent.GetComponentInChildren<ToolBaseShared>();
+            if (otherTool != null)
+                otherTool.Unequip();
             equippedStaticEvent?.Invoke(this);
             equippedEvent?.Invoke(this);
             gameObject.SetActive(true);
@@ -66,21 +80,29 @@ namespace RyanAssets.Tools.Shared {
         }
 
         // Initalization
+#if !UNITY_SERVER
         [SerializeField]
-        private MonoBehaviour clientScript, clientObserver, serverScript;
+        private MonoScript clientScript, clientObserver;
         public override void OnStartClient() {
             base.OnStartClient();
-            if (IsOwner)
-                gameObject.AddComponent(clientScript.GetType());
-            else if (clientObserver)
-                gameObject.AddComponent(clientObserver.GetType());
-            if (equipped)
-                Equip();
+            if (IsOwner){
+                gameObject.AddComponent(clientScript.GetClass());
+                gameObject.SetActive(false); // unequipped by default
+            } else if (clientObserver != null)
+                gameObject.AddComponent(clientObserver.GetClass());
+            createEvent?.Invoke(this);
         }
+#else
+        [SerializeField]
+        private MonoScript serverScript;
         public override void OnStartServer() {
             base.OnStartServer();
-            gameObject.AddComponent(serverScript.GetType());
+            if (serverScript != null)
+                gameObject.AddComponent(serverScript.GetClass());
+            gameObject.SetActive(false);
+            createEvent?.Invoke(this);
         }
+#endif
         public override void OnStartNetwork() {
             base.OnStartNetwork();
             transform.SetParent(connectedCharacter.Value.transform, false);

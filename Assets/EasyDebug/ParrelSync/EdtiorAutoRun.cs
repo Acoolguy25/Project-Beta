@@ -11,9 +11,9 @@ using UnityEngine;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             if (ClonesManager.IsClone()) {
                 if (ClonesManager.GetArgument() == "server") {
-                    EditorApplication.EnterPlaymode();
-                    EditorWindow.FocusWindowIfItsOpen<SceneView>();
-                }
+                    //EditorApplication.EnterPlaymode();
+                //EditorWindow.FocusWindowIfItsOpen<SceneView>();
+            }
             }
         }
         static void OnPlayModeStateChanged(PlayModeStateChange state)

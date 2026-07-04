@@ -10,13 +10,15 @@ using FishNet.Object;
 using System;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Player;
 
 namespace RyanAssets.Server.ServerCore {
     public class ServerPlayerCharacter: MonoBehaviour {
         [SerializeField]
         NetworkObject characterPrefab;
         //public static event Action<Transform> 
-        public static Dictionary<NetworkConnection, LocalCharacter> ClientToCharacter;
+        public static Dictionary<NetworkConnection, LocalCharacter> ClientToCharacter => LocalCharacter.Characters;
         public static Func<NetworkConnection, bool> CanSpawnFunction;
         public static event Action<NetworkConnection, LocalCharacter> OnPlayerCharacterAdded;
         public static event Action<NetworkConnection, LocalCharacter> OnPlayerCharacterDied;
@@ -38,6 +40,10 @@ namespace RyanAssets.Server.ServerCore {
             OnPlayerCharacterAdded?.Invoke(player, localChar);
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
             ClientToCharacter[player] = localChar;
+            // Insert player tools
+            foreach (var tool in SharedGlobalEvents.Instance.Players[player].gamePlayerStats.tools) {
+                ServerTool.Instance.AddTool(localChar.NetworkObject, tool);
+            }
         }
         public async void OnPlayerCharacterDie(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){
             OnPlayerCharacterDied?.Invoke(player, character.GetComponent<LocalCharacter>());
@@ -59,8 +65,8 @@ namespace RyanAssets.Server.ServerCore {
             InstanceFinder.ServerManager.Despawn(character);
         }
         public static void ResetPlayerCharacter(NetworkConnection player) {
-            if (LocalCharacter.Characters.TryGetValue(player, out NetworkObject character))
-                ResetPlayerCharacter(character);
+            if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character))
+                ResetPlayerCharacter(character.NetworkObject);
         }
         public static void ResetPlayerCharacter(NetworkObject character){
             character.GetComponent<LocalCharacter>().Kill(DamageSource.Reset);
@@ -79,7 +85,6 @@ namespace RyanAssets.Server.ServerCore {
         void Awake()
         {
             Instance = this;
-            ClientToCharacter = new();
         }
         void OnEnable(){
             ServerPlayerEvents.OnPlayerAddedEvent += PlayerAdded;

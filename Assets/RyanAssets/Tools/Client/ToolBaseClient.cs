@@ -1,3 +1,4 @@
+using RyanAssets.Input;
 using RyanAssets.Tools.Shared;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -11,11 +12,7 @@ namespace RyanAssets.Tools.Client
             toolBaseShared = GetComponent<ToolBaseShared>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
-        }
-        protected virtual void Update() {
-            if (Input.GetMouseButtonDown(0))
-                if (!EventSystem.current.IsPointerOverGameObject())
-                    OnClick(Input.mousePosition);
+            ToolControls.activateToolPressed += OnActivate;
         }
         protected virtual void OnEquip(ToolBaseShared _) {
 
@@ -23,7 +20,7 @@ namespace RyanAssets.Tools.Client
         protected virtual void OnUnequip(ToolBaseShared _) {
 
         }
-        protected virtual void OnClick(Vector2 position) {
+        protected virtual void OnActivate() {
 
         }
     }

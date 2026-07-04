@@ -1,8 +1,9 @@
-using System;
-using FishNet.Object;
 using FishNet.Connection;
-using UnityEngine;
+using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using RyanAssets.Tools.Shared;
+using System;
+using UnityEngine;
 
 namespace RyanAssets.Characters.Shared {
     public enum DamageSource {
@@ -18,6 +19,25 @@ namespace RyanAssets.Characters.Shared {
     public class GameCharacter : NetworkBehaviour {
         public readonly SyncVar<long> Health = new();
         public readonly SyncVar<long> MaxHealth = new();
+        readonly public SyncVar<ToolBaseShared> ActiveTool = new(new(WritePermission.ClientUnsynchronized));
+        public void SwitchTool(ToolBaseShared tool) {
+            if (tool == ActiveTool.Value) return;
+#if UNITY_SERVER
+            if (ActiveTool.Value)
+                ActiveTool.Value.UnequipServer();
+            if (tool)
+                tool.EquipServer();
+#else
+            if (ActiveTool.Value)
+                ActiveTool.Value.UnequipClient();
+            if (tool)
+                tool.EquipClient();
+#endif
+            ActiveTool.Value = tool;
+        }
+        public bool Equipped(ToolBaseShared tool) {
+            return ActiveTool.Value == tool;
+        }
 #if UNITY_EDITOR
         [SerializeField] private long HealthEditor, MaxHealthEditor;
         protected override void OnValidate() {
@@ -88,6 +108,10 @@ namespace RyanAssets.Characters.Shared {
             Init(hp, hp);
         }
         protected virtual void Start() {
+#if !UNITY_SERVER
+            if (ActiveTool.Value)
+                ActiveTool.Value.EquipClient();
+#endif
             if (Health.Value == 0 && MaxHealth.Value > 0)
                 Kill(DamageSource.None);
         }

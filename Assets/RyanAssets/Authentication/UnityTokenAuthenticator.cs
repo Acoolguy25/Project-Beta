@@ -35,7 +35,7 @@ namespace RyanAssets.Authentication {
 
         public override void OnRemoteConnection(NetworkConnection conn) {
             // Wait for AuthRequest.
-            Debug.Log("Initializing Player...");
+            //Debug.Log("Initializing Player...");
         }
 
 #if !UNITY_SERVER

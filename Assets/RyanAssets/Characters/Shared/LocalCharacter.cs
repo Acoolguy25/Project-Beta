@@ -7,11 +7,11 @@ using System.Collections.Generic;
 namespace RyanAssets.Characters.Shared {
     public class LocalCharacter : TrackedGameCharacter {
         public Transform CharacterCamera;
-        public static Dictionary<NetworkConnection, NetworkObject> Characters = new();
+        public static Dictionary<NetworkConnection, LocalCharacter> Characters = new();
         public void InstantiateSelf(NetworkConnection prevOwner) {
-            if (Characters.TryGetValue(prevOwner, out NetworkObject newCharacter) && newCharacter != NetworkObject)
+            if (Characters.TryGetValue(prevOwner, out LocalCharacter newCharacter) && newCharacter != this)
                 Characters.Remove(prevOwner);
-            Characters[Owner] = NetworkObject;
+            Characters[Owner] = this;
         }
 #if !UNITY_SERVER
         public static event Action<(Transform, bool)> AnyCharacterAdded;

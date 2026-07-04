@@ -9,7 +9,7 @@ using System;
 namespace RyanAssets.Characters.Client {
     public class LocalPlayer : MonoBehaviour {
         public static LocalPlayer Instance { get; private set; }
-        public static Transform Character;
+        public static LocalCharacter Character;
         [NonSerialized]
         public InstantEvent<Transform> OnCharacterAdded;
         [SerializeField] private Transform CharacterControl;
@@ -31,7 +31,7 @@ namespace RyanAssets.Characters.Client {
         }
         public void SetCharacter(Transform NewCharacter) {
             // InputService.SetInputScreenActive(I3nputScreen.Character, NewCharacter != null);
-            Character = NewCharacter;
+            Character = NewCharacter?.GetComponent<LocalCharacter>();
             OnCharacterAdded.Invoke(NewCharacter);
             CharacterControl.gameObject.SetActive(NewCharacter != null);
         }

@@ -48,8 +48,10 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         static void RemovePlayerConnection(NetworkConnection conn) {
-            InstanceFinder.ServerManager.BroadcastExcept<PlayerLeaveBroadcast>(conn, new() { player = conn, stats = SharedGlobalEvents.Instance.Players[conn] });
-            SharedGlobalEvents.Instance.Players.Remove(conn);
+            if (SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats playerStats)) {
+                InstanceFinder.ServerManager.BroadcastExcept<PlayerLeaveBroadcast>(conn, new() { player = conn, stats = playerStats });
+                SharedGlobalEvents.Instance.Players.Remove(conn);
+            }
             ServerPlayerSave.Forget(conn);
             OnPlayerRemovedEvent?.Invoke(conn);
         }

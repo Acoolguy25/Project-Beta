@@ -1,0 +1,26 @@
+{
+    "name": "RyanAssets.Client.ClientUI.Toolbar",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Toolbar",
+    "references": [
+        "GUID:d81c570acb0546e47865a9bb58cc7645",
+        "GUID:bbe124153e03c834bb9c5fb786ef908a",
+        "GUID:6ac2de33d550f6e43ab52d2391cf5802",
+        "GUID:8658255f531113649bacf96894a008e1",
+        "GUID:30b4aa37ab8e7994987c0bdb87f386dd",
+        "GUID:a225d37a9b46aa14a967ffdeff667c71",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:00196c2529079474c8ba52d5e10eae13",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

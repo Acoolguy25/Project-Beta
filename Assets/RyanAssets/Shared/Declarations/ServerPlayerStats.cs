@@ -24,7 +24,7 @@ namespace RyanAssets.Shared.Declarations {
         public int deaths = 0;
         public TeamColor team = TeamColor.Lobby;
         // character data
-        public List<ToolEnum> tools = new() { ToolEnum.Dagger };
+        public List<ToolEnum> tools = new() { ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger };
         public float walkSpeed = 10f;
         public float sprintSpeed = 23f;
     }
