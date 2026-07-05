@@ -27,7 +27,7 @@ namespace RyanAssets.Server.ServerCore
             ToolBaseShared toolBase = toolClone.GetComponent<ToolBaseShared>();
             toolBase.transform.localPosition = Vector3.zero;
             toolBase.transform.localRotation = Quaternion.identity;
-            toolBase.connectedCharacter.Value = networkObject.GetComponent<NetworkObject>();
+            toolBase.connectedCharacter = networkObject.GetComponent<GameCharacter>();
             InstanceFinder.ServerManager.Spawn(toolClone, ownerConnection: networkObject.Owner);
         }
         public void AddTool(NetworkConnection player, ToolEnum tool) {

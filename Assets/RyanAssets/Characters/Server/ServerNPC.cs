@@ -4,6 +4,7 @@ using System;
 using FishNet.Managing.Server;
 using FishNet;
 using RyanAssets.Server.ServerFeatures;
+using RyanAssets.Characters.Shared;
 
 namespace RyanAssets.Characters.Server { 
     public static class ServerNPC {
@@ -12,6 +13,7 @@ namespace RyanAssets.Characters.Server {
             if (location == null)
                 location = ServerPathfinding.GetRandomPosition();
             clone.transform.position = location.Value;
+            clone.GetComponent<GameCharacter>().Init(100);
             InstanceFinder.ServerManager.Spawn(clone, null); // spawn with server ownership
             clone.AddComponent<LocalNPC>();
             return clone;

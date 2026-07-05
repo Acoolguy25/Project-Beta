@@ -2,7 +2,9 @@
     "name": "RyanAssets.Tools.Server",
     "rootNamespace": "RyanAssets.Tools.Server",
     "references": [
-        "GUID:8658255f531113649bacf96894a008e1"
+        "GUID:8658255f531113649bacf96894a008e1",
+        "GUID:d81c570acb0546e47865a9bb58cc7645",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

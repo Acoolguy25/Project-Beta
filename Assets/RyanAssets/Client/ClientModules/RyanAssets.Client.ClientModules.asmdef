@@ -8,14 +8,12 @@
         "GUID:7f0918fe4a0747945a46440afcd6ffc9",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
         "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
-        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc"
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
     ],
     "includePlatforms": [],
-    "excludePlatforms": [
-        "LinuxStandalone64Server",
-        "WindowsStandalone32Server",
-        "WindowsStandalone64Server"
-    ],
+    "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],

@@ -42,6 +42,7 @@ namespace RyanAssets.Characters.Shared {
         [SerializeField] private long HealthEditor, MaxHealthEditor;
         protected override void OnValidate() {
             base.OnValidate();
+            MaxHealth.Value = MaxHealthEditor;
             TakeDamage(Health.Value - HealthEditor);
             HealthEditor = Health.Value;
         }

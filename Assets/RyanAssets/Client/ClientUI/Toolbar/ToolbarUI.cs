@@ -15,8 +15,8 @@ namespace RyanAssets.Client.ClientUI.Toolbar
         protected override void Start()
         {
             base.Start();
-            ToolBaseShared.createEvent += OnToolCreated;
-            ToolBaseShared.destroyEvent += OnToolRemoved;
+            ToolBaseShared.createStaticEvent += OnToolCreated;
+            ToolBaseShared.destroyStaticEvent += OnToolRemoved;
             OnCreatePrefab += OnAddPrefab;
             OnClickPrefab += OnPrefabClicked;
             ToolControls.toolBarHotkeyPressed += OnActivateToolPressed;

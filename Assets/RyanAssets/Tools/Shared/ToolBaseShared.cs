@@ -1,10 +1,10 @@
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using FishNet.Connection;
+using FishNet.Serializing;
 using RyanAssets.Core;
 using RyanAssets.Shared.Declarations;
 using System;
-using System.Collections;
-using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -13,6 +13,8 @@ using UnityEngine.UIElements;
 namespace RyanAssets.Tools.Shared {
     public class ToolBaseShared : NetworkBehaviour {
         [SerializeField]
+        private MonoScript clientScript, clientObserver, serverScript;
+        [SerializeField]
         public ToolEnum toolEnum;
         [SerializeField]
         public string toolName, toolDesc;
@@ -20,21 +22,26 @@ namespace RyanAssets.Tools.Shared {
         public Sprite toolImage;
         [SerializeField]
         public string ParentObjectName = "RightHand";
+        [SerializeField]
+        public uint staminaCost = 10;
+        [SerializeField]
+        public uint hitDamage = 150;
 
-        readonly public SyncVar<NetworkObject> connectedCharacter = new();
+        public NetworkBehaviour connectedCharacter;
+        public GameObject weaponRoot;
 
-        public bool equipped => gameObject.activeInHierarchy;
+        public bool equipped => weaponRoot.activeInHierarchy;
 
         public Action<ToolBaseShared> equippedEvent, unequippedEvent;
         public static Action<ToolBaseShared> equippedStaticEvent, unequippedStaticEvent;
-        public static Action<ToolBaseShared> createEvent, destroyEvent;
+        public static Action<ToolBaseShared> createStaticEvent, destroyStaticEvent;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             equippedStaticEvent = null;
             unequippedStaticEvent = null;
-            createEvent = null;
-            destroyEvent = null;
+            createStaticEvent = null;
+            destroyStaticEvent = null;
         }
         void Equip() {
             ToolBaseShared otherTool = transform.parent.GetComponentInChildren<ToolBaseShared>();
@@ -42,12 +49,12 @@ namespace RyanAssets.Tools.Shared {
                 otherTool.Unequip();
             equippedStaticEvent?.Invoke(this);
             equippedEvent?.Invoke(this);
-            gameObject.SetActive(true);
+            weaponRoot.SetActive(true);
         }
         void Unequip() {
             unequippedStaticEvent?.Invoke(this);
             unequippedEvent?.Invoke(this);
-            gameObject.SetActive(false);
+            weaponRoot.SetActive(false);
         }
         [ObserversRpc(RunLocally = true, ExcludeOwner = true)]
         public void EquipOthersRpc() {
@@ -83,58 +90,42 @@ namespace RyanAssets.Tools.Shared {
         public void UnequipServerRpc() {
             UnequipOthersRpc();
         }
+        public override void WritePayload(NetworkConnection connection, Writer writer) {
+            writer.WriteNetworkBehaviour(connectedCharacter);
+        }
 
-        // Initalization
+        public override void ReadPayload(NetworkConnection connection, Reader reader) {
+            connectedCharacter = reader.ReadNetworkBehaviour();
+        }
 #if !UNITY_SERVER
-        [SerializeField]
-        private MonoScript clientScript, clientObserver;
+        
         public override void OnStartClient() {
-            _ = test();
-            if (connectedCharacter.Value != null)
-                StartClient();
-            else {
-                connectedCharacter.OnChange += OnChangeFunction;
-            }
-            
-        }
-        async Task test() {
-            await Awaitable.WaitForSecondsAsync(1f);
-            StartClient();
-        }
-        void OnChangeFunction(NetworkObject oldval, NetworkObject newval, bool asServer)  {
-            if (newval != null) {
-                StartClient();
-                connectedCharacter.OnChange -= OnChangeFunction;
-            }
-        }
-        void StartClient() {
-            StartNetwork();
+            weaponRoot.SetActive(false); // unequipped by default
             if (IsOwner) {
                 gameObject.AddComponent(clientScript.GetClass());
-                gameObject.SetActive(false); // unequipped by default
             } else if (clientObserver != null)
                 gameObject.AddComponent(clientObserver.GetClass());
-            createEvent?.Invoke(this);
+            createStaticEvent?.Invoke(this);
         }
 #else
-        [SerializeField]
-        private MonoScript serverScript;
         public override void OnStartServer() {
             base.OnStartServer();
             if (serverScript != null)
                 gameObject.AddComponent(serverScript.GetClass());
-            //gameObject.SetActive(false);
-            createEvent?.Invoke(this);
-            StartNetwork();
+            weaponRoot.SetActive(false);
+            createStaticEvent?.Invoke(this);
         }
 #endif
-        public void StartNetwork() {
-            Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.Value.transform, ParentObjectName);
+        public override void OnStartNetwork() {
+            Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.transform, ParentObjectName);
             Debug.Assert(rightHand != null, "RightHand not found!");
             transform.SetParent(rightHand, false);
         }
+        void Awake() {
+            weaponRoot = transform.GetChild(0).gameObject;
+        }
         public void OnDestroy() {
-            destroyEvent?.Invoke(this);
+            destroyStaticEvent?.Invoke(this);
         }
     }
 }

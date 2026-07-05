@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 namespace RyanAssets.Input {
     public class ToolControls : MonoBehaviour {
@@ -42,8 +44,19 @@ namespace RyanAssets.Input {
         public void On_9() {
             toolBarHotkeyPressed?.Invoke(9);
         }
-        public void On_ActivateTool() {
-            if (!EventSystem.current.IsPointerOverGameObject())
+        bool IsCursorFree() { 
+            PointerEventData pointerData = new(EventSystem.current) {
+                position = Mouse.current.position.ReadValue()
+            };
+
+            List<RaycastResult> results = new();
+            EventSystem.current.RaycastAll(pointerData, results);
+
+            bool overUI = results.Count == 0;
+            return overUI;
+        }
+        public void OnActivateTool() {
+            if (IsCursorFree())
                 activateToolPressed?.Invoke();
         }
     }
