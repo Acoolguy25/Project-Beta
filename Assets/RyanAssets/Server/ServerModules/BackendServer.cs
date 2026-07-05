@@ -1,17 +1,17 @@
 using UnityEngine;
 using RyanAssets.NetworkService;
 using System;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using RyanAssets.Core;
 
 namespace RyanAssets.Server.ServerModules {
     public static class BackendServer {
-        public static async Task<(string, JObject)> RequestAsync(Func<Task<(string, JObject)>> requestFunc, string title, int retries = 3) {
+        public static async UniTask<(string, JObject)> RequestAsync(Func<UniTask<(string, JObject)>> requestFunc, string title, int retries = 3) {
             string res = "Request Never Executed";
             for (int i = 0; i < retries || retries <= 0; i++) {
-                async Task<(string, JObject)> SafeTryRequest() {
+                async UniTask<(string, JObject)> SafeTryRequest() {
                     try {
                         return await requestFunc();
                     } catch (Exception e) {
@@ -27,7 +27,7 @@ namespace RyanAssets.Server.ServerModules {
                     string jsonDisplay = (j != null) ? $"\nJSON: {JsonConvert.SerializeObject(j, Formatting.Indented)}" : "";
                     Debug.LogError($"{title} {res} ({i}{retriesText}){jsonDisplay}");
                     if (retries > 0)
-                        await Task.Delay(TimeSpan.FromSeconds(RequestHelper.GetRetryDelay(i)));
+                        await UniTask.Delay(TimeSpan.FromSeconds(RequestHelper.GetRetryDelay(i)));
                 }
             }
             return (res, null);

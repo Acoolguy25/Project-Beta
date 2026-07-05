@@ -4,10 +4,10 @@ using UnityEngine;
 
 namespace RyanAssets.Tools.Shared {
     public class ToolHitDetection : MonoBehaviour {
-        public event Action<Collision> CollisionEntered;
+        public event Action<Collider> CollisionEntered;
 
-        void OnCollisionEnter(Collision collision) {
-            CollisionEntered?.Invoke(collision);
+        void OnTriggerEnter(UnityEngine.Collider other) {
+            CollisionEntered?.Invoke(other);
         }
     }
 }

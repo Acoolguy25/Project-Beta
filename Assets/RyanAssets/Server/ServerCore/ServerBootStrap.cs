@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
 using UnityEngine.SceneManagement;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 
 using FishNet;
 using FishNet.Transporting;
@@ -33,7 +33,7 @@ namespace RyanAssets.Server.ServerCore {
             }
         };
         public static Action StartServerEvent, StopServerEvent;
-        public static event Func<Task> StopServerAsyncEvent;
+        public static event Func<UniTask> StopServerAsyncEvent;
         public static ServerInfo serverInfo = new();
         static bool isStopping;
         public static ushort MaxPlayers { get; private set; }
@@ -168,10 +168,10 @@ namespace RyanAssets.Server.ServerCore {
             }
         }
         public static void StopServer(string reason) {
-            _ = StopServerAsync(reason);
+            StopServerAsync(reason).Forget();
         }
 
-        static async Task StopServerAsync(string reason) {
+        static async UniTask StopServerAsync(string reason) {
             if (isStopping || !InstanceFinder.IsServerStarted)
                 return;
             isStopping = true;
@@ -184,7 +184,7 @@ namespace RyanAssets.Server.ServerCore {
 
             Debug.Log($"Stopping server because {reason}");
             StopServerEvent?.Invoke();
-            bool passed = await TaskHelper.AwaitTaskTimeout(Task.WhenAll(WaitForNetworkFlush(2), InvokeStopServerAsyncEvent()));
+            bool passed = await TaskHelper.AwaitTaskTimeout(UniTask.WhenAll(WaitForNetworkFlush(2), InvokeStopServerAsyncEvent()));
             if (!passed)
             {
                 Debug.LogError("StopServerAsyncEvent did not complete in time, proceeding with shutdown.");
@@ -197,9 +197,9 @@ namespace RyanAssets.Server.ServerCore {
             InstanceFinder.ServerManager.StopConnection(true);
             Application.Quit(0);
         }
-        private static Task WaitForNetworkFlush(int postTicks = 3)
+        private static UniTask WaitForNetworkFlush(int postTicks = 3)
         {
-            TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
+            UniTaskCompletionSource<bool> tcs = new UniTaskCompletionSource<bool>();
             int remaining = postTicks;
 
             void OnPostTick()
@@ -212,7 +212,7 @@ namespace RyanAssets.Server.ServerCore {
                 void OnPreTick()
                 {
                     InstanceFinder.TimeManager.OnPreTick -= OnPreTick;
-                    tcs.SetResult(true);
+                    tcs.TrySetResult(true);
                 }
 
                 InstanceFinder.TimeManager.OnPreTick += OnPreTick;
@@ -225,17 +225,17 @@ namespace RyanAssets.Server.ServerCore {
             StopServer("the backend server experienced a shutdown");
         }
 
-        static async Task InvokeStopServerAsyncEvent() {
+        static async UniTask InvokeStopServerAsyncEvent() {
             if (StopServerAsyncEvent == null)
                 return;
 
             Delegate[] handlers = StopServerAsyncEvent.GetInvocationList();
-            Task[] tasks = new Task[handlers.Length];
+            UniTask[] tasks = new UniTask[handlers.Length];
 
             for (int i = 0; i < handlers.Length; i++)
-                tasks[i] = ((Func<Task>)handlers[i]).Invoke();
+                tasks[i] = ((Func<UniTask>)handlers[i]).Invoke();
 
-            await Task.WhenAll(tasks);
+            await UniTask.WhenAll(tasks);
         }
     }
 }

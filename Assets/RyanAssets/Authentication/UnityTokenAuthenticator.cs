@@ -9,7 +9,7 @@ using UnityEngine;
 using RyanAssets.PromptService;
 #endif
 using RyanAssets.NetworkService;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 
@@ -62,7 +62,7 @@ namespace RyanAssets.Authentication {
         public static event Action<NetworkConnection, JObject> OnAuthenticationSucceeded;
         public static Dictionary<string, string> KickPlayers;
         public static bool IsShuttingDown;
-        private void OnAuthRequest(NetworkConnection conn, AuthRequest req, Channel channel) {
+        private void OnAuthRequest(NetworkConnection conn, AuthRequest req, FishNet.Transporting.Channel channel) {
             // Debug.Log("Received OnAuthRequest");
             if (conn.IsAuthenticated) {
                 Debug.LogWarning($"Received authentication req from {conn}, kicking..");
@@ -70,9 +70,9 @@ namespace RyanAssets.Authentication {
                 return;
             }
 
-            _ = ValidateToken(conn, req.Token);
+            ValidateToken(conn, req.Token).Forget();
         }
-        private async Task ValidateToken(NetworkConnection conn, string token) {
+        private async UniTask ValidateToken(NetworkConnection conn, string token) {
             if (IsShuttingDown) {
                 Fail(conn, "This server is shutting down!");
                 return;
@@ -109,7 +109,7 @@ namespace RyanAssets.Authentication {
         }
 #endif
 
-        private void OnAuthResponse(AuthResponse res, Channel channel) {
+        private void OnAuthResponse(AuthResponse res, FishNet.Transporting.Channel channel) {
             if (res.Success) {
                 // Debug.Log("Authentication Succeeded!");
             } else {

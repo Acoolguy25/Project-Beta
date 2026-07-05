@@ -6,13 +6,15 @@ using RyanAssets.NetworkService;
 using RyanAssets.Client.ClientModules;
 using RyanAssets.Client.ClientCore;
 using Newtonsoft.Json.Linq;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
+using System;
 
 
 
 namespace Universes.GameBrowser {
     [RequireComponent(typeof(CanvasGroupController))]
     public class SelectedGameUI : MonoBehaviour {
+        [NonSerialized]
         public UniverseStruct activeUniverse;
 
         [SerializeField]
@@ -34,13 +36,13 @@ namespace Universes.GameBrowser {
         public void CloseUniversePage() {
             selectedGameCanvasUI.SetVisible(false, 0.5f);
         }
-        static async Task<(string, JObject)> GetMyServer() {
+        static async UniTask<(string, JObject)> GetMyServer() {
             return await BackendNetwork.PostRequest($"/api/universes/v1/play?universe_id={joining_universe_id}");
         }
-        public static async Task PlayGame(string universe_id) {
+        public static async UniTask PlayGame(string universe_id) {
             joining_universe_id = universe_id;
             (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel);
-            if (res != null)
+            if (res != null || json == null)
                 return;
             // Debug.Log(json);
             ClientConnector.Instance.JoinGameServer(joining_universe_id, json);

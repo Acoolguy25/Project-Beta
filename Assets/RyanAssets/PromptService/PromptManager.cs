@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using RyanAssets.UI;
 using Unity.VisualScripting;
 using System.Collections.Generic;
@@ -47,7 +47,7 @@ namespace RyanAssets.PromptService {
         public string title, description;
         public PromptId promptId;
         public PromptButton[] buttons;
-        public TaskCompletionSource<PromptButton> response;
+        public UniTaskCompletionSource<PromptButton> response;
     };
 
     public class PromptManager: MonoBehaviour {
@@ -144,17 +144,17 @@ namespace RyanAssets.PromptService {
                     CompleteAction(0, button);
             }
         }
-        public Task<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
+        public UniTask<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
             if (promptId == PromptId.None)
-                return Task.FromResult(PromptButton.ErrorPromptId);
+                return UniTask.FromResult(PromptButton.ErrorPromptId);
             if (promptId != PromptId.Protected){
                 foreach (PromptData prompt in PromptList){
                     if (prompt.promptId == promptId){
-                        return Task.FromResult(PromptButton.ErrorDuplicate);
+                        return UniTask.FromResult(PromptButton.ErrorDuplicate);
                     }
                 }
             }
-            var promptResponse = new TaskCompletionSource<PromptButton>();
+            var promptResponse = new UniTaskCompletionSource<PromptButton>();
             PromptData newPrompt = new() {
                 title = title,
                 description = description,
@@ -187,7 +187,7 @@ namespace RyanAssets.PromptService {
         public static void PromptWait(string title, string description, PromptId promptId){
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_None);
         }
-        public static Task<PromptButton> PromptCancelableWait(string title, string description, PromptId promptId){
+        public static UniTask<PromptButton> PromptCancelableWait(string title, string description, PromptId promptId){
             return Instance.PromptLocalUser(title, description, promptId, ButtonPreset_CancelOnly);
         }
         public static void PromptOk(string title, string description, PromptId promptId = PromptId.Protected){

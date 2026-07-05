@@ -4,7 +4,6 @@ using FishNet.Connection;
 using Unity.VectorGraphics;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Shared.Requests;
-using System.Threading.Tasks;
 using System.Threading;
 using FishNet.Object;
 using System;

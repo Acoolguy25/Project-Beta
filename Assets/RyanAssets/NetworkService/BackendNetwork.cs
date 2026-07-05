@@ -1,7 +1,7 @@
 
 using UnityEngine;
 using System.Net.Http;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Net.Http.Headers;
@@ -37,7 +37,7 @@ namespace RyanAssets.NetworkService {
                 return null;
             }
         }
-        static async Task<(string, JObject)> HandleResponse(HttpResponseMessage response) {
+        static async UniTask<(string, JObject)> HandleResponse(HttpResponseMessage response) {
             if (response.StatusCode == HttpStatusCode.NoContent)
                 return (null, null);
             string text = await response.Content.ReadAsStringAsync();
@@ -77,7 +77,7 @@ namespace RyanAssets.NetworkService {
             client.DefaultRequestHeaders.Add(header_name, header_value);
         }
 #endif
-        public static async Task<(string, JObject)> GetRequest(string url) {
+        public static async UniTask<(string, JObject)> GetRequest(string url) {
             try {
                 using HttpRequestMessage request = new(HttpMethod.Get, url);
             #if !SERVER_BUILD
@@ -89,7 +89,7 @@ namespace RyanAssets.NetworkService {
                 return (e.Message, null);
             }
         }
-        public static async Task<(string, JObject)> PostRequest(string url, JObject body = null, string accessToken = null) {
+        public static async UniTask<(string, JObject)> PostRequest(string url, JObject body = null, string accessToken = null) {
             try {
                 StringContent content = new(
                     (body != null) ? body.ToString() : default_body,

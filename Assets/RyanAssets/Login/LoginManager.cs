@@ -5,7 +5,7 @@ using UnityEngine;
 using System;
 using System.Net.Http;
 using Newtonsoft.Json.Linq;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using RyanAssets.DataService;
 using RyanAssets.PromptService;
 using RyanAssets.Client.ClientModules;
@@ -22,12 +22,16 @@ namespace RyanAssets.Login {
         public LoginScreen loginScreen;
         [SerializeField]
         InputField usernameInputField;
-        async Task<(string, JObject)> LoadPlayerStats() {
+        async UniTask<(string, JObject)> LoadPlayerStats() {
             return await BackendNetwork.PostRequest("/api/players/v1/me");
         }
         async void SignedIn() {
             loginScreen.RefreshScreen();
             (string res, JObject json) = await BackendClient.RequestAsync(LoadPlayerStats, "Login", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse);
+            if (res != null || json == null) {
+                Debug.LogError($"Login player stats request failed: {res ?? "Response JSON was empty"}");
+                return;
+            }
             // json["preferences"] = BackendNetwork.ParseJSON(json["preferences"].ToString());
             LocalPlayerData.PlayerInit(json);
             usernameInputField.text = json["username"].ToString();

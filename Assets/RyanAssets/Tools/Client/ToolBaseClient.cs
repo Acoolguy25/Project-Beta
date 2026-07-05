@@ -2,7 +2,6 @@ using RyanAssets.Input;
 using RyanAssets.Tools.Shared;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -20,12 +19,12 @@ namespace RyanAssets.Tools.Client
             animator = toolBaseShared.connectedCharacter.GetComponent<Animator>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
-            ToolControls.activateToolPressed += OnActivate;
         }
         protected virtual void OnEquip(ToolBaseShared _) {
-
+            ToolControls.activateToolPressed += OnActivate;
         }
         protected virtual void OnUnequip(ToolBaseShared _) {
+            ToolControls.activateToolPressed -= OnActivate;
             SetAttacking(false);
             foreach (CancellationTokenSource token in activeTasks) {
                 token.Cancel();
@@ -39,7 +38,7 @@ namespace RyanAssets.Tools.Client
         protected virtual void SetAttacking(bool attack) {
         
         }
-        protected virtual void OnHit(Collision collision) {
+        protected virtual void OnHit(Collider collider) {
 
         }
         protected virtual CancellationTokenSource AddCancellationToken() {

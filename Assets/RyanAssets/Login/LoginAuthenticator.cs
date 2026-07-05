@@ -1,7 +1,6 @@
 using Unity.Services.Authentication;
 using Unity.Services.Core;
 using Unity.Services.Authentication.PlayerAccounts;
-using System.Threading.Tasks;
 using RyanAssets.PromptService;
 using UnityEngine;
 using RyanAssets.NetworkService;

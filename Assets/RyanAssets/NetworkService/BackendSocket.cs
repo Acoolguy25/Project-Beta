@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using RyanAssets.Core;
 
@@ -44,7 +44,7 @@ namespace RyanAssets.NetworkService {
                     break;
                 } catch (Exception ex) {
                     Debug.LogError(ex);
-                    await Task.Delay(TimeSpan.FromSeconds(RequestHelper.GetRetryDelay(i)));
+                    await UniTask.Delay(TimeSpan.FromSeconds(RequestHelper.GetRetryDelay(i)));
                 }
             }
         }

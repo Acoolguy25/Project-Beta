@@ -1,8 +1,9 @@
 using UnityEngine;
 using System;
 using System.Threading;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using RyanAssets.Core;
 using RyanAssets.NetworkService;
 
 namespace RyanAssets.Server.ServerCore {
@@ -16,10 +17,10 @@ namespace RyanAssets.Server.ServerCore {
             heartbeatCts = new CancellationTokenSource();
             ServerBootStrap.StopServerEvent += OnStopServer;
 
-            _ = HeartbeatLoop(heartbeatCts.Token);
+            HeartbeatLoop(heartbeatCts.Token).Forget();
         }
 
-        static async Task HeartbeatLoop(CancellationToken token) {
+        static async UniTask HeartbeatLoop(CancellationToken token) {
             Debug.Log($"Heartbeat loop started: {NetworkSettings.BackendAPIURL}");
 
             while (!token.IsCancellationRequested) {
@@ -39,9 +40,9 @@ namespace RyanAssets.Server.ServerCore {
                 }
 
                 try {
-                    await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerHeartbeatIntvSeconds), token);
+                    await UniTask.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerHeartbeatIntvSeconds), cancellationToken: token);
                 }
-                catch (TaskCanceledException) {
+                catch (OperationCanceledException) {
                     break;
                 }
             }
@@ -54,27 +55,20 @@ namespace RyanAssets.Server.ServerCore {
                 heartbeatCts.Cancel();
             // Debug.Log("Server shutting down");
 
-            _ = SendShutdown();
+            SendShutdown().Forget();
         }
 
-        static async Task SendShutdown() {
+        static async UniTask SendShutdown() {
             try {
-                Task request = SendShutdownRequest();
-                Task timeout = Task.Delay(TimeSpan.FromSeconds(2));
-
-                Task finished = await Task.WhenAny(request, timeout);
-
-                if (finished == timeout)
+                if (!await TaskHelper.AwaitTaskTimeout(SendShutdownRequest(), 2000))
                     Debug.LogWarning("Shutdown request timed out!");
-                else
-                    await request;
             }
             catch (Exception e) {
                 Debug.LogWarning($"Shutdown request failed: {e.Message}");
             }
         }
 
-        static async Task SendShutdownRequest() {
+        static async UniTask SendShutdownRequest() {
             (string res, JObject _) =
                 await BackendNetwork.PostRequest("/api/internal/v1/shutdown");
 

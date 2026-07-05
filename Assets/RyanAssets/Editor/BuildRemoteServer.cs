@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using RyanAssets.NetworkService;
+using EditorProgress = UnityEditor.Progress;
 using UnityDebug = UnityEngine.Debug;
 
 namespace RyanAssets.Editor
@@ -34,14 +35,14 @@ namespace RyanAssets.Editor
             catch (Exception e)
             {
                 UnityDebug.LogError($"Linux server build failed.\n{e}");
-                task.Finish(Progress.Status.Failed, "Linux server build failed");
+                task.Finish(EditorProgress.Status.Failed, "Linux server build failed");
                 ClearCurrentTask(task);
                 return;
             }
 
             if (task.IsCancellationRequested)
             {
-                task.Finish(Progress.Status.Canceled, "Canceled after build");
+                task.Finish(EditorProgress.Status.Canceled, "Canceled after build");
                 ClearCurrentTask(task);
                 return;
             }
@@ -49,7 +50,7 @@ namespace RyanAssets.Editor
             if (report.summary.result != BuildResult.Succeeded)
             {
                 UnityDebug.LogError("Linux server build failed.");
-                task.Finish(Progress.Status.Failed, "Linux server build failed");
+                task.Finish(EditorProgress.Status.Failed, "Linux server build failed");
                 ClearCurrentTask(task);
                 return;
             }
@@ -62,8 +63,9 @@ namespace RyanAssets.Editor
         {
             UnityDebug.Log("Linux server upload started in background.");
 
-            _ = Task.Run(() =>
+            UniTask.Create(async () =>
             {
+                await UniTask.SwitchToThreadPool();
                 try
                 {
                     string keyPath = Environment.ExpandEnvironmentVariables(
@@ -91,24 +93,24 @@ namespace RyanAssets.Editor
                         "Setting server executable permission"
                     );
 
-                    task.Finish(Progress.Status.Succeeded, "Linux server uploaded");
+                    task.Finish(EditorProgress.Status.Succeeded, "Linux server uploaded");
                     LogOnMainThread("Linux server uploaded successfully.");
                 }
                 catch (OperationCanceledException)
                 {
-                    task.Finish(Progress.Status.Canceled, "Linux server upload canceled");
+                    task.Finish(EditorProgress.Status.Canceled, "Linux server upload canceled");
                     LogOnMainThread("Linux server upload canceled.");
                 }
                 catch (Exception e)
                 {
-                    task.Finish(Progress.Status.Failed, "Linux server upload failed");
+                    task.Finish(EditorProgress.Status.Failed, "Linux server upload failed");
                     LogErrorOnMainThread($"Linux server upload failed:\n{e.Message}");
                 }
                 finally
                 {
                     ClearCurrentTask(task);
                 }
-            });
+            }).Forget();
         }
 
         static bool TryStartTask(string name, out BuildTask task)
@@ -211,8 +213,8 @@ namespace RyanAssets.Editor
             public BuildTask(string name)
             {
                 mainThreadId = Thread.CurrentThread.ManagedThreadId;
-                progressId = Progress.Start(name, "0% - Preparing - 00:00");
-                Progress.RegisterCancelCallback(progressId, RequestCancel);
+                progressId = EditorProgress.Start(name, "0% - Preparing - 00:00");
+                EditorProgress.RegisterCancelCallback(progressId, RequestCancel);
             }
 
             public bool IsCancellationRequested => cancelRequested;
@@ -221,18 +223,18 @@ namespace RyanAssets.Editor
             {
                 float clampedProgress = Math.Max(0f, Math.Min(0.99f, progress));
                 string description = FormatDescription(clampedProgress, phase);
-                RunOnMainThread(() => Progress.Report(progressId, clampedProgress, description));
+                RunOnMainThread(() => EditorProgress.Report(progressId, clampedProgress, description));
             }
 
-            public void Finish(Progress.Status status, string phase)
+            public void Finish(EditorProgress.Status status, string phase)
             {
-                float progress = status == Progress.Status.Succeeded ? 1f : Math.Min(0.99f, Math.Max(0f, ElapsedProgressGuess()));
+                float progress = status == EditorProgress.Status.Succeeded ? 1f : Math.Min(0.99f, Math.Max(0f, ElapsedProgressGuess()));
                 string description = FormatDescription(progress, phase);
 
                 RunOnMainThread(() =>
                 {
-                    Progress.Report(progressId, progress, description);
-                    Progress.Finish(progressId, status);
+                    EditorProgress.Report(progressId, progress, description);
+                    EditorProgress.Finish(progressId, status);
                 });
             }
 

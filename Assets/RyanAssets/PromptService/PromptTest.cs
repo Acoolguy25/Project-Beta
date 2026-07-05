@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace RyanAssets.PromptService {
@@ -7,7 +7,7 @@ namespace RyanAssets.PromptService {
             while (true){
                 PromptButton resp = await PromptManager.Instance.PromptLocalUser("Hello", "This is a test", PromptId.Protected, PromptManager.ButtonPreset_OkOnly);
                 Debug.Log("Resp: " + resp);
-                await Task.Delay(2 * 1000);
+                await UniTask.Delay(2 * 1000);
             }
         }
     }

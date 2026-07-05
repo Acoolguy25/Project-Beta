@@ -1,10 +1,9 @@
 using System;
 using System.Threading;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using RyanAssets.PromptService;
-using System.Collections.Generic;
 
 namespace RyanAssets.Client.ClientModules {
     public enum RetryPolicy {
@@ -13,30 +12,57 @@ namespace RyanAssets.Client.ClientModules {
         ForceRetry
     };
     public static class BackendClient {
-        static async Task<(string, JObject)> SafeTryRequest(Func<Task<(string, JObject)>> requestFunc) {
+        static async UniTask<(string, JObject)> SafeTryRequest(Func<UniTask<(string, JObject)>> requestFunc) {
             try {
                 return await requestFunc();
             } catch (Exception e) {
                 return ($"Unhandled error: {e}", null);
             }
         }
-        public static async Task<(string, JObject)> RequestAsync(Func<Task<(string, JObject)>> requestFunc, string title, RetryPolicy retryPolicy = RetryPolicy.ForceRetry, PromptId promptWaiting = PromptId.Protected, PromptId promptResult = PromptId.Protected, string desc = "Connecting To Server...") {
+        public static async UniTask<(string, JObject)> RequestAsync(Func<UniTask<(string, JObject)>> requestFunc, string title, RetryPolicy retryPolicy = RetryPolicy.ForceRetry, PromptId promptWaiting = PromptId.Protected, PromptId promptResult = PromptId.Protected, string desc = "Connecting To Server...") {
             while (true) {
-                CancellationTokenSource cts = new();
-                List<Task> tasks = new();
+                using CancellationTokenSource cts = new();
 
-                var requestTask = Task.Run(() => SafeTryRequest(requestFunc), cts.Token);
+                if (promptWaiting != PromptId.Protected && retryPolicy != RetryPolicy.RetryOrCancel)
+                    PromptManager.PromptWait(title, desc, promptWaiting);
 
-                Task waitingTask = requestTask;
-                if (promptWaiting != PromptId.Protected)
-                    if (retryPolicy == RetryPolicy.RetryOrCancel)
-                        waitingTask = PromptManager.PromptCancelableWait(title, desc, promptWaiting);
-                    else
-                        PromptManager.PromptWait(title, desc, promptWaiting);
-                Task completed = await Task.WhenAny(requestTask, waitingTask);
+                (string res, JObject j) result;
 
-                if (completed == requestTask){
-                    (string res, JObject j) = await requestTask;
+                if (promptWaiting != PromptId.Protected && retryPolicy == RetryPolicy.RetryOrCancel) {
+                    var completedSource = new UniTaskCompletionSource<int>();
+                    var requestSource = new UniTaskCompletionSource<(string, JObject)>();
+
+                    UniTask.Create(async () => {
+                        try {
+                            (string res, JObject j) requestResult = await SafeTryRequest(requestFunc).AttachExternalCancellation(cts.Token);
+                            requestSource.TrySetResult(requestResult);
+                            completedSource.TrySetResult(0);
+                        } catch (OperationCanceledException) {
+                            requestSource.TrySetCanceled(cts.Token);
+                        } catch (Exception e) {
+                            requestSource.TrySetException(e);
+                            completedSource.TrySetResult(0);
+                        }
+                    }).Forget();
+
+                    UniTask.Create(async () => {
+                        await PromptManager.PromptCancelableWait(title, desc, promptWaiting);
+                        completedSource.TrySetResult(1);
+                    }).Forget();
+
+                    int completed = await completedSource.Task;
+                    if (completed != 0) {
+                        cts.Cancel();
+                        return ("User Cancelled", null);
+                    }
+
+                    result = await requestSource.Task;
+                } else {
+                    result = await UniTask.Create(() => SafeTryRequest(requestFunc)).AttachExternalCancellation(cts.Token);
+                }
+
+                {
+                    (string res, JObject j) = result;
                     PromptManager.PromptDelete(promptWaiting);
                     if (res == null) { // succeeded
                         return (null, j);
@@ -55,10 +81,6 @@ namespace RyanAssets.Client.ClientModules {
                         else if (userResult == PromptButton.Ok || userResult == PromptButton.Cancel)
                             return (res, j);
                     }
-                }
-                else{
-                    cts.Cancel();
-                    return ("User Cancelled", null);
                 }
             }
         }

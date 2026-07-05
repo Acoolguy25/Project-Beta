@@ -125,6 +125,8 @@ namespace RyanAssets.Tools.Shared {
             weaponRoot = transform.GetChild(0).gameObject;
         }
         public void OnDestroy() {
+            if (equipped)
+                Unequip();
             destroyStaticEvent?.Invoke(this);
         }
     }

@@ -1,4 +1,5 @@
-﻿using RyanAssets.Characters.Shared;
+﻿using FishNet.Object;
+using RyanAssets.Characters.Shared;
 using RyanAssets.Tools.Shared;
 using System.Collections;
 using UnityEngine;
@@ -8,7 +9,7 @@ namespace RyanAssets.Tools.Server {
         protected override void Start() {
             base.Start();
             ((ToolMeleeShared)toolBaseShared).hitEvent += (gameCharacter) => {
-                OnHit((GameCharacter)gameCharacter);
+                OnHit(gameCharacter.gameObject.GetComponent<GameCharacter>());
             };
         }
         protected override void OnEquip(ToolBaseShared _) {

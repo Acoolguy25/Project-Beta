@@ -1,6 +1,6 @@
 using UnityEngine;
 using System;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using RyanAssets.NetworkService;
 using FishNet;
 using FishNet.Connection;
@@ -17,12 +17,12 @@ namespace RyanAssets.Server.ServerCore {
             ServerBootStrap.StartServerEvent += OnStartServer;
             ServerBootStrap.StopServerEvent += OnStopServer;
         }
-        static async Task IdleTimeoutLoop(CancellationToken token) {
+        static async UniTask IdleTimeoutLoop(CancellationToken token) {
             Debug.LogWarning("No Players Online; Server Will Stop Soon Due To Idle Timeout!");
             try {
-                await Task.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), token);
+                await UniTask.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), cancellationToken: token);
                 ServerBootStrap.StopServer("Idle Timeout");
-            } catch (TaskCanceledException) { }
+            } catch (OperationCanceledException) { }
         }
         static void OnStartServer() {
             InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
@@ -35,7 +35,7 @@ namespace RyanAssets.Server.ServerCore {
         static void StartIdleTimeout() {
             StopIdleTimeout();
             idleTimeoutCts = new();
-            _ = IdleTimeoutLoop(idleTimeoutCts.Token);
+            IdleTimeoutLoop(idleTimeoutCts.Token).Forget();
         }
         static void StopIdleTimeout() {
             if (idleTimeoutCts == null)

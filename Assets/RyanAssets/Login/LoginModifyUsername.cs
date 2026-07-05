@@ -1,5 +1,5 @@
 using System;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
@@ -18,7 +18,7 @@ namespace RyanAssets.Login {
         public void EditButtonClicked() {
             usernameInputField.Select();
         }
-        async Task<(string, JObject)> CheckUsernameAvailability() {
+        async UniTask<(string, JObject)> CheckUsernameAvailability() {
             return await BackendNetwork.GetRequest($"/api/players/v1/check-availability?username={newUsername}");
         }
         public async void UsernameSubmit() {
@@ -32,6 +32,8 @@ namespace RyanAssets.Login {
 
             (string res, JObject json) = await BackendClient.RequestAsync(CheckUsernameAvailability, "Username Availability", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse, retryPolicy: RetryPolicy.RetryOrCancel);
             // Debug.Log(json);
+            if (res != null || json == null)
+                return;
             if (!(bool)json["Available"]) {
                 PromptManager.PromptError("Username Unavailable", "Selected username is taken, please choose another one!");
                 return;

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Transporting;
@@ -27,7 +27,7 @@ namespace RyanAssets.Server.ServerCore {
 
         static void OnStartServer() {
             saveLoopCts = new CancellationTokenSource();
-            _ = SaveLoop(saveLoopCts.Token);
+            SaveLoop(saveLoopCts.Token).Forget();
         }
 
         static void OnStopServer() {
@@ -35,12 +35,12 @@ namespace RyanAssets.Server.ServerCore {
                 saveLoopCts.Cancel();
         }
 
-        static async Task SaveLoop(CancellationToken token) {
+        static async UniTask SaveLoop(CancellationToken token) {
             while (!token.IsCancellationRequested) {
                 try {
-                    await Task.Delay(TimeSpan.FromSeconds(60), token);
+                    await UniTask.Delay(TimeSpan.FromSeconds(60), cancellationToken: token);
                     await Save();
-                } catch (TaskCanceledException) {
+                } catch (OperationCanceledException) {
                     break;
                 }
             }
@@ -54,24 +54,24 @@ namespace RyanAssets.Server.ServerCore {
             dirtyConnections.Remove(conn);
         }
 
-        public static Task Save() {
+        public static UniTask Save() {
             return SaveDirty();
         }
 
-        public static Task Save(NetworkConnection conn) {
+        public static UniTask Save(NetworkConnection conn) {
             if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.ContainsKey(conn))
-                return Task.CompletedTask;
+                return UniTask.CompletedTask;
             if (!dirtyConnections.ContainsKey(conn) || !dirtyConnections[conn])
-                return Task.CompletedTask;
+                return UniTask.CompletedTask;
 
             return SavePlayers(new List<NetworkConnection> { conn });
         }
 
-        static Task SaveDirty() {
+        static UniTask SaveDirty() {
             return SavePlayers(new List<NetworkConnection>(dirtyConnections.Keys));
         }
 
-        static async Task SavePlayers(List<NetworkConnection> connections) {
+        static async UniTask SavePlayers(List<NetworkConnection> connections) {
             //InstanceFinder.ServerManager.Broadcast<PromptBroadcast>(new() {
             //    title = "PromptError",
             //    description = $"i am really annoying!"

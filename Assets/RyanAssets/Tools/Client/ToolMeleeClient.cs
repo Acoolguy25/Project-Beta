@@ -3,6 +3,7 @@ using RyanAssets.Characters.Shared;
 using RyanAssets.Tools.Shared;
 using System.Collections;
 using UnityEngine;
+using Cysharp.Threading.Tasks;
 
 namespace RyanAssets.Tools.Client {
     public class ToolMeleeClient : ToolBaseClient {
@@ -20,7 +21,7 @@ namespace RyanAssets.Tools.Client {
             base.OnActivate();
             var token = AddCancellationToken();
             SetAttacking(true);
-            await Awaitable.WaitForSecondsAsync(0.5f, token.Token);
+            await UniTask.WaitForSeconds(0.5f, cancellationToken: token.Token).SuppressCancellationThrow();
             SetAttacking(false);
         }
         protected override void SetAttacking(bool attack) {
@@ -28,9 +29,9 @@ namespace RyanAssets.Tools.Client {
             animator.SetBool("MeleeAttack", attack);
             hitCollider.enabled = attack;
         }
-        protected override void OnHit(Collision collision) {
-            base.OnHit(collision);
-            if (collision.transform.TryGetComponent(out GameCharacter character)) {
+        protected override void OnHit(Collider collider) {
+            base.OnHit(collider);
+            if (collider.transform.TryGetComponent(out GameCharacter character)) {
                 ((ToolMeleeShared)toolBaseShared).OnHit(character);
             }
         }

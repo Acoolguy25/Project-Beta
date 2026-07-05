@@ -1,4 +1,5 @@
 using System;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using FishNet;
 using FishNet.Connection;
@@ -30,7 +31,7 @@ namespace RyanAssets.Server.ServerCore {
             if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
                 return;
             string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id}";
-            _ = BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect");
+            BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect").Forget();
         }
 
         static void OnAuthenticationSucceeded(NetworkConnection conn, JObject json) {

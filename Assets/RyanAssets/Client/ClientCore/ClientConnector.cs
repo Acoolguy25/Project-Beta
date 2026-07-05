@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 
 using FishNet;
 using FishNet.Transporting;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using RyanAssets.Client.ClientModules;
 using System;
 using RyanAssets.Input;
@@ -39,11 +39,10 @@ namespace RyanAssets.Client.ClientCore {
         void SetJoiningMessage(string reason, string title = "Joining") {
             PromptManager.PromptDelete(PromptId.JoinGameAwait);
             if (reason != null)
-                _ = PromptManager.PromptCancelableWait(title + " Server", reason, PromptId.JoinGameAwait).ContinueWith(async task => {
-                    PromptButton button = await task;
+                PromptManager.PromptCancelableWait(title + " Server", reason, PromptId.JoinGameAwait).ContinueWith(button => {
                     if (button == PromptButton.Cancel)
                         CancelJoinGameServer();
-                });
+                }).Forget();
         }
         void SetJoinResult(string reason, string title = "Join Failed") {
             SetJoiningMessage(null);
@@ -51,7 +50,7 @@ namespace RyanAssets.Client.ClientCore {
             if (reason != null)
                 PromptManager.PromptOk(title, reason, PromptId.JoinGameResponse);
         }
-        async Task<(string, JObject)> WaitForServerLoad() {
+        async UniTask<(string, JObject)> WaitForServerLoad() {
             return await BackendNetwork.GetRequest($"/api/servers/v1/{joinServerId}/wait");
         }
         public async void JoinGameServer(string universe_id, JObject json) {
