@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using RyanAssets.Server.ServerFeatures;
+using RyanAssets.Characters.Shared;
 
 namespace RyanAssets.Characters.Server
 {
@@ -16,8 +17,9 @@ namespace RyanAssets.Characters.Server
     }
 
     [RequireComponent(typeof(NavMeshAgent))]
-    public class LocalNPC : MonoBehaviour
+    public class LocalNPC : IRagdoll
     {
+        public override bool disableOnRagdoll => true;
         [Header("Movement")]
         [SerializeField] private float WalkSpeed = 18.0f;
         [SerializeField] private float FleeSpeed = 28.0f;
@@ -41,14 +43,19 @@ namespace RyanAssets.Characters.Server
 
         public NavMeshAgent agent;
         private Coroutine _fleeCoroutine;
-
-        void Start()
-        {
+        void Awake() {
             agent = GetComponent<NavMeshAgent>();
             agent.updateRotation = false;
             agent.updateUpAxis = false;
+        }
+        void OnEnable()
+        {
             agent.enabled = true;
             UpdateSpeed();
+        }
+        void OnDisable() {
+            SetTargetingType(NPCTargetingType.None);
+            agent.enabled = false;
         }
         public void UpdateSpeed(){
             if (TargetingType == NPCTargetingType.Flee){

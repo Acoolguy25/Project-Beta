@@ -1,9 +1,10 @@
 ﻿using System.Collections;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace RyanAssets.Characters.Shared {
-    public class IRagdoll: MonoBehaviour { }
+    public class IRagdoll: MonoBehaviour { public virtual bool disableOnRagdoll => false; }
     public class RagdollCharacter : MonoBehaviour {
         [SerializeField]
         private bool RagdollEnabled;
@@ -19,10 +20,13 @@ namespace RyanAssets.Characters.Shared {
         private Joint[] joints;
         void Start() {
             GameCharacter = GetComponent<GameCharacter>();
-            if (RagdollOnDeath)
-                GameCharacter.OnDied += (_) => SetRagdoll(true);
 
             RagdollInit();
+            if (RagdollOnDeath) {
+                GameCharacter.OnDied += (_) => SetRagdoll(true);
+                if (GameCharacter.IsDead()) // If already died
+                    RagdollEnabled = true;
+            }
             SetRagdoll(RagdollEnabled);
         }
 #if UNITY_EDITOR
@@ -56,7 +60,10 @@ namespace RyanAssets.Characters.Shared {
                 }
             }
             foreach (var ragdoll in GetComponentsInChildren<MonoBehaviour>(true).OfType<IRagdoll>()) {
-                ragdoll.enabled = disabled;
+                if (ragdoll.disableOnRagdoll)
+                    ragdoll.enabled = !disabled;
+                else
+                    ragdoll.enabled = disabled;
             }
         }
         public void SetRagdoll(bool enabled) {

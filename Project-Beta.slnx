@@ -4,6 +4,7 @@
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
+  <Project Path="EasyDebug.Client.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Toolbar.csproj" />
@@ -23,7 +24,6 @@
   <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
   <Project Path="RyanAssets.Commands.Shared.csproj" />
-  <Project Path="EasyDebug.Client.csproj" />
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />

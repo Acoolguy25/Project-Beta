@@ -1,4 +1,5 @@
-﻿using FishNet.Object;
+﻿using FishNet;
+using FishNet.Object;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Tools.Shared;
 using System.Collections;
@@ -19,7 +20,9 @@ namespace RyanAssets.Tools.Server {
 
         }
         protected void OnHit(GameCharacter character) {
-            character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Firearm);
+            character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Melee);
+            //Destroy(character.gameObject);
+            //InstanceFinder.ServerManager.Despawn(character.gameObject);
         }
     }
 }

@@ -44,9 +44,6 @@ namespace RyanAssets.Tools.Shared {
             destroyStaticEvent = null;
         }
         void Equip() {
-            ToolBaseShared otherTool = transform.parent.GetComponentInChildren<ToolBaseShared>();
-            if (otherTool != null)
-                otherTool.Unequip();
             equippedStaticEvent?.Invoke(this);
             equippedEvent?.Invoke(this);
             weaponRoot.SetActive(true);

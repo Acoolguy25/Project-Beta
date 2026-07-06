@@ -13,7 +13,9 @@ namespace RyanAssets.Tools.Client {
                 Debug.LogError($"No hit collider found under {toolBaseShared.weaponRoot.name}.", toolBaseShared.weaponRoot);
                 return;
             }
-            hitCollider.gameObject.AddComponent<ToolHitDetection>().CollisionEntered += OnHit;
+            ToolHitDetection hitDetection = hitCollider.gameObject.AddComponent<ToolHitDetection>();
+            hitDetection.Init(toolBaseShared.connectedCharacter.transform);
+            hitDetection.CollisionEntered += OnHit;
         }
         protected override void OnEquip(ToolBaseShared _) {
             base.OnEquip(_);
@@ -36,7 +38,8 @@ namespace RyanAssets.Tools.Client {
         }
         protected override void OnHit(Collider collider) {
             base.OnHit(collider);
-            if (collider.transform.TryGetComponent(out GameCharacter character)) {
+            GameCharacter character = collider.transform.GetComponentInParent<GameCharacter>();
+            if (character != null) {
                 ((ToolMeleeShared)toolBaseShared).OnHit(character);
             }
         }

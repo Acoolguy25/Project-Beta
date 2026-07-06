@@ -22,7 +22,7 @@ namespace RyanAssets.Characters.Shared
         AudioSource _footStepSource;
 
         private Vector3 prevPosition;
-        private float jumpStart;
+        private float jumpStart = float.MinValue;
         public void OnFootstep(AnimationEvent animationEvent) {
             if (animationEvent.animatorClipInfo.weight > 0.5f && FootstepAudioClips.Length > 0) {
                 int index = Random.Range(0, FootstepAudioClips.Length);

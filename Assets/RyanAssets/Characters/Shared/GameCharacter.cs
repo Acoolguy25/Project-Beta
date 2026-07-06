@@ -9,7 +9,8 @@ namespace RyanAssets.Characters.Shared {
     public enum DamageSource {
         None,
         Fall,
-        Firearm,
+        Melee,
+        Gun,
         Despawn,
         
         Reset,
@@ -21,7 +22,7 @@ namespace RyanAssets.Characters.Shared {
         public readonly SyncVar<long> MaxHealth = new();
         readonly public SyncVar<ToolBaseShared> ActiveTool = new(new(WritePermission.ClientUnsynchronized));
         public void SwitchTool(ToolBaseShared tool) {
-            if (tool == ActiveTool.Value) return;
+            if (tool == ActiveTool.Value || (IsDead() && tool)) return;
 #if UNITY_SERVER
             if (ActiveTool.Value)
                 ActiveTool.Value.UnequipServer();
@@ -84,13 +85,20 @@ namespace RyanAssets.Characters.Shared {
             MaxHealthEditor = MaxHealth.Value;
 #endif
         }
+        [Server]
         protected virtual void Died(DamageSource source) {
             if (IsDead()) return;
+            SetHealth(0);
+            SharedDied(source);
+        }
+        protected virtual void SharedDied(DamageSource source) {
+            SwitchTool(null);
             if (!transform.tag.StartsWith("Dead"))
                 transform.tag = "Dead" + transform.tag;
-            SetHealth(0);
+
             OnDied?.Invoke(source);
         }
+        [Server]
         public virtual void Kill(DamageSource source) {
             Died(source);
         }
@@ -108,13 +116,17 @@ namespace RyanAssets.Characters.Shared {
         public void Init(long hp){
             Init(hp, hp);
         }
-        protected virtual void Start() {
+        public override void OnStartNetwork() {
 #if !UNITY_SERVER
             if (ActiveTool.Value)
                 ActiveTool.Value.EquipClient();
 #endif
             if (Health.Value == 0 && MaxHealth.Value > 0)
+#if UNITY_SERVER
                 Kill(DamageSource.None);
+#else
+                SharedDied(DamageSource.None);
+#endif
         }
     }
 }

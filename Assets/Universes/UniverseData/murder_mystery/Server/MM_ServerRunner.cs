@@ -9,6 +9,8 @@ namespace Universes.murder_mystery.Server {
     public class MM_ServerRunner : MonoBehaviour {
         [SerializeField]
         GameObject RobotNPC_Prefab;
+        [SerializeField]
+        bool Debug = true;
         void Awake(){
             ServerPlayerCharacter.OnPlayerCharacterAdded += OnCharacterAdded;
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
@@ -23,8 +25,12 @@ namespace Universes.murder_mystery.Server {
         }
         async void Start(){
             await ServerRunner.WaitForSceneAsync("murder_mystery_start");
-            for (int i = 0; i < 30; i++){
-                ServerNPC.SpawnNPC(RobotNPC_Prefab);
+            if (Debug) {
+                LocalNPC.FleeSpeedMultiplier = 0f;
+                LocalNPC.WalkSpeedMultiplier = 0f;
+            }
+            for (int i = 0; i < (Debug? 1: 30); i++){
+                LocalNPC obj = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (Debug? new Vector3(1117.56995f, -8.12100029f, 1008.34003f): null));
             }
             while(true) {
                 await ServerRunner.Intermission(10);

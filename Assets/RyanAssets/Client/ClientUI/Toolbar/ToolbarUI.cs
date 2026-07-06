@@ -32,8 +32,10 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             }
         }
         void OnToolRemoved(ToolBaseShared tool) {
-            if (tool.IsOwner)
+            if (toolBaseToItem.TryGetValue(tool, out Transform prefabClone) && prefabClone != null) {
+                RemovePrefab(prefabClone);
                 toolBaseToItem.Remove(tool);
+            }
         }
         void OnAddPrefab(GameObject prefabClone, ToolBaseShared toolBase) {
             prefabClone.transform.GetChild(0).GetComponent<Image>().sprite = toolBase.toolImage;
@@ -43,7 +45,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
                 prefabClone.GetComponent<Image>().color = Color.green;
             };
             toolBase.unequippedEvent += (ToolBaseShared _) => {
-                prefabClone.GetComponent<Image>().color = Color.gray;
+                prefabClone.GetComponent<Image>().color = new Color32(13, 14, 15, 219);
             };
         }
         void OnPrefabClicked(GameObject prefabClone, ToolBaseShared toolBase) {

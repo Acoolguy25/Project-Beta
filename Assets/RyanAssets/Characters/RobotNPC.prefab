@@ -4125,7 +4125,7 @@ GameObject:
   - component: {fileID: 9155375541221003514}
   - component: {fileID: 2508271702602764159}
   - component: {fileID: 8624230890759636101}
-  - component: {fileID: 5440816225021528054}
+  - component: {fileID: 1320132304164476998}
   - component: {fileID: 5344553774358299964}
   - component: {fileID: -291742417468123223}
   - component: {fileID: 2862851711235735417}
@@ -4270,7 +4270,7 @@ MonoBehaviour:
   - {fileID: 6153214736968288770}
   - {fileID: 2508271702602764159}
   - {fileID: 8624230890759636101}
-  - {fileID: 5440816225021528054}
+  - {fileID: 0}
   - {fileID: 7091241065695170515}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
@@ -4358,7 +4358,7 @@ MonoBehaviour:
     X: 0
     Y: 0
     Z: 0
---- !u!114 &5440816225021528054
+--- !u!114 &1320132304164476998
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -4367,12 +4367,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 6865002775998532502}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe78106734a0df145bbab500d0f0d7a2, type: 3}
+  m_Script: {fileID: 11500000, guid: 157c590c032953445ba61157195cba79, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.GameCharacter
-  _componentIndexCache: 3
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.TrackedGameCharacter
+  _componentIndexCache: 255
   _addedNetworkObject: {fileID: 9155375541221003514}
-  _networkObjectCache: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 0}
   HealthEditor: 0
   MaxHealthEditor: 0
 --- !u!114 &5344553774358299964

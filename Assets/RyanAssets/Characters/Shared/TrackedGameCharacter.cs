@@ -12,7 +12,7 @@ namespace RyanAssets.Characters.Shared {
         }
         [ObserversRpc]
         private void RpcDied(DamageSource source) {
-            OnDied?.Invoke(source);
+            SharedDied(source);
         }
     }
 }

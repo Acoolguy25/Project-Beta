@@ -21,7 +21,7 @@ namespace Universes.murder_mystery.Server
                     {
                         name = "Speed",
                         type = CommandArgumentType.Float,
-                        min = 0.1f,
+                        min = 0f,
                         max = 100f
                     }
                 }
@@ -36,7 +36,7 @@ namespace Universes.murder_mystery.Server
                     {
                         name = "Speed",
                         type = CommandArgumentType.Float,
-                        min = 0.1f,
+                        min = 0f,
                         max = 100f
                     }
                 }
