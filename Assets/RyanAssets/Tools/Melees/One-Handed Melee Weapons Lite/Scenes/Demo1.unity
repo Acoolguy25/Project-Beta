@@ -196,14 +196,6 @@ PrefabInstance:
       propertyPath: WasActiveDuringEdit
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: 3519154818253025011, guid: 22d87e29756248f49818058520841b2d, type: 3}
-      propertyPath: 'NetworkBehaviours.Array.data[0]'
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 4644704030424568041, guid: 22d87e29756248f49818058520841b2d, type: 3}
-      propertyPath: weaponRoot
-      value: 
-      objectReference: {fileID: 1685917840}
     - target: {fileID: 4863828123048561288, guid: 22d87e29756248f49818058520841b2d, type: 3}
       propertyPath: m_Name
       value: RoughDagger01
@@ -436,11 +428,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 00a426678692d02479fca36921aa5724, type: 3}
---- !u!1 &1685917840 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 7547310032996758689, guid: 22d87e29756248f49818058520841b2d, type: 3}
-  m_PrefabInstance: {fileID: 694304390}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1983251226
 GameObject:
   m_ObjectHideFlags: 0

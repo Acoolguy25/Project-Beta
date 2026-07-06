@@ -9,6 +9,10 @@ namespace RyanAssets.Tools.Client {
     public class ToolMeleeClient : ToolBaseClient {
         protected override void Start() {
             base.Start();
+            if (hitCollider == null) {
+                Debug.LogError($"No hit collider found under {toolBaseShared.weaponRoot.name}.", toolBaseShared.weaponRoot);
+                return;
+            }
             hitCollider.gameObject.AddComponent<ToolHitDetection>().CollisionEntered += OnHit;
         }
         protected override void OnEquip(ToolBaseShared _) {
@@ -27,7 +31,8 @@ namespace RyanAssets.Tools.Client {
         protected override void SetAttacking(bool attack) {
             base.SetAttacking(attack);
             animator.SetBool("MeleeAttack", attack);
-            hitCollider.enabled = attack;
+            if (hitCollider != null)
+                hitCollider.enabled = attack;
         }
         protected override void OnHit(Collider collider) {
             base.OnHit(collider);

@@ -15,7 +15,7 @@ namespace RyanAssets.Tools.Client
         protected Collider hitCollider;
         protected virtual void Start() {
             toolBaseShared = GetComponent<ToolBaseShared>();
-            hitCollider = toolBaseShared.weaponRoot.GetComponent<Collider>();
+            hitCollider = toolBaseShared.weaponRoot.GetComponentInChildren<Collider>(true);
             animator = toolBaseShared.connectedCharacter.GetComponent<Animator>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
