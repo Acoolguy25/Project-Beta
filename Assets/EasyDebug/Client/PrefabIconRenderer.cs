@@ -137,7 +137,10 @@ public class PrefabIconRenderer : EditorWindow {
         prefabObject.hideFlags = HideFlags.HideAndDontSave;
         prefabObject.transform.SetParent(group.transform);
         prefabObject.transform.localPosition = Vector3.zero;
-        prefabObject.transform.localRotation = Quaternion.Euler(objectRotation);
+        prefabObject.transform.localRotation =
+            Quaternion.AngleAxis(objectRotation.y, Vector3.forward) *
+            Quaternion.AngleAxis(objectRotation.x, Vector3.right) *
+            Quaternion.AngleAxis(objectRotation.z, Vector3.up);
         prefabObject.transform.localScale = Vector3.one * prefabZoom;
 
         Bounds bounds = GetRenderableBounds(prefabObject);

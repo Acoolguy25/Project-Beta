@@ -55,7 +55,7 @@ MonoBehaviour:
   toolEnum: 1
   toolName: Rough Dagger
   toolDesc: Rusty dagger that can stick wound someone.
-  toolImage: {fileID: 0}
+  toolImage: {fileID: 21300000, guid: 5b0fd8522a40a554a810f072a4904f3a, type: 3}
   ParentObjectName: RightHand
   staminaCost: 10
   hitDamage: 150

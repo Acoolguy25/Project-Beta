@@ -6,11 +6,16 @@ using RyanAssets.Input;
 using RyanAssets.Characters.Client;
 using TMPro;
 using UnityEngine.UI;
+using RyanAssets.TweenService.TweenComponents;
+using RyanAssets.Tools.Client;
 
 namespace RyanAssets.Client.ClientUI.Toolbar
 {
     public class ToolbarUI : ButtonGridUI<ToolBaseShared>
     {
+        [SerializeField]
+        public float SwitchToolDelay = 0.1f;
+        float LastSwitchToolTime = float.MinValue;
         Dictionary<ToolBaseShared, Transform> toolBaseToItem = new();
         protected override void Start()
         {
@@ -38,17 +43,31 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             }
         }
         void OnAddPrefab(GameObject prefabClone, ToolBaseShared toolBase) {
+            ToolBaseClient baseClient = toolBase.GetComponent<ToolBaseClient>();
+            UnityEngine.Assertions.Assert.IsNotNull(baseClient, $"ToolBaseShared {toolBase.name} does not have a ToolBaseClient component.");
+            Image backingImage = prefabClone.GetComponent<Image>();
             prefabClone.transform.GetChild(0).GetComponent<Image>().sprite = toolBase.toolImage;
-            prefabClone.transform.GetChild(1).GetComponent<TextMeshProUGUI>().text = prefabClone.transform.GetSiblingIndex().ToString();
+            Image sliderImage = prefabClone.transform.GetChild(1).GetComponent<Image>();
+            prefabClone.transform.GetChild(2).GetComponent<TextMeshProUGUI>().text = (prefabClone.transform.GetSiblingIndex() + 1).ToString();
             toolBaseToItem.Add(toolBase, prefabClone.transform);
             toolBase.equippedEvent += (ToolBaseShared _) => {
-                prefabClone.GetComponent<Image>().color = Color.green;
+                //prefabClone.GetComponent<Image>().color = new Color32(60, 81, 161, 219);
+                TweenImage.ColorImage(backingImage, 0.15f, new Color32(60, 81, 161, 219));
             };
             toolBase.unequippedEvent += (ToolBaseShared _) => {
-                prefabClone.GetComponent<Image>().color = new Color32(13, 14, 15, 219);
+                //prefabClone.GetComponent<Image>().color = new Color32(13, 14, 15, 219);
+                TweenImage.ColorImage(backingImage, 0.15f, new Color32(13, 14, 15, 219));
             };
+            baseClient.onCooldownChangeEvent += (float start, float stop) => {
+                sliderImage.rectTransform.anchorMax = new Vector2(1, 1);
+                TweenRectTransform.AnchorTween(sliderImage.rectTransform, stop - start, new Vector2(0f, 0f), new Vector2(1f, 0f));
+            };
+            sliderImage.rectTransform.anchorMax = new Vector2(1, 0);
         }
         void OnPrefabClicked(GameObject prefabClone, ToolBaseShared toolBase) {
+            if (LastSwitchToolTime + SwitchToolDelay > Time.time)
+                return;
+            LastSwitchToolTime = Time.time;
             if (LocalPlayer.Character.Equipped(toolBase))
                 LocalPlayer.Character.SwitchTool(null);
             else

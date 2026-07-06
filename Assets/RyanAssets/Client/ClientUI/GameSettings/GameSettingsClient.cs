@@ -45,22 +45,22 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             ["MasterVolume"] = new IntGameSetting(){
                 title = "Master Volume",
                 category = GameSettingCategory.Audio,
-                min = 1, max = 100, start = 50
+                min = 0, max = 100, start = 50
             },
             ["MenuMusic"] = new IntGameSetting(){
                 title = "Menu Music",
                 category = GameSettingCategory.Audio,
-                min = 1, max = 100, start = 50
+                min = 0, max = 100, start = 50
             },
             ["GameMusic"] = new IntGameSetting(){
                 title = "Game Music",
                 category = GameSettingCategory.Audio,
-                min = 1, max = 100, start = 50
+                min = 0, max = 100, start = 50
             },
             ["UIVolume"] = new IntGameSetting(){
                 title = "UI Volume",
                 category = GameSettingCategory.Audio,
-                min = 1, max = 100, start = 50
+                min = 0, max = 100, start = 50
             },
             // new IntGameSetting(){
             //     name = "VerticalZoomSensitivity",

@@ -26,6 +26,8 @@ namespace RyanAssets.Tools.Shared {
         public uint staminaCost = 10;
         [SerializeField]
         public uint hitDamage = 150;
+        [SerializeField]
+        public float primaryCooldown = 0.85f;
 
         public NetworkBehaviour connectedCharacter;
         public GameObject weaponRoot;
