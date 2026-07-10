@@ -14,6 +14,7 @@ namespace RyanAssets.Characters.Client {
         [Header("Player")]
         public float MoveSpeed = 2.0f;
         public float SprintSpeed = 5.335f;
+        public float SprintStaminaConsumptionRate = 10.0f;
         [Range(0.0f, 0.3f)] public float RotationSmoothTime = 0.12f;
         public float SpeedChangeRate = 10.0f;
 
@@ -100,9 +101,13 @@ namespace RyanAssets.Characters.Client {
             return move;
         }
         private void Move() {
-            float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
-            Vector2 moveVec = GetAdaptedMoveVector();
+            //if (LocalPlayer.Character.ConsumeStamina(previousSpeed.magnitude > 3f && _input.sprint)) {
 
+            //}
+            Vector2 moveVec = GetAdaptedMoveVector();
+            Vector2 lastMoveVec = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
+
+            float targetSpeed = (_input.sprint && moveVec.magnitude > 0f && lastMoveVec.magnitude > SprintSpeed/4f && LocalPlayer.Character.ConsumeStamina(SprintStaminaConsumptionRate * Time.fixedDeltaTime)) ? SprintSpeed : MoveSpeed;
             if (moveVec == Vector2.zero) targetSpeed = 0.0f;
 
             float inputMagnitude = _input.analogMovement ? moveVec.magnitude : 1f;

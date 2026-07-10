@@ -14,6 +14,7 @@ namespace RyanAssets.Characters.Shared {
             Characters[Owner] = this;
         }
 #if !UNITY_SERVER
+        public Action<float> StaminaChanged;
         public static event Action<(Transform, bool)> AnyCharacterAdded;
         public static event Action<(Transform, bool)> AnyCharacterRemoved;
         public static event Action<(Transform, bool)> AnyCharacterDied;
@@ -39,6 +40,32 @@ namespace RyanAssets.Characters.Shared {
         protected void Awake() {
             CharacterCamera = transform.Find("CharacterCamera");
             OnDied += OnDiedEvent;
+        }
+        float lastTimeStaminaRegen;
+        public virtual void SetStamina(float stamina) {
+            stamina = Mathf.Clamp(stamina, 0, MaxStamina.Value);
+            if (Stamina > stamina) lastTimeStaminaRegen = Time.time;
+            Stamina = stamina;
+            StaminaChanged?.Invoke(Stamina);
+        }
+        public virtual void DeltaStamina(float delta) {
+            SetStamina(Stamina + delta);
+        }
+        public virtual bool ConsumeStamina(float amount) {
+            if (Stamina < amount)
+                return false;
+            SetStamina(Stamina - amount);
+            return true;
+        }
+        void Update() {
+            if (Time.time >= lastTimeStaminaRegen + StaminaRegen.Value && !IsDead()) {
+                lastTimeStaminaRegen = Time.time;
+                DeltaStamina(1f);
+            }
+        }
+        public override void OnStartNetwork() {
+            base.OnStartNetwork();
+            SetStamina(MaxStamina.Value);
         }
 #else
         public override void OnOwnershipServer(NetworkConnection prevOwner) {

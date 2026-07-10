@@ -6,7 +6,9 @@ using System.Collections.Generic;
 namespace RyanAssets.Shared.Declarations {
     [System.Serializable]
     public enum TeamColor: short {
-        Lobby,
+        None,
+        Ghost, // Spectator
+        Lobby, // Lobby / Spectator
         Blue, // Sheriff
         Red,  // Murderer
         Green // Innocent
@@ -22,7 +24,7 @@ namespace RyanAssets.Shared.Declarations {
         // player data
         public int lives = -1;
         public int deaths = 0;
-        public TeamColor team = TeamColor.Lobby;
+        public TeamColor team = TeamColor.Ghost;
         // character data
         public List<ToolEnum> tools = new() { ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger };
         public float walkSpeed = 10f;

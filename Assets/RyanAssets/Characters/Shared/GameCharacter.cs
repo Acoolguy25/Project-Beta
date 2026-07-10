@@ -20,7 +20,12 @@ namespace RyanAssets.Characters.Shared {
     public class GameCharacter : NetworkBehaviour {
         public readonly SyncVar<long> Health = new();
         public readonly SyncVar<long> MaxHealth = new();
-        readonly public SyncVar<ToolBaseShared> ActiveTool = new(new(WritePermission.ClientUnsynchronized));
+        public readonly SyncVar<ToolBaseShared> ActiveTool = new(new(WritePermission.ClientUnsynchronized));
+#if !UNITY_SERVER
+        public float Stamina;
+#endif
+        public readonly SyncVar<float> MaxStamina = new();
+        public readonly SyncVar<float> StaminaRegen = new();
         public void SwitchTool(ToolBaseShared tool) {
             if (tool == ActiveTool.Value || (IsDead() && tool)) return;
 #if UNITY_SERVER
@@ -109,8 +114,10 @@ namespace RyanAssets.Characters.Shared {
             return Health.Value == MaxHealth.Value && !IsDead();
         }
 
-        public virtual void Init(long hp, long maxHP) {
+        public virtual void Init(long hp, long maxHP, float maxStamina = 100f, float staminaRegen = 1f) {
             MaxHealth.Value = maxHP;
+            MaxStamina.Value = maxStamina;
+            StaminaRegen.Value = staminaRegen;
             SetHealth(hp);
         }
         public void Init(long hp){
@@ -127,6 +134,7 @@ namespace RyanAssets.Characters.Shared {
 #else
                 SharedDied(DamageSource.None);
 #endif
+            
         }
     }
 }

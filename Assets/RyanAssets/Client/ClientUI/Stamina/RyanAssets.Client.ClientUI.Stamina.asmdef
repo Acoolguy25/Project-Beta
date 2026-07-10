@@ -1,0 +1,27 @@
+{
+    "name": "RyanAssets.Client.ClientUI.Stamina",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Stamina",
+    "references": [
+        "GUID:bbe124153e03c834bb9c5fb786ef908a",
+        "GUID:d81c570acb0546e47865a9bb58cc7645",
+        "GUID:ed67ee73c62f4dd4086a7f7f2bbde5ed",
+        "GUID:a8e23967f92bb984dbade4a7176fb550",
+        "GUID:5b7b4c192f382b045bac8ca1197e2b45",
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:d62649f20bc2ba349a434c5eba6f7556",
+        "GUID:6ac2de33d550f6e43ab52d2391cf5802",
+        "GUID:8658255f531113649bacf96894a008e1"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

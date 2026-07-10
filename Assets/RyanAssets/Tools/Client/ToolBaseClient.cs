@@ -1,3 +1,4 @@
+using RyanAssets.Characters.Shared;
 using RyanAssets.Input;
 using RyanAssets.Tools.Shared;
 using System;
@@ -10,6 +11,7 @@ namespace RyanAssets.Tools.Client
 {
     [RequireComponent(typeof(ToolBaseShared))]
     public class ToolBaseClient : MonoBehaviour {
+        public Func<bool> CanActivateEvent = null;
         public event Action<float, float> onCooldownChangeEvent;
         protected List<CancellationTokenSource> activeTasks = new();
         protected ToolBaseShared toolBaseShared;
@@ -55,7 +57,7 @@ namespace RyanAssets.Tools.Client
             onCooldownChangeEvent?.Invoke(StartCooldown, StopCooldown);
         }
         protected virtual bool CanAttack() {
-            return StopCooldown <= Time.time;
+            return StopCooldown <= Time.time && (CanActivateEvent == null || CanActivateEvent());
         }
         protected virtual CancellationTokenSource AddCancellationToken() {
             CancellationTokenSource token = new();

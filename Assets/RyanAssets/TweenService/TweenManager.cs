@@ -25,7 +25,7 @@ namespace RyanAssets.TweenService {
         public Action<float> onchange_event;
         public void UpdateTimer(float delta_time) {
             cur_timer = Mathf.Clamp(cur_timer + delta_time, 0f, end_timer);
-            realValue = cur_timer / (end_timer - start_timer);
+            realValue = Mathf.Min(cur_timer / (end_timer - start_timer), 1f);
             transformedValue = Mathf.Clamp(easingClass.TransformValue(realValue), 0f, 1f);
             onchange_event?.Invoke(transformedValue);
         }
