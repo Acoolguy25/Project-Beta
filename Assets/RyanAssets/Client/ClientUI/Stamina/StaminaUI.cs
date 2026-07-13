@@ -1,3 +1,4 @@
+using FishNet.Object;
 using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
 using RyanAssets.TweenService.TweenComponents;
@@ -27,17 +28,19 @@ namespace RyanAssets.Client.ClientUI.Stamina {
             OnStaminaChanged(true);
             SetVisible(true);
         }
-        void OnCharacterDied(DamageSource source) {
+        void OnCharacterDied(DamageSource source, NetworkObject sourceObject) {
             SetVisible();
         }
         void OnCharacterRemoved() {
             SetVisible();
         }
         void SetVisible(bool visible = false) {
-            canvasGroupController.SetVisible(false, 0.5f);
+            canvasGroupController.SetVisible(visible, 0.5f);
         }
         void OnStaminaChanged(bool Instant) {
-            TweenRectTransform.AnchorTween(staminaSlider.rectTransform, Instant ? 0 : 0.25f, Vector2.zero, new Vector2(localCharacter.Stamina / localCharacter.MaxStamina.Value, 1));
+            //TweenRectTransform.AnchorTween(staminaSlider.rectTransform, Instant ? 0 : 0.25f, Vector2.zero, new Vector2(localCharacter.Stamina / localCharacter.MaxStamina.Value, 1));
+            // Always keep it instant
+            staminaSlider.rectTransform.anchorMax = new Vector2(localCharacter.Stamina / localCharacter.MaxStamina.Value, 1);
         }
     }
 }

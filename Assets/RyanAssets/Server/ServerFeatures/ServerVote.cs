@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Transporting;
+using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Shared.Player;
 using RyanAssets.Shared.Requests;
@@ -20,7 +21,7 @@ namespace RyanAssets.Server.ServerFeatures {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
             InstanceFinder.ServerManager.RegisterBroadcast<VoteRequest>(OnVoteRequest, true);
-            ServerPlayerEvents.OnPlayerRemovedEvent += OnPlayerRemoved;
+            PlayerData.OnPlayerRemoved += OnPlayerRemoved;
         }
 
         public static void StartVote(string title, IReadOnlyList<SharedVoteOption> options, float durationSeconds = -1f, string description = "") {
@@ -101,7 +102,7 @@ namespace RyanAssets.Server.ServerFeatures {
             ChangeVoteCount(vote.voteId, request.optionId, 1);
         }
 
-        static void OnPlayerRemoved(NetworkConnection conn) {
+        static void OnPlayerRemoved(NetworkConnection conn, PlayerData playerData) {
             SharedVoteInfo vote = SharedGlobalEvents.Instance.CurrentVote;
             if (!vote.isActive || !PlayerVotes.TryGetValue(conn, out int optionId))
                 return;

@@ -20,7 +20,7 @@ namespace RyanAssets.Tools.Server {
 
         }
         protected void OnHit(GameCharacter character) {
-            character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Melee);
+            character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Melee, toolBaseShared.NetworkObject);
             //Destroy(character.gameObject);
             //InstanceFinder.ServerManager.Despawn(character.gameObject);
         }

@@ -53,9 +53,12 @@ namespace RyanAssets.UI.ListGrid {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
-                if (!pending_ops.Remove(op))
+                GameObject prefabClone = (op.Result != null)? op.Result[0]: null;
+                if (!pending_ops.Remove(op)) {
+                    if (prefabClone)
+                        Destroy(prefabClone);
                     return; // cancelled
-                GameObject prefabClone = op.Result[0];
+                }
                 prefabOrder.Add(prefabClone.transform, order);
                 prefabClone.transform.SetParent(contentTarget, false);
                 

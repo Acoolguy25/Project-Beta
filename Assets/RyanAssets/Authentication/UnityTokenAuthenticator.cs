@@ -12,10 +12,13 @@ using RyanAssets.NetworkService;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using FishNet;
+using RyanAssets.DataService;
 
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {
         public override event Action<NetworkConnection, bool> OnAuthenticationResult;
+        public GameObject playerDataPrefab;
 
         public override void InitializeOnce(NetworkManager networkManager) {
             base.InitializeOnce(networkManager);
@@ -59,7 +62,7 @@ namespace RyanAssets.Authentication {
             });
         }
 #else
-        public static event Action<NetworkConnection, JObject> OnAuthenticationSucceeded;
+        public static event Action<NetworkConnection, PlayerData, JObject> OnAuthenticationSucceeded;
         public static Dictionary<string, string> KickPlayers;
         public static bool IsShuttingDown;
         private void OnAuthRequest(NetworkConnection conn, AuthRequest req, FishNet.Transporting.Channel channel) {
@@ -91,7 +94,10 @@ namespace RyanAssets.Authentication {
                 }, false);
 
                 OnAuthenticationResult?.Invoke(conn, true);
-                OnAuthenticationSucceeded?.Invoke(conn, json);
+                PlayerData playerData = Instantiate(playerDataPrefab).GetComponent<PlayerData>();
+                playerData.Deserialize(json);
+                InstanceFinder.ServerManager.Spawn(playerData.gameObject, conn);
+                OnAuthenticationSucceeded?.Invoke(conn, playerData, json);
             } else {
                 Fail(conn, res);
             }

@@ -17,6 +17,7 @@ namespace RyanAssets.TweenService {
         ManualUpdate
     };
     public class TweenTimer {
+        public object targetObject;
         public float transformedValue, realValue;
         public float start_timer, end_timer, cur_timer;
         public TweenUpdateDelta delta_method;
@@ -33,9 +34,10 @@ namespace RyanAssets.TweenService {
     public class TweenManager : MonoBehaviour {
         public static TweenManager Instance { get; private set; }
         readonly List<TweenTimer> ActiveTweens = new();
-        public void RegisterTween(float duration, Action<float> onchange_event, TweenUpdateDelta delta = TweenUpdateDelta.RealTime, TweenUpdateMethod update = TweenUpdateMethod.Update, EasingClass easing = null) {
+        public void RegisterTween(float duration, Action<float> onchange_event, TweenUpdateDelta delta = TweenUpdateDelta.RealTime, TweenUpdateMethod update = TweenUpdateMethod.Update, EasingClass easing = null, object targetObject = null) {
             easing ??= new LinearEasing();
             TweenTimer newTimer = new() {
+                targetObject = targetObject?? gameObject,
                 delta_method = delta,
                 update_method = update,
                 easingClass = easing,
@@ -49,11 +51,17 @@ namespace RyanAssets.TweenService {
         void Awake() {
             Instance = this;
         }
+        bool IsObjectDestroyed(object obj) {
+            //Debug.Log($"obj == null: {obj == null}");
+            //Debug.Log($"ReferenceEquals: {ReferenceEquals(obj, null)}");
+            //Debug.Log($"InstanceID: {obj.GetHashCode()}");
+            return obj == null; // Unity check for destroyed non null objects
+        }
         void UpdateAllTimers(TweenUpdateMethod method, float scaled_delta_time, float real_delta_time){
             // foreach (TweenTimer timer in ActiveTweens){
             for (int i = ActiveTweens.Count() - 1; i >= 0; i--){
                 TweenTimer timer = ActiveTweens[i];
-                if (timer.transformedValue == 1f)
+                if (timer.transformedValue == 1f || IsObjectDestroyed(timer.targetObject))
                     ActiveTweens.RemoveAt(i);
                 else if (timer.update_method == method)
                     timer.UpdateTimer(timer.delta_method == TweenUpdateDelta.ScaledTime? scaled_delta_time: real_delta_time);
@@ -67,6 +75,15 @@ namespace RyanAssets.TweenService {
         }
         void LateUpdate(){
             UpdateAllTimers(TweenUpdateMethod.LateUpdate, Time.deltaTime, Time.unscaledDeltaTime);
+        }
+
+        // Public Helpers
+        public void ClearTweens(object obj) {
+            for (int i = ActiveTweens.Count() - 1; i >= 0; i--) {
+                TweenTimer timer = ActiveTweens[i];
+                if (timer.targetObject == obj)
+                    ActiveTweens.RemoveAt(i);
+            }
         }
     }
 }

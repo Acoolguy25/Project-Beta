@@ -11,6 +11,7 @@ using FishNet.Transporting;
 using System.Collections.Generic;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
+using RyanAssets.DataService;
 
 namespace RyanAssets.Server.ServerCore {
     public class ServerPlayerCharacter: MonoBehaviour {
@@ -34,13 +35,13 @@ namespace RyanAssets.Server.ServerCore {
             var newCharacter = Instantiate(characterPrefab.gameObject);
             newCharacter.transform.position = Vector3.zero;
             LocalCharacter localChar = newCharacter.GetComponent<LocalCharacter>();
-            localChar.OnDied += (_) => OnPlayerCharacterDie(player, newCharacter.transform);
+            localChar.OnDied += (_, _) => OnPlayerCharacterDie(player, newCharacter.transform);
             localChar.Init(health);
             OnPlayerCharacterAdded?.Invoke(player, localChar);
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
             ClientToCharacter[player] = localChar;
             // Insert player tools
-            foreach (var tool in SharedGlobalEvents.Instance.Players[player].gamePlayerStats.tools) {
+            foreach (var tool in PlayerData.Players[player].tools) {
                 ServerTool.Instance.AddTool(localChar.NetworkObject, tool);
             }
         }
@@ -75,10 +76,10 @@ namespace RyanAssets.Server.ServerCore {
                 ResetPlayerCharacter(conn);
         }
 
-        void PlayerAdded(NetworkConnection player){
+        void PlayerAdded(NetworkConnection player, PlayerData playerData){
             SpawnPlayerCharacter(player);
         }
-        void PlayerRemoved(NetworkConnection player){
+        void PlayerRemoved(NetworkConnection player, PlayerData playerData){
             DespawnPlayerCharacter(player);
         }
         void Awake()
@@ -86,13 +87,13 @@ namespace RyanAssets.Server.ServerCore {
             Instance = this;
         }
         void OnEnable(){
-            ServerPlayerEvents.OnPlayerAddedEvent += PlayerAdded;
-            ServerPlayerEvents.OnPlayerRemovedEvent += PlayerRemoved;
+            PlayerData.OnPlayerAdded += PlayerAdded;
+            PlayerData.OnPlayerRemoved += PlayerRemoved;
             InstanceFinder.ServerManager.RegisterBroadcast<MenuActionRequest>(OnMenuActionRequest);
         }
         void OnDisable(){
-            ServerPlayerEvents.OnPlayerAddedEvent -= PlayerAdded;
-            ServerPlayerEvents.OnPlayerRemovedEvent -= PlayerRemoved;
+            PlayerData.OnPlayerAdded -= PlayerAdded;
+            PlayerData.OnPlayerRemoved -= PlayerRemoved;
             InstanceFinder.ServerManager.UnregisterBroadcast<MenuActionRequest>(OnMenuActionRequest);
         }
     }

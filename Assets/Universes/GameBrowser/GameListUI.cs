@@ -66,11 +66,11 @@ namespace Universes.GameBrowser {
             RefreshPrefabs(UniverseCfg.ActiveUniverses);
         }
         private void OnEnable() {
-            LocalPlayerData.username_changed_event += UsernameRefresh;
-            UsernameRefresh(LocalPlayerData.localData.username);
+            LocalPlayerDataHandler.username_changed_event += UsernameRefresh;
+            UsernameRefresh(LocalPlayerDataHandler.localData.username);
         }
         private void OnDisable() {
-            LocalPlayerData.username_changed_event -= UsernameRefresh;
+            LocalPlayerDataHandler.username_changed_event -= UsernameRefresh;
         }
         public void Refresh_ButtonClicked() {
             TweenImage.SpinImage(refreshImage, 1 / 3f, 180);

@@ -23,7 +23,7 @@ namespace RyanAssets.Characters.Shared {
 
             RagdollInit();
             if (RagdollOnDeath) {
-                GameCharacter.OnDied += (_) => SetRagdoll(true);
+                GameCharacter.OnDied += (_, _) => SetRagdoll(true);
                 if (GameCharacter.IsDead()) // If already died
                     RagdollEnabled = true;
             }

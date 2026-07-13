@@ -1,7 +1,18 @@
 {
     "name": "RyanAssets.Client.Audio",
     "rootNamespace": "RyanAssets.Client.ClientAudio",
-    "references": [],
+    "references": [
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:cc504a07560c6e240ae0bb9cfb3b64c9",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:30b4aa37ab8e7994987c0bdb87f386dd",
+        "GUID:ed67ee73c62f4dd4086a7f7f2bbde5ed",
+        "GUID:5b7b4c192f382b045bac8ca1197e2b45",
+        "GUID:a8e23967f92bb984dbade4a7176fb550",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

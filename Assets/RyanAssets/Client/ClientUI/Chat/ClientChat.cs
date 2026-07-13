@@ -37,8 +37,8 @@ namespace RyanAssets.Client.ClientUI.Chat {
             OnCreatePrefab += OnCreateMessage;
             InstanceFinder.ClientManager.RegisterBroadcast<ChatMessageBroadcast>(OnReceiveChatMessage);
             InstanceFinder.ClientManager.RegisterBroadcast<SystemMessageBroadcast>(OnReceiveSystemMessage);
-            SharedGlobalEvents.OnPlayerAdded += OnPlayerAdded;
-            SharedGlobalEvents.OnPlayerRemoved += OnPlayerRemoved;
+            PlayerData.OnPlayerAdded += OnPlayerAdded;
+            PlayerData.OnPlayerRemoved += OnPlayerRemoved;
             chatBox.onSubmit.AddListener(OnMessageSend_ButtonPressed);
             ClientConnector.OnDisconnected += OnDisconnected;
             ClientConnector.OnConnected += OnConnected;
@@ -70,7 +70,7 @@ namespace RyanAssets.Client.ClientUI.Chat {
                         break;
                 }
             } else { // Player message
-                string username = SharedGlobalEvents.Instance.Players[message.player].data.username;
+                string username = PlayerData.Players[message.player].username.Value;
                 displayText = $"{ClientChatHelper.ColorNameRichText(username)}: {ClientChatHelper.EscapeRichText(message.message)}";
             }
             usernameText.text = displayText;
@@ -115,15 +115,15 @@ namespace RyanAssets.Client.ClientUI.Chat {
             CreateSystemMessage(new("Chat messages will appear here.", SystemMessageSource.LocalPlayerJoinMessage));
         }
 
-        private void OnPlayerAdded(NetworkConnection conn, ServerPlayerStats stats, bool synced) {
-            if (!synced)
-                return;
-            CreateSystemMessage(new($"{stats.data.username} has joined the game!", SystemMessageSource.PlayerAdd));
+        private void OnPlayerAdded(NetworkConnection conn, PlayerData stats) {
+            //if (!synced)
+            //    return;
+            CreateSystemMessage(new($"{stats.username.Value} has joined the game!", SystemMessageSource.PlayerAdd));
         }
-        private void OnPlayerRemoved(NetworkConnection conn, ServerPlayerStats stats) {
+        private void OnPlayerRemoved(NetworkConnection conn, PlayerData stats) {
             if (conn.IsLocalClient)
                 return;
-            CreateSystemMessage(new($"{stats.data.username} has left the game!", SystemMessageSource.PlayerRemove));
+            CreateSystemMessage(new($"{stats.username.Value} has left the game!", SystemMessageSource.PlayerRemove));
         }
         public void CreateSystemMessage(SystemMessageBroadcast message) {
             AddPrefab(new() { message = message.message, type = message.type });

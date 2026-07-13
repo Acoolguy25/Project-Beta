@@ -50,5 +50,8 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             PlayerPrefs.SetInt(GetSaveName(), EncodeValue(value));
             PlayerPrefs.Save();
         }
+        public override void ToggleValue() {
+            TrySet(!value);
+        }
     }
 }

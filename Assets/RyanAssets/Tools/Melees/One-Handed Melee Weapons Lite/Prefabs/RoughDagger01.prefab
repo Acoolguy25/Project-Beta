@@ -49,9 +49,9 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 3519154818253025011}
   _networkObjectCache: {fileID: 3519154818253025011}
-  clientScript: {fileID: 11500000, guid: 682cafef70093aa4ba60061119a727d1, type: 3}
-  clientObserver: {fileID: 0}
-  serverScript: {fileID: 11500000, guid: 8b938495da25fdd4681a4af4c12a615c, type: 3}
+  clientScript: RyanAssets.Tools.Client.ToolMeleeClient, RyanAssets.Tools.Client
+  clientObserver: 
+  serverScript: RyanAssets.Tools.Server.ToolMeleeServer, RyanAssets.Tools.Server
   toolEnum: 1
   toolName: Rough Dagger
   toolDesc: Rusty dagger that can stick wound someone.
@@ -59,6 +59,7 @@ MonoBehaviour:
   ParentObjectName: RightHand
   staminaCost: 10
   hitDamage: 150
+  primaryCooldown: 0.85
   connectedCharacter: {fileID: 0}
   weaponRoot: {fileID: 7547310032996758689}
 --- !u!114 &3519154818253025011

@@ -33,7 +33,7 @@ namespace RyanAssets.Login {
                 return;
             }
             // json["preferences"] = BackendNetwork.ParseJSON(json["preferences"].ToString());
-            LocalPlayerData.PlayerInit(json);
+            LocalPlayerDataHandler.PlayerInit(json);
             usernameInputField.text = json["username"].ToString();
         }
         void SignedOut() {
@@ -51,7 +51,7 @@ namespace RyanAssets.Login {
             } else {
                 SignedIn();
             }
-            usernameInputField.text = LocalPlayerData.localData.username;
+            usernameInputField.text = LocalPlayerDataHandler.localData.username;
         }
         void OnDestroy() {
             if (!NetworkSettings.noNetworkLogin) {

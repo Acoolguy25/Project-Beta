@@ -1,6 +1,7 @@
 ﻿using FishNet;
 using RyanAssets.Client.ClientUI.Chat;
 using RyanAssets.Commands.Shared;
+using RyanAssets.DataService;
 using RyanAssets.Declarations;
 using RyanAssets.Shared.Player;
 using RyanAssets.UI.Autocomplete;
@@ -35,7 +36,7 @@ namespace RyanAssets.Commands.Client {
             } else {
                 bool found = CommandVerification.TryGetCommandConfig(commandConfigs.Values, fullString.Split(" ")[0], out CommandConfig commandConfig);
                 if (found && commandConfig.arguments.Length > spaces-1)
-                    options = CommandVerification.GetArgumentPredictions(commandConfig.arguments[spaces-1], fullString.Split(" ")[spaces-1], SharedGlobalEvents.Instance.GetPlayerNames());
+                    options = CommandVerification.GetArgumentPredictions(commandConfig.arguments[spaces-1], fullString.Split(" ")[spaces-1], PlayerData.GetPlayerNames());
             }
             foreach (var newText in options) {
                 AddPrefab(new() { display = newText });
@@ -59,7 +60,7 @@ namespace RyanAssets.Commands.Client {
                 if (str2Cmd.TryGetValue(commandName, out CommandConfig commandCfg) && commandCfg.arguments.Length > 0 && args.Length + 1 == commandCfg.arguments.Length && 
                     (commandCfg.arguments[commandCfg.arguments.Length - 1].type == CommandArgumentType.Player || commandCfg.arguments[commandCfg.arguments.Length - 1].type == CommandArgumentType.Players))
                     args = args.Append("me").ToArray();
-                if (!CommandVerification.VerifyCommand(str2Cmd.Values, commandName, args, SharedGlobalEvents.Instance.GetPlayerNames(), out errorMessage)) {
+                if (!CommandVerification.VerifyCommand(str2Cmd.Values, commandName, args, PlayerData.GetPlayerNames(), out errorMessage)) {
                     ShowCommandError(errorMessage);
                     return true;
                 }

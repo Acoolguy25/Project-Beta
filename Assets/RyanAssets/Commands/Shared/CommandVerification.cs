@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Object.Synchronizing;
 using NUnit.Framework;
+using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
 using System;
 using System.Collections.Generic;
@@ -214,7 +215,7 @@ namespace RyanAssets.Commands.Shared {
             }
             return result;
         }
-        public static List<NetworkConnection> GetPlayersFromArgument(string arg, SyncDictionary<NetworkConnection, ServerPlayerStats> allPlayers, NetworkConnection caller)
+        public static List<NetworkConnection> GetPlayersFromArgument(string arg, Dictionary<NetworkConnection, PlayerData> allPlayers, NetworkConnection caller)
         {
             HashSet<NetworkConnection> result = new();
             foreach (string value in SplitPlayersArgument(arg))
@@ -233,7 +234,7 @@ namespace RyanAssets.Commands.Shared {
                 }
                 else
                 {
-                    var playerConn = allPlayers.FirstOrDefault(conn => string.Equals(conn.Value.data.username, value, StringComparison.OrdinalIgnoreCase));
+                    var playerConn = allPlayers.FirstOrDefault(conn => string.Equals(conn.Value.username.Value, value, StringComparison.OrdinalIgnoreCase));
                     if (playerConn.Key.IsValid())
                     {
                         result.Add(playerConn.Key);

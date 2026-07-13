@@ -2,6 +2,7 @@ using FishNet;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientUI.GameSettings;
 using RyanAssets.Core;
+using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
@@ -52,17 +53,24 @@ namespace RyanAssets.Characters.Client {
         //private bool IsCurrentDeviceMouse => _playerInput != null && _playerInput.currentControlScheme == "KeyboardMouse";
         void OnEnable() {
             LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
-            SharedGlobalEvents.OnMyPlayerUpdated += Refresh;
-             if (SharedGlobalEvents.Instance && SharedGlobalEvents.Instance.Players.TryGetValue(InstanceFinder.ClientManager.Connection, out ServerPlayerStats serverPlayerStats))
-                Refresh(serverPlayerStats);
+            //PlayerData.localData.walkSpeed.Subscribe(Refresh);
+            //if (SharedGlobalEvents.Instance && SharedGlobalEvents.Instance.Players.TryGetValue(InstanceFinder.ClientManager.Connection, out ServerPlayerStats serverPlayerStats))
+            //   Refresh(serverPlayerStats);
+            PlayerData.OnMyPlayerAdded.Subscribe(OnMyPlayerAdded);
         }
         void OnDisable() {
             LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
-            SharedGlobalEvents.OnMyPlayerUpdated -= Refresh;
+            PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
+            //SharedGlobalEvents.OnMyPlayerUpdated -= Refresh;
+            //PlayerData.localData.walkSpeed.Unsubscribe(Refresh);
         }
-        private void Refresh(ServerPlayerStats playerStats) {
-            MoveSpeed = playerStats.gamePlayerStats.walkSpeed;
-            SprintSpeed = playerStats.gamePlayerStats.sprintSpeed;
+        void OnMyPlayerAdded(PlayerData data) {
+            data.walkSpeed.OnChange += (_, _, _) => Refresh();
+            data.sprintSpeed.OnChange += (_, _, _) => Refresh();
+        }
+        private void Refresh() {
+            MoveSpeed = PlayerData.localData.walkSpeed.Value;
+            SprintSpeed = PlayerData.localData.sprintSpeed.Value;
         }
         private void OnCharacterAdded(Transform c) {
             _hasAnimator = LocalPlayer.Character.TryGetComponent(out _animator);

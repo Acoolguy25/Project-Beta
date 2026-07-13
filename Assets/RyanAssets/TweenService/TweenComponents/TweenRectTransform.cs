@@ -28,7 +28,7 @@ namespace RyanAssets.TweenService.TweenComponents {
                 rect.anchorMax = currentAnchorMax;
             };
 
-            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing);
+            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing, rect.gameObject);
         }
 
         // Pure anchoredPosition tween, no anchor involvement.
@@ -39,7 +39,7 @@ namespace RyanAssets.TweenService.TweenComponents {
                 rect.anchoredPosition = Vector2.Lerp(startPosition, targetPosition, percent);
             };
 
-            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing);
+            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing, rect.gameObject);
         }
     }
 }

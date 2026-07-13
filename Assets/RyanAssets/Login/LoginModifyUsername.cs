@@ -23,7 +23,7 @@ namespace RyanAssets.Login {
         }
         public async void UsernameSubmit() {
             newUsername = usernameInputField.text;
-            if (newUsername == LocalPlayerData.localData.username)
+            if (newUsername == LocalPlayerDataHandler.localData.username)
                 return;
             else if (!Regex.IsMatch(newUsername, usernameRegexPattern)) {
                 await PromptManager.Instance.PromptLocalUser("Invalid Username", "Username cannot contain spaces or non alphanumeric characters", PromptId.UsernameResponse, PromptManager.ButtonPreset_CancelOnly);
@@ -43,10 +43,10 @@ namespace RyanAssets.Login {
                 PromptManager.ButtonPreset_YesNo
             );
             if (resp != PromptButton.Yes) {
-                usernameInputField.text = LocalPlayerData.localData.username;
+                usernameInputField.text = LocalPlayerDataHandler.localData.username;
                 return;
             }
-            LocalPlayerData.ModifyUsername(newUsername);
+            LocalPlayerDataHandler.ModifyUsername(newUsername);
         }
     }
 }

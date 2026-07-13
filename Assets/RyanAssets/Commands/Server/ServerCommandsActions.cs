@@ -6,6 +6,7 @@ using System.Reflection;
 using FishNet;
 using FishNet.Connection;
 using RyanAssets.Commands.Shared;
+using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
@@ -64,31 +65,29 @@ namespace RyanAssets.Commands.Server {
             ServerCommandService.SendSystemMessage(caller, $"Commands: {commandList}");
         }
         public static void Player_SetWalkspeed(NetworkConnection caller, string commandName, string[] args) {
-            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
-                if (SharedGlobalEvents.Instance.Players.TryGetValue(conn, out var player))
+                if (PlayerData.Players.TryGetValue(conn, out var player))
                 {
-                    player.gamePlayerStats.walkSpeed = float.Parse(args[1]);
-                    SharedGlobalEvents.Instance.Players.Dirty(conn);
+                    player.walkSpeed.Value = float.Parse(args[1]);
                 }
             }
         }
         public static void Player_SetSprintspeed(NetworkConnection caller, string commandName, string[] args)
         {
-            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
-                if (SharedGlobalEvents.Instance.Players.TryGetValue(conn, out var player))
+                if (PlayerData.Players.TryGetValue(conn, out var player))
                 {
-                    player.gamePlayerStats.sprintSpeed = float.Parse(args[1]);
-                    SharedGlobalEvents.Instance.Players.Dirty(conn);
+                    player.sprintSpeed.Value = float.Parse(args[1]);
                 }
             }
         }
         public static void Player_Kill(NetworkConnection caller, string commandName, string[] args)
         {
-            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
                 if (ServerPlayerCharacter.ClientToCharacter.TryGetValue(conn, out var character))
@@ -99,7 +98,7 @@ namespace RyanAssets.Commands.Server {
         }
         public static void Player_Respawn(NetworkConnection caller, string commandName, string[] args)
         {
-            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
                 ServerPlayerCharacter.DespawnPlayerCharacter(conn);
@@ -108,15 +107,15 @@ namespace RyanAssets.Commands.Server {
         }
         public static void Player_Kick(NetworkConnection caller, string commandName, string[] args)
         {
-            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], SharedGlobalEvents.Instance.Players, caller);
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
-                ServerPlayerEvents.KickPlayer(conn, $"Kicked by {SharedGlobalEvents.GetPlayerName(caller) ?? "anonymous"}");
+                ServerPlayerEvents.KickPlayer(conn, $"Kicked by {PlayerData.GetPlayerName(caller) ?? "anonymous"}");
             }
         }
         public static void Server_Shutdown(NetworkConnection caller, string commandName, string[] args)
         {
-            ServerBootStrap.StopServer($"Shutdown by {SharedGlobalEvents.GetPlayerName(caller) ?? "anonymous"}");
+            ServerBootStrap.StopServer($"Shutdown by {PlayerData.GetPlayerName(caller) ?? "anonymous"}");
         }
     }
 }

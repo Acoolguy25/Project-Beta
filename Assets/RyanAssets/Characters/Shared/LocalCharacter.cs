@@ -34,7 +34,7 @@ namespace RyanAssets.Characters.Shared {
         void OnDestroy() {
             AnyCharacterRemoved?.Invoke((transform, IsOwner));
         }
-        void OnDiedEvent(DamageSource source) {
+        void OnDiedEvent(DamageSource source, NetworkObject sourceObject) {
             AnyCharacterDied?.Invoke((transform, IsOwner));
         }
         protected void Awake() {
@@ -44,7 +44,7 @@ namespace RyanAssets.Characters.Shared {
         float lastTimeStaminaRegen;
         public virtual void SetStamina(float stamina) {
             stamina = Mathf.Clamp(stamina, 0, MaxStamina.Value);
-            if (Stamina > stamina) lastTimeStaminaRegen = Time.time;
+            if (Stamina > stamina) lastTimeStaminaRegen = Time.time; // Trigger cooldown if stamina is consumed
             Stamina = stamina;
             StaminaChanged?.Invoke(Stamina);
         }
@@ -58,9 +58,9 @@ namespace RyanAssets.Characters.Shared {
             return true;
         }
         void Update() {
-            if (Time.time >= lastTimeStaminaRegen + StaminaRegen.Value && !IsDead()) {
-                lastTimeStaminaRegen = Time.time;
-                DeltaStamina(1f);
+            if (Time.time >= lastTimeStaminaRegen + StaminaCooldown.Value && !IsDead()) {
+                //lastTimeStaminaRegen = Time.time;
+                DeltaStamina(Time.deltaTime * StaminaRegen.Value);
             }
         }
         public override void OnStartNetwork() {

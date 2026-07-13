@@ -26,6 +26,7 @@ namespace RyanAssets.Characters.Shared {
 #endif
         public readonly SyncVar<float> MaxStamina = new();
         public readonly SyncVar<float> StaminaRegen = new();
+        public readonly SyncVar<float> StaminaCooldown = new();
         public void SwitchTool(ToolBaseShared tool) {
             if (tool == ActiveTool.Value || (IsDead() && tool)) return;
 #if UNITY_SERVER
@@ -65,8 +66,8 @@ namespace RyanAssets.Characters.Shared {
             MaxHealthEditor = MaxHealth.Value;
         }
 #endif
-        public Action<DamageSource> OnDied;
-        public virtual void TakeDamage(long Damage, DamageSource source = DamageSource.None) {
+        public Action<DamageSource, NetworkObject> OnDied;
+        public virtual void TakeDamage(long Damage, DamageSource source = DamageSource.None, NetworkObject sourceObject = null) {
             if (Health.Value == 0)
                 return;
             if (Damage < 0) {
@@ -74,7 +75,7 @@ namespace RyanAssets.Characters.Shared {
                 return;
             }
             if (Damage >= Health.Value && MaxHealth.Value >= 0) {
-                Died(source);
+                Died(source, sourceObject);
             } else {
                 SetHealth(Health.Value - Damage);
             }
@@ -91,21 +92,21 @@ namespace RyanAssets.Characters.Shared {
 #endif
         }
         [Server]
-        protected virtual void Died(DamageSource source) {
+        protected virtual void Died(DamageSource source, NetworkObject sourceObject) {
             if (IsDead()) return;
             SetHealth(0);
-            SharedDied(source);
+            SharedDied(source, sourceObject);
         }
-        protected virtual void SharedDied(DamageSource source) {
+        protected virtual void SharedDied(DamageSource source, NetworkObject sourceObject) {
             SwitchTool(null);
             if (!transform.tag.StartsWith("Dead"))
                 transform.tag = "Dead" + transform.tag;
 
-            OnDied?.Invoke(source);
+            OnDied?.Invoke(source, sourceObject);
         }
         [Server]
-        public virtual void Kill(DamageSource source) {
-            Died(source);
+        public virtual void Kill(DamageSource source, NetworkObject sourceObject = null) {
+            Died(source, sourceObject);
         }
         public bool IsDead() {
             return Health.Value == 0 && MaxHealth.Value != 0;
@@ -114,14 +115,18 @@ namespace RyanAssets.Characters.Shared {
             return Health.Value == MaxHealth.Value && !IsDead();
         }
 
-        public virtual void Init(long hp, long maxHP, float maxStamina = 100f, float staminaRegen = 1f) {
+        public virtual void Init(long hp, long maxHP, float maxStamina = 100f, float staminaRegen = 10f, float staminaCooldown = 0.4f) {
             MaxHealth.Value = maxHP;
             MaxStamina.Value = maxStamina;
             StaminaRegen.Value = staminaRegen;
+            StaminaCooldown.Value = staminaCooldown;
             SetHealth(hp);
         }
         public void Init(long hp){
             Init(hp, hp);
+        }
+        public override void OnStopNetwork() {
+            SwitchTool(null);
         }
         public override void OnStartNetwork() {
 #if !UNITY_SERVER
@@ -132,7 +137,7 @@ namespace RyanAssets.Characters.Shared {
 #if UNITY_SERVER
                 Kill(DamageSource.None);
 #else
-                SharedDied(DamageSource.None);
+                SharedDied(DamageSource.None, null);
 #endif
             
         }

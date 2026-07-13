@@ -136,6 +136,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3eece3509dba6fd46984d4f390259a1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Authentication::RyanAssets.Authentication.UnityTokenAuthenticator
+  playerDataPrefab: {fileID: 4617473292877070987, guid: 17fdc17fcd730124aac0b60666055340, type: 3}
 --- !u!114 &1960467471069559613
 MonoBehaviour:
   m_ObjectHideFlags: 0

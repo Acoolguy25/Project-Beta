@@ -129,7 +129,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 5910158685828723263, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
       propertyPath: m_Name
-      value: NetworkServerManager
+      value: ServerNetworkManager
       objectReference: {fileID: 0}
     - target: {fileID: 6452689492563838916, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
       propertyPath: m_LocalPosition.x

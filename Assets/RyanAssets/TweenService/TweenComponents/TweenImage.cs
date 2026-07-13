@@ -18,14 +18,14 @@ namespace RyanAssets.TweenService.TweenComponents {
             Action<float> onChange = (float percent) => {
                 imageTransform.rotation = Quaternion.Euler(0f, 0f, offset + percent * degrees * (float)spinDirection);
             };
-            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing);
+            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing, imageTransform);
         }
         public static void ColorImage(Image image, float duration, Color targetColor, TweenUpdateDelta delta = TweenUpdateDelta.RealTime, TweenUpdateMethod update = TweenUpdateMethod.Update, EasingClass easing = null) {
             Color startColor = image.color;
             Action<float> onChange = (float percent) => {
                 image.color = Color.Lerp(startColor, targetColor, percent);
             };
-            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing);
+            TweenManager.Instance.RegisterTween(duration, onChange, delta, update, easing, image);
         }
     }
 }

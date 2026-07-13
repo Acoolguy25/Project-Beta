@@ -3,11 +3,12 @@ using FishNet.Connection;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Shared.Player;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.DataService;
 
 namespace RyanAssets.Server.ServerFeatures {
     public static class ServerReward {
         public static bool AddXPReward(NetworkConnection conn, ulong xpReward) {
-            if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
+            if (SharedGlobalEvents.Instance == null || !PlayerData.Players.TryGetValue(conn, out PlayerData stats))
                 return false;
 
             return AddXPReward(conn, stats, xpReward);
@@ -15,13 +16,13 @@ namespace RyanAssets.Server.ServerFeatures {
 
         public static bool AddXPReward(string playerId, ulong xpReward) {
             NetworkConnection matchedConn = null;
-            ServerPlayerStats matchedStats = default;
+            PlayerData matchedStats = default;
 
             if (SharedGlobalEvents.Instance == null)
                 return false;
 
-            foreach (KeyValuePair<NetworkConnection, ServerPlayerStats> pair in SharedGlobalEvents.Instance.Players) {
-                if (pair.Value.player_id != playerId)
+            foreach (KeyValuePair<NetworkConnection, PlayerData> pair in PlayerData.Players) {
+                if (pair.Value.player_id.Value != playerId)
                     continue;
 
                 matchedConn = pair.Key;
@@ -32,13 +33,12 @@ namespace RyanAssets.Server.ServerFeatures {
             return matchedConn != null && AddXPReward(matchedConn, matchedStats, xpReward);
         }
 
-        static bool AddXPReward(NetworkConnection conn, ServerPlayerStats stats, ulong xpReward) {
-            ulong previousXp = stats.data.xp;
-            stats.data.xp = ulong.MaxValue - previousXp < xpReward
+        static bool AddXPReward(NetworkConnection conn, PlayerData stats, ulong xpReward) {
+            ulong previousXp = stats.xp.Value;
+            stats.xp.Value = ulong.MaxValue - previousXp < xpReward
                 ? ulong.MaxValue
                 : previousXp + xpReward;
 
-            SharedGlobalEvents.Instance.Players[conn] = stats;
             ServerPlayerSave.MarkDirty(conn);
             return true;
         }

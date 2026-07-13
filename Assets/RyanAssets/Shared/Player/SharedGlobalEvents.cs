@@ -29,13 +29,22 @@ namespace RyanAssets.Shared.Player {
         public string imageUrl;
         public int count;
     }
+    [Serializable]
+    public enum MusicTracks : ushort {
+        MenuMusic,
+        GameMusic1,
+        GameMusic2,
+        None
+    };
 
     public class SharedGlobalEvents : NetworkBehaviour {
         public static SharedGlobalEvents Instance;
-        public static Action OnInstanceReady;
-        public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
+        public static Action OnInstanceReady, OnInstanceReadyPersistent, OnInstanceRemoved;
+        //public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
         public readonly SyncList<CommandConfig> Commands = new();
         public readonly SyncList<SharedVoteOption> VoteOptions = new();
+        public readonly SyncList<string> LeaderboardHeaders = new();
+        public readonly SyncVar<MusicTracks> MusicTrack = new(initialValue: Player.MusicTracks.GameMusic1);
         readonly SyncVar<SharedVoteInfo> _currentVote = new();
         readonly SyncVar<string> _topMessage = new();
 
@@ -51,60 +60,28 @@ namespace RyanAssets.Shared.Player {
 
         void Awake() {
             Instance = this;
-            OnInstanceReady?.Invoke();
 #if !UNITY_SERVER
             // foreach (var pair in Players) {
             //     OnPlayerAdded?.Invoke(pair.Key, pair.Value);
             // }
-            InstanceFinder.ClientManager.RegisterBroadcast<PlayerLeaveBroadcast>(OnPlayerRemovedHandler);
-            Players.OnChange += OnPlayerChanged;
+            //Players.OnChange += OnPlayerChanged;
             Commands.OnChange += OnCommandsChanged;
             VoteOptions.OnChange += OnVoteOptionsChanged;
             _currentVote.OnChange += OnCurrentVoteChanged;
             _topMessage.OnChange += (_, msg, _) => TopMessageChanged?.Invoke(msg);
-            PlayerListSynced = false;
+            //PlayerListSynced = false;
 #endif
         }
 
         public override void OnStartServer() {
             base.OnStartServer();
             Instance = this;
-            OnInstanceReady?.Invoke();
         }
 #if !UNITY_SERVER
-        public static Action<NetworkConnection, ServerPlayerStats> OnPlayerRemoved, OnPlayerUpdated;
-        public static Action<NetworkConnection, ServerPlayerStats, bool> OnPlayerAdded;
-        public static Action<ServerPlayerStats> OnMyPlayerUpdated;
+        
         public static Action OnCommandsUpdated;
         public static Action OnVoteChanged;
         public static Action<SharedVoteInfo> OnCurrentVoteChangedEvent;
-        public static bool PlayerListSynced;
-
-        void OnPlayerChanged(SyncDictionaryOperation op, NetworkConnection key, ServerPlayerStats value, bool asServer) {
-            switch (op) {
-                case SyncDictionaryOperation.Add:
-                    // Debug.Log($"{key} player added");
-                    OnPlayerAdded?.Invoke(key, value, PlayerListSynced);
-                    if (key.IsLocalClient)
-                        OnMyPlayerUpdated?.Invoke(value);
-                    break;
-                case SyncDictionaryOperation.Set:
-                    OnPlayerUpdated?.Invoke(key, value);
-                    if (key.IsLocalClient)
-                        OnMyPlayerUpdated?.Invoke(value);
-                    break;
-                case SyncDictionaryOperation.Remove:
-                    // Debug.Log($"{key} player removed");
-                    //OnPlayerRemoved?.Invoke(key, value);
-                    break;
-                case SyncDictionaryOperation.Clear:
-                    Debug.LogError("PlayerList was cleared!");
-                    break;
-                case SyncDictionaryOperation.Complete:
-                    PlayerListSynced = true;
-                    break;
-            }
-        }
 
         void OnVoteOptionsChanged(SyncListOperation op, int index, SharedVoteOption oldItem, SharedVoteOption newItem, bool asServer) {
             if (op != SyncListOperation.Complete)
@@ -122,52 +99,38 @@ namespace RyanAssets.Shared.Player {
             OnCurrentVoteChangedEvent?.Invoke(next);
             OnVoteChanged?.Invoke();
         }
-        void OnPlayerRemovedHandler(PlayerLeaveBroadcast msg, FishNet.Transporting.Channel channel) {
-            OnPlayerRemoved?.Invoke(msg.player, msg.stats);
-        }
-
-        // private void SyncLatePlayerAdd(Action<NetworkConnection, ServerPlayerStats> func) {
-        //     foreach (var pair in Players) {
-        //         func(pair.Key, pair.Value);
-        //     }
-        // }
-        public static void RegisterLatePlayerAdd(Action<NetworkConnection, ServerPlayerStats, bool> func) {
-            // if (Instance != null)
-            //     Instance.SyncLatePlayerAdd(func);
-            OnPlayerAdded += func;
-        }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init(){
             Instance = null;
             OnInstanceReady = null;
-            OnPlayerAdded = null;
-            OnPlayerRemoved = null;
-            OnPlayerUpdated = null;
-            OnMyPlayerUpdated = null;
             OnVoteChanged = null;
             OnCurrentVoteChangedEvent = null;
             OnCommandsUpdated = null;
         }
-        private void OnDestroy() {
-            if (InstanceFinder.ClientManager == null)
-                return;
-            InstanceFinder.ClientManager.UnregisterBroadcast<PlayerLeaveBroadcast>(OnPlayerRemovedHandler);
+        public static void BindInstanceReady(Action action, bool persistent = false) {
+            if (persistent)
+                OnInstanceReadyPersistent += action;
+            if (Instance == null) {
+                if (!persistent)
+                    OnInstanceReady += action;
+            } else
+                action();
+        }
+#else
+        public static void SetTopMessage(string topMessage) {
+            Instance.TopMessage = topMessage;
         }
 #endif
-        public List<string> GetPlayerNames(Func<KeyValuePair<NetworkConnection, ServerPlayerStats>, bool> selector = null) {
-            List<string> strings = new();
-            foreach (var item in Players) {
-                if (selector != null && !selector(item))
-                    continue;
-                strings.Add(item.Value.data.username);
-            }
-            return strings;
+        public static int GetLeaderboardIndex(string name) {
+            return Instance?.LeaderboardHeaders?.IndexOf(name) ?? -1;
         }
-        public static string GetPlayerName(NetworkConnection connection) {
-            if (Instance && Instance.Players.TryGetValue(connection, out ServerPlayerStats serverPlayerStats)){
-                return serverPlayerStats.data.username;
-            }
-            return null;
+        public override void OnStartNetwork() {
+            OnInstanceReady?.Invoke();
+            OnInstanceReadyPersistent?.Invoke();
+            OnInstanceReady = null;
+        }
+        public override void OnStopNetwork() {
+            OnInstanceRemoved?.Invoke();
         }
     }
 }

@@ -23,8 +23,8 @@ namespace RyanAssets.Levels.Client {
         void UpdateLevel(){
             _level_text.text = LevelsCalc.GetRank(xp).ToString();
         }
-        public static void UpdateLevelInstances(PlayerData playerData){
-            xp = playerData.xp;
+        public static void UpdateLevelInstances(LocalPlayerData localPlayerData){
+            xp = localPlayerData.xp;
             foreach (LevelClient client in Instances){
                 client.UpdateLevel();
             }

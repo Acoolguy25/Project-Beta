@@ -22,8 +22,9 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         public abstract object GetValue();
         public abstract bool TrySet(object obj);
         public abstract void InitDone();
+        public abstract void ToggleValue();
         protected string GetSaveName(){
-            return $"GameSettings_" + name;
+            return $"GameSetting_" + name;
         }
     }
     public abstract class GameSettingsInstance<T>: GameSettingsInstance {
@@ -57,6 +58,9 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         public override void Save(){
             // TODO
             Debug.LogError($"Save is not implemented in {this}!");
+        }
+        public override void ToggleValue() {
+            throw new NotImplementedException();
         }
         public T value {get ; protected set;}
         public T start {get ; set;}

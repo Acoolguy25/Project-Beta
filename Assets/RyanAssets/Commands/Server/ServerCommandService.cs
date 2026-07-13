@@ -5,6 +5,7 @@ using FishNet;
 using FishNet.Connection;
 using FishNet.Transporting;
 using RyanAssets.Commands.Shared;
+using RyanAssets.DataService;
 using RyanAssets.Declarations;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
@@ -114,21 +115,14 @@ namespace RyanAssets.Commands.Server {
             if (SharedGlobalEvents.Instance == null)
                 return Enumerable.Empty<string>();
 
-            return SharedGlobalEvents.Instance.Players.Values
-                .Select(player => player.data.username)
+            return PlayerData.Players.Values
+                .Select(player => player.username.Value)
                 .Where(username => !string.IsNullOrWhiteSpace(username));
         }
 
         internal static IEnumerable<CommandConfig> GetRegisteredCommandConfigs() {
             return Commands.Values.Select(registration => registration.Config);
-        }
-
-        internal static string GetPlayerUsername(NetworkConnection conn) {
-            if (SharedGlobalEvents.Instance != null && SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
-                return stats.data.username;
-
-            return "A player";
-        }
+        }        
 
         internal static void UnknownGlobalCommand(NetworkConnection caller, string commandName, string[] args) {
             SendCommandError(caller, $"Command '{commandName}' has no server handler.");

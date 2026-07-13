@@ -7,6 +7,7 @@ using FishNet.Connection;
 using RyanAssets.Tools.Shared;
 using FishNet;
 using RyanAssets.Characters.Shared;
+using RyanAssets.DataService;
 
 namespace RyanAssets.Server.ServerCore
 {

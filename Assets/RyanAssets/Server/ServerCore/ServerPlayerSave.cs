@@ -6,6 +6,7 @@ using FishNet;
 using FishNet.Connection;
 using FishNet.Transporting;
 using Newtonsoft.Json.Linq;
+using RyanAssets.DataService;
 using RyanAssets.NetworkService;
 using RyanAssets.Server.ServerModules;
 using RyanAssets.Shared.Declarations;
@@ -22,7 +23,7 @@ namespace RyanAssets.Server.ServerCore {
             ServerBootStrap.StartServerEvent += OnStartServer;
             ServerBootStrap.StopServerEvent += OnStopServer;
             ServerBootStrap.StopServerAsyncEvent += SaveDirty;
-            ServerPlayerEvents.OnPlayerRemovedEvent += (conn) => Save(conn);
+            PlayerData.OnPlayerAdded += (conn, playerData) => Save(conn);
         }
 
         static void OnStartServer() {
@@ -59,7 +60,7 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         public static UniTask Save(NetworkConnection conn) {
-            if (SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.Players.ContainsKey(conn))
+            if (SharedGlobalEvents.Instance == null || !PlayerData.Players.ContainsKey(conn))
                 return UniTask.CompletedTask;
             if (!dirtyConnections.ContainsKey(conn) || !dirtyConnections[conn])
                 return UniTask.CompletedTask;
@@ -84,13 +85,13 @@ namespace RyanAssets.Server.ServerCore {
             List<NetworkConnection> savedConnections = new();
 
             foreach (NetworkConnection conn in connections) {
-                if (!SharedGlobalEvents.Instance.Players.TryGetValue(conn, out ServerPlayerStats stats))
+                if (!PlayerData.Players.TryGetValue(conn, out PlayerData stats))
                     continue;
 
-                if (string.IsNullOrWhiteSpace(stats.player_id))
+                if (string.IsNullOrWhiteSpace(stats.player_id.Value))
                     continue;
 
-                payload["players"][stats.player_id] = JObject.FromObject(stats.data);
+                payload["players"][stats.player_id.Value] = stats.Serialize();
                 savedConnections.Add(conn);
             }
 

@@ -5,15 +5,16 @@ using FishNet.Serializing;
 using RyanAssets.Core;
 using RyanAssets.Shared.Declarations;
 using System;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using RyanAssets.DataService;
 
 
 namespace RyanAssets.Tools.Shared {
     public class ToolBaseShared : NetworkBehaviour {
         [SerializeField]
-        private MonoScript clientScript, clientObserver, serverScript;
+        private string clientScript, clientObserver, serverScript;
+        
         [SerializeField]
         public ToolEnum toolEnum;
         [SerializeField]
@@ -101,16 +102,21 @@ namespace RyanAssets.Tools.Shared {
         public override void OnStartClient() {
             weaponRoot.SetActive(false); // unequipped by default
             if (IsOwner) {
-                gameObject.AddComponent(clientScript.GetClass());
-            } else if (clientObserver != null)
-                gameObject.AddComponent(clientObserver.GetClass());
+                Type clientScriptType = Type.GetType(clientScript);
+                gameObject.AddComponent(clientScriptType);
+            } else if (clientObserver != null) {
+                Type clientObserverType = Type.GetType(clientObserver);
+                gameObject.AddComponent(clientObserverType);
+            }
             createStaticEvent?.Invoke(this);
         }
 #else
         public override void OnStartServer() {
             base.OnStartServer();
-            if (serverScript != null)
-                gameObject.AddComponent(serverScript.GetClass());
+            if (serverScript != null){
+                Type serverScriptType = Type.GetType(serverScript);
+                gameObject.AddComponent(serverScriptType);
+            }
             weaponRoot.SetActive(false);
             createStaticEvent?.Invoke(this);
         }

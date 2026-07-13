@@ -10,6 +10,7 @@ using RyanAssets.Client.ClientCore;
 using RyanAssets.Shared.Declarations;
 using FishNet;
 using FishNet.Transporting;
+using FishNet.Object;
 
 namespace RyanAssets.Cameras
 {
@@ -71,7 +72,7 @@ namespace RyanAssets.Cameras
             SetCameraAvailable(GameCameraType.DeathCamera, false);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, character != null);
         }
-        private void OnCharacterDied(DamageSource source) {
+        private void OnCharacterDied(DamageSource source, NetworkObject sourceObject) {
             SetCameraAvailable(GameCameraType.DeathCamera, true);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
         }

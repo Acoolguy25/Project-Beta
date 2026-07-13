@@ -10,6 +10,8 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         public override bool TrySet(object new_value){
             value = Math.Clamp((int) new_value, min, max);
             numberSlider.SetValue(value);
+            on_update?.Invoke(value);
+            Save();
             return true;
         }
         public override void Init(GameObject obj){
@@ -30,6 +32,9 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         public override void Save(){
             PlayerPrefs.SetInt(GetSaveName(), value);
             PlayerPrefs.Save();
+        }
+        public override void ToggleValue() {
+            TrySet(value == min ? start : min);
         }
         public int min = 1, max = 250;
     }
