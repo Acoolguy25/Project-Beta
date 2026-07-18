@@ -48,7 +48,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             Image backingImage = prefabClone.GetComponent<Image>();
             prefabClone.transform.GetChild(0).GetComponent<Image>().sprite = toolBase.toolImage;
             Image sliderImage = prefabClone.transform.GetChild(1).GetComponent<Image>();
-            prefabClone.transform.GetChild(2).GetComponent<TextMeshProUGUI>().text = (prefabClone.transform.GetSiblingIndex() + 1).ToString();
+            prefabClone.transform.GetChild(2).GetComponent<TextMeshProUGUI>().text = (prefabOrder[prefabClone.transform] + 1).ToString();
             toolBaseToItem.Add(toolBase, prefabClone.transform);
             toolBase.equippedEvent += (ToolBaseShared _) => {
                 //prefabClone.GetComponent<Image>().color = new Color32(60, 81, 161, 219);

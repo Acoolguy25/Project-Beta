@@ -118,6 +118,8 @@ namespace RyanAssets.Client.ClientUI.Chat {
         private void OnPlayerAdded(NetworkConnection conn, PlayerData stats) {
             //if (!synced)
             //    return;
+            if (stats.Owner.IsLocalClient)
+                return;
             CreateSystemMessage(new($"{stats.username.Value} has joined the game!", SystemMessageSource.PlayerAdd));
         }
         private void OnPlayerRemoved(NetworkConnection conn, PlayerData stats) {

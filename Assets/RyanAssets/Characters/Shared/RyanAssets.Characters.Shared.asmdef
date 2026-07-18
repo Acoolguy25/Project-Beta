@@ -9,7 +9,8 @@
         "RyanAssets.Client.ClientUI.GameSettings",
         "RyanAssets.UI.ListGrid",
         "RyanAssets.Shared.Declarations",
-        "RyanAssets.Tools.Shared"
+        "RyanAssets.Tools.Shared",
+        "RyanAssets.Shared.Player"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

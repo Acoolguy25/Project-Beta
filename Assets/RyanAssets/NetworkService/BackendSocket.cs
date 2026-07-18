@@ -23,6 +23,7 @@ namespace RyanAssets.NetworkService {
         }
         (string, JObject) OnSocketMessage(byte[] bytes) {
             string data = Encoding.UTF8.GetString(bytes);
+            Debug.Log($"Got Socket Message: {bytes}");
             JObject j = BackendNetwork.ParseJSON(data);
             if (j == null)
                 return (data, null);
@@ -31,8 +32,12 @@ namespace RyanAssets.NetworkService {
         public async void StartSocket(string url, Action<(string, JObject)> onMessage = null, Action onClose = null, Dictionary<string, string> headers = null) {
             for (int i = 0; /* no condition */; i++) { 
                 try {
-                    //Debug.Log($"URL: ws://{base_address}{url}");
-                    WebSocket ws = new($"ws://{base_address}{url}", headers != null ? headers : socket_headers);
+                    Uri backendUri = new(base_address);
+                    string scheme = backendUri.Scheme == "https" ? "wss" : "ws";
+                    string path = url.StartsWith("/") ? url : "/" + url;
+                    string socketUrl = $"{scheme}://{backendUri.Authority}{path}";
+                    Debug.Log($"Connecting to backend socket {socketUrl}");
+                    WebSocket ws = new(socketUrl, headers != null ? headers : socket_headers);
                     ws.OnMessage += (bytes) => onMessage?.Invoke(OnSocketMessage(bytes));
                     ws.OnClose += (_) => {
                         active_sockets.Remove(ws);

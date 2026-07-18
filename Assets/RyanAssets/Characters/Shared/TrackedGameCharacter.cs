@@ -6,10 +6,12 @@ using FishNet.Object.Synchronizing;
 
 namespace RyanAssets.Characters.Shared {
     public class TrackedGameCharacter : GameCharacter {
+#if UNITY_SERVER
         protected override void Died(DamageSource source, NetworkObject sourceObject) {
             base.Died(source, sourceObject);
             RpcDied(source, sourceObject);
         }
+#endif
         [ObserversRpc]
         private void RpcDied(DamageSource source, NetworkObject sourceObject) {
             SharedDied(source, sourceObject);

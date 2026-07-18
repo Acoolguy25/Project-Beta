@@ -177,7 +177,7 @@ namespace RyanAssets.Characters.Server
 
         private IEnumerator FleeRoutine()
         {
-            Debug.Log($"[{name}] FleeRoutine started");
+            //Debug.Log($"[{name}] FleeRoutine started");
 
             // Always pick a destination immediately on enter
             PickFleeDestination();

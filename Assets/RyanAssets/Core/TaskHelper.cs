@@ -1,5 +1,6 @@
-using System.Threading;
 using Cysharp.Threading.Tasks;
+using System;
+using System.Threading;
 
 namespace RyanAssets.Core {
     public static class TaskHelper {
@@ -35,6 +36,60 @@ namespace RyanAssets.Core {
             }
 
             return (false, res);
+        }
+
+        public static UniTask WaitForAction<T>(
+    Action<Action<T>> subscribe,
+    Action<Action<T>> unsubscribe,
+    CancellationToken token = default) {
+            var tcs = new UniTaskCompletionSource();
+
+            Action<T> handler = null;
+
+            handler = (val) =>
+            {
+                unsubscribe(handler);
+                tcs.TrySetResult();
+            };
+
+            subscribe(handler);
+
+            if (token.CanBeCanceled) {
+                token.Register(() =>
+                {
+                    unsubscribe(handler);
+                    tcs.TrySetCanceled(token);
+                });
+            }
+
+            return tcs.Task;
+        }
+
+        public static UniTask WaitForAction<T1, T2>(
+    Action<Action<T1, T2>> subscribe,
+    Action<Action<T1, T2>> unsubscribe,
+    CancellationToken token = default) {
+            var tcs = new UniTaskCompletionSource();
+
+            Action<T1, T2> handler = null;
+
+            handler = (_, _) =>
+            {
+                unsubscribe(handler);
+                tcs.TrySetResult();
+            };
+
+            subscribe(handler);
+
+            if (token.CanBeCanceled) {
+                token.Register(() =>
+                {
+                    unsubscribe(handler);
+                    tcs.TrySetCanceled(token);
+                });
+            }
+
+            return tcs.Task;
         }
     }
 }

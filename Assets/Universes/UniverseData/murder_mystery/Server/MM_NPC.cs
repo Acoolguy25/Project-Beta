@@ -1,12 +1,13 @@
-﻿using System.Collections;
+﻿using FishNet.Connection;
+using RyanAssets.Characters.Server;
+using RyanAssets.Characters.Shared;
+using RyanAssets.Server.ServerCore;
+using RyanAssets.Server.ServerFeatures;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
-using RyanAssets.Server.ServerFeatures;
-using System.Collections.Generic;
-using RyanAssets.Server.ServerCore;
-using FishNet.Connection;
-using RyanAssets.Characters.Shared;
-using RyanAssets.Characters.Server;
+using UnityEngine.TextCore.Text;
 
 namespace Universes.murder_mystery.Server
 {
@@ -29,9 +30,10 @@ namespace Universes.murder_mystery.Server
         //        PrevTargets[agent] = target;
         //    }
         //}
-        List<Transform> characters = new();
+        public static List<Transform> characters;
         private void Awake()
         {
+            characters = new();
             ServerPlayerCharacter.OnPlayerCharacterAdded += OnCharacterAdded;
             ServerPlayerCharacter.OnPlayerCharacterDied += OnCharacterDied;
         }

@@ -48,6 +48,11 @@ namespace RyanAssets.Shared.Player {
         readonly SyncVar<SharedVoteInfo> _currentVote = new();
         readonly SyncVar<string> _topMessage = new();
 
+#if UNITY_SERVER
+        public bool TeamKillEnabled = true;
+        public bool GlobalInvul     = true;
+#endif
+
         public SharedVoteInfo CurrentVote {
             get => _currentVote.Value;
             set => _currentVote.Value = value;

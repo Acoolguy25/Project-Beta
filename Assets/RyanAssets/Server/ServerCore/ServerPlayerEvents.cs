@@ -20,33 +20,34 @@ namespace RyanAssets.Server.ServerCore {
         //public static event Action<NetworkConnection> OnPlayerAddedEvent, OnPlayerRemovedEvent;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
-            InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
-            UnityTokenAuthenticator.OnAuthenticationSucceeded += OnAuthenticationSucceeded;
+            //InstanceFinder.ServerManager.OnRemoteConnectionState += OnRemoteConnectionState;
+            //UnityTokenAuthenticator.OnAuthenticationSucceeded += OnAuthenticationSucceeded;
+            PlayerData.OnPlayerRemoved += RemovePlayerConnection;
         }
 
-        static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
-            if (args.ConnectionState != RemoteConnectionState.Stopped)
-                return;
+        //static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
+        //    if (args.ConnectionState != RemoteConnectionState.Stopped)
+        //        return;
 
-            RemovePlayerConnection(conn);
-            if (SharedGlobalEvents.Instance == null || !PlayerData.Players.TryGetValue(conn, out PlayerData stats))
-                return;
-            string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id}";
-            BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect").Forget();
-        }
+        //    RemovePlayerConnection(conn);
+        //    if (SharedGlobalEvents.Instance == null || !PlayerData.Players.TryGetValue(conn, out PlayerData stats))
+        //        return;
+        //}
 
-        static void OnAuthenticationSucceeded(NetworkConnection conn, PlayerData stats, JObject json) {
-             Debug.Log("Auth Succeeded: " + json);
+        //static void OnAuthenticationSucceeded(NetworkConnection conn, PlayerData stats, JObject json) {
+             //Debug.Log("Auth Succeeded: " + json);
             
             //stats.gamePlayerStats ??= new GamePlayerStats();
             //Debug.Log("PlayerAuthenticated: " + JsonConvert.SerializeObject(stats));
 
             //OnPlayerAddedEvent?.Invoke(conn);
-        }
-        static void RemovePlayerConnection(NetworkConnection conn) {
+        //}
+        static void RemovePlayerConnection(NetworkConnection conn, PlayerData stats) {
             //if (PlayerData.Players.TryGetValue(conn, out PlayerData playerStats)) {
                 //InstanceFinder.ServerManager.BroadcastExcept<PlayerLeaveBroadcast>(conn, new() { player = conn, stats = playerStats });
-            PlayerData.Players.Remove(conn);
+            string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id.Value}";
+            BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect").Forget();
+            //PlayerData.Players.Remove(conn);
             //}
             ServerPlayerSave.Forget(conn);
             //OnPlayerRemovedEvent?.Invoke(conn);

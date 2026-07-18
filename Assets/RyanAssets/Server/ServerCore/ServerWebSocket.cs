@@ -1,7 +1,7 @@
-﻿using System.Collections;
-using UnityEngine;
+﻿using Newtonsoft.Json.Linq;
 using RyanAssets.NetworkService;
-using Newtonsoft.Json.Linq;
+using System.Collections;
+using UnityEngine;
 
 namespace RyanAssets.Server.ServerCore {
     public static class ServerWebSocket {
@@ -19,6 +19,11 @@ namespace RyanAssets.Server.ServerCore {
                     break;
                 case "kick":
                     ServerPlayerEvents.KickPlayer(((string)res.j["player_id"]), message: res.j["reason"]?.ToString());
+                    break;
+                case "update":
+                    ServerBootStrap.serverInfo = res.j["info"].ToObject<ServerBootStrap.ServerInfo>();
+                    ServerBootStrap.serverSettings = res.j["settings"].ToObject<ServerBootStrap.ServerSettings>();
+                    ServerBootStrap.ApplyServerInfo();
                     break;
                 default:
                     Debug.LogError($"Unknown Server WebSocket Request: {res.j["type"].ToString()}");

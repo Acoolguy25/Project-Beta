@@ -24,6 +24,7 @@ namespace RyanAssets.UI.ListGrid {
         protected uint globalOrder;
 
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
+        public bool IsBuilding => pending_ops.Count > 0;
 
         RectTransform contentRT;
         protected void ClearPendingPrefabs(){
@@ -39,6 +40,7 @@ namespace RyanAssets.UI.ListGrid {
             foreach (Transform obj in contentTarget) {
                 RemovePrefab(obj);
             }
+            globalOrder = 0;
         }
         public void ClearPrefabs() {
             ClearPendingPrefabs();

@@ -32,13 +32,16 @@ namespace RyanAssets.Server.ServerCore {
                 return JObject.FromObject(this);
             }
         };
+        public class ServerSettings {
+            public ushort MaxPlayers;
+            public ushort ServerIdleTimeoutSeconds;
+            public ushort ServerHeartbeatIntvSeconds;
+        }
         public static Action StartServerEvent, StopServerEvent;
         public static event Func<UniTask> StopServerAsyncEvent;
         public static ServerInfo serverInfo = new();
+        public static ServerSettings serverSettings = new();
         static bool isStopping;
-        public static ushort MaxPlayers { get; private set; }
-        public static ushort ServerIdleTimeoutSeconds { get; private set; }
-        public static ushort ServerHeartbeatIntvSeconds { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ConfigureStackTraces() {
@@ -60,9 +63,9 @@ namespace RyanAssets.Server.ServerCore {
                 server_id = "unity-test-server",
                 server_port = 20000
             };
-            MaxPlayers = 10;
-            ServerIdleTimeoutSeconds = ushort.MaxValue;
-            ServerHeartbeatIntvSeconds = ushort.MaxValue;
+            serverSettings.MaxPlayers = 10;
+            serverSettings.ServerIdleTimeoutSeconds = ushort.MaxValue;
+            serverSettings.ServerHeartbeatIntvSeconds = ushort.MaxValue;
 #else
             foreach (string arg in Environment.GetCommandLineArgs()) {
                 string[] split = arg.Split('=', 2);
@@ -95,15 +98,15 @@ namespace RyanAssets.Server.ServerCore {
                             Debug.LogError($"Invalid max players: {split[1]}");
                             break;
                         }
-                        MaxPlayers = maxPlayers;
+                        serverSettings.MaxPlayers = maxPlayers;
                         break;
                     case "-server_idle_timeout":
                         ushort.TryParse(split[1], out ushort idleTimeout);
-                        ServerIdleTimeoutSeconds = idleTimeout;
+                        serverSettings.ServerIdleTimeoutSeconds = idleTimeout;
                         break;
                     case "-heartbeat_interval":
                         ushort.TryParse(split[1], out ushort intvl);
-                        ServerHeartbeatIntvSeconds = intvl;
+                        serverSettings.ServerHeartbeatIntvSeconds = intvl;
                         break;
                     case "-server_folder":
                         // case "-backend_local":
@@ -116,6 +119,9 @@ namespace RyanAssets.Server.ServerCore {
             }
 #endif
             // BackendNetwork.default_body = JsonConvert.SerializeObject(serverInfo);
+            ApplyServerInfo();
+        }
+        public static void ApplyServerInfo() {
             BackendNetwork.SetServerHeader("universe-id", serverInfo.universe_id);
             BackendNetwork.SetServerHeader("server-id", serverInfo.server_id);
             BackendNetwork.SetServerHeader("server-port", serverInfo.server_port.ToString());
@@ -125,12 +131,17 @@ namespace RyanAssets.Server.ServerCore {
             BackendSocket.SetServerHeader("server-port", serverInfo.server_port.ToString());
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        static void AfterSceneLoad() {
+        public static void AfterSceneLoad() {
+            if (serverSettings.MaxPlayers == 0) {
+                Debug.Log("Detected no max players, waiting for connection to see what to be");
+                return;
+            }
             if (InstanceFinder.NetworkManager == null || InstanceFinder.TransportManager == null) {
                 Debug.LogError("Server startup failed: FishNet NetworkManager or TransportManager is not available in the loaded scene.");
                 Application.Quit(65);
                 return;
             }
+
 
             Transport transport = InstanceFinder.TransportManager.Transport;
             if (transport == null) {
@@ -139,7 +150,7 @@ namespace RyanAssets.Server.ServerCore {
                 return;
             }
 
-            transport.SetMaximumClients(MaxPlayers);
+            transport.SetMaximumClients(serverSettings.MaxPlayers);
             //#if DEVELOPMENT_BUILD
             Debug.Log("Hosting at 0.0.0.0");
             transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
@@ -154,11 +165,14 @@ namespace RyanAssets.Server.ServerCore {
             Debug.Assert(start_status, "ServerManager Failed To Start!");
             Application.quitting += OnQuit;
         }
-        static void StartServer() {
+        public static void LoadInitialScene() {
             SceneLoadData sceneLoadData = new(serverInfo.universe_id + "_start") {
                 ReplaceScenes = ReplaceOption.All
             };
             InstanceFinder.NetworkManager.SceneManager.LoadGlobalScenes(sceneLoadData);
+        }
+        static void StartServer() {
+            LoadInitialScene();
             UnityEngine.SceneManagement.SceneManager.LoadScene(serverInfo.universe_id + "_server", LoadSceneMode.Additive);
             StartServerEvent?.Invoke();
         }

@@ -40,7 +40,7 @@ namespace RyanAssets.Server.ServerCore {
                 }
 
                 try {
-                    await UniTask.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerHeartbeatIntvSeconds), cancellationToken: token);
+                    await UniTask.Delay(TimeSpan.FromSeconds(ServerBootStrap.serverSettings.ServerHeartbeatIntvSeconds), cancellationToken: token);
                 }
                 catch (OperationCanceledException) {
                     break;

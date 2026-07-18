@@ -52,10 +52,10 @@ namespace RyanAssets.TweenService {
             Instance = this;
         }
         bool IsObjectDestroyed(object obj) {
-            //Debug.Log($"obj == null: {obj == null}");
-            //Debug.Log($"ReferenceEquals: {ReferenceEquals(obj, null)}");
-            //Debug.Log($"InstanceID: {obj.GetHashCode()}");
-            return obj == null; // Unity check for destroyed non null objects
+            if (obj is UnityEngine.Object unityObject)
+                return unityObject == null;
+
+            return obj == null;
         }
         void UpdateAllTimers(TweenUpdateMethod method, float scaled_delta_time, float real_delta_time){
             // foreach (TweenTimer timer in ActiveTweens){

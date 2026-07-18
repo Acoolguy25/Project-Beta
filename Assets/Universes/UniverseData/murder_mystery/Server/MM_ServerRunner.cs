@@ -1,80 +1,98 @@
+using Cysharp.Threading.Tasks;
+using EasyDebug.Shared;
 using FishNet.Connection;
+using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
+using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
-using RyanAssets.Characters.Server;
-using UnityEngine;
-using RyanAssets.DataService;
-using System.Collections.Generic;
 using RyanAssets.Shared.Player;
-using System.Linq;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using UnityEngine;
 
 namespace Universes.murder_mystery.Server {
-    public class MM_ServerRunner : MonoBehaviour {
+    public class MM_ServerRunner : ServerRunner {
         [SerializeField]
         GameObject RobotNPC_Prefab;
         [SerializeField]
-        bool DebugSingleNpc, DebugMotionlessNpc;
+        DebugBool DebugSingleNpc, DebugMotionlessNpc;
         [SerializeField]
-        bool DebugTimerSpeedUp;
+        DebugBool DebugTimerSpeedUp;
         Action UpdateGameBarEvent;
-        void Awake(){
+        int startNPCs;
+        protected override void Awake(){
+            base.Awake();
+            PlayerData.OnPlayerAdded += OnPlayerAdded;
             ServerPlayerCharacter.OnPlayerCharacterAdded += OnCharacterAdded;
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
+            SharedGlobalEvents.Instance.LeaderboardHeaders.Clear();
             SharedGlobalEvents.Instance.LeaderboardHeaders.AddRange(new[] { "Kills" });
         }
         bool CanSpawnFunction(NetworkConnection player) {
             return true;
         }
-        void OnCharacterAdded(NetworkConnection player, LocalCharacter character){
-            character.transform.position = DebugSingleNpc? new Vector3(1120.56995f, -8.12100029f, 1008.34003f): ServerPathfinding.GetRandomPosition(); // Random position
-            //new Vector3(1120.56995f, -8.12100029f, 1008.34003f);
+        void OnPlayerAdded(NetworkConnection player, PlayerData data) {
             PlayerData.GetPlayerData(player).leaderboard.AddRange(new[] { 0 });
+            //data.tools.AddRange(new[] { ToolEnum.Dagger });
+            ServerTool.Instance.AddTool(player, ToolEnum.Dagger);
+            //ServerTool.tool
+        }
+        void OnCharacterAdded(NetworkConnection player, LocalCharacter character){
+            character.transform.position = DebugSingleNpc.Value? new Vector3(1120.56995f, -8.12100029f, 1008.34003f): ServerPathfinding.GetRandomPosition(); // Random position
+            //new Vector3(1120.56995f, -8.12100029f, 1008.34003f);
             //character.transform.localScale = 0.7f * Vector3.one;  
             //character.GetComponent<CharacterScaler>().SetScale(0.7f * Vector3.one);
         }
         void SpawnNpcs() {
-            for (int i = 0; i < (DebugSingleNpc ? 1 : 30); i++) {
-                LocalNPC obj = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (DebugSingleNpc ? new Vector3(1117.56995f, -8.12100029f, 1008.34003f) : null));
-                GameCharacter gameCharacter = obj.GetComponent<GameCharacter>();
+            startNPCs = (DebugSingleNpc.Value ? 1 : 30);
+            for (int i = 0; i < startNPCs; i++) {
+                LocalNPC npc = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (DebugSingleNpc.Value ? new Vector3(1117.56995f, -8.12100029f, 1008.34003f) : null));
+                GameCharacter gameCharacter = npc.GetComponent<GameCharacter>();
                 gameCharacter.OnDied += (source, killer) => {
                     if (killer && killer.Owner != null) {
                         int kills = SharedGlobalEvents.GetLeaderboardIndex("Kills");
                         if (kills != -1)
                             PlayerData.GetPlayerData(killer.Owner).leaderboard[kills]++;
                     }
+                    //if (GameObject.FindGameObjectsWithTag("NPC").Count() == 0)
                     UpdateGameBarEvent?.Invoke();
                 };
+                npc.FleeTargets = MM_NPC.characters.ToArray();
             }
         }
+        int GetNPCCount() => GameObject.FindGameObjectsWithTag("NPC").Count();
         bool UpdateInGameBar(int durationLeft, bool interrupted) {
-            int npcsLeft = GameObject.FindGameObjectsWithTag("NPC").Count();
-            if (npcsLeft > 0)
-                SharedGlobalEvents.Instance.TopMessage = $"Civilians Left: {npcsLeft} ({durationLeft})";
+            int npcsLeft = GetNPCCount();
+            SharedGlobalEvents.Instance.TopMessage = $"Civilians Left: {npcsLeft} ({durationLeft})";
             return npcsLeft > 0;
         }
-        async void Start(){
-            await ServerRunner.WaitForSceneAsync("murder_mystery_start");
-            if (DebugMotionlessNpc) {
+        protected override async UniTask StartAsync(CancellationToken token){
+            await base.StartAsync(token);
+            base.SetTeamKillEnabled(true);
+            if (DebugMotionlessNpc.Value) {
                 LocalNPC.FleeSpeedMultiplier = 0f;
                 LocalNPC.WalkSpeedMultiplier = 0f;
             }
             
             while(true) {
-                await ServerRunner.Intermission(DebugTimerSpeedUp? 1: 5);
+                await base.Intermission(DebugTimerSpeedUp.Value ? 1: 5, token);
 
                 SpawnNpcs();
-                await ServerRunner.CustomTimerCountdown(DebugTimerSpeedUp ? 10 : 90, UpdateInGameBar, interrupt => UpdateGameBarEvent += interrupt);
+                base.SetGlobalInvul(false);
+                await base.CustomTimerCountdown(DebugTimerSpeedUp.Value ? 10 : 90, UpdateInGameBar, interrupt => UpdateGameBarEvent += interrupt, token);
 
-                List<PlayerData> scores = ServerRunner.GetLeaderboardWinner("Kills");
+                List<PlayerData> scores = base.GetLeaderboardWinner("Kills");
                 if (scores.Count > 0) {
                     ServerChat.SendSystemMessage(new($"{scores[0].username.Value} wins with {scores[0].leaderboard[SharedGlobalEvents.GetLeaderboardIndex("Kills")]} kills!", RyanAssets.Shared.Declarations.SystemMessageSource.CustomMessage));
                 }
 
-                await ServerRunner.TimerCountdown("Game Over! ({0})", DebugTimerSpeedUp ? 2 : 5);
+                base.SetGlobalInvul(true);
+                await TimerCountdown($"Game over: {GetNPCCount()}/{startNPCs} survivors! ({{0}})", DebugTimerSpeedUp.Value ? 2 : 5, token);
                 ServerNPC.ClearAllNPC();
-                ServerRunner.ResetLeaderboardData();
+                base.ResetLeaderboardData();
             }
         }
     }

@@ -10,7 +10,9 @@ using System.Threading;
 // using FishNet.Connections;
 
 namespace RyanAssets.Server.ServerCore {
-    public static class ServerTimeout {
+    public static class ServerIdleTimeout {
+        public static bool IdleTimeoutEnabled { private set; get; }
+        public static event Action OnIdleTimeoutStarted, OnIdleTimeoutStopped;
         static CancellationTokenSource idleTimeoutCts;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
@@ -20,7 +22,7 @@ namespace RyanAssets.Server.ServerCore {
         static async UniTask IdleTimeoutLoop(CancellationToken token) {
             Debug.LogWarning("No Players Online; Server Will Stop Soon Due To Idle Timeout!");
             try {
-                await UniTask.Delay(TimeSpan.FromSeconds(ServerBootStrap.ServerIdleTimeoutSeconds), cancellationToken: token);
+                await UniTask.Delay(TimeSpan.FromSeconds(ServerBootStrap.serverSettings.ServerIdleTimeoutSeconds), cancellationToken: token);
                 ServerBootStrap.StopServer("Idle Timeout");
             } catch (OperationCanceledException) { }
         }
@@ -34,8 +36,10 @@ namespace RyanAssets.Server.ServerCore {
         }
         static void StartIdleTimeout() {
             StopIdleTimeout();
+            IdleTimeoutEnabled = true;
             idleTimeoutCts = new();
             IdleTimeoutLoop(idleTimeoutCts.Token).Forget();
+            OnIdleTimeoutStarted?.Invoke();
         }
         static void StopIdleTimeout() {
             if (idleTimeoutCts == null)
@@ -44,6 +48,8 @@ namespace RyanAssets.Server.ServerCore {
             idleTimeoutCts.Cancel();
             idleTimeoutCts.Dispose();
             idleTimeoutCts = null;
+            IdleTimeoutEnabled = false;
+            OnIdleTimeoutStopped?.Invoke();
         }
         private static void OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
             if (!InstanceFinder.IsServerStarted){

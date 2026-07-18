@@ -3,60 +3,79 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using FishNet;
+using FishNet.Connection;
 using NUnit.Framework;
+using RyanAssets.Characters.Shared;
+using RyanAssets.Core;
 using RyanAssets.DataService;
+using RyanAssets.Server.ServerCore;
 using RyanAssets.Shared.Player;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+#pragma warning disable CS1998
 namespace RyanAssets.Server.ServerFeatures {
-    public static class ServerRunner {
-        public static UniTask WaitForSceneAsync(string sceneName) {
+    public class ServerRunner: MonoBehaviour {
+        public static event Action OnResetEvent;
+        public static bool serverRunning => serverRunnerCTS != null && !serverRunnerCTS.IsCancellationRequested;
+        protected static CancellationTokenSource serverRunnerCTS = null;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Init() {
+            OnResetEvent = null;
+        }
+        public UniTask WaitForSceneAsync(string sceneName, CancellationToken token = default) {
             Scene scene = SceneManager.GetSceneByName(sceneName);
 
             if (scene.IsValid() && scene.isLoaded)
                 return UniTask.CompletedTask;
 
-            var tcs = new UniTaskCompletionSource<bool>();
+            var tcs = new UniTaskCompletionSource();
 
             void Handler(Scene loadedScene, LoadSceneMode mode) {
                 if (loadedScene.name != sceneName)
                     return;
 
                 SceneManager.sceneLoaded -= Handler;
-                tcs.TrySetResult(true);
+                tcs.TrySetResult();
             }
 
             SceneManager.sceneLoaded += Handler;
 
+            token.Register(() =>
+            {
+                SceneManager.sceneLoaded -= Handler;
+                tcs.TrySetCanceled(token);
+            });
+
             return tcs.Task;
         }
 
-        public static async UniTask Intermission(int duration, CancellationToken token = default) {
+        public async UniTask Intermission(int duration, CancellationToken token = default) {
             await TimerCountdown("Intermission ({0})", duration, token);
         }
 
-        public static async UniTask TimerCountdown(string message, int duration, CancellationToken token = default) {
+        public async UniTask TimerCountdown(string message, int duration, CancellationToken token = default) {
             for (int i = duration; i > 0; i--) {
                 SharedGlobalEvents.Instance.TopMessage = string.Format(message, i);
                 await Awaitable.WaitForSecondsAsync(1f, token);
             }
         }
 
-        public static async UniTask CustomTimerCountdown(
+        public async UniTask CustomTimerCountdown(
     int duration,
     Func<int, bool, bool> activationFunc,
     Func<Action, Action> registerInterrupt,
     CancellationToken token = default) {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            bool loopExited = false;
 
-            Action interrupt = () =>
-            {
-                if (cts.IsCancellationRequested)
+            Action interrupt = () => {
+                if (cts.IsCancellationRequested || loopExited)
                     return;
 
-                activationFunc(duration, true);
-                cts.Cancel();
+                if (!activationFunc(duration, true))
+                    cts.Cancel();
             };
 
             Action unregisterInterrupt = registerInterrupt(interrupt);
@@ -66,27 +85,84 @@ namespace RyanAssets.Server.ServerFeatures {
                     if (!activationFunc(duration, false))
                         return;
 
-                    await UniTask.Delay(6000, cancellationToken: cts.Token);
+                    await UniTask.Delay(1000, cancellationToken: cts.Token);
 
                     duration--;
                 }
             }
-            catch (OperationCanceledException) {
+            catch (OperationCanceledException) when (!token.IsCancellationRequested) {
             }
             finally {
+                loopExited = true;
                 unregisterInterrupt();
             }
         }
-        public static void ResetLeaderboardData() {
+        public void ResetLeaderboardData() {
             foreach (PlayerData playerData in PlayerData.Players.Values) {
-                for (int i = 0; i <  playerData.leaderboard.Count; i++) {
+                for (int i = 0; i < playerData.leaderboard.Count; i++) {
                     playerData.leaderboard[i] = 0;
                 }
             }
         }
-        public static List<PlayerData> GetLeaderboardWinner(string leaderboardName) {
+        public List<PlayerData> GetLeaderboardWinner(string leaderboardName) {
             int leaderboardIdx = SharedGlobalEvents.GetLeaderboardIndex(leaderboardName);
             return PlayerData.Players.Values.OrderByDescending(p => p.leaderboard[leaderboardIdx]).ToList();
         }
+
+        public void SetGlobalInvul(bool enabled) {
+            SharedGlobalEvents.Instance.GlobalInvul = enabled;
+        }
+        public void SetTeamKillEnabled(bool enabled) {
+            SharedGlobalEvents.Instance.TeamKillEnabled = enabled;
+        }
+
+        public int GetActivePlayers() {
+            return InstanceFinder.ServerManager.Clients.Values.Count((conn) => conn.IsActive && conn.IsAuthenticated);
+        }
+        public async UniTask WaitForPlayersAsync(int players = 1, CancellationToken token = default) {
+            while (GetActivePlayers() < players) {
+                await TaskHelper.WaitForAction<NetworkConnection, LocalCharacter>(
+                    h => ServerPlayerCharacter.OnPlayerCharacterAdded += h,
+                    h => ServerPlayerCharacter.OnPlayerCharacterAdded -= h,
+                    token
+                );
+            }
+        }
+
+        protected virtual void Awake() {
+            DontDestroyOnLoad(gameObject);
+            ServerIdleTimeout.OnIdleTimeoutStarted += Restart;
+        }
+
+        protected virtual void Start() {
+            var cts = new CancellationTokenSource();
+            serverRunnerCTS = cts;
+            StartAsync(cts.Token).Forget();
+        }
+
+        protected virtual async UniTask StartAsync(CancellationToken token) {
+            await WaitForSceneAsync(ServerBootStrap.serverInfo.universe_id + "_start", token); // Wait for start scene to load
+            await WaitForPlayersAsync(1, token);
+        }
+
+        protected virtual void Stop() {
+            serverRunnerCTS?.Cancel();
+        }
+
+        protected virtual void Reset() {
+            OnResetEvent?.Invoke();
+            ServerBootStrap.LoadInitialScene();
+        }
+
+        protected virtual void Restart() {
+            Stop();
+            Reset();
+            Start();
+        }
+
+        protected virtual void OnDestroy() {
+            ServerIdleTimeout.OnIdleTimeoutStarted -= Restart;
+        }
     }
 }
+#pragma warning restore CS1998

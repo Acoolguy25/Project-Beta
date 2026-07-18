@@ -46,4 +46,5 @@
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Universes.csproj" />
+  <Project Path="EasyDebug.Shared.csproj" />
 </Solution>

@@ -42,7 +42,7 @@ namespace RyanAssets.Server.ServerCore {
             ClientToCharacter[player] = localChar;
             // Insert player tools
             foreach (var tool in PlayerData.Players[player].tools) {
-                ServerTool.Instance.AddTool(localChar.NetworkObject, tool);
+                ServerTool.Instance.SpawnTool(localChar.NetworkObject, tool);
             }
         }
         public async void OnPlayerCharacterDie(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){

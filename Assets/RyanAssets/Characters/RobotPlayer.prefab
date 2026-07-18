@@ -2362,7 +2362,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 2
+  <PrefabId>k__BackingField: 3
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 16495638397274493063
   SceneId: 0
@@ -2393,7 +2393,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584191710661319870
+  _initializedTimestamp: -8584175277592423065
 --- !u!114 &1039838637883914799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2409,6 +2409,7 @@ MonoBehaviour:
   _componentIndexCache: 1
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
+  Stamina: 0
   HealthEditor: 0
   MaxHealthEditor: 0
   CharacterCamera: {fileID: 7279864874766871779}
@@ -2558,7 +2559,7 @@ AudioSource:
   m_GameObject: {fileID: 6865002775998532502}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: 4144306746528415441, guid: a3706924799c36f459396edda30f4552, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 1

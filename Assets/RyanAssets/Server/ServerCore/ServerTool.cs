@@ -18,7 +18,7 @@ namespace RyanAssets.Server.ServerCore
         void Awake() {
             Instance = this;
         }
-        public void AddTool(NetworkObject networkObject, ToolEnum tool) {
+        public void SpawnTool(NetworkObject networkObject, ToolEnum tool) {
             int toolEnumIndex = (int)tool - 1;
             if (toolPrefab.Count <= toolEnumIndex) {
                 Debug.LogWarning($"Tried to add tool {tool} but no prefab exists for it");
@@ -31,12 +31,31 @@ namespace RyanAssets.Server.ServerCore
             toolBase.connectedCharacter = networkObject.GetComponent<GameCharacter>();
             InstanceFinder.ServerManager.Spawn(toolClone, ownerConnection: networkObject.Owner);
         }
-        public void AddTool(NetworkConnection player, ToolEnum tool) {
+        public void SpawnTool(NetworkConnection player, ToolEnum tool) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {
-                AddTool(character.NetworkObject, tool);
+                SpawnTool(character.NetworkObject, tool);
             }
             else {
                 Debug.LogWarning($"Tried to add tool {tool} for player {player} but no character exists for them");
+            }
+        }
+        public void AddTool(NetworkConnection player, ToolEnum tool) {
+            if (PlayerData.Players.TryGetValue(player, out PlayerData stats)) {
+                stats.tools.Add(tool);
+                SpawnTool(player, tool);
+            }
+        }
+        public void RemoveTool(NetworkConnection player, ToolEnum tool) {
+            if (PlayerData.Players.TryGetValue(player, out PlayerData stats)) {
+                stats.tools.Remove(tool);
+                if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {
+                    foreach (var toolBase in character.GetComponentsInChildren<ToolBaseShared>(true)) {
+                        if (toolBase.toolEnum == tool) {
+                            InstanceFinder.ServerManager.Despawn(toolBase.gameObject);
+                            break;
+                        }
+                    }
+                }
             }
         }
     }

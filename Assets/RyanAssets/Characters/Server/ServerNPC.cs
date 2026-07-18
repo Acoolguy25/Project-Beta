@@ -10,6 +10,10 @@ using RyanAssets.Shared.Player;
 
 namespace RyanAssets.Characters.Server { 
     public static class ServerNPC {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Init() {
+            ServerRunner.OnResetEvent += Reset;
+        }
         public static int ClearObjectsWithTag(string tagName) {
             int count = 0;
             foreach (GameObject obj in GameObject.FindGameObjectsWithTag(tagName)) {
@@ -37,6 +41,9 @@ namespace RyanAssets.Characters.Server {
         }
         public static int ClearAllNPC() {
             return ClearAliveNPC() + ClearDeadNPC();
+        }
+        public static void Reset() {
+            ClearAllNPC();
         }
     }
 }

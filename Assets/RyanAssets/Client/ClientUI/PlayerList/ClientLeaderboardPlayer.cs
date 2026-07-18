@@ -12,6 +12,8 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             this.player = player;
             OnCreatePrefab += (prefab, idx) => {
                 SetLeaderboardItem(prefab, player.leaderboard[idx]);
+                if (!IsBuilding)
+                    rebuildRequired = false;
             };
             if (enabled)
                 OnEnable();
@@ -31,12 +33,12 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             player.team.OnChange -= Team_OnChange;
         }
         private void Rebuild() {
-            rebuildRequired = true; // rebuild again if currently building
+            rebuildRequired = true;
             BuildLeaderboard(player.leaderboard.Count);
             //for (int i = 0; i < player.leaderboard.Count; i++) {
             //    SetLeaderboardItem(i, player.leaderboard[i]);
             //}
-            rebuildRequired = false;
+            
         }
         private void Leaderboard_OnChange(SyncListOperation op, int index, int oldItem, int newItem, bool asServer) {
             if (op == SyncListOperation.RemoveAt || op == SyncListOperation.Clear || op == SyncListOperation.Insert) {
@@ -47,7 +49,7 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
                     ClearPrefabs();
                 else
                     SetLeaderboardItem(contentTarget.transform.GetChild(index).gameObject, newItem);
-            } else if (rebuildRequired && op == SyncListOperation.Complete) {
+            } else if ((rebuildRequired || IsBuilding) && op == SyncListOperation.Complete) {
                 Rebuild();
             }
         }

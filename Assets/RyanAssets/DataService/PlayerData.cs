@@ -59,7 +59,7 @@ namespace RyanAssets.DataService {
 
         // Server
 #if UNITY_SERVER
-        public List<ToolEnum> tools = new() { ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger, ToolEnum.Dagger };
+        public List<ToolEnum> tools = new();
 #else   // Client
         public static InstantEvent<PlayerData> OnMyPlayerAdded;
 #endif
@@ -91,8 +91,8 @@ namespace RyanAssets.DataService {
             gameObject.name = $"PlayerData ({username.Value})";
         }
         public override void OnStopNetwork() {
-            OnPlayerRemoved?.Invoke(Owner, this);
             Players.Remove(Owner);
+            OnPlayerRemoved?.Invoke(Owner, this);
         }
 
         // Helpful Static Methods

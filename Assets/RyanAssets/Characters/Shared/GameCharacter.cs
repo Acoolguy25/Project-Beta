@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using RyanAssets.Shared.Player;
 using RyanAssets.Tools.Shared;
 using System;
 using UnityEngine;
@@ -18,8 +19,10 @@ namespace RyanAssets.Characters.Shared {
         Command
     };
     public class GameCharacter : NetworkBehaviour {
+        private static DamageSource[] invulSources = {DamageSource.Fall, DamageSource.Melee, DamageSource.Gun};
         public readonly SyncVar<long> Health = new();
         public readonly SyncVar<long> MaxHealth = new();
+        public readonly SyncVar<bool> Invul = new();
         public readonly SyncVar<ToolBaseShared> ActiveTool = new(new(WritePermission.ClientUnsynchronized));
 #if !UNITY_SERVER
         public float Stamina;
@@ -47,12 +50,14 @@ namespace RyanAssets.Characters.Shared {
         }
 #if UNITY_EDITOR
         [SerializeField] private long HealthEditor, MaxHealthEditor;
+#if UNITY_SERVER
         protected override void OnValidate() {
             base.OnValidate();
             MaxHealth.Value = MaxHealthEditor;
             TakeDamage(Health.Value - HealthEditor);
             HealthEditor = Health.Value;
         }
+#endif
         protected void OnEnable() {
             Health.OnChange += UpdateEditorOptions;
             MaxHealth.OnChange += UpdateEditorOptions;
@@ -67,8 +72,13 @@ namespace RyanAssets.Characters.Shared {
         }
 #endif
         public Action<DamageSource, NetworkObject> OnDied;
+#if UNITY_SERVER
+        [Server]
+        protected virtual bool IsProtected(DamageSource source) {
+            return (Invul.Value || SharedGlobalEvents.Instance.GlobalInvul) && Array.Exists(invulSources, s => s == source);
+        }
         public virtual void TakeDamage(long Damage, DamageSource source = DamageSource.None, NetworkObject sourceObject = null) {
-            if (Health.Value == 0)
+            if (Health.Value == 0 || IsProtected(source))
                 return;
             if (Damage < 0) {
                 HealHealth(-Damage);
@@ -97,24 +107,6 @@ namespace RyanAssets.Characters.Shared {
             SetHealth(0);
             SharedDied(source, sourceObject);
         }
-        protected virtual void SharedDied(DamageSource source, NetworkObject sourceObject) {
-            SwitchTool(null);
-            if (!transform.tag.StartsWith("Dead"))
-                transform.tag = "Dead" + transform.tag;
-
-            OnDied?.Invoke(source, sourceObject);
-        }
-        [Server]
-        public virtual void Kill(DamageSource source, NetworkObject sourceObject = null) {
-            Died(source, sourceObject);
-        }
-        public bool IsDead() {
-            return Health.Value == 0 && MaxHealth.Value != 0;
-        }
-        public bool IsFullHealth() {
-            return Health.Value == MaxHealth.Value && !IsDead();
-        }
-
         public virtual void Init(long hp, long maxHP, float maxStamina = 100f, float staminaRegen = 10f, float staminaCooldown = 0.4f) {
             MaxHealth.Value = maxHP;
             MaxStamina.Value = maxStamina;
@@ -125,6 +117,25 @@ namespace RyanAssets.Characters.Shared {
         public void Init(long hp){
             Init(hp, hp);
         }
+        [Server]
+        public virtual void Kill(DamageSource source, NetworkObject sourceObject = null) {
+            Died(source, sourceObject);
+        }
+#endif
+        protected virtual void SharedDied(DamageSource source, NetworkObject sourceObject) {
+            SwitchTool(null);
+            if (!transform.tag.StartsWith("Dead"))
+                transform.tag = "Dead" + transform.tag;
+
+            OnDied?.Invoke(source, sourceObject);
+        }
+        public bool IsDead() {
+            return Health.Value == 0 && MaxHealth.Value != 0;
+        }
+        public bool IsFullHealth() {
+            return Health.Value == MaxHealth.Value && !IsDead();
+        }
+
         public override void OnStopNetwork() {
             SwitchTool(null);
         }
