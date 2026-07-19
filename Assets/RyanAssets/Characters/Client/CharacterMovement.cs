@@ -25,8 +25,8 @@ namespace RyanAssets.Characters.Client {
 
         [Space(10)]
         public float JumpTimeout = 0.35f;
-        public float LandJumpTimeout = 0.15f;
-        public float FallTimeout = 0.20f;
+        public float LandJumpTimeout = 0.05f;
+        public float FallTimeout = 0.05f;
 
 
         private float _animationBlend;
@@ -164,13 +164,14 @@ namespace RyanAssets.Characters.Client {
                 //    _animator.SetBool(_animIDFreeFall, false);
                 //}
 
-                if (_input.jump && _jumpTimeoutDelta <= 0.0f && _landTimeoutDelta <= 0.0f) {
+                if (_input.jump && _jumpTimeoutDelta <= 0.0f && _landTimeoutDelta <= 0.0f && LocalPlayer.Character.ConsumeStamina(5f)) {
                     _jumpTimeoutDelta = JumpTimeout;
 
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-                    Vector3 velocity = _rb.linearVelocity;
-                    velocity.y = _verticalVelocity;
-                    _rb.linearVelocity = velocity;
+                    //Vector3 velocity = _rb.linearVelocity;
+                    //velocity.y = _verticalVelocity;
+                    //_rb.linearVelocity = velocity;
+                    _rb.AddRelativeForce(Vector3.up * _verticalVelocity, ForceMode.VelocityChange);
                     characterAnimator.Jump();
                     //if (_hasAnimator)
                     //    _animator.SetBool(_animIDJump, true);

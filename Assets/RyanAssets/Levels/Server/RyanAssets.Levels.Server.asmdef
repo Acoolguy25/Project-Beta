@@ -1,0 +1,24 @@
+{
+    "name": "RyanAssets.Levels.Server",
+    "rootNamespace": "RyanAssets.Levels.Server",
+    "references": [
+        "GUID:f12bfd3872f944c498302f1d069a7be1",
+        "GUID:39cf4af17d22e66448d4cd56fe623fa9",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:9a84ec9673600fb4cbb1544ed2172dd8",
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

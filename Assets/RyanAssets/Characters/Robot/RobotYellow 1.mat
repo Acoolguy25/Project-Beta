@@ -20,14 +20,14 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: RobotRuntimeColors
+  m_Name: RobotYellow 1
   m_Shader: {fileID: 4800000, guid: 57da8a73a9f342019d6cb71ac6f9a926, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
+  m_ValidKeywords: []
+  m_InvalidKeywords:
   - _METALLICSPECGLOSSMAP
   - _NORMALMAP
-  m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -140,8 +140,8 @@ Material:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _RobotPrimaryColor: {r: 1, g: 1, b: 1, a: 1}
-    - _RobotSecondaryColor: {r: 1, g: 0.18, b: 0.12, a: 1}
+    - _RobotPrimaryColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+    - _RobotSecondaryColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.2, g: 0.2, b: 0.2, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

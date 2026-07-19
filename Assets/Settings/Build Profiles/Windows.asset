@@ -37,13 +37,13 @@ MonoBehaviour:
     - line: '|   targetDevice: 2'
     - line: '|   useOnDemandResources: 0'
     - line: '|   accelerometerFrequency: 60'
-    - line: '|   companyName: DefaultCompany'
+    - line: '|   companyName: Acoolguy25'
     - line: '|   productName: Project Beta'
     - line: '|   defaultCursor: {instanceID: 0}'
     - line: '|   cursorHotspot: {x: 0, y: 0}'
     - line: '|   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b:
         0.1254902, a: 1}'
-    - line: '|   m_ShowUnitySplashScreen: 1'
+    - line: '|   m_ShowUnitySplashScreen: 0'
     - line: '|   m_ShowUnitySplashLogo: 1'
     - line: '|   m_SplashScreenOverlayOpacity: 1'
     - line: '|   m_SplashScreenAnimation: 1'
@@ -124,9 +124,9 @@ MonoBehaviour:
     - line: '|   usePlayerLog: 1'
     - line: '|   dedicatedServerOptimizations: 1'
     - line: '|   bakeCollisionMeshes: 0'
-    - line: '|   forceSingleInstance: 0'
+    - line: '|   forceSingleInstance: 1'
     - line: '|   useFlipModelSwapchain: 1'
-    - line: '|   resizableWindow: 0'
+    - line: '|   resizableWindow: 1'
     - line: '|   useMacAppStoreValidation: 0'
     - line: '|   macAppStoreCategory: public.app-category.games'
     - line: '|   gpuSkinning: 1'
@@ -138,7 +138,7 @@ MonoBehaviour:
     - line: '|   xboxEnableFitness: 0'
     - line: '|   visibleInBackground: 1'
     - line: '|   allowFullscreenSwitch: 1'
-    - line: '|   fullscreenMode: 1'
+    - line: '|   fullscreenMode: 3'
     - line: '|   xboxSpeechDB: 0'
     - line: '|   xboxEnableHeadOrientation: 0'
     - line: '|   xboxEnableGuest: 0'
@@ -873,7 +873,7 @@ MonoBehaviour:
     - line: '|     PS5: UNITY_POST_PROCESSING_STACK_V2'
     - line: '|     QNX: UNITY_POST_PROCESSING_STACK_V2'
     - line: '|     Server: FISHNET;FISHNET_V4;LOCAL_BACKEND'
-    - line: '|     Standalone: MIRROR;MIRROR_89_OR_NEWER;MIRROR_90_OR_NEWER;MIRROR_93_OR_NEWER;MIRROR_96_OR_NEWER;EDGEGAP_PLUGIN_SERVERS;FISHNET;FISHNET_V4;UNITY_POST_PROCESSING_STACK_V2;APP_UI_EDITOR_ONLY;UNITY_CLIENT'
+    - line: '|     Standalone: MIRROR;MIRROR_89_OR_NEWER;MIRROR_90_OR_NEWER;MIRROR_93_OR_NEWER;MIRROR_96_OR_NEWER;EDGEGAP_PLUGIN_SERVERS;FISHNET;FISHNET_V4;UNITY_POST_PROCESSING_STACK_V2;APP_UI_EDITOR_ONLY;UNITY_CLIENT;AUDIO_ENABLED'
     - line: '|     VisionOS: UNITY_POST_PROCESSING_STACK_V2'
     - line: '|     WebGL: UNITY_POST_PROCESSING_STACK_V2'
     - line: '|     XboxOne: UNITY_POST_PROCESSING_STACK_V2'
@@ -1003,7 +1003,7 @@ MonoBehaviour:
     - rid: 5934063747499819063
       type: {class: WindowsPlatformSettings, ns: UnityEditor.WindowsStandalone, asm: UnityEditor.WindowsStandalone.Extensions}
       data:
-        m_Development: 0
+        m_Development: 1
         m_ConnectProfiler: 0
         m_BuildWithDeepProfilingSupport: 0
         m_BuildWithCodeCoverage: 0

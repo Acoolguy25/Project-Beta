@@ -8,6 +8,7 @@ using FishNet.Connection;
 using RyanAssets.Commands.Shared;
 using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
+using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
 
@@ -116,6 +117,11 @@ namespace RyanAssets.Commands.Server {
         public static void Server_Shutdown(NetworkConnection caller, string commandName, string[] args)
         {
             ServerBootStrap.StopServer($"Shutdown by {PlayerData.GetPlayerName(caller) ?? "anonymous"}");
+        }
+
+        public static void Server_Restart(NetworkConnection caller, string commandName, string[] args) {
+            ServerChat.SendSystemMessage(new("Server is restarting...", SystemMessageSource.ServerRestart));
+            ServerBootStrap.RestartServerEvent?.Invoke();
         }
     }
 }

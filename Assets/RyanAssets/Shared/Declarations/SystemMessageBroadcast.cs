@@ -9,6 +9,8 @@ namespace RyanAssets.Shared.Declarations {
         PlayerRemove,
         ClientCommand,
         // Server-side
+        PlayerLevelUp,
+        ServerRestart,
         CustomMessage,
         // Either-side
         CommandError

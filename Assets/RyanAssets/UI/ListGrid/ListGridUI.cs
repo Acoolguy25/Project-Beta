@@ -20,8 +20,8 @@ namespace RyanAssets.UI.ListGrid {
 
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
-        protected Dictionary<Transform, uint> prefabOrder = new();
-        protected uint globalOrder;
+        protected Dictionary<Transform, int> prefabOrder = new();
+        protected int globalOrder;
 
         readonly List<AsyncInstantiateOperation<GameObject>> pending_ops = new();
         public bool IsBuilding => pending_ops.Count > 0;
@@ -51,7 +51,7 @@ namespace RyanAssets.UI.ListGrid {
             Destroy(obj.gameObject);
             prefabOrder.Remove(obj);
         }
-        protected void AddPrefab(T data, uint order) {
+        protected void AddPrefab(T data, int order) {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
@@ -75,11 +75,11 @@ namespace RyanAssets.UI.ListGrid {
         }
         public void AddPrefabs(T[] objects) {
             //foreach (T data in objects) {
-            for (uint i = 0; i < objects.Length; i++) {
+            for (int i = 0; i < objects.Length; i++) {
                 T data = objects[i];
                 AddPrefab(data, globalOrder + i);
             }
-            globalOrder += ((uint)objects.Length);
+            globalOrder += ((int)objects.Length);
         }
         public void RefreshPrefabs(T[] objects) {
             ClearPrefabs();

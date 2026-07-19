@@ -30,7 +30,7 @@ namespace RyanAssets.Client.ClientModules {
             localSettings = (json.TryGetValue("preferences", out JToken preferences) && (string)preferences != null)
                 ? preferences.ToObject<LocalPlayerSettings>()
                 : default;
-            LevelClient.UpdateLevelInstances(localData);
+            LevelsClient.UpdateLevelInstances(localData);
             username_changed_event?.Invoke(localData.username);
         }
         static JObject pending_data;

@@ -27,7 +27,7 @@ namespace RyanAssets.Characters.Shared
             if (animationEvent.animatorClipInfo.weight > 0.5f && FootstepAudioClips.Length > 0) {
                 int index = Random.Range(0, FootstepAudioClips.Length);
                 var clip = FootstepAudioClips[index];
-                
+
                 //var audioGO = new GameObject("FootstepAudio");
                 //audioGO.transform.position = transform.position;
                 //var source = audioGO.AddComponent<AudioSource>();
@@ -35,7 +35,9 @@ namespace RyanAssets.Characters.Shared
                 //source.volume = FootstepAudioVolume;
                 //source.pitch = 1.0f; //_input.sprint ? (1.25f) : 1.0f;
                 //source.Play();
+#if AUDIO_ENABLED
                 _footStepSource.PlayOneShot(clip);
+#endif
                 //Destroy(audioGO, clip.length / source.pitch);
             }
         }
@@ -65,11 +67,12 @@ namespace RyanAssets.Characters.Shared
             Vector3 velocity = GetVelocity();
             _animator.SetFloat("Speed", velocity.magnitude * SpeedThreshold);
             _animator.SetFloat("MotionSpeed", velocity.magnitude * SpeedThreshold);
-            _animator.SetBool("Jump", Time.time - jumpStart < 0.4f);
+            _animator.SetBool("Jump", (Time.fixedTime - jumpStart) < 0.01f);
+            //_animator.SetBool("Jump", false);
         }
         public void Jump() {
             _animator.SetBool("Jump", true);
-            jumpStart = Time.time;
+            jumpStart = Time.fixedTime;
         }
         private Vector3 GetVelocity() {
             Vector3 velocity = (transform.position - prevPosition) / Time.fixedDeltaTime;

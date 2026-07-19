@@ -58,7 +58,8 @@ namespace RyanAssets.Authentication {
             }
 
             NetworkManager.ClientManager.Broadcast(new AuthRequest {
-                Token = token
+                Token = token,
+                ClientVersion = Application.version
             });
         }
 #else
@@ -73,9 +74,9 @@ namespace RyanAssets.Authentication {
                 return;
             }
 
-            ValidateToken(conn, req.Token).Forget();
+            ValidateToken(conn, req.Token, req.ClientVersion).Forget();
         }
-        private async UniTask ValidateToken(NetworkConnection conn, string token) {
+        private async UniTask ValidateToken(NetworkConnection conn, string token, string clientVersion) {
             if (IsShuttingDown) {
                 Fail(conn, "This server is shutting down!");
                 return;
@@ -84,6 +85,9 @@ namespace RyanAssets.Authentication {
                 return;
             } else if (KickPlayers.TryGetValue(token, out string KickReason)) {
                 Fail(conn, KickReason != null ? KickReason : "You do not have permission to join this server");
+                return;
+            } else if (clientVersion != Application.version) {
+                Fail(conn, $"Client version mismatch. Server is running {Application.version}, but client is running {clientVersion}");
                 return;
             }
             var (res, json) = await BackendNetwork.PostRequest("/api/internal/v1/user/add", accessToken: token);
@@ -130,6 +134,7 @@ namespace RyanAssets.Authentication {
 
     public struct AuthRequest : IBroadcast {
         public string Token;
+        public string ClientVersion;
     }
 
     public struct AuthResponse : IBroadcast {

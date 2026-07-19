@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace RyanAssets.Input {
     public class ToolControls : MonoBehaviour {
@@ -44,16 +45,22 @@ namespace RyanAssets.Input {
         public void On_9() {
             toolBarHotkeyPressed?.Invoke(9);
         }
-        bool IsCursorFree() { 
+        bool IsCursorFree() {
             PointerEventData pointerData = new(EventSystem.current) {
                 position = Mouse.current.position.ReadValue()
             };
-
             List<RaycastResult> results = new();
             EventSystem.current.RaycastAll(pointerData, results);
 
-            bool overUI = results.Count == 0;
-            return overUI;
+            foreach (var result in results) {
+                // Skip fully transparent graphics — invisible overlay panels, faded-out UI, etc.
+                if (result.gameObject.TryGetComponent<Graphic>(out var graphic) && graphic.color.a <= 0f)
+                    continue;
+
+                return false; // hit something visible — cursor is blocked
+            }
+
+            return true; // nothing visible under the cursor
         }
         public void OnActivateTool() {
             if (IsCursorFree())

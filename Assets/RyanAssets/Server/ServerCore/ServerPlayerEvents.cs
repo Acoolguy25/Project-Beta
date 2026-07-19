@@ -49,6 +49,7 @@ namespace RyanAssets.Server.ServerCore {
             BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect").Forget();
             //PlayerData.Players.Remove(conn);
             //}
+            ServerPlayerSave.Save(conn);
             ServerPlayerSave.Forget(conn);
             //OnPlayerRemovedEvent?.Invoke(conn);
         }

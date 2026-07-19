@@ -6,8 +6,8 @@ using UnityEngine.UI;
 using TMPro;
 
 namespace RyanAssets.Levels.Client {
-    public class LevelClient: MonoBehaviour {
-        readonly static List<LevelClient> Instances = new();
+    public class LevelsClient: MonoBehaviour {
+        readonly static List<LevelsClient> Instances = new();
         static ulong xp;
         TextMeshProUGUI _level_text;
         void Awake(){
@@ -25,7 +25,7 @@ namespace RyanAssets.Levels.Client {
         }
         public static void UpdateLevelInstances(LocalPlayerData localPlayerData){
             xp = localPlayerData.xp;
-            foreach (LevelClient client in Instances){
+            foreach (LevelsClient client in Instances){
                 client.UpdateLevel();
             }
         }

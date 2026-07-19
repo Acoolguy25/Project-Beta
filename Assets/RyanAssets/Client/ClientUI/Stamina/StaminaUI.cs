@@ -17,7 +17,6 @@ namespace RyanAssets.Client.ClientUI.Stamina {
             LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
         }
         void OnCharacterAdded(Transform character) {
-            canvasGroupController.SetVisible(character != null, 0.5f);
             if (character == null) {
                 OnCharacterRemoved();
                 return;

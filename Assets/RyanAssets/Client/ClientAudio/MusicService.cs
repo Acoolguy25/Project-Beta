@@ -62,10 +62,10 @@ namespace RyanAssets.Client.ClientAudio {
             }
         }
         void UpdateMusicVolume(string musicType, int volume) {
-            float db = volume <= 0 ? -80f : Mathf.Log10(volume / 100f) * 20f;
-            //audioMixer.SetFloat(musicType + "Volume", db);
+            float db = volume <= 0 ? -80f : Mathf.Log10(volume / 200f) * 20f;
+            audioMixer.SetFloat(musicType + "Volume", db);
 
-            TweenService.TweenComponents.TweenAudioMixerGroup.FadeMixerVolume(audioMixer, musicType + "Volume", db, 0.25f, owner: musicType);
+            //TweenService.TweenComponents.TweenAudioMixerGroup.FadeMixerVolume(audioMixer, musicType + "Volume", db, 0.25f, owner: musicType);
         }
         public void SetActiveTrack(MusicTracks track){
             activeTrack = track;

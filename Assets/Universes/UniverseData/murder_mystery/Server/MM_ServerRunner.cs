@@ -4,6 +4,7 @@ using FishNet.Connection;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
+using RyanAssets.Levels.Server;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Player;
@@ -20,11 +21,16 @@ namespace Universes.murder_mystery.Server {
         [SerializeField]
         DebugBool DebugSingleNpc, DebugMotionlessNpc;
         [SerializeField]
-        DebugBool DebugTimerSpeedUp;
-        Action UpdateGameBarEvent;
+        DebugBool DebugTimerSpeedUp, DebugTimerInfinite;
+        public static float SpawnMultiplier;
+        public static bool ForceEndGame;
+        public static Action UpdateGameBarEvent;
         int startNPCs;
         protected override void Awake(){
             base.Awake();
+            UpdateGameBarEvent = null;
+            ForceEndGame = false;
+            SpawnMultiplier = 1f;
             PlayerData.OnPlayerAdded += OnPlayerAdded;
             ServerPlayerCharacter.OnPlayerCharacterAdded += OnCharacterAdded;
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
@@ -47,7 +53,7 @@ namespace Universes.murder_mystery.Server {
             //character.GetComponent<CharacterScaler>().SetScale(0.7f * Vector3.one);
         }
         void SpawnNpcs() {
-            startNPCs = (DebugSingleNpc.Value ? 1 : 30);
+            startNPCs = Mathf.RoundToInt((DebugSingleNpc.Value ? 1 : 30) * SpawnMultiplier);
             for (int i = 0; i < startNPCs; i++) {
                 LocalNPC npc = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (DebugSingleNpc.Value ? new Vector3(1117.56995f, -8.12100029f, 1008.34003f) : null));
                 GameCharacter gameCharacter = npc.GetComponent<GameCharacter>();
@@ -56,6 +62,7 @@ namespace Universes.murder_mystery.Server {
                         int kills = SharedGlobalEvents.GetLeaderboardIndex("Kills");
                         if (kills != -1)
                             PlayerData.GetPlayerData(killer.Owner).leaderboard[kills]++;
+                        LevelsServer.AwardPlayerXPAndGold(killer.Owner, 5);
                     }
                     //if (GameObject.FindGameObjectsWithTag("NPC").Count() == 0)
                     UpdateGameBarEvent?.Invoke();
@@ -78,7 +85,7 @@ namespace Universes.murder_mystery.Server {
             }
             
             while(true) {
-                await base.Intermission(DebugTimerSpeedUp.Value ? 1: 5, token);
+                await base.Intermission(DebugTimerInfinite.Value? Int32.MaxValue: DebugTimerSpeedUp.Value ? 1: 5, token);
 
                 SpawnNpcs();
                 base.SetGlobalInvul(false);

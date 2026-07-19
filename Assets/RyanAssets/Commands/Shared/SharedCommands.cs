@@ -74,6 +74,11 @@ namespace RyanAssets.Commands.Shared {
                 commandName = "server_shutdown",
                 description = "Closes current server.",
                 arguments = new CommandArgumentConfig[0]
+            },
+            new() {
+                commandName = "server_restart",
+                description = "Restarts current server.",
+                arguments = new CommandArgumentConfig[0]
             }
         };
     }

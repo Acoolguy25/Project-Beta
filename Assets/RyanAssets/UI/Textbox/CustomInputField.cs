@@ -1122,7 +1122,7 @@ namespace RyanAssets.UI.Textbox {
 
             return index;
         }
-
+#if UNITY_EDITOR
         protected override void OnValidate() {
             base.OnValidate();
             EnforceContentType();
@@ -1135,7 +1135,7 @@ namespace RyanAssets.UI.Textbox {
                 }
             }
         }
-
+#endif
         protected override void OnEnable() {
             base.OnEnable();
             if (m_Text == null) {

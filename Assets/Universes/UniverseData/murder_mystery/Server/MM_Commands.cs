@@ -40,6 +40,21 @@ namespace Universes.murder_mystery.Server
                         max = 100f
                     }
                 }
+            },
+            new()
+            {
+               commandName = "NPC_SpawnMultiplier",
+               description = "Sets the NPC Spawn Multiplier",
+               arguments = new[]
+                {
+                    new CommandArgumentConfig
+                    {
+                        name = "Multiplier",
+                        type = CommandArgumentType.Float,
+                        min = 0f,
+                        max = 100f
+                    }
+                }
             }
         };
         static readonly ServerCommandService.CommandHandler[] commandActions =
@@ -51,6 +66,9 @@ namespace Universes.murder_mystery.Server
             (NetworkConnection caller, string commandName, string[] args) => {
                 LocalNPC.FleeSpeedMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
                 MM_NPC.RefreshNPCSpeeds();
+            },
+            (NetworkConnection caller, string commandName, string[] args) => {
+                MM_ServerRunner.SpawnMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
             }
         };
         void Start() {

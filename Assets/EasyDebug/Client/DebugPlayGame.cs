@@ -10,6 +10,7 @@ namespace EasyDebug.Debug {
         string PlayGameUniverseId;
         [SerializeField]
         Button continueButton;
+#if UNITY_EDITOR
         IEnumerator PressButton(Button button){
             while (!button.IsInteractable()){
                 yield return new WaitForSeconds(0.5f);
@@ -23,11 +24,10 @@ namespace EasyDebug.Debug {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
-#if UNITY_SERVER
-            SceneManager.LoadScene("ServerInit");
-#else
+#if !UNITY_SERVER
             SceneManager.LoadScene("MainMenu");
 #endif
         }
+#endif
     }
 }

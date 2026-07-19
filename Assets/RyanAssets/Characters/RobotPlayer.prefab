@@ -2393,7 +2393,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584175277592423065
+  _initializedTimestamp: -8584171376923301659
 --- !u!114 &1039838637883914799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2440,7 +2440,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 67c8b33e424ccdc4486edf538ab91c5a, type: 3}
   - {fileID: 8300000, guid: 274649b0e221539409070ebf6c18918b, type: 3}
   - {fileID: 8300000, guid: a3194b8bbc96ef84fab1f98f4b7dae3e, type: 3}
-  GroundCheck: 0
+  GroundCheck: 1
   Grounded: 0
 --- !u!114 &8624230890759636101
 MonoBehaviour:
@@ -2516,11 +2516,13 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6852dd55a24244da96cc35141fd20afe, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.RobotColorController
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.RobotColor
   renderers:
   - {fileID: 6988255403260066607}
-  primaryColor: {r: 0.13207549, g: 0.07538271, b: 0.07538271, a: 1}
-  secondaryColor: {r: 1, g: 0.9961495, b: 0.0990566, a: 1}
+  shaderVariants:
+  - {fileID: 2100000, guid: 8fc6ce4275b346fc9d900ae86ae76f6b, type: 2}
+  targetMaterialSlot: 0
+  randomizeOnStart: 1
 --- !u!114 &7934802168562780897
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2548,7 +2550,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 67c8b33e424ccdc4486edf538ab91c5a, type: 3}
   - {fileID: 8300000, guid: 274649b0e221539409070ebf6c18918b, type: 3}
   - {fileID: 8300000, guid: a3194b8bbc96ef84fab1f98f4b7dae3e, type: 3}
-  GroundCheck: 0
+  GroundCheck: 1
   Grounded: 0
 --- !u!82 &3857622150104325183
 AudioSource:
@@ -2607,7 +2609,7 @@ AudioSource:
     m_Curve:
     - serializedVersion: 3
       time: 0
-      value: 0
+      value: 1
       inSlope: 0
       outSlope: 0
       tangentMode: 0

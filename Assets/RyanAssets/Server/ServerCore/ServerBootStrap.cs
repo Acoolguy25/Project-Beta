@@ -37,7 +37,7 @@ namespace RyanAssets.Server.ServerCore {
             public ushort ServerIdleTimeoutSeconds;
             public ushort ServerHeartbeatIntvSeconds;
         }
-        public static Action StartServerEvent, StopServerEvent;
+        public static Action StartServerEvent, StopServerEvent, RestartServerEvent;
         public static event Func<UniTask> StopServerAsyncEvent;
         public static ServerInfo serverInfo = new();
         public static ServerSettings serverSettings = new();

@@ -15,7 +15,6 @@
   <Project Path="RyanAssets.Characters.Shared.csproj" />
   <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
-  <Project Path="RyanAssets.Levels.Client.csproj" />
   <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Vote.csproj" />
@@ -28,6 +27,7 @@
   <Project Path="RyanAssets.Commands.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
+  <Project Path="RyanAssets.Levels.Client.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />
   <Project Path="RyanAssets.Commands.Client.csproj" />
   <Project Path="RyanAssets.UI.Autocomplete.csproj" />

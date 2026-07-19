@@ -14,9 +14,10 @@ namespace RyanAssets.Client.ClientUI.Toolbar
     public class ToolbarUI : ButtonGridUI<ToolBaseShared>
     {
         [SerializeField]
-        public float SwitchToolDelay = 0.1f;
+        public float SwitchToolDelay = 0.01f;
         float LastSwitchToolTime = float.MinValue;
         Dictionary<ToolBaseShared, Transform> toolBaseToItem = new();
+        List<ToolBaseShared> orderedTools = new();
         protected override void Start()
         {
             base.Start();
@@ -33,7 +34,8 @@ namespace RyanAssets.Client.ClientUI.Toolbar
         }
         void OnToolCreated(ToolBaseShared tool) {
             if (tool.IsOwner) {
-                AddPrefab(tool);
+                orderedTools.Add(tool);
+                AddPrefab(tool, orderedTools.Count - 1);
             }
         }
         void OnToolRemoved(ToolBaseShared tool) {
@@ -41,6 +43,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
                 RemovePrefab(prefabClone);
                 toolBaseToItem.Remove(tool);
             }
+            orderedTools.Remove(tool);
         }
         void OnAddPrefab(GameObject prefabClone, ToolBaseShared toolBase) {
             ToolBaseClient baseClient = toolBase.GetComponent<ToolBaseClient>();
@@ -48,7 +51,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             Image backingImage = prefabClone.GetComponent<Image>();
             prefabClone.transform.GetChild(0).GetComponent<Image>().sprite = toolBase.toolImage;
             Image sliderImage = prefabClone.transform.GetChild(1).GetComponent<Image>();
-            prefabClone.transform.GetChild(2).GetComponent<TextMeshProUGUI>().text = (prefabOrder[prefabClone.transform] + 1).ToString();
+            prefabClone.transform.GetChild(2).GetComponent<TextMeshProUGUI>().text = (orderedTools.FindIndex(t => t == toolBase) + 1).ToString();
             toolBaseToItem.Add(toolBase, prefabClone.transform);
             toolBase.equippedEvent += (ToolBaseShared _) => {
                 //prefabClone.GetComponent<Image>().color = new Color32(60, 81, 161, 219);

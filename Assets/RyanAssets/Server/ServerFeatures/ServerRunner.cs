@@ -63,24 +63,40 @@ namespace RyanAssets.Server.ServerFeatures {
         }
 
         public async UniTask CustomTimerCountdown(
-    int duration,
-    Func<int, bool, bool> activationFunc,
-    Func<Action, Action> registerInterrupt,
-    CancellationToken token = default) {
+            int duration,
+            Func<int, bool, bool> activationFunc,
+            Func<Action, Action> registerInterrupt,
+            CancellationToken token = default) {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             bool loopExited = false;
+            bool interruptRegistered = false;
+            Action unregisterInterrupt = null;
 
-            Action interrupt = () => {
-                if (cts.IsCancellationRequested || loopExited)
+            void UnregisterInterrupt() {
+                if (!interruptRegistered)
                     return;
 
-                if (!activationFunc(duration, true))
+                // Mark it inactive before invoking the unregister callback. This also
+                // prevents a registration callback that returns the event delegate
+                // itself from recursively invoking the interrupt action.
+                interruptRegistered = false;
+                unregisterInterrupt?.Invoke();
+            }
+
+            Action interrupt = () => {
+                if (!interruptRegistered || cts.IsCancellationRequested || loopExited)
+                    return;
+
+                if (!activationFunc(duration, true)) {
                     cts.Cancel();
+                    UnregisterInterrupt();
+                }
             };
 
-            Action unregisterInterrupt = registerInterrupt(interrupt);
-
             try {
+                unregisterInterrupt = registerInterrupt(interrupt);
+                interruptRegistered = true;
+
                 while (duration >= 0) {
                     if (!activationFunc(duration, false))
                         return;
@@ -94,7 +110,7 @@ namespace RyanAssets.Server.ServerFeatures {
             }
             finally {
                 loopExited = true;
-                unregisterInterrupt();
+                UnregisterInterrupt();
             }
         }
         public void ResetLeaderboardData() {
@@ -132,6 +148,7 @@ namespace RyanAssets.Server.ServerFeatures {
         protected virtual void Awake() {
             DontDestroyOnLoad(gameObject);
             ServerIdleTimeout.OnIdleTimeoutStarted += Restart;
+            ServerBootStrap.RestartServerEvent += Restart;
         }
 
         protected virtual void Start() {

@@ -91,6 +91,8 @@ namespace RyanAssets.Cameras
         }
         void OnRightClick(InputAction.CallbackContext context)
         {
+            if (!InputService.GetActionMapActive(RyanAssetsActionMap.Character))
+                return;
             ToggleRightClick(true);
         }
         void OnRightClickRelease(InputAction.CallbackContext context)

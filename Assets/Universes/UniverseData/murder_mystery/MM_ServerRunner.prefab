@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 9172638451029384756}
   - component: {fileID: 5434769148292391608}
   m_Layer: 0
-  m_Name: ServerRunner
+  m_Name: MM_ServerRunner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -47,6 +47,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   RobotNPC_Prefab: {fileID: 6865002775998532502, guid: 464ffb59118c58248a4e3c9bc1c665f9, type: 3}
+  DebugSingleNpc:
+    _editor_value: 0
+    _runtime_value: 0
+  DebugMotionlessNpc:
+    _editor_value: 1
+    _runtime_value: 0
+  DebugTimerSpeedUp:
+    _editor_value: 0
+    _runtime_value: 0
+  DebugTimerInfinite:
+    _editor_value: 0
+    _runtime_value: 0
 --- !u!114 &9172638451029384756
 MonoBehaviour:
   m_ObjectHideFlags: 0

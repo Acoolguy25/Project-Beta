@@ -4146,7 +4146,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6865002775998532502}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 3, y: 3, z: 3}
   m_ConstrainProportionsScale: 0
@@ -4424,36 +4424,25 @@ MonoBehaviour:
   m_GameObject: {fileID: 6865002775998532502}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c9b5d3faaf38d584b99cafec49fafc78, type: 3}
+  m_Script: {fileID: 11500000, guid: 6852dd55a24244da96cc35141fd20afe, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.RobotRandomColor
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.RobotColor
   renderers:
   - {fileID: 6988255403260066607}
-  primaryColor: {r: 1, g: 1, b: 1, a: 1}
-  secondaryColor: {r: 1, g: 0.18, b: 0.12, a: 1}
-  colorCount: 200
-  primaryColors:
-  - {r: 1, g: 0, b: 0, a: 1}
-  - {r: 0, g: 0, b: 1, a: 1}
-  - {r: 0, g: 1, b: 0, a: 1}
-  - {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  - {r: 1, g: 0, b: 1, a: 1}
-  - {r: 0, g: 1, b: 1, a: 1}
-  - {r: 1, g: 1, b: 1, a: 1}
-  - {r: 1, g: 0.5, b: 0, a: 1}
-  - {r: 0.5, g: 0, b: 1, a: 1}
-  - {r: 0.2, g: 0.2, b: 0.2, a: 1}
-  secondaryColors:
-  - {r: 0, g: 0, b: 1, a: 1}
-  - {r: 0, g: 1, b: 0, a: 1}
-  - {r: 1, g: 0, b: 0, a: 1}
-  - {r: 0, g: 1, b: 1, a: 1}
-  - {r: 1, g: 0, b: 1, a: 1}
-  - {r: 0.6, g: 0.3, b: 0.1, a: 1}
-  - {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  - {r: 1, g: 1, b: 1, a: 1}
-  - {r: 1, g: 0.5, b: 0, a: 1}
-  - {r: 0.5, g: 0.8, b: 1, a: 1}
+  shaderVariants:
+  - {fileID: 2100000, guid: ee992a4b0874bd8468f8b0f18394cfd7, type: 2}
+  - {fileID: 2100000, guid: a6ccb999c762eac44bf6d16ae0ccebf8, type: 2}
+  - {fileID: 2100000, guid: c08cc850b0f8fde49b68ee5f253dd660, type: 2}
+  - {fileID: 2100000, guid: a49c0d754a9cf4c4a849708d32e0d772, type: 2}
+  - {fileID: 2100000, guid: 06d2f46ad7e0d0e4cabbf8d1eb7fe439, type: 2}
+  - {fileID: 2100000, guid: 52491b03b6789e341b175d7475ef1ea9, type: 2}
+  - {fileID: 2100000, guid: 787650c4434ab4d4da8514c0a6d407ee, type: 2}
+  - {fileID: 2100000, guid: fce0b4e5680291f4f9a3e1f0d46f3360, type: 2}
+  - {fileID: 2100000, guid: 8fc6ce4275b346fc9d900ae86ae76f6b, type: 2}
+  - {fileID: 2100000, guid: ee183704ed3521a4a80e3ef454bfc990, type: 2}
+  - {fileID: 2100000, guid: e8ba7e19805871a4bbc9c210d9c04517, type: 2}
+  targetMaterialSlot: 0
+  randomizeOnStart: 1
 --- !u!114 &7091241065695170515
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4540,7 +4529,7 @@ AudioSource:
     m_Curve:
     - serializedVersion: 3
       time: 0
-      value: 0
+      value: 1
       inSlope: 0
       outSlope: 0
       tangentMode: 0
