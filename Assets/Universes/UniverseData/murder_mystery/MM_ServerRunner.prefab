@@ -51,7 +51,7 @@ MonoBehaviour:
     _editor_value: 0
     _runtime_value: 0
   DebugMotionlessNpc:
-    _editor_value: 1
+    _editor_value: 0
     _runtime_value: 0
   DebugTimerSpeedUp:
     _editor_value: 0

@@ -36,6 +36,16 @@ namespace Universes.murder_mystery.Server {
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
             SharedGlobalEvents.Instance.LeaderboardHeaders.Clear();
             SharedGlobalEvents.Instance.LeaderboardHeaders.AddRange(new[] { "Kills" });
+
+            base.SetTeamKillEnabled(true);
+            if (DebugMotionlessNpc.Value) {
+                LocalNPC.FleeSpeedMultiplier = 0f;
+                LocalNPC.WalkSpeedMultiplier = 0f;
+            }
+            else {
+                LocalNPC.FleeSpeedMultiplier = 1f;
+                LocalNPC.WalkSpeedMultiplier = 1f;
+            }
         }
         bool CanSpawnFunction(NetworkConnection player) {
             return true;
@@ -78,11 +88,7 @@ namespace Universes.murder_mystery.Server {
         }
         protected override async UniTask StartAsync(CancellationToken token){
             await base.StartAsync(token);
-            base.SetTeamKillEnabled(true);
-            if (DebugMotionlessNpc.Value) {
-                LocalNPC.FleeSpeedMultiplier = 0f;
-                LocalNPC.WalkSpeedMultiplier = 0f;
-            }
+            
             
             while(true) {
                 await base.Intermission(DebugTimerInfinite.Value? Int32.MaxValue: DebugTimerSpeedUp.Value ? 1: 5, token);

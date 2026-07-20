@@ -1,10 +1,10 @@
 ﻿// TAKEN FROM GITHUB:
 // https://github.com/Kokia1/Prefab-Icon-Renderer-for-Unity/tree/main
+#if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
 using System.IO;
 using System.Collections.Generic;
-
 public class PrefabIconRenderer : EditorWindow {
     private GameObject prefab;
     private int resolution = 512;
@@ -303,3 +303,4 @@ public class PrefabIconRenderer : EditorWindow {
         }
     }
 }
+#endif

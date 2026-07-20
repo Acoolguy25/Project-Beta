@@ -95,6 +95,10 @@ namespace RyanAssets.DataService {
             OnPlayerRemoved?.Invoke(Owner, this);
         }
 
+        public string GetPlayerName() {
+            return username.Value;
+        }
+
         // Helpful Static Methods
         public static List<string> GetPlayerNames(Func<NetworkConnection, PlayerData, bool> selector = null) {
             List<string> strings = new();
@@ -107,7 +111,7 @@ namespace RyanAssets.DataService {
         }
         public static string GetPlayerName(NetworkConnection connection) {
             if (Players.TryGetValue(connection, out PlayerData serverPlayerStats)) {
-                return serverPlayerStats.username.Value;
+                return serverPlayerStats.GetPlayerName();
             }
             return null;
         }

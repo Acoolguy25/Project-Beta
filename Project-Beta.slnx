@@ -40,11 +40,12 @@
   <Project Path="RyanAssets.UI.Textbox.csproj" />
   <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
+  <Project Path="EasyDebug.Shared.csproj" />
   <Project Path="RyanAssets.Tools.Client.csproj" />
   <Project Path="RyanAssets.Shared.Player.csproj" />
   <Project Path="RyanAssets.Levels.Shared.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Universes.csproj" />
-  <Project Path="EasyDebug.Shared.csproj" />
 </Solution>

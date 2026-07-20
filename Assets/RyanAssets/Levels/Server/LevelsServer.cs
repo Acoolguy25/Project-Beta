@@ -13,7 +13,7 @@ namespace RyanAssets.Levels.Server
         public static void AwardPlayerXP(NetworkConnection player, ulong xp) {
             PlayerData playerData = PlayerData.GetPlayerData(player);
             if (playerData) {
-                int oldLevel = LevelsCalc.GetRank(xp);
+                int oldLevel = LevelsCalc.GetRank(playerData.xp.Value);
                 try {
                     playerData.xp.Value = checked(playerData.xp.Value + xp);
                 } catch(OverflowException) { 
@@ -23,7 +23,7 @@ namespace RyanAssets.Levels.Server
                 ServerPlayerSave.MarkDirty(player);
                 int newLevel = LevelsCalc.GetRank(playerData.xp.Value);
                 for (int curLevel = oldLevel + 1; curLevel <= newLevel; curLevel++) {
-                    ServerChat.SendSystemMessage(new($"You have reached level {curLevel}!", RyanAssets.Shared.Declarations.SystemMessageSource.PlayerLevelUp));
+                    ServerChat.SendSystemMessage(new($"{playerData.GetPlayerName()} has reached level {curLevel}!", RyanAssets.Shared.Declarations.SystemMessageSource.PlayerLevelUp));
                 }
             }
         }

@@ -51,7 +51,9 @@ namespace RyanAssets.Server.ServerCore {
             dirtyConnections[conn] = true;
         }
 
-        public static void Forget(NetworkConnection conn) {
+        public static async UniTask Forget(NetworkConnection conn, PlayerData stats) {
+            if (dirtyConnections.TryGetValue(conn, out var dirty) && dirty)
+                await Save(stats);
             dirtyConnections.Remove(conn);
         }
 
@@ -67,35 +69,38 @@ namespace RyanAssets.Server.ServerCore {
 
             return SavePlayers(new List<NetworkConnection> { conn });
         }
+        public static UniTask Save(PlayerData playerData) {
+            return SavePlayers(new List<PlayerData> { playerData });
+        }
 
         static UniTask SaveDirty() {
             return SavePlayers(new List<NetworkConnection>(dirtyConnections.Keys));
         }
-
         static async UniTask SavePlayers(List<NetworkConnection> connections) {
-            //InstanceFinder.ServerManager.Broadcast<PromptBroadcast>(new() {
-            //    title = "PromptError",
-            //    description = $"i am really annoying!"
-            //});
-            //Debug.Log($"broadcasted!");
+            List<PlayerData> players = new();
+            foreach (NetworkConnection conn in connections) {
+                if (PlayerData.Players.TryGetValue(conn, out PlayerData playerData))
+                    players.Add(playerData);
+            }
+            await SavePlayers(players);
+        }
 
+        static async UniTask SavePlayers(List<PlayerData> players) {
             JObject payload = new() {
                 ["players"] = new JObject()
             };
-            List<NetworkConnection> savedConnections = new();
 
-            foreach (NetworkConnection conn in connections) {
-                if (!PlayerData.Players.TryGetValue(conn, out PlayerData stats))
+            List<PlayerData> savedPlayers = new();
+
+            foreach (PlayerData player in players) {
+                if (string.IsNullOrWhiteSpace(player.player_id.Value))
                     continue;
 
-                if (string.IsNullOrWhiteSpace(stats.player_id.Value))
-                    continue;
-
-                payload["players"][stats.player_id.Value] = stats.Serialize();
-                savedConnections.Add(conn);
+                payload["players"][player.player_id.Value] = player.Serialize();
+                savedPlayers.Add(player);
             }
 
-            if (savedConnections.Count == 0)
+            if (savedPlayers.Count == 0)
                 return;
 
             (string res, JObject _) = await BackendServer.RequestAsync(
@@ -104,9 +109,9 @@ namespace RyanAssets.Server.ServerCore {
             );
 
             if (res == null) {
-                foreach (NetworkConnection conn in savedConnections) {
-                    dirtyConnections.Remove(conn);
-                }
+                foreach (PlayerData player in savedPlayers)
+                    dirtyConnections.Remove(player.Owner);
+
                 return;
             }
 
@@ -115,8 +120,10 @@ namespace RyanAssets.Server.ServerCore {
                 description = $"Failed to save player stats: {res}"
             };
 
-            foreach (NetworkConnection conn in savedConnections)
-                InstanceFinder.ServerManager.Broadcast(conn, prompt);
+            foreach (PlayerData player in savedPlayers) {
+                if (player.Owner != null)
+                    InstanceFinder.ServerManager.Broadcast(player.Owner, prompt);
+            }
         }
     }
 }

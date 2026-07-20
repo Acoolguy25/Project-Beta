@@ -52,6 +52,9 @@ namespace RyanAssets.Server.ServerCore {
             Application.SetStackTraceLogType(LogType.Exception, StackTraceLogType.Full);
             Application.SetStackTraceLogType(LogType.Assert, StackTraceLogType.Full);
 #endif
+            StartServerEvent = null;
+            StopServerEvent = null;
+            RestartServerEvent = null;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]

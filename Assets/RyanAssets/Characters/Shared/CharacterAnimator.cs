@@ -55,6 +55,7 @@ namespace RyanAssets.Characters.Shared
             _animator.SetBool("Grounded", true);
             _animator.SetBool("FreeFall", false);
             _animator.SetBool("Jump", false);
+            _animator.SetFloat("Speed", 0f);
         }
         void FixedUpdate(){
             if (!IsController)
@@ -65,8 +66,9 @@ namespace RyanAssets.Characters.Shared
                 _animator.SetBool("FreeFall", !Grounded);
             }
             Vector3 velocity = GetVelocity();
-            _animator.SetFloat("Speed", velocity.magnitude * SpeedThreshold);
-            _animator.SetFloat("MotionSpeed", velocity.magnitude * SpeedThreshold);
+            float newSpeed = Mathf.Lerp(_animator.GetFloat("Speed"), velocity.magnitude * SpeedThreshold, 1f);
+            _animator.SetFloat("Speed", newSpeed);
+            _animator.SetFloat("MotionSpeed", newSpeed);
             _animator.SetBool("Jump", (Time.fixedTime - jumpStart) < 0.01f);
             //_animator.SetBool("Jump", false);
         }
