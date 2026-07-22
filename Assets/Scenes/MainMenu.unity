@@ -180,6 +180,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d8b343595d1037948a7274412fdf4f67, type: 3}
+--- !u!114 &169215605 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3990969582851006258, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+  m_PrefabInstance: {fileID: 8125114074414780783}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4f8c068f702cd64bba6f5343c3486b0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Login::RyanAssets.Login.LoginModifyUsername
 --- !u!1001 &274022416
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -194,7 +205,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2000000000000000019, guid: 8f3a1811d04c4d7aa078fbd52f966117, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2000000000000000038, guid: 8f3a1811d04c4d7aa078fbd52f966117, type: 3}
       propertyPath: m_Pivot.x
@@ -290,15 +301,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2000000000000001406, guid: 8f3a1811d04c4d7aa078fbd52f966117, type: 3}
       propertyPath: m_AnchorMax.x
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2000000000000001406, guid: 8f3a1811d04c4d7aa078fbd52f966117, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2000000000000001406, guid: 8f3a1811d04c4d7aa078fbd52f966117, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0.10307193
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -550,7 +561,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9155375541221003514, guid: f7d1c294d492a5443b11033f22cc4673, type: 3}
       propertyPath: WasActiveDuringEdit
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9218633042198105055, guid: f7d1c294d492a5443b11033f22cc4673, type: 3}
       propertyPath: m_UseGravity
@@ -1026,6 +1037,38 @@ PrefabInstance:
     - target: {fileID: 4855746894705542107, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
       propertyPath: m_IsActive
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnSubmit.m_PersistentCalls.m_Calls.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 169215605}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: UsernameSubmit
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: RyanAssets.Login.LoginModifyUsername, RyanAssets.Login
+      objectReference: {fileID: 0}
+    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
+      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -7,6 +7,8 @@ using Newtonsoft.Json;
 using System.Net.Http.Headers;
 using System;
 using System.Text;
+using UnityEditor;
+
 #if !SERVER_BUILD
 using Unity.Services.Authentication;
 #endif
@@ -65,11 +67,12 @@ namespace RyanAssets.NetworkService {
                 return (null, json);
         }
 #if !SERVER_BUILD
+        public static string FakePlayerId;
         public static string GetAuthorizationToken(){
             if (!NetworkSettings.noNetworkLogin) {
                 return AuthenticationService.Instance.AccessToken;
             } else {
-                return "Uvr2xiFAyUZJDybNdBEKcPOsMvjR";
+                return FakePlayerId;
             }
         }
 #else
@@ -79,10 +82,12 @@ namespace RyanAssets.NetworkService {
 #endif
         public static async UniTask<(string, JObject)> GetRequest(string url) {
             try {
-                using HttpRequestMessage request = new(HttpMethod.Get, url);
+                using HttpRequestMessage request = new(HttpMethod.Get, url){
+                };
             #if !SERVER_BUILD
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GetAuthorizationToken());
-            #endif
+#endif
+                request.Headers.Add("X-Client-Version", Application.version);
                 HttpResponseMessage response = await client.SendAsync(request);
                 return await HandleResponse(response);
             } catch (Exception e) {
@@ -107,7 +112,8 @@ namespace RyanAssets.NetworkService {
                 else {
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GetAuthorizationToken());
                 }
-            #endif
+#endif
+                request.Headers.Add("X-Client-Version", Application.version);
 
                 HttpResponseMessage response = await client.SendAsync(request);
 

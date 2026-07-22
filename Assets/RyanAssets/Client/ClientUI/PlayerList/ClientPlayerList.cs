@@ -37,7 +37,11 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             //prefab.transform.GetChild(1).GetComponent<Text>().text = username;
         }
         private void OnPlayerAdded(NetworkConnection conn, PlayerData data) {
-            AddPrefab((conn, data));
+            if (data.IsOwner) {
+                AddPrefab((conn, data), -10); // Guarentee you are the top player!
+            } else {
+                AddPrefab((conn, data));
+            }
         }
         private void OnPlayerRemoved(NetworkConnection conn, PlayerData data) {
             string player_id = data.player_id.Value;

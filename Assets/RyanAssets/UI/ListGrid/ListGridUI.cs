@@ -55,9 +55,9 @@ namespace RyanAssets.UI.ListGrid {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
-                GameObject prefabClone = (op.Result != null)? op.Result[0]: null;
-                if (!pending_ops.Remove(op)) {
-                    if (prefabClone)
+                GameObject prefabClone = (op.Result != null) ? op.Result[0] : null;
+                if (gameObject == null || !pending_ops.Remove(op)) { // destroyed gameobject or cancelled operation
+                    if (prefabClone != null)
                         Destroy(prefabClone);
                     return; // cancelled
                 }

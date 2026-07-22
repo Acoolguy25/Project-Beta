@@ -4257,7 +4257,7 @@ MonoBehaviour:
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: -0, y: -0, z: -0, w: 1}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
     Scale: {x: 3, y: 3, z: 3}
     IsValid: 1
   <IsNested>k__BackingField: 0
@@ -4282,7 +4282,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584175277592423065
+  _initializedTimestamp: -8584170138958707761
 --- !u!114 &2508271702602764159
 MonoBehaviour:
   m_ObjectHideFlags: 0

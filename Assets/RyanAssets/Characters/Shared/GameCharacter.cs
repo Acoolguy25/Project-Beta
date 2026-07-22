@@ -1,3 +1,4 @@
+using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
@@ -30,6 +31,8 @@ namespace RyanAssets.Characters.Shared {
         public readonly SyncVar<float> MaxStamina = new();
         public readonly SyncVar<float> StaminaRegen = new();
         public readonly SyncVar<float> StaminaCooldown = new();
+        public readonly float FallenPartsDestroyHeight = -10.0f;
+        public readonly bool FallHeightEnabled = true;
         public void SwitchTool(ToolBaseShared tool) {
             if (tool == ActiveTool.Value || (IsDead() && tool)) return;
 #if UNITY_SERVER
@@ -121,6 +124,14 @@ namespace RyanAssets.Characters.Shared {
         public virtual void Kill(DamageSource source, NetworkObject sourceObject = null) {
             Died(source, sourceObject);
         }
+        private void FixedUpdate() {
+            if (FallHeightEnabled && IsSpawned) {
+                if (transform.position.y < FallenPartsDestroyHeight) {
+                    Kill(DamageSource.Fall, null);
+                    InstanceFinder.ServerManager.Despawn(gameObject);
+                }
+            }
+        }
 #endif
         protected virtual void SharedDied(DamageSource source, NetworkObject sourceObject) {
             SwitchTool(null);
@@ -152,5 +163,6 @@ namespace RyanAssets.Characters.Shared {
 #endif
             
         }
+        
     }
 }

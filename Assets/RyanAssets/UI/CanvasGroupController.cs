@@ -12,8 +12,8 @@ namespace RyanAssets.UI {
         float startAlpha;
         public float targetAlpha;
         void Awake() {
-            if (canvasGroup != null)
-                return; // already initalized
+            if (canvasGroup != null || gameObject == null)
+                return; // already initalized or destroyed
             canvasGroup = GetComponent<CanvasGroup>();
             targetAlpha = canvasGroup.alpha;
             SetAlpha(targetAlpha);
@@ -32,7 +32,7 @@ namespace RyanAssets.UI {
         public void TweenAlpha(float newAlpha, float duration = 0f) {
             if (canvasGroup == null)
                 Awake();
-            if (newAlpha == targetAlpha) // Ignore same set
+            if (newAlpha == targetAlpha || gameObject == null) // Ignore same set
                 return;
             startAlpha = canvasGroup.alpha;
             targetAlpha = newAlpha;

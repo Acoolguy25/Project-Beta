@@ -97,7 +97,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 unregisterInterrupt = registerInterrupt(interrupt);
                 interruptRegistered = true;
 
-                while (duration >= 0) {
+                while (duration > 0) {
                     if (!activationFunc(duration, false))
                         return;
 

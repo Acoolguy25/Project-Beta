@@ -149,7 +149,7 @@ namespace RyanAssets.Characters.Server
                 Vector3 dir = new Vector3(agent.velocity.x, 0f, agent.velocity.z);
                 transform.rotation = Quaternion.RotateTowards(
                     transform.rotation,
-                    Quaternion.LookRotation(dir),
+                    Quaternion.LookRotation(dir.magnitude == 0 ? Vector3.forward : dir),
                     agent.angularSpeed * Time.deltaTime
                 );
             }

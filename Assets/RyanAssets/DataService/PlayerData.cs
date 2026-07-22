@@ -1,5 +1,6 @@
 ﻿using FishNet.Connection;
 using FishNet.Object;
+using FishNet.Serializing;
 using FishNet.Object.Synchronizing;
 using Newtonsoft.Json.Linq;
 using RyanAssets.Core;
@@ -39,6 +40,7 @@ namespace RyanAssets.DataService {
         readonly public SyncVar<ulong>  gold = new();
 
         // Game Player Stats
+        public DateTime JoinDateTime { get; private set; } = default; // Synchronized Via SpawnData
         readonly public SyncVar<int> lives = new(initialValue: -1);
         readonly public SyncVar<int> deaths = new(initialValue: 0);
         readonly public SyncVar<TeamConfig> team = new(initialValue: new());
@@ -62,6 +64,7 @@ namespace RyanAssets.DataService {
         public List<ToolEnum> tools = new();
 #else   // Client
         public static InstantEvent<PlayerData> OnMyPlayerAdded;
+        public static event Action<PlayerData> OnMyPlayerRemoved;
 #endif
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
@@ -69,6 +72,7 @@ namespace RyanAssets.DataService {
             localData = null;
 #if !UNITY_SERVER
             OnMyPlayerAdded = new();
+            OnMyPlayerRemoved = null;
 #endif
             OnPlayerAdded = 
             OnPlayerRemoved = null;
@@ -93,6 +97,10 @@ namespace RyanAssets.DataService {
         public override void OnStopNetwork() {
             Players.Remove(Owner);
             OnPlayerRemoved?.Invoke(Owner, this);
+#if !UNITY_SERVER
+            OnMyPlayerRemoved?.Invoke(this);
+#endif
+            localData = null;
         }
 
         public string GetPlayerName() {
@@ -132,6 +140,8 @@ namespace RyanAssets.DataService {
 #if UNITY_SERVER
         // Constructors
         public void Deserialize(JObject json) {
+            if (JoinDateTime == default)
+                JoinDateTime = DateTime.UtcNow;
             player_id.Value = (string)json["player_id"];
 
             JObject data = (JObject)json["data"];
@@ -150,6 +160,14 @@ namespace RyanAssets.DataService {
                 ["xp"] = xp.Value,
                 ["gold"] = gold.Value
             };
+        }
+
+        public override void WritePayload(NetworkConnection connection, Writer writer){
+            writer.WriteDateTime(JoinDateTime);
+        }
+#else
+        public override void ReadPayload(NetworkConnection connection, Reader reader) {
+            JoinDateTime = reader.ReadDateTime();
         }
 #endif
     }

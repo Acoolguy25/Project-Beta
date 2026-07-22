@@ -115,11 +115,11 @@ MonoBehaviour:
   RuntimeChildNetworkBehaviours: []
   _isNetworked: 1
   _isSpawnable: 1
-  _isGlobal: 0
+  _isGlobal: 1
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584183208814680441
+  _initializedTimestamp: -8584170075574666572
 --- !u!1 &7547310032996758689
 GameObject:
   m_ObjectHideFlags: 0

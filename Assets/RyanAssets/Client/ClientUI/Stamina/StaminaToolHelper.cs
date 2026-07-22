@@ -11,6 +11,8 @@ namespace RyanAssets.Client.ClientUI.Stamina {
             ToolBaseShared.createStaticEvent += AddTool;
         }
         static void AddTool(ToolBaseShared toolBaseShared) {
+            if (!toolBaseShared.IsOwner)
+                return;
             var toolBaseClient = toolBaseShared.GetComponent<ToolBaseClient>();
             toolBaseClient.CanActivateEvent = () => {
                 return (LocalPlayer.Character.ConsumeStamina(toolBaseShared.staminaCost));

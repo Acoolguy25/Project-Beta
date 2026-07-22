@@ -120,6 +120,8 @@ namespace RyanAssets.Client.ClientUI.Chat {
             //    return;
             if (stats.Owner.IsLocalClient)
                 return;
+            if (PlayerData.localData == null || PlayerData.localData.JoinDateTime >= stats.JoinDateTime)
+                return;
             CreateSystemMessage(new($"{stats.username.Value} has joined the game!", SystemMessageSource.PlayerAdd));
         }
         private void OnPlayerRemoved(NetworkConnection conn, PlayerData stats) {
