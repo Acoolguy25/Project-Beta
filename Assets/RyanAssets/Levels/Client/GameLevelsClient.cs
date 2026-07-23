@@ -14,13 +14,13 @@ namespace RyanAssets.Levels.Client {
         }
         void OnMyPlayerAdded(PlayerData stats) {
             stats.xp.OnChange += OnXPChange;
-            UpdateLevel();
+            UpdateLevel(stats.xp.Value);
         }
         void OnMyPlayerRemoved(PlayerData stats) {
             stats.xp.OnChange -= OnXPChange;
         }
         void OnXPChange(ulong oldValue, ulong newValue, bool asServer) {
-            UpdateLevel();
+            UpdateLevel(newValue);
         }
     }
 }

@@ -23,11 +23,11 @@
   <Project Path="RyanAssets.NetworkSettings.csproj" />
   <Project Path="RyanAssets.Shared.Requests.csproj" />
   <Project Path="Universes.GameBrowser.csproj" />
+  <Project Path="RyanAssets.Levels.Client.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
   <Project Path="RyanAssets.Commands.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
-  <Project Path="RyanAssets.Levels.Client.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />
   <Project Path="RyanAssets.Commands.Client.csproj" />
   <Project Path="RyanAssets.UI.Autocomplete.csproj" />

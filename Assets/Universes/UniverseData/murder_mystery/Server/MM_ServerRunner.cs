@@ -57,7 +57,7 @@ namespace Universes.murder_mystery.Server {
             //ServerTool.tool
         }
         void OnCharacterAdded(NetworkConnection player, LocalCharacter character){
-            character.transform.position = DebugSingleNpc.Value? new Vector3(1120.56995f, -8.12100029f, 1008.34003f): ServerPathfinding.GetRandomPosition(); // Random position
+            character.transform.position = DebugSingleNpc.Value? new Vector3(1120.56995f, 12.12100029f, 1008.34003f): ServerPathfinding.GetRandomPosition(); // Random position
             //new Vector3(1120.56995f, -8.12100029f, 1008.34003f);
             //character.transform.localScale = 0.7f * Vector3.one;  
             //character.GetComponent<CharacterScaler>().SetScale(0.7f * Vector3.one);
@@ -65,7 +65,7 @@ namespace Universes.murder_mystery.Server {
         void SpawnNpcs() {
             startNPCs = Mathf.RoundToInt((DebugSingleNpc.Value ? 1 : 30) * SpawnMultiplier);
             for (int i = 0; i < startNPCs; i++) {
-                LocalNPC npc = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (DebugSingleNpc.Value ? new Vector3(1117.56995f, -8.12100029f, 1008.34003f) : null));
+                LocalNPC npc = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (DebugSingleNpc.Value ? new Vector3(1117.56995f, 12.12100029f, 1008.34003f) : null));
                 GameCharacter gameCharacter = npc.GetComponent<GameCharacter>();
                 gameCharacter.OnDied += (source, killer) => {
                     if (killer && killer.Owner != null) {

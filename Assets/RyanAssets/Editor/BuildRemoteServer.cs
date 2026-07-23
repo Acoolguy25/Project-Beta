@@ -1,3 +1,4 @@
+#if UNITY_SERVER
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -360,3 +361,4 @@ namespace RyanAssets.Editor
         }
     }
 }
+#endif

@@ -8,8 +8,10 @@ using RyanAssets.NetworkService;
 namespace RyanAssets.Login {
     public class LoginAuthenticator : MonoBehaviour {
         static bool _initialized;
+        public static bool didTryLogin;
         public async void UnityLogin() {
             try {
+                didTryLogin = true;
                 await PlayerAccountService.Instance.StartSignInAsync();
             } catch (System.Exception e) {
                 Debug.Log(e);
@@ -31,6 +33,7 @@ namespace RyanAssets.Login {
             _initialized = false;
         }
         async void OnEnable() {
+            didTryLogin = false;
             if (_initialized)
                 return;
             _initialized = true;

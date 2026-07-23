@@ -49,7 +49,9 @@ namespace RyanAssets.Shared.Player {
         readonly SyncVar<string> _topMessage = new();
 
 #if UNITY_SERVER
+        [NonSerialized]
         public bool TeamKillEnabled = true;
+        [NonSerialized]
         public bool GlobalInvul     = true;
 #endif
 

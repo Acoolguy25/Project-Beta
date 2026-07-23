@@ -19,7 +19,7 @@
 // This calls Butler's "push" command, which itch.io recommends over manually zipping/uploading
 // through the web UI because Butler does binary diffing for faster, smaller updates.
 // See: https://itch.io/docs/butler/pushing.html
-
+#if !UNITY_SERVER
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -212,3 +212,4 @@ namespace EasyDebug.Client {
         }
     }
 }
+#endif

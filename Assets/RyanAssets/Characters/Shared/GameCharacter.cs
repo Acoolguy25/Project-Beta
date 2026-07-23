@@ -31,7 +31,7 @@ namespace RyanAssets.Characters.Shared {
         public readonly SyncVar<float> MaxStamina = new();
         public readonly SyncVar<float> StaminaRegen = new();
         public readonly SyncVar<float> StaminaCooldown = new();
-        public readonly float FallenPartsDestroyHeight = -10.0f;
+        public readonly float FallenPartsDestroyHeight = 0.0f;
         public readonly bool FallHeightEnabled = true;
         public void SwitchTool(ToolBaseShared tool) {
             if (tool == ActiveTool.Value || (IsDead() && tool)) return;
@@ -129,6 +129,12 @@ namespace RyanAssets.Characters.Shared {
                 if (transform.position.y < FallenPartsDestroyHeight) {
                     Kill(DamageSource.Fall, null);
                     InstanceFinder.ServerManager.Despawn(gameObject);
+
+                    //Vector3 newPositon = transform.position;
+                    //newPositon.y = FallenPartsDestroyHeight;
+                    //transform.position = newPositon;
+                    //Time.timeScale = 0f;
+                    //Debug.Log("Fallen character");
                 }
             }
         }

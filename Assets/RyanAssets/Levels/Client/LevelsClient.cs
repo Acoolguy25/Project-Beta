@@ -25,9 +25,9 @@ namespace RyanAssets.Levels.Client {
         //}
 
 
-        protected void UpdateLevel(){
-            _level_text.text = LevelsCalc.GetRank(PlayerData.localData.xp.Value).ToString();
-            TweenRectTransform.AnchorTween(_level_fill_graphic, 1f, new Vector2(0, 0), new Vector2(1, LevelsCalc.GetRankProgress(PlayerData.localData.xp.Value)));
+        public void UpdateLevel(ulong xp, bool instant = false){
+            _level_text.text = LevelsCalc.GetRank(xp).ToString();
+            TweenRectTransform.AnchorTween(_level_fill_graphic, instant? 0f: 1f, new Vector2(0, 0), new Vector2(1, LevelsCalc.GetRankProgress(xp)));
         }
         //public static void UpdateLevelInstances(LocalPlayerData localPlayerData){
         //    xp = localPlayerData.xp;

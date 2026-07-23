@@ -2377,6 +2377,14 @@ PrefabInstance:
       propertyPath: gameSettingsCanvas
       value: 
       objectReference: {fileID: 1120765809775446551}
+    - target: {fileID: 7554617344071268608, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7615915327855379713, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
       propertyPath: m_Pivot.x
       value: 0

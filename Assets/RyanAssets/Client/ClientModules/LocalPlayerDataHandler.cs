@@ -1,21 +1,24 @@
-using Newtonsoft.Json.Linq;
-using RyanAssets.NetworkService;
-using RyanAssets.PromptService;
-using RyanAssets.Client.ClientModules;
-using RyanAssets.Levels.Client;
-using RyanAssets.DataService;
 using Cysharp.Threading.Tasks;
-using System;
 using FishNet;
 using FishNet.Connection;
-using RyanAssets.Shared.Player;
+using Newtonsoft.Json.Linq;
+using RyanAssets.Client.ClientModules;
+using RyanAssets.Core;
+using RyanAssets.DataService;
+using RyanAssets.Levels.Client;
+using RyanAssets.NetworkService;
+using RyanAssets.PromptService;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Player;
+using System;
 using UnityEngine;
+using static FishNet.Component.Transforming.NetworkTransform;
 
 namespace RyanAssets.Client.ClientModules {
     public static class LocalPlayerDataHandler {
         public static LocalPlayerData localData;
         public static LocalPlayerSettings localSettings;
+        //public static InstantEvent<LocalPlayerData> local_data_changed_event = new InstantEvent<LocalPlayerData>();
         public static Action<string> username_changed_event;
 
         public static void PlayerInit(JObject json) {
@@ -32,6 +35,9 @@ namespace RyanAssets.Client.ClientModules {
                 : default;
             //LevelsClient.UpdateLevelInstances(localData);
             username_changed_event?.Invoke(localData.username);
+            LobbyLevelsClient.xp = localData.xp;
+            LobbyLevelsClient.onXpChanged?.Invoke(localData.xp);
+            //local_data_changed_event.Invoke(localData);
         }
         static JObject pending_data;
         static async UniTask<(string, JObject)> ModifyUsernameNetworkRequest() {

@@ -61,6 +61,7 @@ namespace RyanAssets.DataService {
 
         // Server
 #if UNITY_SERVER
+        [NonSerialized]
         public List<ToolEnum> tools = new();
 #else   // Client
         public static InstantEvent<PlayerData> OnMyPlayerAdded;

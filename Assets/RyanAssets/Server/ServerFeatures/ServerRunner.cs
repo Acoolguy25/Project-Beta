@@ -16,7 +16,7 @@ using UnityEngine.SceneManagement;
 
 #pragma warning disable CS1998
 namespace RyanAssets.Server.ServerFeatures {
-    public class ServerRunner: MonoBehaviour {
+    public class ServerRunner : MonoBehaviour {
         public static event Action OnResetEvent;
         public static bool serverRunning => serverRunnerCTS != null && !serverRunnerCTS.IsCancellationRequested;
         protected static CancellationTokenSource serverRunnerCTS = null;
@@ -42,8 +42,7 @@ namespace RyanAssets.Server.ServerFeatures {
 
             SceneManager.sceneLoaded += Handler;
 
-            token.Register(() =>
-            {
+            token.Register(() => {
                 SceneManager.sceneLoaded -= Handler;
                 tcs.TrySetCanceled(token);
             });
@@ -93,25 +92,23 @@ namespace RyanAssets.Server.ServerFeatures {
                 }
             };
 
-            try {
-                unregisterInterrupt = registerInterrupt(interrupt);
-                interruptRegistered = true;
+            // try {
+            unregisterInterrupt = registerInterrupt(interrupt);
+            interruptRegistered = true;
 
-                while (duration > 0) {
-                    if (!activationFunc(duration, false))
-                        return;
+            while (duration > 0) {
+                if (!activationFunc(duration, false))
+                    return;
 
-                    await UniTask.Delay(1000, cancellationToken: cts.Token);
+                await UniTask.Delay(1000, cancellationToken: cts.Token);
 
-                    duration--;
-                }
+                duration--;
             }
-            catch (OperationCanceledException) when (!token.IsCancellationRequested) {
-            }
-            finally {
-                loopExited = true;
-                UnregisterInterrupt();
-            }
+            // } catch (OperationCanceledException) when (!token.IsCancellationRequested) {
+            // } finally {
+            loopExited = true;
+            UnregisterInterrupt();
+            // }
         }
         public void ResetLeaderboardData() {
             foreach (PlayerData playerData in PlayerData.Players.Values) {
@@ -164,6 +161,7 @@ namespace RyanAssets.Server.ServerFeatures {
 
         protected virtual void Stop() {
             serverRunnerCTS?.Cancel();
+            serverRunnerCTS?.Dispose();
         }
 
         protected virtual void Reset() {

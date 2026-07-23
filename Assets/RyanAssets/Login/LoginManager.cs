@@ -35,6 +35,8 @@ namespace RyanAssets.Login {
             // json["preferences"] = BackendNetwork.ParseJSON(json["preferences"].ToString());
             LocalPlayerDataHandler.PlayerInit(json);
             usernameInputField.text = json["username"].ToString();
+            if (!LoginAuthenticator.didTryLogin)
+                GetComponent<LoginScreen>().SetLoginScreenVisible(false, true);
         }
         void SignedOut() {
             loginScreen.RefreshScreen();

@@ -20,6 +20,7 @@ namespace RyanAssets.Client.ClientModules {
             }
         }
         public static async UniTask<(string, JObject)> RequestAsync(Func<UniTask<(string, JObject)>> requestFunc, string title, RetryPolicy retryPolicy = RetryPolicy.ForceRetry, PromptId promptWaiting = PromptId.Protected, PromptId promptResult = PromptId.Protected, string desc = "Connecting To Server...") {
+            int tryCount = -1; // indicates first try, so the delay is 0 seconds
             while (true) {
                 using CancellationTokenSource cts = new();
 
@@ -34,6 +35,7 @@ namespace RyanAssets.Client.ClientModules {
 
                     UniTask.Create(async () => {
                         try {
+                            await Awaitable.WaitForSecondsAsync(tryCount - 1, cts.Token);
                             (string res, JObject j) requestResult = await SafeTryRequest(requestFunc).AttachExternalCancellation(cts.Token);
                             requestSource.TrySetResult(requestResult);
                             completedSource.TrySetResult(0);
@@ -43,6 +45,7 @@ namespace RyanAssets.Client.ClientModules {
                             requestSource.TrySetException(e);
                             completedSource.TrySetResult(0);
                         }
+                        tryCount++;
                     }).Forget();
 
                     UniTask.Create(async () => {

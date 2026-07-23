@@ -1,3 +1,4 @@
+#if UNITY_SERVER
 using System;
 using System.IO;
 using UnityEditor;
@@ -73,3 +74,5 @@ namespace RyanAssets.Editor {
         }
     }
 }
+
+#endif
