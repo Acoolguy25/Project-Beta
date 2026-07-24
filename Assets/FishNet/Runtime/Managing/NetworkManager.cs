@@ -470,7 +470,7 @@ namespace FishNet.Managing
             // If to destroy the newest.
             if (_persistence == PersistenceType.DestroyNewest)
             {
-                InternalLog($"NetworkManager on object {gameObject.name} is being destroyed due to persistence type {_persistence}. A NetworkManager instance already exist on {firstInstance.name}.");
+                //InternalLog($"NetworkManager on object {gameObject.name} is being destroyed due to persistence type {_persistence}. A NetworkManager instance already exist on {firstInstance.name}.");
                 DestroyImmediate(gameObject);
                 // This one is being destroyed because its the newest.
                 return false;

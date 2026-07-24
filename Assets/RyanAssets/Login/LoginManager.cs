@@ -50,6 +50,10 @@ namespace RyanAssets.Login {
                 AuthenticationService.Instance.Expired += SignedOut;
                 AuthenticationService.Instance.SignedOut += SignedOut;
                 AuthenticationService.Instance.SignInFailed += SignInErr;
+                // Authentication can restore a session without emitting a
+                // new SignedIn event. Reconcile the current state on startup.
+                if (AuthenticationService.Instance.IsSignedIn)
+                    SignedIn();
             } else {
                 SignedIn();
             }

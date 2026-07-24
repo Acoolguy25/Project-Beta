@@ -20,7 +20,6 @@ namespace RyanAssets.Characters.Shared {
         Command
     };
     public class GameCharacter : NetworkBehaviour {
-        private static DamageSource[] invulSources = {DamageSource.Fall, DamageSource.Melee, DamageSource.Gun};
         public readonly SyncVar<long> Health = new();
         public readonly SyncVar<long> MaxHealth = new();
         public readonly SyncVar<bool> Invul = new();
@@ -76,6 +75,7 @@ namespace RyanAssets.Characters.Shared {
 #endif
         public Action<DamageSource, NetworkObject> OnDied;
 #if UNITY_SERVER
+        private static DamageSource[] invulSources = {DamageSource.Fall, DamageSource.Melee, DamageSource.Gun};
         [Server]
         protected virtual bool IsProtected(DamageSource source) {
             return (Invul.Value || SharedGlobalEvents.Instance.GlobalInvul) && Array.Exists(invulSources, s => s == source);
