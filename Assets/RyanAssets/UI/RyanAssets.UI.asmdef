@@ -8,9 +8,7 @@
     ],
     "includePlatforms": [],
     "excludePlatforms": [
-        "LinuxStandalone64Server",
-        "WindowsStandalone32Server",
-        "WindowsStandalone64Server"
+
     ],
     "allowUnsafeCode": false,
     "overrideReferences": false,
