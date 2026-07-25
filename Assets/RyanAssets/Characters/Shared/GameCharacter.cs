@@ -32,8 +32,12 @@ namespace RyanAssets.Characters.Shared {
         public void SwitchTool(ToolBaseShared tool) {
             if (tool == ActiveTool.Value || (IsDead() && tool)) return;
 #if UNITY_SERVER
-            if (ActiveTool.Value)
-                ActiveTool.Value.UnequipServer();
+            if (ActiveTool.Value) {
+                if (gameObject != null)
+                    ActiveTool.Value.UnequipServer();
+                else
+                    ActiveTool.Value.Unequip();
+            }
             if (tool)
                 tool.EquipServer();
 #else

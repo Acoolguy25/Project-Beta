@@ -15,13 +15,14 @@ namespace RyanAssets.Tools.Client
     public class ToolBaseClient : MonoBehaviour {
         public Func<bool> CanActivateEvent = null;
         public event Action<float, float> onCooldownChangeEvent;
-        protected List<CancellationTokenSource> activeTasks = new();
+        //protected List<CancellationTokenSource> activeTasks = new();
+        protected CancellationTokenSource activeTask = new();
         protected ToolBaseShared toolBaseShared;
         protected CharacterAnimator characterAnimator;
         protected Animator animator;
         protected Collider hitCollider;
         protected float StartCooldown, StopCooldown;
-        protected virtual void Start() {
+        protected virtual void Awake() {
             toolBaseShared = GetComponent<ToolBaseShared>();
             hitCollider = toolBaseShared.weaponRoot.GetComponentInChildren<Collider>(true);
             animator = toolBaseShared.connectedCharacter.GetComponent<Animator>();
@@ -45,11 +46,14 @@ namespace RyanAssets.Tools.Client
             if (characterAnimator.LethalAttackEnabled)
                 SetLethalAttack(false);
             SetAttacking(false);
-            foreach (CancellationTokenSource token in activeTasks) {
-                token.Cancel();
-                token.Dispose();
-            }
-            activeTasks.Clear();
+            //foreach (CancellationTokenSource token in activeTasks) {
+            //    token.Cancel();
+            //    token.Dispose();
+            //}
+            //activeTasks.Clear();
+            activeTask.Cancel();
+            activeTask.Dispose();
+            activeTask = new();
         }
         public virtual void TryActivate() { 
             if (CanAttack()) {
@@ -80,12 +84,14 @@ namespace RyanAssets.Tools.Client
             onCooldownChangeEvent?.Invoke(StartCooldown, StopCooldown);
         }
         protected virtual bool CanAttack() {
-            return StopCooldown <= Time.time && (CanActivateEvent == null || CanActivateEvent());
+            return StopCooldown <= Time.time && (CanActivateEvent == null || CanActivateEvent()) 
+                && gameObject != null && toolBaseShared.equipped; // Sanity Checks
         }
         protected virtual CancellationTokenSource AddCancellationToken() {
-            CancellationTokenSource token = new();
-            activeTasks.Add(token);
-            return token;
+            //CancellationTokenSource token = new();
+            //activeTasks.Add(token);
+            //return token;
+            return activeTask;
         }
     }
 }

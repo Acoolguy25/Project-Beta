@@ -13,6 +13,8 @@ namespace RyanAssets.Tools.Server {
             ((ToolMeleeShared)toolBaseShared).hitEvent += (gameCharacter) => {
                 OnHit(gameCharacter.gameObject.GetComponent<GameCharacter>());
             };
+            if (toolBaseShared.IsController)
+                toolBaseShared.connectedCharacter.GetComponent<GameCharacter>().SwitchTool(toolBaseShared);
         }
         protected override void OnEquip(ToolBaseShared _) {
 
@@ -27,8 +29,6 @@ namespace RyanAssets.Tools.Server {
         }
         void Update() {
             if (toolBaseShared.IsController) {
-                if (!toolBaseShared.equipped)
-                    toolBaseShared.EquipServer();
                 GetComponent<ToolBaseClient>().TryActivate();
             }
         }

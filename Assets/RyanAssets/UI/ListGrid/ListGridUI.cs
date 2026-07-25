@@ -18,6 +18,7 @@ namespace RyanAssets.UI.ListGrid {
         GridLayoutGroup gridLayoutGroup;
         VerticalLayoutGroup verticalLayoutGroup;
 
+        protected bool IsDestroyed;
         protected Action<GameObject, T> OnCreatePrefab;
         protected Action<GameObject> OnDeletePrefab;
         protected Dictionary<Transform, int> prefabOrder = new();
@@ -27,13 +28,13 @@ namespace RyanAssets.UI.ListGrid {
         public bool IsBuilding => pending_ops.Count > 0;
 
         RectTransform contentRT;
-        protected void ClearPendingPrefabs(){
+        protected void ClearPendingPrefabs() {
             // Cancel all pending operations
             foreach (var op in pending_ops)
                 op.Cancel();
             pending_ops.Clear();
         }
-        protected void ClearActivePrefabs(){
+        protected void ClearActivePrefabs() {
             // Destroy all remaining created objects
             if (contentTarget == null)
                 return;
@@ -56,14 +57,14 @@ namespace RyanAssets.UI.ListGrid {
 
             op.completed += _ => {
                 GameObject prefabClone = (op.Result != null) ? op.Result[0] : null;
-                if (gameObject == null || !pending_ops.Remove(op)) { // destroyed gameobject or cancelled operation
+                if (IsDestroyed || !pending_ops.Remove(op)) { // destroyed gameobject or cancelled operation
                     if (prefabClone != null)
                         Destroy(prefabClone);
                     return; // cancelled
                 }
                 prefabOrder.Add(prefabClone.transform, order);
                 prefabClone.transform.SetParent(contentTarget, false);
-                
+
 
                 OnCreatePrefab?.Invoke(prefabClone.gameObject, data);
                 UpdateLayout();
@@ -85,7 +86,7 @@ namespace RyanAssets.UI.ListGrid {
             ClearPrefabs();
             AddPrefabs(objects);
         }
-        protected void UpdateLayout(){
+        protected void UpdateLayout() {
             if (contentRT == null || !isActiveAndEnabled)
                 return;
 
@@ -104,8 +105,7 @@ namespace RyanAssets.UI.ListGrid {
                 children[i].SetSiblingIndex(i);
             }
         }
-        private IEnumerator UpdateLayoutRoutine()
-        {
+        private IEnumerator UpdateLayoutRoutine() {
             bool wasAtBottom = AutoScroll &&
                             scrollRect != null &&
                             scrollRect.verticalNormalizedPosition <= 0.01f;
@@ -118,12 +118,10 @@ namespace RyanAssets.UI.ListGrid {
 
             float height;
 
-            if (gridLayoutGroup != null)
-            {
+            if (gridLayoutGroup != null) {
                 int count = 0;
 
-                foreach (RectTransform child in contentRT)
-                {
+                foreach (RectTransform child in contentRT) {
                     if (child.gameObject.activeInHierarchy)
                         count++;
                 }
@@ -131,17 +129,12 @@ namespace RyanAssets.UI.ListGrid {
                 int columns;
                 int rows;
 
-                if (gridLayoutGroup.constraint == GridLayoutGroup.Constraint.FixedColumnCount)
-                {
+                if (gridLayoutGroup.constraint == GridLayoutGroup.Constraint.FixedColumnCount) {
                     columns = Mathf.Max(1, gridLayoutGroup.constraintCount);
                     rows = Mathf.CeilToInt(count / (float)columns);
-                }
-                else if (gridLayoutGroup.constraint == GridLayoutGroup.Constraint.FixedRowCount)
-                {
+                } else if (gridLayoutGroup.constraint == GridLayoutGroup.Constraint.FixedRowCount) {
                     rows = count == 0 ? 0 : Mathf.Min(count, Mathf.Max(1, gridLayoutGroup.constraintCount));
-                }
-                else
-                {
+                } else {
                     float availableWidth = contentRT.rect.width - gridLayoutGroup.padding.horizontal;
 
                     columns = Mathf.Max(1, Mathf.FloorToInt(
@@ -155,17 +148,13 @@ namespace RyanAssets.UI.ListGrid {
                     gridLayoutGroup.padding.vertical +
                     rows * gridLayoutGroup.cellSize.y +
                     Mathf.Max(0, rows - 1) * gridLayoutGroup.spacing.y;
-            }
-            else if (verticalLayoutGroup != null)
-            {
+            } else if (verticalLayoutGroup != null) {
                 int count = 0;
                 height = verticalLayoutGroup.padding.vertical;
 
-                foreach (Transform child in contentRT)
-                {
+                foreach (Transform child in contentRT) {
                     if (child.TryGetComponent(out RectTransform childRT) &&
-                        child.gameObject.activeInHierarchy)
-                    {
+                        child.gameObject.activeInHierarchy) {
                         float preferredHeight = LayoutUtility.GetPreferredHeight(childRT);
                         height += preferredHeight >= 0f ? preferredHeight : childRT.rect.height;
                         count++;
@@ -173,16 +162,12 @@ namespace RyanAssets.UI.ListGrid {
                 }
 
                 height += Mathf.Max(0, count - 1) * verticalLayoutGroup.spacing;
-            }
-            else
-            {
+            } else {
                 height = 0f;
 
-                foreach (Transform child in contentRT)
-                {
+                foreach (Transform child in contentRT) {
                     if (child.TryGetComponent(out RectTransform childRT) &&
-                        child.gameObject.activeInHierarchy)
-                    {
+                        child.gameObject.activeInHierarchy) {
                         height += childRT.rect.height;
                     }
                 }
@@ -193,8 +178,7 @@ namespace RyanAssets.UI.ListGrid {
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
 
-            if (AutoScroll && wasAtBottom && scrollRect != null)
-            {
+            if (AutoScroll && wasAtBottom && scrollRect != null) {
                 scrollRect.StopMovement();
                 scrollRect.verticalNormalizedPosition = 0f;
             }
@@ -249,7 +233,8 @@ namespace RyanAssets.UI.ListGrid {
             verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
             globalOrder = 0;
         }
-        virtual protected void OnDestroy(){
+        virtual protected void OnDestroy() {
+            IsDestroyed = true;
             ClearPendingPrefabs();
         }
     }

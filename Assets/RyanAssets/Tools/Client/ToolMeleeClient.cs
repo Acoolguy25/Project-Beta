@@ -7,8 +7,8 @@ using Cysharp.Threading.Tasks;
 
 namespace RyanAssets.Tools.Client {
     public class ToolMeleeClient : ToolBaseClient {
-        protected override void Start() {
-            base.Start();
+        protected override void Awake() {
+            base.Awake();
             if (hitCollider == null) {
                 Debug.LogError($"No hit collider found under {toolBaseShared.weaponRoot.name}.", toolBaseShared.weaponRoot);
                 return;
@@ -30,7 +30,9 @@ namespace RyanAssets.Tools.Client {
             var token = AddCancellationToken();
             SetAttacking(true);
             SetCooldown(toolBaseShared.primaryCooldown);
-            await UniTask.WaitForSeconds(0.717f, cancellationToken: token.Token);
+            bool isCancelled = await UniTask.WaitForSeconds(0.717f, cancellationToken: token.Token).SuppressCancellationThrow();
+            if (isCancelled)
+                return;
             SetAttacking(false);
         }
         protected override void SetAttacking(bool attack) {

@@ -2393,7 +2393,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584170138958707761
+  _initializedTimestamp: -8584165906964860571
 --- !u!114 &1039838637883914799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2409,7 +2409,6 @@ MonoBehaviour:
   _componentIndexCache: 1
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
-  Stamina: 0
   HealthEditor: 0
   MaxHealthEditor: 0
   CharacterCamera: {fileID: 7279864874766871779}

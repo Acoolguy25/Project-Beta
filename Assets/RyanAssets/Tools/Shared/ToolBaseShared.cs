@@ -51,7 +51,7 @@ namespace RyanAssets.Tools.Shared {
             equippedEvent?.Invoke(this);
             weaponRoot.SetActive(true);
         }
-        void Unequip() {
+        public void Unequip() {
             unequippedStaticEvent?.Invoke(this);
             unequippedEvent?.Invoke(this);
             weaponRoot.SetActive(false);
@@ -70,7 +70,7 @@ namespace RyanAssets.Tools.Shared {
         }
         [ObserversRpc(RunLocally = true)]
         public void UnequipServer() {
-            Equip();
+            Unequip();
         }
 #if !UNITY_SERVER
         public void EquipClient() {
@@ -79,7 +79,8 @@ namespace RyanAssets.Tools.Shared {
         }
         public void UnequipClient() {
             Unequip();
-            UnequipServerRpc();
+            if (IsController)
+                UnequipServerRpc();
         }
 #endif
         [ServerRpc]
@@ -103,7 +104,7 @@ namespace RyanAssets.Tools.Shared {
             weaponRoot.SetActive(false); // unequipped by default
             if (IsOwner) {
                 SpawnClientScript();
-            } else if (clientObserver != null) {
+            } else if (clientObserver != "") {
                 Type clientObserverType = Type.GetType(clientObserver);
                 gameObject.AddComponent(clientObserverType);
             }
@@ -112,7 +113,7 @@ namespace RyanAssets.Tools.Shared {
 #else
         public override void OnStartServer() {
             base.OnStartServer();
-            if (serverScript != null){
+            if (serverScript != ""){
                 Type serverScriptType = Type.GetType(serverScript);
                 gameObject.AddComponent(serverScriptType);
             }
@@ -130,8 +131,10 @@ namespace RyanAssets.Tools.Shared {
             transform.SetParent(rightHand, false);
         }
         void SpawnClientScript() {
-            Type clientScriptType = Type.GetType(clientScript);
-            gameObject.AddComponent(clientScriptType);
+            if (clientScript != "") {
+                Type clientScriptType = Type.GetType(clientScript);
+                gameObject.AddComponent(clientScriptType);
+            }
         }
         void Awake() {
             weaponRoot = transform.GetChild(0).gameObject;

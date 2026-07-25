@@ -71,7 +71,7 @@ namespace Universes.murder_mystery.Server {
                 GameCharacter gameCharacter = npc.GetComponent<GameCharacter>();
                 ServerTool.Instance.SpawnTool(gameCharacter, ToolEnum.Dagger);
                 gameCharacter.OnDied += (source, killer) => {
-                    if (killer && killer.Owner != null) {
+                    if (killer && killer.Owner.IsValid) {
                         int kills = SharedGlobalEvents.GetLeaderboardIndex("Kills");
                         if (kills != -1)
                             PlayerData.GetPlayerData(killer.Owner).leaderboard[kills]++;
