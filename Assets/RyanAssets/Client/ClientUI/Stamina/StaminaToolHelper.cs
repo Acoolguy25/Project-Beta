@@ -15,7 +15,7 @@ namespace RyanAssets.Client.ClientUI.Stamina {
                 return;
             var toolBaseClient = toolBaseShared.GetComponent<ToolBaseClient>();
             toolBaseClient.CanActivateEvent = () => {
-                return (LocalPlayer.Character.ConsumeStamina(toolBaseShared.staminaCost));
+                return (StaminaController.ConsumeStamina(toolBaseShared.staminaCost));
             };
         }
     }

@@ -22,6 +22,8 @@ namespace Universes.murder_mystery.Server {
         DebugBool DebugSingleNpc, DebugMotionlessNpc;
         [SerializeField]
         DebugBool DebugTimerSpeedUp, DebugTimerInfinite;
+        [SerializeField]
+        DebugBool FallTest;
         public static float SpawnMultiplier;
         public static bool ForceEndGame;
         public static Action UpdateGameBarEvent;
@@ -63,10 +65,11 @@ namespace Universes.murder_mystery.Server {
             //character.GetComponent<CharacterScaler>().SetScale(0.7f * Vector3.one);
         }
         void SpawnNpcs() {
-            startNPCs = Mathf.RoundToInt((DebugSingleNpc.Value ? 1 : 30) * SpawnMultiplier);
+            startNPCs = FallTest.Value? 700: Mathf.RoundToInt((DebugSingleNpc.Value ? 1 : 30) * SpawnMultiplier);
             for (int i = 0; i < startNPCs; i++) {
                 LocalNPC npc = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (DebugSingleNpc.Value ? new Vector3(1117.56995f, 12.12100029f, 1008.34003f) : null));
                 GameCharacter gameCharacter = npc.GetComponent<GameCharacter>();
+                ServerTool.Instance.SpawnTool(gameCharacter, ToolEnum.Dagger);
                 gameCharacter.OnDied += (source, killer) => {
                     if (killer && killer.Owner != null) {
                         int kills = SharedGlobalEvents.GetLeaderboardIndex("Kills");
@@ -76,6 +79,10 @@ namespace Universes.murder_mystery.Server {
                     }
                     //if (GameObject.FindGameObjectsWithTag("NPC").Count() == 0)
                     UpdateGameBarEvent?.Invoke();
+                    if (source == DamageSource.Fall) {
+                        Time.timeScale = 0f;
+                        Debug.LogError("NPC HAS FALLEN!");
+                    }
                 };
                 npc.FleeTargets = MM_NPC.characters.ToArray();
             }

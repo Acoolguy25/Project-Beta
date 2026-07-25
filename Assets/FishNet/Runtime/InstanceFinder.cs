@@ -46,7 +46,7 @@ namespace FishNet
                             return null;
 
                         // Do not log using NetworkManager extensions, it will try to use InstanceFinder, resulting in this causing a stack overflow.
-                        Debug.Log($"NetworkManager not found in any open scenes.");
+                        //Debug.Log($"NetworkManager not found in any open scenes.");
                     }
                 }
 

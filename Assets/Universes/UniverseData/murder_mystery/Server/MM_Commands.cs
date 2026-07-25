@@ -13,7 +13,8 @@ namespace Universes.murder_mystery.Server
         {
             new()
             {
-               commandName = "NPC_WalkSpeedMultiplier",
+               commandType = "NPC",
+               commandName = "NPCWalkSpeedMultiplier",
                description = "Sets the NPC Walk Speed",
                arguments = new[]
                 {
@@ -28,7 +29,8 @@ namespace Universes.murder_mystery.Server
             },
             new()
             {
-               commandName = "NPC_FleeSpeedMultiplier",
+               commandType = "NPC",
+               commandName = "NPCFleeSpeedMultiplier",
                description = "Sets the NPC Flee Speed",
                arguments = new[]
                 {
@@ -43,7 +45,8 @@ namespace Universes.murder_mystery.Server
             },
             new()
             {
-               commandName = "NPC_SpawnMultiplier",
+               commandType = "NPC",
+               commandName = "NPCSpawnMultiplier",
                description = "Sets the NPC Spawn Multiplier",
                arguments = new[]
                 {

@@ -12,7 +12,7 @@ namespace RyanAssets.Server.ServerCore {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
-            Debug.Log("ServerHeartbeat Init");
+            //Debug.Log("ServerHeartbeat Init");
 
             heartbeatCts = new CancellationTokenSource();
             ServerBootStrap.StopServerEvent += OnStopServer;

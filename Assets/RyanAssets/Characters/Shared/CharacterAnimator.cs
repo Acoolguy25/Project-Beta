@@ -7,6 +7,8 @@ namespace RyanAssets.Characters.Shared
     [RequireComponent(typeof(AudioSource))]
     [RequireComponent(typeof(Animator))]
     public class CharacterAnimator: NetworkBehaviour {
+        public event System.Action LethalAttackStarted, LethalAttackEnded;
+        public bool LethalAttackEnabled { get; set; } = false;
         public AudioClip LandingAudioClip;
         public AudioClip[] FootstepAudioClips;
 
@@ -45,6 +47,14 @@ namespace RyanAssets.Characters.Shared
             if (animationEvent.animatorClipInfo.weight > 0.5f) {
                 _footStepSource.PlayOneShot(LandingAudioClip);
             }
+        }
+        public void OnLethalAttackStart(AnimationEvent animationEvent) {
+            LethalAttackEnabled = true;
+            LethalAttackStarted?.Invoke();
+        }
+        public void OnLethalAttackEnd(AnimationEvent animationEvent) {
+            LethalAttackEnabled = false;
+            LethalAttackEnded?.Invoke();
         }
         void Start(){
             _animator = GetComponent<Animator>();

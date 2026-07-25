@@ -10,13 +10,12 @@ namespace RyanAssets.Tools.Server
             toolBaseShared = GetComponent<ToolBaseShared>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
-            enabled = false;
         }
         protected virtual void OnEquip(ToolBaseShared _) {
-            enabled = true;
+
         }
         protected virtual void OnUnequip(ToolBaseShared _) {
-            enabled = false;
+
         }
     }
 }

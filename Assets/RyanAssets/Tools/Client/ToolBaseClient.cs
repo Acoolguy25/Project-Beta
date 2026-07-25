@@ -1,5 +1,7 @@
 using RyanAssets.Characters.Shared;
+#if !UNITY_SERVER
 using RyanAssets.Input;
+#endif
 using RyanAssets.Tools.Shared;
 using System;
 using System.Collections.Generic;
@@ -15,6 +17,7 @@ namespace RyanAssets.Tools.Client
         public event Action<float, float> onCooldownChangeEvent;
         protected List<CancellationTokenSource> activeTasks = new();
         protected ToolBaseShared toolBaseShared;
+        protected CharacterAnimator characterAnimator;
         protected Animator animator;
         protected Collider hitCollider;
         protected float StartCooldown, StopCooldown;
@@ -22,14 +25,25 @@ namespace RyanAssets.Tools.Client
             toolBaseShared = GetComponent<ToolBaseShared>();
             hitCollider = toolBaseShared.weaponRoot.GetComponentInChildren<Collider>(true);
             animator = toolBaseShared.connectedCharacter.GetComponent<Animator>();
+            characterAnimator = animator.GetComponent<CharacterAnimator>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
         }
         protected virtual void OnEquip(ToolBaseShared _) {
+#if !UNITY_SERVER
             ToolControls.activateToolPressed += TryActivate;
+#endif
+            characterAnimator.LethalAttackStarted += OnLethalAttackStart;
+            characterAnimator.LethalAttackEnded += OnLethalAttackEnd;
         }
         protected virtual void OnUnequip(ToolBaseShared _) {
+#if !UNITY_SERVER
             ToolControls.activateToolPressed -= TryActivate;
+#endif
+            characterAnimator.LethalAttackStarted -= OnLethalAttackStart;
+            characterAnimator.LethalAttackEnded -= OnLethalAttackEnd;
+            if (characterAnimator.LethalAttackEnabled)
+                SetLethalAttack(false);
             SetAttacking(false);
             foreach (CancellationTokenSource token in activeTasks) {
                 token.Cancel();
@@ -37,7 +51,7 @@ namespace RyanAssets.Tools.Client
             }
             activeTasks.Clear();
         }
-        protected virtual void TryActivate() { 
+        public virtual void TryActivate() { 
             if (CanAttack()) {
                 OnActivate();
             }
@@ -46,7 +60,16 @@ namespace RyanAssets.Tools.Client
 
         }
         protected virtual void SetAttacking(bool attack) {
-        
+            
+        }
+        protected virtual void OnLethalAttackStart() {
+            SetLethalAttack(true);
+        }
+        protected virtual void OnLethalAttackEnd() {
+            SetLethalAttack(false);
+        }
+        protected virtual void SetLethalAttack(bool attack) {
+
         }
         protected virtual void OnHit(Collider collider) {
 

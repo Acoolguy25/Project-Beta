@@ -179,6 +179,22 @@ PrefabInstance:
       propertyPath: DebugMotionlessNpc
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: FallTest._editor_value
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: DebugSingleNpc._editor_value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: DebugMotionlessNpc._editor_value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: DebugTimerInfinite._editor_value
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

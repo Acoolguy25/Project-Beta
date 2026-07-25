@@ -50,6 +50,10 @@ namespace RyanAssets.DataService {
         readonly public SyncVar<float> walkSpeed = new(initialValue: 10f);
         readonly public SyncVar<float> sprintSpeed = new(initialValue: 23f);
 
+        readonly public SyncVar<float> staminaMax = new(initialValue: 250f);
+        readonly public SyncVar<float> staminaRegen = new(initialValue: 30f);
+        readonly public SyncVar<float> staminaCooldown = new(initialValue: 0.6f);
+
         // Events
         public static Action<NetworkConnection, PlayerData> OnPlayerAdded;
         public static Action<NetworkConnection, PlayerData> OnPlayerRemoved;
@@ -57,21 +61,21 @@ namespace RyanAssets.DataService {
         // Static
 
         public static Dictionary<NetworkConnection, PlayerData> Players;
-        public static PlayerData localData;
 
         // Server
 #if UNITY_SERVER
         [NonSerialized]
         public List<ToolEnum> tools = new();
 #else   // Client
+        public static PlayerData localData;
         public static InstantEvent<PlayerData> OnMyPlayerAdded;
         public static event Action<PlayerData> OnMyPlayerRemoved;
 #endif
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             Players = new();
-            localData = null;
 #if !UNITY_SERVER
+            localData = null;
             OnMyPlayerAdded = new();
             OnMyPlayerRemoved = null;
 #endif
@@ -100,8 +104,9 @@ namespace RyanAssets.DataService {
             OnPlayerRemoved?.Invoke(Owner, this);
 #if !UNITY_SERVER
             OnMyPlayerRemoved?.Invoke(this);
-#endif
+            OnMyPlayerAdded.ClearLastValue();
             localData = null;
+#endif
         }
 
         public string GetPlayerName() {

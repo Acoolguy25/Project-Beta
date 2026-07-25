@@ -15,6 +15,10 @@ namespace RyanAssets.Client.ClientUI.Stamina {
         void Start() {
             canvasGroupController = GetComponent<CanvasGroupController>();
             LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            StaminaController.StaminaChanged += OnStaminaChanged;
+        }
+        private void OnDestroy() {
+            StaminaController.StaminaChanged -= OnStaminaChanged;
         }
         void OnCharacterAdded(Transform character) {
             if (character == null) {
@@ -22,7 +26,7 @@ namespace RyanAssets.Client.ClientUI.Stamina {
                 return;
             }
             localCharacter = character.GetComponent<LocalCharacter>();
-            localCharacter.StaminaChanged += (_) => OnStaminaChanged(false);
+            //localCharacter.StaminaChanged += (_) => OnStaminaChanged(false);
             localCharacter.OnDied += OnCharacterDied;
             OnStaminaChanged(true);
             SetVisible(true);
@@ -36,10 +40,15 @@ namespace RyanAssets.Client.ClientUI.Stamina {
         void SetVisible(bool visible = false) {
             canvasGroupController.SetVisible(visible, 0.5f);
         }
+        void OnStaminaChanged(float newStamina) {
+            OnStaminaChanged(false);
+        }
         void OnStaminaChanged(bool Instant) {
             //TweenRectTransform.AnchorTween(staminaSlider.rectTransform, Instant ? 0 : 0.25f, Vector2.zero, new Vector2(localCharacter.Stamina / localCharacter.MaxStamina.Value, 1));
+            if (!StaminaController.StaminaLoaded)
+                return;
             // Always keep it instant
-            staminaSlider.rectTransform.anchorMax = new Vector2(localCharacter.Stamina / localCharacter.MaxStamina.Value, 1);
+            staminaSlider.rectTransform.anchorMax = new Vector2(StaminaController.Stamina / StaminaController.MaxStamina, 1);
         }
     }
 }

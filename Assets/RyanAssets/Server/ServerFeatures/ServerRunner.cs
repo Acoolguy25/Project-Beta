@@ -92,23 +92,23 @@ namespace RyanAssets.Server.ServerFeatures {
                 }
             };
 
-            // try {
-            unregisterInterrupt = registerInterrupt(interrupt);
-            interruptRegistered = true;
+             try {
+                unregisterInterrupt = registerInterrupt(interrupt);
+                interruptRegistered = true;
 
-            while (duration > 0) {
-                if (!activationFunc(duration, false))
-                    return;
+                while (duration > 0) {
+                    if (!activationFunc(duration, false))
+                        return;
 
-                await UniTask.Delay(1000, cancellationToken: cts.Token);
+                    await UniTask.Delay(1000, cancellationToken: cts.Token);
 
-                duration--;
-            }
-            // } catch (OperationCanceledException) when (!token.IsCancellationRequested) {
-            // } finally {
-            loopExited = true;
+                    duration--;
+                }
+             } catch (OperationCanceledException) when (!token.IsCancellationRequested) {
+             } finally {
+                loopExited = true;
             UnregisterInterrupt();
-            // }
+            }
         }
         public void ResetLeaderboardData() {
             foreach (PlayerData playerData in PlayerData.Players.Values) {

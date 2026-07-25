@@ -21,6 +21,7 @@ namespace RyanAssets.Commands.Shared {
 
     [Serializable]
     public struct CommandConfig {
+        public string commandType;
         public string commandName;
         public string description;
         public CommandArgumentConfig[] arguments;

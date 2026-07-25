@@ -24,12 +24,9 @@ namespace RyanAssets.Characters.Shared {
         public readonly SyncVar<long> MaxHealth = new();
         public readonly SyncVar<bool> Invul = new();
         public readonly SyncVar<ToolBaseShared> ActiveTool = new(new(WritePermission.ClientUnsynchronized));
-#if !UNITY_SERVER
-        public float Stamina;
-#endif
-        public readonly SyncVar<float> MaxStamina = new();
-        public readonly SyncVar<float> StaminaRegen = new();
-        public readonly SyncVar<float> StaminaCooldown = new();
+        //public readonly SyncVar<float> MaxStamina = new();
+        //public readonly SyncVar<float> StaminaRegen = new();
+        //public readonly SyncVar<float> StaminaCooldown = new();
         public readonly float FallenPartsDestroyHeight = 0.0f;
         public readonly bool FallHeightEnabled = true;
         public void SwitchTool(ToolBaseShared tool) {
@@ -110,11 +107,11 @@ namespace RyanAssets.Characters.Shared {
             SetHealth(0);
             SharedDied(source, sourceObject);
         }
-        public virtual void Init(long hp, long maxHP, float maxStamina = 100f, float staminaRegen = 10f, float staminaCooldown = 0.4f) {
+        public virtual void Init(long hp, long maxHP) { //, float maxStamina = 250f, float staminaRegen = 30f, float staminaCooldown = 0.6f) {
             MaxHealth.Value = maxHP;
-            MaxStamina.Value = maxStamina;
-            StaminaRegen.Value = staminaRegen;
-            StaminaCooldown.Value = staminaCooldown;
+            //MaxStamina.Value = maxStamina;
+            //StaminaRegen.Value = staminaRegen;
+            //StaminaCooldown.Value = staminaCooldown;
             SetHealth(hp);
         }
         public void Init(long hp){

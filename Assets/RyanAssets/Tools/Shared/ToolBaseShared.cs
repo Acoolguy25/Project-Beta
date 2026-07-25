@@ -102,8 +102,7 @@ namespace RyanAssets.Tools.Shared {
         public override void OnStartClient() {
             weaponRoot.SetActive(false); // unequipped by default
             if (IsOwner) {
-                Type clientScriptType = Type.GetType(clientScript);
-                gameObject.AddComponent(clientScriptType);
+                SpawnClientScript();
             } else if (clientObserver != null) {
                 Type clientObserverType = Type.GetType(clientObserver);
                 gameObject.AddComponent(clientObserverType);
@@ -117,14 +116,22 @@ namespace RyanAssets.Tools.Shared {
                 Type serverScriptType = Type.GetType(serverScript);
                 gameObject.AddComponent(serverScriptType);
             }
+            if (!Owner.IsValid) {
+                SpawnClientScript();
+            }
             weaponRoot.SetActive(false);
             createStaticEvent?.Invoke(this);
         }
+        
 #endif
         public override void OnStartNetwork() {
             Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.transform, ParentObjectName);
             Debug.Assert(rightHand != null, "RightHand not found!");
             transform.SetParent(rightHand, false);
+        }
+        void SpawnClientScript() {
+            Type clientScriptType = Type.GetType(clientScript);
+            gameObject.AddComponent(clientScriptType);
         }
         void Awake() {
             weaponRoot = transform.GetChild(0).gameObject;

@@ -2,6 +2,7 @@
 using FishNet.Object;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Tools.Shared;
+using RyanAssets.Tools.Client;
 using System.Collections;
 using UnityEngine;
 
@@ -23,6 +24,13 @@ namespace RyanAssets.Tools.Server {
             character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Melee, toolBaseShared.NetworkObject);
             //Destroy(character.gameObject);
             //InstanceFinder.ServerManager.Despawn(character.gameObject);
+        }
+        void Update() {
+            if (toolBaseShared.IsController) {
+                if (!toolBaseShared.equipped)
+                    toolBaseShared.EquipServer();
+                GetComponent<ToolBaseClient>().TryActivate();
+            }
         }
     }
 }

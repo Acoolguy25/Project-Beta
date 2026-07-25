@@ -19,21 +19,26 @@ namespace RyanAssets.Tools.Client {
         }
         protected override void OnEquip(ToolBaseShared _) {
             base.OnEquip(_);
+            animator.SetBool("KnifeHold", true);
         }
         protected override void OnUnequip(ToolBaseShared _) {
             base.OnUnequip(_);
+            animator.SetBool("KnifeHold", false);
         }
         protected override async void OnActivate() {
             base.OnActivate();
             var token = AddCancellationToken();
             SetAttacking(true);
             SetCooldown(toolBaseShared.primaryCooldown);
-            await UniTask.WaitForSeconds(0.5f, cancellationToken: token.Token).SuppressCancellationThrow();
+            await UniTask.WaitForSeconds(0.717f, cancellationToken: token.Token);
             SetAttacking(false);
         }
         protected override void SetAttacking(bool attack) {
             base.SetAttacking(attack);
-            animator.SetBool("MeleeAttack", attack);
+            animator.SetBool("KnifeAttack", attack);
+        }
+        protected override void SetLethalAttack(bool attack) {
+            base.SetLethalAttack(attack);
             if (hitCollider != null)
                 hitCollider.enabled = attack;
         }

@@ -59,7 +59,7 @@ namespace RyanAssets.Server.ServerCore {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void BeforeSceneLoad() {
-            Debug.Log("============ ServerBootStrap ============");
+            //Debug.Log("============ ServerBootStrap ============");
 #if UNITY_EDITOR
             serverInfo = new(){
                 universe_id = "murder_mystery",

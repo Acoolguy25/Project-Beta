@@ -57,15 +57,15 @@ namespace RyanAssets.Commands.Server {
 
             return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
         }
-
-        static void Help(NetworkConnection caller, string commandName, string[] args) {
+        // Comamnds
+        public static void help(NetworkConnection caller, string commandName, string[] args) {
             string commandList = string.Join(", ", ServerCommandService.GetRegisteredCommandConfigs()
                 .Select(config => "/" + config.commandName)
                 .OrderBy(command => command, StringComparer.OrdinalIgnoreCase));
 
             ServerCommandService.SendSystemMessage(caller, $"Commands: {commandList}");
         }
-        public static void Player_SetWalkspeed(NetworkConnection caller, string commandName, string[] args) {
+        public static void walkspeed(NetworkConnection caller, string commandName, string[] args) {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
@@ -75,7 +75,7 @@ namespace RyanAssets.Commands.Server {
                 }
             }
         }
-        public static void Player_SetSprintspeed(NetworkConnection caller, string commandName, string[] args)
+        public static void sprintspeed(NetworkConnection caller, string commandName, string[] args)
         {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
@@ -86,7 +86,31 @@ namespace RyanAssets.Commands.Server {
                 }
             }
         }
-        public static void Player_Kill(NetworkConnection caller, string commandName, string[] args)
+        public static void maxstamina(NetworkConnection caller, string commandName, string[] args) {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
+            foreach (NetworkConnection conn in conns) {
+                if (PlayerData.Players.TryGetValue(conn, out var player)) {
+                    player.staminaMax.Value = float.Parse(args[1]);
+                }
+            }
+        }
+        public static void staminaregen(NetworkConnection caller, string commandName, string[] args) {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
+            foreach (NetworkConnection conn in conns) {
+                if (PlayerData.Players.TryGetValue(conn, out var player)) {
+                    player.staminaRegen.Value = float.Parse(args[1]);
+                }
+            }
+        }
+        public static void staminacooldown(NetworkConnection caller, string commandName, string[] args) {
+            List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
+            foreach (NetworkConnection conn in conns) {
+                if (PlayerData.Players.TryGetValue(conn, out var player)) {
+                    player.staminaCooldown.Value = float.Parse(args[1]);
+                }
+            }
+        }
+        public static void kill(NetworkConnection caller, string commandName, string[] args)
         {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
@@ -97,7 +121,7 @@ namespace RyanAssets.Commands.Server {
                 }
             }
         }
-        public static void Player_Respawn(NetworkConnection caller, string commandName, string[] args)
+        public static void respawn(NetworkConnection caller, string commandName, string[] args)
         {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
@@ -106,7 +130,7 @@ namespace RyanAssets.Commands.Server {
                 ServerPlayerCharacter.Instance.SpawnPlayerCharacter(conn);
             }
         }
-        public static void Player_Kick(NetworkConnection caller, string commandName, string[] args)
+        public static void kick(NetworkConnection caller, string commandName, string[] args)
         {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
@@ -114,12 +138,12 @@ namespace RyanAssets.Commands.Server {
                 ServerPlayerEvents.KickPlayer(conn, $"Kicked by {PlayerData.GetPlayerName(caller) ?? "anonymous"}");
             }
         }
-        public static void Server_Shutdown(NetworkConnection caller, string commandName, string[] args)
+        public static void shutdown(NetworkConnection caller, string commandName, string[] args)
         {
             ServerBootStrap.StopServer($"Shutdown by {PlayerData.GetPlayerName(caller) ?? "anonymous"}");
         }
 
-        public static void Server_Restart(NetworkConnection caller, string commandName, string[] args) {
+        public static void restart(NetworkConnection caller, string commandName, string[] args) {
             ServerChat.SendSystemMessage(new("Server is restarting...", SystemMessageSource.ServerRestart));
             ServerBootStrap.RestartServerEvent?.Invoke();
         }

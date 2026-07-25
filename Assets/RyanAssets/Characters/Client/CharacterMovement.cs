@@ -115,7 +115,7 @@ namespace RyanAssets.Characters.Client {
             Vector2 moveVec = GetAdaptedMoveVector();
             Vector2 lastMoveVec = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
 
-            float targetSpeed = (_input.sprint && moveVec.magnitude > 0f && lastMoveVec.magnitude > SprintSpeed/4f && LocalPlayer.Character.ConsumeStamina(SprintStaminaConsumptionRate * Time.fixedDeltaTime)) ? SprintSpeed : MoveSpeed;
+            float targetSpeed = (_input.sprint && moveVec.magnitude > 0f && lastMoveVec.magnitude > SprintSpeed/4f && StaminaController.ConsumeStamina(SprintStaminaConsumptionRate * Time.fixedDeltaTime)) ? SprintSpeed : MoveSpeed;
             if (moveVec == Vector2.zero) targetSpeed = 0.0f;
 
             float inputMagnitude = _input.analogMovement ? moveVec.magnitude : 1f;
@@ -164,7 +164,7 @@ namespace RyanAssets.Characters.Client {
                 //    _animator.SetBool(_animIDFreeFall, false);
                 //}
 
-                if (_input.jump && _jumpTimeoutDelta <= 0.0f && _landTimeoutDelta <= 0.0f && LocalPlayer.Character.ConsumeStamina(5f)) {
+                if (_input.jump && _jumpTimeoutDelta <= 0.0f && _landTimeoutDelta <= 0.0f && StaminaController.ConsumeStamina(5f)) {
                     _jumpTimeoutDelta = JumpTimeout;
 
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);

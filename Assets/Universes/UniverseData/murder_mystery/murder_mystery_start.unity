@@ -169,7 +169,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 8e88ccec895a9e14b928197d073a2598, type: 2}
   m_BuildHeightMesh: 0
@@ -201,7 +201,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: c016ce3ce1be16c4eb992a15b3e0a658, type: 2}
   m_BuildHeightMesh: 0
@@ -233,7 +233,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 4fdf2f687b3107b4b803251695c80eee, type: 2}
   m_BuildHeightMesh: 0
@@ -287,7 +287,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 21c0fe2f57a69e2479d274be6ac34924, type: 2}
   m_BuildHeightMesh: 0
@@ -691,7 +691,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 554954740bdd0e4469022d19d3305f45, type: 2}
   m_BuildHeightMesh: 0
@@ -983,7 +983,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 2f1892a00ef523b408015e75b5e1f4a2, type: 2}
   m_BuildHeightMesh: 0
@@ -1225,7 +1225,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 1d5ccb62a47968c4f99bdce5739b7ff1, type: 2}
   m_BuildHeightMesh: 0
@@ -1257,7 +1257,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: ea5ac8eb1e32dad4b9250e352be3f4c6, type: 2}
   m_BuildHeightMesh: 0
@@ -1333,7 +1333,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 754a6a8a3df61c240a1a6316772c5552, type: 2}
   m_BuildHeightMesh: 0
@@ -1400,7 +1400,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 6abddbdf535eae9439f41872f812b2c8, type: 2}
   m_BuildHeightMesh: 0
@@ -1532,7 +1532,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 6f61912995369b14591d7e01c7d6f8f7, type: 2}
   m_BuildHeightMesh: 0
@@ -1586,7 +1586,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 51c6fa2bd6e0b4841b1c5ef99f620971, type: 2}
   m_BuildHeightMesh: 0
@@ -1837,7 +1837,7 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.13333334
+  m_VoxelSize: 0.23333333
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: 3a3a7278501804f4c95647b3992178e2, type: 2}
   m_BuildHeightMesh: 0
@@ -2422,6 +2422,7 @@ GameObject:
   - component: {fileID: 6548578144439439061}
   - component: {fileID: 2651191904433242078}
   - component: {fileID: 112309123}
+  - component: {fileID: 6548578144439439062}
   m_Layer: 0
   m_Name: tunnel_003
   m_TagString: Untagged
@@ -3212,6 +3213,7 @@ GameObject:
   - component: {fileID: 1157663459385250216}
   - component: {fileID: 2839627677506643701}
   - component: {fileID: 619856420}
+  - component: {fileID: 3719413618749850299}
   m_Layer: 0
   m_Name: entrada_002
   m_TagString: Untagged
@@ -3360,6 +3362,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 2075342296638033164}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!208 &3719413618749850299
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3101266387655717312}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.061000004, y: 0.015000001, z: 0.007}
+  m_MoveThreshold: 0.1
+  m_Carve: 0
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0.061000004, y: 0, z: 0.007}
+  m_TimeToStationary: 0.5
 --- !u!33 &3750863239328542278
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -3414,6 +3432,7 @@ GameObject:
   - component: {fileID: 1787746796908703220}
   - component: {fileID: 1246556894947669104}
   - component: {fileID: 1760530372}
+  - component: {fileID: 8096321700266656462}
   m_Layer: 0
   m_Name: entrada_006
   m_TagString: Untagged
@@ -3946,6 +3965,7 @@ GameObject:
   - component: {fileID: 333451022338536330}
   - component: {fileID: 8806296948436737050}
   - component: {fileID: 1629709585}
+  - component: {fileID: 8806296948436737051}
   m_Layer: 0
   m_Name: tunnel_001
   m_TagString: Untagged
@@ -4041,6 +4061,7 @@ GameObject:
   - component: {fileID: 8646815597728160309}
   - component: {fileID: 2367146354143571333}
   - component: {fileID: 973268325}
+  - component: {fileID: 8646815597728160310}
   m_Layer: 0
   m_Name: tunnel
   m_TagString: Untagged
@@ -4349,6 +4370,22 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1378708265466347564}
   m_Mesh: {fileID: -6399863045655417725, guid: 400a81954580ee74ca9572026a8d8518, type: 3}
+--- !u!208 &6548578144439439062
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1378708265466347564}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.061000004, y: 0.015000001, z: 0.007}
+  m_MoveThreshold: 0.1
+  m_Carve: 0
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0.061000004, y: 0, z: 0.007}
+  m_TimeToStationary: 0.5
 --- !u!4 &6564195888758169367
 Transform:
   m_ObjectHideFlags: 0
@@ -4815,6 +4852,7 @@ GameObject:
   - component: {fileID: 4653843854536855531}
   - component: {fileID: 1617125609003171703}
   - component: {fileID: 1234384573}
+  - component: {fileID: 8069508889607678968}
   m_Layer: 0
   m_Name: tunnel_002
   m_TagString: Untagged
@@ -4822,6 +4860,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!208 &8069508889607678968
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8069508889607678967}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.061000004, y: 0.008, z: 0.007}
+  m_MoveThreshold: 0.1
+  m_Carve: 0
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0.061000004, y: -0.008, z: 0.007}
+  m_TimeToStationary: 0.5
 --- !u!4 &8096321700266656461
 Transform:
   m_ObjectHideFlags: 0
@@ -4837,6 +4891,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 558799878366773191}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!208 &8096321700266656462
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3852327004801621175}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.15400001, y: 0.008, z: 0.008}
+  m_MoveThreshold: 0.1
+  m_Carve: 0
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0.15400001, y: -0.007, z: 0.008}
+  m_TimeToStationary: 0.5
 --- !u!23 &8292435026299619208
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -4947,6 +5017,22 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5429662993726816502}
   m_Mesh: {fileID: -6399863045655417725, guid: 400a81954580ee74ca9572026a8d8518, type: 3}
+--- !u!208 &8646815597728160310
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5429662993726816502}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.061000004, y: 0.015000001, z: 0.007}
+  m_MoveThreshold: 0.1
+  m_Carve: 0
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0.061000004, y: 0, z: 0.007}
+  m_TimeToStationary: 0.5
 --- !u!23 &8670490179160550142
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -5097,6 +5183,22 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!208 &8806296948436737051
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5105072695249219951}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 0.061000004, y: 0.015000001, z: 0.007}
+  m_MoveThreshold: 0.1
+  m_Carve: 0
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0.061000004, y: 0, z: 0.007}
+  m_TimeToStationary: 0.5
 --- !u!33 &8911833062612787907
 MeshFilter:
   m_ObjectHideFlags: 0

@@ -23,7 +23,7 @@ namespace RyanAssets.NetworkService {
         }
         (string, JObject) OnSocketMessage(byte[] bytes) {
             string data = Encoding.UTF8.GetString(bytes);
-            Debug.Log($"Got Socket Message: {bytes}");
+            //Debug.Log($"Got Socket Message: {bytes}");
             JObject j = BackendNetwork.ParseJSON(data);
             if (j == null)
                 return (data, null);
