@@ -10,9 +10,6 @@ namespace RyanAssets.Tools.Server {
     public class ToolMeleeServer : ToolBaseServer {
         protected override void Start() {
             base.Start();
-            ((ToolMeleeShared)toolBaseShared).hitEvent += (gameCharacter) => {
-                OnHit(gameCharacter.gameObject.GetComponent<GameCharacter>());
-            };
             if (toolBaseShared.IsController)
                 toolBaseShared.connectedCharacter.GetComponent<GameCharacter>().SwitchTool(toolBaseShared);
         }
@@ -22,7 +19,7 @@ namespace RyanAssets.Tools.Server {
         protected override void OnUnequip(ToolBaseShared _) {
 
         }
-        protected void OnHit(GameCharacter character) {
+        protected override void OnHit(GameCharacter character) {
             character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Melee, toolBaseShared.NetworkObject);
             //Destroy(character.gameObject);
             //InstanceFinder.ServerManager.Despawn(character.gameObject);

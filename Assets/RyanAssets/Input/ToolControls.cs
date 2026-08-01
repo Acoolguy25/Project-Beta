@@ -8,8 +8,9 @@ using UnityEngine.UI;
 
 namespace RyanAssets.Input {
     public class ToolControls : MonoBehaviour {
-        public static Action<int> toolBarHotkeyPressed;
-        public static Action activateToolPressed;
+        public static event Action<int> toolBarHotkeyPressed;
+        public static event Action<Vector3> activateToolPressed;
+        public static event Action reloadToolPressed;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             toolBarHotkeyPressed = null;
@@ -45,6 +46,9 @@ namespace RyanAssets.Input {
         public void On_9() {
             toolBarHotkeyPressed?.Invoke(9);
         }
+        public void OnReloadTool() {
+            reloadToolPressed?.Invoke();
+        }
         bool IsCursorFree() {
             PointerEventData pointerData = new(EventSystem.current) {
                 position = Mouse.current.position.ReadValue()
@@ -62,9 +66,21 @@ namespace RyanAssets.Input {
 
             return true; // nothing visible under the cursor
         }
+        Vector3 GetCursorWorldPosition() {
+            Vector2 mousePosition = Mouse.current.position.ReadValue();
+
+            Ray ray = Camera.main.ScreenPointToRay(mousePosition);
+
+            if (Physics.Raycast(ray, out RaycastHit hit, float.MaxValue, ~LayerMask.GetMask("LocalCharacter", "Ignore Raycast"))) {
+                return hit.point;
+            }
+
+            return Vector3.zero;
+        }
         public void OnActivateTool() {
-            if (IsCursorFree())
-                activateToolPressed?.Invoke();
+            if (IsCursorFree()) {
+                activateToolPressed?.Invoke(GetCursorWorldPosition());
+            }
         }
     }
 }

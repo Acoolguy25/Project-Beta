@@ -10,7 +10,8 @@
         "RyanAssets.UI.ListGrid",
         "RyanAssets.Shared.Declarations",
         "RyanAssets.Tools.Shared",
-        "RyanAssets.Shared.Player"
+        "RyanAssets.Shared.Player",
+        "RyanAssets.DataService"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

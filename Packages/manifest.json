@@ -9,6 +9,7 @@
     "com.unity.collections": "6.5.0",
     "com.unity.dedicated-server": "2.0.2",
     "com.unity.ext.nunit": "2.1.0",
+    "com.unity.formats.fbx": "5.1.6",
     "com.unity.ide.rider": "3.0.39",
     "com.unity.ide.visualstudio": "2.0.27",
     "com.unity.ide.vscode": "1.2.5",
@@ -69,6 +70,7 @@
     "com.unity.modules.vehicles": "1.0.0",
     "com.unity.modules.video": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
-    "com.unity.modules.xr": "1.0.0"
+    "com.unity.modules.xr": "1.0.0",
+    "com.ryan.rpcgen": "file:com.ryan.rpcgen"
   }
 }

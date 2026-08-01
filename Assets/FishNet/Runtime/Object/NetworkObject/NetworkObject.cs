@@ -1463,8 +1463,8 @@ namespace FishNet.Object
         {
             ReserializeEditorSetValues(setWasActiveDuringEdit: true, setSceneId: true);
 
-            if (IsGlobal && IsSceneObject)
-                NetworkManager.LogWarning($"Object {gameObject.name} will have it's IsGlobal state ignored because it is a scene object. Instantiated copies will still be global. This warning is informative only.");
+            //if (IsGlobal && IsSceneObject)
+                //NetworkManager.LogWarning($"Object {gameObject.name} will have it's IsGlobal state ignored because it is a scene object. Instantiated copies will still be global. This warning is informative only.");
         }
 
         private void Reset()

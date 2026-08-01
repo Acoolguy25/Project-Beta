@@ -16,6 +16,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "ReloadTool",
+                    "type": "Button",
+                    "id": "576f7d84-38eb-4682-9e2e-465a43b035b3",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "0",
                     "type": "Button",
                     "id": "8fd753e9-7bfa-4494-b62b-5c11617c4ac7",
@@ -225,6 +234,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "9",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "1afcf9c9-0f13-404d-86b7-797b52a27391",
+                    "path": "<Keyboard>/r",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ReloadTool",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

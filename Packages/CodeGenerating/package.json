@@ -1,0 +1,7 @@
+{
+  "name": "com.ryan.rpcgen",
+  "version": "1.0.0",
+  "displayName": "Ryan RPC Generator",
+  "description": "Source generator that expands [Rpc] attributed methods into ServerRpc/ObserverRpc wrappers.",
+  "unity": "2021.2"
+}

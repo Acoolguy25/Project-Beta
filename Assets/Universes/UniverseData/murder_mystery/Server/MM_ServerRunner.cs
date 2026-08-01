@@ -24,6 +24,8 @@ namespace Universes.murder_mystery.Server {
         DebugBool DebugTimerSpeedUp, DebugTimerInfinite;
         [SerializeField]
         DebugBool FallTest;
+        //[SerializeField]
+        //DebugValue<float> DebugMurderCount;
         public static float SpawnMultiplier;
         public static bool ForceEndGame;
         public static Action UpdateGameBarEvent;
@@ -56,6 +58,7 @@ namespace Universes.murder_mystery.Server {
             PlayerData.GetPlayerData(player).leaderboard.AddRange(new[] { 0 });
             //data.tools.AddRange(new[] { ToolEnum.Dagger });
             ServerTool.Instance.AddTool(player, ToolEnum.Dagger);
+            ServerTool.Instance.AddTool(player, ToolEnum.Pistol);
             //ServerTool.tool
         }
         void OnCharacterAdded(NetworkConnection player, LocalCharacter character){
@@ -85,6 +88,8 @@ namespace Universes.murder_mystery.Server {
                     }
                 };
                 npc.FleeTargets = MM_NPC.characters.ToArray();
+                gameCharacter.SetTeam(new TeamConfig(TeamColor.Red, TeamColor.Blue));
+                npc.gameObject.AddComponent<MM_LocalNPC>();
             }
         }
         int GetNPCCount() => GameObject.FindGameObjectsWithTag("NPC").Count();

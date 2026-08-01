@@ -25,11 +25,11 @@ namespace RyanAssets.Tools.Client {
             base.OnUnequip(_);
             animator.SetBool("KnifeHold", false);
         }
-        protected override async void OnActivate() {
-            base.OnActivate();
+        protected override async void OnActivate(Vector3 targetPosition) {
+            base.OnActivate(targetPosition);
             var token = AddCancellationToken();
             SetAttacking(true);
-            SetCooldown(toolBaseShared.primaryCooldown);
+            SetCooldown(toolBaseShared.attackCooldown);
             bool isCancelled = await UniTask.WaitForSeconds(0.717f, cancellationToken: token.Token).SuppressCancellationThrow();
             if (isCancelled)
                 return;

@@ -24,6 +24,17 @@ namespace RyanAssets.DataService {
     public class TeamConfig {
         public TeamColor team = TeamColor.Ghost;
         public TeamColor displayTeam = TeamColor.Ghost;
+        public TeamConfig() {
+
+        }
+        public TeamConfig(TeamColor team) {
+            this.team = team;
+            this.displayTeam = team;
+        }
+        public TeamConfig(TeamColor team, TeamColor displayTeam) {
+            this.team = team;
+            this.displayTeam = displayTeam;
+        }
     };
     public enum ToolEnum : short {
         Unknown = 0,
@@ -103,16 +114,20 @@ namespace RyanAssets.DataService {
             Players.Remove(Owner);
             OnPlayerRemoved?.Invoke(Owner, this);
 #if !UNITY_SERVER
-            OnMyPlayerRemoved?.Invoke(this);
-            OnMyPlayerAdded.ClearLastValue();
-            localData = null;
+            if (IsOwner) {
+                OnMyPlayerRemoved?.Invoke(this);
+                OnMyPlayerAdded.ClearLastValue();
+                localData = null;
+            }
 #endif
         }
 
         public string GetPlayerName() {
             return username.Value;
         }
-
+        public void SetPlayerTeam(TeamConfig teamConfig) {
+            team.Value = teamConfig;
+        }
         // Helpful Static Methods
         public static List<string> GetPlayerNames(Func<NetworkConnection, PlayerData, bool> selector = null) {
             List<string> strings = new();

@@ -2,6 +2,7 @@ using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using RyanAssets.DataService;
 using RyanAssets.Shared.Player;
 using RyanAssets.Tools.Shared;
 using System;
@@ -20,6 +21,7 @@ namespace RyanAssets.Characters.Shared {
         Command
     };
     public class GameCharacter : NetworkBehaviour {
+        public readonly SyncVar<TeamConfig> Team = new(new(), new(WritePermission.ClientUnsynchronized));
         public readonly SyncVar<long> Health = new();
         public readonly SyncVar<long> MaxHealth = new();
         public readonly SyncVar<bool> Invul = new();
@@ -82,7 +84,11 @@ namespace RyanAssets.Characters.Shared {
             return (Invul.Value || SharedGlobalEvents.Instance.GlobalInvul) && Array.Exists(invulSources, s => s == source);
         }
         public virtual void TakeDamage(long Damage, DamageSource source = DamageSource.None, NetworkObject sourceObject = null) {
+            // If the character is dead or invulnerable, ignore damage
             if (Health.Value == 0 || IsProtected(source))
+                return;
+            // Verify the attacker isn't a humanoid or is alive
+            if (sourceObject != null && sourceObject.TryGetComponent(out GameCharacter gameCharacter) && gameCharacter.IsDead())
                 return;
             if (Damage < 0) {
                 HealHealth(-Damage);
@@ -125,6 +131,11 @@ namespace RyanAssets.Characters.Shared {
         public virtual void Kill(DamageSource source, NetworkObject sourceObject = null) {
             Died(source, sourceObject);
         }
+        
+        [Server]
+        public virtual void SetTeam(TeamConfig teamConfig) {
+            Team.Value = teamConfig;
+        }
         private void FixedUpdate() {
             if (FallHeightEnabled && IsSpawned) {
                 if (transform.position.y < FallenPartsDestroyHeight) {
@@ -140,6 +151,9 @@ namespace RyanAssets.Characters.Shared {
             }
         }
 #endif
+        public virtual TeamConfig GetTeam() {
+            return Team.Value;
+        }
         protected virtual void SharedDied(DamageSource source, NetworkObject sourceObject) {
             SwitchTool(null);
             if (!transform.tag.StartsWith("Dead"))

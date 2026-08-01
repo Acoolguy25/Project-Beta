@@ -8,6 +8,7 @@ using TMPro;
 using UnityEngine.UI;
 using RyanAssets.TweenService.TweenComponents;
 using RyanAssets.Tools.Client;
+using RyanAssets.UI;
 
 namespace RyanAssets.Client.ClientUI.Toolbar
 {
@@ -18,9 +19,22 @@ namespace RyanAssets.Client.ClientUI.Toolbar
         float LastSwitchToolTime = float.MinValue;
         Dictionary<ToolBaseShared, Transform> toolBaseToItem = new();
         List<ToolBaseShared> orderedTools = new();
+        ToolBaseShared equippedToolShared;
+
+        [SerializeField]
+        CanvasGroupController weaponAmmoUI;
+        TextMeshProUGUI weaponTitleText;
+        TextMeshProUGUI currentAmmoText, maxAmmoText;
+        GameObject maxAmmoFinite, maxAmmoInfinte;
         protected override void Start()
         {
             base.Start();
+            weaponTitleText = weaponAmmoUI.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+            currentAmmoText = weaponAmmoUI.transform.GetChild(1).GetComponent<TextMeshProUGUI>();
+            maxAmmoText = weaponAmmoUI.transform.GetChild(3).GetComponent<TextMeshProUGUI>();
+            maxAmmoFinite = weaponAmmoUI.transform.GetChild(3).gameObject;
+            maxAmmoInfinte = weaponAmmoUI.transform.GetChild(4).gameObject;
+
             ToolBaseShared.createStaticEvent += OnToolCreated;
             ToolBaseShared.destroyStaticEvent += OnToolRemoved;
             OnCreatePrefab += OnAddPrefab;
@@ -56,16 +70,52 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             toolBase.equippedEvent += (ToolBaseShared _) => {
                 //prefabClone.GetComponent<Image>().color = new Color32(60, 81, 161, 219);
                 TweenImage.ColorImage(backingImage, 0.15f, new Color32(60, 81, 161, 219));
+                equippedToolShared = toolBase;
+
+                weaponTitleText.text = toolBase.toolName;
+                RefreshCurrentAmmoUI();
+                RefreshMaxAmmoUI();
             };
             toolBase.unequippedEvent += (ToolBaseShared _) => {
                 //prefabClone.GetComponent<Image>().color = new Color32(13, 14, 15, 219);
                 TweenImage.ColorImage(backingImage, 0.15f, new Color32(13, 14, 15, 219));
+                equippedToolShared = null;
+                RefreshCurrentAmmoUI();
+                RefreshMaxAmmoUI();
             };
+            toolBase.currentAmmoEvent += (int ammo) => RefreshCurrentAmmoUI();
+            toolBase.maxAmmoEvent += (int ammo) => RefreshMaxAmmoUI();
             baseClient.onCooldownChangeEvent += (float start, float stop) => {
                 sliderImage.rectTransform.anchorMax = new Vector2(1, 1);
                 TweenRectTransform.AnchorTween(sliderImage.rectTransform, stop - start, new Vector2(0f, 0f), new Vector2(1f, 0f));
             };
             sliderImage.rectTransform.anchorMax = new Vector2(1, 0);
+        }
+        private const string LeadingZeroColor = "#808080"; // Grey
+
+        private static string FormatAmmo(int ammo) {
+            ammo = Mathf.Clamp(ammo, 0, 999);
+
+            string text = (ammo == 0)? "": ammo.ToString();
+            int leadingZeros = 3 - text.Length;
+
+            if (leadingZeros <= 0)
+                return text;
+
+            return $"<color={LeadingZeroColor}>{new string('0', leadingZeros)}</color>{text}";
+        }
+        void RefreshCurrentAmmoUI() {
+            weaponAmmoUI.SetVisible(equippedToolShared != null && equippedToolShared.currentAmmo >= 0);
+            if (equippedToolShared)
+                currentAmmoText.text = FormatAmmo(equippedToolShared.currentAmmo);
+
+        }
+        void RefreshMaxAmmoUI() {
+            if (equippedToolShared) {
+                maxAmmoText.text = FormatAmmo(equippedToolShared.currentStoredAmmo);
+                maxAmmoFinite.SetActive(equippedToolShared.currentStoredAmmo >= 0);
+                maxAmmoInfinte.SetActive(equippedToolShared.currentStoredAmmo < 0);
+            }
         }
         void OnPrefabClicked(GameObject prefabClone, ToolBaseShared toolBase) {
             if (LastSwitchToolTime + SwitchToolDelay > Time.time)

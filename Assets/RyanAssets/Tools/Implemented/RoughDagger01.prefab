@@ -12,9 +12,9 @@ GameObject:
   - component: {fileID: 4644704030424568041}
   - component: {fileID: 3519154818253025011}
   - component: {fileID: 268737388274741454}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: RoughDagger01
-  m_TagString: Untagged
+  m_TagString: Tool
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -60,7 +60,13 @@ MonoBehaviour:
   ParentObjectName: RightHand
   staminaCost: 10
   hitDamage: 150
-  primaryCooldown: 0.85
+  attackCooldown: 0.85
+  reloadDuration: -1
+  currentAmmo: -1
+  maxClipAmmo: 10
+  currentStoredAmmo: -1
+  maxStoredAmmo: 10
+  animationPackName: 
   connectedCharacter: {fileID: 0}
   weaponRoot: {fileID: 7547310032996758689}
 --- !u!114 &3519154818253025011
@@ -93,9 +99,9 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
+  <PrefabId>k__BackingField: 1
   <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 2234247352094704845
+  <AssetPathHash>k__BackingField: 8312609819245440150
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0.1, y: 0.02, z: 0}
@@ -120,7 +126,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584165906964860571
+  _initializedTimestamp: -8584161494416123271
 --- !u!114 &268737388274741454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -153,7 +159,7 @@ GameObject:
   - component: {fileID: 2411732764795954466}
   - component: {fileID: 5195934261101473527}
   - component: {fileID: 5844228886590094531}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: Mesh
   m_TagString: Untagged
   m_Icon: {fileID: 0}

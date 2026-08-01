@@ -59,7 +59,7 @@ namespace RyanAssets.UI.ListGrid {
                 GameObject prefabClone = (op.Result != null) ? op.Result[0] : null;
                 if (IsDestroyed || !pending_ops.Remove(op)) { // destroyed gameobject or cancelled operation
                     if (prefabClone != null)
-                        Destroy(prefabClone);
+                        DestroyImmediate(prefabClone);
                     return; // cancelled
                 }
                 prefabOrder.Add(prefabClone.transform, order);

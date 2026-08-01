@@ -14,7 +14,8 @@ namespace RyanAssets.Tools.Shared {
     public class ToolBaseShared : NetworkBehaviour {
         [SerializeField]
         private string clientScript, clientObserver, serverScript;
-        
+
+        [Header("Tool Data")]
         [SerializeField]
         public ToolEnum toolEnum;
         [SerializeField]
@@ -22,20 +23,45 @@ namespace RyanAssets.Tools.Shared {
         [SerializeField]
         public Sprite toolImage;
         [SerializeField]
-        public string ParentObjectName = "RightHand";
-        [SerializeField]
+
+        [Header("Weapon Stats")]
         public uint staminaCost = 10;
         [SerializeField]
         public uint hitDamage = 150;
         [SerializeField]
-        public float primaryCooldown = 0.85f;
+        public float attackCooldown = 0.85f;
+        [SerializeField]
+        public float reloadDuration = 1.0f;
 
-        public NetworkBehaviour connectedCharacter;
+        [Header("Ammo Stats")]
+        [SerializeField]
+        public int currentAmmo = -1; // -1 to disable ammo
+        [SerializeField]
+        public int maxClipAmmo = 10;
+        [SerializeField]
+        public int currentStoredAmmo = -1; // -1 for infinite ammo
+        [SerializeField]
+        public int maxStoredAmmo = 10;
+
+        [Header("Animation")]
+        [SerializeField]
+        public string animationPackName;
+
+        [Header("Internal")]
+        [SerializeField]
+        public string ParentObjectName = "RightHand";
+
+        [SerializeField]
         public GameObject weaponRoot;
+
+
+        [NonSerialized]
+        public NetworkBehaviour connectedCharacter;
 
         public bool equipped => weaponRoot.activeInHierarchy;
 
         public Action<ToolBaseShared> equippedEvent, unequippedEvent;
+        public Action<int> currentAmmoEvent, maxAmmoEvent;
         public static Action<ToolBaseShared> equippedStaticEvent, unequippedStaticEvent;
         public static Action<ToolBaseShared> createStaticEvent, destroyStaticEvent;
 
@@ -126,6 +152,8 @@ namespace RyanAssets.Tools.Shared {
         
 #endif
         public override void OnStartNetwork() {
+            //if (connectedCharacter == null)
+            //    return;
             Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.transform, ParentObjectName);
             Debug.Assert(rightHand != null, "RightHand not found!");
             transform.SetParent(rightHand, false);
@@ -136,13 +164,30 @@ namespace RyanAssets.Tools.Shared {
                 gameObject.AddComponent(clientScriptType);
             }
         }
-        void Awake() {
+        protected virtual void Awake() {
             weaponRoot = transform.GetChild(0).gameObject;
         }
         public void OnDestroy() {
             if (equipped)
                 Unequip();
             destroyStaticEvent?.Invoke(this);
+        }
+
+
+        // RPC HIT DETECTION
+#pragma warning disable CS0067
+        public event Action<NetworkObject> hitEvent;
+#pragma warning restore CS0067
+        public void OnHit(NetworkObject gameCharacter) {
+#if UNITY_SERVER
+            hitEvent.Invoke(gameCharacter);
+#else
+        _OnHitRpc(gameCharacter);
+#endif
+        }
+        [ServerRpc(RequireOwnership = true)]
+        public void _OnHitRpc(NetworkObject gameCharacter) {
+            OnHit(gameCharacter);
         }
     }
 }

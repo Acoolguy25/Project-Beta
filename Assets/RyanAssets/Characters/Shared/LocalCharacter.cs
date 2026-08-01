@@ -3,6 +3,7 @@ using FishNet.Object;
 using FishNet.Connection;
 using UnityEngine;
 using System.Collections.Generic;
+using RyanAssets.DataService;
 
 namespace RyanAssets.Characters.Shared {
     public class LocalCharacter : TrackedGameCharacter {
@@ -39,12 +40,21 @@ namespace RyanAssets.Characters.Shared {
         protected void Awake() {
             CharacterCamera = transform.Find("CharacterCamera");
             OnDied += OnDiedEvent;
+            foreach (Transform t in GetComponentsInChildren<Transform>(true)) {
+                t.gameObject.layer = LayerMask.NameToLayer("LocalCharacter");
+            }
         }
         
 #else
         public override void OnOwnershipServer(NetworkConnection prevOwner) {
             InstantiateSelf(prevOwner);
         }
+        public override void SetTeam(TeamConfig teamConfig) {
+            PlayerData.GetPlayerData(Owner).SetPlayerTeam(teamConfig);
+        }
 #endif
+        public override TeamConfig GetTeam() {
+            return PlayerData.GetPlayerData(Owner).team.Value;
+        }
     }
 }

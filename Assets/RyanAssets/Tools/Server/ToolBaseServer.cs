@@ -1,3 +1,4 @@
+using RyanAssets.Characters.Shared;
 using RyanAssets.Tools.Shared;
 using UnityEngine;
 
@@ -10,11 +11,17 @@ namespace RyanAssets.Tools.Server
             toolBaseShared = GetComponent<ToolBaseShared>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
+            toolBaseShared.hitEvent += (gameCharacter) => {
+                OnHit(gameCharacter.gameObject.GetComponent<GameCharacter>());
+            };
         }
         protected virtual void OnEquip(ToolBaseShared _) {
 
         }
         protected virtual void OnUnequip(ToolBaseShared _) {
+
+        }
+        protected virtual void OnHit(GameCharacter character) {
 
         }
     }
