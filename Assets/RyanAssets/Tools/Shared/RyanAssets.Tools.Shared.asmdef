@@ -2,6 +2,7 @@
     "name": "RyanAssets.Tools.Shared",
     "rootNamespace": "",
     "references": [
+        "GUID:8adfc070156280444ac3501675d3d1c5",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
         "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
         "GUID:da01a9a0aa24eb94ea427fd540755587",

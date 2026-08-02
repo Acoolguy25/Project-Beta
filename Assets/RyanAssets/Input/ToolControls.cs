@@ -58,7 +58,7 @@ namespace RyanAssets.Input {
 
             foreach (var result in results) {
                 // Skip fully transparent graphics — invisible overlay panels, faded-out UI, etc.
-                if (result.gameObject.TryGetComponent<Graphic>(out var graphic) && graphic.color.a <= 0f)
+                if (result.gameObject.TryGetComponent<Graphic>(out var graphic) && graphic.color.a <= 0.3f)
                     continue;
 
                 return false; // hit something visible — cursor is blocked
@@ -66,7 +66,7 @@ namespace RyanAssets.Input {
 
             return true; // nothing visible under the cursor
         }
-        Vector3 GetCursorWorldPosition() {
+        public static Vector3 GetCursorWorldPosition() {
             Vector2 mousePosition = Mouse.current.position.ReadValue();
 
             Ray ray = Camera.main.ScreenPointToRay(mousePosition);

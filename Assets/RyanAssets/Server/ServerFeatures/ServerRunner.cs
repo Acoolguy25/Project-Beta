@@ -61,6 +61,33 @@ namespace RyanAssets.Server.ServerFeatures {
             }
         }
 
+        public async UniTask<int> VoteCountdown(string title, string description, int duration, SharedVoteOption[] voteOptions, CancellationToken token = default) {
+            SharedGlobalEvents.Instance.CurrentVote = new SharedVoteInfo
+            {
+                title = title,
+                description = description,
+                endUtcTicks = DateTime.UtcNow.AddSeconds(duration).Ticks,
+                isActive = true
+            };
+            for (int i = 0; i < voteOptions.Length; i++) {
+                voteOptions[i].count = 0; // reset vote counts
+            }
+            SharedGlobalEvents.Instance.VoteOptions.Clear();
+            SharedGlobalEvents.Instance.VoteOptions.AddRange(voteOptions);
+            await TimerCountdown(title + " ({0})", duration, token);
+            SharedGlobalEvents.Instance.CurrentVote = new SharedVoteInfo
+            {
+                title = title,
+                description = description,
+                endUtcTicks = DateTime.UtcNow.Ticks,
+                isActive = false
+            };
+            return SharedGlobalEvents.Instance.VoteOptions
+                .Where(v => v.voteId == SharedGlobalEvents.Instance.CurrentVote.voteId)
+                .OrderByDescending(v => v.count)
+                .FirstOrDefault().optionId;
+        }
+
         public async UniTask CustomTimerCountdown(
             int duration,
             Func<int, bool, bool> activationFunc,
@@ -132,8 +159,10 @@ namespace RyanAssets.Server.ServerFeatures {
         public int GetActivePlayers() {
             return InstanceFinder.ServerManager.Clients.Values.Count((conn) => conn.IsActive && conn.IsAuthenticated);
         }
-        public async UniTask WaitForPlayersAsync(int players = 1, CancellationToken token = default) {
-            while (GetActivePlayers() < players) {
+        public async UniTask WaitForPlayersAsync(int playerRequirement = 1, CancellationToken token = default) {
+            int activePlayers;
+            while ((activePlayers = GetActivePlayers()) < playerRequirement) {
+                SharedGlobalEvents.SetTopMessage($"Waiting for players ({activePlayers}/{playerRequirement})");
                 await TaskHelper.WaitForAction<NetworkConnection, LocalCharacter>(
                     h => ServerPlayerCharacter.OnPlayerCharacterAdded += h,
                     h => ServerPlayerCharacter.OnPlayerCharacterAdded -= h,

@@ -62,7 +62,8 @@ namespace RyanAssets.Server.ServerCore {
             ClientToCharacter.Remove(character.Owner);
             //if (character.TryGetComponent(out LocalCharacter localCharacter) && !localCharacter.IsDead())
             //    localCharacter.Kill(DamageSource.Despawn);
-            InstanceFinder.ServerManager.Despawn(character);
+            if (character != null) // cannot despawn null characters
+                InstanceFinder.ServerManager.Despawn(character);
         }
         public static void ResetPlayerCharacter(NetworkConnection player) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character))

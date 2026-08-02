@@ -1,6 +1,10 @@
 ﻿using Cysharp.Threading.Tasks;
 using FishNet.Object;
+#if !UNITY_SERVER
+using RyanAssets.Input;
+#endif
 using RyanAssets.Tools.Shared;
+using System;
 using System.Collections;
 using System.Threading;
 using UnityEngine;
@@ -8,6 +12,7 @@ using UnityEngine;
 namespace RyanAssets.Tools.Client {
     public class ToolGunClient : ToolBaseClient {
         protected ToolGunShared toolGunShared;
+        public Func<Vector3> GetTargetPosition;
         protected override void Awake() {
             base.Awake();
             toolGunShared = (ToolGunShared) toolBaseShared;
@@ -29,10 +34,11 @@ namespace RyanAssets.Tools.Client {
             for (int i = 0; i < toolGunShared.BurstCount; i++) {
                 if (!ConsumeAmmo(1))
                     break;
-
+                if (i != 0)
+                    targetLocation = RefreshTargetPosition();
                 RaycastHit? hit = toolGunShared.Shoot(targetLocation);
-                toolGunShared.VisualizeBullet(hit);
-                toolGunShared.ShootServerRpc(targetLocation);
+                toolGunShared.VisualizeBulletLocally(hit);
+                toolGunShared.VisualizeBullet(targetLocation);
                 if (hit != null && hit.Value.transform != null) {
                     NetworkObject character = hit.Value.transform.GetComponentInParent<NetworkObject>();
                     if (character)
@@ -42,6 +48,14 @@ namespace RyanAssets.Tools.Client {
                 if (cancelled)
                     return;
             }
+        }
+
+        protected virtual Vector3 RefreshTargetPosition() {
+#if UNITY_SERVER
+            return GetTargetPosition();
+#else
+            return ToolControls.GetCursorWorldPosition();
+#endif
         }
     }
 }

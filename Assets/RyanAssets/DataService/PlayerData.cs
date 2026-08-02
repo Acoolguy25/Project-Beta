@@ -22,7 +22,9 @@ namespace RyanAssets.DataService {
     };
     [System.Serializable]
     public class TeamConfig {
+        [SerializeField]
         public TeamColor team = TeamColor.Ghost;
+        [SerializeField]
         public TeamColor displayTeam = TeamColor.Ghost;
         public TeamConfig() {
 
@@ -35,6 +37,18 @@ namespace RyanAssets.DataService {
             this.team = team;
             this.displayTeam = displayTeam;
         }
+        public static Color32 TeamToColor(TeamColor teamColor) {
+            return teamColor switch {
+                TeamColor.Ghost or TeamColor.Lobby => Color.grey,
+                TeamColor.Blue => Color.blue,
+                TeamColor.Red => Color.red,
+                TeamColor.Green => Color.green,
+                TeamColor.None => Color.white,
+                _ => Color.white
+            };
+        }
+        public Color32 realTeamColor => TeamToColor(team);
+        public Color32 displayTeamColor => TeamToColor(displayTeam);
     };
     public enum ToolEnum : short {
         Unknown = 0,
@@ -126,6 +140,8 @@ namespace RyanAssets.DataService {
             return username.Value;
         }
         public void SetPlayerTeam(TeamConfig teamConfig) {
+            if (teamConfig == team.Value)
+                return;
             team.Value = teamConfig;
         }
         // Helpful Static Methods
@@ -152,6 +168,9 @@ namespace RyanAssets.DataService {
         }
         public static PlayerData GetPlayerData(NetworkConnection conn) {
             return Players.TryGetValue(conn, out PlayerData stats) ? stats : null;
+        }
+        public static bool TryGetPlayerData(NetworkConnection conn, out PlayerData stats) {
+            return Players.TryGetValue(conn, out stats);
         }
         public static void RunEach(Action<NetworkConnection, PlayerData> action) {
             foreach (var item in Players) {

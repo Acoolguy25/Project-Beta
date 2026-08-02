@@ -2285,7 +2285,7 @@ Rigidbody:
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
   m_UseGravity: 0
-  m_IsKinematic: 0
+  m_IsKinematic: 1
   m_Interpolate: 0
   m_Constraints: 80
   m_CollisionDetection: 2
@@ -2393,7 +2393,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584164895333831041
+  _initializedTimestamp: -8584159918214972760
 --- !u!114 &1039838637883914799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2411,6 +2411,9 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 9155375541221003514}
   HealthEditor: 0
   MaxHealthEditor: 0
+  TeamEditor:
+    team: 1
+    displayTeam: 1
   CharacterCamera: {fileID: 7279864874766871779}
 --- !u!114 &2508271702602764159
 MonoBehaviour:
@@ -2516,10 +2519,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6852dd55a24244da96cc35141fd20afe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.RobotColor
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 0}
   renderers:
   - {fileID: 6988255403260066607}
   shaderVariants:
+  - {fileID: 2100000, guid: ee992a4b0874bd8468f8b0f18394cfd7, type: 2}
+  - {fileID: 2100000, guid: a6ccb999c762eac44bf6d16ae0ccebf8, type: 2}
+  - {fileID: 2100000, guid: c08cc850b0f8fde49b68ee5f253dd660, type: 2}
+  - {fileID: 2100000, guid: a49c0d754a9cf4c4a849708d32e0d772, type: 2}
+  - {fileID: 2100000, guid: 06d2f46ad7e0d0e4cabbf8d1eb7fe439, type: 2}
+  - {fileID: 2100000, guid: 52491b03b6789e341b175d7475ef1ea9, type: 2}
+  - {fileID: 2100000, guid: 787650c4434ab4d4da8514c0a6d407ee, type: 2}
+  - {fileID: 2100000, guid: fce0b4e5680291f4f9a3e1f0d46f3360, type: 2}
   - {fileID: 2100000, guid: 8fc6ce4275b346fc9d900ae86ae76f6b, type: 2}
+  - {fileID: 2100000, guid: ee183704ed3521a4a80e3ef454bfc990, type: 2}
+  - {fileID: 2100000, guid: e8ba7e19805871a4bbc9c210d9c04517, type: 2}
   targetMaterialSlot: 0
   randomizeOnStart: 1
 --- !u!114 &7934802168562780897

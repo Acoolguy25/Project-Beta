@@ -21,6 +21,11 @@ namespace Universes {
             Assert.IsNotNull(thumbnail, $"{id} Thumnail Not Found!");
             return thumbnail;
         }
+        public string LoadText(string localPath) {
+            TextAsset textAsset = Resources.Load<TextAsset>(GetResourcePath(localPath));
+            Assert.IsNotNull(textAsset, $"{id} TextAsset Not Found: {localPath}");
+            return textAsset.text;
+        }
     };
     public static class UniverseCfg {
         public readonly static UniverseStruct[] ActiveUniverses = {

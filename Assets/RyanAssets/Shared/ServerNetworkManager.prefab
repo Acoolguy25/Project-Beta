@@ -273,7 +273,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _logging: {fileID: 0}
+  _logging: {fileID: 11400000, guid: f8d8c633483a4ec40afe576c6cdf5b04, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 231085b9569cfec4eacbeecbdfde97d0, type: 2}
   _refreshDefaultPrefabs: 0
   _runInBackground: 1
@@ -409,3 +409,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.Server.ServerCore::RyanAssets.Server.ServerCore.ServerTool
   toolPrefab:
   - {fileID: 4644704030424568041, guid: 22d87e29756248f49818058520841b2d, type: 3}
+  - {fileID: 3268832193828849133, guid: a845bcc7174ef9549aca2d92ae07b0b0, type: 3}

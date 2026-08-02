@@ -46,6 +46,22 @@ namespace Universes.murder_mystery.Server
             new()
             {
                commandType = "NPC",
+               commandName = "NPCAttackSpeedMultiplier",
+               description = "Sets the NPC Attack Speed",
+               arguments = new[]
+                {
+                    new CommandArgumentConfig
+                    {
+                        name = "Speed",
+                        type = CommandArgumentType.Float,
+                        min = 0f,
+                        max = 100f
+                    }
+                }
+            },
+            new()
+            {
+               commandType = "NPC",
                commandName = "NPCSpawnMultiplier",
                description = "Sets the NPC Spawn Multiplier",
                arguments = new[]
@@ -64,11 +80,15 @@ namespace Universes.murder_mystery.Server
         {
             (NetworkConnection caller, string commandName, string[] args) => {
                 LocalNPC.WalkSpeedMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
-                MM_NPC.RefreshNPCSpeeds();
+                MM_ServerRunner.RefreshNPCSpeeds();
             },
             (NetworkConnection caller, string commandName, string[] args) => {
                 LocalNPC.FleeSpeedMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
-                MM_NPC.RefreshNPCSpeeds();
+                MM_ServerRunner.RefreshNPCSpeeds();
+            },
+            (NetworkConnection caller, string commandName, string[] args) => {
+                LocalNPC.AttackSpeedMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
+                MM_ServerRunner.RefreshNPCSpeeds();
             },
             (NetworkConnection caller, string commandName, string[] args) => {
                 MM_ServerRunner.SpawnMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));

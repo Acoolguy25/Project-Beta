@@ -10,6 +10,7 @@ TagManager:
   - DeadPlayer
   - DeadNPC
   - Tool
+  - CharacterNameTag
   layers:
   - Default
   - TransparentFX

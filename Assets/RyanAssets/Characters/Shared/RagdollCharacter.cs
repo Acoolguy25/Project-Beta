@@ -15,11 +15,13 @@ namespace RyanAssets.Characters.Shared {
         private readonly static System.Type[] disableObjects = {  typeof(Animator), typeof(Collider), typeof(CharacterAnimator) };
         private GameCharacter GameCharacter;
         // Ragdoll internals
+        private Collider mainCollider;
         private Rigidbody[] rigidBodies;
         private Collider[] colliders;
         private Joint[] joints;
         void Start() {
             GameCharacter = GetComponent<GameCharacter>();
+            mainCollider = GetComponent<Collider>();
 
             RagdollInit();
             if (RagdollOnDeath) {
@@ -72,6 +74,8 @@ namespace RyanAssets.Characters.Shared {
         }
         public void SetRagdoll(bool enabled) {
             RagdollEnabled = enabled;
+            mainCollider.enabled = !enabled;
+
             foreach (Joint joint in joints) {
                 joint.enableCollision = enabled;
                 //joint.breakForce = enabled ? Mathf.Infinity : 0;

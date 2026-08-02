@@ -1,0 +1,7 @@
+{
+  "name": "com.ryan.codegenerator",
+  "version": "1.0.0",
+  "displayName": "Ryan Code Generator",
+  "description": "Source generator that expands [SharedRpc] attributed methods into ServerRpc/ObserverRpc wrappers.",
+  "unity": "2021.2"
+}

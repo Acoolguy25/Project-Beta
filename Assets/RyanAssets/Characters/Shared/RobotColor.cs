@@ -1,40 +1,46 @@
+using FishNet.Object;
+using FishNet.Object.Synchronizing;
 using UnityEngine;
 
 namespace RyanAssets.Characters.Shared {
     [DisallowMultipleComponent]
-    public class RobotColor : MonoBehaviour {
+    public class RobotColor : NetworkBehaviour {
         [SerializeField] private Renderer[] renderers;
 
         [Header("Material Variants")]
         [SerializeField] private Material[] shaderVariants;
         [SerializeField, Min(0)] private int targetMaterialSlot;
+#pragma warning disable CS0414
         [SerializeField] private bool randomizeOnStart = true;
+#pragma warning restore CS0414
 
+        readonly SyncVar<int> currentVariant = new();
         public Material[] ShaderVariants => shaderVariants;
 
-        private void Reset() {
-            renderers = GetComponentsInChildren<Renderer>(true);
-        }
-
-        private void Start() {
+#if UNITY_SERVER
+        public override void OnStartServer() {
             if (randomizeOnStart)
                 ApplyRandomVariant();
         }
 
-        public bool ApplyRandomVariant() {
-            if (!TryGetRandomVariant(out Material variant))
-                return false;
-
+        public void ApplyRandomVariant() {
+            Debug.Assert(shaderVariants != null && shaderVariants.Length > 0, "Shader variants are not set.");
+            int materialIndex = Random.Range(0, shaderVariants.Length);
+            currentVariant.Value = materialIndex;
+            Material variant = shaderVariants[materialIndex];
             ApplyVariant(variant);
-            return true;
         }
+#else
+        public override void OnStartClient() {
+            currentVariant.OnChange += OnCurrentVariantChanged;
+            OnCurrentVariantChanged(default, currentVariant.Value, false);
+        }
+        void OnCurrentVariantChanged(int oldVariant, int newVariant, bool asServer) {
+            ApplyVariant(shaderVariants[newVariant]);
+        }
+#endif
 
         public void ApplyVariant(Material variant) {
-            if (variant == null)
-                return;
-
-            EnsureRenderers();
-
             foreach (Renderer targetRenderer in renderers) {
                 if (targetRenderer == null)
                     continue;
@@ -46,23 +52,6 @@ namespace RyanAssets.Characters.Shared {
                 materials[targetMaterialSlot] = variant;
                 targetRenderer.sharedMaterials = materials;
             }
-        }
-
-        private bool TryGetRandomVariant(out Material variant) {
-            if (shaderVariants != null && shaderVariants.Length > 0) {
-                variant = shaderVariants[Random.Range(0, shaderVariants.Length)];
-                return variant != null;
-            }
-
-            variant = null;
-            return false;
-        }
-
-        private void EnsureRenderers() {
-            if (renderers != null && renderers.Length > 0)
-                return;
-
-            renderers = GetComponentsInChildren<Renderer>(true);
         }
     }
 }

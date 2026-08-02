@@ -14,11 +14,13 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using FishNet;
 using RyanAssets.DataService;
+using SimpleJSON;
 
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {
         public override event Action<NetworkConnection, bool> OnAuthenticationResult;
         public GameObject playerDataPrefab;
+        Dictionary<NetworkConnection, JObject> joinPlayerData = new();
 
         public override void InitializeOnce(NetworkManager networkManager) {
             base.InitializeOnce(networkManager);
@@ -28,6 +30,7 @@ namespace RyanAssets.Authentication {
             KickPlayers = new();
             // Debug.Log("Initialize Auth Server");
             NetworkManager.ServerManager.RegisterBroadcast<AuthRequest>(OnAuthRequest, false);
+            NetworkManager.ServerManager.OnRemoteConnectionState += ServerConnectionState;
 #else
             // Debug.Log("Initialize Auth Client");
             NetworkManager.ClientManager.RegisterBroadcast<AuthResponse>(OnAuthResponse);
@@ -98,13 +101,25 @@ namespace RyanAssets.Authentication {
                 }, false);
 
                 OnAuthenticationResult?.Invoke(conn, true);
-                PlayerData playerData = Instantiate(playerDataPrefab).GetComponent<PlayerData>();
-                playerData.Deserialize(json);
-                InstanceFinder.ServerManager.Spawn(playerData.gameObject, conn);
-                OnAuthenticationSucceeded?.Invoke(conn, playerData, json);
+                joinPlayerData[conn] = json;
+                conn.OnLoadedStartScenes += OnPlayerAuthenticated;
             } else {
                 Fail(conn, res);
             }
+        }
+        void OnPlayerAuthenticated(NetworkConnection conn, bool isServer) {
+            JObject json;
+            if (!joinPlayerData.TryGetValue(conn, out json)) {
+                Debug.LogError("Player authenticated but no player data found for connection: " + conn);
+                return;
+            }
+            conn.OnLoadedStartScenes -= OnPlayerAuthenticated;
+
+            joinPlayerData.Remove(conn);
+            PlayerData playerData = Instantiate(playerDataPrefab).GetComponent<PlayerData>();
+            playerData.Deserialize(json);
+            InstanceFinder.ServerManager.Spawn(playerData.gameObject, conn);
+            OnAuthenticationSucceeded?.Invoke(conn, playerData, json);
         }
         private void Fail(NetworkConnection conn, string reason) {
             Debug.Log("Auth Failed: " + reason);
@@ -116,6 +131,11 @@ namespace RyanAssets.Authentication {
 
             OnAuthenticationResult?.Invoke(conn, false);
             conn.Disconnect(false);
+        }
+        void ServerConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
+            if (args.ConnectionState != RemoteConnectionState.Stopped)
+                return;
+            conn.OnLoadedStartScenes -= OnPlayerAuthenticated; // Emergency cleanup
         }
 #endif
 

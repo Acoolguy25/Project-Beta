@@ -4,6 +4,7 @@ using FishNet.Connection;
 using UnityEngine;
 using System.Collections.Generic;
 using RyanAssets.DataService;
+using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Characters.Shared {
     public class LocalCharacter : TrackedGameCharacter {
@@ -31,8 +32,14 @@ namespace RyanAssets.Characters.Shared {
                 gameObject.name = $"LocalCharacter";
             InstantiateSelf(prevOwner);
         }
+        public override void OnStartClient() {
+            base.OnStartClient();
+            PlayerData.OnMyPlayerAdded.Subscribe(OnMyPlayerAdded);
+        }
+
         void OnDestroy() {
             AnyCharacterRemoved?.Invoke((transform, IsOwner));
+            PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
         }
         void OnDiedEvent(DamageSource source, NetworkObject sourceObject) {
             AnyCharacterDied?.Invoke((transform, IsOwner));
@@ -49,10 +56,37 @@ namespace RyanAssets.Characters.Shared {
         public override void OnOwnershipServer(NetworkConnection prevOwner) {
             InstantiateSelf(prevOwner);
         }
+        [Server]
         public override void SetTeam(TeamConfig teamConfig) {
-            PlayerData.GetPlayerData(Owner).SetPlayerTeam(teamConfig);
+            PlayerData playerData = PlayerData.GetPlayerData(Owner);
+            if (playerData == null)
+                return;
+
+            base.SetTeam(teamConfig);
+            playerData.SetPlayerTeam(teamConfig);
+        }
+        public override void OnStartServer() {
+            base.OnStartNetwork();
+            OnMyPlayerAdded(PlayerData.GetPlayerData(Owner));
         }
 #endif
+        void OnMyPlayerAdded(PlayerData data) {
+            data.team.OnChange += OnPlayerTeamChanged;
+            OnPlayerTeamChanged(default, data.team.Value, true);
+        }
+        void OnPlayerTeamChanged(TeamConfig prev, TeamConfig next, bool asServer) {
+#if UNITY_SERVER
+            base.SetTeam(next);
+#endif
+#if UNITY_EDITOR
+            UpdateTeamEditorOptions(prev, next, asServer);
+#endif
+        }
+        public override void OnStopNetwork() {
+            if (PlayerData.TryGetPlayerData(Owner, out PlayerData playerData))
+                playerData.team.OnChange -= OnPlayerTeamChanged;
+            base.OnStopNetwork();
+        }
         public override TeamConfig GetTeam() {
             return PlayerData.GetPlayerData(Owner).team.Value;
         }

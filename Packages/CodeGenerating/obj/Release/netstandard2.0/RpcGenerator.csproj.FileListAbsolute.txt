@@ -1,6 +1,0 @@
-C:\Users\ryanb\Documents\Unity\Project-Beta\Packages\CodeGenerating\obj\Release\netstandard2.0\RpcGenerator.csproj.AssemblyReference.cache
-C:\Users\ryanb\Documents\Unity\Project-Beta\Packages\CodeGenerating\obj\Release\netstandard2.0\RpcGenerator.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\ryanb\Documents\Unity\Project-Beta\Packages\CodeGenerating\obj\Release\netstandard2.0\RpcGenerator.AssemblyInfoInputs.cache
-C:\Users\ryanb\Documents\Unity\Project-Beta\Packages\CodeGenerating\obj\Release\netstandard2.0\RpcGenerator.AssemblyInfo.cs
-C:\Users\ryanb\Documents\Unity\Project-Beta\Packages\CodeGenerating\obj\Release\netstandard2.0\RpcGenerator.csproj.CoreCompileInputs.cache
-C:\Users\ryanb\Documents\Unity\Project-Beta\Packages\CodeGenerating\obj\Release\netstandard2.0\RpcGenerator.sourcelink.json

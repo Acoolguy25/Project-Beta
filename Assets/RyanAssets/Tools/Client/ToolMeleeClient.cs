@@ -30,7 +30,7 @@ namespace RyanAssets.Tools.Client {
             var token = AddCancellationToken();
             SetAttacking(true);
             SetCooldown(toolBaseShared.attackCooldown);
-            bool isCancelled = await UniTask.WaitForSeconds(0.717f, cancellationToken: token.Token).SuppressCancellationThrow();
+            bool isCancelled = await UniTask.WaitForSeconds(toolBaseShared.attackCooldown, cancellationToken: token.Token).SuppressCancellationThrow();
             if (isCancelled)
                 return;
             SetAttacking(false);

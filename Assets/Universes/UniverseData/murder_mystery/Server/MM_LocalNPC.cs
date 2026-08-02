@@ -1,8 +1,48 @@
-﻿using System.Collections;
+﻿using RyanAssets.DataService;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using RyanAssets.Characters.Shared;
+using RyanAssets.Shared.Player;
+using RyanAssets.Characters.Server;
+using RyanAssets.Tools.Shared;
+using RyanAssets.Server.ServerCore;
+using RyanAssets.Tools.Client;
+using FishNet.Object;
 
 namespace Universes.murder_mystery.Server {
-    public class MM_LocalNPC : MonoBehaviour {
+    public class MM_LocalNPC : NetworkBehaviour {
+        //[Header("Attack")]
+        //[SerializeField] public List<TeamColor> TargetTeams = new List<TeamColor>();
+        //[SerializeField] private float AttackEnterRadius = 6f;
+        float unequipAttackTime = 1.5f;
 
+        LocalNPC localNPC;
+        GameCharacter gameCharacter;
+
+        ToolBaseShared sharedWeapon;
+        ToolBaseClient clientWeapon;
+        float lastAttack = float.MinValue;
+        void Awake() {
+            gameCharacter = GetComponent<GameCharacter>();
+            localNPC = GetComponent<LocalNPC>();
+            localNPC.AttackFunction = AttackFunction;
+        }
+        void Start() {
+            base.OnStartServer();
+            localNPC.SetTargetingType(NPCTargetingType.Attack);
+            sharedWeapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
+            clientWeapon = sharedWeapon.GetComponent<ToolBaseClient>();
+        }
+        void AttackFunction(GameCharacter targetCharacter) {
+            lastAttack = Time.time;
+            gameCharacter.SwitchTool(sharedWeapon);
+            clientWeapon.TryActivate(gameCharacter.transform.position);
+        }
+        void Update() {
+            if (lastAttack + unequipAttackTime <= Time.time) {
+                gameCharacter.SwitchTool(null);
+            }
+        }
     }
 }

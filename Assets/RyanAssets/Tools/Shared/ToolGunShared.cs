@@ -3,14 +3,12 @@ using System;
 
 #if !UNITY_SERVER
     using RyanAssets.Clients.ClientEffects;
-using System;
-
 #endif
 using UnityEngine;
 using RpcGen;
 
 namespace RyanAssets.Tools.Shared { 
-    public class ToolGunShared : ToolBaseShared {
+    public partial class ToolGunShared : ToolBaseShared {
         [Header("Gun Stats")]
         [SerializeField]
         public int Accuracy = 300; // 0.0 to 1.0, where 1.0 is perfect accuracy
@@ -66,11 +64,10 @@ namespace RyanAssets.Tools.Shared {
             return spread * baseDir;
         }
         //[ObserversRpc(ExcludeOwner = true)]
-        [Rpc]
-        public void VisualizeBulletRpc(Vector3 targetLocation) {
-            VisualizeBullet(Shoot(targetLocation));
-        }
-        public void VisualizeBullet(RaycastHit? hit) {
+        //public void VisualizeBulletRpc(Vector3 targetLocation) {
+        //    VisualizeBullet(Shoot(targetLocation));
+        //}
+        public void VisualizeBulletLocally(RaycastHit? hit) {
             if (hit == null)
                 return;
 #if !UNITY_SERVER
@@ -78,9 +75,13 @@ namespace RyanAssets.Tools.Shared {
             GunVisualEffects.VisualizeBullet(hit.Value, FireParticleSystem.transform.position, FireParticleSystem);
 #endif
         }
-        [ServerRpc]
-        public void ShootServerRpc(Vector3 targetLocation) {
-            VisualizeBulletRpc(targetLocation);
+        //[ServerRpc]
+        //public void ShootServerRpc(Vector3 targetLocation) {
+        //    VisualizeBulletRpc(targetLocation);
+        //}
+        [SharedRpc(RunOnServer = true, RunOnCallingClient = false)]
+        public void VisualizeBullet(Vector3 targetLocation) {
+            VisualizeBulletLocally(Shoot(targetLocation));
         }
     }
 }

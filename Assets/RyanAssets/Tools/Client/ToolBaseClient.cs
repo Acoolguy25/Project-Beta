@@ -23,6 +23,7 @@ namespace RyanAssets.Tools.Client
         protected Animator animator;
         protected Collider hitCollider;
         protected float StartCooldown, StopCooldown;
+        protected bool IsAttacking;
         protected virtual void Awake() {
             toolBaseShared = GetComponent<ToolBaseShared>();
             hitCollider = toolBaseShared.weaponRoot.GetComponentInChildren<Collider>(true);
@@ -30,6 +31,7 @@ namespace RyanAssets.Tools.Client
             characterAnimator = animator.GetComponent<CharacterAnimator>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
+            SetLethalAttack(false);
         }
         protected virtual void OnEquip(ToolBaseShared _) {
 #if !UNITY_SERVER
@@ -105,7 +107,7 @@ namespace RyanAssets.Tools.Client
             return true;
         }
         protected virtual void SetAttacking(bool attack) {
-            
+            IsAttacking = attack;
         }
         protected virtual void OnLethalAttackStart() {
             SetLethalAttack(true);
@@ -136,6 +138,7 @@ namespace RyanAssets.Tools.Client
         }
         protected virtual bool CanAttack() {
             return !IsOnCooldown() && (CanActivateEvent == null || CanActivateEvent()) 
+                && !IsAttacking // Attack Checks
                 && toolBaseShared.currentAmmo != 0 // Ammo Checks
                 && gameObject != null && toolBaseShared.equipped; // Sanity Checks
         }

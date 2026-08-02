@@ -18,11 +18,11 @@ namespace RyanAssets.Server.ServerCore
         void Awake() {
             Instance = this;
         }
-        public void SpawnTool(NetworkObject networkObject, ToolEnum tool) {
+        public ToolBaseShared SpawnTool(NetworkObject networkObject, ToolEnum tool) {
             int toolEnumIndex = (int)tool - 1;
             if (toolPrefab.Count <= toolEnumIndex) {
                 Debug.LogWarning($"Tried to add tool {tool} but no prefab exists for it");
-                return;
+                return null;
             }
             GameObject toolClone = Instantiate(toolPrefab[toolEnumIndex].gameObject);
             ToolBaseShared toolBase = toolClone.GetComponent<ToolBaseShared>();
@@ -30,20 +30,23 @@ namespace RyanAssets.Server.ServerCore
             toolBase.transform.localRotation = Quaternion.identity;
             toolBase.connectedCharacter = networkObject.GetComponent<GameCharacter>();
             InstanceFinder.ServerManager.Spawn(toolClone, ownerConnection: networkObject.Owner);
+            return toolBase;
         }
-        public void SpawnTool(NetworkConnection player, ToolEnum tool) {
+        public ToolBaseShared SpawnTool(NetworkConnection player, ToolEnum tool) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {
-                SpawnTool(character.NetworkObject, tool);
+                return SpawnTool(character.NetworkObject, tool);
             }
             else {
                 Debug.LogWarning($"Tried to add tool {tool} for player {player} but no character exists for them");
+                return null;
             }
         }
-        public void AddTool(NetworkConnection player, ToolEnum tool) {
+        public ToolBaseShared AddTool(NetworkConnection player, ToolEnum tool) {
             if (PlayerData.Players.TryGetValue(player, out PlayerData stats)) {
                 stats.tools.Add(tool);
-                SpawnTool(player, tool);
+                return SpawnTool(player, tool);
             }
+            return null;
         }
         public void RemoveTool(NetworkConnection player, ToolEnum tool) {
             if (PlayerData.Players.TryGetValue(player, out PlayerData stats)) {

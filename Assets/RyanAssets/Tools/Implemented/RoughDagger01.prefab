@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 9197304929209225574}
   - component: {fileID: 4644704030424568041}
   - component: {fileID: 3519154818253025011}
-  - component: {fileID: 268737388274741454}
+  - component: {fileID: 410884457205271586}
   m_Layer: 2
   m_Name: RoughDagger01
   m_TagString: Tool
@@ -53,11 +53,11 @@ MonoBehaviour:
   clientScript: RyanAssets.Tools.Client.ToolMeleeClient, RyanAssets.Tools.Client
   clientObserver: 
   serverScript: RyanAssets.Tools.Server.ToolMeleeServer, RyanAssets.Tools.Server
+  defaultDamageSource: 2
   toolEnum: 1
   toolName: Rough Dagger
   toolDesc: Rusty dagger that can stick wound someone.
   toolImage: {fileID: 21300000, guid: 5b0fd8522a40a554a810f072a4904f3a, type: 3}
-  ParentObjectName: RightHand
   staminaCost: 10
   hitDamage: 150
   attackCooldown: 0.85
@@ -67,7 +67,7 @@ MonoBehaviour:
   currentStoredAmmo: -1
   maxStoredAmmo: 10
   animationPackName: 
-  connectedCharacter: {fileID: 0}
+  ParentObjectName: RightHand
   weaponRoot: {fileID: 7547310032996758689}
 --- !u!114 &3519154818253025011
 MonoBehaviour:
@@ -126,8 +126,8 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584161494416123271
---- !u!114 &268737388274741454
+  _initializedTimestamp: -8584159925269463775
+--- !u!114 &410884457205271586
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -136,16 +136,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 4863828123048561288}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7d331f979d46e8e4a9fc90070c596d44, type: 3}
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Managing.Observing.ObserverManager
-  _useLevelOfDetail: 0
-  _maximumLevelOfDetailInterval: 2
-  _levelOfDetailUpdateDuration: 1
-  _levelOfDetailDistances: []
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 3
   _updateHostVisibility: 1
-  _maximumTimedObserversDuration: 10
-  _defaultConditions: []
+  _observerConditions: []
 --- !u!1 &7547310032996758689
 GameObject:
   m_ObjectHideFlags: 0

@@ -3,6 +3,7 @@ using FishNet.Object;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Tools.Shared;
 using RyanAssets.Tools.Client;
+using RyanAssets.Shared.Declarations;
 using System.Collections;
 using UnityEngine;
 
@@ -17,8 +18,8 @@ namespace RyanAssets.Tools.Server {
         protected override void OnUnequip(ToolBaseShared _) {
 
         }
-        protected override void OnHit(GameCharacter character) {
-            character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Gun, toolBaseShared.NetworkObject);
-        }
+        //protected override void OnHit(GameCharacter character) {
+        //    character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Gun, toolBaseShared.connectedCharacter);
+        //}
     }
 }

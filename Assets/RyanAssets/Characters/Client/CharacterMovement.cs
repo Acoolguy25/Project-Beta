@@ -76,6 +76,7 @@ namespace RyanAssets.Characters.Client {
             _hasAnimator = LocalPlayer.Character.TryGetComponent(out _animator);
             _rb = LocalPlayer.Character.GetComponent<Rigidbody>();
             _rb.constraints = RigidbodyConstraints.FreezeRotation & ~RigidbodyConstraints.FreezeRotationY;
+            _rb.isKinematic = false;
             _input = InputService.characterControls;
             boxCollider = LocalPlayer.Character.GetComponent<BoxCollider>();
             characterAnimator = LocalPlayer.Character.GetComponent<CharacterAnimator>();

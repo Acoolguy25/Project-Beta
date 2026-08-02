@@ -17,14 +17,16 @@ namespace RyanAssets.Tools.Shared {
 
         [Header("Tool Data")]
         [SerializeField]
+        public DamageSource defaultDamageSource;
+        [SerializeField]
         public ToolEnum toolEnum;
         [SerializeField]
         public string toolName, toolDesc;
         [SerializeField]
         public Sprite toolImage;
-        [SerializeField]
 
         [Header("Weapon Stats")]
+        [SerializeField]
         public uint staminaCost = 10;
         [SerializeField]
         public uint hitDamage = 150;
@@ -53,7 +55,6 @@ namespace RyanAssets.Tools.Shared {
 
         [SerializeField]
         public GameObject weaponRoot;
-
 
         [NonSerialized]
         public NetworkBehaviour connectedCharacter;
@@ -138,7 +139,7 @@ namespace RyanAssets.Tools.Shared {
         }
 #else
         public override void OnStartServer() {
-            base.OnStartServer();
+            weaponRoot.SetActive(false); // unequipped by default
             if (serverScript != ""){
                 Type serverScriptType = Type.GetType(serverScript);
                 gameObject.AddComponent(serverScriptType);
@@ -152,8 +153,6 @@ namespace RyanAssets.Tools.Shared {
         
 #endif
         public override void OnStartNetwork() {
-            //if (connectedCharacter == null)
-            //    return;
             Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.transform, ParentObjectName);
             Debug.Assert(rightHand != null, "RightHand not found!");
             transform.SetParent(rightHand, false);

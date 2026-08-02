@@ -64,6 +64,7 @@ namespace FishNet.CodeGenerating.ILCore
 
 
             bool modified = false;
+            modified |= SharedRpcProcessor.Process(session.Module, compiledAssembly.Defines.Contains("UNITY_SERVER"));
 
             bool fnAssembly = IsFishNetAssembly(compiledAssembly);
             if (fnAssembly)

@@ -50,7 +50,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _logging: {fileID: 0}
+  _logging: {fileID: 11400000, guid: f8d8c633483a4ec40afe576c6cdf5b04, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 231085b9569cfec4eacbeecbdfde97d0, type: 2}
   _refreshDefaultPrefabs: 0
   _runInBackground: 1

@@ -184,7 +184,15 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: modeVoteOptions.Array.size
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
       propertyPath: DebugSingleNpc._editor_value
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: DebugTimerSpeedUp._editor_value
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
@@ -193,7 +201,35 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
       propertyPath: DebugTimerInfinite._editor_value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: DebugNoIntermission._editor_value
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: modeVoteOptions.Array.data[0].title
+      value: NPCs Vs Players
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: modeVoteOptions.Array.data[1].title
+      value: Classic
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: modeVoteOptions.Array.data[2].title
+      value: Unarmed NPCs
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: modeVoteOptions.Array.data[0].description
+      value: Robots are murderers, and players are sheriffs
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: modeVoteOptions.Array.data[1].description
+      value: Find the murderer, hidden amongst each other or NPCs.
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119158067740291384, guid: 263e718d131ee0c4ea665ae1853684b9, type: 3}
+      propertyPath: modeVoteOptions.Array.data[2].description
+      value: Your murder spree begins now :)
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

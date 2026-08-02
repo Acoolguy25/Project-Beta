@@ -16,6 +16,8 @@ using FishNet.Connection;
 using RyanAssets.Authentication;
 using System.Threading;
 using RyanAssets.Core;
+using Universes;
+
 
 
 #if UNITY_EDITOR
@@ -42,6 +44,7 @@ namespace RyanAssets.Server.ServerCore {
         public static ServerInfo serverInfo = new();
         public static ServerSettings serverSettings = new();
         static bool isStopping;
+        public static UniverseStruct universeCfg;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ConfigureStackTraces() {
@@ -132,6 +135,8 @@ namespace RyanAssets.Server.ServerCore {
             BackendSocket.SetServerHeader("universe-id", serverInfo.universe_id);
             BackendSocket.SetServerHeader("server-id", serverInfo.server_id);
             BackendSocket.SetServerHeader("server-port", serverInfo.server_port.ToString());
+
+            universeCfg = UniverseCfg.GetUniverseFromId(serverInfo.universe_id);
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void AfterSceneLoad() {

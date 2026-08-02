@@ -117,7 +117,7 @@ namespace RyanAssets.Commands.Server {
             {
                 if (ServerPlayerCharacter.ClientToCharacter.TryGetValue(conn, out var character))
                 {
-                    character.Kill(Characters.Shared.DamageSource.Command);
+                    character.Kill(DamageSource.Command);
                 }
             }
         }

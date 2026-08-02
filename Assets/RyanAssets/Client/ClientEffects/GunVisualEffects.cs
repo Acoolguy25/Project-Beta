@@ -34,7 +34,7 @@ namespace RyanAssets.Clients.ClientEffects {
 
             lineObj.layer = LayerMask.NameToLayer("Ignore Raycast");
             // Instant shot: hold for a single short duration then destroy, no fading
-            GameObject.Destroy(lineObj, 0.02f);
+            GameObject.Destroy(lineObj, 0.12f);
         }
 
         private static void SpawnImpactEffect(Vector3 point, Vector3 normal) {

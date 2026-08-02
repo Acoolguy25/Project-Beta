@@ -1,6 +1,7 @@
 using FishNet.Object;
 using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Shared.Declarations;
 using RyanAssets.TweenService.TweenComponents;
 using RyanAssets.UI;
 using UnityEngine;

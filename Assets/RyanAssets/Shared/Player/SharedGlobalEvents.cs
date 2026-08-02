@@ -4,6 +4,7 @@ using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
 using RyanAssets.Commands.Shared;
+using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
 using System;
 using System.Collections.Generic;
@@ -47,6 +48,7 @@ namespace RyanAssets.Shared.Player {
         public readonly SyncVar<MusicTracks> MusicTrack = new(initialValue: Player.MusicTracks.GameMusic1);
         readonly SyncVar<SharedVoteInfo> _currentVote = new();
         readonly SyncVar<string> _topMessage = new();
+        public static Dictionary<TeamColor, HashSet<TeamColor>> TeamEnemies;
 
 #if UNITY_SERVER
         [NonSerialized]

@@ -63,18 +63,11 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             TeamColor team = player.IsOwner ? player.team.Value.team : player.team.Value.displayTeam;
             string playerName = player.username.Value;
 
-            if (team == TeamColor.None)
-                playerNameText.text = playerName;
-            else if (team == TeamColor.Ghost || team == TeamColor.Lobby)
-                playerNameText.text = $"<color=grey>{playerName}</color>";
-            else if (team == TeamColor.Blue)
-                playerNameText.text = $"<color=blue>{playerName}</color>";
-            else if (team == TeamColor.Red)
-                playerNameText.text = $"<color=red>{playerName}</color>";
-            else if (team == TeamColor.Green)
-                playerNameText.text = $"<color=green>{playerName}</color>";
-            else
-                Debug.LogError($"Unknown team color: {team} for player: {playerName}");
+            Color32 color = TeamConfig.TeamToColor(team);
+
+            playerNameText.text = color == Color.white
+                ? playerName
+                : $"<color=#{ColorUtility.ToHtmlStringRGB(color)}>{playerName}</color>";
         }
     }
 }

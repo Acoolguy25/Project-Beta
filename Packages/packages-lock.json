@@ -21,8 +21,8 @@
       "dependencies": {},
       "hash": "ea014c9ae534d56111962d96f89f8a046e302dc9"
     },
-    "com.ryan.rpcgen": {
-      "version": "file:CodeGenerating",
+    "com.ryan.codegenerator": {
+      "version": "file:com.ryan.codegenerator",
       "depth": 0,
       "source": "embedded",
       "dependencies": {}

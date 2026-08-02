@@ -326,6 +326,7 @@ MonoBehaviour:
   clientScript: RyanAssets.Tools.Client.ToolGunClient, RyanAssets.Tools.Client
   clientObserver: 
   serverScript: RyanAssets.Tools.Server.ToolGunServer, RyanAssets.Tools.Server
+  defaultDamageSource: 3
   toolEnum: 2
   toolName: FN Five-seven
   toolDesc: Semi-automatic pistol designed and manufactured by FN Herstal in Belgium
@@ -334,17 +335,18 @@ MonoBehaviour:
   hitDamage: 150
   attackCooldown: 0.85
   reloadDuration: 1
-  currentAmmo: 10
-  maxClipAmmo: 10
+  currentAmmo: 6
+  maxClipAmmo: 6
   currentStoredAmmo: -1
   maxStoredAmmo: 10
   animationPackName: 
   ParentObjectName: RightHand
   weaponRoot: {fileID: 2401834043414206446}
-  MaxRange: 30
+  Accuracy: 160
+  MaxRange: 60
   FireRate: 0.35
-  FireMode: 0
-  Accuracy: 300
+  BurstCount: 1
+  BurstDelay: 0.1
   FireParticleSystem: {fileID: 7723627861008121746}
 --- !u!114 &7753925069632843638
 MonoBehaviour:
@@ -403,7 +405,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584160691997963544
+  _initializedTimestamp: -8584159134382092326
 --- !u!114 &3334228999619063352
 MonoBehaviour:
   m_ObjectHideFlags: 0

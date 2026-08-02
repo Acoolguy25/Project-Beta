@@ -3,6 +3,7 @@ using FishNet.Object;
 using FishNet.Connection;
 using UnityEngine;
 using FishNet.Object.Synchronizing;
+using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Characters.Shared {
     public class TrackedGameCharacter : GameCharacter {

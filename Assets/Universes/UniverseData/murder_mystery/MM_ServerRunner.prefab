@@ -10,7 +10,6 @@ GameObject:
   m_Component:
   - component: {fileID: 420314417922096227}
   - component: {fileID: 6119158067740291384}
-  - component: {fileID: 9172638451029384756}
   - component: {fileID: 5434769148292391608}
   m_Layer: 0
   m_Name: MM_ServerRunner
@@ -59,18 +58,9 @@ MonoBehaviour:
   DebugTimerInfinite:
     _editor_value: 0
     _runtime_value: 0
---- !u!114 &9172638451029384756
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3384629353061646621}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 54b9aa45f6559f44e8220c2dc5c9fe7d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  FallTest:
+    _editor_value: 0
+    _runtime_value: 0
 --- !u!114 &5434769148292391608
 MonoBehaviour:
   m_ObjectHideFlags: 0

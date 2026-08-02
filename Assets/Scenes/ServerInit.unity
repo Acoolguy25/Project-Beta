@@ -127,22 +127,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 2216050423673818264, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
-      propertyPath: toolPrefab.Array.size
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 2216050423673818264, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
-      propertyPath: 'toolPrefab.Array.data[0]'
-      value: 
-      objectReference: {fileID: 4644704030424568041, guid: 22d87e29756248f49818058520841b2d, type: 3}
-    - target: {fileID: 2216050423673818264, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
-      propertyPath: 'toolPrefab.Array.data[1]'
-      value: 
-      objectReference: {fileID: 3268832193828849133, guid: a845bcc7174ef9549aca2d92ae07b0b0, type: 3}
-    - target: {fileID: 2216050423673818264, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
-      propertyPath: 'toolPrefab.Array.data[2]'
-      value: 
-      objectReference: {fileID: 0}
     - target: {fileID: 5910158685828723263, guid: 852b76690dbffa441a1687699dc8253f, type: 3}
       propertyPath: m_Name
       value: ServerNetworkManager

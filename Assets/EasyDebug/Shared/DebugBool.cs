@@ -6,7 +6,7 @@ namespace EasyDebug.Shared {
     [Serializable]
     public class DebugBool {
         [SerializeField]
-        private bool _editor_value;
+        private bool _editor_value = true;
         [SerializeField]
         private bool _runtime_value = false;
         public bool Value {
