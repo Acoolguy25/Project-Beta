@@ -26,7 +26,7 @@ namespace RyanAssets.TweenService {
         public Action<float> onchange_event;
         public void UpdateTimer(float delta_time) {
             cur_timer = Mathf.Clamp(cur_timer + delta_time, 0f, end_timer);
-            realValue = Mathf.Min(cur_timer / (end_timer - start_timer), 1f);
+            realValue = (end_timer == start_timer)? 1f : Mathf.Min(cur_timer / (end_timer - start_timer), 1f);
             transformedValue = Mathf.Clamp(easingClass.TransformValue(realValue), 0f, 1f);
             onchange_event?.Invoke(transformedValue);
         }
@@ -35,6 +35,13 @@ namespace RyanAssets.TweenService {
         public static TweenManager Instance { get; private set; }
         readonly List<TweenTimer> ActiveTweens = new();
         public void RegisterTween(float duration, Action<float> onchange_event, TweenUpdateDelta delta = TweenUpdateDelta.RealTime, TweenUpdateMethod update = TweenUpdateMethod.Update, EasingClass easing = null, object targetObject = null) {
+            // An instant tween must resolve now.  Registering it leaves a completed
+            // timer around until the next update and can let an older tween win.
+            if (duration <= 0f) {
+                onchange_event?.Invoke(1f);
+                return;
+            }
+
             easing ??= new LinearEasing();
             TweenTimer newTimer = new() {
                 targetObject = targetObject?? gameObject,
@@ -47,6 +54,7 @@ namespace RyanAssets.TweenService {
                 cur_timer = 0f
             };
             ActiveTweens.Add(newTimer);
+            newTimer.UpdateTimer(0f); // call onchange_event with initial value
         }
         void Awake() {
             Instance = this;
@@ -56,6 +64,23 @@ namespace RyanAssets.TweenService {
                 return unityObject == null;
 
             return obj == null;
+        }
+        GameObject GetTargetGameObject(object obj) {
+            return obj switch {
+                GameObject gameObject => gameObject,
+                Component component => component.gameObject,
+                _ => null
+            };
+        }
+        bool TargetsMatch(object first, object second) {
+            GameObject firstGameObject = GetTargetGameObject(first);
+            GameObject secondGameObject = GetTargetGameObject(second);
+
+            // Components of the same GameObject should control the same tween set.
+            if (firstGameObject != null || secondGameObject != null)
+                return firstGameObject == secondGameObject;
+
+            return Equals(first, second);
         }
         void UpdateAllTimers(TweenUpdateMethod method, float scaled_delta_time, float real_delta_time){
             // foreach (TweenTimer timer in ActiveTweens){
@@ -81,7 +106,7 @@ namespace RyanAssets.TweenService {
         public void ClearTweens(object obj) {
             for (int i = ActiveTweens.Count() - 1; i >= 0; i--) {
                 TweenTimer timer = ActiveTweens[i];
-                if (timer.targetObject == obj)
+                if (TargetsMatch(timer.targetObject, obj))
                     ActiveTweens.RemoveAt(i);
             }
         }

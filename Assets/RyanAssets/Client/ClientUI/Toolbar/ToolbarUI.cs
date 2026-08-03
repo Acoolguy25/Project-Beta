@@ -9,6 +9,7 @@ using UnityEngine.UI;
 using RyanAssets.TweenService.TweenComponents;
 using RyanAssets.Tools.Client;
 using RyanAssets.UI;
+using RyanAssets.TweenService;
 
 namespace RyanAssets.Client.ClientUI.Toolbar
 {
@@ -86,6 +87,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             toolBase.currentAmmoEvent += (int ammo) => RefreshCurrentAmmoUI();
             toolBase.maxAmmoEvent += (int ammo) => RefreshMaxAmmoUI();
             baseClient.onCooldownChangeEvent += (float start, float stop) => {
+                TweenManager.Instance.ClearTweens(sliderImage.rectTransform);
                 sliderImage.rectTransform.anchorMax = new Vector2(1, 1);
                 TweenRectTransform.AnchorTween(sliderImage.rectTransform, stop - start, new Vector2(0f, 0f), new Vector2(1f, 0f));
             };

@@ -197,7 +197,7 @@ MonoBehaviour:
   modelPrefab: {fileID: 9100000000000000002, guid: 56d26f8b3fc2437da2e13789255c204a, type: 3}
   scrollRect: {fileID: 898951070834908149}
   AutoScroll: 1
-  chatBox: {fileID: 5614910597484933578}
+  chatBox: {fileID: 0}
 --- !u!225 &5683709899323602274
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -1115,11 +1115,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426410, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_Size
-      value: 0.9999677
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: -22
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_SizeDelta.y
@@ -1127,7 +1127,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.00060272217
+      value: 32600
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426465, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.x
@@ -1139,6 +1139,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426617, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426617, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426617, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
+      propertyPath: m_AnchoredPosition.x
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426637, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}

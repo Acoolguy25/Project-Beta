@@ -4,10 +4,10 @@ using FishNet.Connection;
 namespace RyanAssets.Shared.Declarations {
     public enum GameCameraType: ushort {
         OrbitCamera = 0,
-        ThirdPersonCamera = 1,
-        DeathCamera = 2,
-        CutsceneCamera = 3,
-        LockedSpectateCamera = 4
+        SpectateCamera = 1,
+        ThirdPersonCamera = 2,
+        DeathCamera = 3,
+        CutsceneCamera = 4
     };
     public struct CameraTypeBroadcast : IBroadcast {
         public GameCameraType cameraType;

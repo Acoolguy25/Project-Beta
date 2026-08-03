@@ -8,6 +8,8 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using RyanAssets.DataService;
+using RpcGen;
+using System.Collections.Generic;
 
 
 namespace RyanAssets.Tools.Shared {
@@ -49,6 +51,14 @@ namespace RyanAssets.Tools.Shared {
         [SerializeField]
         public string animationPackName;
 
+        [Header("Audio")]
+        [SerializeField]
+        public AudioClip equipAudio;
+        [SerializeField]
+        public AudioClip unequipAudio, attackAudio;
+        [SerializeField]
+        public List<AudioClip> extraAudios;
+
         [Header("Internal")]
         [SerializeField]
         public string ParentObjectName = "RightHand";
@@ -66,6 +76,8 @@ namespace RyanAssets.Tools.Shared {
         public static Action<ToolBaseShared> equippedStaticEvent, unequippedStaticEvent;
         public static Action<ToolBaseShared> createStaticEvent, destroyStaticEvent;
 
+        protected AudioSource audioSource;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             equippedStaticEvent = null;
@@ -77,11 +89,15 @@ namespace RyanAssets.Tools.Shared {
             equippedStaticEvent?.Invoke(this);
             equippedEvent?.Invoke(this);
             weaponRoot.SetActive(true);
+
+            PlayAudio(equipAudio);
         }
         public void Unequip() {
             unequippedStaticEvent?.Invoke(this);
             unequippedEvent?.Invoke(this);
             weaponRoot.SetActive(false);
+
+            PlayAudio(unequipAudio);
         }
         [ObserversRpc(RunLocally = true, ExcludeOwner = true)]
         public void EquipOthersRpc() {
@@ -165,6 +181,7 @@ namespace RyanAssets.Tools.Shared {
         }
         protected virtual void Awake() {
             weaponRoot = transform.GetChild(0).gameObject;
+            audioSource = weaponRoot.GetComponent<AudioSource>();
         }
         public void OnDestroy() {
             if (equipped)
@@ -187,6 +204,26 @@ namespace RyanAssets.Tools.Shared {
         [ServerRpc(RequireOwnership = true)]
         public void _OnHitRpc(NetworkObject gameCharacter) {
             OnHit(gameCharacter);
+        }
+
+        // AUDIO
+        protected virtual void PlayAudio(AudioClip audioClip) {
+#if ENABLE_AUDIO
+            audioSource.Stop();
+            if (audioClip == null)
+                return;
+            audioSource.clip = audioClip;
+            audioSource.Play();
+#endif
+        }
+        public virtual void PlayAudio(int audioClipIdx) {
+            if (extraAudios[audioClipIdx] == null)
+                return;
+            PlayAudioRpc(audioClipIdx);
+        }
+        [SharedRpc(RunOnServer = false, RunOnCallingClient = true, RunOnCallingServer = false)]
+        protected virtual void PlayAudioRpc(int audioClipIdx) {
+            PlayAudio(extraAudios[audioClipIdx]);
         }
     }
 }

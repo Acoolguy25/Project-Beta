@@ -804,6 +804,7 @@ GameObject:
   - component: {fileID: 1955165352}
   - component: {fileID: 1955165351}
   - component: {fileID: 1955165353}
+  - component: {fileID: 1955165354}
   m_Layer: 0
   m_Name: Debug
   m_TagString: Untagged
@@ -855,6 +856,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: EasyDebug.Client::EasyDebug.Client.Assets.EasyDebug.Client.DebugTimeScale
   SetTimeScale: 1
+--- !u!1652712579 &1955165354
+MultiplayerRolesData:
+  m_ObjectHideFlags: 2
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1955165350}
+  m_GameObjectRolesMask: 2
+  m_ComponentsRolesMasks: []
 --- !u!1 &2106358813
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,226 +1,231 @@
-using System;
-using System.Collections.Generic;
 using FishNet;
+using FishNet.Object.Synchronizing;
 using RyanAssets.Client.ClientCore;
+using RyanAssets.DataService;
+using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
 using RyanAssets.Shared.Requests;
+using RyanAssets.TweenService;
 using RyanAssets.UI.ListGrid;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace RyanAssets.Client.ClientUI.Vote {
-    public class ClientVote : ListGridUI<SharedVoteOption> {
-        [Header("Window")]
-        [SerializeField] RectTransform window;
-        [SerializeField] Vector2 maximizedSize = new(720f, 430f);
-        [SerializeField] Vector2 minimizedSize = new(280f, 54f);
-        [SerializeField] CanvasGroup canvasGroup;
+    public class ClientVote : ListGridUI<ClientVoteOption> {
+        CanvasGroup canvasGroup;
+        [SerializeField]
+        TextMeshProUGUI titleText, descriptionText, timerText;
+        [SerializeField]
+        Button noVoteButton;
+        [SerializeField]
+        TextMeshProUGUI noVoteCountText;
 
-        [Header("Text")]
-        [SerializeField] TextMeshProUGUI titleText;
-        [SerializeField] TextMeshProUGUI descriptionText;
-        [SerializeField] TextMeshProUGUI timerText;
-        [SerializeField] TextMeshProUGUI totalText;
-
-        [Header("Controls")]
-        [SerializeField] Button noVoteButton;
-        [SerializeField] Button minimizeButton;
-        [SerializeField] TextMeshProUGUI minimizeText;
-
-        [Header("Options")]
-        [SerializeField] RectTransform viewport;
-        [SerializeField] GridLayoutGroup grid;
-        [SerializeField] ClientVoteOptionPrefab optionPrefab;
-
-        readonly Dictionary<int, ClientVoteOptionPrefab> optionRows = new();
-        bool minimized;
-        int activeVoteId;
-        int selectedOptionId;
-        int currentTotal;
-
-        void Awake() {
-            if (!HasRequiredReferences()) {
-                enabled = false;
-                return;
-            }
-
-            modelPrefab = optionPrefab.gameObject;
-            noVoteButton.onClick.AddListener(SendNoVote);
-            minimizeButton.onClick.AddListener(() => SetMinimized(!minimized));
-        }
+        readonly System.Collections.Generic.Dictionary<int, TextMeshProUGUI> optionCountTexts = new();
+        readonly System.Collections.Generic.Dictionary<Image, Color> buttonColors = new();
+        Image selectedButtonImage;
+        bool subscribed;
 
         protected override void Start() {
             base.Start();
-            OnCreatePrefab += OnCreateOptionPrefab;
-            OnDeletePrefab += OnDeleteOptionPrefab;
-            SharedGlobalEvents.OnVoteChanged += Refresh;
-            SharedGlobalEvents.OnCurrentVoteChangedEvent += OnVoteChanged;
+            canvasGroup = GetComponent<CanvasGroup>();
+
+            OnCreatePrefab += BindOption;
+            if (noVoteButton != null)
+                noVoteButton.onClick.AddListener(() => SubmitVote(-1));
             ClientConnector.OnDisconnected += Clear;
-            Clear();
+            SharedGlobalEvents.OnInstanceReady += OnSharedEventsReady;
+            PlayerData.OnPlayerAdded += OnPlayerChanged;
+            PlayerData.OnPlayerRemoved += OnPlayerChanged;
+            Subscribe();
+            Refresh();
+        }
+
+        void OnEnable() {
+            Subscribe();
             Refresh();
         }
 
         protected override void OnDestroy() {
-            SharedGlobalEvents.OnVoteChanged -= Refresh;
-            SharedGlobalEvents.OnCurrentVoteChangedEvent -= OnVoteChanged;
+            Unsubscribe();
             ClientConnector.OnDisconnected -= Clear;
+            SharedGlobalEvents.OnInstanceReady -= OnSharedEventsReady;
+            PlayerData.OnPlayerAdded -= OnPlayerChanged;
+            PlayerData.OnPlayerRemoved -= OnPlayerChanged;
             base.OnDestroy();
         }
 
-        void Update() {
-            if (SharedGlobalEvents.Instance == null)
-                return;
-
-            SharedVoteInfo vote = SharedGlobalEvents.Instance.CurrentVote;
-            if (!vote.isActive)
-                return;
-
-            TimeSpan remaining = new DateTime(vote.endUtcTicks, DateTimeKind.Utc) - DateTime.UtcNow;
-            if (remaining < TimeSpan.Zero)
-                remaining = TimeSpan.Zero;
-            timerText.text = $"{Mathf.CeilToInt((float)remaining.TotalSeconds)}s";
-        }
-
-        void OnVoteChanged(SharedVoteInfo vote) {
-            if (vote.voteId != activeVoteId)
-                selectedOptionId = 0;
+        void OnSharedEventsReady() {
+            Subscribe();
             Refresh();
         }
 
-        void Refresh() {
-            if (SharedGlobalEvents.Instance == null) {
-                Clear();
+        void Update() {
+            if (timerText == null || !SharedGlobalEvents.isVoting)
                 return;
-            }
 
-            SharedVoteInfo vote = SharedGlobalEvents.Instance.CurrentVote;
-            bool visible = vote.isActive && vote.voteId != 0;
+            timerText.text = $"{Mathf.CeilToInt(Mathf.Max(0f, SharedGlobalEvents.Instance.SharedVoteHeader.Value.endTime - RyanAssets.Core.NetworkHelper.ServerTime))}s";
+        }
+
+        void Subscribe() {
+            if (subscribed || SharedGlobalEvents.Instance == null)
+                return;
+
+            SharedGlobalEvents.Instance.SharedVoteHeader.OnChange += OnVoteHeaderChanged;
+            SharedGlobalEvents.Instance.VoteTotals.OnChange += OnVoteTotalsChanged;
+            subscribed = true;
+        }
+
+        void Unsubscribe() {
+            if (!subscribed || SharedGlobalEvents.Instance == null)
+                return;
+
+            SharedGlobalEvents.Instance.SharedVoteHeader.OnChange -= OnVoteHeaderChanged;
+            SharedGlobalEvents.Instance.VoteTotals.OnChange -= OnVoteTotalsChanged;
+            subscribed = false;
+        }
+
+        void OnVoteHeaderChanged(SharedVoteHeader previous, SharedVoteHeader next, bool asServer) => Refresh();
+
+        void OnVoteTotalsChanged(SyncListOperation operation, int index, int oldValue, int newValue, bool asServer) {
+            if (operation == SyncListOperation.Complete)
+                UpdateVoteCounts();
+        }
+
+        void OnPlayerChanged(FishNet.Connection.NetworkConnection connection, PlayerData player) => UpdateVoteCounts();
+
+        void Refresh() {
+            Subscribe();
+            bool visible = SharedGlobalEvents.isVoting;
             SetVisible(visible);
             if (!visible)
                 return;
 
-            activeVoteId = vote.voteId;
-            titleText.text = vote.title;
-            descriptionText.text = vote.description;
-
-            List<SharedVoteOption> options = GetCurrentOptions(vote.voteId);
-            totalText.text = $"{currentTotal} votes";
-            ResizeOptionGrid(options.Count);
-            optionRows.Clear();
-            RefreshPrefabs(options.ToArray());
-            SetMinimized(minimized);
+            ClientVoteInfo voteInfo = VoteDeclarations.GetVoteInfo(SharedGlobalEvents.Instance.SharedVoteHeader.Value.voteId);
+            if (titleText != null)
+                titleText.text = voteInfo.title;
+            if (descriptionText != null) {
+                descriptionText.text = voteInfo.description;
+                descriptionText.gameObject.SetActive(!string.IsNullOrWhiteSpace(voteInfo.description));
+            }
+            optionCountTexts.Clear();
+            RefreshPrefabs(voteInfo.options ?? System.Array.Empty<ClientVoteOption>());
+            UpdateVoteCounts();
         }
 
-        List<SharedVoteOption> GetCurrentOptions(int voteId) {
-            List<SharedVoteOption> options = new();
-            currentTotal = 0;
+        void BindOption(GameObject prefab, ClientVoteOption option) {
+            Transform root = prefab.transform;
+            TextMeshProUGUI optionTitle = FindText(root, "OptionTitle");
+            TextMeshProUGUI optionDescription = FindText(root, "OptionDescription");
+            TextMeshProUGUI optionVoteCount = FindText(root, "OptionVoteCount");
+            Image optionImage = FindTransform(root, "OptionImage")?.GetComponent<Image>();
+            Button button = prefab.GetComponent<Button>();
 
-            foreach (SharedVoteOption option in SharedGlobalEvents.Instance.VoteOptions) {
-                if (option.voteId != voteId)
-                    continue;
-
-                options.Add(option);
-                currentTotal += option.count;
+            if (optionTitle != null)
+                optionTitle.text = option.title;
+            if (optionDescription != null)
+                optionDescription.text = option.description;
+            if (optionImage != null) {
+                optionImage.sprite = option.image;
+                optionImage.enabled = option.image != null;
+            }
+            if (button != null) {
+                int optionId = option.optionId;
+                if (optionVoteCount != null)
+                    optionCountTexts[optionId] = optionVoteCount;
+                button.onClick.RemoveAllListeners();
+                button.onClick.AddListener(() => SubmitVote(optionId, button));
             }
 
-            return options;
+            UpdateVoteCounts();
         }
 
-        void OnCreateOptionPrefab(GameObject prefab, SharedVoteOption option) {
-            ClientVoteOptionPrefab row = prefab.GetComponent<ClientVoteOptionPrefab>();
-            row.Bind(option, currentTotal, option.optionId == selectedOptionId, SendVote);
-            optionRows[option.optionId] = row;
-            prefab.SetActive(true);
+        void SubmitVote(int optionId) => SubmitVote(optionId, optionId < 0 ? noVoteButton : null);
+
+        void SubmitVote(int optionId, Button button) {
+            FadeSelectedButton(button);
+            InstanceFinder.ClientManager.Broadcast(new VoteRequest { optionId = optionId });
         }
 
-        void OnDeleteOptionPrefab(GameObject prefab) {
-            ClientVoteOptionPrefab row = prefab.GetComponent<ClientVoteOptionPrefab>();
-            if (row != null)
-                row.Cleanup();
-        }
-
-        void SendVote(int optionId) {
-            if (SharedGlobalEvents.Instance == null)
+        void UpdateVoteCounts() {
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            if (events == null)
                 return;
 
-            SharedVoteInfo vote = SharedGlobalEvents.Instance.CurrentVote;
-            if (!vote.isActive)
+            int selectedVotes = 0;
+            for (int i = 0; i < events.VoteTotals.Count; i++) {
+                int count = events.VoteTotals[i];
+                selectedVotes += count;
+                if (optionCountTexts.TryGetValue(i, out TextMeshProUGUI label) && label != null)
+                    label.text = $"{count} vote{(count == 1 ? string.Empty : "s")}";
+            }
+
+            if (noVoteCountText != null) {
+                int noVoteCount = Mathf.Max(0, PlayerData.Players.Count - selectedVotes);
+                noVoteCountText.text = $"No Vote ({noVoteCount})";
+            }
+        }
+
+        void FadeSelectedButton(Button button) {
+            if (button == null)
                 return;
 
-            selectedOptionId = optionId;
-            InstanceFinder.ClientManager.Broadcast<VoteRequest>(new VoteRequest { voteId = vote.voteId, optionId = optionId });
-            UpdateSelection();
-        }
-
-        void SendNoVote() {
-            if (SharedGlobalEvents.Instance == null)
+            Image image = button.targetGraphic as Image ?? button.GetComponent<Image>();
+            if (image == null)
                 return;
 
-            selectedOptionId = 0;
-            if (SharedGlobalEvents.Instance.CurrentVote.isActive)
-                InstanceFinder.ClientManager.Broadcast<VoteRequest>(new VoteRequest { voteId = SharedGlobalEvents.Instance.CurrentVote.voteId, optionId = 0 });
-            UpdateSelection();
+            if (!buttonColors.TryGetValue(image, out Color initialColor)) {
+                initialColor = image.color;
+                buttonColors.Add(image, initialColor);
+            }
+
+            if (selectedButtonImage != null && selectedButtonImage != image && buttonColors.TryGetValue(selectedButtonImage, out Color previousColor))
+                FadeImage(selectedButtonImage, previousColor);
+
+            selectedButtonImage = image;
+            FadeImage(image, new Color(0.20f, 0.72f, 0.34f, initialColor.a));
         }
 
-        void UpdateSelection() {
-            foreach (KeyValuePair<int, ClientVoteOptionPrefab> pair in optionRows)
-                pair.Value.SetSelected(pair.Key == selectedOptionId);
-            noVoteButton.GetComponent<Image>().color = selectedOptionId == 0 ? new Color32(92, 98, 108, 230) : new Color32(36, 40, 48, 230);
-        }
-
-        void SetMinimized(bool value) {
-            minimized = value;
-            window.sizeDelta = minimized ? minimizedSize : maximizedSize;
-            scrollRect.gameObject.SetActive(!minimized);
-            descriptionText.gameObject.SetActive(!minimized && !string.IsNullOrWhiteSpace(descriptionText.text));
-            noVoteButton.gameObject.SetActive(!minimized);
-            totalText.gameObject.SetActive(!minimized);
-            minimizeText.text = minimized ? "+" : "-";
-        }
-
-        void ResizeOptionGrid(int optionCount) {
-            int columns = optionCount <= 2 ? Mathf.Max(1, optionCount) : 2;
-            float width = viewport.rect.width > 1f ? viewport.rect.width : maximizedSize.x - 28f;
-            float cellWidth = (width - grid.padding.horizontal - grid.spacing.x * (columns - 1)) / columns;
-            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = columns;
-            grid.cellSize = new Vector2(Mathf.Max(240f, cellWidth), optionCount <= 2 ? 144f : 118f);
+        static void FadeImage(Image image, Color color) {
+            if (TweenManager.Instance == null) {
+                image.color = color;
+                return;
+            }
+            TweenManager.Instance.ClearTweens(image);
+            Color startColor = image.color;
+            TweenManager.Instance.RegisterTween(0.2f, percent => image.color = Color.Lerp(startColor, color, percent), targetObject: image);
         }
 
         void Clear() {
             ClearPrefabs();
-            optionRows.Clear();
-            selectedOptionId = 0;
+            optionCountTexts.Clear();
+            selectedButtonImage = null;
             SetVisible(false);
         }
 
         void SetVisible(bool visible) {
+            if (canvasGroup == null)
+                return;
             canvasGroup.alpha = visible ? 1f : 0f;
-            canvasGroup.blocksRaycasts = visible;
             canvasGroup.interactable = visible;
+            canvasGroup.blocksRaycasts = visible;
         }
 
-        bool HasRequiredReferences() {
-            bool hasReferences =
-                window != null &&
-                canvasGroup != null &&
-                titleText != null &&
-                descriptionText != null &&
-                timerText != null &&
-                totalText != null &&
-                noVoteButton != null &&
-                minimizeButton != null &&
-                minimizeText != null &&
-                viewport != null &&
-                grid != null &&
-                optionPrefab != null &&
-                scrollRect != null;
+        Transform FindTransform(string path) => transform.Find(path);
+        TextMeshProUGUI FindText(string path) => FindTransform(path)?.GetComponentInChildren<TextMeshProUGUI>(true);
 
-            if (!hasReferences)
-                Debug.LogError($"{nameof(ClientVote)} prefab is missing serialized UI references.", this);
-
-            return hasReferences;
+        static Transform FindTransform(Transform root, string name) {
+            foreach (Transform child in root) {
+                if (child.name == name)
+                    return child;
+                Transform nested = FindTransform(child, name);
+                if (nested != null)
+                    return nested;
+            }
+            return null;
         }
+
+        static TextMeshProUGUI FindText(Transform root, string name) =>
+            FindTransform(root, name)?.GetComponent<TextMeshProUGUI>();
     }
 }

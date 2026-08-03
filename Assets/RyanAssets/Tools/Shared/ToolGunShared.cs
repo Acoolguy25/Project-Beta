@@ -16,6 +16,8 @@ namespace RyanAssets.Tools.Shared {
         public float MaxRange = 30f;
         [SerializeField]
         public float FireRate = 0.3f;
+        [SerializeField, Min(0.01f)]
+        public float MuzzleCollisionRadius = 0.1f;
 
         [Header("Gun Fire Mode")]
         [SerializeField]
@@ -26,6 +28,7 @@ namespace RyanAssets.Tools.Shared {
         public ParticleSystem FireParticleSystem;
         static LayerMask hitLayers;
         protected override void Awake() {
+            base.Awake();
             hitLayers = ~LayerMask.GetMask("Ignore Raycast");
         }
         public RaycastHit? Shoot(Vector3 targetLocation) {
@@ -38,6 +41,10 @@ namespace RyanAssets.Tools.Shared {
             Vector3 origin = weaponRoot.transform.position;
             if (targetLocation == origin)
                 return null; // safety check!
+            if (TryGetMuzzleObstruction(origin, out RaycastHit muzzleHit))
+                return muzzleHit; // The muzzle is inside a solid object; never raycast past it.
+            Debug.DrawLine(origin, origin + Vector3.forward*0.3f, Color.red, 2f);
+
             Vector3 dir = GetSpreadDirection(origin, targetLocation, UnityEngine.Random.Range(Accuracy / 360f, 1f));
             RaycastHit[] hits = Physics.RaycastAll(origin, dir, MaxRange, hitLayers);
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -51,6 +58,42 @@ namespace RyanAssets.Tools.Shared {
                 normal = -dir,
                 distance = MaxRange,
             };
+        }
+        bool TryGetMuzzleObstruction(Vector3 origin, out RaycastHit hit) {
+            // Raycasts do not reliably report a collider when their origin is already inside it.
+            // Check the muzzle volume first, ignoring the wielder and the weapon itself.
+            Collider[] overlaps = Physics.OverlapSphere(
+                origin,
+                MuzzleCollisionRadius,
+                hitLayers,
+                QueryTriggerInteraction.Ignore);
+
+            foreach (Collider overlap in overlaps) {
+                if (IsShooterOrWeaponCollider(overlap))
+                    continue;
+
+                Vector3 closestPoint = overlap.ClosestPoint(origin);
+                Vector3 normal = origin - closestPoint;
+                if (normal.sqrMagnitude < 0.0001f)
+                    normal = -weaponRoot.transform.forward;
+
+                // RaycastHit cannot be constructed with a Collider, but a hit with no
+                // transform is intentionally non-damaging and stops the bullet visual here.
+                hit = new RaycastHit {
+                    point = closestPoint,
+                    normal = normal.normalized,
+                    distance = 0f,
+                };
+                return true;
+            }
+
+            hit = default;
+            return false;
+        }
+        bool IsShooterOrWeaponCollider(Collider collider) {
+            Transform colliderTransform = collider.transform;
+            return colliderTransform.IsChildOf(transform) ||
+                   (connectedCharacter != null && colliderTransform.IsChildOf(connectedCharacter.transform));
         }
         Vector3 GetSpreadDirection(Vector3 origin, Vector3 targetPosition, float accuracy) {
             Vector3 baseDir = (targetPosition - origin).normalized;
@@ -74,6 +117,7 @@ namespace RyanAssets.Tools.Shared {
             //GunVisualEffects.VisualizeBullet(hit.Value, weaponRoot.transform.position);
             GunVisualEffects.VisualizeBullet(hit.Value, FireParticleSystem.transform.position, FireParticleSystem);
 #endif
+            PlayAudio(attackAudio);
         }
         //[ServerRpc]
         //public void ShootServerRpc(Vector3 targetLocation) {

@@ -167,7 +167,7 @@ namespace RyanAssets.Characters.Shared {
             Init(hp, hp);
         }
         public void InitDefaultEffects() {
-            AddEffect(CharacterEffect.Invul, 50000f);
+            AddEffect(CharacterEffect.Invul, 5f);
         }
         [Server]
         public virtual void Kill(DamageSource source, NetworkObject sourceObject = null) {

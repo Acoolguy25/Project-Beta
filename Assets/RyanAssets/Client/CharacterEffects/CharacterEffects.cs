@@ -84,7 +84,8 @@ namespace RyanAssets.Client.CharacterEffects {
         }
         public void RemoveEffect(CharacterEffect effect) {
             if (activeEffectParticles.TryGetValue(effect, out CharacterEffectParticle particle)) {
-                GameObject.Destroy(particle.particleSystem.gameObject);
+                if (particle.particleSystem)
+                    GameObject.Destroy(particle.particleSystem.gameObject);
                 particle.cancellationTokenSource.Cancel();
                 particle.cancellationTokenSource.Dispose();
                 activeEffectParticles.Remove(effect);

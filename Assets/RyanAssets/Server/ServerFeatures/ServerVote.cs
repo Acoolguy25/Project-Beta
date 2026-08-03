@@ -1,22 +1,19 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Transporting;
+using RyanAssets.Core;
 using RyanAssets.DataService;
-using RyanAssets.Server.ServerCore;
+using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Player;
 using RyanAssets.Shared.Requests;
 using UnityEngine;
 
 namespace RyanAssets.Server.ServerFeatures {
     public static class ServerVote {
-        public static float DefaultDurationSeconds = 30f;
-
-        static readonly Dictionary<NetworkConnection, int> PlayerVotes = new();
-        static Coroutine closeRoutine;
-        static int nextVoteId = 1;
+        static int voteGeneration;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
@@ -24,111 +21,81 @@ namespace RyanAssets.Server.ServerFeatures {
             PlayerData.OnPlayerRemoved += OnPlayerRemoved;
         }
 
-        public static void StartVote(string title, IReadOnlyList<SharedVoteOption> options, float durationSeconds = -1f, string description = "") {
-            if (SharedGlobalEvents.Instance == null) {
-                Debug.LogError("Cannot start vote. SharedGlobalEvents.Instance is missing.");
+        static void OnVoteRequest(NetworkConnection connection, VoteRequest request, FishNet.Transporting.Channel channel) {
+            if (!SharedGlobalEvents.isVoting || !PlayerData.TryGetPlayerData(connection, out PlayerData player))
                 return;
+
+            int optionCount = VoteDeclarations.GetOptionCount(SharedGlobalEvents.Instance.SharedVoteHeader.Value.voteId);
+            if (request.optionId < -1 || request.optionId >= optionCount)
+                return;
+
+            SetPlayerVote(player, request.optionId, optionCount);
+        }
+
+        static void OnPlayerRemoved(NetworkConnection connection, PlayerData player) {
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            if (!SharedGlobalEvents.isVoting)
+                return;
+
+            SetPlayerVote(player, -1, events.VoteTotals.Count);
+        }
+
+        static void SetPlayerVote(PlayerData player, int newOption, int optionCount) {
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            int previousOption = player.voteOption.Value;
+            if (previousOption == newOption)
+                return;
+
+            if (previousOption >= 0 && previousOption < events.VoteTotals.Count)
+                events.VoteTotals[previousOption] = Mathf.Max(0, events.VoteTotals[previousOption] - 1);
+
+            if (newOption >= 0 && newOption < optionCount)
+                events.VoteTotals[newOption]++;
+
+            player.voteOption.Value = newOption;
+        }
+
+        public static async UniTask<int> StartVote(VoteEnum voteEnum, float duration, CancellationToken token) {
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            Debug.Assert(events != null, "Cannot start a vote without SharedGlobalEvents.");
+
+            int optionCount = VoteDeclarations.GetOptionCount(voteEnum);
+            if (voteEnum == VoteEnum.None || optionCount == 0)
+                throw new ArgumentException($"Vote '{voteEnum}' has no configured options.", nameof(voteEnum));
+
+            int generation = ++voteGeneration;
+            events.VoteTotals.Clear();
+            for (int i = 0; i < optionCount; i++)
+                events.VoteTotals.Add(0);
+            foreach (PlayerData player in PlayerData.Players.Values)
+                player.voteOption.Value = -1;
+
+            events.SharedVoteHeader.Value = new SharedVoteHeader(voteEnum, NetworkHelper.ServerTime + duration);
+            try {
+                SharedGlobalEvents.Instance.TopMessage = "Voting in progress...";
+                await UniTask.Delay(TimeSpan.FromSeconds(duration), cancellationToken: token);
+                return GetWinningOption(events);
+            } finally {
+                // Do not allow a cancelled/older vote to close a newer one.
+                if (generation == voteGeneration)
+                    events.SharedVoteHeader.Value = new SharedVoteHeader(VoteEnum.None);
             }
+        }
 
-            int voteId = nextVoteId++;
-            float duration = durationSeconds > 0f ? durationSeconds : DefaultDurationSeconds;
-            PlayerVotes.Clear();
-            SharedGlobalEvents.Instance.VoteOptions.Clear();
-
-            for (int i = 0; i < options.Count; i++) {
-                SharedVoteOption option = options[i];
-                option.voteId = voteId;
-                option.optionId = option.optionId == 0 ? i + 1 : option.optionId;
-                option.count = 0;
-                SharedGlobalEvents.Instance.VoteOptions.Add(option);
+        static int GetWinningOption(SharedGlobalEvents events) {
+            int bestTotal = int.MinValue;
+            int winner = -1;
+            int ties = 0;
+            for (int i = 0; i < events.VoteTotals.Count; i++) {
+                if (events.VoteTotals[i] > bestTotal) {
+                    bestTotal = events.VoteTotals[i];
+                    winner = i;
+                    ties = 1;
+                } else if (events.VoteTotals[i] == bestTotal && UnityEngine.Random.Range(0, ++ties) == 0) {
+                    winner = i;
+                }
             }
-
-            SharedGlobalEvents.Instance.CurrentVote = new SharedVoteInfo {
-                voteId = voteId,
-                title = title,
-                description = description,
-                endUtcTicks = DateTime.UtcNow.AddSeconds(duration).Ticks,
-                isActive = true
-            };
-
-            if (closeRoutine != null)
-                SharedGlobalEvents.Instance.StopCoroutine(closeRoutine);
-            closeRoutine = SharedGlobalEvents.Instance.StartCoroutine(CloseVoteAfter(duration, voteId));
-        }
-
-        public static void StartVote(string title, IReadOnlyList<string> optionTitles, float durationSeconds = -1f, string description = "") {
-            List<SharedVoteOption> options = new(optionTitles.Count);
-            for (int i = 0; i < optionTitles.Count; i++)
-                options.Add(new SharedVoteOption { optionId = i + 1, title = optionTitles[i] });
-
-            StartVote(title, options, durationSeconds, description);
-        }
-
-        public static void EndCurrentVote() {
-            if (SharedGlobalEvents.Instance == null)
-                return;
-
-            SharedVoteInfo vote = SharedGlobalEvents.Instance.CurrentVote;
-            vote.isActive = false;
-            vote.endUtcTicks = DateTime.UtcNow.Ticks;
-            SharedGlobalEvents.Instance.CurrentVote = vote;
-            PlayerVotes.Clear();
-            closeRoutine = null;
-        }
-
-        static IEnumerator CloseVoteAfter(float seconds, int voteId) {
-            yield return new WaitForSeconds(seconds);
-            if (SharedGlobalEvents.Instance.CurrentVote.voteId == voteId)
-                EndCurrentVote();
-        }
-
-        static void OnVoteRequest(NetworkConnection conn, VoteRequest request, Channel channel) {
-            SharedVoteInfo vote = SharedGlobalEvents.Instance.CurrentVote;
-            if (!vote.isActive || request.voteId != vote.voteId)
-                return;
-
-            if (request.optionId != 0 && FindOptionIndex(vote.voteId, request.optionId) < 0)
-                return;
-
-            if (PlayerVotes.TryGetValue(conn, out int previousOptionId))
-                ChangeVoteCount(vote.voteId, previousOptionId, -1);
-
-            if (request.optionId == 0) {
-                PlayerVotes.Remove(conn);
-                return;
-            }
-
-            PlayerVotes[conn] = request.optionId;
-            ChangeVoteCount(vote.voteId, request.optionId, 1);
-        }
-
-        static void OnPlayerRemoved(NetworkConnection conn, PlayerData playerData) {
-            SharedVoteInfo vote = SharedGlobalEvents.Instance.CurrentVote;
-            if (!vote.isActive || !PlayerVotes.TryGetValue(conn, out int optionId))
-                return;
-
-            PlayerVotes.Remove(conn);
-            ChangeVoteCount(vote.voteId, optionId, -1);
-        }
-
-        static int FindOptionIndex(int voteId, int optionId) {
-            for (int i = 0; i < SharedGlobalEvents.Instance.VoteOptions.Count; i++) {
-                SharedVoteOption option = SharedGlobalEvents.Instance.VoteOptions[i];
-                if (option.voteId == voteId && option.optionId == optionId)
-                    return i;
-            }
-
-            return -1;
-        }
-
-        static void ChangeVoteCount(int voteId, int optionId, int delta) {
-            int index = FindOptionIndex(voteId, optionId);
-            if (index < 0)
-                return;
-
-            SharedVoteOption option = SharedGlobalEvents.Instance.VoteOptions[index];
-            option.count = Mathf.Max(0, option.count + delta);
-            SharedGlobalEvents.Instance.VoteOptions[index] = option;
+            return winner;
         }
     }
 }

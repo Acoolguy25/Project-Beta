@@ -77,9 +77,12 @@ namespace RyanAssets.Tools.Client
         }
         protected virtual async void Reload() {
             SetCooldown(toolBaseShared.reloadDuration);
+            toolBaseShared.PlayAudio(1); // Assume reload is 1th
             bool isCancelled = await UniTask.WaitForSeconds(toolBaseShared.reloadDuration, cancellationToken: AddCancellationToken().Token).SuppressCancellationThrow();
-            if (isCancelled)
+            if (isCancelled) {
+                SetCooldown(0); // delete the cooldown if cancelled
                 return;
+            }
             if (toolBaseShared.currentStoredAmmo >= 0) { // finite ammo enabled
                 int ammoToReload = Mathf.Min(toolBaseShared.maxClipAmmo - toolBaseShared.currentAmmo, toolBaseShared.currentStoredAmmo);
                 SetCurrentAmmo(toolBaseShared.currentAmmo + ammoToReload);

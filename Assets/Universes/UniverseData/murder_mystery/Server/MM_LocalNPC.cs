@@ -15,7 +15,7 @@ namespace Universes.murder_mystery.Server {
         //[Header("Attack")]
         //[SerializeField] public List<TeamColor> TargetTeams = new List<TeamColor>();
         //[SerializeField] private float AttackEnterRadius = 6f;
-        float unequipAttackTime = 1.5f;
+        float unequipAttackTime = 1f;
 
         LocalNPC localNPC;
         GameCharacter gameCharacter;
@@ -30,9 +30,11 @@ namespace Universes.murder_mystery.Server {
         }
         void Start() {
             base.OnStartServer();
-            localNPC.SetTargetingType(NPCTargetingType.Attack);
-            sharedWeapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
-            clientWeapon = sharedWeapon.GetComponent<ToolBaseClient>();
+            if (gameCharacter.GetTeam().team == TeamColor.Red) {
+                localNPC.SetTargetingType(NPCTargetingType.Attack);
+                sharedWeapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
+                clientWeapon = sharedWeapon.GetComponent<ToolBaseClient>();
+            }
         }
         void AttackFunction(GameCharacter targetCharacter) {
             lastAttack = Time.time;

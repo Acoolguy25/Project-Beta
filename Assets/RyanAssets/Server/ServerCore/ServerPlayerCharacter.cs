@@ -25,25 +25,28 @@ namespace RyanAssets.Server.ServerCore {
         public static float RespawnTime = 5f;
         public static ServerPlayerCharacter Instance { get; private set; }
 
-        public void SpawnPlayerCharacter(NetworkConnection player, long health = 100) {
+        public LocalCharacter SpawnPlayerCharacter(NetworkConnection player, long health = 100) {
             if (!player.IsValid) {
                 Debug.LogWarning($"Tried to spawn character for invalid player {player}");
-                return;
+                return null;
             }
             if (CanSpawnFunction != null && !CanSpawnFunction(player))
-                return;
+                return null;
+            DespawnPlayerCharacter(player); // make sure bro is despawned first!
             var newCharacter = Instantiate(characterPrefab.gameObject);
             newCharacter.transform.position = Vector3.zero;
             LocalCharacter localChar = newCharacter.GetComponent<LocalCharacter>();
             localChar.OnDied += (_, _) => OnPlayerCharacterDie(player, newCharacter.transform);
             localChar.Init(health);
+            ClientToCharacter[player] = localChar;
             OnPlayerCharacterAdded?.Invoke(player, localChar);
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
-            ClientToCharacter[player] = localChar;
             // Insert player tools
             foreach (var tool in PlayerData.Players[player].tools) {
                 ServerTool.Instance.SpawnTool(localChar.NetworkObject, tool);
             }
+            //Debug.Log("Spawned PlayerCharacter");
+            return localChar;
         }
         public async void OnPlayerCharacterDie(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){
             OnPlayerCharacterDied?.Invoke(player, character.GetComponent<LocalCharacter>());
@@ -62,8 +65,10 @@ namespace RyanAssets.Server.ServerCore {
             ClientToCharacter.Remove(character.Owner);
             //if (character.TryGetComponent(out LocalCharacter localCharacter) && !localCharacter.IsDead())
             //    localCharacter.Kill(DamageSource.Despawn);
-            if (character != null) // cannot despawn null characters
+            if (character != null) {  // cannot despawn null characters
                 InstanceFinder.ServerManager.Despawn(character);
+                //Debug.Log("Despawning PlayerCharacter {}", character);
+            }
         }
         public static void ResetPlayerCharacter(NetworkConnection player) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character))

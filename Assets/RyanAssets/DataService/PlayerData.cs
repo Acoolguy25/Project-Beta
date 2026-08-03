@@ -70,6 +70,7 @@ namespace RyanAssets.DataService {
         readonly public SyncVar<int> deaths = new(initialValue: 0);
         readonly public SyncVar<TeamConfig> team = new(initialValue: new());
         readonly public SyncList<int> leaderboard = new();
+        readonly public SyncVar<int> voteOption = new(-1); // which option this player has voted for, -1 for none
         // Character Data
 
         readonly public SyncVar<float> walkSpeed = new(initialValue: 10f);

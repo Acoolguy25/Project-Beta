@@ -4,6 +4,7 @@ using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
 using RyanAssets.Commands.Shared;
+using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
 using System;
@@ -12,24 +13,7 @@ using System.Linq;
 using UnityEngine;
 
 namespace RyanAssets.Shared.Player {
-    [Serializable]
-    public struct SharedVoteInfo {
-        public int voteId;
-        public string title;
-        public string description;
-        public long endUtcTicks;
-        public bool isActive;
-    }
-
-    [Serializable]
-    public struct SharedVoteOption {
-        public int voteId;
-        public int optionId;
-        public string title;
-        public string description;
-        public string imageUrl;
-        public int count;
-    }
+    
     [Serializable]
     public enum MusicTracks : ushort {
         MenuMusic,
@@ -43,12 +27,14 @@ namespace RyanAssets.Shared.Player {
         public static Action OnInstanceReady, OnInstanceReadyPersistent, OnInstanceRemoved;
         //public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
         public readonly SyncList<CommandConfig> Commands = new();
-        public readonly SyncList<SharedVoteOption> VoteOptions = new();
         public readonly SyncList<string> LeaderboardHeaders = new();
         public readonly SyncVar<MusicTracks> MusicTrack = new(initialValue: Player.MusicTracks.GameMusic1);
-        readonly SyncVar<SharedVoteInfo> _currentVote = new();
         readonly SyncVar<string> _topMessage = new();
         public static Dictionary<TeamColor, HashSet<TeamColor>> TeamEnemies;
+
+        // Voting
+        public readonly SyncVar<SharedVoteHeader> SharedVoteHeader = new(new());
+        public readonly SyncList<int> VoteTotals = new(new());
 
 #if UNITY_SERVER
         [NonSerialized]
@@ -57,10 +43,6 @@ namespace RyanAssets.Shared.Player {
         public bool GlobalInvul     = true;
 #endif
 
-        public SharedVoteInfo CurrentVote {
-            get => _currentVote.Value;
-            set => _currentVote.Value = value;
-        }
         public string TopMessage {
             get => _topMessage.Value;
             set => _topMessage.Value = value;
@@ -75,12 +57,11 @@ namespace RyanAssets.Shared.Player {
             // }
             //Players.OnChange += OnPlayerChanged;
             Commands.OnChange += OnCommandsChanged;
-            VoteOptions.OnChange += OnVoteOptionsChanged;
-            _currentVote.OnChange += OnCurrentVoteChanged;
             _topMessage.OnChange += (_, msg, _) => TopMessageChanged?.Invoke(msg);
             //PlayerListSynced = false;
 #endif
         }
+        public static bool isVoting => Instance != null && Instance.SharedVoteHeader.Value.voteId != VoteEnum.None && Instance.SharedVoteHeader.Value.endTime >= NetworkHelper.ServerTime;
 
         public override void OnStartServer() {
             base.OnStartServer();
@@ -89,14 +70,6 @@ namespace RyanAssets.Shared.Player {
 #if !UNITY_SERVER
         
         public static Action OnCommandsUpdated;
-        public static Action OnVoteChanged;
-        public static Action<SharedVoteInfo> OnCurrentVoteChangedEvent;
-
-        void OnVoteOptionsChanged(SyncListOperation op, int index, SharedVoteOption oldItem, SharedVoteOption newItem, bool asServer) {
-            if (op != SyncListOperation.Complete)
-                return;
-            OnVoteChanged?.Invoke();
-        }
 
         void OnCommandsChanged(SyncListOperation op, int index, CommandConfig oldItem, CommandConfig newItem, bool asServer) {
             if (op != SyncListOperation.Complete)
@@ -104,16 +77,10 @@ namespace RyanAssets.Shared.Player {
             OnCommandsUpdated?.Invoke();
         }
 
-        void OnCurrentVoteChanged(SharedVoteInfo previous, SharedVoteInfo next, bool asServer) {
-            OnCurrentVoteChangedEvent?.Invoke(next);
-            OnVoteChanged?.Invoke();
-        }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init(){
             Instance = null;
             OnInstanceReady = null;
-            OnVoteChanged = null;
-            OnCurrentVoteChangedEvent = null;
             OnCommandsUpdated = null;
         }
         public static void BindInstanceReady(Action action, bool persistent = false) {
@@ -124,10 +91,6 @@ namespace RyanAssets.Shared.Player {
                     OnInstanceReady += action;
             } else
                 action();
-        }
-#else
-        public static void SetTopMessage(string topMessage) {
-            Instance.TopMessage = topMessage;
         }
 #endif
         public static int GetLeaderboardIndex(string name) {

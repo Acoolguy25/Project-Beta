@@ -24,6 +24,8 @@ namespace RyanAssets.Server.ServerFeatures {
         static void Init() {
             OnResetEvent = null;
         }
+
+        // TIMER FUNCTIONS
         public UniTask WaitForSceneAsync(string sceneName, CancellationToken token = default) {
             Scene scene = SceneManager.GetSceneByName(sceneName);
 
@@ -59,33 +61,6 @@ namespace RyanAssets.Server.ServerFeatures {
                 SharedGlobalEvents.Instance.TopMessage = string.Format(message, i);
                 await Awaitable.WaitForSecondsAsync(1f, token);
             }
-        }
-
-        public async UniTask<int> VoteCountdown(string title, string description, int duration, SharedVoteOption[] voteOptions, CancellationToken token = default) {
-            SharedGlobalEvents.Instance.CurrentVote = new SharedVoteInfo
-            {
-                title = title,
-                description = description,
-                endUtcTicks = DateTime.UtcNow.AddSeconds(duration).Ticks,
-                isActive = true
-            };
-            for (int i = 0; i < voteOptions.Length; i++) {
-                voteOptions[i].count = 0; // reset vote counts
-            }
-            SharedGlobalEvents.Instance.VoteOptions.Clear();
-            SharedGlobalEvents.Instance.VoteOptions.AddRange(voteOptions);
-            await TimerCountdown(title + " ({0})", duration, token);
-            SharedGlobalEvents.Instance.CurrentVote = new SharedVoteInfo
-            {
-                title = title,
-                description = description,
-                endUtcTicks = DateTime.UtcNow.Ticks,
-                isActive = false
-            };
-            return SharedGlobalEvents.Instance.VoteOptions
-                .Where(v => v.voteId == SharedGlobalEvents.Instance.CurrentVote.voteId)
-                .OrderByDescending(v => v.count)
-                .FirstOrDefault().optionId;
         }
 
         public async UniTask CustomTimerCountdown(
@@ -137,6 +112,33 @@ namespace RyanAssets.Server.ServerFeatures {
             UnregisterInterrupt();
             }
         }
+
+        public async UniTask WaitForPlayersAsync(int playerRequirement = 1, CancellationToken token = default) {
+            int activePlayers;
+            while ((activePlayers = GetActivePlayers()) < playerRequirement) {
+                SetTopMessage($"Waiting for players ({activePlayers}/{playerRequirement})");
+                await TaskHelper.WaitForAction<NetworkConnection, LocalCharacter>(
+                    h => ServerPlayerCharacter.OnPlayerCharacterAdded += h,
+                    h => ServerPlayerCharacter.OnPlayerCharacterAdded -= h,
+                    token
+                );
+            }
+            SetTopMessage($"Players connected ({activePlayers}/{playerRequirement})");
+        }
+
+        // LEADERBOARD FUNCTIONS
+        public List<PlayerData> GetLeaderboardWinner(string leaderboardName) {
+            int leaderboardIdx = SharedGlobalEvents.GetLeaderboardIndex(leaderboardName);
+            return PlayerData.Players.Values.OrderByDescending(p => p.leaderboard[leaderboardIdx]).ToList();
+        }
+        public void SetLeaderboardEnabled(string value, bool enabled) {
+            SharedGlobalEvents.Instance.LeaderboardHeaders.Remove(value);
+            if (enabled)
+                SharedGlobalEvents.Instance.LeaderboardHeaders.AddRange(new[] { value });
+        }
+        public bool GetLeaderboardEnabled(string value) {
+            return SharedGlobalEvents.Instance.LeaderboardHeaders.Contains(value);
+        }
         public void ResetLeaderboardData() {
             foreach (PlayerData playerData in PlayerData.Players.Values) {
                 for (int i = 0; i < playerData.leaderboard.Count; i++) {
@@ -144,35 +146,29 @@ namespace RyanAssets.Server.ServerFeatures {
                 }
             }
         }
-        public List<PlayerData> GetLeaderboardWinner(string leaderboardName) {
-            int leaderboardIdx = SharedGlobalEvents.GetLeaderboardIndex(leaderboardName);
-            return PlayerData.Players.Values.OrderByDescending(p => p.leaderboard[leaderboardIdx]).ToList();
+        
+        // Baby functions
+        protected virtual void OnPlayerAdded(NetworkConnection conn, PlayerData playerData) {
+            playerData.leaderboard.AddRange(Enumerable.Repeat(0, SharedGlobalEvents.Instance.LeaderboardHeaders.Count));
         }
-
+        public static void SetTopMessage(string topMessage) {
+            SharedGlobalEvents.Instance.TopMessage = topMessage;
+        }
         public void SetGlobalInvul(bool enabled) {
             SharedGlobalEvents.Instance.GlobalInvul = enabled;
         }
         public void SetTeamKillEnabled(bool enabled) {
             SharedGlobalEvents.Instance.TeamKillEnabled = enabled;
         }
-
         public int GetActivePlayers() {
-            return InstanceFinder.ServerManager.Clients.Values.Count((conn) => conn.IsActive && conn.IsAuthenticated);
+            return InstanceFinder.ServerManager.Clients.Values.Count((conn) => conn.IsActive && conn.IsAuthenticated && conn.LoadedStartScenes());
         }
-        public async UniTask WaitForPlayersAsync(int playerRequirement = 1, CancellationToken token = default) {
-            int activePlayers;
-            while ((activePlayers = GetActivePlayers()) < playerRequirement) {
-                SharedGlobalEvents.SetTopMessage($"Waiting for players ({activePlayers}/{playerRequirement})");
-                await TaskHelper.WaitForAction<NetworkConnection, LocalCharacter>(
-                    h => ServerPlayerCharacter.OnPlayerCharacterAdded += h,
-                    h => ServerPlayerCharacter.OnPlayerCharacterAdded -= h,
-                    token
-                );
-            }
-        }
+
+        // LIFECYCLE FUNCTIONS
 
         protected virtual void Awake() {
             DontDestroyOnLoad(gameObject);
+            PlayerData.OnPlayerAdded += OnPlayerAdded;
             ServerIdleTimeout.OnIdleTimeoutStarted += Restart;
             ServerBootStrap.RestartServerEvent += Restart;
         }

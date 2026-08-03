@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 420314417922096227}
   - component: {fileID: 6119158067740291384}
   - component: {fileID: 5434769148292391608}
+  - component: {fileID: 2303817796176454911}
   m_Layer: 0
   m_Name: MM_ServerRunner
   m_TagString: Untagged
@@ -52,6 +53,9 @@ MonoBehaviour:
   DebugMotionlessNpc:
     _editor_value: 0
     _runtime_value: 0
+  DebugNoIntermission:
+    _editor_value: 1
+    _runtime_value: 0
   DebugTimerSpeedUp:
     _editor_value: 0
     _runtime_value: 0
@@ -61,6 +65,9 @@ MonoBehaviour:
   FallTest:
     _editor_value: 0
     _runtime_value: 0
+  mode: 1
+  npcRoles: 
+  playerRoles: 
 --- !u!114 &5434769148292391608
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -73,3 +80,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2672ed0077aa29a4c9168cd8e35f73a4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Universes.murder_mystery.Server::Universes.murder_mystery.Server.MM_Commands
+--- !u!114 &2303817796176454911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3384629353061646621}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bdba0e7a72d3f9a47983193f5c2a23d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.murder_mystery.Server::Universes.UniverseData.murder_mystery.Server.MM_Roles
+  murdererBaseChance: 0.08
+  minMurderers: 1
+  murdererMaxRatio: 0.2
+  sheriffBaseChance: 0.15
+  minSheriffs: 1
+  sheriffMaxRatio: 0.34

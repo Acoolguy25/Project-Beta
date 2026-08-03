@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 1988745938550712830}
   - component: {fileID: 2562014013593081152}
   - component: {fileID: 4663405407941543712}
+  - component: {fileID: 8665740458390322290}
   m_Layer: 2
   m_Name: FNFiveSeven_Body
   m_TagString: Untagged
@@ -93,6 +94,103 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!82 &8665740458390322290
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2401834043414206446}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 4144306746528415441, guid: a3706924799c36f459396edda30f4552, type: 2}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 50
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &2975185524438642583
 GameObject:
   m_ObjectHideFlags: 0
@@ -334,17 +432,24 @@ MonoBehaviour:
   staminaCost: 0
   hitDamage: 150
   attackCooldown: 0.85
-  reloadDuration: 1
-  currentAmmo: 6
-  maxClipAmmo: 6
+  reloadDuration: 2.5
+  currentAmmo: 1
+  maxClipAmmo: 1
   currentStoredAmmo: -1
   maxStoredAmmo: 10
   animationPackName: 
+  equipAudio: {fileID: 0}
+  unequipAudio: {fileID: 0}
+  attackAudio: {fileID: 8300000, guid: 9b91af91e8298e44293cdfaf2e7c71d7, type: 3}
+  extraAudios:
+  - {fileID: 0}
+  - {fileID: 8300000, guid: 71570343c4cad764cb5e434194ad5b54, type: 3}
   ParentObjectName: RightHand
   weaponRoot: {fileID: 2401834043414206446}
   Accuracy: 160
   MaxRange: 60
   FireRate: 0.35
+  MuzzleCollisionRadius: 0.1
   BurstCount: 1
   BurstDelay: 0.1
   FireParticleSystem: {fileID: 7723627861008121746}
@@ -405,7 +510,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584159134382092326
+  _initializedTimestamp: -8584159103909666476
 --- !u!114 &3334228999619063352
 MonoBehaviour:
   m_ObjectHideFlags: 0
