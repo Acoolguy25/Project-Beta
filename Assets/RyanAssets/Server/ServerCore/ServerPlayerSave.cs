@@ -23,7 +23,7 @@ namespace RyanAssets.Server.ServerCore {
             ServerBootStrap.StartServerEvent += OnStartServer;
             ServerBootStrap.StopServerEvent += OnStopServer;
             ServerBootStrap.StopServerAsyncEvent += SaveDirty;
-            PlayerData.OnPlayerAdded += (conn, playerData) => Save(conn);
+            PlayerData.OnPlayerAdded += playerData => Save(playerData.Owner);
         }
 
         static void OnStartServer() {

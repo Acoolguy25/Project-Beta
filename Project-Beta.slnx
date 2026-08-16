@@ -12,6 +12,7 @@
   <Project Path="RyanAssets.Tools.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="RyanAssets.Characters.Client.csproj" />
+  <Project Path="RyanAssets.Client.ClientUI.Spectate.csproj" />
   <Project Path="RyanAssets.Characters.Shared.csproj" />
   <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="RyanAssets.Tools.Client.csproj" />

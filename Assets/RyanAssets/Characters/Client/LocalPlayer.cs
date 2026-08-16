@@ -11,28 +11,40 @@ namespace RyanAssets.Characters.Client {
         public static LocalPlayer Instance { get; private set; }
         public static LocalCharacter Character;
         [NonSerialized]
-        public InstantEvent<Transform> OnCharacterAdded;
+        public static InstantEvent<LocalCharacter> OnCharacterAdded;
+        public static Action<LocalCharacter> OnCharacterRemoved;
         [SerializeField] private Transform CharacterControl;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Init() {
+            Instance = null;
+            Character = null;
+            OnCharacterAdded = new();
+            OnCharacterRemoved = null;
+        }
         private void Awake() {
             Instance = this;
             Character = null;
-            OnCharacterAdded = new();
-            LocalCharacter.AnyCharacterAdded += OnAnyCharacterAdded;
-            LocalCharacter.AnyCharacterRemoved += OnAnyCharacterRemoved;
+            LocalCharacter.LocalCharacterAdded += OnAnyCharacterAdded;
+            LocalCharacter.LocalCharacterRemoved += OnAnyCharacterRemoved;
             InstanceFinder.ClientManager.OnClientConnectionState += OnClientConnectionState;
         }
-        public void OnAnyCharacterAdded((Transform obj, bool IsOwner) NewCharacter){
-            if (NewCharacter.IsOwner)
-                SetCharacter(NewCharacter.obj);
+        public void OnAnyCharacterAdded(LocalCharacter character){
+            if (character.IsOwner)
+                SetCharacter(character);
         }
-        public void OnAnyCharacterRemoved((Transform obj, bool IsOwner) NewCharacter){
-            if (NewCharacter.IsOwner && NewCharacter.obj == Character)
+        public void OnAnyCharacterRemoved(LocalCharacter character){
+            if (character == Character)
                 SetCharacter(null);
         }
-        public void SetCharacter(Transform NewCharacter) {
+        public void SetCharacter(LocalCharacter NewCharacter) {
             // InputService.SetInputScreenActive(I3nputScreen.Character, NewCharacter != null);
-            Character = NewCharacter?.GetComponent<LocalCharacter>();
-            OnCharacterAdded.Invoke(NewCharacter);
+            if (NewCharacter == null && Character != null) {
+                OnCharacterRemoved?.Invoke(Character);
+            }
+            Character = NewCharacter;
+            if (NewCharacter != null) {
+                OnCharacterAdded.Invoke(Character);
+            }
             CharacterControl.gameObject.SetActive(NewCharacter != null);
         }
         public void OnClientConnectionState(ClientConnectionStateArgs clientConnection) {

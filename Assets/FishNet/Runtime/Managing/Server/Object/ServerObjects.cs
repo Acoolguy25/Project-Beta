@@ -1042,7 +1042,7 @@ namespace FishNet.Managing.Server
 
             if (networkObject.IsDeinitializing)
             {
-                NetworkManager.LogWarning($"Object {networkObject.name} cannot be despawned because it is already deinitializing.");
+                //NetworkManager.LogWarning($"Object {networkObject.name} cannot be despawned because it is already deinitializing.");
                 return;
             }
 

@@ -115,7 +115,7 @@ namespace RyanAssets.Client.ClientUI.Chat {
             CreateSystemMessage(new("Chat messages will appear here.", SystemMessageSource.LocalPlayerJoinMessage));
         }
 
-        private void OnPlayerAdded(NetworkConnection conn, PlayerData stats) {
+        private void OnPlayerAdded(PlayerData stats) {
             //if (!synced)
             //    return;
             if (stats.Owner.IsLocalClient)
@@ -124,8 +124,8 @@ namespace RyanAssets.Client.ClientUI.Chat {
                 return;
             CreateSystemMessage(new($"{stats.username.Value} has joined the game!", SystemMessageSource.PlayerAdd));
         }
-        private void OnPlayerRemoved(NetworkConnection conn, PlayerData stats) {
-            if (conn.IsLocalClient)
+        private void OnPlayerRemoved(PlayerData stats) {
+            if (stats.Owner.IsLocalClient)
                 return;
             CreateSystemMessage(new($"{stats.username.Value} has left the game!", SystemMessageSource.PlayerRemove));
         }

@@ -22,8 +22,9 @@ namespace RyanAssets.Tools.Server
 
         }
         protected virtual void OnHit(GameCharacter character) {
-            character.TakeDamage(toolBaseShared.hitDamage, toolBaseShared.defaultDamageSource, toolBaseShared.connectedCharacter);
-            toolBaseShared.PlayAudio(0);
+            if (character.TakeDamage(toolBaseShared.hitDamage, toolBaseShared.defaultDamageSource, toolBaseShared.connectedCharacter)) {
+                toolBaseShared.PlayAudio(0); // Play audio only if the hit was successful
+            }
         }
     }
 }

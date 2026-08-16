@@ -10,6 +10,9 @@ using RyanAssets.TweenService.TweenComponents;
 using RyanAssets.Tools.Client;
 using RyanAssets.UI;
 using RyanAssets.TweenService;
+using RyanAssets.Characters.Shared;
+using RyanAssets.Shared.Declarations;
+using FishNet.Object;
 
 namespace RyanAssets.Client.ClientUI.Toolbar
 {
@@ -23,7 +26,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
         ToolBaseShared equippedToolShared;
 
         [SerializeField]
-        CanvasGroupController weaponAmmoUI;
+        CanvasGroupController toolUI, weaponAmmoUI;
         TextMeshProUGUI weaponTitleText;
         TextMeshProUGUI currentAmmoText, maxAmmoText;
         GameObject maxAmmoFinite, maxAmmoInfinte;
@@ -41,11 +44,23 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             OnCreatePrefab += OnAddPrefab;
             OnClickPrefab += OnPrefabClicked;
             ToolControls.toolBarHotkeyPressed += OnActivateToolPressed;
+            LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
             if (LocalPlayer.Character != null) {
                 foreach (ToolBaseShared tool in LocalPlayer.Character.GetComponentsInChildren<ToolBaseShared>(true)) {
                     OnToolCreated(tool);
                 }
             }
+        }
+        protected override void OnDestroy() {
+            base.OnDestroy();
+            LocalPlayer.OnCharacterRemoved -= OnCharacterAdded;
+        }
+        void OnCharacterAdded(LocalCharacter character) {
+            toolUI.SetVisible(true);
+            character.OnDied += OnCharacterDied;
+        }
+        void OnCharacterDied(DamageSource damageSource, NetworkObject networkObject) {
+            toolUI.SetVisible(false);
         }
         void OnToolCreated(ToolBaseShared tool) {
             if (tool.IsOwner) {
@@ -61,6 +76,14 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             orderedTools.Remove(tool);
         }
         void OnAddPrefab(GameObject prefabClone, ToolBaseShared toolBase) {
+            // ListGrid creates entries asynchronously. The tool can be despawned before
+            // its creation callback runs, leaving this managed reference pointing to a
+            // destroyed Unity object.
+            if (toolBase == null || !orderedTools.Contains(toolBase)) {
+                RemovePrefab(prefabClone.transform);
+                return;
+            }
+
             ToolBaseClient baseClient = toolBase.GetComponent<ToolBaseClient>();
             UnityEngine.Assertions.Assert.IsNotNull(baseClient, $"ToolBaseShared {toolBase.name} does not have a ToolBaseClient component.");
             Image backingImage = prefabClone.GetComponent<Image>();
@@ -87,6 +110,8 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             toolBase.currentAmmoEvent += (int ammo) => RefreshCurrentAmmoUI();
             toolBase.maxAmmoEvent += (int ammo) => RefreshMaxAmmoUI();
             baseClient.onCooldownChangeEvent += (float start, float stop) => {
+                if (sliderImage == null)
+                    return;
                 TweenManager.Instance.ClearTweens(sliderImage.rectTransform);
                 sliderImage.rectTransform.anchorMax = new Vector2(1, 1);
                 TweenRectTransform.AnchorTween(sliderImage.rectTransform, stop - start, new Vector2(0f, 0f), new Vector2(1f, 0f));
@@ -107,7 +132,8 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             return $"<color={LeadingZeroColor}>{new string('0', leadingZeros)}</color>{text}";
         }
         void RefreshCurrentAmmoUI() {
-            weaponAmmoUI.SetVisible(equippedToolShared != null && equippedToolShared.currentAmmo >= 0);
+            if (weaponAmmoUI)
+                weaponAmmoUI.SetVisible(equippedToolShared != null && equippedToolShared.currentAmmo >= 0);
             if (equippedToolShared)
                 currentAmmoText.text = FormatAmmo(equippedToolShared.currentAmmo);
 

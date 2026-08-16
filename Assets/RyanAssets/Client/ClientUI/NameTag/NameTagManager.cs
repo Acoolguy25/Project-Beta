@@ -7,6 +7,7 @@ using UnityEngine.UI;
 using UnityEngine.UIElements;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Cameras;
 
 namespace RyanAssets.Client.ClientUI.NameTag {
     public class NameTagManager : MonoBehaviour {
@@ -43,7 +44,8 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                 displayNameText.text = gameCharater.DisplayName.Value;
             }
             void OnPlayerHealthChanged(long _1, long _2, bool asServer) {
-                healthBar.sizeDelta = new Vector2((float)gameCharater.Health.Value / (float)gameCharater.MaxHealth.Value, healthBar.sizeDelta.y);
+                float healthPercent = (gameCharater.MaxHealth.Value == 0)? 1f: ((float)gameCharater.Health.Value / (float)gameCharater.MaxHealth.Value);
+                healthBar.anchorMax = new Vector2(healthPercent, healthBar.anchorMax.y);
                 healthLabelText.text = $"{gameCharater.Health.Value}/{gameCharater.MaxHealth.Value}";
                 HealthBarBacking.gameObject.SetActive(gameCharater.Health.Value < gameCharater.MaxHealth.Value && !gameCharater.IsDead() && !gameCharater.IsEffectActive(CharacterEffect.Invul));
             }
@@ -95,8 +97,12 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                 GameCharacter gameCharacter = nameTagTuple.Item2;
                 
                 if (nameTag != null) {
-                    nameTag.transform.forward = Camera.main.transform.forward;
-                    nameTag.gameObject.SetActive(!gameCharacter.IsOwner);
+                    // Camera switches briefly leave no active MainCamera. Nametags
+                    // can wait a frame rather than throwing during that transition.
+                    Camera mainCamera = Camera.main;
+                    if (mainCamera != null)
+                        nameTag.transform.forward = mainCamera.transform.forward;
+                    nameTag.gameObject.SetActive(CameraController.targetCharacter != gameCharacter);
 #if UNITY_EDITOR
                     //UpdateNameTagPositioning(nameTag);
 #endif

@@ -22,8 +22,24 @@ namespace RyanAssets.Editor {
 
         public static string LinuxServerExecutablePath => Path.Combine(LinuxServerDirectory, ServerExecutableName);
         public static string LinuxServerUploadDirectory => LinuxServerDirectory.Replace('\\', '/');
+        public class ApplicationData {
+            public string ApplicationVersion;
+        }
+        public static void WriteBuildFiles() {
+            string buildDirectory = LinuxServerDirectory;
+            string versionFile = Path.Combine(buildDirectory, "application.json");
 
-        [MenuItem("Build/Local Linux Server")]
+            File.WriteAllText(
+                versionFile,
+                JsonUtility.ToJson(new ApplicationData
+                {
+                    ApplicationVersion = PlayerSettings.bundleVersion
+                }, true)
+            );
+
+        }
+
+        //[MenuItem("Build/Local Linux Server")]
         public static void BuildLinuxServer() {
             BuildReport report = BuildLinuxServer(null);
 
@@ -34,7 +50,7 @@ namespace RyanAssets.Editor {
             }
         }
 
-        [MenuItem("Build/Run Linux Server")]
+        //[MenuItem("Build/Run Linux Server")]
         public static void RunLinuxServer(){
             BuildReport report = BuildLinuxServer(null);
 
@@ -70,7 +86,10 @@ namespace RyanAssets.Editor {
             };
 
             reportProgress?.Invoke(0.08f, "Building Linux server");
-            return BuildPipeline.BuildPlayer(options);
+            BuildReport report = BuildPipeline.BuildPlayer(options);
+            // build first, then write build files so that it doesn't get deleted
+            WriteBuildFiles();
+            return report;
         }
     }
 }

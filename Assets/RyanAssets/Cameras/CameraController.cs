@@ -11,23 +11,34 @@ using RyanAssets.Shared.Declarations;
 using FishNet;
 using FishNet.Transporting;
 using FishNet.Object;
+using System;
 
 namespace RyanAssets.Cameras
 {
     public class CameraController : MonoBehaviour
     {
         public static CameraController Instance;
-        private List<Camera> CameraComponents = new();
+        private List<ICamera> CameraComponents = new();
         private List<bool> CameraActive = new();
+
         private int activeIndex;
-        public Camera activeCamera { get; private set; }
+        public ICamera activeCamera { get; private set; }
+        public static GameCharacter targetCharacter { get; private set; }
+
+        public static event Action<GameCharacter> OnCameraTargetAdded, OnCameraTargetRemoved;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Init() {
+            OnCameraTargetAdded = OnCameraTargetRemoved = null;
+            targetCharacter = null;
+        }
         public void SwitchCamera(int index) {
-            Camera newCamera = CameraComponents[index];
+            if (gameObject == null)
+                return;
+            ICamera newCamera = CameraComponents[index];
             Assert.IsNotNull(newCamera, "Active Camera cannot be null");
             Assert.IsTrue(newCamera.transform.parent == transform, "Cameras must be parented to GameObject.Cameras");
-            Assert.IsTrue(!activeCamera || newCamera.tag == activeCamera.tag, "Tags between cameras must be the same");
             //newCamera.transform.position = activeCamera.transform.position;
-            ICamera oldController = activeCamera.GetComponent<ICamera>();
+            ICamera oldController = activeCamera;
             ICamera newController = newCamera.GetComponent<ICamera>();
             oldController?.DisableCamera(newCamera.transform, (GameCameraType) index);
             newController?.EnableCamera(activeCamera?.transform, (GameCameraType) activeIndex);
@@ -46,54 +57,71 @@ namespace RyanAssets.Cameras
                 for (int i = index - 1; i >= 0; i--){
                     if (CameraActive[i]){
                         SwitchCamera(i);
-                        break;
+                        return;
                     }
                 }
+                activeIndex = -1; // if not set one, then remind it to set it active later
             }
         }
-        public void SetCameraTarget(Transform target) {
+        public void SetCameraTarget(GameCharacter target) {
+            if (gameObject == null)
+                return; // we are being destroyed
+            if (target)
+                Assert.IsNotNull(target.CharacterCamera, $"Target {target.name} does not have a valid CharacterCamera");
             foreach (var cinemachine in GetComponentsInChildren<CinemachineCamera>(true)) {
-                cinemachine.LookAt = cinemachine.Follow = target;
+                cinemachine.LookAt = cinemachine.Follow = target?.CharacterCamera;
             }
+            if (targetCharacter)
+                OnCameraTargetRemoved?.Invoke(targetCharacter);
+            targetCharacter = target;
+            if (target)
+                OnCameraTargetAdded?.Invoke(target);
         }
         private void Awake() {
             Instance = this;
-
         }
-        private void OnCharacterAdded(Transform character)
+        private void OnCharacterAdded(LocalCharacter localCharacter)
         {
-            LocalCharacter localCharacter = character?.GetComponent<LocalCharacter>();
-            Transform CharacterCamera = localCharacter?.CharacterCamera;
-            if (character) {
-                Assert.IsNotNull(CharacterCamera);
-                localCharacter.OnDied += OnCharacterDied;
-            }
-            SetCameraTarget(CharacterCamera);
+            localCharacter.OnDied += OnCharacterDied;
+            SetCameraAvailable(GameCameraType.SpectateCamera, false);
             SetCameraAvailable(GameCameraType.DeathCamera, false);
-            SetCameraAvailable(GameCameraType.ThirdPersonCamera, character != null);
+            SetCameraAvailable(GameCameraType.ThirdPersonCamera, true);
+            SetCameraTarget(localCharacter);
         }
-        private void OnCharacterDied(DamageSource source, NetworkObject sourceObject) {
+        private void OnCharacterDied(RyanAssets.Shared.Declarations.DamageSource source, NetworkObject sourceObject) {
             SetCameraAvailable(GameCameraType.DeathCamera, true);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
         }
-        private void OnConnected(){
-            LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
-            InstanceFinder.ClientManager.RegisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
-        }
-        private void OnDisconnected(){
-            LocalPlayer.Instance?.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
-            InstanceFinder.ClientManager.UnregisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
+        private void OnCharacterRemoved(LocalCharacter localCharacter) {
+            SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
+            SetCameraAvailable(GameCameraType.DeathCamera, false);
+            SetCameraAvailable(GameCameraType.SpectateCamera, true);
+            if (targetCharacter == localCharacter)
+                SetCameraTarget(null);
         }
         private void SetCameraAvailable_RPC(CameraTypeBroadcast broadcast, Channel channel = Channel.Reliable) {
             SetCameraAvailable(broadcast.cameraType, broadcast.enabled);
         }
+        void OnConnected() {
+            OnCharacterRemoved(null);
+            LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterRemoved += OnCharacterRemoved;
+            InstanceFinder.ClientManager.RegisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
+        }
+        void OnDisconnected() {
+            LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
+            InstanceFinder.ClientManager.UnregisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
+
+            SetCameraAvailable(GameCameraType.SpectateCamera, false);
+            SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
+            SetCameraTarget(null);
+        }
         private void Start() {
-            ClientConnector.OnConnected += OnConnected;
-            ClientConnector.OnDisconnected += OnDisconnected;
             activeCamera = null;
             activeIndex = -1;
             for (int i = 0; i < transform.childCount; i++){
-                Camera cam = transform.GetChild(i).GetComponent<Camera>();
+                ICamera cam = transform.GetChild(i).GetComponent<ICamera>();
                 bool cam_active = cam.gameObject.activeSelf;
                 if (cam_active) {
                     activeIndex = i;
@@ -103,8 +131,11 @@ namespace RyanAssets.Cameras
                 Assert.IsNotNull(cam);
                 CameraComponents.Add(cam);
                 CameraActive.Add(cam_active);
+                Assert.AreEqual(((int)Enum.Parse<GameCameraType>(cam.transform.name)), i, $"{cam.transform.name} does not match its enum!");
             }
             SwitchCamera(activeIndex);
+            ClientConnector.OnConnected += OnConnected;
+            ClientConnector.OnDisconnected += OnDisconnected;
         }
         private void OnDestroy() {
             Instance = null;

@@ -32,7 +32,7 @@ namespace RyanAssets.Server.ServerFeatures {
             SetPlayerVote(player, request.optionId, optionCount);
         }
 
-        static void OnPlayerRemoved(NetworkConnection connection, PlayerData player) {
+        static void OnPlayerRemoved(PlayerData player) {
             SharedGlobalEvents events = SharedGlobalEvents.Instance;
             if (!SharedGlobalEvents.isVoting)
                 return;

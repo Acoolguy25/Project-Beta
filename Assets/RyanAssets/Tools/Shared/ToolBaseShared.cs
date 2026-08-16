@@ -29,19 +29,19 @@ namespace RyanAssets.Tools.Shared {
 
         [Header("Weapon Stats")]
         [SerializeField]
-        public uint staminaCost = 10;
+        public int staminaCostInit = 10;
         [SerializeField]
-        public uint hitDamage = 150;
+        public int hitDamageInit = 150;
         [SerializeField]
-        public float attackCooldown = 0.85f;
+        public float attackCooldownInit = 0.85f;
         [SerializeField]
-        public float reloadDuration = 1.0f;
+        public float reloadDurationInit = 1.0f;
 
         [Header("Ammo Stats")]
         [SerializeField]
         public int currentAmmo = -1; // -1 to disable ammo
         [SerializeField]
-        public int maxClipAmmo = 10;
+        public int maxClipAmmoInit = 10;
         [SerializeField]
         public int currentStoredAmmo = -1; // -1 for infinite ammo
         [SerializeField]
@@ -62,6 +62,20 @@ namespace RyanAssets.Tools.Shared {
         [Header("Internal")]
         [SerializeField]
         public string ParentObjectName = "RightHand";
+
+        // Sync Vars
+        public readonly SyncVar<int> staminaCostSync = new();
+        public readonly SyncVar<int> hitDamageSync = new();
+        public readonly SyncVar<float> attackCooldownSync = new();
+        public readonly SyncVar<float> reloadDurationSync = new();
+        public readonly SyncVar<int> maxClipAmmoSync = new();
+        public readonly SyncVar<float> serverCooldownSync = new(0f);
+        // Client Readonly Sync Vars
+        public int staminaCost => staminaCostSync.Value;
+        public int hitDamage => hitDamageSync.Value;
+        public float attackCooldown => attackCooldownSync.Value;
+        public float reloadDuration => reloadDurationSync.Value;
+        public int maxClipAmmo => maxClipAmmoSync.Value;
 
         [SerializeField]
         public GameObject weaponRoot;
@@ -166,7 +180,9 @@ namespace RyanAssets.Tools.Shared {
             weaponRoot.SetActive(false);
             createStaticEvent?.Invoke(this);
         }
-        
+        public void UpdateServerCooldown(float cooldown) {
+            serverCooldownSync.Value = cooldown + NetworkHelper.GetServerTime();
+        }
 #endif
         public override void OnStartNetwork() {
             Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.transform, ParentObjectName);
@@ -183,7 +199,7 @@ namespace RyanAssets.Tools.Shared {
             weaponRoot = transform.GetChild(0).gameObject;
             audioSource = weaponRoot.GetComponent<AudioSource>();
         }
-        public void OnDestroy() {
+        public override void OnStopNetwork() {
             if (equipped)
                 Unequip();
             destroyStaticEvent?.Invoke(this);
@@ -213,7 +229,8 @@ namespace RyanAssets.Tools.Shared {
             if (audioClip == null)
                 return;
             audioSource.clip = audioClip;
-            audioSource.Play();
+            if (audioSource.isActiveAndEnabled)
+                audioSource.Play();
 #endif
         }
         public virtual void PlayAudio(int audioClipIdx) {

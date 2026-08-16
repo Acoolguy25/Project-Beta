@@ -58,12 +58,12 @@ MonoBehaviour:
   toolName: Rough Dagger
   toolDesc: Rusty dagger that can stick wound someone.
   toolImage: {fileID: 21300000, guid: 5b0fd8522a40a554a810f072a4904f3a, type: 3}
-  staminaCost: 10
-  hitDamage: 150
-  attackCooldown: 0.85
-  reloadDuration: -1
+  staminaCostInit: 15
+  hitDamageInit: 100
+  attackCooldownInit: 1.3
+  reloadDurationInit: 0
   currentAmmo: -1
-  maxClipAmmo: 10
+  maxClipAmmoInit: 10
   currentStoredAmmo: -1
   maxStoredAmmo: 10
   animationPackName: 

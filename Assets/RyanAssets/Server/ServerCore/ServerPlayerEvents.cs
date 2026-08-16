@@ -42,14 +42,14 @@ namespace RyanAssets.Server.ServerCore {
 
             //OnPlayerAddedEvent?.Invoke(conn);
         //}
-        static void RemovePlayerConnection(NetworkConnection conn, PlayerData stats) {
+        static void RemovePlayerConnection(PlayerData stats) {
             //if (PlayerData.Players.TryGetValue(conn, out PlayerData playerStats)) {
                 //InstanceFinder.ServerManager.BroadcastExcept<PlayerLeaveBroadcast>(conn, new() { player = conn, stats = playerStats });
             string remove_url = $"/api/internal/v1/user/remove?player_id={stats.player_id.Value}";
             BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect").Forget();
             //PlayerData.Players.Remove(conn);
             //}
-            ServerPlayerSave.Forget(conn, stats).Forget();
+            ServerPlayerSave.Forget(stats.Owner, stats).Forget();
             //OnPlayerRemovedEvent?.Invoke(conn);
         }
 

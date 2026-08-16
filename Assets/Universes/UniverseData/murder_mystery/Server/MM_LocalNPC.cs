@@ -31,9 +31,10 @@ namespace Universes.murder_mystery.Server {
         void Start() {
             base.OnStartServer();
             if (gameCharacter.GetTeam().team == TeamColor.Red) {
-                localNPC.SetTargetingType(NPCTargetingType.Attack);
                 sharedWeapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
                 clientWeapon = sharedWeapon.GetComponent<ToolBaseClient>();
+                localNPC.AttackDamageSource = sharedWeapon.defaultDamageSource;
+                localNPC.SetTargetingType(NPCTargetingType.Attack);
             }
         }
         void AttackFunction(GameCharacter targetCharacter) {

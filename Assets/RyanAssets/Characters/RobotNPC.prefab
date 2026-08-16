@@ -4373,8 +4373,12 @@ MonoBehaviour:
   _componentIndexCache: 3
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
+  CharacterCamera: {fileID: 7279864874766871779}
   HealthEditor: 0
   MaxHealthEditor: 0
+  TeamEditor:
+    team: 1
+    displayTeam: 1
 --- !u!114 &5344553774358299964
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4426,6 +4430,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6852dd55a24244da96cc35141fd20afe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.RobotColor
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 0}
   renderers:
   - {fileID: 6988255403260066607}
   shaderVariants:

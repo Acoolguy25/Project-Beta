@@ -2,7 +2,6 @@ using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
-using PlasticGui.WorkspaceWindow.Items;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Player;
 using RyanAssets.Tools.Shared;
@@ -11,11 +10,16 @@ using System.Collections.Generic;
 using RyanAssets.Core;
 using UnityEngine;
 using RyanAssets.Shared.Declarations;
+using System.Linq;
 
 namespace RyanAssets.Characters.Shared {
     public class GameCharacter : NetworkBehaviour {
+        [SerializeField]
+        public Transform CharacterCamera;
+
         public static Dictionary<TeamColor, HashSet<GameCharacter>> TeamToCharacter = new();
         public static event Action<GameCharacter> GameCharacterAdded, GameCharacterRemoved;
+        public event Action<GameCharacter> MyGameCharacterRemoved;
         public readonly SyncVar<TeamConfig> Team = new(new(), new(WritePermission.ClientUnsynchronized));
         public readonly SyncVar<long> Health = new();
         public readonly SyncVar<long> MaxHealth = new();
@@ -24,6 +28,7 @@ namespace RyanAssets.Characters.Shared {
         public readonly SyncVar<ToolBaseShared> ActiveTool = new(null, new(WritePermission.ClientUnsynchronized));
         public readonly SyncVar<string> DisplayName = new("Anonymous");
         public readonly SyncVar<Vector3> CharacterScale = new(Vector3.one);
+        public readonly SyncVar<bool> CanSpectate = new(true);
         //public readonly SyncVar<float> MaxStamina = new();
         //public readonly SyncVar<float> StaminaRegen = new();
         //public readonly SyncVar<float> StaminaCooldown = new();
@@ -32,6 +37,8 @@ namespace RyanAssets.Characters.Shared {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             GameCharacterAdded = null;
+            GameCharacterRemoved = null;
+            TeamToCharacter.Clear();
         }
         public void SwitchTool(ToolBaseShared tool) {
             if (tool == ActiveTool.Value || (IsDead() && tool)) return;
@@ -57,7 +64,7 @@ namespace RyanAssets.Characters.Shared {
         }
         public bool IsEffectActive(CharacterEffect effect) {
             if (ActiveEffects.TryGetValue(effect, out float timer)) {
-                return timer >= InstanceFinder.TimeManager.Tick;
+                return timer >= NetworkHelper.GetServerTime();
             }
             return false;
         }
@@ -98,7 +105,7 @@ namespace RyanAssets.Characters.Shared {
         public virtual bool IsProtected(GameCharacter sourceCharacter = null, DamageSource damageSource = DamageSource.None) {
             return (
                 (IsEffectActive(CharacterEffect.Invul) || SharedGlobalEvents.Instance.GlobalInvul)  // INVUL ACTIVATE
-                && Array.Exists(invulSources, s => s == damageSource)) ||
+                && invulSources.Contains(damageSource)) ||
 
                 (sourceCharacter != null && // SOURCE CHARACTER
                     (sourceCharacter.GetTeam().team == GetTeam().team && SharedGlobalEvents.Instance.TeamKillEnabled) ||
@@ -136,6 +143,11 @@ namespace RyanAssets.Characters.Shared {
             if (Health.Value >= 0 || MaxHealth.Value == 0)
                 SetHealth(Health.Value + hitpoints);
         }
+        public virtual void HealMaxHealth(long hitpoints) {
+            if (MaxHealth.Value >= 0)
+                MaxHealth.Value += hitpoints;
+            HealHealth(hitpoints);
+        }
         public virtual void AddEffect(CharacterEffect effect, float duration) {
             if (!IsEffectActive(effect)) {
                 ActiveEffects[effect] = NetworkHelper.GetServerTime() + duration;
@@ -145,6 +157,9 @@ namespace RyanAssets.Characters.Shared {
         }
         public virtual void RemoveEffect(CharacterEffect effect) {
             ActiveEffects.Remove(effect);
+        }
+        public virtual void ClearEffects() {
+            ActiveEffects.Clear();
         }
         protected virtual void SetHealth(long hitpoints) {
             Health.Value = hitpoints;
@@ -157,6 +172,7 @@ namespace RyanAssets.Characters.Shared {
         protected virtual void Died(DamageSource source, NetworkObject sourceObject) {
             if (IsDead()) return;
             SetHealth(0);
+            ClearEffects();
             SharedDied(source, sourceObject);
         }
         public virtual void Init(long hp, long maxHP) {
@@ -186,13 +202,6 @@ namespace RyanAssets.Characters.Shared {
             UpdateTeamEditorOptions(default, teamConfig, true);
 #endif
         }
-        protected void UpdateTeamRegistry(TeamConfig oldTeam, TeamConfig newTeam) {
-            if (oldTeam != null && TeamToCharacter.ContainsKey(oldTeam.team))
-                TeamToCharacter[oldTeam.team].Remove(this);
-            if (!TeamToCharacter.ContainsKey(newTeam.team))
-                TeamToCharacter[newTeam.team] = new HashSet<GameCharacter>();
-            TeamToCharacter[newTeam.team].Add(this);
-        }
         private void FixedUpdate() {
             if (FallHeightEnabled && IsSpawned) {
                 if (transform.position.y < FallenPartsDestroyHeight) {
@@ -207,7 +216,29 @@ namespace RyanAssets.Characters.Shared {
                 }
             }
         }
+#else
+        public override void OnStartClient() {
+            Team.OnChange += UpdateTeamClient;
+            if (!IsDead())
+                UpdateTeamRegistry(default, Team.Value);
+            // Client consumers (including spectating) can now safely look this
+            // character up in TeamToCharacter.
+            GameCharacterAdded?.Invoke(this);
+        }
+        void UpdateTeamClient(TeamConfig oldTeam, TeamConfig newTeam, bool asServer) {
+            UpdateTeamRegistry(oldTeam, newTeam);
+        }
 #endif
+        protected void RemoveTeamRegistry(TeamConfig team) {
+            if (team != null && TeamToCharacter.ContainsKey(team.team))
+                TeamToCharacter[team.team].Remove(this);
+        }
+        protected void UpdateTeamRegistry(TeamConfig oldTeam, TeamConfig newTeam) {
+            RemoveTeamRegistry(oldTeam);
+            if (!TeamToCharacter.ContainsKey(newTeam.team))
+                TeamToCharacter[newTeam.team] = new HashSet<GameCharacter>();
+            TeamToCharacter[newTeam.team].Add(this);
+        }
         public virtual TeamConfig GetTeam() {
             return Team.Value;
         }
@@ -216,6 +247,7 @@ namespace RyanAssets.Characters.Shared {
             if (!transform.tag.StartsWith("Dead"))
                 transform.tag = "Dead" + transform.tag;
 
+            RemoveTeamRegistry(GetTeam());
             OnDied?.Invoke(source, sourceObject);
         }
         public bool IsDead() {
@@ -226,8 +258,12 @@ namespace RyanAssets.Characters.Shared {
         }
 
         public override void OnStopNetwork() {
-            SwitchTool(null);
+            // Consumers of the removal events must not be able to select this character
+            // from the client-side registry while it is being despawned.
+            RemoveTeamRegistry(GetTeam());
             GameCharacterRemoved?.Invoke(this);
+            MyGameCharacterRemoved?.Invoke(this);
+            SwitchTool(null);
         }
         public override void OnStartNetwork() {
 #if !UNITY_SERVER
@@ -247,7 +283,6 @@ namespace RyanAssets.Characters.Shared {
 
             }
             gameObject.name = $"{DisplayName.Value} ({NetworkObject.ObjectId})";
-            GameCharacterAdded?.Invoke(this);
         }
         
     }

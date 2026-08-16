@@ -117,9 +117,9 @@ namespace RyanAssets.Server.ServerFeatures {
             int activePlayers;
             while ((activePlayers = GetActivePlayers()) < playerRequirement) {
                 SetTopMessage($"Waiting for players ({activePlayers}/{playerRequirement})");
-                await TaskHelper.WaitForAction<NetworkConnection, LocalCharacter>(
-                    h => ServerPlayerCharacter.OnPlayerCharacterAdded += h,
-                    h => ServerPlayerCharacter.OnPlayerCharacterAdded -= h,
+                await TaskHelper.WaitForAction<PlayerData>(
+                    h => PlayerData.OnPlayerAdded += h,
+                    h => PlayerData.OnPlayerRemoved -= h,
                     token
                 );
             }
@@ -132,12 +132,26 @@ namespace RyanAssets.Server.ServerFeatures {
             return PlayerData.Players.Values.OrderByDescending(p => p.leaderboard[leaderboardIdx]).ToList();
         }
         public void SetLeaderboardEnabled(string value, bool enabled) {
+            if (GetLeaderboardEnabled(value) == enabled) {
+                return;
+            }
+            if (enabled) {
+                foreach (PlayerData player in PlayerData.Players.Values) {
+                    player.leaderboard.AddRange(new[] { 0 });
+                }
+            }
             SharedGlobalEvents.Instance.LeaderboardHeaders.Remove(value);
             if (enabled)
                 SharedGlobalEvents.Instance.LeaderboardHeaders.AddRange(new[] { value });
         }
         public bool GetLeaderboardEnabled(string value) {
             return SharedGlobalEvents.Instance.LeaderboardHeaders.Contains(value);
+        }
+        public void ClearLeaderboard() {
+            foreach (PlayerData playerData in PlayerData.Players.Values) {
+                playerData.leaderboard.Clear();
+            }
+            SharedGlobalEvents.Instance.LeaderboardHeaders.Clear();
         }
         public void ResetLeaderboardData() {
             foreach (PlayerData playerData in PlayerData.Players.Values) {
@@ -146,9 +160,15 @@ namespace RyanAssets.Server.ServerFeatures {
                 }
             }
         }
+        // Teams
+        public void SetPlayerTeams(TeamConfig teamColor) {
+            foreach (PlayerData playerData in PlayerData.Players.Values) {
+                playerData.SetPlayerTeam(teamColor);
+            }
+        }
         
         // Baby functions
-        protected virtual void OnPlayerAdded(NetworkConnection conn, PlayerData playerData) {
+        protected virtual void OnPlayerAdded(PlayerData playerData) {
             playerData.leaderboard.AddRange(Enumerable.Repeat(0, SharedGlobalEvents.Instance.LeaderboardHeaders.Count));
         }
         public static void SetTopMessage(string topMessage) {
@@ -190,7 +210,10 @@ namespace RyanAssets.Server.ServerFeatures {
         }
 
         protected virtual void Reset() {
+            SetGlobalInvul(true);
+            SetTeamKillEnabled(true);
             OnResetEvent?.Invoke();
+            ClearLeaderboard();
             ServerBootStrap.LoadInitialScene();
         }
 

@@ -64,7 +64,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
             if (timerText == null || !SharedGlobalEvents.isVoting)
                 return;
 
-            timerText.text = $"{Mathf.CeilToInt(Mathf.Max(0f, SharedGlobalEvents.Instance.SharedVoteHeader.Value.endTime - RyanAssets.Core.NetworkHelper.ServerTime))}s";
+            timerText.text = $"{Mathf.CeilToInt(Mathf.Max(1f, SharedGlobalEvents.Instance.SharedVoteHeader.Value.endTime - RyanAssets.Core.NetworkHelper.ServerTime))}s";
         }
 
         void Subscribe() {
@@ -92,7 +92,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
                 UpdateVoteCounts();
         }
 
-        void OnPlayerChanged(FishNet.Connection.NetworkConnection connection, PlayerData player) => UpdateVoteCounts();
+        void OnPlayerChanged(PlayerData player) => UpdateVoteCounts();
 
         void Refresh() {
             Subscribe();
@@ -109,6 +109,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
                 descriptionText.gameObject.SetActive(!string.IsNullOrWhiteSpace(voteInfo.description));
             }
             optionCountTexts.Clear();
+            FadeSelectedButton(noVoteButton); // no vote is selected by default
             RefreshPrefabs(voteInfo.options ?? System.Array.Empty<ClientVoteOption>());
             UpdateVoteCounts();
         }

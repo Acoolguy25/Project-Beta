@@ -36,14 +36,14 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             prefab.GetComponent<ClientLeaderboardPlayer>().Init(player.data);
             //prefab.transform.GetChild(1).GetComponent<Text>().text = username;
         }
-        private void OnPlayerAdded(NetworkConnection conn, PlayerData data) {
+        private void OnPlayerAdded(PlayerData data) {
             if (data.IsOwner) {
-                AddPrefab((conn, data), -10); // Guarentee you are the top player!
+                AddPrefab((data.Owner, data), -10); // Guarentee you are the top player!
             } else {
-                AddPrefab((conn, data));
+                AddPrefab((data.Owner, data));
             }
         }
-        private void OnPlayerRemoved(NetworkConnection conn, PlayerData data) {
+        private void OnPlayerRemoved(PlayerData data) {
             string player_id = data.player_id.Value;
             if (player_id != null) { // player_id can be null when disconnecting
                 Transform item = contentTarget.Find(data.player_id.Value);

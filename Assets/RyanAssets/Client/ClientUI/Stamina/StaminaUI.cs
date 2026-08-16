@@ -15,27 +15,25 @@ namespace RyanAssets.Client.ClientUI.Stamina {
         CanvasGroupController canvasGroupController;
         void Start() {
             canvasGroupController = GetComponent<CanvasGroupController>();
-            LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterRemoved += OnCharacterRemoved;
             StaminaController.StaminaChanged += OnStaminaChanged;
         }
         private void OnDestroy() {
             StaminaController.StaminaChanged -= OnStaminaChanged;
+            LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
         }
-        void OnCharacterAdded(Transform character) {
-            if (character == null) {
-                OnCharacterRemoved();
-                return;
-            }
+        void OnCharacterAdded(LocalCharacter character) {
             localCharacter = character.GetComponent<LocalCharacter>();
             //localCharacter.StaminaChanged += (_) => OnStaminaChanged(false);
             localCharacter.OnDied += OnCharacterDied;
             OnStaminaChanged(true);
             SetVisible(true);
         }
-        void OnCharacterDied(DamageSource source, NetworkObject sourceObject) {
+        void OnCharacterDied(RyanAssets.Shared.Declarations.DamageSource source, NetworkObject sourceObject) {
             SetVisible();
         }
-        void OnCharacterRemoved() {
+        void OnCharacterRemoved(LocalCharacter oldCharacter) {
             SetVisible();
         }
         void SetVisible(bool visible = false) {

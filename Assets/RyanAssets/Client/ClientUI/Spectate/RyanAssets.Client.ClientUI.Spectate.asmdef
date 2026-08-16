@@ -1,0 +1,27 @@
+{
+    "name": "RyanAssets.Client.ClientUI.Spectate",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Spectate",
+    "references": [
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:d81c570acb0546e47865a9bb58cc7645",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
+        "GUID:57d6978d0bcf457469dd29bce6e29b08",
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
+        "GUID:4307f53044263cf4b835bd812fc161a4",
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:f12bfd3872f944c498302f1d069a7be1",
+        "GUID:d62649f20bc2ba349a434c5eba6f7556"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

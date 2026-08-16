@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using RyanAssets.UI;
 using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Cameras;
 
 namespace RyanAssets.Client.ClientUI.Topbar {
     public class ClientHealthbar : MonoBehaviour{
@@ -13,32 +14,38 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         Image healthPanel;
 
         CanvasGroupController canvasGroupController;
-        LocalCharacter localCharacter;
         void Start() {
             canvasGroupController = GetComponent<CanvasGroupController>();
-            LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            CameraController.OnCameraTargetAdded += OnCameraTargetAdded;
+            CameraController.OnCameraTargetRemoved += OnCameraTargetRemoved;
         }
         void OnDestroy() {
-            LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+            CameraController.OnCameraTargetAdded -= OnCameraTargetAdded;
+            CameraController.OnCameraTargetRemoved -= OnCameraTargetRemoved;
         }
-        void OnCharacterAdded(Transform character) {
-            localCharacter = character?.GetComponent<LocalCharacter>();
-            //localCharacter.OnDied += OnCharacterDied;
-            if (localCharacter != null) {
-                localCharacter.Health.OnChange += (_, _, _) => Refresh();
-                localCharacter.MaxHealth.OnChange += (_, _, _) => Refresh();
-            }
+        void OnCameraTargetAdded(GameCharacter targetCharacter) {
+            //targetCharacter.OnDied += OnCharacterDied;
+            targetCharacter.Health.OnChange += OnHealthChanged;
+            targetCharacter.MaxHealth.OnChange += OnHealthChanged;
+            Refresh();
+        }
+        void OnCameraTargetRemoved(GameCharacter oldCharacter) {
+            oldCharacter.Health.OnChange -= OnHealthChanged;
+            oldCharacter.MaxHealth.OnChange -= OnHealthChanged;
+            Refresh();
+        }
+        void OnHealthChanged(long oldValue, long newValue, bool asServer) {
             Refresh();
         }
         void Refresh() {
-            if (localCharacter != null) {
-                long Health = localCharacter.Health.Value;
-                long MaxHealth = localCharacter.MaxHealth.Value;
-                float HealthPercent = localCharacter.IsFullHealth() ? 1f : Mathf.Min(1f, (float) Health / MaxHealth);
+            if (CameraController.targetCharacter != null) {
+                long Health = CameraController.targetCharacter.Health.Value;
+                long MaxHealth = CameraController.targetCharacter.MaxHealth.Value;
+                float HealthPercent = CameraController.targetCharacter.IsFullHealth() ? 1f : Mathf.Min(1f, (float) Health / MaxHealth);
                 healthText.text = $"{Health}/{MaxHealth}";
                 healthPanel.color = Color.LerpUnclamped(Color.red, Color.green, HealthPercent);
                 healthPanel.GetComponent<RectTransform>().anchorMax = new Vector2(HealthPercent, 1);
-                canvasGroupController.SetVisible(!localCharacter.IsFullHealth() && Health != 0);
+                canvasGroupController.SetVisible(!CameraController.targetCharacter.IsFullHealth() && Health != 0);
             } else
                 canvasGroupController.SetVisible(false);
         }

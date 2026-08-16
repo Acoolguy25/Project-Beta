@@ -17,7 +17,7 @@ namespace RyanAssets.Client.CharacterEffects {
         public CancellationTokenSource cancellationTokenSource;
         public Vector3 localPosition;
     }
-    internal class GameCharacterEffectManager {
+    internal class GameCharacterEffectManager : IDisposable {
         private const float CameraFacingOffset = 0.5f;
         public GameCharacter character;
         public GameObject root;
@@ -44,7 +44,7 @@ namespace RyanAssets.Client.CharacterEffects {
                     break;
                 case SyncDictionaryOperation.Clear:
                     // Handle effects cleared
-                    Debug.Log($"All effects cleared from character {character.name}");
+                    //Debug.Log($"All effects cleared from character {character.name}");
                     ClearEffects();
                     break;
 
@@ -53,6 +53,16 @@ namespace RyanAssets.Client.CharacterEffects {
         public void ClearEffects() {
             foreach (var effect in activeEffectParticles.Keys.ToList()) {
                 RemoveEffect(effect);
+            }
+        }
+        private static void CancelAndDispose(CancellationTokenSource cts) {
+            if (cts == null)
+                return;
+            try {
+                cts.Cancel();
+                cts.Dispose();
+            } catch (ObjectDisposedException) {
+                // Cleaned up already
             }
         }
         private async UniTask RemoveEffectAfterDelay(CharacterEffect effect, float duration, CancellationToken token) {
@@ -76,9 +86,9 @@ namespace RyanAssets.Client.CharacterEffects {
                     localPosition = effectClone.transform.localPosition
                 };
             } else {
-                existingParticle.cancellationTokenSource.Cancel();
-                existingParticle.cancellationTokenSource.Dispose();
+                CancelAndDispose(existingParticle.cancellationTokenSource);
                 existingParticle.cancellationTokenSource = cts;
+                activeEffectParticles[effect] = existingParticle;
             }
             RemoveEffectAfterDelay(effect, duration, cts.Token).Forget();
         }
@@ -86,12 +96,12 @@ namespace RyanAssets.Client.CharacterEffects {
             if (activeEffectParticles.TryGetValue(effect, out CharacterEffectParticle particle)) {
                 if (particle.particleSystem)
                     GameObject.Destroy(particle.particleSystem.gameObject);
-                particle.cancellationTokenSource.Cancel();
-                particle.cancellationTokenSource.Dispose();
+                CancelAndDispose(particle.cancellationTokenSource);
                 activeEffectParticles.Remove(effect);
             }
         }
-        ~GameCharacterEffectManager() {
+        public void Dispose() {
+            character.ActiveEffects.OnChange -= OnActiveEffectsChanged;
             ClearEffects();
         }
     }
@@ -111,11 +121,18 @@ namespace RyanAssets.Client.CharacterEffects {
             effectInstances.Add(new GameCharacterEffectManager(character, character.gameObject, PositiveEffectsPrefab, NegativeEffectsPrefab));
         }
         void OnGameCharacterRemoved(GameCharacter character) {
-            effectInstances.RemoveAll(e => e.character == character);
+            foreach (GameCharacterEffectManager manager in effectInstances.Where(e => e.character == character).ToList()) {
+                manager.Dispose();
+                effectInstances.Remove(manager);
+            }
         }
         void OnDestroy() {
             GameCharacter.GameCharacterAdded -= OnGameCharacterAdded;
             GameCharacter.GameCharacterRemoved -= OnGameCharacterRemoved;
+            foreach (GameCharacterEffectManager manager in effectInstances) {
+                manager.Dispose();
+            }
+            effectInstances.Clear();
         }
     }
 }

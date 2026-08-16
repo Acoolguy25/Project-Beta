@@ -52,14 +52,14 @@ namespace RyanAssets.Characters.Client {
 
         //private bool IsCurrentDeviceMouse => _playerInput != null && _playerInput.currentControlScheme == "KeyboardMouse";
         void OnEnable() {
-            LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
             //PlayerData.localData.walkSpeed.Subscribe(Refresh);
             //if (SharedGlobalEvents.Instance && SharedGlobalEvents.Instance.Players.TryGetValue(InstanceFinder.ClientManager.Connection, out ServerPlayerStats serverPlayerStats))
             //   Refresh(serverPlayerStats);
             PlayerData.OnMyPlayerAdded.Subscribe(OnMyPlayerAdded);
         }
         void OnDisable() {
-            LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
             PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
             //SharedGlobalEvents.OnMyPlayerUpdated -= Refresh;
             //PlayerData.localData.walkSpeed.Unsubscribe(Refresh);
@@ -72,7 +72,7 @@ namespace RyanAssets.Characters.Client {
             MoveSpeed = PlayerData.localData.walkSpeed.Value;
             SprintSpeed = PlayerData.localData.sprintSpeed.Value;
         }
-        private void OnCharacterAdded(Transform c) {
+        private void OnCharacterAdded(LocalCharacter c) {
             _hasAnimator = LocalPlayer.Character.TryGetComponent(out _animator);
             _rb = LocalPlayer.Character.GetComponent<Rigidbody>();
             _rb.constraints = RigidbodyConstraints.FreezeRotation & ~RigidbodyConstraints.FreezeRotationY;

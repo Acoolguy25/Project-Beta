@@ -1381,7 +1381,16 @@ namespace FishNet.Managing.Scened
                         s.GetRootGameObjects(_movingObjects);
 
                         foreach (GameObject go in _movingObjects)
+                        {
+                            // Unity objects can be destroyed while the scene unload/load
+                            // coroutine is yielding. A destroyed GameObject remains as a
+                            // managed reference but compares equal to null, and passing it
+                            // to MoveGameObjectToScene throws MissingReferenceException.
+                            if (go == null)
+                                continue;
+
                             UnitySceneManager.MoveGameObjectToScene(go, firstValidScene);
+                        }
                     }
                 }
 

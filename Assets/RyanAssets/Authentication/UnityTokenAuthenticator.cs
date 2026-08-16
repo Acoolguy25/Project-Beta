@@ -14,7 +14,6 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using FishNet;
 using RyanAssets.DataService;
-using SimpleJSON;
 
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {

@@ -57,7 +57,7 @@ namespace RyanAssets.Server.ServerCore {
                 return;
             }
             if (args.ConnectionState == RemoteConnectionState.Started) {
-                Debug.Log($"Player joined: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} total)");
+                //Debug.Log($"Player joined: ClientId={conn.ClientId} ({InstanceFinder.ServerManager.Clients.Count} total)");
                 foreach (NetworkConnection clientConn in InstanceFinder.ServerManager.Clients.Values){
                     Debug.Log(
                         $"ClientId={clientConn.ClientId} " +

@@ -1,4 +1,5 @@
-﻿using RyanAssets.DataService;
+﻿using RyanAssets.Characters.Shared;
+using RyanAssets.DataService;
 using System;
 using System.Collections;
 using UnityEngine;
@@ -43,12 +44,12 @@ namespace RyanAssets.Characters.Client {
             Instance = this;
         }
         void OnEnable() {
-            LocalPlayer.Instance.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
             PlayerData.OnMyPlayerAdded.Subscribe(OnMyPlayerAdded);
             PlayerData.OnMyPlayerRemoved += OnMyPlayerRemoved;
         }
         void OnDisable() {
-            LocalPlayer.Instance.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
             PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
             PlayerData.OnMyPlayerRemoved -= OnMyPlayerRemoved;
         }
@@ -69,7 +70,7 @@ namespace RyanAssets.Characters.Client {
             else
                 DeltaStamina(0); // signal an update, clip it to max if max decreased
         }
-        void OnCharacterAdded(Transform character) {
+        void OnCharacterAdded(LocalCharacter character) {
             if (!StaminaLoaded)
                 return;
             SetStamina(MaxStamina);

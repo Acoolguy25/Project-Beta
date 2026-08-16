@@ -1,12 +1,14 @@
-﻿using System;
+﻿using FishNet.Object;
+using RyanAssets.Characters.Shared;
+using RyanAssets.DataService;
+using RyanAssets.Server.ServerFeatures;
+using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Player;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
-using RyanAssets.Server.ServerFeatures;
-using RyanAssets.Characters.Shared;
-using RyanAssets.DataService;
-using RyanAssets.Shared.Player;
 
 namespace RyanAssets.Characters.Server {
     public enum NPCTargetingType {
@@ -25,7 +27,7 @@ namespace RyanAssets.Characters.Server {
         [Header("Movement")]
         [SerializeField] private float WalkSpeed = 18.0f;
         [SerializeField] private float FleeSpeed = 28.0f;
-        [SerializeField] private float AttackSpeed = 32.0f;
+        [SerializeField] private float AttackSpeed = 20.0f;
         public static float WalkSpeedMultiplier = 1.0f;
         public static float FleeSpeedMultiplier = 1.0f;
         public static float AttackSpeedMultiplier = 1.0f;
@@ -33,6 +35,7 @@ namespace RyanAssets.Characters.Server {
         [Header("Targeting")]
         public NPCTargetingType TargetingType = NPCTargetingType.Random;
         private NPCTargetingType _previousTargetingType = NPCTargetingType.Random;
+        [NonSerialized] public DamageSource AttackDamageSource; // set in runtime by game specific script
         public GameObject PreviousTarget;
         private Vector3? PreviousTargetVec;
 
@@ -53,27 +56,28 @@ namespace RyanAssets.Characters.Server {
 
         [Header("Attack")]
         HashSet<TeamColor> EnemyTeams => SharedGlobalEvents.TeamEnemies[gameCharacter.GetTeam().team];
-        [SerializeField] private float AttackDetectionRadius = 12f; // enemy this close -> start attacking
-        [SerializeField] private float MinAttackRange = 0f;         // closer than this -> back off
-        [SerializeField] private float MaxAttackRange = 9f;         // farther than this -> close the distance
+        [SerializeField] public float AttackDetectionRadius = 10f; // enemy this close -> start attacking
+        [SerializeField] private float MinAttackRange = 0f;         // closer than this -> back off (0 = melee, never backs off)
+        [SerializeField] private float MaxAttackRange = 2f;         // farther than this -> close the distance (melee reach)
         [SerializeField] private float AttackRetargetInterval = 1f;
-        [SerializeField] private float AttackClearRadius = 24f;     // no enemies this close -> stop attacking
+        [SerializeField] private float AttackClearRadius = 15f;     // no enemies this close -> stop attacking
         [SerializeField] private float AttackCooldown = 1f;         // min seconds between AttackFunction invocations
+        [SerializeField] private float RetargetSwitchThreshold = 0.7f; // on each retarget check, only switch off a still-valid target onto a different enemy if the alternative is at least this much closer (as a fraction of the current target's distance) - stops the NPC fixating on whichever enemy it happened to see first while a much closer attacker goes ignored, while still avoiding thrash between two similarly-distant targets every retarget tick
 
         [Header("Attack Movement")]
-        // Movement destination is only recalculated on this interval rather than every frame - calling
-        // SetDestination every single frame while chasing was the other main cause of the stutter,
-        // since it forces NavMesh to re-evaluate a path constantly instead of periodically.
-        [SerializeField] private float AttackMoveRecalcInterval = 0.35f;
+        [SerializeField] private float DestinationUpdateThreshold = 0.5f; // only re-path when the desired destination has moved at least this far since the last time we committed to one - see UpdateAttackMovement for why
         [SerializeField] private float AttackApproachSideOffset = 0f;   // lateral offset so the approach weaves instead of beelining - 0 disables weaving entirely
-        [SerializeField] private float AttackApproachStopShort = 0.3f;    // stop this far inside MaxAttackRange when closing in (only used when ApproachToMinRangeEdge is false)
-        [SerializeField] private bool ApproachToMinRangeEdge = false;   // true: close the gap all the way down to MinAttackRange (as close as possible). false: stop just inside MaxAttackRange.
+        [SerializeField] private float AttackApproachStopShort = 0.5f;  // stop this far inside MaxAttackRange when closing in (only used when ApproachToMinRangeEdge is false, and only outside DirectChaseRange)
+        [SerializeField] private bool ApproachToMinRangeEdge = true;    // true: close the gap all the way down to MinAttackRange (as close as possible). false: stop just inside MaxAttackRange.
         [SerializeField] private bool AllowMovementWhileAttacking = true; // true: keeps walking straight at the target while inside the [Min, Max] band instead of freezing at the standoff point - use this for melee, where the computed standoff can land just short of actual hit range. Set false to keep the NPC planted in place while attacking (e.g. for ranged units that want to hold a fixed distance).
         [SerializeField] private bool RetreatToMinRangeEdge = true;    // true: always run all the way out to the absolute MinAttackRange edge. false: retreat using AttackRetreatDistance but stop as soon as we're back in range.
-        [SerializeField] private float AttackRetreatDistance = 6f;      // only used when RetreatToMinRangeEdge is false
-        [SerializeField] private float AttackPredictionLeadTime = 0f;   // seconds to lead the target's estimated velocity by - approach/retreat destinations aim at where the target will be, not where it currently is. 0 disables prediction entirely (chases actual current position).
-        [SerializeField] private float DirectChaseRange = 4f;          // within this distance, if a raycast confirms a clear line of sight, chase every frame instead of waiting for AttackMoveRecalcInterval - this is what makes closing distance feel snappy instead of laggy
-        [SerializeField] private LayerMask DirectChaseObstacleMask = ~0; // layers that count as blocking line-of-sight for the direct-chase raycast (e.g. walls/terrain, not other characters)
+        [SerializeField] private float AttackRetreatDistance = 3f;      // only used when RetreatToMinRangeEdge is false
+        [SerializeField] private float AttackPredictionLeadTime = 0f;   // seconds to lead the target's estimated velocity by. 0 disables prediction entirely (chases actual current position).
+        [SerializeField] private float DirectChaseRange = 10f;          // within this distance, if a raycast confirms a clear line of sight, head straight at the target with no standoff/weave math at all
+        [SerializeField] private LayerMask DirectChaseObstacleMask = ~0; // layers that count as blocking line-of-sight for the direct-chase raycast (e.g. walls/terrain) - restrict this to your environment layer(s), otherwise other characters standing in the way will also count as an obstruction
+        [SerializeField] private float DirectChaseModeSwitchCooldown = 0.2f; // minimum time between flipping direct-chase on/off - stops a raycast that flickers across a corner edge from resetting/rebuilding the path every frame
+        [SerializeField] private float AttackRangeBuffer = 0.5f;        // margin kept beyond MinAttackRange when computing the standoff point the NPC actually walks to. Without this, the point the NPC approaches toward was the exact same point that triggers retreat, so ordinary movement overshoot flipped it between closing in and backing off every frame - the main cause of the walking-back-and-forth bug. Also stops melee NPCs (MinAttackRange = 0) from aiming at the target's exact pivot.
+        [SerializeField] private float DirectChaseArrivalTolerance = 0.15f; // once within this distance of the standoff point, direct-chase mode holds still instead of continuing to drive at full speed - direct-chase sets agent.velocity by hand every frame with no deceleration curve, so without this it kept nudging/colliding into the target trying to close the last few centimeters, which showed up as jitter/oscillation once in range
 
         // Assign this from elsewhere (e.g. another script's Awake/Start) to define what
         // "attacking" actually does for this NPC, e.g.:
@@ -86,14 +90,12 @@ namespace RyanAssets.Characters.Server {
 
         private Coroutine _fleeCoroutine;
         private Coroutine _attackCoroutine;
-        private Coroutine _attackMoveCoroutine;
 
         private Vector3 _lastFleeDestination = Vector3.zero;
 
         private GameCharacter _currentAttackTarget;
         public GameCharacter CurrentAttackTarget => _currentAttackTarget;
         private float _lastAttackTime = -Mathf.Infinity;
-        private bool _isRetreating;
 
         // Estimated target velocity, used to predict where it's going instead of chasing/fleeing
         // where it currently is. We have to estimate this ourselves by sampling its position over
@@ -102,6 +104,15 @@ namespace RyanAssets.Characters.Server {
         private Vector3 _lastTargetPosition;
         private float _lastTargetSampleTime = -1f;
         private Vector3 _targetVelocity;
+
+        // Tracks the last movement point we actually committed a path to, so we can tell whether
+        // the desired destination has moved far enough to be worth re-pathing over.
+        private Vector3 _lastAttackMoveCandidate;
+        private bool _hasAttackMoveCandidate;
+
+        // Direct-chase mode state - see DirectChaseModeSwitchCooldown / SetDirectChasing.
+        private bool _isDirectChasing;
+        private float _lastDirectChaseSwitchTime = -Mathf.Infinity;
 
         void Awake() {
             gameCharacter = GetComponent<GameCharacter>();
@@ -176,10 +187,8 @@ namespace RyanAssets.Characters.Server {
 
             if (newType == NPCTargetingType.Flee)
                 _fleeCoroutine = StartCoroutine(FleeRoutine());
-            else if (newType == NPCTargetingType.Attack) {
+            else if (newType == NPCTargetingType.Attack)
                 _attackCoroutine = StartCoroutine(AttackRoutine());
-                _attackMoveCoroutine = StartCoroutine(AttackMovementRoutine());
-            }
         }
 
         private void StopStateCoroutines() {
@@ -190,14 +199,12 @@ namespace RyanAssets.Characters.Server {
             if (_attackCoroutine != null) {
                 StopCoroutine(_attackCoroutine);
                 _attackCoroutine = null;
-                _currentAttackTarget = null;
+                SetAttackTarget(null);
                 _velocityTrackedTarget = null;
                 _targetVelocity = Vector3.zero;
                 _lastTargetSampleTime = -1f;
-            }
-            if (_attackMoveCoroutine != null) {
-                StopCoroutine(_attackMoveCoroutine);
-                _attackMoveCoroutine = null;
+                _hasAttackMoveCandidate = false;
+                _isDirectChasing = false;
             }
         }
 
@@ -284,7 +291,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null || character.IsDead()) continue;
+                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageSource)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         return true;
                 }
@@ -301,7 +308,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null) continue;
+                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageSource)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         result.Add(character);
                 }
@@ -309,7 +316,8 @@ namespace RyanAssets.Characters.Server {
             return result;
         }
 
-        // Nearest matching character within maxRadius, or null if none found.
+        // Nearest matching character within maxRadius, or null if none found. Skips dead
+        // characters so a corpse never gets (re-)selected as an attack target.
         private GameCharacter GetNearestCharacter(ICollection<TeamColor> teams, float maxRadius) {
             if (teams == null) return null;
 
@@ -319,7 +327,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null) continue;
+                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageSource)) continue;
                     float dist = Vector3.Distance(transform.position, character.transform.position);
                     if (dist < maxRadius && dist < nearestDist) {
                         nearestDist = dist;
@@ -332,26 +340,74 @@ namespace RyanAssets.Characters.Server {
 
         // ─── Attack ──────────────────────────────────────────────────────────
 
+        // Centralizes changing _currentAttackTarget so the OnDied subscription always stays in
+        // sync - subscribe to the new target, unsubscribe from the old one, and clear any stale
+        // movement/velocity tracking that referred to the previous target.
+        private void SetAttackTarget(GameCharacter target) {
+            if (_currentAttackTarget == target) return;
+
+            if (_currentAttackTarget != null)
+                _currentAttackTarget.OnDied -= HandleAttackTargetDied;
+
+            _currentAttackTarget = target;
+            _hasAttackMoveCandidate = false; // force a fresh destination for the new target (or stop cleanly if null)
+            _isDirectChasing = false;
+
+            if (_currentAttackTarget != null)
+                _currentAttackTarget.OnDied += HandleAttackTargetDied;
+        }
+
+        // Fires the instant our current target dies, so we drop it immediately instead of
+        // continuing to chase/hold at a corpse until the periodic check in AttackRoutine (or the
+        // dead-target check at the top of HandleAttackTick) eventually notices. Those periodic
+        // checks stay in place as a safety net in case this event is ever missed.
+        private void HandleAttackTargetDied(DamageSource source, NetworkObject killer) {
+            SetAttackTarget(null);
+        }
+
         private IEnumerator AttackRoutine() {
-            _currentAttackTarget = GetNearestCharacter(EnemyTeams, AttackClearRadius);
+            SetAttackTarget(GetNearestCharacter(EnemyTeams, AttackClearRadius));
 
             while (true) {
                 yield return new WaitForSeconds(AttackRetargetInterval);
 
-                // Re-acquire target if it's gone or has wandered out of range.
+                // Re-acquire target if it's gone, died, or has wandered out of range. The death
+                // check here is just a safety net - HandleAttackTargetDied normally clears the
+                // target immediately via the OnDied event well before this runs.
                 if (_currentAttackTarget == null
+                    || _currentAttackTarget.IsDead()
                     || Vector3.Distance(transform.position, _currentAttackTarget.transform.position) > AttackClearRadius) {
-                    _currentAttackTarget = GetNearestCharacter(EnemyTeams, AttackClearRadius);
+                    SetAttackTarget(GetNearestCharacter(EnemyTeams, AttackClearRadius));
+                    continue;
+                }
+
+                // Current target is still valid, but check whether someone closer has shown up.
+                // Without this, the NPC fixates on whichever enemy it targeted first for as long
+                // as that enemy stays inside AttackClearRadius - which is generous, well beyond
+                // AttackDetectionRadius - so it would keep chasing one target across the map while
+                // ignoring other enemies right next to it. Only switches when the alternative is
+                // meaningfully closer (RetargetSwitchThreshold) so it doesn't thrash between two
+                // similarly-distant targets every retarget tick.
+                GameCharacter closest = GetNearestCharacter(EnemyTeams, AttackClearRadius);
+                if (closest != null && closest != _currentAttackTarget) {
+                    float closestDist = Vector3.Distance(transform.position, closest.transform.position);
+                    float currentDist = Vector3.Distance(transform.position, _currentAttackTarget.transform.position);
+                    if (closestDist < currentDist * RetargetSwitchThreshold)
+                        SetAttackTarget(closest);
                 }
             }
         }
 
-        // Runs every frame from Update(). Deliberately cheap - one distance check, no NavMesh
-        // or allocation work - since the actual movement destination is handled on its own
-        // interval by AttackMovementRoutine below.
+        // Runs every frame from Update(). Handles retargeting, velocity tracking, movement, and
+        // attacking - all driven straight off distance checks each frame rather than a mix of
+        // frame-rate and interval-rate logic, which is what was causing the stutter.
         private void HandleAttackTick() {
+            // Extra safety net - see HandleAttackTargetDied for the primary (immediate) path.
+            if (_currentAttackTarget != null && _currentAttackTarget.IsDead())
+                SetAttackTarget(null);
+
             if (_currentAttackTarget == null) {
-                _currentAttackTarget = GetNearestCharacter(EnemyTeams, AttackClearRadius);
+                SetAttackTarget(GetNearestCharacter(EnemyTeams, AttackClearRadius));
                 if (_currentAttackTarget == null) return;
             }
 
@@ -359,23 +415,7 @@ namespace RyanAssets.Characters.Server {
 
             float dist = Vector3.Distance(transform.position, _currentAttackTarget.transform.position);
 
-            // RetreatToMinRangeEdge=false means retreat destinations are computed with the full
-            // AttackRetreatDistance rather than stopping exactly at MinAttackRange - so cut the
-            // retreat short here, every frame, the instant we're back in range instead of waiting
-            // for the next AttackMoveRecalcInterval tick to notice and overshooting in the meantime.
-            if (_isRetreating && !RetreatToMinRangeEdge && dist >= MinAttackRange) {
-                agent.ResetPath();
-                _isRetreating = false;
-            }
-
-            // When close and unobstructed, skip waiting on AttackMoveRecalcInterval entirely and
-            // just chase every frame - the periodic recalc is fine for long-range approaches, but
-            // it reads as laggy once the target is close and moving, since a whole interval can
-            // pass before the destination catches up. Only takes over when we're not retreating
-            // and there's a clear line of sight, so it never overrides backing off or fights the
-            // NavMesh-routed approach when something's actually in the way.
-            if (!_isRetreating && dist > MinAttackRange && dist <= DirectChaseRange && HasLineOfSightToTarget())
-                agent.SetDestination(_currentAttackTarget.transform.position);
+            UpdateAttackMovement(dist);
 
             // Only attack while sitting inside the [Min, Max] band - too close means we're
             // backing off, too far means we're still closing the distance.
@@ -407,9 +447,10 @@ namespace RyanAssets.Characters.Server {
         }
 
         // Where the target is predicted to be AttackPredictionLeadTime seconds from now, based on
-        // our own estimated velocity for it.
+        // our own estimated velocity for it. With AttackPredictionLeadTime at 0 (the default) this
+        // is just the target's actual current position.
         private Vector3 GetPredictedTargetPosition() {
-            if (_currentAttackTarget == null) return Vector3.zero;
+            if (_currentAttackTarget == null) return transform.position;
             return _currentAttackTarget.transform.position + _targetVelocity * AttackPredictionLeadTime;
         }
 
@@ -427,85 +468,151 @@ namespace RyanAssets.Characters.Server {
             return !Physics.Raycast(origin, delta.normalized, delta.magnitude, DirectChaseObstacleMask);
         }
 
-        // Recalculates the movement destination on an interval instead of every frame - this
-        // is what stops the constant re-pathing that was causing the freezing/stuttering.
-        private IEnumerator AttackMovementRoutine() {
-            UpdateAttackDestination();
-            while (true) {
-                yield return new WaitForSeconds(AttackMoveRecalcInterval);
-                UpdateAttackDestination();
-            }
-        }
-
-        private void UpdateAttackDestination() {
+        // Decides how the NPC should move this frame. Close + a clear line of sight uses direct
+        // steering (see SteerDirectlyToward) every single frame with none of NavMesh's path-request
+        // overhead. Farther away, retreating, or blocked line of sight falls back to normal
+        // NavMesh-routed movement, gated by DestinationUpdateThreshold so we don't re-path more
+        // often than the desired point has actually moved.
+        private void UpdateAttackMovement(float dist) {
             if (_currentAttackTarget == null) return;
 
-            float dist = Vector3.Distance(transform.position, _currentAttackTarget.transform.position);
-
             if (dist < MinAttackRange) {
-                _isRetreating = true;
-                Vector3 dest = ComputeRetreatDestination(dist);
-                if (dest != Vector3.zero) agent.SetDestination(dest);
+                SetDirectChasing(false);
+                CommitPathDestination(ComputeRetreatCandidate(dist));
+                return;
             }
-            else if (dist > MaxAttackRange) {
-                _isRetreating = false;
-                Vector3 dest = ComputeApproachDestination(dist);
-                if (dest != Vector3.zero) agent.SetDestination(dest);
+
+            bool wantsToMove = dist > MaxAttackRange || AllowMovementWhileAttacking;
+            if (!wantsToMove) {
+                SetDirectChasing(false);
+                if (agent.hasPath) agent.ResetPath();
+                agent.velocity = Vector3.zero;
+                _hasAttackMoveCandidate = false;
+                return;
             }
-            else {
-                _isRetreating = false;
-                if (AllowMovementWhileAttacking)
-                    // Keep closing in on where the target is predicted to be instead of freezing
-                    // at the computed standoff point (or chasing its stale current position) -
-                    // fixes NPCs that sit "in range" per the distance check but are still too far
-                    // from the target's actual hitbox/pivot to land hits.
-                    agent.SetDestination(GetPredictedTargetPosition());
-                else
-                    agent.ResetPath();
+
+            // Once we've committed to a mode, stick with it for DirectChaseModeSwitchCooldown even
+            // if the raw condition flips back the very next frame - that's what stops a raycast
+            // clipping a corner edge from retriggering a path reset/rebuild every single frame.
+            bool wantsDirectChase = dist <= DirectChaseRange && HasLineOfSightToTarget();
+            if (wantsDirectChase != _isDirectChasing
+                && Time.time - _lastDirectChaseSwitchTime >= DirectChaseModeSwitchCooldown) {
+                SetDirectChasing(wantsDirectChase);
             }
+
+            if (_isDirectChasing)
+                SteerDirectlyToward(GetStandoffPoint());
+            else
+                CommitPathDestination(ComputeApproachCandidate(dist));
         }
 
-        // Aims to close the gap - normally to just inside MaxAttackRange, or all the way down to
-        // MinAttackRange when ApproachToMinRangeEdge is set. Aims at the target's *predicted*
-        // position (current position + estimated velocity * AttackPredictionLeadTime) rather than
-        // where it currently is, so the NPC leads a moving target instead of always trailing it.
-        // Only weaves to a random side while genuinely out of range (farther than
-        // AttackDetectionRadius, e.g. re-engaging after the target ran off) - once already within
-        // detection range it just goes straight at the approach point instead of weaving.
-        private Vector3 ComputeApproachDestination(float dist) {
-            if (_currentAttackTarget == null) return Vector3.zero;
+        // Centralizes flipping direct-chase mode so the switch timestamp and the "force a fresh
+        // destination next time we're path-based" bookkeeping can't drift out of sync.
+        private void SetDirectChasing(bool active) {
+            if (_isDirectChasing == active) return;
+            _isDirectChasing = active;
+            _lastDirectChaseSwitchTime = Time.time;
+            _hasAttackMoveCandidate = false;
+        }
+
+        // Takes the agent's pathfollowing out of the loop entirely and drives velocity by hand -
+        // still snaps to the NavMesh surface each frame since NavMeshAgent.updatePosition stays on,
+        // it just skips path calculation and the braking curve that comes with it. The path has to
+        // actually be cleared here (not just paused via isStopped) - isStopped commands the agent
+        // to decelerate to zero every frame internally, which fights a manually-assigned non-zero
+        // velocity and produces constant jitter rather than smooth movement.
+        private void SteerDirectlyToward(Vector3 worldPos) {
+            if (agent.hasPath || agent.pathPending) agent.ResetPath();
+
+            Vector3 toTarget = worldPos - transform.position;
+            toTarget.y = 0f;
+
+            // Hold still once we're basically at the standoff point instead of continuing to
+            // drive full speed toward it. Direct-chase sets velocity by hand with no braking
+            // curve, so without this tolerance the NPC would keep nudging/colliding into the
+            // target every frame trying to close the last few centimeters - the push-and-bounce
+            // that showed up as walking back and forth.
+            if (toTarget.magnitude <= DirectChaseArrivalTolerance) {
+                agent.velocity = Vector3.zero;
+                return;
+            }
+
+            agent.velocity = toTarget.normalized * agent.speed;
+        }
+
+        // Shared by the retreat and far/obstructed-approach cases: only actually re-paths once the
+        // desired point has moved farther than DestinationUpdateThreshold from the last one we
+        // committed to. If NavMesh.SamplePosition fails to resolve a candidate, the "last committed"
+        // point is deliberately left unchanged so we retry again next frame instead of getting stuck
+        // waiting for the raw candidate to drift another full threshold away.
+        private void CommitPathDestination(Vector3 candidate) {
+            if (_hasAttackMoveCandidate
+                && (candidate - _lastAttackMoveCandidate).sqrMagnitude < DestinationUpdateThreshold * DestinationUpdateThreshold)
+                return;
+
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 4f, NavMesh.AllAreas))
+                return;
+
+            _lastAttackMoveCandidate = candidate;
+            _hasAttackMoveCandidate = true;
+            agent.SetDestination(hit.position);
+        }
+
+        // Point offset back from the target's predicted position by the standoff distance -
+        // shared by direct-chase steering and the normal NavMesh approach path so both agree on
+        // where "in range" actually means. Direct-chase used to aim straight at the target's bare
+        // position with no standoff at all, so once in melee range it kept trying to walk on top
+        // of the target every single frame - that perpetual last-few-centimeters push against
+        // something it could never physically reach was the main cause of the back-and-forth
+        // jitter. AttackRangeBuffer keeps this resting point a bit outside the retreat trigger
+        // rather than exactly on it (see ComputeRetreatCandidate).
+        private Vector3 GetStandoffPoint() {
+            if (_currentAttackTarget == null) return transform.position;
 
             Vector3 predictedPos = GetPredictedTargetPosition();
             Vector3 toTarget = predictedPos - transform.position;
             toTarget.y = 0f;
-            if (toTarget.sqrMagnitude < 0.01f) return Vector3.zero;
+            if (toTarget.sqrMagnitude < 0.01f) return transform.position;
 
-            Vector3 dir = toTarget.normalized;
-            float standoff = ApproachToMinRangeEdge ? MinAttackRange : (MaxAttackRange - AttackApproachStopShort);
+            float standoff = ApproachToMinRangeEdge ? (MinAttackRange + AttackRangeBuffer) : (MaxAttackRange - AttackApproachStopShort);
             float travelDist = Mathf.Max(toTarget.magnitude - standoff, 0f);
-            Vector3 candidate = transform.position + dir * travelDist;
-
-            if (dist > AttackDetectionRadius) {
-                Vector3 sideways = Vector3.Cross(Vector3.up, dir);
-                float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
-                candidate += sideways * side * AttackApproachSideOffset;
-            }
-
-            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 4f, NavMesh.AllAreas))
-                return Vector3.zero;
-
-            return hit.position;
+            return transform.position + toTarget.normalized * travelDist;
         }
 
-        // Backs straight away from the target's *predicted* position (current position + estimated
-        // velocity * AttackPredictionLeadTime), so it retreats away from where the target is
-        // heading rather than where it currently stands. If RetreatToMinRangeEdge is set, the
-        // destination is computed to land exactly on the MinAttackRange edge (the absolute minimum
-        // distance); otherwise it aims for the full AttackRetreatDistance, but HandleAttackTick
-        // cuts the move short the instant we're back in range rather than letting it run all the
-        // way there.
-        private Vector3 ComputeRetreatDestination(float dist) {
-            if (_currentAttackTarget == null) return Vector3.zero;
+        // Raw (unsampled) approach point for when direct steering doesn't apply (too far, or
+        // something's blocking line of sight) - same standoff point as GetStandoffPoint, but only
+        // weaves to a random side while genuinely out of range (farther than AttackDetectionRadius,
+        // e.g. re-engaging after the target ran off) - within detection range it goes straight at
+        // the standoff point.
+        private Vector3 ComputeApproachCandidate(float dist) {
+            if (_currentAttackTarget == null) return transform.position;
+
+            Vector3 candidate = GetStandoffPoint();
+
+            if (dist > AttackDetectionRadius) {
+                Vector3 toTarget = GetPredictedTargetPosition() - transform.position;
+                toTarget.y = 0f;
+                if (toTarget.sqrMagnitude >= 0.01f) {
+                    Vector3 sideways = Vector3.Cross(Vector3.up, toTarget.normalized);
+                    float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+                    candidate += sideways * side * AttackApproachSideOffset;
+                }
+            }
+
+            return candidate;
+        }
+
+        // Raw (unsampled) retreat point, straight away from the target's predicted position. If
+        // RetreatToMinRangeEdge is set, lands on MinAttackRange + AttackRangeBuffer - the same
+        // resting point GetStandoffPoint approaches toward, not the bare MinAttackRange edge.
+        // Landing on the exact trigger threshold used to mean ordinary movement overshoot could
+        // immediately re-trigger retreat (or get pulled straight back in by approach), producing
+        // a fast back-and-forth flicker; the buffer gives it somewhere to actually settle.
+        // Otherwise aims for the full AttackRetreatDistance - once dist crosses back above
+        // MinAttackRange, UpdateAttackMovement's branch switches away from retreat on the very
+        // next frame regardless, so there's no separate "cut the retreat short" logic needed here.
+        private Vector3 ComputeRetreatCandidate(float dist) {
+            if (_currentAttackTarget == null) return transform.position;
 
             Vector3 predictedPos = GetPredictedTargetPosition();
             Vector3 away = transform.position - predictedPos;
@@ -513,15 +620,10 @@ namespace RyanAssets.Characters.Server {
             away = away.sqrMagnitude < 0.01f ? -transform.forward : away.normalized;
 
             float retreatDist = RetreatToMinRangeEdge
-                ? Mathf.Max(MinAttackRange - dist, 0f)
+                ? Mathf.Max(MinAttackRange + AttackRangeBuffer - dist, 0f)
                 : AttackRetreatDistance;
 
-            Vector3 candidate = transform.position + away * retreatDist;
-
-            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 4f, NavMesh.AllAreas))
-                return Vector3.zero;
-
-            return hit.position;
+            return transform.position + away * retreatDist;
         }
 
         private void TryAttack() {

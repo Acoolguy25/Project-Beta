@@ -189,7 +189,7 @@ MonoBehaviour:
     - line: '|   loadStoreDebugModeEnabled: 0'
     - line: '|   visionOSBundleVersion: 1.0'
     - line: '|   tvOSBundleVersion: 1.0'
-    - line: '|   bundleVersion: 0.01c'
+    - line: '|   bundleVersion: 0.02'
     - line: '|   preloadedAssets:'
     - line: '|   - {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b,
         type: 3}'
@@ -1034,7 +1034,7 @@ MonoBehaviour:
           m_BuildProfileEngineDiagnosticsState: 2
         m_AdaptivePerformanceEnabled: 0
         m_Architecture: 0
-        m_RemoteDeviceSectionFoldoutOpen: 0
+        m_RemoteDeviceSectionFoldoutOpen: 1
         m_DeployTarget: 0
         m_RemoteDeviceAddress: 
         m_RemoteDeviceUsername: 

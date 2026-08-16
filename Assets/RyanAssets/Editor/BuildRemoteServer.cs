@@ -12,10 +12,15 @@ using UnityDebug = UnityEngine.Debug;
 
 namespace RyanAssets.Editor
 {
+    internal enum SyncMethod {
+        SCP,
+        RSYNC
+    }
     public static class BuildRemoteServer
     {
         const float ServerBuildProgress = 0.7f;
         static BuildTask currentTask;
+        static SyncMethod syncMethod = SyncMethod.SCP;
 
         [MenuItem("Build/Remote Linux Server")]
         public static void BuildLinuxServer()
@@ -67,29 +72,52 @@ namespace RyanAssets.Editor
             UniTask.Create(async () =>
             {
                 await UniTask.SwitchToThreadPool();
-                try
-                {
+                try {
                     string keyPath = Environment.ExpandEnvironmentVariables(
                         @"%USERPROFILE%\.ssh\id_hetzner"
                     );
+                    switch (syncMethod) {
+                        case SyncMethod.SCP:
 
-                    task.Report(0.72f, "Uploading Linux server files with scp compression");
-                    RunCommand(
-                        "scp",
-                        $"-C -i \"{keyPath}\" -r \"{BuildLocalServer.LinuxServerUploadDirectory}\" root@{NetworkSettings.DEPLOY_SERVER_IP}:/root/UnityBackend",
-                        task,
-                        0.72f,
-                        0.93f,
-                        "Uploading Linux server files with scp compression"
-                    );
+                            task.Report(0f, "Uploading files with scp");
+                            RunCommand(
+                                "scp",
+                                $"-C -i \"{keyPath}\" -r \"{BuildLocalServer.LinuxServerUploadDirectory}\" root@{NetworkSettings.DEPLOY_SERVER_IP}:/root/UnityBackend",
+                                task,
+                                0f,
+                                0.98f,
+                                "Uploading files with scp"
+                            );
+                            break;
+                        case SyncMethod.RSYNC:
+                            string localPath = BuildLocalServer.LinuxServerUploadDirectory
+                                .TrimEnd('\\', '/');
 
+                            string remotePath =
+                                $"root@{NetworkSettings.DEPLOY_SERVER_IP}:/root/UnityBackend/";
+
+                            task.Report(0f, "Uploading files with rsync");
+
+                            RunCommand(
+                                "wsl",
+                                $"rsync -a --delete " +
+                                $"-e \"ssh -i '{keyPath.Replace("\\", "/")}'\" " +
+                                $"\"$(wslpath -a '{localPath}')/\" " +
+                                $"\"{remotePath}\"",
+                                task,
+                                0f,
+                                0.98f,
+                                "Uploading files with rsync"
+                            );
+                            break;
+                    }
                     task.ThrowIfCancellationRequested();
-                    task.Report(0.95f, "Setting server executable permission");
+                    task.Report(0.98f, "Setting server executable permission");
                     RunCommand(
                         "ssh",
                         $"-i \"{keyPath}\" root@{NetworkSettings.DEPLOY_SERVER_IP} chmod +x /root/UnityBackend/LinuxServer/GameServer.x86_64",
                         task,
-                        0.95f,
+                        0.98f,
                         0.99f,
                         "Setting server executable permission"
                     );
@@ -305,10 +333,31 @@ namespace RyanAssets.Editor
                 return (float)Math.Min(0.99d, stopwatch.Elapsed.TotalSeconds / 60d);
             }
 
-            string FormatDescription(float progress, string phase)
-            {
+            string FormatDescription(float progress, string phase) {
                 int percent = (int)Math.Round(progress * 100f);
-                return $"{percent}% - {phase} - {FormatElapsed()}";
+
+                string eta = FormatEta(progress);
+
+                return $"{percent}% - {phase} - {FormatElapsed()} - ETA {eta}";
+            }
+
+            string FormatEta(float progress) {
+                if (progress <= 0f)
+                    return "--:--";
+
+                double elapsed = stopwatch.Elapsed.TotalSeconds;
+                double total = elapsed / progress;
+                double remaining = total - elapsed;
+
+                if (remaining < 0)
+                    remaining = 0;
+
+                TimeSpan eta = TimeSpan.FromSeconds(remaining);
+
+                if (eta.TotalHours >= 1d)
+                    return eta.ToString(@"h\:mm\:ss");
+
+                return eta.ToString(@"mm\:ss");
             }
 
             string FormatElapsed()

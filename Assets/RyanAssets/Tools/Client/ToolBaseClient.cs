@@ -1,5 +1,7 @@
 using Cysharp.Threading.Tasks;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Core;
+
 #if !UNITY_SERVER
 using RyanAssets.Input;
 #endif
@@ -31,6 +33,7 @@ namespace RyanAssets.Tools.Client
             characterAnimator = animator.GetComponent<CharacterAnimator>();
             toolBaseShared.equippedEvent += OnEquip;
             toolBaseShared.unequippedEvent += OnUnequip;
+            toolBaseShared.serverCooldownSync.OnChange += OnServerCooldownChanged;
             SetLethalAttack(false);
         }
         protected virtual void OnEquip(ToolBaseShared _) {
@@ -91,6 +94,9 @@ namespace RyanAssets.Tools.Client
                 SetCurrentAmmo(toolBaseShared.maxClipAmmo);
             }
         }
+        protected virtual void OnServerCooldownChanged(float before, float after, bool isServer) {
+            SetCooldown(after - NetworkHelper.GetServerTime());
+        }
         protected virtual void SetCurrentAmmo(int ammo) {
             toolBaseShared.currentAmmo = ammo;
             toolBaseShared.currentAmmoEvent?.Invoke(toolBaseShared.currentAmmo);
@@ -125,9 +131,14 @@ namespace RyanAssets.Tools.Client
 
         }
         protected virtual void SetCooldown(float Duration) {
+            if (GetCooldown() >= Duration)
+                return;
             StartCooldown = Time.time;
             StopCooldown = Time.time + Duration;
             onCooldownChangeEvent?.Invoke(StartCooldown, StopCooldown);
+        }
+        protected virtual float GetCooldown() {
+            return Mathf.Max(0, StopCooldown - Time.time);
         }
         protected virtual bool CanReload() {
             return toolBaseShared.currentAmmo >= 0 && toolBaseShared.currentAmmo < toolBaseShared.maxClipAmmo && toolBaseShared.currentStoredAmmo != 0

@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace RyanAssets.DataService {
     public enum TeamColor : short {
-        None,
+        None = 0,
         Ghost, // Spectator
         Lobby, // Lobby / Spectator
         Blue, // Sheriff
@@ -61,8 +61,8 @@ namespace RyanAssets.DataService {
         readonly public SyncVar<string> username = new();
 
         // Savable Data
-        readonly public SyncVar<ulong>  xp = new();
-        readonly public SyncVar<ulong>  gold = new();
+        readonly public SyncVar<ulong> xp = new();
+        readonly public SyncVar<ulong> gold = new();
 
         // Game Player Stats
         public DateTime JoinDateTime { get; private set; } = default; // Synchronized Via SpawnData
@@ -81,11 +81,10 @@ namespace RyanAssets.DataService {
         readonly public SyncVar<float> staminaCooldown = new(initialValue: 0.6f);
 
         // Events
-        public static Action<NetworkConnection, PlayerData> OnPlayerAdded;
-        public static Action<NetworkConnection, PlayerData> OnPlayerRemoved;
+        public static Action<PlayerData> OnPlayerAdded;
+        public static Action<PlayerData> OnPlayerRemoved;
 
         // Static
-
         public static Dictionary<NetworkConnection, PlayerData> Players;
 
         // Server
@@ -105,29 +104,28 @@ namespace RyanAssets.DataService {
             OnMyPlayerAdded = new();
             OnMyPlayerRemoved = null;
 #endif
-            OnPlayerAdded = 
+            OnPlayerAdded =
             OnPlayerRemoved = null;
         }
-#if UNITY_SERVER
-        public override void OnOwnershipServer(NetworkConnection prevOwner) {
-            OnPlayerAdded?.Invoke(Owner, this);
-        }
-#else
+#if !UNITY_SERVER
         public override void OnOwnershipClient(NetworkConnection prevOwner) {
             if (IsOwner) {
                 localData = this;
                 OnMyPlayerAdded?.Invoke(this);
             }
-            OnPlayerAdded?.Invoke(Owner, this);
+            OnPlayerAdded?.Invoke(this);
         }
 #endif
         public override void OnStartNetwork() {
             Players.Add(Owner, this);
             gameObject.name = $"PlayerData ({username.Value})";
+#if UNITY_SERVER
+            OnPlayerAdded?.Invoke(this);
+#endif
         }
         public override void OnStopNetwork() {
             Players.Remove(Owner);
-            OnPlayerRemoved?.Invoke(Owner, this);
+            OnPlayerRemoved?.Invoke(this);
 #if !UNITY_SERVER
             if (IsOwner) {
                 OnMyPlayerRemoved?.Invoke(this);
@@ -173,9 +171,9 @@ namespace RyanAssets.DataService {
         public static bool TryGetPlayerData(NetworkConnection conn, out PlayerData stats) {
             return Players.TryGetValue(conn, out stats);
         }
-        public static void RunEach(Action<NetworkConnection, PlayerData> action) {
+        public static void RunEach(Action<PlayerData> action) {
             foreach (var item in Players) {
-                action.Invoke(item.Key, item.Value);
+                action.Invoke(item.Value);
             }
         }
 #if UNITY_SERVER

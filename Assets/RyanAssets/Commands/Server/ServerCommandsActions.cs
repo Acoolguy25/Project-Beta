@@ -126,8 +126,7 @@ namespace RyanAssets.Commands.Server {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)
             {
-                ServerPlayerCharacter.DespawnPlayerCharacter(conn);
-                ServerPlayerCharacter.Instance.SpawnPlayerCharacter(conn);
+                ServerPlayerCharacter.Instance.SpawnPlayerCharacter(conn, overideCanSpawnFunction: true);
             }
         }
         public static void kick(NetworkConnection caller, string commandName, string[] args)
