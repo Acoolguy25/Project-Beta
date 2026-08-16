@@ -2,7 +2,7 @@
 using UnityEngine;
 
 namespace RyanAssets.Shared.Declarations {
-    public enum DamageSource {
+    public enum DamageType {
         None,
         Fall,
         Melee,

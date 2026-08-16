@@ -19,7 +19,7 @@ namespace RyanAssets.Tools.Server {
 
         }
         //protected override void OnHit(GameCharacter character) {
-        //    character.TakeDamage(toolBaseShared.hitDamage, DamageSource.Gun, toolBaseShared.connectedCharacter);
+        //    character.TakeDamage(toolBaseShared.hitDamage, DamageType.Gun, toolBaseShared.connectedCharacter);
         //}
     }
 }

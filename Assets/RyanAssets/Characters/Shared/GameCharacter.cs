@@ -98,14 +98,14 @@ namespace RyanAssets.Characters.Shared {
             MaxHealthEditor = MaxHealth.Value;
         }
 #endif
-        public Action<DamageSource, NetworkObject> OnDied;
+        public Action<DamageType, NetworkObject> OnDied;
 #if UNITY_SERVER
-        private static DamageSource[] invulSources = {DamageSource.Fall, DamageSource.Melee, DamageSource.Gun};
+        private static DamageType[] invulSources = {DamageType.Fall, DamageType.Melee, DamageType.Gun};
         [Server]
-        public virtual bool IsProtected(GameCharacter sourceCharacter = null, DamageSource damageSource = DamageSource.None) {
+        public virtual bool IsProtected(GameCharacter sourceCharacter = null, DamageType damageType = DamageType.None) {
             return (
                 (IsEffectActive(CharacterEffect.Invul) || SharedGlobalEvents.Instance.GlobalInvul)  // INVUL ACTIVATE
-                && invulSources.Contains(damageSource)) ||
+                && invulSources.Contains(damageType)) ||
 
                 (sourceCharacter != null && // SOURCE CHARACTER
                     (sourceCharacter.GetTeam().team == GetTeam().team && SharedGlobalEvents.Instance.TeamKillEnabled) ||
@@ -113,10 +113,10 @@ namespace RyanAssets.Characters.Shared {
             );
         }
         [Server]
-        public bool IsProtected(GameCharacter damageSource) {
-            return IsProtected(damageSource, DamageSource.None);
+        public bool IsProtected(GameCharacter sourceCharacter) {
+            return IsProtected(sourceCharacter, DamageType.None);
         }
-        public virtual bool TakeDamage(long Damage, DamageSource source = DamageSource.None, NetworkObject sourceObject = null) {
+        public virtual bool TakeDamage(long Damage, DamageType source = DamageType.None, NetworkObject sourceObject = null) {
             // If the character is dead or invulnerable, ignore damage
             if (Health.Value == 0)
                 return false;
@@ -169,7 +169,7 @@ namespace RyanAssets.Characters.Shared {
 #endif
         }
         [Server]
-        protected virtual void Died(DamageSource source, NetworkObject sourceObject) {
+        protected virtual void Died(DamageType source, NetworkObject sourceObject) {
             if (IsDead()) return;
             SetHealth(0);
             ClearEffects();
@@ -186,7 +186,7 @@ namespace RyanAssets.Characters.Shared {
             AddEffect(CharacterEffect.Invul, 5f);
         }
         [Server]
-        public virtual void Kill(DamageSource source, NetworkObject sourceObject = null) {
+        public virtual void Kill(DamageType source, NetworkObject sourceObject = null) {
             Died(source, sourceObject);
         }
         
@@ -202,10 +202,11 @@ namespace RyanAssets.Characters.Shared {
             UpdateTeamEditorOptions(default, teamConfig, true);
 #endif
         }
+        [Server]
         private void FixedUpdate() {
             if (FallHeightEnabled && IsSpawned) {
                 if (transform.position.y < FallenPartsDestroyHeight) {
-                    Kill(DamageSource.Fall, null);
+                    Kill(DamageType.Fall, null);
                     InstanceFinder.ServerManager.Despawn(gameObject);
 
                     //Vector3 newPositon = transform.position;
@@ -214,6 +215,14 @@ namespace RyanAssets.Characters.Shared {
                     //Time.timeScale = 0f;
                     //Debug.Log("Fallen character");
                 }
+            }
+        }
+        [Server]
+        public override void OnStopServer() {
+            base.OnStopServer();
+            foreach (ToolBaseShared tool in GetComponentsInChildren<ToolBaseShared>(true)) {
+                if (tool.IsSpawned)
+                    InstanceFinder.ServerManager.Despawn(tool.gameObject);
             }
         }
 #else
@@ -242,7 +251,7 @@ namespace RyanAssets.Characters.Shared {
         public virtual TeamConfig GetTeam() {
             return Team.Value;
         }
-        protected virtual void SharedDied(DamageSource source, NetworkObject sourceObject) {
+        protected virtual void SharedDied(DamageType source, NetworkObject sourceObject) {
             SwitchTool(null);
             if (!transform.tag.StartsWith("Dead"))
                 transform.tag = "Dead" + transform.tag;
@@ -261,9 +270,9 @@ namespace RyanAssets.Characters.Shared {
             // Consumers of the removal events must not be able to select this character
             // from the client-side registry while it is being despawned.
             RemoveTeamRegistry(GetTeam());
+            SwitchTool(null);
             GameCharacterRemoved?.Invoke(this);
             MyGameCharacterRemoved?.Invoke(this);
-            SwitchTool(null);
         }
         public override void OnStartNetwork() {
 #if !UNITY_SERVER
@@ -274,9 +283,9 @@ namespace RyanAssets.Characters.Shared {
 #endif
             if (Health.Value == 0 && MaxHealth.Value > 0) {
 #if UNITY_SERVER
-                Kill(DamageSource.None);
+                Kill(DamageType.None);
 #else
-                SharedDied(DamageSource.None, null);
+                SharedDied(DamageType.None, null);
 #endif
             }
             else {

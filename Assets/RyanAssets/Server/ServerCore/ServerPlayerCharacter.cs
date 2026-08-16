@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using FishNet;
 using FishNet.Connection;
 using Unity.VectorGraphics;
@@ -68,9 +68,14 @@ namespace RyanAssets.Server.ServerCore {
             if (character == null)
                 return;
 
+            // Tools are independent NetworkObjects. Explicitly despawn them
+            // before the character so disconnects and non-death despawns cannot
+            // leave weapons alive for a later character instance.
+            if (ServerTool.Instance != null)
+                ServerTool.Instance.DespawnTools(character);
             ClientToCharacter.Remove(character.Owner);
             //if (character.TryGetComponent(out LocalCharacter localCharacter) && !localCharacter.IsDead())
-            //    localCharacter.Kill(DamageSource.Despawn);
+            //    localCharacter.Kill(DamageType.Despawn);
             if (character.IsSpawned) {
                 InstanceFinder.ServerManager.Despawn(character);
                 //Debug.Log("Despawning PlayerCharacter {}", character);
@@ -81,7 +86,7 @@ namespace RyanAssets.Server.ServerCore {
                 ResetPlayerCharacter(character.NetworkObject);
         }
         public static void ResetPlayerCharacter(NetworkObject character){
-            character.GetComponent<LocalCharacter>().Kill(RyanAssets.Shared.Declarations.DamageSource.Reset);
+            character.GetComponent<LocalCharacter>().Kill(RyanAssets.Shared.Declarations.DamageType.Reset);
         }
         public void OnMenuActionRequest(NetworkConnection conn, MenuActionRequest request, Channel channel = Channel.Reliable){
             if (request.type == MenuActionType.ResetCharacter)

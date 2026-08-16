@@ -61,7 +61,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                     OnPlayerHealthChanged(default, default, default);
             };
             gameCharater.Team.OnChange += OnPlayerTeamChanged;
-            gameCharater.OnDied += (damageSource, ownerObj) => {
+            gameCharater.OnDied += (damageType, ownerObj) => {
                 Destroy(nameTag);
             };
 

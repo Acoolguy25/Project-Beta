@@ -17,7 +17,9 @@ using RyanAssets.DataService;
 
 namespace RyanAssets.Authentication {
     public sealed class UnityTokenAuthenticator : Authenticator {
+#pragma warning disable CS0414
         public override event Action<NetworkConnection, bool> OnAuthenticationResult;
+#pragma warning restore CS0414
         public GameObject playerDataPrefab;
         Dictionary<NetworkConnection, JObject> joinPlayerData = new();
 
@@ -66,8 +68,14 @@ namespace RyanAssets.Authentication {
         }
 #else
         public static event Action<NetworkConnection, PlayerData, JObject> OnAuthenticationSucceeded;
+        public static event Action<NetworkConnection, JObject> EarlyPlayerDisconnected;
         public static Dictionary<string, string> KickPlayers;
         public static bool IsShuttingDown;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void Init() {
+            OnAuthenticationSucceeded = null;
+            EarlyPlayerDisconnected = null;
+        }
         private void OnAuthRequest(NetworkConnection conn, AuthRequest req, FishNet.Transporting.Channel channel) {
             // Debug.Log("Received OnAuthRequest");
             if (conn.IsAuthenticated) {
@@ -95,6 +103,10 @@ namespace RyanAssets.Authentication {
             var (res, json) = await BackendNetwork.PostRequest("/api/internal/v1/user/add", accessToken: token);
 
             if (res == null) {
+                if (conn.Disconnecting) {
+                    EarlyPlayerDisconnected.Invoke(conn, json);
+                    return;
+                }
                 NetworkManager.ServerManager.Broadcast(conn, new AuthResponse {
                     Success = true
                 }, false);
@@ -129,12 +141,17 @@ namespace RyanAssets.Authentication {
             }, false);
 
             OnAuthenticationResult?.Invoke(conn, false);
-            conn.Disconnect(false);
+            if (!conn.Disconnecting)
+                conn.Disconnect(false);
         }
         void ServerConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
             if (args.ConnectionState != RemoteConnectionState.Stopped)
                 return;
             conn.OnLoadedStartScenes -= OnPlayerAuthenticated; // Emergency cleanup
+            if (joinPlayerData.TryGetValue(conn, out JObject json)) {
+                joinPlayerData.Remove(conn);
+                EarlyPlayerDisconnected.Invoke(conn, json);
+            }
         }
 #endif
 

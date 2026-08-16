@@ -59,7 +59,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             toolUI.SetVisible(true);
             character.OnDied += OnCharacterDied;
         }
-        void OnCharacterDied(DamageSource damageSource, NetworkObject networkObject) {
+        void OnCharacterDied(DamageType damageType, NetworkObject networkObject) {
             toolUI.SetVisible(false);
         }
         void OnToolCreated(ToolBaseShared tool) {
@@ -113,8 +113,9 @@ namespace RyanAssets.Client.ClientUI.Toolbar
                 if (sliderImage == null)
                     return;
                 TweenManager.Instance.ClearTweens(sliderImage.rectTransform);
+                float duration = (stop - start) * 1.15f;
                 sliderImage.rectTransform.anchorMax = new Vector2(1, 1);
-                TweenRectTransform.AnchorTween(sliderImage.rectTransform, stop - start, new Vector2(0f, 0f), new Vector2(1f, 0f));
+                TweenRectTransform.AnchorTween(sliderImage.rectTransform, duration, new Vector2(0f, 0f), new Vector2(1f, 0f));
             };
             sliderImage.rectTransform.anchorMax = new Vector2(1, 0);
         }

@@ -20,6 +20,10 @@ namespace RyanAssets.Client.ClientUI.Vote {
         Button noVoteButton;
         [SerializeField]
         TextMeshProUGUI noVoteCountText;
+        [SerializeField]
+        Button skipVoteButton;
+        [SerializeField]
+        TextMeshProUGUI skipVoteCountText;
 
         readonly System.Collections.Generic.Dictionary<int, TextMeshProUGUI> optionCountTexts = new();
         readonly System.Collections.Generic.Dictionary<Image, Color> buttonColors = new();
@@ -33,6 +37,8 @@ namespace RyanAssets.Client.ClientUI.Vote {
             OnCreatePrefab += BindOption;
             if (noVoteButton != null)
                 noVoteButton.onClick.AddListener(() => SubmitVote(-1));
+            if (skipVoteButton != null)
+                skipVoteButton.onClick.AddListener(() => SubmitVote(VoteRequest.SkipVoteOptionId, skipVoteButton));
             ClientConnector.OnDisconnected += Clear;
             SharedGlobalEvents.OnInstanceReady += OnSharedEventsReady;
             PlayerData.OnPlayerAdded += OnPlayerChanged;
@@ -73,6 +79,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
 
             SharedGlobalEvents.Instance.SharedVoteHeader.OnChange += OnVoteHeaderChanged;
             SharedGlobalEvents.Instance.VoteTotals.OnChange += OnVoteTotalsChanged;
+            SharedGlobalEvents.Instance.SkipVoteCount.OnChange += OnSkipVoteCountChanged;
             subscribed = true;
         }
 
@@ -82,6 +89,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
 
             SharedGlobalEvents.Instance.SharedVoteHeader.OnChange -= OnVoteHeaderChanged;
             SharedGlobalEvents.Instance.VoteTotals.OnChange -= OnVoteTotalsChanged;
+            SharedGlobalEvents.Instance.SkipVoteCount.OnChange -= OnSkipVoteCountChanged;
             subscribed = false;
         }
 
@@ -91,6 +99,8 @@ namespace RyanAssets.Client.ClientUI.Vote {
             if (operation == SyncListOperation.Complete)
                 UpdateVoteCounts();
         }
+
+        void OnSkipVoteCountChanged(int previous, int next, bool asServer) => UpdateVoteCounts();
 
         void OnPlayerChanged(PlayerData player) => UpdateVoteCounts();
 
@@ -162,9 +172,12 @@ namespace RyanAssets.Client.ClientUI.Vote {
             }
 
             if (noVoteCountText != null) {
-                int noVoteCount = Mathf.Max(0, PlayerData.Players.Count - selectedVotes);
+                int noVoteCount = Mathf.Max(0, PlayerData.Players.Count - selectedVotes - events.SkipVoteCount.Value);
                 noVoteCountText.text = $"No Vote ({noVoteCount})";
             }
+
+            if (skipVoteCountText != null)
+                skipVoteCountText.text = $"Skip Vote ({events.SkipVoteCount.Value}/{PlayerData.Players.Count})";
         }
 
         void FadeSelectedButton(Button button) {

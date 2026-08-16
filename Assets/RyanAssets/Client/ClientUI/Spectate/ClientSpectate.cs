@@ -34,16 +34,17 @@ namespace RyanAssets.Client.ClientUI.Spectate
             controller = transform.parent.GetComponent<CameraController>();
             leftArrow.onClick.AddListener(() => AdvancePosition(-1));
             rightArrow.onClick.AddListener(() => AdvancePosition(1));
-            GameCharacter.GameCharacterAdded += OnGameCharacterAdded;
         }
         public override void EnableCamera(Transform oldCamera, GameCameraType oldCameraType) {
             base.EnableCamera(oldCamera, oldCameraType);
+            GameCharacter.GameCharacterAdded += OnGameCharacterAdded;
             canvasGroupController.SetVisible(true, 0.3f);
             currentCharacter = null;
             AdvancePosition(0);
         }
         public override void DisableCamera(Transform newCamera, GameCameraType newCameraType) {
             base.DisableCamera(newCamera, newCameraType);
+            GameCharacter.GameCharacterAdded -= OnGameCharacterAdded;
             canvasGroupController.SetVisible(false, 0.3f);
             UnsetCamera();
         }
@@ -57,7 +58,7 @@ namespace RyanAssets.Client.ClientUI.Spectate
             if (characters.Count == 0 || (characters.Count == 1 && characters[0] == currentCharacter)) {
                 // This is expected while waiting for the next round to spawn.
                 currentCharacter = null;
-                Debug.LogWarning($"No valid characters to spectate. Waiting for next round.");
+                //Debug.LogWarning($"No valid characters to spectate. Waiting for next round.");
                 SetCamera(null);
                 return;
             }
@@ -123,7 +124,7 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 AdvancePosition(0);
         }
         void OnDestroy() {
-            GameCharacter.GameCharacterAdded -= OnGameCharacterAdded;
+            UnsetCamera();
         }
         // Dumb wrappers
         void OnPlayerNameChanged(string oldVal, string newVal, bool asServer) {
@@ -138,7 +139,7 @@ namespace RyanAssets.Client.ClientUI.Spectate
         void OnPlayerXPChanged(ulong oldVal, ulong newVal, bool asServer) {
             UpdatePlayerLevel();
         }
-        void OnPlayerDied(DamageSource source, FishNet.Object.NetworkObject sourceObject) {
+        void OnPlayerDied(DamageType source, FishNet.Object.NetworkObject sourceObject) {
             AdvancePosition(1);
         }
         void OnMyGameCharacterRemoved(GameCharacter character) {

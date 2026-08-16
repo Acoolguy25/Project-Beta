@@ -54,6 +54,8 @@ namespace RyanAssets.Characters.Client {
         private void OnDestroy() {
             if (InstanceFinder.ClientManager != null)
                 InstanceFinder.ClientManager.OnClientConnectionState -= OnClientConnectionState;
+            LocalCharacter.LocalCharacterAdded -= OnAnyCharacterAdded;
+            LocalCharacter.LocalCharacterRemoved -= OnAnyCharacterRemoved;
         }
         void OnEnable(){
             InputService.SetInputScreenActive(InputScreen.Client, true);

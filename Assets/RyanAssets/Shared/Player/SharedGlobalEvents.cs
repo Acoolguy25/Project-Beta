@@ -35,6 +35,7 @@ namespace RyanAssets.Shared.Player {
         // Voting
         public readonly SyncVar<SharedVoteHeader> SharedVoteHeader = new(new());
         public readonly SyncList<int> VoteTotals = new(new());
+        public readonly SyncVar<int> SkipVoteCount = new(0);
 
 #if UNITY_SERVER
         [NonSerialized]

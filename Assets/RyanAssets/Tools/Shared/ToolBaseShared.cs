@@ -19,7 +19,7 @@ namespace RyanAssets.Tools.Shared {
 
         [Header("Tool Data")]
         [SerializeField]
-        public DamageSource defaultDamageSource;
+        public DamageType defaultDamageType;
         [SerializeField]
         public ToolEnum toolEnum;
         [SerializeField]

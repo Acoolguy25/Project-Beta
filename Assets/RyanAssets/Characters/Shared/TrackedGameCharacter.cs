@@ -8,13 +8,13 @@ using RyanAssets.Shared.Declarations;
 namespace RyanAssets.Characters.Shared {
     public class TrackedGameCharacter : GameCharacter {
 #if UNITY_SERVER
-        protected override void Died(DamageSource source, NetworkObject sourceObject) {
+        protected override void Died(DamageType source, NetworkObject sourceObject) {
             base.Died(source, sourceObject);
             RpcDied(source, sourceObject);
         }
 #endif
         [ObserversRpc]
-        private void RpcDied(DamageSource source, NetworkObject sourceObject) {
+        private void RpcDied(DamageType source, NetworkObject sourceObject) {
             SharedDied(source, sourceObject);
         }
     }

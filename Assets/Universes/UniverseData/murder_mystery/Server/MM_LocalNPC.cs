@@ -1,4 +1,4 @@
-﻿using RyanAssets.DataService;
+using RyanAssets.DataService;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -33,7 +33,7 @@ namespace Universes.murder_mystery.Server {
             if (gameCharacter.GetTeam().team == TeamColor.Red) {
                 sharedWeapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
                 clientWeapon = sharedWeapon.GetComponent<ToolBaseClient>();
-                localNPC.AttackDamageSource = sharedWeapon.defaultDamageSource;
+                localNPC.AttackDamageType = sharedWeapon.defaultDamageType;
                 localNPC.SetTargetingType(NPCTargetingType.Attack);
             }
         }

@@ -32,7 +32,7 @@ namespace RyanAssets.Cameras
             targetCharacter = null;
         }
         public void SwitchCamera(int index) {
-            if (gameObject == null)
+            if (!this)
                 return;
             ICamera newCamera = CameraComponents[index];
             Assert.IsNotNull(newCamera, "Active Camera cannot be null");
@@ -88,7 +88,7 @@ namespace RyanAssets.Cameras
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, true);
             SetCameraTarget(localCharacter);
         }
-        private void OnCharacterDied(RyanAssets.Shared.Declarations.DamageSource source, NetworkObject sourceObject) {
+        private void OnCharacterDied(RyanAssets.Shared.Declarations.DamageType source, NetworkObject sourceObject) {
             SetCameraAvailable(GameCameraType.DeathCamera, true);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
         }
@@ -111,7 +111,8 @@ namespace RyanAssets.Cameras
         void OnDisconnected() {
             LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
             LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
-            InstanceFinder.ClientManager.UnregisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
+            if (InstanceFinder.ClientManager != null)
+                InstanceFinder.ClientManager.UnregisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
 
             SetCameraAvailable(GameCameraType.SpectateCamera, false);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
@@ -139,6 +140,12 @@ namespace RyanAssets.Cameras
         }
         private void OnDestroy() {
             Instance = null;
+            ClientConnector.OnConnected -= OnConnected;
+            ClientConnector.OnDisconnected -= OnDisconnected;
+            if (LocalPlayer.Character)
+                LocalPlayer.Character.OnDied -= OnCharacterDied;
+            if (ClientConnector.IsConnected)
+                OnDisconnected();
         }
     }
 }

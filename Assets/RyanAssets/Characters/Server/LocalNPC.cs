@@ -1,4 +1,4 @@
-﻿using FishNet.Object;
+using FishNet.Object;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
 using RyanAssets.Server.ServerFeatures;
@@ -35,7 +35,7 @@ namespace RyanAssets.Characters.Server {
         [Header("Targeting")]
         public NPCTargetingType TargetingType = NPCTargetingType.Random;
         private NPCTargetingType _previousTargetingType = NPCTargetingType.Random;
-        [NonSerialized] public DamageSource AttackDamageSource; // set in runtime by game specific script
+        [NonSerialized] public DamageType AttackDamageType; // set in runtime by game specific script
         public GameObject PreviousTarget;
         private Vector3? PreviousTargetVec;
 
@@ -254,7 +254,7 @@ namespace RyanAssets.Characters.Server {
             }
         }
 
-        // ─── Rotation ────────────────────────────────────────────────────────
+        // --- Rotation --------------------------------------------------------
 
         private void HandleRotation() {
             if (!agent.pathPending && agent.velocity.sqrMagnitude > 0.001f) {
@@ -267,7 +267,7 @@ namespace RyanAssets.Characters.Server {
             }
         }
 
-        // ─── Random wandering ────────────────────────────────────────────────
+        // --- Random wandering ------------------------------------------------
 
         private void HandleRandom() {
             if (!agent.pathPending &&
@@ -282,7 +282,7 @@ namespace RyanAssets.Characters.Server {
             }
         }
 
-        // ─── Shared team-based detection (used by both Flee and Attack) ────────
+        // --- Shared team-based detection (used by both Flee and Attack) --------
         // Takes ICollection<TeamColor> so both FleeTeams' cached HashSet and EnemyTeams'
         // native HashSet can be passed straight in - no more ToList() copies per call.
 
@@ -291,7 +291,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageSource)) continue;
+                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         return true;
                 }
@@ -308,7 +308,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageSource)) continue;
+                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         result.Add(character);
                 }
@@ -327,7 +327,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageSource)) continue;
+                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     float dist = Vector3.Distance(transform.position, character.transform.position);
                     if (dist < maxRadius && dist < nearestDist) {
                         nearestDist = dist;
@@ -338,7 +338,7 @@ namespace RyanAssets.Characters.Server {
             return nearest;
         }
 
-        // ─── Attack ──────────────────────────────────────────────────────────
+        // --- Attack ----------------------------------------------------------
 
         // Centralizes changing _currentAttackTarget so the OnDied subscription always stays in
         // sync - subscribe to the new target, unsubscribe from the old one, and clear any stale
@@ -361,7 +361,7 @@ namespace RyanAssets.Characters.Server {
         // continuing to chase/hold at a corpse until the periodic check in AttackRoutine (or the
         // dead-target check at the top of HandleAttackTick) eventually notices. Those periodic
         // checks stay in place as a safety net in case this event is ever missed.
-        private void HandleAttackTargetDied(DamageSource source, NetworkObject killer) {
+        private void HandleAttackTargetDied(DamageType source, NetworkObject killer) {
             SetAttackTarget(null);
         }
 
@@ -636,7 +636,7 @@ namespace RyanAssets.Characters.Server {
                 Debug.LogWarning($"[{name}] In range to attack {_currentAttackTarget.name} but no AttackFunction is assigned.");
         }
 
-        // ─── Flee ────────────────────────────────────────────────────────────
+        // --- Flee ------------------------------------------------------------
 
         private IEnumerator FleeRoutine() {
             // Always pick a destination immediately on enter

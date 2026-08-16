@@ -16,7 +16,7 @@ namespace RyanAssets.Characters.Shared {
         }
         public static event Action<LocalCharacter> LocalCharacterAdded;
         public static event Action<LocalCharacter> LocalCharacterRemoved;
-        public static event Action<LocalCharacter, DamageSource, GameCharacter> LocalCharacterDied;
+        public static event Action<LocalCharacter, DamageType, GameCharacter> LocalCharacterDied;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init() {
             LocalCharacterAdded = null;
@@ -63,7 +63,7 @@ namespace RyanAssets.Characters.Shared {
             PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
 #endif
         }
-        void OnDiedEvent(DamageSource source, NetworkObject sourceObject) {
+        void OnDiedEvent(DamageType source, NetworkObject sourceObject) {
             LocalCharacterDied?.Invoke(this, source, sourceObject?.GetComponent<GameCharacter>());
         }
         protected void Awake() {
@@ -85,7 +85,7 @@ namespace RyanAssets.Characters.Shared {
             UpdateTeamEditorOptions(prev, next, asServer);
 #endif
         }
-        protected override void SharedDied(DamageSource source, NetworkObject sourceObject) {
+        protected override void SharedDied(DamageType source, NetworkObject sourceObject) {
             base.SharedDied(source, sourceObject);
         }
         public override void OnStopNetwork() {

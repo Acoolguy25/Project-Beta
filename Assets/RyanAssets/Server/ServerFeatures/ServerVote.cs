@@ -14,9 +14,11 @@ using UnityEngine;
 namespace RyanAssets.Server.ServerFeatures {
     public static class ServerVote {
         static int voteGeneration;
+        static UniTaskCompletionSource skipVoteCompletion;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
+            skipVoteCompletion = null;
             InstanceFinder.ServerManager.RegisterBroadcast<VoteRequest>(OnVoteRequest, true);
             PlayerData.OnPlayerRemoved += OnPlayerRemoved;
         }
@@ -26,10 +28,11 @@ namespace RyanAssets.Server.ServerFeatures {
                 return;
 
             int optionCount = VoteDeclarations.GetOptionCount(SharedGlobalEvents.Instance.SharedVoteHeader.Value.voteId);
-            if (request.optionId < -1 || request.optionId >= optionCount)
+            if (request.optionId < VoteRequest.SkipVoteOptionId || request.optionId >= optionCount)
                 return;
 
             SetPlayerVote(player, request.optionId, optionCount);
+            CompleteVoteIfEveryoneSkipped();
         }
 
         static void OnPlayerRemoved(PlayerData player) {
@@ -38,6 +41,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 return;
 
             SetPlayerVote(player, -1, events.VoteTotals.Count);
+            CompleteVoteIfEveryoneSkipped();
         }
 
         static void SetPlayerVote(PlayerData player, int newOption, int optionCount) {
@@ -49,10 +53,25 @@ namespace RyanAssets.Server.ServerFeatures {
             if (previousOption >= 0 && previousOption < events.VoteTotals.Count)
                 events.VoteTotals[previousOption] = Mathf.Max(0, events.VoteTotals[previousOption] - 1);
 
+            if (previousOption == VoteRequest.SkipVoteOptionId)
+                events.SkipVoteCount.Value = Mathf.Max(0, events.SkipVoteCount.Value - 1);
+
             if (newOption >= 0 && newOption < optionCount)
                 events.VoteTotals[newOption]++;
 
+            if (newOption == VoteRequest.SkipVoteOptionId)
+                events.SkipVoteCount.Value++;
+
             player.voteOption.Value = newOption;
+        }
+
+        static void CompleteVoteIfEveryoneSkipped() {
+            if (!SharedGlobalEvents.isVoting || PlayerData.Players.Count == 0)
+                return;
+
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            if (events.SkipVoteCount.Value == PlayerData.Players.Count)
+                skipVoteCompletion?.TrySetResult();
         }
 
         public static async UniTask<int> StartVote(VoteEnum voteEnum, float duration, CancellationToken token) {
@@ -64,7 +83,9 @@ namespace RyanAssets.Server.ServerFeatures {
                 throw new ArgumentException($"Vote '{voteEnum}' has no configured options.", nameof(voteEnum));
 
             int generation = ++voteGeneration;
+            skipVoteCompletion = new UniTaskCompletionSource();
             events.VoteTotals.Clear();
+            events.SkipVoteCount.Value = 0;
             for (int i = 0; i < optionCount; i++)
                 events.VoteTotals.Add(0);
             foreach (PlayerData player in PlayerData.Players.Values)
@@ -73,12 +94,17 @@ namespace RyanAssets.Server.ServerFeatures {
             events.SharedVoteHeader.Value = new SharedVoteHeader(voteEnum, NetworkHelper.ServerTime + duration);
             try {
                 SharedGlobalEvents.Instance.TopMessage = "Voting in progress...";
-                await UniTask.Delay(TimeSpan.FromSeconds(duration), cancellationToken: token);
+                await UniTask.WhenAny(
+                    //UniTask.Delay(TimeSpan.FromSeconds(duration), cancellationToken: token),
+                    ServerRunner.Instance.AwaitTime((int)(duration * 1000), token),
+                    skipVoteCompletion.Task);
                 return GetWinningOption(events);
             } finally {
                 // Do not allow a cancelled/older vote to close a newer one.
-                if (generation == voteGeneration)
+                if (generation == voteGeneration) {
                     events.SharedVoteHeader.Value = new SharedVoteHeader(VoteEnum.None);
+                    skipVoteCompletion = null;
+                }
             }
         }
 

@@ -17,8 +17,11 @@ using UnityEngine.SceneManagement;
 #pragma warning disable CS1998
 namespace RyanAssets.Server.ServerFeatures {
     public class ServerRunner : MonoBehaviour {
+        [SerializeField]
+        protected DebugBool DebugTimerSpeedUp, DebugTimerInfinite;
         public static event Action OnResetEvent;
         public static bool serverRunning => serverRunnerCTS != null && !serverRunnerCTS.IsCancellationRequested;
+        public static ServerRunner Instance;
         protected static CancellationTokenSource serverRunnerCTS = null;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
@@ -51,6 +54,10 @@ namespace RyanAssets.Server.ServerFeatures {
 
             return tcs.Task;
         }
+        public async UniTask AwaitTime(int durationMs, CancellationToken cts = default) {
+            int time2Sleep = DebugTimerInfinite.Value ? int.MaxValue : DebugTimerSpeedUp.Value ? Mathf.Max(1, durationMs / 10) : durationMs;
+            await UniTask.Delay(time2Sleep, cancellationToken: cts);
+        }
 
         public async UniTask Intermission(int duration, CancellationToken token = default) {
             await TimerCountdown("Intermission ({0})", duration, token);
@@ -59,7 +66,7 @@ namespace RyanAssets.Server.ServerFeatures {
         public async UniTask TimerCountdown(string message, int duration, CancellationToken token = default) {
             for (int i = duration; i > 0; i--) {
                 SharedGlobalEvents.Instance.TopMessage = string.Format(message, i);
-                await Awaitable.WaitForSecondsAsync(1f, token);
+                await AwaitTime(1000, token);
             }
         }
 
@@ -102,7 +109,7 @@ namespace RyanAssets.Server.ServerFeatures {
                     if (!activationFunc(duration, false))
                         return;
 
-                    await UniTask.Delay(1000, cancellationToken: cts.Token);
+                    await AwaitTime(1000, token);
 
                     duration--;
                 }
@@ -132,12 +139,18 @@ namespace RyanAssets.Server.ServerFeatures {
             return PlayerData.Players.Values.OrderByDescending(p => p.leaderboard[leaderboardIdx]).ToList();
         }
         public void SetLeaderboardEnabled(string value, bool enabled) {
-            if (GetLeaderboardEnabled(value) == enabled) {
+            int lastIdx = SharedGlobalEvents.GetLeaderboardIndex(value);
+            bool wasEnabled = lastIdx >= 0;
+            if (wasEnabled == enabled) {
                 return;
             }
             if (enabled) {
                 foreach (PlayerData player in PlayerData.Players.Values) {
                     player.leaderboard.AddRange(new[] { 0 });
+                }
+            } else if (wasEnabled) {
+                foreach (PlayerData player in PlayerData.Players.Values) {
+                    player.leaderboard.RemoveAt(lastIdx);
                 }
             }
             SharedGlobalEvents.Instance.LeaderboardHeaders.Remove(value);
@@ -187,6 +200,7 @@ namespace RyanAssets.Server.ServerFeatures {
         // LIFECYCLE FUNCTIONS
 
         protected virtual void Awake() {
+            Instance = this;
             DontDestroyOnLoad(gameObject);
             PlayerData.OnPlayerAdded += OnPlayerAdded;
             ServerIdleTimeout.OnIdleTimeoutStarted += Restart;

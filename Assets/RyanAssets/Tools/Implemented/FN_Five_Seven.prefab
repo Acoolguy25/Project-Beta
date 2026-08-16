@@ -424,7 +424,7 @@ MonoBehaviour:
   clientScript: RyanAssets.Tools.Client.ToolGunClient, RyanAssets.Tools.Client
   clientObserver: 
   serverScript: RyanAssets.Tools.Server.ToolGunServer, RyanAssets.Tools.Server
-  defaultDamageSource: 3
+  defaultDamageType: 3
   toolEnum: 2
   toolName: FN Five-seven
   toolDesc: Semi-automatic pistol designed and manufactured by FN Herstal in Belgium

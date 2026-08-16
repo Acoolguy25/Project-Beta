@@ -31,7 +31,7 @@ namespace Universes.murder_mystery.Server {
         [SerializeField]
         DebugBool DebugSingleNpc, DebugMotionlessNpc;
         [SerializeField]
-        DebugBool DebugNoIntermission, DebugTimerSpeedUp, DebugTimerInfinite;
+        DebugBool DebugNoIntermission;
         [SerializeField]
         DebugBool FallTest;
         //[SerializeField]
@@ -85,16 +85,14 @@ namespace Universes.murder_mystery.Server {
         protected void SetPlayerTeam(PlayerData player, TeamConfig teamConfig) {
             switch (teamConfig.team) {
                 case TeamColor.Red: // Murderer
-                    player.staminaMax.Value = 100f;
-                    break;
-                case TeamColor.Blue:
-                    player.staminaMax.Value = 60f;
-                    break;
-                case TeamColor.Green:
-                    player.staminaMax.Value = 60f;
+                    player.staminaMax.Value = 165f;
+                    player.staminaRegen.Value = 25f;
+                    player.staminaCooldown.Value = 0.6f;
                     break;
                 default:
-                    player.staminaMax.Value = 60f;
+                    player.staminaMax.Value = 100f;
+                    player.staminaRegen.Value = 15f;
+                    player.staminaCooldown.Value = 0.8f;
                     break;
             }
         }
@@ -117,12 +115,14 @@ namespace Universes.murder_mystery.Server {
                     SetPlayerTeam(player, new TeamConfig(TeamColor.Blue, TeamColor.Blue));
                     break;
             }
-            player.sprintSpeed.Value = 18f;
+            player.walkSpeed.Value = 16f;
+            player.sprintSpeed.Value = 19f;
         }
         void OnCharacterAdded(LocalCharacter character){
             //PlayerData data = PlayerData.GetPlayerData(character.Owner);
             character.Init(100);
             character.InitDefaultEffects();
+            
             character.OnDied += (source, killer) => SharedOnDied(character, source, killer);
             //new Vector3(1120.56995f, -8.12100029f, 1008.34003f);
             //character.transform.localScale = 0.7f * Vector3.one;  
@@ -133,23 +133,25 @@ namespace Universes.murder_mystery.Server {
                 SpawnPlayerTools(PlayerData.GetPlayerData(character.Owner));
             }
         }
-        void SharedOnDied(GameCharacter character, DamageSource source, NetworkObject killer) {
-            if (killer && mode == MM_Mode.Classic) {
-                GameCharacter killerCharacter = killer?.GetComponent<GameCharacter>();
-                if (killer.Owner.IsValid && source == DamageSource.Gun && character.GetTeam().team != TeamColor.Red) {
-                    //ServerTool.Instance.DespawnTool(killerCharacter.Owner, ToolEnum.Pistol);
-                    ToolBaseShared tool = ServerTool.Instance.GetTool(killerCharacter.Owner, ToolEnum.Pistol);
-                    tool.UpdateServerCooldown(20f);
-                    //tool.
+        void SharedOnDied(GameCharacter character, DamageType source, NetworkObject killer) {
+            if (mode == MM_Mode.Classic) {
+                if (killer) {
+                    GameCharacter killerCharacter = killer?.GetComponent<GameCharacter>();
+                    if (killer.Owner.IsValid && source == DamageType.Gun && character.GetTeam().team != TeamColor.Red) {
+                        //ServerTool.Instance.DespawnTool(killerCharacter.Owner, ToolEnum.Pistol);
+                        ToolBaseShared tool = ServerTool.Instance.GetTool(killerCharacter.Owner, ToolEnum.Pistol);
+                        tool.UpdateServerCooldown(20f);
+                        //tool.
+                    }
+                    if (killerCharacter.GetTeam().team == TeamColor.Red) {
+                        killerCharacter.HealMaxHealth(character.Owner.IsValid ? 150 : 20);
+                    }
                 }
-                if (killerCharacter.GetTeam().team == TeamColor.Red) {
-                    killerCharacter.HealMaxHealth(character.Owner.IsValid? 150 : 20);
-                }
-            }
-            if (character.GetTeam().team == TeamColor.Blue && GetTeamCount(TeamColor.Blue) == 0) {
-                foreach (GameCharacter gameCharacter in GameCharacter.TeamToCharacter[TeamColor.Red]) {
-                    if (gameCharacter.TryGetComponent<LocalNPC>(out LocalNPC localNPC)) {
-                        localNPC.AttackDetectionRadius *= 3.5f;
+                if (character.GetTeam().team == TeamColor.Blue && GetTeamCount(TeamColor.Blue) == 0) {
+                    foreach (GameCharacter gameCharacter in GameCharacter.TeamToCharacter[TeamColor.Red]) {
+                        if (gameCharacter.TryGetComponent<LocalNPC>(out LocalNPC localNPC)) {
+                            localNPC.AttackDetectionRadius *= 3.5f;
+                        }
                     }
                 }
             }
@@ -165,6 +167,7 @@ namespace Universes.murder_mystery.Server {
                 switch (mode) {
                     case MM_Mode.NPCsVsPlayers:
                         gameCharacter.SetTeam(new TeamConfig(TeamColor.Red, TeamColor.Red));
+                        npc.AttackDetectionRadius *= 3.5f;
                         break;
                     case MM_Mode.Classic:
                         gameCharacter.SetTeam(new TeamConfig(npcRoles[i], TeamColor.None));
@@ -177,7 +180,7 @@ namespace Universes.murder_mystery.Server {
                 gameCharacter.OnDied += (source, killer) =>
                 {
                     SharedOnDied(gameCharacter, source, killer);
-                    if (source == DamageSource.Fall) {
+                    if (source == DamageType.Fall) {
                         if (FallTest.Value)
                             Time.timeScale = 0f;
                         Debug.LogError("NPC HAS FALLEN!");
@@ -188,10 +191,10 @@ namespace Universes.murder_mystery.Server {
                         if (kills != -1) // if it exists
                             PlayerData.GetPlayerData(killer.Owner).leaderboard[kills]++;
                         switch (source) {
-                            case DamageSource.Melee:
+                            case DamageType.Melee:
                                 LevelsServer.AwardPlayerXPAndGold(killer.Owner, 15, 5);
                                 break;
-                            case DamageSource.Gun:
+                            case DamageType.Gun:
                                 LevelsServer.AwardPlayerXPAndGold(killer.Owner, 5, 5);
                                 break;
                         }
@@ -215,7 +218,7 @@ namespace Universes.murder_mystery.Server {
                     break;
             }
         }
-        async UniTask SpawnPlayers() {
+        void SpawnPlayers() {
             int i = 0;
             // This method yields between players, so the live dictionary may
             // change due to authentication or disconnect callbacks.
@@ -291,8 +294,7 @@ namespace Universes.murder_mystery.Server {
             await base.StartAsync(token);
 
             if (!DebugNoIntermission.Value) {
-                int intermissionDuration = DebugTimerInfinite.Value ? 9999 : DebugTimerSpeedUp.Value ? 1 : 15;
-                mode = (MM_Mode)await ServerVote.StartVote(VoteEnum.MM_VoteMode, intermissionDuration, token);
+                mode = (MM_Mode)await ServerVote.StartVote(VoteEnum.MM_VoteMode, 15f, token);
                 //await base.Intermission(DebugTimerInfinite.Value ? Int32.MaxValue : DebugTimerSpeedUp.Value ? 1 : 5, token);
             }
             SetLeaderboardEnabled("Kills", mode != MM_Mode.Classic);
@@ -304,7 +306,7 @@ namespace Universes.murder_mystery.Server {
             }
 
             SpawnNpcs();
-            await SpawnPlayers();
+            SpawnPlayers();
             base.SetGlobalInvul(false);
             int gameTime = mode == MM_Mode.Classic ? 180 : 90;
             gameInProgress = true;
@@ -332,8 +334,8 @@ namespace Universes.murder_mystery.Server {
             base.Stop();
             gameInProgress = false;
         }
-        protected override void Restart() {
-            base.Restart();
+        protected override void Reset() {
+            base.Reset();
             ServerNPC.ClearAllNPC();
             SetPlayerTeams(new TeamConfig(TeamColor.Ghost));
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();

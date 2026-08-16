@@ -30,7 +30,7 @@ namespace RyanAssets.Client.ClientUI.Stamina {
             OnStaminaChanged(true);
             SetVisible(true);
         }
-        void OnCharacterDied(RyanAssets.Shared.Declarations.DamageSource source, NetworkObject sourceObject) {
+        void OnCharacterDied(RyanAssets.Shared.Declarations.DamageType source, NetworkObject sourceObject) {
             SetVisible();
         }
         void OnCharacterRemoved(LocalCharacter oldCharacter) {

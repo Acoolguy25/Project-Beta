@@ -53,7 +53,7 @@ MonoBehaviour:
   clientScript: RyanAssets.Tools.Client.ToolMeleeClient, RyanAssets.Tools.Client
   clientObserver: 
   serverScript: RyanAssets.Tools.Server.ToolMeleeServer, RyanAssets.Tools.Server
-  defaultDamageSource: 2
+  defaultDamageType: 2
   toolEnum: 1
   toolName: Rough Dagger
   toolDesc: Rusty dagger that can stick wound someone.

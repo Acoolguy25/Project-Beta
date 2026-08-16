@@ -14,6 +14,10 @@ namespace RyanAssets.Server.ServerCore
     public class ServerTool : MonoBehaviour {
         [SerializeField]
         List<ToolBaseShared> toolPrefab;
+        // Tools are parented to the character only after their network spawn has
+        // completed. Keep an authoritative server-side record so they can still
+        // be found (and cleaned up) during that window or while a player leaves.
+        readonly Dictionary<NetworkObject, Dictionary<ToolEnum, ToolBaseShared>> characterTools = new();
         public static ServerTool Instance { get; private set; }
         void Awake() {
             Instance = this;
@@ -25,9 +29,38 @@ namespace RyanAssets.Server.ServerCore
             toolBase.reloadDurationSync.Value = toolBase.reloadDurationInit;
             toolBase.maxClipAmmoSync.Value = toolBase.maxClipAmmoInit;
         }
+        bool TryGetTrackedTool(NetworkObject character, ToolEnum tool, out ToolBaseShared toolBase) {
+            toolBase = null;
+            if (!characterTools.TryGetValue(character, out Dictionary<ToolEnum, ToolBaseShared> tools) ||
+                !tools.TryGetValue(tool, out toolBase))
+                return false;
+
+            if (toolBase != null && toolBase.IsSpawned)
+                return true;
+
+            tools.Remove(tool);
+            if (tools.Count == 0)
+                characterTools.Remove(character);
+            toolBase = null;
+            return false;
+        }
+        void TrackTool(NetworkObject character, ToolBaseShared toolBase) {
+            if (!characterTools.TryGetValue(character, out Dictionary<ToolEnum, ToolBaseShared> tools)) {
+                tools = new();
+                characterTools[character] = tools;
+            }
+            tools[toolBase.toolEnum] = toolBase;
+        }
         public ToolBaseShared SpawnTool(NetworkObject networkObject, ToolEnum tool) {
+            if (networkObject == null || !networkObject.IsSpawned) {
+                Debug.LogWarning($"Tried to add tool {tool} to an unspawned character");
+                return null;
+            }
+            if (TryGetTrackedTool(networkObject, tool, out ToolBaseShared existingTool))
+                return existingTool;
+
             int toolEnumIndex = (int)tool - 1;
-            if (toolPrefab.Count <= toolEnumIndex) {
+            if (toolEnumIndex < 0 || toolPrefab.Count <= toolEnumIndex) {
                 Debug.LogWarning($"Tried to add tool {tool} but no prefab exists for it");
                 return null;
             }
@@ -38,6 +71,7 @@ namespace RyanAssets.Server.ServerCore
             toolBase.connectedCharacter = networkObject.GetComponent<GameCharacter>();
             InitTool(toolBase);
             InstanceFinder.ServerManager.Spawn(toolClone, ownerConnection: networkObject.Owner);
+            TrackTool(networkObject, toolBase);
             return toolBase;
         }
         public ToolBaseShared SpawnTool(NetworkConnection player, ToolEnum tool) {
@@ -51,12 +85,45 @@ namespace RyanAssets.Server.ServerCore
         }
         public void DespawnTool(NetworkConnection player, ToolEnum tool) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {
-                foreach (var toolBase in character.GetComponentsInChildren<ToolBaseShared>(true)) {
-                    if (toolBase.toolEnum == tool) {
-                        InstanceFinder.ServerManager.Despawn(toolBase.gameObject);
-                        break;
-                    }
-                }
+                DespawnTool(character.NetworkObject, tool);
+            }
+        }
+        public void DespawnTool(NetworkObject character, ToolEnum tool) {
+            if (character == null)
+                return;
+
+            if (TryGetTrackedTool(character, tool, out ToolBaseShared toolBase)) {
+                characterTools[character].Remove(tool);
+                if (characterTools[character].Count == 0)
+                    characterTools.Remove(character);
+                InstanceFinder.ServerManager.Despawn(toolBase.gameObject);
+                return;
+            }
+
+            // Compatibility cleanup for tools created before they were tracked.
+            foreach (ToolBaseShared attachedTool in character.GetComponentsInChildren<ToolBaseShared>(true)) {
+                if (attachedTool.toolEnum == tool && attachedTool.IsSpawned)
+                    InstanceFinder.ServerManager.Despawn(attachedTool.gameObject);
+            }
+        }
+        public void DespawnTools(NetworkObject character) {
+            if (character == null)
+                return;
+
+            HashSet<ToolBaseShared> toolsToDespawn = new();
+            if (characterTools.TryGetValue(character, out Dictionary<ToolEnum, ToolBaseShared> trackedTools)) {
+                foreach (ToolBaseShared tool in trackedTools.Values)
+                    toolsToDespawn.Add(tool);
+                characterTools.Remove(character);
+            }
+            // Also remove legacy/untracked duplicates which have already been
+            // parented beneath the character.
+            foreach (ToolBaseShared tool in character.GetComponentsInChildren<ToolBaseShared>(true))
+                toolsToDespawn.Add(tool);
+
+            foreach (ToolBaseShared tool in toolsToDespawn) {
+                if (tool != null && tool.IsSpawned)
+                    InstanceFinder.ServerManager.Despawn(tool.gameObject);
             }
         }
 
@@ -68,10 +135,14 @@ namespace RyanAssets.Server.ServerCore
         }
 
         public ToolBaseShared GetTool(NetworkObject networkObject, ToolEnum tool) {
+            if (TryGetTrackedTool(networkObject, tool, out ToolBaseShared trackedTool))
+                return trackedTool;
+
             GameCharacter character = networkObject.GetComponent<GameCharacter>();
             if (character != null) {
                 foreach (var toolBase in character.GetComponentsInChildren<ToolBaseShared>(true)) {
-                    if (toolBase.toolEnum == tool) {
+                    if (toolBase.toolEnum == tool && toolBase.IsSpawned) {
+                        TrackTool(networkObject, toolBase);
                         return toolBase;
                     }
                 }
