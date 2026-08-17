@@ -59,7 +59,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             toolUI.SetVisible(true);
             character.OnDied += OnCharacterDied;
         }
-        void OnCharacterDied(DamageType damageType, NetworkObject networkObject) {
+        void OnCharacterDied(DamageType damageType, IEntity sourceEntity) {
             toolUI.SetVisible(false);
         }
         void OnToolCreated(ToolBaseShared tool) {

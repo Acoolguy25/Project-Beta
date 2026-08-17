@@ -133,11 +133,11 @@ namespace Universes.murder_mystery.Server {
                 SpawnPlayerTools(PlayerData.GetPlayerData(character.Owner));
             }
         }
-        void SharedOnDied(GameCharacter character, DamageType source, NetworkObject killer) {
+        void SharedOnDied(GameCharacter character, DamageType source, IEntity killer) {
             if (mode == MM_Mode.Classic) {
-                if (killer) {
-                    GameCharacter killerCharacter = killer?.GetComponent<GameCharacter>();
-                    if (killer.Owner.IsValid && source == DamageType.Gun && character.GetTeam().team != TeamColor.Red) {
+                GameCharacter killerCharacter = killer as GameCharacter;
+                if (killerCharacter != null) {
+                    if (killerCharacter.Owner.IsValid && source == DamageType.Gun && character.GetTeam().team != TeamColor.Red) {
                         //ServerTool.Instance.DespawnTool(killerCharacter.Owner, ToolEnum.Pistol);
                         ToolBaseShared tool = ServerTool.Instance.GetTool(killerCharacter.Owner, ToolEnum.Pistol);
                         tool.UpdateServerCooldown(20f);
@@ -186,16 +186,17 @@ namespace Universes.murder_mystery.Server {
                         Debug.LogError("NPC HAS FALLEN!");
                     }
 
-                    if (killer && killer.Owner.IsValid) {
+                    GameCharacter killerCharacter = killer as GameCharacter;
+                    if (killerCharacter != null && killerCharacter.Owner.IsValid) {
                         int kills = SharedGlobalEvents.GetLeaderboardIndex("Kills");
                         if (kills != -1) // if it exists
-                            PlayerData.GetPlayerData(killer.Owner).leaderboard[kills]++;
+                            PlayerData.GetPlayerData(killerCharacter.Owner).leaderboard[kills]++;
                         switch (source) {
                             case DamageType.Melee:
-                                LevelsServer.AwardPlayerXPAndGold(killer.Owner, 15, 5);
+                                LevelsServer.AwardPlayerXPAndGold(killerCharacter.Owner, 15, 5);
                                 break;
                             case DamageType.Gun:
-                                LevelsServer.AwardPlayerXPAndGold(killer.Owner, 5, 5);
+                                LevelsServer.AwardPlayerXPAndGold(killerCharacter.Owner, 5, 5);
                                 break;
                         }
                     }
@@ -249,7 +250,7 @@ namespace Universes.murder_mystery.Server {
         void RandomizeCharacterName(GameCharacter gameCharacter) {
             if (alienNames == null)
                 alienNames = ServerBootStrap.universeCfg.LoadText("alien_names").Replace("\r", "").Split("\n");
-            gameCharacter.DisplayName.Value = alienNames[UnityEngine.Random.Range(0, alienNames.Length)];
+            gameCharacter.DisplayName = alienNames[UnityEngine.Random.Range(0, alienNames.Length)];
         }
         string GetTeamName(TeamColor team) {
             return team switch

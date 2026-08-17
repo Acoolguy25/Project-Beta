@@ -4126,6 +4126,8 @@ GameObject:
   - component: {fileID: 2508271702602764159}
   - component: {fileID: 8624230890759636101}
   - component: {fileID: 1320132304164476998}
+  - component: {fileID: 8134790421318710112}
+  - component: {fileID: 8134790421318710113}
   - component: {fileID: 5344553774358299964}
   - component: {fileID: -291742417468123223}
   - component: {fileID: 2862851711235735417}
@@ -4271,6 +4273,8 @@ MonoBehaviour:
   - {fileID: 2508271702602764159}
   - {fileID: 8624230890759636101}
   - {fileID: 1320132304164476998}
+  - {fileID: 8134790421318710112}
+  - {fileID: 8134790421318710113}
   - {fileID: 7091241065695170515}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
@@ -4367,18 +4371,50 @@ MonoBehaviour:
   m_GameObject: {fileID: 6865002775998532502}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 157c590c032953445ba61157195cba79, type: 3}
+  m_Script: {fileID: 11500000, guid: fe78106734a0df145bbab500d0f0d7a2, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.TrackedGameCharacter
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.GameCharacter
   _componentIndexCache: 3
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
   CharacterCamera: {fileID: 7279864874766871779}
-  HealthEditor: 0
-  MaxHealthEditor: 0
-  TeamEditor:
+  effectsComponent: {fileID: 8134790421318710112}
+  healthComponent: {fileID: 8134790421318710113}
+  teamEditor:
     team: 1
     displayTeam: 1
+--- !u!114 &8134790421318710112
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8452b7f4d98d4b29b396c1ed2dceba01, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: RyanAssets.Shared.Component::RyanAssets.Shared.Component.EffectsComponent
+  _componentIndexCache: 4
+  _addedNetworkObject: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 9155375541221003514}
+--- !u!114 &8134790421318710113
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 956ab4a573694803859107420bb3fecb, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: RyanAssets.Shared.Component::RyanAssets.Shared.Component.HealthComponent
+  _componentIndexCache: 5
+  _addedNetworkObject: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 9155375541221003514}
+  healthEditor: 0
+  maxHealthEditor: 0
 --- !u!114 &5344553774358299964
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4461,7 +4497,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ff2350129a577a4c8c76d71116eb639, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.CharacterAnimator
-  _componentIndexCache: 4
+  _componentIndexCache: 6
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
   LandingAudioClip: {fileID: 8300000, guid: ff697d3070687ce4583faa0561a145a2, type: 3}

@@ -89,7 +89,7 @@ namespace RyanAssets.Cameras
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, true);
             SetCameraTarget(localCharacter);
         }
-        private void OnCharacterDied(RyanAssets.Shared.Declarations.DamageType source, NetworkObject sourceObject) {
+        private void OnCharacterDied(RyanAssets.Shared.Declarations.DamageType source, IEntity sourceEntity) {
             SetCameraAvailable(GameCameraType.DeathCamera, true);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
         }

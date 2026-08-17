@@ -41,11 +41,11 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             if (CameraController.targetCharacter != null) {
                 long Health = CameraController.targetCharacter.Health.Value;
                 long MaxHealth = CameraController.targetCharacter.MaxHealth.Value;
-                float HealthPercent = CameraController.targetCharacter.IsFullHealth() ? 1f : Mathf.Min(1f, (float) Health / MaxHealth);
+                float HealthPercent = CameraController.targetCharacter.IsFullHealth ? 1f : Mathf.Min(1f, (float) Health / MaxHealth);
                 healthText.text = $"{Health}/{MaxHealth}";
                 healthPanel.color = Color.LerpUnclamped(Color.red, Color.green, HealthPercent);
                 healthPanel.GetComponent<RectTransform>().anchorMax = new Vector2(HealthPercent, 1);
-                canvasGroupController.SetVisible(!CameraController.targetCharacter.IsFullHealth() && Health != 0);
+                canvasGroupController.SetVisible(!CameraController.targetCharacter.IsFullHealth && Health != 0);
             } else
                 canvasGroupController.SetVisible(false);
         }

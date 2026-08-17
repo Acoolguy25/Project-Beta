@@ -53,7 +53,7 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 .SelectMany(x => x)
                 // A despawning Unity object can compare equal to null. Require a live
                 // object before allowing the current selection through the fallback.
-                .Where(c => c && ((!c.IsDead() && c.CanSpectate.Value) || currentCharacter == c))
+                .Where(c => c && ((!c.IsDead && c.CanSpectate.Value) || currentCharacter == c))
                 .ToList();
             if (characters.Count == 0 || (characters.Count == 1 && characters[0] == currentCharacter)) {
                 // This is expected while waiting for the next round to spawn.
@@ -83,8 +83,8 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 currentPlayer.xp.OnChange -= OnPlayerXPChanged;
             }
             if (currentCharacter) {
-                currentCharacter.DisplayName.OnChange -= OnPlayerNameChanged;
-                currentCharacter.Team.OnChange -= OnPlayerTeamChanged;
+                currentCharacter.DisplayNameSync.OnChange -= OnPlayerNameChanged;
+                currentCharacter.TeamSync.OnChange -= OnPlayerTeamChanged;
                 currentCharacter.Health.OnChange -= OnPlayerHealthChanged;
                 currentCharacter.MaxHealth.OnChange -= OnPlayerHealthChanged;
                 currentCharacter.OnDied -= OnPlayerDied;
@@ -104,8 +104,8 @@ namespace RyanAssets.Client.ClientUI.Spectate
                     currentPlayer.username.OnChange += OnPlayerNameChanged;
                     currentPlayer.xp.OnChange += OnPlayerXPChanged;
                 }
-                currentCharacter.DisplayName.OnChange += OnPlayerNameChanged;
-                currentCharacter.Team.OnChange += OnPlayerTeamChanged;
+                currentCharacter.DisplayNameSync.OnChange += OnPlayerNameChanged;
+                currentCharacter.TeamSync.OnChange += OnPlayerTeamChanged;
                 currentCharacter.Health.OnChange += OnPlayerHealthChanged;
                 currentCharacter.MaxHealth.OnChange += OnPlayerHealthChanged;
                 currentCharacter.OnDied += OnPlayerDied;
@@ -139,7 +139,7 @@ namespace RyanAssets.Client.ClientUI.Spectate
         void OnPlayerXPChanged(ulong oldVal, ulong newVal, bool asServer) {
             UpdatePlayerLevel();
         }
-        void OnPlayerDied(DamageType source, FishNet.Object.NetworkObject sourceObject) {
+        void OnPlayerDied(DamageType source, IEntity sourceEntity) {
             AdvancePosition(1);
         }
         void OnMyGameCharacterRemoved(GameCharacter character) {
@@ -151,9 +151,9 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 playerName.text = "No Characters Found";
                 playerName.color = Color.white;
             } else {
-                playerName.text = (currentPlayer && currentPlayer.username.Value != currentCharacter.DisplayName.Value) ?
-                        $"{currentCharacter.DisplayName.Value} (@{currentPlayer.username.Value})"
-                        : currentCharacter.DisplayName.Value;
+                playerName.text = (currentPlayer && currentPlayer.username.Value != currentCharacter.DisplayName) ?
+                        $"{currentCharacter.DisplayName} (@{currentPlayer.username.Value})"
+                        : currentCharacter.DisplayName;
                 playerName.color = currentCharacter.GetTeam().realTeamColor;
             }
         }

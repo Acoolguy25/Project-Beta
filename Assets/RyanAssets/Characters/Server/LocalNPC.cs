@@ -291,7 +291,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageType)) continue;
+                    if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         return true;
                 }
@@ -308,7 +308,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageType)) continue;
+                    if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         result.Add(character);
                 }
@@ -327,7 +327,7 @@ namespace RyanAssets.Characters.Server {
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
-                    if (character == null || character.IsDead() || character.IsProtected(gameCharacter, AttackDamageType)) continue;
+                    if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     float dist = Vector3.Distance(transform.position, character.transform.position);
                     if (dist < maxRadius && dist < nearestDist) {
                         nearestDist = dist;
@@ -361,7 +361,7 @@ namespace RyanAssets.Characters.Server {
         // continuing to chase/hold at a corpse until the periodic check in AttackRoutine (or the
         // dead-target check at the top of HandleAttackTick) eventually notices. Those periodic
         // checks stay in place as a safety net in case this event is ever missed.
-        private void HandleAttackTargetDied(DamageType source, NetworkObject killer) {
+        private void HandleAttackTargetDied(DamageType source, IEntity killer) {
             SetAttackTarget(null);
         }
 
@@ -375,7 +375,7 @@ namespace RyanAssets.Characters.Server {
                 // check here is just a safety net - HandleAttackTargetDied normally clears the
                 // target immediately via the OnDied event well before this runs.
                 if (_currentAttackTarget == null
-                    || _currentAttackTarget.IsDead()
+                    || _currentAttackTarget.IsDead
                     || Vector3.Distance(transform.position, _currentAttackTarget.transform.position) > AttackClearRadius) {
                     SetAttackTarget(GetNearestCharacter(EnemyTeams, AttackClearRadius));
                     continue;
@@ -403,7 +403,7 @@ namespace RyanAssets.Characters.Server {
         // frame-rate and interval-rate logic, which is what was causing the stutter.
         private void HandleAttackTick() {
             // Extra safety net - see HandleAttackTargetDied for the primary (immediate) path.
-            if (_currentAttackTarget != null && _currentAttackTarget.IsDead())
+            if (_currentAttackTarget != null && _currentAttackTarget.IsDead)
                 SetAttackTarget(null);
 
             if (_currentAttackTarget == null) {

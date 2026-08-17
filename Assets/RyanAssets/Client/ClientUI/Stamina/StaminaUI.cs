@@ -1,4 +1,3 @@
-using FishNet.Object;
 using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Shared.Declarations;
@@ -30,7 +29,7 @@ namespace RyanAssets.Client.ClientUI.Stamina {
             OnStaminaChanged(true);
             SetVisible(true);
         }
-        void OnCharacterDied(RyanAssets.Shared.Declarations.DamageType source, NetworkObject sourceObject) {
+        void OnCharacterDied(RyanAssets.Shared.Declarations.DamageType source, IEntity sourceEntity) {
             SetVisible();
         }
         void OnCharacterRemoved(LocalCharacter oldCharacter) {

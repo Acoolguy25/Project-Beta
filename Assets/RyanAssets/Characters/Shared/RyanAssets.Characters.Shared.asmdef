@@ -11,7 +11,8 @@
         "RyanAssets.Shared.Declarations",
         "RyanAssets.Tools.Shared",
         "RyanAssets.Shared.Global",
-        "RyanAssets.DataService"
+        "RyanAssets.DataService",
+        "RyanAssets.Shared.Component"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

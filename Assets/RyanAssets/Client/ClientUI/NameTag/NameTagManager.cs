@@ -41,18 +41,18 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             RectTransform healthBar = HealthBarBacking.GetChild(0).GetComponent<RectTransform>();
             TextMeshProUGUI healthLabelText = HealthBarBacking.GetChild(1).GetComponent<TextMeshProUGUI>();
             void OnPlayerNameChanged(string _, string newValue, bool asServer) {
-                displayNameText.text = gameCharater.DisplayName.Value;
+                displayNameText.text = gameCharater.DisplayName;
             }
             void OnPlayerHealthChanged(long _1, long _2, bool asServer) {
                 float healthPercent = (gameCharater.MaxHealth.Value == 0)? 1f: ((float)gameCharater.Health.Value / (float)gameCharater.MaxHealth.Value);
                 healthBar.anchorMax = new Vector2(healthPercent, healthBar.anchorMax.y);
                 healthLabelText.text = $"{gameCharater.Health.Value}/{gameCharater.MaxHealth.Value}";
-                HealthBarBacking.gameObject.SetActive(gameCharater.Health.Value < gameCharater.MaxHealth.Value && !gameCharater.IsDead() && !gameCharater.IsEffectActive(CharacterEffect.Invul));
+                HealthBarBacking.gameObject.SetActive(gameCharater.Health.Value < gameCharater.MaxHealth.Value && !gameCharater.IsDead && !gameCharater.IsEffectActive(CharacterEffect.Invul));
             }
             void OnPlayerTeamChanged(TeamConfig _, TeamConfig newValue, bool asServer) {
                 displayNameText.color = newValue.displayTeamColor;
             }
-            gameCharater.DisplayName.OnChange += OnPlayerNameChanged;
+            gameCharater.DisplayNameSync.OnChange += OnPlayerNameChanged;
 
             gameCharater.Health.OnChange += OnPlayerHealthChanged;
             gameCharater.MaxHealth.OnChange += OnPlayerHealthChanged;
@@ -60,14 +60,14 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                 if (op == FishNet.Object.Synchronizing.SyncDictionaryOperation.Complete)
                     OnPlayerHealthChanged(default, default, default);
             };
-            gameCharater.Team.OnChange += OnPlayerTeamChanged;
+            gameCharater.TeamSync.OnChange += OnPlayerTeamChanged;
             gameCharater.OnDied += (damageType, ownerObj) => {
                 Destroy(nameTag);
             };
 
-            OnPlayerNameChanged(default, gameCharater.DisplayName.Value, false);
+            OnPlayerNameChanged(default, gameCharater.DisplayName, false);
             OnPlayerHealthChanged(default, default, false);
-            OnPlayerTeamChanged(default, gameCharater.Team.Value, false);
+            OnPlayerTeamChanged(default, gameCharater.Team, false);
 
             UpdateNameTagPositioning(nameTagCanvas);
 

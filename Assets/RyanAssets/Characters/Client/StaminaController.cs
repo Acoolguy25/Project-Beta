@@ -16,7 +16,7 @@ namespace RyanAssets.Characters.Client {
         public static float StaminaCooldown => PlayerData.localData.staminaCooldown.Value;
         static float lastTimeStaminaRegen;
         public static void SetStamina(float stamina) {
-            if (LocalPlayer.Character == null || LocalPlayer.Character.IsDead())
+            if (LocalPlayer.Character == null || LocalPlayer.Character.IsDead)
                 return;
             stamina = Mathf.Clamp(stamina, 0, MaxStamina);
             if (Stamina > stamina) lastTimeStaminaRegen = Time.time; // Trigger cooldown if stamina is consumed

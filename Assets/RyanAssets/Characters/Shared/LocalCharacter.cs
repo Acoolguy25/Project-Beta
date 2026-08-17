@@ -7,7 +7,7 @@ using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Characters.Shared {
-    public class LocalCharacter : TrackedGameCharacter {
+    public class LocalCharacter : GameCharacter {
         public static Dictionary<NetworkConnection, LocalCharacter> Characters = new();
         public void InstantiateSelf(NetworkConnection prevOwner) {
             if (Characters.TryGetValue(prevOwner, out LocalCharacter newCharacter) && newCharacter != this)
@@ -58,15 +58,17 @@ namespace RyanAssets.Characters.Shared {
             OnMyPlayerAdded(playerData);
         }
 #endif
-        void OnDestroy() {
+        protected override void OnDestroy() {
+            base.OnDestroy();
 #if !UNITY_SERVER
             PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
 #endif
         }
-        void OnDiedEvent(DamageType source, NetworkObject sourceObject) {
-            LocalCharacterDied?.Invoke(this, source, sourceObject?.GetComponent<GameCharacter>());
+        void OnDiedEvent(DamageType source, IEntity sourceEntity) {
+            LocalCharacterDied?.Invoke(this, source, sourceEntity as GameCharacter);
         }
-        protected void Awake() {
+        protected override void Awake() {
+            base.Awake();
             CharacterCamera = transform.Find("CharacterCamera");
             OnDied += OnDiedEvent;
             foreach (Transform t in GetComponentsInChildren<Transform>(true)) {
@@ -85,8 +87,8 @@ namespace RyanAssets.Characters.Shared {
             UpdateTeamEditorOptions(prev, next, asServer);
 #endif
         }
-        protected override void SharedDied(DamageType source, NetworkObject sourceObject) {
-            base.SharedDied(source, sourceObject);
+        protected override void SharedDied(DamageType source, IEntity sourceEntity) {
+            base.SharedDied(source, sourceEntity);
         }
         public override void OnStopNetwork() {
             base.OnStopNetwork();

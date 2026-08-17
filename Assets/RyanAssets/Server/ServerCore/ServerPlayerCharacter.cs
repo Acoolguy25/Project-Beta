@@ -74,7 +74,7 @@ namespace RyanAssets.Server.ServerCore {
             if (ServerTool.Instance != null)
                 ServerTool.Instance.DespawnTools(character);
             ClientToCharacter.Remove(character.Owner);
-            //if (character.TryGetComponent(out LocalCharacter localCharacter) && !localCharacter.IsDead())
+            //if (character.TryGetComponent(out LocalCharacter localCharacter) && !localCharacter.IsDead)
             //    localCharacter.Kill(DamageType.Despawn);
             if (character.IsSpawned) {
                 InstanceFinder.ServerManager.Despawn(character);

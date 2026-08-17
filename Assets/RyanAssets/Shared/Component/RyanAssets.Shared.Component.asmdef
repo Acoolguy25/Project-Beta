@@ -2,7 +2,11 @@
     "name": "RyanAssets.Shared.Component",
     "rootNamespace": "RyanAssets.Shared.Component",
     "references": [
-        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc"
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
+        "FishNet.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Shared.Global",
+        "RyanAssets.DataService"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
