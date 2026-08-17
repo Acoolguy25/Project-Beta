@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using FishNet.Connection;
 using RyanAssets.Server.ServerCore;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.DataService;
 

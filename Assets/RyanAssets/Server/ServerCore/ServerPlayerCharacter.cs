@@ -10,7 +10,7 @@ using System;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.DataService;
 
 namespace RyanAssets.Server.ServerCore {

@@ -3,9 +3,9 @@
 //using System.Linq;
 //using FishNet;
 //using RyanAssets.Commands.Shared;
-//using RyanAssets.Declarations;
+//using RyanAssets.Shared.Requests;
 //using RyanAssets.Shared.Declarations;
-//using RyanAssets.Shared.Player;
+//using RyanAssets.Shared.Global;
 //using TMPro;
 //using UnityEngine;
 //using UnityEngine.EventSystems;

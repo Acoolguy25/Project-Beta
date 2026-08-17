@@ -3,7 +3,7 @@ using RyanAssets.UI;
 using RyanAssets.Input;
 using UnityEngine.UI;
 using RyanAssets.Client.ClientCore;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 
 namespace RyanAssets.Client.ClientUI.Topbar {
     public class ClientTopbar : MonoBehaviour {

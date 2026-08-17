@@ -1,6 +1,6 @@
 {
-    "name": "RyanAssets.Shared.Player",
-    "rootNamespace": "RyanAssets.Shared.Player",
+    "name": "RyanAssets.Shared.Global",
+    "rootNamespace": "RyanAssets.Shared.Global",
     "references": [
         "GUID:fe264023cf80b5c4d970ee18f18982a1",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",

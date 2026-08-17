@@ -10,7 +10,8 @@ using RyanAssets.DataService;
 using RyanAssets.NetworkService;
 using RyanAssets.Server.ServerModules;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Requests;
+using RyanAssets.Shared.Global;
 using UnityEngine;
 
 namespace RyanAssets.Server.ServerCore {

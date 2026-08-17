@@ -3,7 +3,7 @@ using FishNet.Object.Synchronizing;
 using RyanAssets.Client.ClientCore;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.Shared.Requests;
 using RyanAssets.TweenService;
 using RyanAssets.UI.ListGrid;

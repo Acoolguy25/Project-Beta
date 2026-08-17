@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
 using RyanAssets.Shared.Requests;
+using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Client.ClientUI.GameSettings {
     public class GameSettingsClient: ListGridUI<GameSettingsInstance> {

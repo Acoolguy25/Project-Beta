@@ -8,6 +8,7 @@ using System.Collections.Specialized;
 using Unity.Cinemachine;
 using RyanAssets.Client.ClientCore;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Requests;
 using FishNet;
 using FishNet.Transporting;
 using FishNet.Object;

@@ -9,7 +9,7 @@ using RyanAssets.Levels.Server;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.Tools.Shared;
 using System;
 using System.Collections;

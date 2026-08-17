@@ -9,7 +9,7 @@ using RyanAssets.Levels.Client;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using System;
 using UnityEngine;
 using static FishNet.Component.Transforming.NetworkTransform;

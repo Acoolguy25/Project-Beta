@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using RyanAssets.Characters.Shared;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.Characters.Server;
 using RyanAssets.Tools.Shared;
 using RyanAssets.Server.ServerCore;

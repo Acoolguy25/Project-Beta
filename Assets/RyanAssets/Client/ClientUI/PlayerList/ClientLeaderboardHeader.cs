@@ -1,6 +1,6 @@
 ﻿using FishNet.Object.Synchronizing;
 using RyanAssets.DataService;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using System.Collections;
 using UnityEngine;
 using Cysharp.Threading.Tasks;

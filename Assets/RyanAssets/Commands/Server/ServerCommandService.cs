@@ -6,9 +6,9 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using RyanAssets.Commands.Shared;
 using RyanAssets.DataService;
-using RyanAssets.Declarations;
+using RyanAssets.Shared.Requests;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using UnityEngine;
 
 namespace RyanAssets.Commands.Server {

@@ -2,7 +2,7 @@
 using RyanAssets.Characters.Server;
 using RyanAssets.Commands.Server;
 using RyanAssets.Commands.Shared;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using System.Collections;
 using UnityEngine;
 using Universes.UniverseData.murder_mystery.Server;

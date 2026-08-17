@@ -7,7 +7,7 @@ using FishNet.Transporting;
 using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.Shared.Requests;
 using UnityEngine;
 

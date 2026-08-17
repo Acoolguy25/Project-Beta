@@ -6,7 +6,7 @@ using FishNet;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 
 namespace RyanAssets.Characters.Server { 
     public static class ServerNPC {

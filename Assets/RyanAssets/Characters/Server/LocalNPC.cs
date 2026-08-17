@@ -3,7 +3,7 @@ using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using System;
 using System.Collections;
 using System.Collections.Generic;

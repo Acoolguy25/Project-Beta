@@ -1,6 +1,7 @@
 using UnityEngine;
 using RyanAssets.PromptService;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Requests;
 using FishNet;
 using FishNet.Transporting;
 

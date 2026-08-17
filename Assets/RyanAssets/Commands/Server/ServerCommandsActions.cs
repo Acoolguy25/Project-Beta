@@ -10,7 +10,7 @@ using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 
 namespace RyanAssets.Commands.Server {
     public static class ServerCommandsActions {

@@ -5,7 +5,7 @@ using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.HID;

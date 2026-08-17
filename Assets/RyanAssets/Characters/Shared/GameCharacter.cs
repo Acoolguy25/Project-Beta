@@ -3,7 +3,7 @@ using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using RyanAssets.DataService;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.Tools.Shared;
 using System;
 using System.Collections.Generic;

@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using RyanAssets.DataService;
 using FishNet;
 using FishNet.Transporting;

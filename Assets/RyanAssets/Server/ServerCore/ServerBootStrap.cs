@@ -8,6 +8,7 @@ using FishNet;
 using FishNet.Transporting;
 using RyanAssets.NetworkService;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Requests;
 using FishNet.Managing;
 using FishNet.Managing.Scened;
 using Newtonsoft.Json;

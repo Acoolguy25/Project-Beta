@@ -2,8 +2,8 @@
 using RyanAssets.Client.ClientUI.Chat;
 using RyanAssets.Commands.Shared;
 using RyanAssets.DataService;
-using RyanAssets.Declarations;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Requests;
+using RyanAssets.Shared.Global;
 using RyanAssets.UI.Autocomplete;
 using RyanAssets.UI.Textbox;
 using System.Collections;

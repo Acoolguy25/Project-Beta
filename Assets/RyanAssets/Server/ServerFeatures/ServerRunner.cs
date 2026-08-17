@@ -10,7 +10,7 @@ using RyanAssets.Characters.Shared;
 using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 

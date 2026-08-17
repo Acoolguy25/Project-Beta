@@ -4,6 +4,7 @@
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
+  <Project Path="RyanAssets.Shared.Global.csproj" />
   <Project Path="EasyDebug.Client.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Stamina.csproj" />
@@ -11,6 +12,7 @@
   <Project Path="RyanAssets.Client.ClientUI.Toolbar.csproj" />
   <Project Path="RyanAssets.Tools.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
+  <Project Path="RyanAssets.Shared.Requests.csproj" />
   <Project Path="RyanAssets.Characters.Client.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Spectate.csproj" />
   <Project Path="RyanAssets.Characters.Shared.csproj" />
@@ -23,11 +25,10 @@
   <Project Path="RyanAssets.UI.ButtonGrid.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Vote.csproj" />
   <Project Path="RyanAssets.NetworkSettings.csproj" />
-  <Project Path="RyanAssets.Shared.Requests.csproj" />
+  <Project Path="RyanAssets.Shared.Declarations.csproj" />
   <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Levels.Client.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
-  <Project Path="RyanAssets.Shared.Declarations.csproj" />
   <Project Path="RyanAssets.Client.ClientEffects.csproj" />
   <Project Path="RyanAssets.Commands.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
@@ -47,7 +48,6 @@
   <Project Path="RyanAssets.Client.CharacterEffects.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
   <Project Path="EasyDebug.Shared.csproj" />
-  <Project Path="RyanAssets.Shared.Player.csproj" />
   <Project Path="RyanAssets.Levels.Shared.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />

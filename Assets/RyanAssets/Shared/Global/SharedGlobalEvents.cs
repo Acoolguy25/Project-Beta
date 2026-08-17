@@ -12,23 +12,15 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace RyanAssets.Shared.Player {
+namespace RyanAssets.Shared.Global {
     
-    [Serializable]
-    public enum MusicTracks : ushort {
-        MenuMusic,
-        GameMusic1,
-        GameMusic2,
-        None
-    };
-
     public class SharedGlobalEvents : NetworkBehaviour {
         public static SharedGlobalEvents Instance;
         public static Action OnInstanceReady, OnInstanceReadyPersistent, OnInstanceRemoved;
         //public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
         public readonly SyncList<CommandConfig> Commands = new();
         public readonly SyncList<string> LeaderboardHeaders = new();
-        public readonly SyncVar<MusicTracks> MusicTrack = new(initialValue: Player.MusicTracks.GameMusic1);
+        public readonly SyncVar<MusicTracks> MusicTrack = new(initialValue: MusicTracks.GameMusic1);
         readonly SyncVar<string> _topMessage = new();
         public static Dictionary<TeamColor, HashSet<TeamColor>> TeamEnemies;
 

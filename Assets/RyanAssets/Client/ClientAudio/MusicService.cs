@@ -1,7 +1,8 @@
 using Cysharp.Threading.Tasks;
 using RyanAssets.Client.ClientUI.GameSettings;
 using RyanAssets.Core;
-using RyanAssets.Shared.Player;
+using RyanAssets.Shared.Global;
+using RyanAssets.Shared.Declarations;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
