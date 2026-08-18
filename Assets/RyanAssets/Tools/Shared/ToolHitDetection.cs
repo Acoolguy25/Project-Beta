@@ -33,7 +33,7 @@ namespace RyanAssets.Tools.Shared {
             }
 
             Bounds bounds = _hitCollider.bounds;
-            bounds.Expand(Time.fixedDeltaTime);
+            bounds.Expand(Time.fixedDeltaTime * 2.2f);
 
             int overlapCount;
             do {
