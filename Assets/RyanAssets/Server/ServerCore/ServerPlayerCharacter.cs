@@ -35,10 +35,12 @@ namespace RyanAssets.Server.ServerCore {
             var newCharacter = Instantiate(characterPrefab.gameObject);
             LocalCharacter localChar = newCharacter.GetComponent<LocalCharacter>();
             localChar.OnDied += (_, _) => OnPlayerCharacterDie(player, newCharacter.transform);
-            localChar.Init(health);
             ClientToCharacter[player] = localChar;
             newCharacter.transform.position = SpawnLocationFunction?.Invoke(player) ?? Vector3.zero;
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
+            // NetworkBehaviour [Server] methods require the NetworkObject to be initialized.
+            // Spawn before setting replicated health so FishNet can apply the change.
+            localChar.Init(health);
             // Insert player tools
             foreach (var tool in PlayerData.Players[player].tools) {
                 ServerTool.Instance.SpawnTool(localChar.NetworkObject, tool);

@@ -116,7 +116,7 @@ namespace Universes.murder_mystery.Server {
                     break;
             }
             player.walkSpeed.Value = 16f;
-            player.sprintSpeed.Value = 19f;
+            player.sprintSpeed.Value = 21f;
         }
         void OnCharacterAdded(LocalCharacter character){
             //PlayerData data = PlayerData.GetPlayerData(character.Owner);

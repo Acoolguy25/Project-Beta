@@ -28,8 +28,9 @@ namespace RyanAssets.Characters.Server {
                 location = ServerPathfinding.GetRandomPosition();
             clone.transform.position = location.Value;
             GameCharacter gameCharacter = clone.GetComponent<GameCharacter>();
-            gameCharacter.Init(100);
             InstanceFinder.ServerManager.Spawn(clone, null); // spawn with server ownership
+            // Init writes SyncVars and therefore must happen after FishNet initializes the object.
+            gameCharacter.Init(100);
             LocalNPC npc = clone.AddComponent<LocalNPC>();
             return npc;
         }

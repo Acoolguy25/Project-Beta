@@ -29,6 +29,10 @@ namespace RyanAssets.Shared.Component {
 #if UNITY_SERVER
         protected override void OnValidate() {
             base.OnValidate();
+            // Inspector validation also runs for prefab/unspawned objects. SyncVars cannot
+            // be changed through [Server] methods until FishNet has initialized this object.
+            if (!IsSpawned)
+                return;
             MaxHealth.Value = maxHealthEditor;
             TakeDamage(Health.Value - healthEditor);
             healthEditor = Health.Value;

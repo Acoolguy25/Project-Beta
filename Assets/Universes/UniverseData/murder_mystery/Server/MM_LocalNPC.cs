@@ -26,6 +26,9 @@ namespace Universes.murder_mystery.Server {
         void Awake() {
             gameCharacter = GetComponent<GameCharacter>();
             localNPC = GetComponent<LocalNPC>();
+            localNPC.WalkSpeed = 16f;
+            localNPC.FleeSpeed = 24f;
+            localNPC.AttackSpeed = 26f;
             localNPC.AttackFunction = AttackFunction;
         }
         void Start() {

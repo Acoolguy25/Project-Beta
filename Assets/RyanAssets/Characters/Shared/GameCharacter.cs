@@ -139,7 +139,7 @@ namespace RyanAssets.Characters.Shared {
         [Server]
         public virtual void SetTeam(TeamConfig teamConfig) {
             if (IsDead) {
-                Debug.LogWarning($"Cannot set team for dead character {gameObject.name}");
+                //Debug.LogWarning($"Cannot set team for dead character {gameObject.name}");
                 return;
             }
             UpdateTeamRegistry(Team, teamConfig);
