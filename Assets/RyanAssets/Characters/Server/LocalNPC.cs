@@ -101,6 +101,13 @@ namespace RyanAssets.Characters.Server {
         // wired up in code.
         public Action<GameCharacter> AttackFunction;
 
+        // Optional game-specific hooks. A multiplier greater than one lets a target be
+        // acquired and retained from farther away; a higher priority is selected before a
+        // lower-priority target, with distance breaking ties. LocalNPC deliberately has no
+        // knowledge of roles, weapons, or individual game modes.
+        public Func<GameCharacter, float> AttackTargetRangeMultiplier;
+        public Func<GameCharacter, float> AttackTargetPriority;
+
         public NavMeshAgent agent;
 
         private Coroutine _fleeCoroutine;
@@ -110,6 +117,7 @@ namespace RyanAssets.Characters.Server {
 
         private GameCharacter _currentAttackTarget;
         public GameCharacter CurrentAttackTarget => _currentAttackTarget;
+        private GameCharacter _forcedAttackTarget;
         private float _lastAttackTime = -Mathf.Infinity;
 
         // Estimated target velocity, used to predict where it's going instead of chasing/fleeing
@@ -217,6 +225,7 @@ namespace RyanAssets.Characters.Server {
                 StopCoroutine(_attackCoroutine);
                 _attackCoroutine = null;
                 SetAttackTarget(null);
+                _forcedAttackTarget = null;
                 _velocityTrackedTarget = null;
                 _targetVelocity = Vector3.zero;
                 _lastTargetSampleTime = -1f;
@@ -242,7 +251,7 @@ namespace RyanAssets.Characters.Server {
             else if (TargetingType != NPCTargetingType.Flee
                 && TargetingType != NPCTargetingType.Attack
                 && EnemyTeams != null
-                && AnyCharacterInRange(EnemyTeams, AttackEngagementRadius)) {
+                && AnyEnemyInAttackRange(AttackEngagementRadius)) {
                 SetTargetingType(NPCTargetingType.Attack);
             }
 
@@ -260,7 +269,8 @@ namespace RyanAssets.Characters.Server {
                         RevertToPrevious();
                     break;
                 case NPCTargetingType.Attack:
-                    if (EnemyTeams == null || EnemyTeams.Count == 0 || !AnyCharacterInRange(EnemyTeams, AttackTrackingRadius))
+                    if ((EnemyTeams == null || EnemyTeams.Count == 0 || !AnyEnemyInAttackRange(AttackTrackingRadius))
+                        && !HasValidForcedAttackTarget())
                         RevertToPrevious();
                     else
                         HandleAttackTick();
@@ -274,14 +284,28 @@ namespace RyanAssets.Characters.Server {
         // --- Rotation --------------------------------------------------------
 
         private void HandleRotation() {
-            if (!agent.pathPending && agent.velocity.sqrMagnitude > 0.001f) {
-                Vector3 dir = new Vector3(agent.velocity.x, 0f, agent.velocity.z);
-                transform.rotation = Quaternion.RotateTowards(
-                    transform.rotation,
-                    Quaternion.LookRotation(dir.magnitude == 0 ? Vector3.forward : dir),
-                    agent.angularSpeed * Time.deltaTime
-                );
+            // A melee weapon's hit collider is attached to the animated hand, so movement
+            // direction is not a reliable aim direction once an NPC reaches its target (or
+            // takes a curved NavMesh path). Keep an attacking NPC facing its actual target;
+            // this also continues to turn while the agent is stopped during the attack swing.
+            Vector3 direction;
+            if (TargetingType == NPCTargetingType.Attack && _currentAttackTarget != null) {
+                direction = _currentAttackTarget.transform.position - transform.position;
+            } else {
+                if (agent.pathPending || agent.velocity.sqrMagnitude <= 0.001f)
+                    return;
+                direction = agent.velocity;
             }
+
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.001f)
+                return;
+
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                Quaternion.LookRotation(direction),
+                agent.angularSpeed * Time.deltaTime
+            );
         }
 
         // --- Random wandering ------------------------------------------------
@@ -356,19 +380,73 @@ namespace RyanAssets.Characters.Server {
 
             GameCharacter nearest = null;
             float nearestDist = float.MaxValue;
+            float highestPriority = float.MinValue;
 
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
                     if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     float dist = Vector3.Distance(transform.position, character.transform.position);
-                    if (dist < maxRadius && dist < nearestDist) {
+                    if (dist >= GetAttackTargetRange(character, maxRadius)) continue;
+
+                    float priority = GetAttackTargetPriority(character);
+                    if (priority > highestPriority
+                        || (Mathf.Approximately(priority, highestPriority) && dist < nearestDist)) {
+                        highestPriority = priority;
                         nearestDist = dist;
                         nearest = character;
                     }
                 }
             }
             return nearest;
+        }
+
+        private float GetAttackTargetRange(GameCharacter target, float baseRange) {
+            float multiplier = AttackTargetRangeMultiplier?.Invoke(target) ?? 1f;
+            return baseRange * Mathf.Max(0f, multiplier);
+        }
+
+        private float GetAttackTargetPriority(GameCharacter target) {
+            return AttackTargetPriority?.Invoke(target) ?? 0f;
+        }
+
+        private bool AnyEnemyInAttackRange(float baseRange) {
+            if (gameCharacter == null) return false;
+
+            foreach (TeamColor team in EnemyTeams) {
+                if (!GameCharacter.TeamToCharacter.TryGetValue(team, out HashSet<GameCharacter> characters)) continue;
+                foreach (GameCharacter character in characters) {
+                    if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
+                    if (Vector3.Distance(transform.position, character.transform.position) < GetAttackTargetRange(character, baseRange))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private bool IsValidAttackTarget(GameCharacter target) {
+            return target != null
+                && !target.IsDead
+                && EnemyTeams.Contains(target.GetTeam().team)
+                && !target.IsProtected(gameCharacter, AttackDamageType);
+        }
+
+        private bool HasValidForcedAttackTarget() {
+            return IsValidAttackTarget(_forcedAttackTarget);
+        }
+
+        /// <summary>
+        /// Immediately enters attack mode and holds this valid enemy as the attack target until
+        /// it is no longer valid. Game-specific behaviours can use this for reactions such as
+        /// retaliating against an attacker outside the NPC's normal acquisition radius.
+        /// </summary>
+        public bool TargetCharacter(GameCharacter target) {
+            if (!IsValidAttackTarget(target)) return false;
+
+            SetTargetingType(NPCTargetingType.Attack);
+            _forcedAttackTarget = target;
+            SetAttackTarget(target);
+            return true;
         }
 
         // --- Attack ----------------------------------------------------------
@@ -395,6 +473,8 @@ namespace RyanAssets.Characters.Server {
         // dead-target check at the top of HandleAttackTick) eventually notices. Those periodic
         // checks stay in place as a safety net in case this event is ever missed.
         private void HandleAttackTargetDied(DamageType source, IEntity killer) {
+            if (_forcedAttackTarget == _currentAttackTarget)
+                _forcedAttackTarget = null;
             SetAttackTarget(null);
         }
 
@@ -404,12 +484,21 @@ namespace RyanAssets.Characters.Server {
             while (true) {
                 yield return new WaitForSeconds(AttackRetargetInterval);
 
+                if (_forcedAttackTarget != null) {
+                    if (IsValidAttackTarget(_forcedAttackTarget)) {
+                        SetAttackTarget(_forcedAttackTarget);
+                        continue;
+                    }
+                    _forcedAttackTarget = null;
+                }
+
                 // Re-acquire target if it's gone, died, or has wandered out of range. The death
                 // check here is just a safety net - HandleAttackTargetDied normally clears the
                 // target immediately via the OnDied event well before this runs.
                 if (_currentAttackTarget == null
-                    || _currentAttackTarget.IsDead
-                    || Vector3.Distance(transform.position, _currentAttackTarget.transform.position) > AttackTrackingRadius) {
+                    || !IsValidAttackTarget(_currentAttackTarget)
+                    || Vector3.Distance(transform.position, _currentAttackTarget.transform.position)
+                        > GetAttackTargetRange(_currentAttackTarget, AttackTrackingRadius)) {
                     SetAttackTarget(GetNearestCharacter(EnemyTeams, AttackTrackingRadius));
                     continue;
                 }
@@ -425,7 +514,14 @@ namespace RyanAssets.Characters.Server {
                 if (closest != null && closest != _currentAttackTarget) {
                     float closestDist = Vector3.Distance(transform.position, closest.transform.position);
                     float currentDist = Vector3.Distance(transform.position, _currentAttackTarget.transform.position);
-                    if (closestDist < currentDist * RetargetSwitchThreshold)
+                    float closestPriority = GetAttackTargetPriority(closest);
+                    float currentPriority = GetAttackTargetPriority(_currentAttackTarget);
+
+                    // A game-specific priority is an explicit override, not merely a distance
+                    // tiebreaker. Keep the distance threshold only for equally-ranked targets.
+                    if (closestPriority > currentPriority
+                        || (Mathf.Approximately(closestPriority, currentPriority)
+                            && closestDist < currentDist * RetargetSwitchThreshold))
                         SetAttackTarget(closest);
                 }
             }

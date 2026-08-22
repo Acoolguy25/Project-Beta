@@ -27,7 +27,8 @@ namespace RyanAssets.Client.ClientUI.Vote {
 
         readonly System.Collections.Generic.Dictionary<int, TextMeshProUGUI> optionCountTexts = new();
         readonly System.Collections.Generic.Dictionary<Image, Color> buttonColors = new();
-        Image selectedButtonImage;
+        Image selectedVoteButtonImage;
+        Image selectedSkipButtonImage;
         bool subscribed;
 
         protected override void Start() {
@@ -38,7 +39,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
             if (noVoteButton != null)
                 noVoteButton.onClick.AddListener(() => SubmitVote(-1));
             if (skipVoteButton != null)
-                skipVoteButton.onClick.AddListener(() => SubmitVote(VoteRequest.SkipVoteOptionId, skipVoteButton));
+                skipVoteButton.onClick.AddListener(SubmitSkipVote);
             ClientConnector.OnDisconnected += Clear;
             SharedGlobalEvents.OnInstanceReady += OnSharedEventsReady;
             PlayerData.OnPlayerAdded += OnPlayerChanged;
@@ -119,7 +120,8 @@ namespace RyanAssets.Client.ClientUI.Vote {
                 descriptionText.gameObject.SetActive(!string.IsNullOrWhiteSpace(voteInfo.description));
             }
             optionCountTexts.Clear();
-            FadeSelectedButton(noVoteButton); // no vote is selected by default
+            ResetButtonSelections();
+            FadeSelectedVoteButton(noVoteButton); // no vote is selected by default
             RefreshPrefabs(voteInfo.options ?? System.Array.Empty<ClientVoteOption>());
             UpdateVoteCounts();
         }
@@ -154,8 +156,13 @@ namespace RyanAssets.Client.ClientUI.Vote {
         void SubmitVote(int optionId) => SubmitVote(optionId, optionId < 0 ? noVoteButton : null);
 
         void SubmitVote(int optionId, Button button) {
-            FadeSelectedButton(button);
+            FadeSelectedVoteButton(button);
             InstanceFinder.ClientManager.Broadcast(new VoteRequest { optionId = optionId });
+        }
+
+        void SubmitSkipVote() {
+            FadeSelectedSkipButton(skipVoteButton);
+            InstanceFinder.ClientManager.Broadcast(new VoteRequest { optionId = VoteRequest.SkipVoteOptionId });
         }
 
         void UpdateVoteCounts() {
@@ -172,7 +179,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
             }
 
             if (noVoteCountText != null) {
-                int noVoteCount = Mathf.Max(0, PlayerData.Players.Count - selectedVotes - events.SkipVoteCount.Value);
+                int noVoteCount = Mathf.Max(0, PlayerData.Players.Count - selectedVotes);
                 noVoteCountText.text = $"No Vote ({noVoteCount})";
             }
 
@@ -180,7 +187,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
                 skipVoteCountText.text = $"Skip Vote ({events.SkipVoteCount.Value}/{PlayerData.Players.Count})";
         }
 
-        void FadeSelectedButton(Button button) {
+        void FadeSelectedVoteButton(Button button) {
             if (button == null)
                 return;
 
@@ -193,11 +200,43 @@ namespace RyanAssets.Client.ClientUI.Vote {
                 buttonColors.Add(image, initialColor);
             }
 
-            if (selectedButtonImage != null && selectedButtonImage != image && buttonColors.TryGetValue(selectedButtonImage, out Color previousColor))
-                FadeImage(selectedButtonImage, previousColor);
+            if (selectedVoteButtonImage != null && selectedVoteButtonImage != image)
+                RestoreButtonColor(selectedVoteButtonImage);
 
-            selectedButtonImage = image;
+            selectedVoteButtonImage = image;
             FadeImage(image, new Color(0.20f, 0.72f, 0.34f, initialColor.a));
+        }
+
+        void FadeSelectedSkipButton(Button button) {
+            if (button == null)
+                return;
+
+            Image image = button.targetGraphic as Image ?? button.GetComponent<Image>();
+            if (image == null)
+                return;
+
+            if (!buttonColors.TryGetValue(image, out Color initialColor)) {
+                initialColor = image.color;
+                buttonColors.Add(image, initialColor);
+            }
+
+            if (selectedSkipButtonImage != null && selectedSkipButtonImage != image)
+                RestoreButtonColor(selectedSkipButtonImage);
+
+            selectedSkipButtonImage = image;
+            FadeImage(image, new Color(0.20f, 0.72f, 0.34f, initialColor.a));
+        }
+
+        void ResetButtonSelections() {
+            RestoreButtonColor(selectedVoteButtonImage);
+            RestoreButtonColor(selectedSkipButtonImage);
+            selectedVoteButtonImage = null;
+            selectedSkipButtonImage = null;
+        }
+
+        void RestoreButtonColor(Image image) {
+            if (image != null && buttonColors.TryGetValue(image, out Color initialColor))
+                FadeImage(image, initialColor);
         }
 
         static void FadeImage(Image image, Color color) {
@@ -213,7 +252,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
         void Clear() {
             ClearPrefabs();
             optionCountTexts.Clear();
-            selectedButtonImage = null;
+            ResetButtonSelections();
             SetVisible(false);
         }
 

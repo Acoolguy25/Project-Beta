@@ -71,6 +71,7 @@
     "com.unity.modules.video": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0",
-    "com.ryan.codegenerator": "file:com.ryan.codegenerator"
+    "com.ryan.codegenerator": "file:com.ryan.codegenerator",
+    "com.unity.pipeline": "0.5.0-exp.1"
   }
 }

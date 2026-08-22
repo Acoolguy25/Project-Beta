@@ -31,7 +31,10 @@ namespace RyanAssets.Server.ServerFeatures {
             if (request.optionId < VoteRequest.SkipVoteOptionId || request.optionId >= optionCount)
                 return;
 
-            SetPlayerVote(player, request.optionId, optionCount);
+            if (request.optionId == VoteRequest.SkipVoteOptionId)
+                SetPlayerSkipVote(player, true);
+            else
+                SetPlayerVote(player, request.optionId, optionCount);
             CompleteVoteIfEveryoneSkipped();
         }
 
@@ -41,6 +44,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 return;
 
             SetPlayerVote(player, -1, events.VoteTotals.Count);
+            SetPlayerSkipVote(player, false);
             CompleteVoteIfEveryoneSkipped();
         }
 
@@ -53,16 +57,19 @@ namespace RyanAssets.Server.ServerFeatures {
             if (previousOption >= 0 && previousOption < events.VoteTotals.Count)
                 events.VoteTotals[previousOption] = Mathf.Max(0, events.VoteTotals[previousOption] - 1);
 
-            if (previousOption == VoteRequest.SkipVoteOptionId)
-                events.SkipVoteCount.Value = Mathf.Max(0, events.SkipVoteCount.Value - 1);
-
             if (newOption >= 0 && newOption < optionCount)
                 events.VoteTotals[newOption]++;
 
-            if (newOption == VoteRequest.SkipVoteOptionId)
-                events.SkipVoteCount.Value++;
-
             player.voteOption.Value = newOption;
+        }
+
+        static void SetPlayerSkipVote(PlayerData player, bool shouldSkip) {
+            if (player.skipVote.Value == shouldSkip)
+                return;
+
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            events.SkipVoteCount.Value = Mathf.Max(0, events.SkipVoteCount.Value + (shouldSkip ? 1 : -1));
+            player.skipVote.Value = shouldSkip;
         }
 
         static void CompleteVoteIfEveryoneSkipped() {
@@ -70,7 +77,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 return;
 
             SharedGlobalEvents events = SharedGlobalEvents.Instance;
-            if (events.SkipVoteCount.Value == PlayerData.Players.Count)
+            if (events.SkipVoteCount.Value >= PlayerData.Players.Count)
                 skipVoteCompletion?.TrySetResult();
         }
 
@@ -88,8 +95,10 @@ namespace RyanAssets.Server.ServerFeatures {
             events.SkipVoteCount.Value = 0;
             for (int i = 0; i < optionCount; i++)
                 events.VoteTotals.Add(0);
-            foreach (PlayerData player in PlayerData.Players.Values)
+            foreach (PlayerData player in PlayerData.Players.Values) {
                 player.voteOption.Value = -1;
+                player.skipVote.Value = false;
+            }
 
             events.SharedVoteHeader.Value = new SharedVoteHeader(voteEnum, NetworkHelper.ServerTime + duration);
             try {

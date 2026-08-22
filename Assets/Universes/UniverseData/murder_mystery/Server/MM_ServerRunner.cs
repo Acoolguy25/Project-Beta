@@ -177,6 +177,7 @@ namespace Universes.murder_mystery.Server {
                         break;
                 }
                 npc.gameObject.AddComponent<MM_LocalNPC>();
+                npc.gameObject.AddComponent<MM_NPC>();
                 gameCharacter.OnDied += (source, killer) =>
                 {
                     SharedOnDied(gameCharacter, source, killer);

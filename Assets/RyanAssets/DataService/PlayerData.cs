@@ -71,6 +71,7 @@ namespace RyanAssets.DataService {
         readonly public SyncVar<TeamConfig> team = new(initialValue: new());
         readonly public SyncList<int> leaderboard = new();
         readonly public SyncVar<int> voteOption = new(-1); // which option this player has voted for, -1 for none
+        readonly public SyncVar<bool> skipVote = new(false); // whether this player has voted to skip the current vote timer
         // Character Data
 
         readonly public SyncVar<float> walkSpeed = new(initialValue: 10f);

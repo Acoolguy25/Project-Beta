@@ -12,6 +12,8 @@ namespace RyanAssets.Tools.Shared {
         private Collider[] _overlaps = new Collider[32];
         private Transform _ignoredRoot;
         private bool _wasColliderEnabled;
+        private Bounds _previousBounds;
+        private bool _hasPreviousBounds;
 
         public void Init(Transform ignoredRoot) {
             _ignoredRoot = ignoredRoot;
@@ -24,6 +26,7 @@ namespace RyanAssets.Tools.Shared {
         void FixedUpdate() {
             if (_hitCollider == null || !_hitCollider.enabled) {
                 _wasColliderEnabled = false;
+                _hasPreviousBounds = false;
                 return;
             }
 
@@ -32,7 +35,18 @@ namespace RyanAssets.Tools.Shared {
                 _wasColliderEnabled = true;
             }
 
-            Bounds bounds = _hitCollider.bounds;
+            // A knife can move much farther than the small fixed-step padding while its
+            // wielder or target is running. Include the previous collider bounds so an
+            // animated swing is tested across its whole physics-step path, not only at its
+            // final pose.
+            Bounds currentBounds = _hitCollider.bounds;
+            Bounds bounds = currentBounds;
+            if (_hasPreviousBounds) {
+                bounds.Encapsulate(_previousBounds.min);
+                bounds.Encapsulate(_previousBounds.max);
+            }
+            _previousBounds = currentBounds;
+            _hasPreviousBounds = true;
             bounds.Expand(Time.fixedDeltaTime * 2.2f);
 
             int overlapCount;
@@ -65,7 +79,7 @@ namespace RyanAssets.Tools.Shared {
         }
 
         private void ReportCollision(Collider other) {
-            if (ShouldIgnore(other))
+            if (ShouldIgnore(other) || !_reportedColliders.Add(other))
                 return;
 
             CollisionEntered?.Invoke(other);

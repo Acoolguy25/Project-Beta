@@ -39,6 +39,10 @@ namespace RyanAssets.Characters.Shared {
         public SyncVar<long> Health => HealthComponent.Health;
         public SyncVar<long> MaxHealth => HealthComponent.MaxHealth;
         public SyncDictionary<CharacterEffect, float> ActiveEffects => EffectsComponent.ActiveEffects;
+        public event Action<DamageType, IEntity> OnDamage {
+            add => HealthComponent.OnDamage += value;
+            remove => HealthComponent.OnDamage -= value;
+        }
         public event Action<DamageType, IEntity> OnDied {
             add => HealthComponent.OnDied += value;
             remove => HealthComponent.OnDied -= value;
