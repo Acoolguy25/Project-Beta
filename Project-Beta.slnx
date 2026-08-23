@@ -25,6 +25,7 @@
   <Project Path="RyanAssets.UI.ButtonGrid.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Vote.csproj" />
   <Project Path="RyanAssets.NetworkSettings.csproj" />
+  <Project Path="RyanAssets.Item.FloatingTool.csproj" />
   <Project Path="RyanAssets.Shared.Declarations.csproj" />
   <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Levels.Client.csproj" />
@@ -43,6 +44,7 @@
   <Project Path="RyanAssets.Client.ClientUI.NameTag.csproj" />
   <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="RyanAssets.UI.Textbox.csproj" />
+  <Project Path="RyanAssets.Items.Coin.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.Client.CharacterEffects.csproj" />

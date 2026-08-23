@@ -1,0 +1,20 @@
+{
+    "name": "RyanAssets.Items.Coin",
+    "rootNamespace": "RyanAssets.Items.Coin",
+    "references": [
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:9a84ec9673600fb4cbb1544ed2172dd8",
+        "GUID:a9a368f3b7a10d5408abfd2672fc801f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

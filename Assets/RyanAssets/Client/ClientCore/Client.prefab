@@ -2548,11 +2548,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2116724677564175234, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_fontSize
-      value: 44.05
+      value: 44.8
       objectReference: {fileID: 0}
     - target: {fileID: 3111625660306725814, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_fontSize
-      value: 26.8
+      value: 27.3
       objectReference: {fileID: 0}
     - target: {fileID: 4066911039856087898, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_SortingOrder
@@ -3421,14 +3421,6 @@ PrefabInstance:
       propertyPath: gameSettingsCanvas
       value: 
       objectReference: {fileID: 1120765809775446551}
-    - target: {fileID: 7554617344071268608, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
-      propertyPath: m_IsActive
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7615915327855379713, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
-      propertyPath: m_IsActive
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
       propertyPath: m_Pivot.x
       value: 0
@@ -3512,22 +3504,6 @@ PrefabInstance:
     - target: {fileID: 9100000000000000002, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
       propertyPath: m_Name
       value: TopbarCanvas
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000037, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
-      propertyPath: m_AnchorMax.x
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000037, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
-      propertyPath: m_AnchorMin.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000037, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
-      propertyPath: m_SizeDelta.x
-      value: -200
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000037, guid: 8b3f8b8c059146aab31dcb15da703a60, type: 3}
-      propertyPath: m_AnchoredPosition.x
-      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

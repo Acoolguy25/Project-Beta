@@ -8,6 +8,7 @@ using RyanAssets.Tools.Shared;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using RyanAssets.Item.FloatingTool;
 
 namespace RyanAssets.Server.ServerCore
 {
@@ -18,6 +19,8 @@ namespace RyanAssets.Server.ServerCore
         // completed. Keep an authoritative server-side record so they can still
         // be found (and cleaned up) during that window or while a player leaves.
         readonly Dictionary<NetworkObject, Dictionary<ToolEnum, ToolBaseShared>> characterTools = new();
+        [SerializeField]
+        FloatingToolShared floatingToolPrefab;
         public static ServerTool Instance { get; private set; }
         void Awake() {
             Instance = this;
@@ -127,6 +130,33 @@ namespace RyanAssets.Server.ServerCore
             }
         }
 
+        public FloatingToolShared SpawnFloatingTool(ToolEnum tool, Vector3 position,
+            bool playerCharacterTrigger = true,
+            bool npcCharacterTrigger = false) {
+
+            NetworkObject nob = InstanceFinder.NetworkManager.GetPooledInstantiated(
+                floatingToolPrefab.NetworkObject,
+                position,
+                Quaternion.identity,
+                true
+            );
+
+            FloatingToolShared floatingTool = nob.GetComponent<FloatingToolShared>();
+
+            floatingTool.TargetToolSync.Value = tool;
+            floatingTool.playerCharacterTrigger.Value = playerCharacterTrigger;
+            floatingTool.npcCharacterTrigger.Value = npcCharacterTrigger;
+            floatingTool.OnToolCollectedFunc = OnFloatingToolCollected;
+
+            InstanceFinder.ServerManager.Spawn(nob);
+
+            return floatingTool;
+        }
+
+        bool OnFloatingToolCollected(NetworkBehaviour collectObject, ToolEnum tool) {
+            return SpawnTool(collectObject, tool) != null;
+        }
+
         public ToolBaseShared GetTool(NetworkConnection player, ToolEnum tool) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {
                 return GetTool(character.NetworkObject, tool);
@@ -161,6 +191,14 @@ namespace RyanAssets.Server.ServerCore
             if (PlayerData.Players.TryGetValue(player, out PlayerData stats)) {
                 stats.tools.Remove(tool);
                 DespawnTool(player, tool);
+            }
+        }
+
+        public static void ClearFloatingTools() {
+            foreach (GameObject obj in GameObject.FindGameObjectsWithTag("FloatingTool")) {
+                NetworkBehaviour floatingTool = obj.GetComponent<NetworkBehaviour>();
+                if (floatingTool != null && floatingTool.IsSpawned)
+                    InstanceFinder.ServerManager.Despawn(floatingTool.gameObject);
             }
         }
     }

@@ -7,37 +7,30 @@ using RyanAssets.DataService;
 
 namespace RyanAssets.Server.ServerFeatures {
     public static class ServerReward {
+        public static bool AddGoldReward(NetworkConnection conn, ulong goldReward) {
+            return AddReward(conn, 0, goldReward);
+        }
         public static bool AddXPReward(NetworkConnection conn, ulong xpReward) {
-            if (SharedGlobalEvents.Instance == null || !PlayerData.Players.TryGetValue(conn, out PlayerData stats))
-                return false;
-
-            return AddXPReward(conn, stats, xpReward);
+            return AddReward(conn, xpReward, 0);
         }
 
-        public static bool AddXPReward(string playerId, ulong xpReward) {
-            NetworkConnection matchedConn = null;
-            PlayerData matchedStats = default;
-
-            if (SharedGlobalEvents.Instance == null)
+        static bool AddReward(NetworkConnection conn, ulong xpReward, ulong goldReward) {
+            if (!PlayerData.Players.TryGetValue(conn, out PlayerData stats))
                 return false;
 
-            foreach (KeyValuePair<NetworkConnection, PlayerData> pair in PlayerData.Players) {
-                if (pair.Value.player_id.Value != playerId)
-                    continue;
-
-                matchedConn = pair.Key;
-                matchedStats = pair.Value;
-                break;
-            }
-
-            return matchedConn != null && AddXPReward(matchedConn, matchedStats, xpReward);
+            return AddReward(conn, stats, xpReward, goldReward);
         }
 
-        static bool AddXPReward(NetworkConnection conn, PlayerData stats, ulong xpReward) {
+        static bool AddReward(NetworkConnection conn, PlayerData stats, ulong xpReward, ulong goldReward) {
             ulong previousXp = stats.xp.Value;
+            ulong previousGold = stats.gold.Value;
+
             stats.xp.Value = ulong.MaxValue - previousXp < xpReward
                 ? ulong.MaxValue
                 : previousXp + xpReward;
+            stats.gold.Value = ulong.MaxValue - previousGold < goldReward
+                ? ulong.MaxValue
+                : previousGold + goldReward;
 
             ServerPlayerSave.MarkDirty(conn);
             return true;

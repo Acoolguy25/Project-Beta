@@ -11,6 +11,8 @@ TagManager:
   - DeadNPC
   - Tool
   - CharacterNameTag
+  - CoinItem
+  - FloatingTool
   layers:
   - Default
   - TransparentFX

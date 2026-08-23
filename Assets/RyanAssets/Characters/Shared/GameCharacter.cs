@@ -12,9 +12,13 @@ using UnityEngine;
 namespace RyanAssets.Characters.Shared {
     [RequireComponent(typeof(EffectsComponent), typeof(HealthComponent))]
     public class GameCharacter : NetworkBehaviour, IEntity {
+        public const string AnonymousDisplayName = "Anonymous";
+
         [SerializeField] public Transform CharacterCamera;
         [SerializeField] private EffectsComponent effectsComponent;
         [SerializeField] private HealthComponent healthComponent;
+        [SerializeField] private bool fallHeightEnabled = true;
+        [SerializeField] private float fallenPartsDestroyHeight = 0.0f;
 
         public EffectsComponent EffectsComponent => effectsComponent;
         public HealthComponent HealthComponent => healthComponent;
@@ -25,20 +29,23 @@ namespace RyanAssets.Characters.Shared {
 
         public readonly SyncVar<TeamConfig> TeamSync = new(new(), new(WritePermission.ClientUnsynchronized));
         public readonly SyncVar<ToolBaseShared> ActiveTool = new(null, new(WritePermission.ClientUnsynchronized));
-        public readonly SyncVar<string> DisplayNameSync = new("Anonymous");
+        public readonly SyncVar<string> DisplayNameSync = new(AnonymousDisplayName);
         public readonly SyncVar<Vector3> CharacterScale = new(Vector3.one);
         public readonly SyncVar<bool> CanSpectate = new(true);
 
         public TeamConfig Team => TeamSync.Value;
         public string DisplayName {
-            get => DisplayNameSync.Value;
-            set => DisplayNameSync.Value = value;
+            get => NormalizeDisplayName(DisplayNameSync.Value);
+            set => DisplayNameSync.Value = NormalizeDisplayName(value);
         }
+        public bool FallHeightEnabled => fallHeightEnabled;
+        public float FallenPartsDestroyHeight => fallenPartsDestroyHeight;
         public bool IsDead => HealthComponent.IsDead;
         public bool IsFullHealth => HealthComponent.IsFullHealth;
         public SyncVar<long> Health => HealthComponent.Health;
         public SyncVar<long> MaxHealth => HealthComponent.MaxHealth;
         public SyncDictionary<CharacterEffect, float> ActiveEffects => EffectsComponent.ActiveEffects;
+        public ToolBaseShared[] Tools => gameObject.GetComponentsInChildren<ToolBaseShared>(false);
         public event Action<DamageType, IEntity> OnDamage {
             add => HealthComponent.OnDamage += value;
             remove => HealthComponent.OnDamage -= value;
@@ -48,8 +55,8 @@ namespace RyanAssets.Characters.Shared {
             remove => HealthComponent.OnDied -= value;
         }
 
-        public readonly bool FallHeightEnabled = true;
-        public readonly float FallenPartsDestroyHeight = 0.0f;
+        public static string NormalizeDisplayName(string value) =>
+            string.IsNullOrWhiteSpace(value) ? AnonymousDisplayName : value.Trim();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
@@ -67,8 +74,13 @@ namespace RyanAssets.Characters.Shared {
         }
 
         protected virtual void OnDestroy() {
+            DisplayNameSync.OnChange -= OnDisplayNameChanged;
             if (healthComponent != null)
                 healthComponent.OnDied -= SharedDied;
+        }
+
+        private void OnDisplayNameChanged(string _, string newValue, bool __) {
+            gameObject.name = $"{NormalizeDisplayName(newValue)} ({NetworkObject.ObjectId})";
         }
 
         public void SwitchTool(ToolBaseShared tool) {
@@ -164,9 +176,14 @@ namespace RyanAssets.Characters.Shared {
         [Server]
         public override void OnStopServer() {
             base.OnStopServer();
+            if (!InstanceFinder.IsServerStarted)
+                return;
+
             foreach (ToolBaseShared tool in GetComponentsInChildren<ToolBaseShared>(true)) {
-                if (tool.IsSpawned)
-                    InstanceFinder.ServerManager.Despawn(tool.gameObject);
+                // OnStopServer may run from NetworkObject.OnDestroy after Unity has
+                // already invalidated this hierarchy. Such children cannot be despawned.
+                if (tool.IsSpawned && tool.gameObject.scene.IsValid())
+                    tool.Despawn();
             }
         }
 #else
@@ -204,6 +221,7 @@ namespace RyanAssets.Characters.Shared {
         }
 
         public override void OnStopNetwork() {
+            DisplayNameSync.OnChange -= OnDisplayNameChanged;
             RemoveTeamRegistry(GetTeam());
             SwitchTool(null);
             GameCharacterRemoved?.Invoke(this);
@@ -211,6 +229,8 @@ namespace RyanAssets.Characters.Shared {
         }
 
         public override void OnStartNetwork() {
+            DisplayNameSync.OnChange -= OnDisplayNameChanged;
+            DisplayNameSync.OnChange += OnDisplayNameChanged;
             if (ActiveTool.Value)
 #if UNITY_SERVER
                 ActiveTool.Value.EquipServer();
@@ -224,7 +244,40 @@ namespace RyanAssets.Characters.Shared {
                 SharedDied(DamageType.None, null);
 #endif
             }
-            gameObject.name = $"{DisplayName} ({NetworkObject.ObjectId})";
+            OnDisplayNameChanged(default, DisplayName, IsServerStarted);
         }
     }
 }
+
+#if UNITY_EDITOR
+[UnityEditor.CustomEditor(typeof(RyanAssets.Characters.Shared.GameCharacter), true)]
+public class GameCharacterEditor : UnityEditor.Editor {
+    public override bool RequiresConstantRepaint() => UnityEngine.Application.isPlaying;
+
+    public override void OnInspectorGUI() {
+        DrawDefaultInspector();
+
+        var character = (RyanAssets.Characters.Shared.GameCharacter)target;
+        UnityEditor.EditorGUILayout.Space();
+        UnityEditor.EditorGUILayout.LabelField("Runtime State", UnityEditor.EditorStyles.boldLabel);
+
+        using (new UnityEditor.EditorGUI.DisabledScope(true)) {
+            UnityEditor.EditorGUILayout.TextField("Display Name", character.DisplayName);
+            UnityEditor.EditorGUILayout.EnumPopup("Team", character.Team?.team ?? RyanAssets.DataService.TeamColor.None);
+            UnityEditor.EditorGUILayout.EnumPopup("Displayed Team", character.Team?.displayTeam ?? RyanAssets.DataService.TeamColor.None);
+            UnityEditor.EditorGUILayout.ObjectField("Active Tool", character.ActiveTool.Value, typeof(RyanAssets.Tools.Shared.ToolBaseShared), true);
+            UnityEditor.EditorGUILayout.Vector3Field("Character Scale", character.CharacterScale.Value);
+            UnityEditor.EditorGUILayout.Toggle("Can Spectate", character.CanSpectate.Value);
+            UnityEditor.EditorGUILayout.LongField("Health", character.Health?.Value ?? 0L);
+            UnityEditor.EditorGUILayout.LongField("Max Health", character.MaxHealth?.Value ?? 0L);
+            UnityEditor.EditorGUILayout.Toggle("Is Dead", character.HealthComponent != null && character.IsDead);
+            UnityEditor.EditorGUILayout.Toggle("Is Full Health", character.HealthComponent != null && character.IsFullHealth);
+            UnityEditor.EditorGUILayout.IntField("Active Effects", character.ActiveEffects?.Count ?? 0);
+            UnityEditor.EditorGUILayout.IntField("Equipped Tools", character.Tools?.Length ?? 0);
+            UnityEditor.EditorGUILayout.Toggle("Is Spawned", character.IsSpawned);
+            UnityEditor.EditorGUILayout.IntField("Network Object ID", character.NetworkObject != null ? character.NetworkObject.ObjectId : -1);
+        }
+
+    }
+}
+#endif

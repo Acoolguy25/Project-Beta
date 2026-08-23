@@ -10,6 +10,9 @@ using UnityEngine.UIElements;
 using RyanAssets.DataService;
 using RpcGen;
 using System.Collections.Generic;
+#if !UNITY_SERVER
+using RyanAssets.Client.ClientAudio;
+#endif
 
 
 namespace RyanAssets.Tools.Shared {
@@ -82,6 +85,8 @@ namespace RyanAssets.Tools.Shared {
 
         [NonSerialized]
         public NetworkBehaviour connectedCharacter;
+        int connectedCharacterObjectId = NetworkObject.UNSET_OBJECTID_VALUE;
+        byte connectedCharacterComponentIndex = NetworkBehaviour.UNSET_NETWORKBEHAVIOUR_ID;
 
         public bool equipped => weaponRoot.activeInHierarchy;
 
@@ -149,16 +154,31 @@ namespace RyanAssets.Tools.Shared {
             UnequipOthersRpc();
         }
         public override void WritePayload(NetworkConnection connection, Writer writer) {
-            writer.WriteNetworkBehaviour(connectedCharacter);
+            // Spawn payloads are read before every object in the client's spawn
+            // cache has necessarily been registered. Writing a NetworkBehaviour
+            // directly makes FishNet resolve it too early and can return null for
+            // a character being spawned in the same batch.
+            writer.WriteNetworkObjectId(connectedCharacter != null
+                ? connectedCharacter.NetworkObject.ObjectId
+                : NetworkObject.UNSET_OBJECTID_VALUE);
+            writer.WriteUInt8Unpacked(connectedCharacter != null
+                ? connectedCharacter.ComponentIndex
+                : NetworkBehaviour.UNSET_NETWORKBEHAVIOUR_ID);
         }
 
         public override void ReadPayload(NetworkConnection connection, Reader reader) {
-            connectedCharacter = reader.ReadNetworkBehaviour();
+            connectedCharacterObjectId = reader.ReadNetworkObjectId();
+            connectedCharacterComponentIndex = reader.ReadUInt8Unpacked();
         }
 #if !UNITY_SERVER
         
         public override void OnStartClient() {
             weaponRoot.SetActive(false); // unequipped by default
+            // A tool can be spawned and despawned in the same client tick, or
+            // become visible without its character. Do not add client scripts
+            // whose Awake methods require a valid character in those cases.
+            if (connectedCharacter == null)
+                return;
             if (IsOwner) {
                 SpawnClientScript();
             } else if (clientObserver != "") {
@@ -185,9 +205,33 @@ namespace RyanAssets.Tools.Shared {
         }
 #endif
         public override void OnStartNetwork() {
+            ResolveConnectedCharacter();
+            if (connectedCharacter == null) {
+                Debug.LogWarning($"Could not attach {name}: connected character ObjectId {connectedCharacterObjectId} is not spawned or visible.", this);
+                return;
+            }
+
             Transform rightHand = TransformHelper.FindChildRecursive(connectedCharacter.transform, ParentObjectName);
-            Debug.Assert(rightHand != null, "RightHand not found!");
+            if (rightHand == null) {
+                Debug.LogError($"Could not attach {name}: {ParentObjectName} was not found under {connectedCharacter.name}.", this);
+                return;
+            }
             transform.SetParent(rightHand, false);
+        }
+        void ResolveConnectedCharacter() {
+            if (connectedCharacter != null ||
+                connectedCharacterObjectId == NetworkObject.UNSET_OBJECTID_VALUE ||
+                connectedCharacterComponentIndex == NetworkBehaviour.UNSET_NETWORKBEHAVIOUR_ID)
+                return;
+
+            NetworkObject characterObject = null;
+            if (NetworkManager.ClientManager.Started)
+                NetworkManager.ClientManager.Objects.Spawned.TryGetValue(connectedCharacterObjectId, out characterObject);
+            if (characterObject == null && NetworkManager.ServerManager.Started)
+                NetworkManager.ServerManager.Objects.Spawned.TryGetValue(connectedCharacterObjectId, out characterObject);
+
+            if (characterObject != null && connectedCharacterComponentIndex < characterObject.NetworkBehaviours.Count)
+                connectedCharacter = characterObject.NetworkBehaviours[connectedCharacterComponentIndex];
         }
         void SpawnClientScript() {
             if (clientScript != "") {
@@ -224,13 +268,11 @@ namespace RyanAssets.Tools.Shared {
 
         // AUDIO
         protected virtual void PlayAudio(AudioClip audioClip) {
-#if ENABLE_AUDIO
-            audioSource.Stop();
+#if ENABLE_AUDIO && !UNITY_SERVER
             if (audioClip == null)
                 return;
-            audioSource.clip = audioClip;
             if (audioSource.isActiveAndEnabled)
-                audioSource.Play();
+                MusicService.CreateOneShot(audioSource, audioClip);
 #endif
         }
         public virtual void PlayAudio(int audioClipIdx) {

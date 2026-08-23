@@ -228,6 +228,7 @@ namespace RyanAssets.Server.ServerFeatures {
             SetTeamKillEnabled(true);
             OnResetEvent?.Invoke();
             ClearLeaderboard();
+            ServerTool.ClearFloatingTools();
             ServerBootStrap.LoadInitialScene();
         }
 
@@ -238,7 +239,9 @@ namespace RyanAssets.Server.ServerFeatures {
         }
 
         protected virtual void OnDestroy() {
+            PlayerData.OnPlayerAdded -= OnPlayerAdded;
             ServerIdleTimeout.OnIdleTimeoutStarted -= Restart;
+            ServerBootStrap.RestartServerEvent -= Restart;
         }
     }
 }

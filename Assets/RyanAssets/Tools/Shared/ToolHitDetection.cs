@@ -47,7 +47,7 @@ namespace RyanAssets.Tools.Shared {
             }
             _previousBounds = currentBounds;
             _hasPreviousBounds = true;
-            bounds.Expand(Time.fixedDeltaTime * 2.2f);
+            bounds.Expand(3f);
 
             int overlapCount;
             do {

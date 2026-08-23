@@ -2,21 +2,17 @@
 using UnityEngine.AI;
 
 namespace RyanAssets.Server.ServerFeatures{
-    public static class ServerPathfinding
-    {
-        public static GameObject FindClosestWithTag(Vector3 origin, string tag)
-        {
+    public static class ServerPathfinding {
+        public static GameObject FindClosestWithTag(Vector3 origin, string tag) {
             GameObject[] objects = GameObject.FindGameObjectsWithTag(tag);
 
             GameObject closest = null;
             float shortestDistance = float.MaxValue;
 
-            foreach (GameObject obj in objects)
-            {
+            foreach (GameObject obj in objects) {
                 float distance = (obj.transform.position - origin).sqrMagnitude;
 
-                if (distance < shortestDistance)
-                {
+                if (distance < shortestDistance) {
                     shortestDistance = distance;
                     closest = obj;
                 }
@@ -25,8 +21,7 @@ namespace RyanAssets.Server.ServerFeatures{
             return closest;
         }
 
-        public static GameObject FindClosestReachableWithTag(Vector3 origin, string tag)
-        {
+        public static GameObject FindClosestReachableWithTag(Vector3 origin, string tag) {
             GameObject[] objects = GameObject.FindGameObjectsWithTag(tag);
 
             GameObject closest = null;
@@ -34,8 +29,7 @@ namespace RyanAssets.Server.ServerFeatures{
 
             NavMeshPath path = new();
 
-            foreach (GameObject obj in objects)
-            {
+            foreach (GameObject obj in objects) {
                 if (!NavMesh.CalculatePath(origin, obj.transform.position, NavMesh.AllAreas, path))
                     continue;
 
@@ -44,8 +38,7 @@ namespace RyanAssets.Server.ServerFeatures{
 
                 float pathLength = GetPathLength(path);
 
-                if (pathLength < shortestPath)
-                {
+                if (pathLength < shortestPath) {
                     shortestPath = pathLength;
                     closest = obj;
                 }
@@ -58,8 +51,7 @@ namespace RyanAssets.Server.ServerFeatures{
             NavMeshAgent agent,
             ref GameObject currentTarget,
             string tag,
-            float directChaseDistance = 15f)
-        {
+            float directChaseDistance = 15f) {
             if (currentTarget == null)
                 currentTarget = FindClosestReachableWithTag(agent.transform.position, tag);
 
@@ -70,8 +62,7 @@ namespace RyanAssets.Server.ServerFeatures{
                 (currentTarget.transform.position - agent.transform.position).sqrMagnitude;
 
             // Close enough: don't waste path searches.
-            if (sqrDistance <= directChaseDistance * directChaseDistance)
-            {
+            if (sqrDistance <= directChaseDistance * directChaseDistance) {
                 agent.SetDestination(currentTarget.transform.position);
                 return true;
             }
@@ -86,8 +77,7 @@ namespace RyanAssets.Server.ServerFeatures{
             return true;
         }
 
-        private static float GetPathLength(NavMeshPath path)
-        {
+        private static float GetPathLength(NavMeshPath path) {
             float length = 0f;
 
             for (int i = 1; i < path.corners.Length; i++)
@@ -118,8 +108,7 @@ namespace RyanAssets.Server.ServerFeatures{
 
             totalArea = 0f;
 
-            for (int i = 0; i < triangleCount; i++)
-            {
+            for (int i = 0; i < triangleCount; i++) {
                 int t = i * 3;
 
                 Vector3 a = triangulation.vertices[triangulation.indices[t]];
@@ -133,13 +122,11 @@ namespace RyanAssets.Server.ServerFeatures{
             }
         }
 
-        public static Vector3 GetRandomPosition()
-        {
+        public static Vector3 GetRandomPosition() {
             if (!didBuild)
                 Build();
 
-            if (totalArea <= 0f || cumulativeAreas == null || cumulativeAreas.Length == 0)
-            {
+            if (totalArea <= 0f || cumulativeAreas == null || cumulativeAreas.Length == 0) {
                 Debug.LogWarning("NavMeshSampler: no valid navmesh area.");
                 return Vector3.zero;
             }
@@ -155,8 +142,7 @@ namespace RyanAssets.Server.ServerFeatures{
             int t = tri * 3;
 
             // Guard against malformed triangulation data from Unity
-            if (t + 2 >= triangulation.indices.Length)
-            {
+            if (t + 2 >= triangulation.indices.Length) {
                 Debug.LogWarning($"NavMeshSampler: tri index {t} out of range for indices array ({triangulation.indices.Length}). Returning zero.");
                 return Vector3.zero;
             }
@@ -168,8 +154,7 @@ namespace RyanAssets.Server.ServerFeatures{
             // Guard against vertex index overflow too
             if (ia >= triangulation.vertices.Length ||
                 ib >= triangulation.vertices.Length ||
-                ic >= triangulation.vertices.Length)
-            {
+                ic >= triangulation.vertices.Length) {
                 Debug.LogWarning("NavMeshSampler: vertex index out of range. Returning zero.");
                 return Vector3.zero;
             }
@@ -182,6 +167,10 @@ namespace RyanAssets.Server.ServerFeatures{
             float v = Random.value;
 
             return (1 - u) * a + u * (1 - v) * b + u * v * c;
+        }
+
+        public static void GetRandomPositionRef(ref Vector3? pos) {
+            pos ??= GetRandomPosition();
         }
     }
 }

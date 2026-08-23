@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace RyanAssets.Core {
     public static class MathHelper {
@@ -10,6 +12,15 @@ namespace RyanAssets.Core {
 
                 (list[i], list[j]) = (list[j], list[i]);
             }
+        }
+
+        // Returns a random float between min [inclusive] and max [inclusive].
+        // Thread safe version of UnityEngine.Random.Range for floats.
+        private static readonly ThreadLocal<System.Random> _random =
+    new(() => new System.Random(Guid.NewGuid().GetHashCode()));
+
+        public static float Range(float min, float max) {
+            return (float)(_random.Value!.NextDouble() * (max - min) + min);
         }
     }
 }

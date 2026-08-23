@@ -219,6 +219,52 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Authentication::RyanAssets.Authentication.UnityTokenAuthenticator
   playerDataPrefab: {fileID: 4617473292877070987, guid: 17fdc17fcd730124aac0b60666055340, type: 3}
+--- !u!1 &5457418049154086567
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3026157018263951234}
+  - component: {fileID: 2049728719246696045}
+  m_Layer: 0
+  m_Name: ServerCoin
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3026157018263951234
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5457418049154086567}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6452689492563838916}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2049728719246696045
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5457418049154086567}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 58f232eb61bc0b947a44370fcb54fa02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Server.ServerFeatures::RyanAssets.Server.ServerFeatures.ServerCoin
+  coinPrefabs:
+  - {fileID: 5942707670600726393, guid: 98bc7e12c685dcb4f82fdf30cf4fee3e, type: 3}
 --- !u!1 &5910158685828723263
 GameObject:
   m_ObjectHideFlags: 0
@@ -260,6 +306,7 @@ Transform:
   - {fileID: 1454804437439598256}
   - {fileID: 79110333945073910}
   - {fileID: 301631912585387400}
+  - {fileID: 3026157018263951234}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2307535749750972156
@@ -411,6 +458,7 @@ MonoBehaviour:
   toolPrefab:
   - {fileID: 4644704030424568041, guid: 22d87e29756248f49818058520841b2d, type: 3}
   - {fileID: 3268832193828849133, guid: a845bcc7174ef9549aca2d92ae07b0b0, type: 3}
+  floatingToolPrefab: {fileID: 6259617292625988322, guid: 3caae25cec659784aaa74635395b009a, type: 3}
 --- !u!1001 &4203954240468426244
 PrefabInstance:
   m_ObjectHideFlags: 0

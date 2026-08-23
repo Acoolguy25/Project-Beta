@@ -1,0 +1,21 @@
+{
+    "name": "RyanAssets.Item.FloatingTool",
+    "rootNamespace": "RyanAssets.Item.FloatingTool",
+    "references": [
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:d81c570acb0546e47865a9bb58cc7645",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:8658255f531113649bacf96894a008e1"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

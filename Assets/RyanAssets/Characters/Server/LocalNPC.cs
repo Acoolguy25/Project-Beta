@@ -614,8 +614,10 @@ namespace RyanAssets.Characters.Server {
         private void CommitPathDestination(Vector3 candidate) {
             if (!CanNavigate()) return;
 
+            // Keep vertical separation in the arrival test. A target directly below the NPC is
+            // horizontally close but still requires a real path down stairs (or across a drop
+            // link); flattening Y here made the NPC stop at the ledge above that target.
             Vector3 offset = candidate - transform.position;
-            offset.y = 0f;
             float arrivalTolerance = Mathf.Max(agent.stoppingDistance, DestinationArrivalTolerance);
             if (offset.sqrMagnitude <= arrivalTolerance * arrivalTolerance) {
                 StopMovement();
@@ -670,11 +672,17 @@ namespace RyanAssets.Characters.Server {
             Vector3 predictedPos = GetPredictedTargetPosition();
             Vector3 toTarget = predictedPos - transform.position;
             toTarget.y = 0f;
-            if (toTarget.sqrMagnitude < 0.01f) return transform.position;
+            if (toTarget.sqrMagnitude < 0.01f) return predictedPos;
 
             float standoff = ApproachToMinRangeEdge ? (MinAttackRange + AttackRangeBuffer) : (MaxAttackRange - AttackApproachStopShort);
             float travelDist = Mathf.Max(toTarget.magnitude - standoff, 0f);
-            return transform.position + toTarget.normalized * travelDist;
+            Vector3 candidate = transform.position + toTarget.normalized * travelDist;
+
+            // The horizontal standoff must not project a lower-floor target onto the NPC's
+            // current floor. Preserve the target elevation so NavMesh.CalculatePath resolves the
+            // connected stair/link route instead of accepting a point at the upper ledge.
+            candidate.y = predictedPos.y;
+            return candidate;
         }
 
         // Same standoff point, with an optional stable side offset while re-engaging from far

@@ -2216,6 +2216,8 @@ GameObject:
   - component: {fileID: 1445698764376531921}
   - component: {fileID: 7934802168562780897}
   - component: {fileID: 3857622150104325183}
+  - component: {fileID: 8293697685302373730}
+  - component: {fileID: 36641937799527138}
   m_Layer: 12
   m_Name: RobotPlayer
   m_TagString: Player
@@ -2362,7 +2364,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 4
+  <PrefabId>k__BackingField: 5
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 16495638397274493063
   SceneId: 0
@@ -2382,7 +2384,10 @@ MonoBehaviour:
   - {fileID: 1039838637883914799}
   - {fileID: 2508271702602764159}
   - {fileID: 8624230890759636101}
+  - {fileID: 1445698764376531921}
   - {fileID: 7934802168562780897}
+  - {fileID: 8293697685302373730}
+  - {fileID: 36641937799527138}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -2393,7 +2398,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584159918214972760
+  _initializedTimestamp: -8584141616877377759
 --- !u!114 &1039838637883914799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2410,9 +2415,9 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
   CharacterCamera: {fileID: 7279864874766871779}
-  HealthEditor: 0
-  MaxHealthEditor: 0
-  TeamEditor:
+  effectsComponent: {fileID: 0}
+  healthComponent: {fileID: 0}
+  teamEditor:
     team: 1
     displayTeam: 1
 --- !u!114 &2508271702602764159
@@ -2519,9 +2524,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6852dd55a24244da96cc35141fd20afe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.RobotColor
-  _componentIndexCache: 255
+  _componentIndexCache: 4
   _addedNetworkObject: {fileID: 9155375541221003514}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 9155375541221003514}
   renderers:
   - {fileID: 6988255403260066607}
   shaderVariants:
@@ -2550,7 +2555,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ff2350129a577a4c8c76d71116eb639, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.CharacterAnimator
-  _componentIndexCache: 4
+  _componentIndexCache: 5
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
   LandingAudioClip: {fileID: 8300000, guid: ff697d3070687ce4583faa0561a145a2, type: 3}
@@ -2664,6 +2669,38 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &8293697685302373730
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8452b7f4d98d4b29b396c1ed2dceba01, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Shared.Component::RyanAssets.Shared.Component.EffectsComponent
+  _componentIndexCache: 6
+  _addedNetworkObject: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 9155375541221003514}
+--- !u!114 &36641937799527138
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 956ab4a573694803859107420bb3fecb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Shared.Component::RyanAssets.Shared.Component.HealthComponent
+  _componentIndexCache: 7
+  _addedNetworkObject: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 9155375541221003514}
+  healthEditor: 0
+  maxHealthEditor: 0
 --- !u!1 &7044496254920343005
 GameObject:
   m_ObjectHideFlags: 0

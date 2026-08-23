@@ -25,6 +25,60 @@ namespace RyanAssets.Client.ClientAudio {
         private CancellationTokenSource musicCTS;
         private AudioSource audioSource;
         int currentTrackIndex;
+
+        public static AudioSource CreateOneShot(AudioClip clip, Vector3 position) {
+            if (clip == null)
+                return null;
+            return CreateOneShot(null, clip, position);
+        }
+
+        public static AudioSource CreateOneShot(AudioSource source, AudioClip clip = null) {
+            if (source == null)
+                return null;
+            return CreateOneShot(source, clip != null ? clip : source.clip, source.transform.position);
+        }
+
+        static AudioSource CreateOneShot(AudioSource source, AudioClip clip, Vector3 position) {
+            if (clip == null)
+                return null;
+
+            GameObject soundObject = new GameObject($"{clip.name} One Shot");
+            soundObject.transform.position = position;
+            AudioSource playbackSource = soundObject.AddComponent<AudioSource>();
+
+            if (source != null)
+                CopyAudioSettings(source, playbackSource);
+
+            playbackSource.PlayOneShot(clip);
+            float playbackDuration = clip.length / Mathf.Max(Mathf.Abs(playbackSource.pitch), 0.01f);
+            Destroy(soundObject, playbackDuration + 0.1f);
+            return playbackSource;
+        }
+
+        static void CopyAudioSettings(AudioSource source, AudioSource destination) {
+            destination.outputAudioMixerGroup = source.outputAudioMixerGroup;
+            destination.volume = source.volume;
+            destination.pitch = source.pitch;
+            destination.mute = source.mute;
+            destination.priority = source.priority;
+            destination.panStereo = source.panStereo;
+            destination.spatialBlend = source.spatialBlend;
+            destination.reverbZoneMix = source.reverbZoneMix;
+            destination.spatialize = source.spatialize;
+            destination.spatializePostEffects = source.spatializePostEffects;
+            destination.dopplerLevel = source.dopplerLevel;
+            destination.spread = source.spread;
+            destination.rolloffMode = source.rolloffMode;
+            destination.minDistance = source.minDistance;
+            destination.maxDistance = source.maxDistance;
+            destination.bypassEffects = source.bypassEffects;
+            destination.bypassListenerEffects = source.bypassListenerEffects;
+            destination.bypassReverbZones = source.bypassReverbZones;
+            destination.ignoreListenerPause = source.ignoreListenerPause;
+            destination.ignoreListenerVolume = source.ignoreListenerVolume;
+            destination.velocityUpdateMode = source.velocityUpdateMode;
+        }
+
         void Start(){
             audioSource = GetComponent<AudioSource>();
             activeTrack = MusicTracks.None;

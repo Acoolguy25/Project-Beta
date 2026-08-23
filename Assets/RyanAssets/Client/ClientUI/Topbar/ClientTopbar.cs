@@ -3,6 +3,7 @@ using RyanAssets.UI;
 using RyanAssets.Input;
 using UnityEngine.UI;
 using RyanAssets.Client.ClientCore;
+using RyanAssets.DataService;
 using RyanAssets.Shared.Global;
 
 namespace RyanAssets.Client.ClientUI.Topbar {
@@ -15,6 +16,9 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         Button chatButton, gameSettingsButton, playerListButton;
         [SerializeField]
         Text experienceText;
+        [SerializeField]
+        Text coinsText;
+        PlayerData observedPlayerData;
         void Awake() {
             Instance = this;
             topbarCanvas = GetComponent<CanvasGroupController>();
@@ -28,11 +32,16 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             SetCanvasVisibility(topbarCanvas, null, true, 0f);
             SharedGlobalEvents.TopMessageChanged += OnTopMessageChanged;
             OnTopMessageChanged(SharedGlobalEvents.Instance?.TopMessage);
+            PlayerData.OnMyPlayerAdded.Subscribe(OnMyPlayerAdded);
+            PlayerData.OnMyPlayerRemoved += OnMyPlayerRemoved;
         }
         void OnDisable() {
             TopbarControls.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
             TopbarControls.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
             SharedGlobalEvents.TopMessageChanged -= OnTopMessageChanged;
+            PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
+            PlayerData.OnMyPlayerRemoved -= OnMyPlayerRemoved;
+            StopObservingCoins();
         }
         public Button GetButton(CanvasGroupController canvas){
             Button button;
@@ -73,6 +82,29 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         }
         void OnTopMessageChanged(string str) {
             experienceText.text = str != string.Empty? str: ClientConnector.joinUniverseId;
+        }
+        void OnMyPlayerAdded(PlayerData playerData) {
+            StopObservingCoins();
+            observedPlayerData = playerData;
+            playerData.gold.OnChange += OnGoldChanged;
+            RefreshCoins(playerData.gold.Value);
+        }
+        void OnMyPlayerRemoved(PlayerData playerData) {
+            if (observedPlayerData == playerData)
+                StopObservingCoins();
+            RefreshCoins(0);
+        }
+        void StopObservingCoins() {
+            if (observedPlayerData == null)
+                return;
+            observedPlayerData.gold.OnChange -= OnGoldChanged;
+            observedPlayerData = null;
+        }
+        void OnGoldChanged(ulong oldValue, ulong newValue, bool asServer) {
+            RefreshCoins(newValue);
+        }
+        void RefreshCoins(ulong coins) {
+            coinsText.text = coins.ToString("N0");
         }
     }
 }

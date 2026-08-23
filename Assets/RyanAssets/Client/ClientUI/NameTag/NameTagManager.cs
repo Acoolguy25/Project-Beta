@@ -31,6 +31,8 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             return null;
         }
         void GameCharacterAdded(GameCharacter gameCharater) {
+            if (gameCharater.IsDead)
+                return;
             Transform head = GetHead(gameCharater.transform);
             GameObject nameTag = Instantiate(nameTagPrefab, head, true);
             Canvas nameTagCanvas = nameTag.GetComponent<Canvas>();
@@ -41,7 +43,9 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             RectTransform healthBar = HealthBarBacking.GetChild(0).GetComponent<RectTransform>();
             TextMeshProUGUI healthLabelText = HealthBarBacking.GetChild(1).GetComponent<TextMeshProUGUI>();
             void OnPlayerNameChanged(string _, string newValue, bool asServer) {
-                displayNameText.text = gameCharater.DisplayName;
+                // Use the value supplied by FishNet. This also remains correct if a
+                // callback is raised before another reader observes the SyncVar value.
+                displayNameText.text = GameCharacter.NormalizeDisplayName(newValue);
             }
             void OnPlayerHealthChanged(long _1, long _2, bool asServer) {
                 float healthPercent = (gameCharater.MaxHealth.Value == 0)? 1f: ((float)gameCharater.Health.Value / (float)gameCharater.MaxHealth.Value);

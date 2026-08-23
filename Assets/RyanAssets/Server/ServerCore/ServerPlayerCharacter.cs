@@ -38,11 +38,16 @@ namespace RyanAssets.Server.ServerCore {
             ClientToCharacter[player] = localChar;
             newCharacter.transform.position = SpawnLocationFunction?.Invoke(player) ?? Vector3.zero;
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
+            // SyncVars must be written after FishNet initializes the NetworkObject.
+            // Set the account name as the baseline; game modes may deliberately
+            // replace it with a round-specific alias in CharacterAdded.
+            PlayerData playerData = PlayerData.GetPlayerData(player);
+            localChar.DisplayName = playerData?.username.Value;
             // NetworkBehaviour [Server] methods require the NetworkObject to be initialized.
             // Spawn before setting replicated health so FishNet can apply the change.
             localChar.Init(health);
             // Insert player tools
-            foreach (var tool in PlayerData.Players[player].tools) {
+            foreach (var tool in playerData.tools) {
                 ServerTool.Instance.SpawnTool(localChar.NetworkObject, tool);
             }
             CharacterAdded?.Invoke(localChar);
