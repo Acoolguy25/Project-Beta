@@ -2214,7 +2214,6 @@ GameObject:
   - component: {fileID: 8624230890759636101}
   - component: {fileID: 5344553774358299964}
   - component: {fileID: 1445698764376531921}
-  - component: {fileID: 7934802168562780897}
   - component: {fileID: 3857622150104325183}
   - component: {fileID: 8293697685302373730}
   - component: {fileID: 36641937799527138}
@@ -2385,7 +2384,6 @@ MonoBehaviour:
   - {fileID: 2508271702602764159}
   - {fileID: 8624230890759636101}
   - {fileID: 1445698764376531921}
-  - {fileID: 7934802168562780897}
   - {fileID: 8293697685302373730}
   - {fileID: 36641937799527138}
   InitializedParentNetworkBehaviour: {fileID: 0}
@@ -2417,6 +2415,8 @@ MonoBehaviour:
   CharacterCamera: {fileID: 7279864874766871779}
   effectsComponent: {fileID: 0}
   healthComponent: {fileID: 0}
+  fallHeightEnabled: 1
+  fallenPartsDestroyHeight: 0
   teamEditor:
     team: 1
     displayTeam: 1
@@ -2543,35 +2543,6 @@ MonoBehaviour:
   - {fileID: 2100000, guid: e8ba7e19805871a4bbc9c210d9c04517, type: 2}
   targetMaterialSlot: 0
   randomizeOnStart: 1
---- !u!114 &7934802168562780897
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6865002775998532502}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0ff2350129a577a4c8c76d71116eb639, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.CharacterAnimator
-  _componentIndexCache: 5
-  _addedNetworkObject: {fileID: 9155375541221003514}
-  _networkObjectCache: {fileID: 9155375541221003514}
-  LandingAudioClip: {fileID: 8300000, guid: ff697d3070687ce4583faa0561a145a2, type: 3}
-  FootstepAudioClips:
-  - {fileID: 8300000, guid: 72f526a6a9890f643a88e85a61c86c8a, type: 3}
-  - {fileID: 8300000, guid: 85016e0f2b01da248b9663dd49a161b0, type: 3}
-  - {fileID: 8300000, guid: 186de84b3207156479abe98f4958fed0, type: 3}
-  - {fileID: 8300000, guid: 1a91fcd19acf1e54bba0945d9f390849, type: 3}
-  - {fileID: 8300000, guid: 14e8a8d2158bec840b56c54f5266e692, type: 3}
-  - {fileID: 8300000, guid: 29841e7d5bbfb5b419c9ad16ca8bc4c1, type: 3}
-  - {fileID: 8300000, guid: dd1af302b8902684d9381de1f2d3a5af, type: 3}
-  - {fileID: 8300000, guid: 67c8b33e424ccdc4486edf538ab91c5a, type: 3}
-  - {fileID: 8300000, guid: 274649b0e221539409070ebf6c18918b, type: 3}
-  - {fileID: 8300000, guid: a3194b8bbc96ef84fab1f98f4b7dae3e, type: 3}
-  GroundCheck: 1
-  Grounded: 0
 --- !u!82 &3857622150104325183
 AudioSource:
   m_ObjectHideFlags: 0
@@ -2681,7 +2652,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8452b7f4d98d4b29b396c1ed2dceba01, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Shared.Component::RyanAssets.Shared.Component.EffectsComponent
-  _componentIndexCache: 6
+  _componentIndexCache: 5
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
 --- !u!114 &36641937799527138
@@ -2696,7 +2667,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 956ab4a573694803859107420bb3fecb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Shared.Component::RyanAssets.Shared.Component.HealthComponent
-  _componentIndexCache: 7
+  _componentIndexCache: 6
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
   healthEditor: 0

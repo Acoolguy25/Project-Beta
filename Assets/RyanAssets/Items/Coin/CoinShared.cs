@@ -5,7 +5,7 @@ using RyanAssets.Shared.Global;
 using RyanAssets.Client.ClientAudio;
 #endif
 #if UNITY_SERVER
-using RyanAssets.Server.ServerFeatures;
+using RyanAssets.Levels.Server;
 #endif
 using UnityEngine;
 
@@ -33,7 +33,7 @@ namespace RyanAssets.Items.Coin {
         protected override bool OnCollectServer(NetworkBehaviour collectObject, NetworkConnection conn) {
             if (conn == null)
                 return true;
-            if (ServerReward.AddGoldReward(conn, coinValue))
+            if (LevelsServer.AwardPlayerGold(conn, coinValue))
                 return true;
 
             conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);

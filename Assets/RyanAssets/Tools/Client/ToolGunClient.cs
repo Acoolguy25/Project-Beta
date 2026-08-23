@@ -32,6 +32,11 @@ namespace RyanAssets.Tools.Client {
             Debug.Assert(toolGunShared.currentAmmo > 0, $"ToolGun {toolGunShared.name} has no ammo to shoot!");
             SetCooldown(toolGunShared.FireRate);
             for (int i = 0; i < toolGunShared.BurstCount; i++) {
+                if (i != 0 && toolBaseShared.currentAmmo > 0) {
+                    bool cancelled = await UniTask.WaitForSeconds(toolGunShared.BurstDelay, cancellationToken: cancellationTokenSource.Token).SuppressCancellationThrow();
+                    if (cancelled)
+                        return;
+                }
                 if (!ConsumeAmmo(1))
                     break;
                 if (i != 0)
@@ -44,9 +49,7 @@ namespace RyanAssets.Tools.Client {
                     if (character)
                         toolBaseShared.OnHit(character);
                 }
-                bool cancelled = await UniTask.WaitForSeconds(toolGunShared.BurstDelay, cancellationToken: cancellationTokenSource.Token).SuppressCancellationThrow();
-                if (cancelled)
-                    return;
+                
             }
         }
 

@@ -157,8 +157,8 @@ namespace Universes.murder_mystery.Server {
             SpawnPlayerTools(player, character.NetworkObject);
         }
         void SharedOnDied(GameCharacter character, DamageType source, IEntity killer) {
+            GameCharacter killerCharacter = killer as GameCharacter;
             if (mode == MM_Mode.Classic) {
-                GameCharacter killerCharacter = killer as GameCharacter;
                 if (killerCharacter != null) {
                     if (killerCharacter.Owner.IsValid && source == DamageType.Gun && character.GetTeam().team != TeamColor.Red) {
                         //ServerTool.Instance.DespawnTool(killerCharacter.Owner, ToolEnum.Pistol);
@@ -171,17 +171,34 @@ namespace Universes.murder_mystery.Server {
                     }
                 }
                 if (character.Tools.Any((tool) => tool.toolEnum == ToolEnum.Pistol))
-                    ServerTool.Instance.SpawnFloatingTool(ToolEnum.Pistol, character.transform.position + character.transform.lossyScale.y/2 * Vector3.up).OnToolCollectedFunc = OnTryCollectToolFunc;
+                    ServerTool.Instance.SpawnFloatingTool(ToolEnum.Pistol, character.transform.position + character.transform.lossyScale.y / 2 * Vector3.up).OnToolCollectedFunc = OnTryCollectToolFunc;
                 if (character.Tools.Any((tool) => tool.toolEnum == ToolEnum.Dagger))
                     ServerTool.Instance.SpawnFloatingTool(ToolEnum.Dagger, character.transform.position + character.transform.lossyScale.y / 2 * Vector3.up).OnToolCollectedFunc = OnTryCollectToolFunc;
                 if (character.GetTeam().team == TeamColor.Blue) {
                     if (GetTeamCount(TeamColor.Blue) == 0) {
                         foreach (GameCharacter gameCharacter in GameCharacter.TeamToCharacter[TeamColor.Red]) {
                             if (gameCharacter.TryGetComponent<LocalNPC>(out LocalNPC localNPC)) {
-                                localNPC.AttackDetectionRadius *= 2f;
+                                localNPC.AttackDetectionRadius *= 3.5f;
                             }
                         }
                     }
+                }
+            }
+            if (killerCharacter != null) {
+                switch (mode) {
+                    case MM_Mode.Classic:
+                        switch (source) {
+                            case DamageType.Melee:
+                                LevelsServer.AwardPlayerXPAndGold(killerCharacter.Owner, 15, 5);
+                                break;
+                            case DamageType.Gun:
+                                LevelsServer.AwardPlayerXPAndGold(killerCharacter.Owner, 5, 5);
+                                break;
+                        }
+                        break;
+                    default:
+                        LevelsServer.AwardPlayerXPAndGold(killerCharacter.Owner, 1, 1);
+                        break;
                 }
             }
             UpdateGameBarEvent?.Invoke();
@@ -232,14 +249,6 @@ namespace Universes.murder_mystery.Server {
                         int kills = SharedGlobalEvents.GetLeaderboardIndex("Kills");
                         if (kills != -1) // if it exists
                             PlayerData.GetPlayerData(killerCharacter.Owner).leaderboard[kills]++;
-                        switch (source) {
-                            case DamageType.Melee:
-                                LevelsServer.AwardPlayerXPAndGold(killerCharacter.Owner, 15, 5);
-                                break;
-                            case DamageType.Gun:
-                                LevelsServer.AwardPlayerXPAndGold(killerCharacter.Owner, 5, 5);
-                                break;
-                        }
                     }
                     UpdateGameBarEvent?.Invoke();
                 };

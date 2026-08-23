@@ -11,7 +11,9 @@ namespace RyanAssets.Tools.Shared {
     public partial class ToolGunShared : ToolBaseShared {
         [Header("Gun Stats")]
         [SerializeField]
-        public int Accuracy = 300; // 0.0 to 1.0, where 1.0 is perfect accuracy
+        public int BestAccuracy = 240; // 0.0 to 360.0, where 0.0 is perfect accuracy
+        [SerializeField]
+        public int WorstAccuracy = 300; // 0.0 to 360.0, where 0.0 is perfect accuracy
         [SerializeField]
         public float MaxRange = 30f;
         [SerializeField]
@@ -45,7 +47,7 @@ namespace RyanAssets.Tools.Shared {
                 return muzzleHit; // The muzzle is inside a solid object; never raycast past it.
             Debug.DrawLine(origin, origin + Vector3.forward*0.3f, Color.red, 2f);
 
-            Vector3 dir = GetSpreadDirection(origin, targetLocation, UnityEngine.Random.Range(Accuracy / 360f, 1f));
+            Vector3 dir = GetSpreadDirection(origin, targetLocation, UnityEngine.Random.Range(WorstAccuracy / 360f, BestAccuracy / 360f));
             RaycastHit[] hits = Physics.RaycastAll(origin, dir, MaxRange, hitLayers);
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
             foreach (RaycastHit h in hits) {

@@ -48,7 +48,7 @@ namespace RyanAssets.Item.FloatingTool
             Transform displayTransform = displayRoot.transform;
             displayTransform.SetParent(hoverTransform, false);
             displayTransform.SetLocalPositionAndRotation(targetTool.transform.localPosition + displayTransform.lossyScale.y * 0.5f * Vector3.up, targetTool.transform.localRotation);
-            displayTransform.localScale = TargetToolScale;
+            displayRoot.transform.localScale = TargetToolScale;
 
             GameObject toolVisual = Instantiate(targetTool.weaponRoot, displayTransform, false);
             toolVisual.transform.localPosition = Vector3.zero;

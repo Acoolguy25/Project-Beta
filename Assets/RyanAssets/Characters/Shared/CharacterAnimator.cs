@@ -61,7 +61,7 @@ namespace RyanAssets.Characters.Shared
             _collider = GetComponent<Collider>();
             _footStepSource = GetComponent<AudioSource>();
 
-            GroundMask = ~LayerMask.GetMask(transform.tag); // Anything but itself is "ground"
+            GroundMask = ~LayerMask.GetMask("Character", "LocalCharacter");
             _animator.SetBool("Grounded", true);
             _animator.SetBool("FreeFall", false);
             _animator.SetBool("Jump", false);
@@ -79,11 +79,12 @@ namespace RyanAssets.Characters.Shared
             float newSpeed = Mathf.Lerp(_animator.GetFloat("Speed"), velocity.magnitude * SpeedThreshold, 1f);
             _animator.SetFloat("Speed", newSpeed);
             _animator.SetFloat("MotionSpeed", newSpeed);
-            _animator.SetBool("Jump", (Time.fixedTime - jumpStart) < 0.01f);
+            _animator.SetBool("Jump", (Time.fixedTime - jumpStart) < JumpThreshold);
             //_animator.SetBool("Jump", false);
         }
         public void Jump() {
             _animator.SetBool("Jump", true);
+            _animator.CrossFadeInFixedTime("Lowerbody.JumpStart", 0.05f, 0, 0f);
             jumpStart = Time.fixedTime;
         }
         private Vector3 GetVelocity() {

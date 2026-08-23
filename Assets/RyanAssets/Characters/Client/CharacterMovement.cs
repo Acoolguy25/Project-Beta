@@ -45,6 +45,7 @@ namespace RyanAssets.Characters.Client {
         private BoxCollider boxCollider;
         private CharacterAnimator characterAnimator;
         private bool LastGrounded;
+        private bool _jumpInProgress;
         // private MovementControl _movementControl;
 
 
@@ -165,20 +166,21 @@ namespace RyanAssets.Characters.Client {
                 //    _animator.SetBool(_animIDFreeFall, false);
                 //}
 
-                if (_input.jump && _jumpTimeoutDelta <= 0.0f && _landTimeoutDelta <= 0.0f && StaminaController.ConsumeStamina(5f)) {
+                if (_input.jump && !_jumpInProgress && StaminaController.ConsumeStamina(5f)) {
+                    _jumpInProgress = true;
                     _jumpTimeoutDelta = JumpTimeout;
 
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-                    //Vector3 velocity = _rb.linearVelocity;
-                    //velocity.y = _verticalVelocity;
-                    //_rb.linearVelocity = velocity;
-                    _rb.AddRelativeForce(Vector3.up * _verticalVelocity, ForceMode.VelocityChange);
+                    Vector3 velocity = _rb.linearVelocity;
+                    velocity.y = _verticalVelocity;
+                    _rb.linearVelocity = velocity;
                     characterAnimator.Jump();
                     //if (_hasAnimator)
                     //    _animator.SetBool(_animIDJump, true);
                     //wasJumping = Time.fixedTime;
                 }
             } else {
+                _jumpInProgress = false;
                 if (_fallTimeoutDelta >= 0.0f) {
                     _fallTimeoutDelta -= Time.fixedDeltaTime;
                 } else {

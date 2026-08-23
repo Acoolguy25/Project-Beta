@@ -1,0 +1,25 @@
+{
+    "name": "Universes.UniverseData.dot_invaders.Server",
+    "rootNamespace": "",
+    "references": [
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:17810ac72512f5d41b3e56d099b5d894",
+        "GUID:301d878e906f4e0d81e7383ad088de42",
+        "GUID:39cf4af17d22e66448d4cd56fe623fa9",
+        "GUID:9a84ec9673600fb4cbb1544ed2172dd8",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:48c360a9b7b348249897eb4e49d403b4",
+        "GUID:d81c570acb0546e47865a9bb58cc7645"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
