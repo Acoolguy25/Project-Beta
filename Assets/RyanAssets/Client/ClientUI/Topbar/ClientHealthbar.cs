@@ -18,6 +18,7 @@ namespace RyanAssets.Client.ClientUI.Topbar {
             canvasGroupController = GetComponent<CanvasGroupController>();
             CameraController.OnCameraTargetAdded += OnCameraTargetAdded;
             CameraController.OnCameraTargetRemoved += OnCameraTargetRemoved;
+            Refresh();
         }
         void OnDestroy() {
             CameraController.OnCameraTargetAdded -= OnCameraTargetAdded;

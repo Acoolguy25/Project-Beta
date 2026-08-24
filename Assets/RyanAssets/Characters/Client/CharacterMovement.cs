@@ -104,8 +104,11 @@ namespace RyanAssets.Characters.Client {
         //    _animIDFreeFall = Animator.StringToHash("FreeFall");
         //    _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
         //}
-        private Vector2 GetAdaptedMoveVector(){
-            Vector2 move = _input.move;
+        public static Vector2 GetAdaptedMoveVector(CharacterControls input) {
+            if (input == null)
+                return Vector2.zero;
+
+            Vector2 move = input.move;
             if (GameSettingsClient.GetSettingValue<bool>("InvertedMovementControls"))
                 move *= -1;
             return move;
@@ -114,7 +117,7 @@ namespace RyanAssets.Characters.Client {
             //if (LocalPlayer.Character.ConsumeStamina(previousSpeed.magnitude > 3f && _input.sprint)) {
 
             //}
-            Vector2 moveVec = GetAdaptedMoveVector();
+            Vector2 moveVec = GetAdaptedMoveVector(_input);
             Vector2 lastMoveVec = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
 
             float targetSpeed = (_input.sprint && moveVec.magnitude > 0f && lastMoveVec.magnitude > SprintSpeed/4f && StaminaController.ConsumeStamina(SprintStaminaConsumptionRate * Time.fixedDeltaTime)) ? SprintSpeed : MoveSpeed;

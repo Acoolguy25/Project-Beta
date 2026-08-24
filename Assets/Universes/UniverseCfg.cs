@@ -42,6 +42,13 @@ namespace Universes {
                 description = "As the murderer, kill everyone else to win. As a sheriff, fend off the murderer. As an survivor, try to survive to win",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
+            },
+            new(){
+                id = "dot_invaders",
+                title = "Dot Invaders",
+                description = "Grow your bases, send dot armies to neighboring bases, and conquer the board.",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
             }
         };
         public static UniverseStruct GetUniverseFromId(string id) {

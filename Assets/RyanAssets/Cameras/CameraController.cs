@@ -1,18 +1,20 @@
-using UnityEngine;
-using UnityEngine.Assertions;
-using RyanAssets.Characters.Shared;
+using FishNet;
+using FishNet.Object;
+using FishNet.Object.Synchronizing;
+using FishNet.Transporting;
 using RyanAssets.Characters.Client;
-using System.Linq;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using Unity.Cinemachine;
+using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientCore;
+using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Requests;
-using FishNet;
-using FishNet.Transporting;
-using FishNet.Object;
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Linq;
+using Unity.Cinemachine;
+using UnityEngine;
+using UnityEngine.Assertions;
 
 namespace RyanAssets.Cameras
 {
@@ -100,20 +102,37 @@ namespace RyanAssets.Cameras
             if (targetCharacter == localCharacter)
                 SetCameraTarget(null);
         }
-        private void SetCameraAvailable_RPC(CameraTypeBroadcast broadcast, Channel channel = Channel.Reliable) {
-            SetCameraAvailable(broadcast.cameraType, broadcast.enabled);
+        //private void SetCameraAvailable_RPC(CameraTypeBroadcast broadcast, Channel channel = Channel.Reliable) {
+        //    SetCameraAvailable(broadcast.cameraType, broadcast.enabled);
+        //}
+        private void OnCameraTypeSyncChanged(SyncHashSetOperation op, GameCameraType item, bool asServer) {
+            if (op == SyncHashSetOperation.Clear) {
+                foreach (GameCameraType camType in Enum.GetValues(typeof(GameCameraType))) {
+                    SetCameraAvailable(camType, false);
+                }
+            } else if (op == SyncHashSetOperation.Remove) {
+                SetCameraAvailable(item, false);
+            } else if (op == SyncHashSetOperation.Add) {
+                SetCameraAvailable(item, true);
+            } else if (op == SyncHashSetOperation.Set) {
+                OnCameraTypeSyncChanged(SyncHashSetOperation.Clear, default, false);
+                foreach (GameCameraType camType in PlayerData.localData.cameraTypes) {
+                    SetCameraAvailable(camType, true);
+                }
+            }
         }
-        void OnConnected() {
+        void OnMyPlayerAdded(PlayerData playerData) {
             OnCharacterRemoved(null);
             LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
             LocalPlayer.OnCharacterRemoved += OnCharacterRemoved;
-            InstanceFinder.ClientManager.RegisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
+            playerData.cameraTypes.OnChange += OnCameraTypeSyncChanged;
+
+            OnCameraTypeSyncChanged(SyncHashSetOperation.Set, GameCameraType.SpectateCamera, false);
         }
-        void OnDisconnected() {
+        void OnMyPlayerRemoved(PlayerData playerData) {
             LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
             LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
-            if (InstanceFinder.ClientManager != null)
-                InstanceFinder.ClientManager.UnregisterBroadcast<CameraTypeBroadcast>(SetCameraAvailable_RPC);
+            playerData.cameraTypes.OnChange -= OnCameraTypeSyncChanged;
 
             SetCameraAvailable(GameCameraType.SpectateCamera, false);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
@@ -136,17 +155,21 @@ namespace RyanAssets.Cameras
                 Assert.AreEqual(((int)Enum.Parse<GameCameraType>(cam.transform.name)), i, $"{cam.transform.name} does not match its enum!");
             }
             SwitchCamera(activeIndex);
-            ClientConnector.OnConnected += OnConnected;
-            ClientConnector.OnDisconnected += OnDisconnected;
+            PlayerData.OnMyPlayerAdded.Subscribe(OnMyPlayerAdded);
+            PlayerData.OnMyPlayerRemoved += OnMyPlayerRemoved;
+            //ClientConnector.OnConnected += OnConnected;
+            //ClientConnector.OnDisconnected += OnDisconnected;
         }
         private void OnDestroy() {
             Instance = null;
-            ClientConnector.OnConnected -= OnConnected;
-            ClientConnector.OnDisconnected -= OnDisconnected;
+            PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
+            PlayerData.OnMyPlayerRemoved -= OnMyPlayerRemoved;
+            //ClientConnector.OnConnected -= OnConnected;
+            //ClientConnector.OnDisconnected -= OnDisconnected;
             if (LocalPlayer.Character)
                 LocalPlayer.Character.OnDied -= OnCharacterDied;
-            if (ClientConnector.IsConnected)
-                OnDisconnected();
+            if (PlayerData.localData)
+                OnMyPlayerRemoved(PlayerData.localData);
         }
     }
 }

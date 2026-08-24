@@ -1,6 +1,7 @@
 ﻿using FishNet.Object.Synchronizing;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Global;
+using RyanAssets.Shared.Declarations;
 using System.Collections;
 using UnityEngine;
 

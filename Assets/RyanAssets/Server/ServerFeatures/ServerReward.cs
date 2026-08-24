@@ -1,39 +1,32 @@
-//using System.Collections.Generic;
-//using FishNet.Connection;
-//using RyanAssets.Server.ServerCore;
-//using RyanAssets.Shared.Global;
-//using RyanAssets.Shared.Declarations;
-//using RyanAssets.DataService;
+#if UNITY_SERVER
+using FishNet.Connection;
+using RyanAssets.DataService;
+using RyanAssets.Server.ServerCore;
 
-//namespace RyanAssets.Server.ServerFeatures {
-//    public static class ServerReward {
-//        public static bool AddGoldReward(NetworkConnection conn, ulong goldReward) {
-//            return AddReward(conn, 0, goldReward);
-//        }
-//        public static bool AddXPReward(NetworkConnection conn, ulong xpReward) {
-//            return AddReward(conn, xpReward, 0);
-//        }
+namespace RyanAssets.Server.ServerFeatures {
+    public static class ServerReward {
+        public static bool AddGoldReward(NetworkConnection connection, ulong goldReward) {
+            return AddReward(connection, 0, goldReward);
+        }
 
-//        static bool AddReward(NetworkConnection conn, ulong xpReward, ulong goldReward) {
-//            if (!PlayerData.Players.TryGetValue(conn, out PlayerData stats))
-//                return false;
+        public static bool AddXPReward(NetworkConnection connection, ulong xpReward) {
+            return AddReward(connection, xpReward, 0);
+        }
 
-//            return AddReward(conn, stats, xpReward, goldReward);
-//        }
+        public static bool AddReward(NetworkConnection connection, ulong xpReward, ulong goldReward) {
+            if (connection == null || !connection.IsValid ||
+                !PlayerData.TryGetPlayerData(connection, out PlayerData playerData) || playerData == null)
+                return false;
 
-//        static bool AddReward(NetworkConnection conn, PlayerData stats, ulong xpReward, ulong goldReward) {
-//            //ulong previousXp = stats.xp.Value;
-//            //ulong previousGold = stats.gold.Value;
+            playerData.xp.Value = SaturatingAdd(playerData.xp.Value, xpReward);
+            playerData.gold.Value = SaturatingAdd(playerData.gold.Value, goldReward);
+            ServerPlayerSave.MarkDirty(connection);
+            return true;
+        }
 
-//            //stats.xp.Value = ulong.MaxValue - previousXp < xpReward
-//            //    ? ulong.MaxValue
-//            //    : previousXp + xpReward;
-//            //stats.gold.Value = ulong.MaxValue - previousGold < goldReward
-//            //    ? ulong.MaxValue
-//            //    : previousGold + goldReward;
-
-//            //ServerPlayerSave.MarkDirty(conn);
-//            //return true;
-//        }
-//    }
-//}
+        static ulong SaturatingAdd(ulong current, ulong reward) {
+            return ulong.MaxValue - current < reward ? ulong.MaxValue : current + reward;
+        }
+    }
+}
+#endif

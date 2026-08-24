@@ -92,6 +92,7 @@ namespace RyanAssets.Characters.Shared {
         }
         public override void OnStopNetwork() {
             base.OnStopNetwork();
+            Characters.Remove(Owner);
             if (PlayerData.TryGetPlayerData(Owner, out PlayerData playerData))
                 playerData.team.OnChange -= OnPlayerTeamChanged;
             LocalCharacterRemoved?.Invoke(this);

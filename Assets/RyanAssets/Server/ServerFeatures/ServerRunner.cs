@@ -11,6 +11,7 @@ using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Shared.Global;
+using RyanAssets.Shared.Declarations;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 

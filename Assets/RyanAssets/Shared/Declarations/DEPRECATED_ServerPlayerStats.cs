@@ -1,7 +1,7 @@
-using FishNet.Connection;
-using NUnit.Framework;
-using RyanAssets.DataService;
-using System.Collections.Generic;
+//using FishNet.Connection;
+//using NUnit.Framework;
+//using RyanAssets.DataService;
+//using System.Collections.Generic;
 
 namespace RyanAssets.Shared.Declarations {
     //[System.Serializable]

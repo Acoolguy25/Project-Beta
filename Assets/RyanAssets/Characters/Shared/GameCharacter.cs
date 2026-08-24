@@ -263,8 +263,8 @@ public class GameCharacterEditor : UnityEditor.Editor {
 
         using (new UnityEditor.EditorGUI.DisabledScope(true)) {
             UnityEditor.EditorGUILayout.TextField("Display Name", character.DisplayName);
-            UnityEditor.EditorGUILayout.EnumPopup("Team", character.Team?.team ?? RyanAssets.DataService.TeamColor.None);
-            UnityEditor.EditorGUILayout.EnumPopup("Displayed Team", character.Team?.displayTeam ?? RyanAssets.DataService.TeamColor.None);
+            UnityEditor.EditorGUILayout.EnumPopup("Team", character.Team?.team ?? TeamColor.None);
+            UnityEditor.EditorGUILayout.EnumPopup("Displayed Team", character.Team?.displayTeam ?? TeamColor.None);
             UnityEditor.EditorGUILayout.ObjectField("Active Tool", character.ActiveTool.Value, typeof(RyanAssets.Tools.Shared.ToolBaseShared), true);
             UnityEditor.EditorGUILayout.Vector3Field("Character Scale", character.CharacterScale.Value);
             UnityEditor.EditorGUILayout.Toggle("Can Spectate", character.CanSpectate.Value);

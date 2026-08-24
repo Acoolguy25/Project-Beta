@@ -3,7 +3,8 @@ namespace RyanAssets.Shared.Declarations {
         SpectateCamera = 0,
         OrbitCamera = 1,
         ThirdPersonCamera = 2,
-        DeathCamera = 3,
-        CutsceneCamera = 4
+        TwoDimCamera = 3,
+        DeathCamera = 4,
+        CutsceneCamera = 5
     }
 }

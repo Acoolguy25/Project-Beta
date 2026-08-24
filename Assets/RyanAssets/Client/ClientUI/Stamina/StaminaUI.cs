@@ -14,6 +14,7 @@ namespace RyanAssets.Client.ClientUI.Stamina {
         CanvasGroupController canvasGroupController;
         void Start() {
             canvasGroupController = GetComponent<CanvasGroupController>();
+            SetVisible();
             LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
             LocalPlayer.OnCharacterRemoved += OnCharacterRemoved;
             StaminaController.StaminaChanged += OnStaminaChanged;

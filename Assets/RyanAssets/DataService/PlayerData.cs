@@ -4,6 +4,7 @@ using FishNet.Serializing;
 using FishNet.Object.Synchronizing;
 using Newtonsoft.Json.Linq;
 using RyanAssets.Core;
+using RyanAssets.Shared.Declarations; 
 using RyanAssets.DataService;
 using System;
 using System.Collections;
@@ -12,49 +13,6 @@ using UnityEditor;
 using UnityEngine;
 
 namespace RyanAssets.DataService {
-    public enum TeamColor : short {
-        None = 0,
-        Ghost, // Spectator
-        Lobby, // Lobby / Spectator
-        Blue, // Sheriff
-        Red,  // Murderer
-        Green // Innocent
-    };
-    [System.Serializable]
-    public class TeamConfig {
-        [SerializeField]
-        public TeamColor team = TeamColor.Ghost;
-        [SerializeField]
-        public TeamColor displayTeam = TeamColor.Ghost;
-        public TeamConfig() {
-
-        }
-        public TeamConfig(TeamColor team) {
-            this.team = team;
-            this.displayTeam = team;
-        }
-        public TeamConfig(TeamColor team, TeamColor displayTeam) {
-            this.team = team;
-            this.displayTeam = displayTeam;
-        }
-        public static Color32 TeamToColor(TeamColor teamColor) {
-            return teamColor switch {
-                TeamColor.Ghost or TeamColor.Lobby => Color.grey,
-                TeamColor.Blue => Color.blue,
-                TeamColor.Red => Color.red,
-                TeamColor.Green => Color.green,
-                TeamColor.None => Color.white,
-                _ => Color.white
-            };
-        }
-        public Color32 realTeamColor => TeamToColor(team);
-        public Color32 displayTeamColor => TeamToColor(displayTeam);
-    };
-    public enum ToolEnum : short {
-        Unknown = 0,
-        Dagger,
-        Pistol
-    }
     public class PlayerData : NetworkBehaviour {
         // Player Settings
         readonly public SyncVar<string> player_id = new();
@@ -80,6 +38,9 @@ namespace RyanAssets.DataService {
         readonly public SyncVar<float> staminaMax = new(initialValue: 250f);
         readonly public SyncVar<float> staminaRegen = new(initialValue: 30f);
         readonly public SyncVar<float> staminaCooldown = new(initialValue: 0.6f);
+
+        // Camera Data
+        readonly public SyncHashSet<GameCameraType> cameraTypes = new();
 
         // Events
         public static Action<PlayerData> OnPlayerAdded;

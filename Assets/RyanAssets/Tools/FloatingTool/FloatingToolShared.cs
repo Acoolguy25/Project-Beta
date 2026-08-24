@@ -7,6 +7,7 @@ using RyanAssets.Shared.Global;
 using RyanAssets.DataService;
 using FishNet.Object.Synchronizing;
 using RyanAssets.Tools.Shared;
+using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Item.FloatingTool
 {

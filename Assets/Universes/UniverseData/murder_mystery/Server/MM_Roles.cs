@@ -1,4 +1,5 @@
 ﻿using RyanAssets.DataService;
+using RyanAssets.Shared.Declarations;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
