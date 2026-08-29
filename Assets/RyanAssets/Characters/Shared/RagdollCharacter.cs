@@ -30,6 +30,11 @@ namespace RyanAssets.Characters.Shared {
                         return;
                     SetRagdoll(true);
                 };
+                GameCharacter.OnRevive += () => {
+                    if (!gameObject)
+                        return;
+                    SetRagdoll(false);
+                };
                 if (GameCharacter.IsDead) // If already died
                     RagdollEnabled = true;
             }
@@ -57,6 +62,13 @@ namespace RyanAssets.Characters.Shared {
             foreach (System.Type type in disableObjects) {
                 var component = GetComponent(type);
 
+                if (component is Animator animator) {
+                    if (disabled) {
+                        animator.Rebind();
+                        animator.Update(0f);
+                    }
+                }
+
                 if (component is Behaviour behaviour) {
                     behaviour.enabled = !disabled;
                 }
@@ -64,6 +76,7 @@ namespace RyanAssets.Characters.Shared {
                 if (component is Rigidbody rb) {
                     rb.isKinematic = disabled;
                 }
+
             }
             foreach (var ragdoll in GetComponentsInChildren<MonoBehaviour>(true).OfType<IRagdoll>()) {
                 if (ragdoll.disableOnRagdoll)

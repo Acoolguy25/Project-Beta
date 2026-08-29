@@ -9,6 +9,7 @@ using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Requests;
 using UnityEngine;
 
 namespace Universes.UniverseData.dot_invaders {
@@ -37,7 +38,18 @@ namespace Universes.UniverseData.dot_invaders {
     }
 
     public sealed class DI_ServerRunner : ServerRunner {
-        const int BaseCount = 30;
+        static readonly TeamColor[] DotInvadersTeamOrder = {
+            TeamColor.Blue,
+            TeamColor.Red,
+            TeamColor.Green,
+            TeamColor.Orange,
+            TeamColor.Purple,
+            TeamColor.Cyan,
+            TeamColor.Pink,
+            TeamColor.Lime
+        };
+
+        const int BaseCount = 32;
         const int StartingTroops = 12;
         const int NeutralTroops = 5;
         const int NpcTeamCount = 2;
@@ -46,15 +58,16 @@ namespace Universes.UniverseData.dot_invaders {
         const int NpcTeamIdStart = 100;
         const int WinnerXPReward = 100;
         const int WinnerGoldReward = 50;
-        const float ArenaHalfWidth = 94f;
-        const float ArenaHalfHeight = 54f;
+        const float ArenaHalfWidth = 100f;
+        const float ArenaHalfHeight = 74f;
         const float MinimumBaseSpacing = 12f;
-        const float DotSpeed = 9f;
+        const float DotSpeed = 12f;
         const float CollisionDistance = 0.75f;
         const float SnapshotInterval = 0.1f;
-        const float ProductionInterval = 2f;
-        const float SendInterval = 0.5f;
-        const float NpcThinkInterval = 1.25f;
+        const float ProductionInterval = 0.8f;
+        const float AttackedProductionDelay = 2f;
+        const float SendInterval = 0.4f;
+        const float NpcThinkInterval = 1.75f;
         const int NpcTroopReserve = 3;
 
         [SerializeField, Min(30)] int matchDurationSeconds = 300;
@@ -67,6 +80,7 @@ namespace Universes.UniverseData.dot_invaders {
             public int pendingTarget = -1;
             public int pendingTroops;
             public float actionTimer;
+            public float productionDelay;
         }
 
         sealed class DotState {
@@ -89,6 +103,8 @@ namespace Universes.UniverseData.dot_invaders {
         readonly List<DotState> dots = new();
         readonly List<NpcTeamState> npcTeams = new();
         readonly Dictionary<int, int> playerTeams = new();
+        readonly HashSet<int> dotInvadersTeams = new();
+        readonly HashSet<int> announcedEliminations = new();
 
         float snapshotTimer;
         int nextTeamId;
@@ -141,6 +157,7 @@ namespace Universes.UniverseData.dot_invaders {
             UpdateNpcTeams(deltaTime);
             UpdateBases(deltaTime);
             UpdateDots(deltaTime);
+            CheckEliminatedTeams();
             CheckEndConditions();
 
             snapshotTimer += deltaTime;
@@ -156,6 +173,8 @@ namespace Universes.UniverseData.dot_invaders {
             dots.Clear();
             npcTeams.Clear();
             playerTeams.Clear();
+            dotInvadersTeams.Clear();
+            announcedEliminations.Clear();
             nextTeamId = 0;
             nextDotId = 0;
             revision = 0;
@@ -257,6 +276,7 @@ namespace Universes.UniverseData.dot_invaders {
                 teamId = nextTeamId++;
                 playerTeams.Add(clientId, teamId);
             }
+            dotInvadersTeams.Add(teamId);
 
             player.SetPlayerTeam(new TeamConfig((teamId % 3) switch {
                 0 => TeamColor.Blue,
@@ -280,6 +300,7 @@ namespace Universes.UniverseData.dot_invaders {
             home.pendingTarget = -1;
             home.pendingTroops = 0;
             home.actionTimer = 0f;
+            home.productionDelay = 0f;
             hadHumanParticipant = true;
             if (matchInProgress)
                 BroadcastState();
@@ -293,6 +314,7 @@ namespace Universes.UniverseData.dot_invaders {
                     thinkTimer = teamIndex * 0.35f
                 };
                 npcTeams.Add(npcTeam);
+                dotInvadersTeams.Add(npcTeam.teamId);
 
                 for (int baseIndex = 0; baseIndex < NpcBasesPerTeam; baseIndex++) {
                     int spawnBase = FindSpawnBase();
@@ -306,6 +328,7 @@ namespace Universes.UniverseData.dot_invaders {
                     state.pendingTarget = -1;
                     state.pendingTroops = 0;
                     state.actionTimer = 0f;
+                    state.productionDelay = 0f;
                 }
             }
         }
@@ -353,9 +376,11 @@ namespace Universes.UniverseData.dot_invaders {
                 state.pendingTarget = -1;
                 state.pendingTroops = 0;
                 state.actionTimer = 0f;
+                state.productionDelay = 0f;
             }
 
             dots.RemoveAll(dot => dot.ownerClientId == clientId);
+            CheckEliminatedTeams();
             BroadcastState();
             CheckEndConditions();
         }
@@ -451,14 +476,11 @@ namespace Universes.UniverseData.dot_invaders {
                 if (state.teamId < 0)
                     continue;
 
-                state.actionTimer += deltaTime;
-                while (true) {
-                    float interval = state.pendingTroops > 0 ? SendInterval : ProductionInterval;
-                    if (state.actionTimer < interval)
-                        break;
-                    state.actionTimer -= interval;
-
-                    if (state.pendingTroops > 0) {
+                state.productionDelay = Mathf.Max(0f, state.productionDelay - deltaTime);
+                if (state.pendingTroops > 0) {
+                    state.actionTimer += deltaTime;
+                    while (state.actionTimer >= SendInterval) {
+                        state.actionTimer -= SendInterval;
                         if (state.troops <= 0 || state.pendingTarget < 0) {
                             ClearSend(state);
                             break;
@@ -473,13 +495,33 @@ namespace Universes.UniverseData.dot_invaders {
                         });
                         state.troops--;
                         state.pendingTroops--;
-                        if (state.pendingTroops == 0)
+                        if (state.pendingTroops == 0) {
                             ClearSend(state);
-                    } else {
-                        state.troops++;
+                            break;
+                        }
                     }
+                    continue;
+                }
+
+                if (state.productionDelay > 0f || HasOutgoingTroops(i)) {
+                    state.actionTimer = 0f;
+                    continue;
+                }
+
+                state.actionTimer += deltaTime;
+                while (state.actionTimer >= ProductionInterval) {
+                    state.actionTimer -= ProductionInterval;
+                    state.troops++;
                 }
             }
+        }
+
+        bool HasOutgoingTroops(int sourceBaseId) {
+            for (int i = 0; i < dots.Count; i++) {
+                if (dots[i].sourceBaseId == sourceBaseId)
+                    return true;
+            }
+            return false;
         }
 
         static void QueueSend(BaseState source, int targetBaseId, int troopCount) {
@@ -547,6 +589,7 @@ namespace Universes.UniverseData.dot_invaders {
                 return;
             }
 
+            target.productionDelay = AttackedProductionDelay;
             if (target.troops > 0) {
                 target.troops--;
                 return;
@@ -586,6 +629,16 @@ namespace Universes.UniverseData.dot_invaders {
             }
             if (hadHumanParticipant && !humanTeamPresent)
                 CompleteMatch(DetermineLeadingTeam());
+        }
+
+        void CheckEliminatedTeams() {
+            foreach (int teamId in dotInvadersTeams) {
+                if (announcedEliminations.Contains(teamId) || HasTeamPresence(teamId))
+                    continue;
+
+                announcedEliminations.Add(teamId);
+                SendTeamChatMessage(teamId, "eliminated.");
+            }
         }
 
         bool HasTeamPresence(int teamId) {
@@ -633,6 +686,7 @@ namespace Universes.UniverseData.dot_invaders {
             if (!matchInProgress)
                 return;
 
+            CheckEliminatedTeams();
             matchInProgress = false;
             winningTeamId = winnerTeamId;
             for (int i = 0; i < bases.Count; i++)
@@ -646,8 +700,30 @@ namespace Universes.UniverseData.dot_invaders {
                 }
             }
 
+            if (winnerTeamId >= 0)
+                SendTeamChatMessage(winnerTeamId, "wins the game!");
+
             UpdateTopMessage();
             BroadcastState();
+        }
+
+        static void SendTeamChatMessage(int teamId, string message) {
+            string teamName = GetDotInvadersTeamName(teamId, teamId >= NpcTeamIdStart);
+            string coloredTeamName = TeamConfig.ColorRichText(
+                teamName,
+                TeamConfig.TeamToColor(GetDotInvadersTeam(teamId)));
+            ServerChat.SendSystemMessage(new SystemMessageBroadcast(
+                $"{coloredTeamName} {message}",
+                SystemMessageSource.CustomMessage));
+        }
+
+        static TeamColor GetDotInvadersTeam(int teamId) {
+            return teamId < 0 ? TeamColor.None : DotInvadersTeamOrder[teamId % DotInvadersTeamOrder.Length];
+        }
+
+        static string GetDotInvadersTeamName(int teamId, bool npc) {
+            string name = GetDotInvadersTeam(teamId).ToString().ToUpperInvariant();
+            return npc ? $"{name} NPC TEAM" : $"{name} TEAM";
         }
 
         void UpdateTopMessage() {
@@ -661,15 +737,9 @@ namespace Universes.UniverseData.dot_invaders {
             if (winningTeamId < 0)
                 SetTopMessage("Dot Invaders - Draw");
             else if (winningTeamId >= NpcTeamIdStart)
-                SetTopMessage($"{GetTeamName(winningTeamId)} wins!");
+                SetTopMessage($"{GetDotInvadersTeamName(winningTeamId, true)} wins!");
             else
-                SetTopMessage($"{GetTeamName(winningTeamId)} wins! +{WinnerXPReward} XP / +{WinnerGoldReward} gold");
-        }
-
-        static string GetTeamName(int teamId) {
-            string[] colors = { "Blue", "Red", "Green", "Orange", "Purple", "Cyan", "Pink", "Lime" };
-            string color = colors[Mathf.Abs(teamId) % colors.Length];
-            return teamId >= NpcTeamIdStart ? $"{color} NPC Team" : $"{color} Team";
+                SetTopMessage($"{GetDotInvadersTeamName(winningTeamId, false)} wins! +{WinnerXPReward} XP / +{WinnerGoldReward} gold");
         }
 
         void BroadcastState() {
@@ -739,6 +809,8 @@ namespace Universes.UniverseData.dot_invaders {
             dots.Clear();
             npcTeams.Clear();
             playerTeams.Clear();
+            dotInvadersTeams.Clear();
+            announcedEliminations.Clear();
             hadHumanParticipant = false;
             base.Reset();
         }

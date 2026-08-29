@@ -21,6 +21,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
         List<(Canvas, GameCharacter)> nameTags = new();
         void Start() {
             GameCharacter.GameCharacterAdded += GameCharacterAdded;
+            GameCharacter.GameCharacterRemoved += GameCharacterRemoved;
         }
         Transform GetHead(Transform root) {
             foreach (Transform t in root.GetComponentsInChildren<Transform>(true)) {
@@ -31,8 +32,6 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             return null;
         }
         void GameCharacterAdded(GameCharacter gameCharater) {
-            if (gameCharater.IsDead)
-                return;
             Transform head = GetHead(gameCharater.transform);
             GameObject nameTag = Instantiate(nameTagPrefab, head, true);
             Canvas nameTagCanvas = nameTag.GetComponent<Canvas>();
@@ -56,18 +55,34 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             void OnPlayerTeamChanged(TeamConfig _, TeamConfig newValue, bool asServer) {
                 displayNameText.color = newValue.displayTeamColor;
             }
+            void OnActiveEffectsChanged(FishNet.Object.Synchronizing.SyncDictionaryOperation op, CharacterEffect _2, float _3, bool _4) {
+                if (op == FishNet.Object.Synchronizing.SyncDictionaryOperation.Complete)
+                    OnPlayerHealthChanged(default, default, default);
+            }
+            void UnsubscribeNameTag() {
+                gameCharater.DisplayNameSync.OnChange -= OnPlayerNameChanged;
+                gameCharater.Health.OnChange -= OnPlayerHealthChanged;
+                gameCharater.MaxHealth.OnChange -= OnPlayerHealthChanged;
+                gameCharater.ActiveEffects.OnChange -= OnActiveEffectsChanged;
+                gameCharater.TeamSync.OnChange -= OnPlayerTeamChanged;
+                gameCharater.OnDied -= OnCharacterDied;
+            }
+            void OnCharacterRevived() {
+                gameCharater.OnRevive -= OnCharacterRevived;
+                GameCharacterAdded(gameCharater);
+            }
+            void OnCharacterDied(DamageType damageType, IEntity ownerObj) {
+                UnsubscribeNameTag();
+                gameCharater.OnRevive += OnCharacterRevived;
+                Destroy(nameTag);
+            }
             gameCharater.DisplayNameSync.OnChange += OnPlayerNameChanged;
 
             gameCharater.Health.OnChange += OnPlayerHealthChanged;
             gameCharater.MaxHealth.OnChange += OnPlayerHealthChanged;
-            gameCharater.ActiveEffects.OnChange += (op, _2, _3, _4) => {
-                if (op == FishNet.Object.Synchronizing.SyncDictionaryOperation.Complete)
-                    OnPlayerHealthChanged(default, default, default);
-            };
+            gameCharater.ActiveEffects.OnChange += OnActiveEffectsChanged;
             gameCharater.TeamSync.OnChange += OnPlayerTeamChanged;
-            gameCharater.OnDied += (damageType, ownerObj) => {
-                Destroy(nameTag);
-            };
+            gameCharater.OnDied += OnCharacterDied;
 
             OnPlayerNameChanged(default, gameCharater.DisplayName, false);
             OnPlayerHealthChanged(default, default, false);
@@ -76,6 +91,13 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             UpdateNameTagPositioning(nameTagCanvas);
 
             nameTags.Add((nameTagCanvas, gameCharater));
+        }
+        void GameCharacterRemoved(GameCharacter gameCharater) {
+            int index = nameTags.FindIndex(t => t.Item2 == gameCharater);
+            if (index != -1) {
+                Destroy(nameTags[index].Item1.gameObject);
+                nameTags.RemoveAt(index);
+            }
         }
         void UpdateNameTagPositioning(Canvas nameTag) {
             Transform head = nameTag.transform.parent;
@@ -106,7 +128,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                     Camera mainCamera = Camera.main;
                     if (mainCamera != null)
                         nameTag.transform.forward = mainCamera.transform.forward;
-                    nameTag.gameObject.SetActive(CameraController.targetCharacter != gameCharacter);
+                    nameTag.gameObject.SetActive(CameraController.targetCharacter != gameCharacter && !gameCharacter.IsDead);
 #if UNITY_EDITOR
                     //UpdateNameTagPositioning(nameTag);
 #endif
@@ -118,6 +140,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
         }
         void OnDestroy() {
             GameCharacter.GameCharacterAdded -= GameCharacterAdded;
+            GameCharacter.GameCharacterRemoved -= GameCharacterRemoved;
         }
     }
 }

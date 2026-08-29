@@ -4,7 +4,8 @@
     "references": [
         "FishNet.Runtime",
         "Unity.InputSystem",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

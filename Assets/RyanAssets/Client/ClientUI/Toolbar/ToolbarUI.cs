@@ -45,6 +45,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             OnClickPrefab += OnPrefabClicked;
             ToolControls.toolBarHotkeyPressed += OnActivateToolPressed;
             LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterRemoved += OnCharacterRemoved;
             if (LocalPlayer.Character != null) {
                 foreach (ToolBaseShared tool in LocalPlayer.Character.GetComponentsInChildren<ToolBaseShared>(true)) {
                     OnToolCreated(tool);
@@ -53,13 +54,29 @@ namespace RyanAssets.Client.ClientUI.Toolbar
         }
         protected override void OnDestroy() {
             base.OnDestroy();
-            LocalPlayer.OnCharacterRemoved -= OnCharacterAdded;
+            LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
+            LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
+            if (LocalPlayer.Character != null) {
+                LocalPlayer.Character.OnDied -= OnCharacterDied;
+                LocalPlayer.Character.OnRevive -= OnCharacterRevived;
+            }
         }
         void OnCharacterAdded(LocalCharacter character) {
             toolUI.SetVisible(true);
             character.OnDied += OnCharacterDied;
+            character.OnRevive += OnCharacterRevived;
         }
         void OnCharacterDied(DamageType damageType, IEntity sourceEntity) {
+            toolUI.SetVisible(false);
+        }
+        void OnCharacterRevived() {
+            toolUI.SetVisible(true);
+        }
+        void OnCharacterRemoved(LocalCharacter character) {
+            if (character != null) {
+                character.OnDied -= OnCharacterDied;
+                character.OnRevive -= OnCharacterRevived;
+            }
             toolUI.SetVisible(false);
         }
         void OnToolCreated(ToolBaseShared tool) {
@@ -119,7 +136,7 @@ namespace RyanAssets.Client.ClientUI.Toolbar
             };
             sliderImage.rectTransform.anchorMax = new Vector2(1, 0);
         }
-        private const string LeadingZeroColor = "#808080"; // Grey
+        private const string LeadingZeroColor = "#545454BC"; // Grey
 
         private static string FormatAmmo(int ammo) {
             ammo = Mathf.Clamp(ammo, 0, 999);

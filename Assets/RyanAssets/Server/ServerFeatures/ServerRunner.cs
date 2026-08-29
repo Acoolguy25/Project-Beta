@@ -27,6 +27,11 @@ namespace RyanAssets.Server.ServerFeatures {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             OnResetEvent = null;
+            CancellationTokenSource cts = serverRunnerCTS;
+            serverRunnerCTS = null;
+            cts?.Cancel();
+            cts?.Dispose();
+            Instance = null;
         }
 
         // TIMER FUNCTIONS
@@ -74,50 +79,40 @@ namespace RyanAssets.Server.ServerFeatures {
         public async UniTask CustomTimerCountdown(
             int duration,
             Func<int, bool, bool> activationFunc,
-            Func<Action, Action> registerInterrupt,
+            Action<Action> registerInterrupt,
+            Action<Action> unregisterInterrupt,
             CancellationToken token = default) {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            bool loopExited = false;
             bool interruptRegistered = false;
-            Action unregisterInterrupt = null;
-
-            void UnregisterInterrupt() {
-                if (!interruptRegistered)
-                    return;
-
-                // Mark it inactive before invoking the unregister callback. This also
-                // prevents a registration callback that returns the event delegate
-                // itself from recursively invoking the interrupt action.
-                interruptRegistered = false;
-                unregisterInterrupt?.Invoke();
-            }
 
             Action interrupt = () => {
-                if (!interruptRegistered || cts.IsCancellationRequested || loopExited)
+                if (!interruptRegistered || cts.IsCancellationRequested)
                     return;
 
-                if (!activationFunc(duration, true)) {
+                if (!activationFunc(duration, true))
                     cts.Cancel();
-                    UnregisterInterrupt();
-                }
             };
 
-             try {
-                unregisterInterrupt = registerInterrupt(interrupt);
+            try {
+                registerInterrupt(interrupt);
                 interruptRegistered = true;
 
                 while (duration > 0) {
                     if (!activationFunc(duration, false))
                         return;
 
-                    await AwaitTime(1000, token);
+                    await AwaitTime(1000, cts.Token);
 
                     duration--;
                 }
-             } catch (OperationCanceledException) when (!token.IsCancellationRequested) {
-             } finally {
-                loopExited = true;
-            UnregisterInterrupt();
+            } catch (OperationCanceledException) when (!token.IsCancellationRequested) {
+                // An interrupt ended this countdown. Cancellation of the owning
+                // runner token still propagates and stops the old round entirely.
+            } finally {
+                if (interruptRegistered) {
+                    interruptRegistered = false;
+                    unregisterInterrupt(interrupt);
+                }
             }
         }
 
@@ -209,8 +204,11 @@ namespace RyanAssets.Server.ServerFeatures {
         }
 
         protected virtual void Start() {
+            CancellationTokenSource previousCts = serverRunnerCTS;
             var cts = new CancellationTokenSource();
             serverRunnerCTS = cts;
+            previousCts?.Cancel();
+            previousCts?.Dispose();
             StartAsync(cts.Token).Forget();
         }
 
@@ -220,8 +218,10 @@ namespace RyanAssets.Server.ServerFeatures {
         }
 
         protected virtual void Stop() {
-            serverRunnerCTS?.Cancel();
-            serverRunnerCTS?.Dispose();
+            CancellationTokenSource cts = serverRunnerCTS;
+            serverRunnerCTS = null;
+            cts?.Cancel();
+            cts?.Dispose();
         }
 
         protected virtual void Reset() {
@@ -243,6 +243,10 @@ namespace RyanAssets.Server.ServerFeatures {
             PlayerData.OnPlayerAdded -= OnPlayerAdded;
             ServerIdleTimeout.OnIdleTimeoutStarted -= Restart;
             ServerBootStrap.RestartServerEvent -= Restart;
+            if (Instance == this) {
+                Stop();
+                Instance = null;
+            }
         }
     }
 }

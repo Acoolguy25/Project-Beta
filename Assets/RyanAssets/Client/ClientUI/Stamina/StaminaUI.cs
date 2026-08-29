@@ -21,19 +21,35 @@ namespace RyanAssets.Client.ClientUI.Stamina {
         }
         private void OnDestroy() {
             StaminaController.StaminaChanged -= OnStaminaChanged;
+            LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
             LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
+            if (localCharacter != null) {
+                localCharacter.OnDied -= OnCharacterDied;
+                localCharacter.OnRevive -= OnCharacterRevived;
+            }
         }
         void OnCharacterAdded(LocalCharacter character) {
             localCharacter = character.GetComponent<LocalCharacter>();
             //localCharacter.StaminaChanged += (_) => OnStaminaChanged(false);
             localCharacter.OnDied += OnCharacterDied;
+            localCharacter.OnRevive += OnCharacterRevived;
             OnStaminaChanged(true);
             SetVisible(true);
         }
         void OnCharacterDied(RyanAssets.Shared.Declarations.DamageType source, IEntity sourceEntity) {
             SetVisible();
         }
+        void OnCharacterRevived() {
+            OnStaminaChanged(true);
+            SetVisible(true);
+        }
         void OnCharacterRemoved(LocalCharacter oldCharacter) {
+            if (oldCharacter != null) {
+                oldCharacter.OnDied -= OnCharacterDied;
+                oldCharacter.OnRevive -= OnCharacterRevived;
+            }
+            if (localCharacter == oldCharacter)
+                localCharacter = null;
             SetVisible();
         }
         void SetVisible(bool visible = false) {

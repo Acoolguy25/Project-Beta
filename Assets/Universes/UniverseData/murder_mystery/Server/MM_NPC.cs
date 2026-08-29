@@ -32,6 +32,9 @@ namespace Universes.murder_mystery.Server {
         }
 
         private void Update() {
+            if (!localNPC.AllowAttackTargetOverrides)
+                return;
+
             // Enforce the game-mode priority every frame rather than waiting for LocalNPC's
             // normal retarget interval. This makes a newly armed sheriff immediately replace
             // an NPC's current victim.
@@ -61,7 +64,9 @@ namespace Universes.murder_mystery.Server {
         }
 
         private void HandleDamage(DamageType source, IEntity attacker) {
-            if (source == DamageType.Gun && attacker is GameCharacter attackerCharacter)
+            if (localNPC.AllowAttackTargetOverrides
+                && source == DamageType.Gun
+                && attacker is GameCharacter attackerCharacter)
                 localNPC.TargetCharacter(attackerCharacter);
         }
 
@@ -84,7 +89,7 @@ namespace Universes.murder_mystery.Server {
         }
 
         private static bool IsArmedSheriff(GameCharacter character) {
-            if (character == null || character.GetTeam().team != TeamColor.Blue)
+            if (character == null || character.GetTeam().realTeam != TeamColor.Blue)
                 return false;
 
             ToolBaseShared activeTool = character.ActiveTool.Value;

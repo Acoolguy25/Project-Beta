@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace RyanAssets.Characters.Shared {
     [RequireComponent(typeof(EffectsComponent), typeof(HealthComponent))]
-    public class GameCharacter : NetworkBehaviour, IEntity {
+    public class GameCharacter : NetworkBehaviour, IEntity, ITeam {
         public const string AnonymousDisplayName = "Anonymous";
 
         [SerializeField] public Transform CharacterCamera;
@@ -55,6 +55,11 @@ namespace RyanAssets.Characters.Shared {
             remove => HealthComponent.OnDied -= value;
         }
 
+        public event Action OnRevive {
+            add => HealthComponent.OnRevive += value;
+            remove => HealthComponent.OnRevive -= value;
+        }
+
         public static string NormalizeDisplayName(string value) =>
             string.IsNullOrWhiteSpace(value) ? AnonymousDisplayName : value.Trim();
 
@@ -71,12 +76,16 @@ namespace RyanAssets.Characters.Shared {
             if (effectsComponent == null || healthComponent == null)
                 throw new MissingComponentException($"{nameof(GameCharacter)} requires {nameof(EffectsComponent)} and {nameof(HealthComponent)}.");
             healthComponent.OnDied += SharedDied;
+            healthComponent.OnRevive += SharedRevived;
         }
 
         protected virtual void OnDestroy() {
             DisplayNameSync.OnChange -= OnDisplayNameChanged;
             if (healthComponent != null)
+            {
                 healthComponent.OnDied -= SharedDied;
+                healthComponent.OnRevive -= SharedRevived;
+            }
         }
 
         private void OnDisplayNameChanged(string _, string newValue, bool __) {
@@ -106,6 +115,7 @@ namespace RyanAssets.Characters.Shared {
 
         public bool Equipped(ToolBaseShared tool) => ActiveTool.Value == tool;
         public bool IsEffectActive(CharacterEffect effect) => EffectsComponent.IsEffectActive(effect);
+
 
 #if UNITY_EDITOR
         [SerializeField] private TeamConfig teamEditor;
@@ -148,6 +158,8 @@ namespace RyanAssets.Characters.Shared {
         [Server] public virtual void Init(long hp, long maxHp) => HealthComponent.Init(hp, maxHp);
         [Server] public void Init(long hp) => HealthComponent.Init(hp);
         [Server] public void InitDefaultEffects() => EffectsComponent.AddEffect(CharacterEffect.Invul, 5f);
+        [Server] public void Revive(long hp, long maxHp) => HealthComponent.Revive(hp, maxHp);
+        [Server] public void Revive(long hp) => Revive(hp, hp);
         [Server] public virtual void Kill(DamageType source, NetworkObject sourceObject = null) {
             HealthComponent.Kill(source, sourceObject ? sourceObject.GetComponent<IEntity>() : null);
         }
@@ -164,6 +176,8 @@ namespace RyanAssets.Characters.Shared {
             UpdateTeamEditorOptions(default, teamConfig, true);
 #endif
         }
+
+        void ITeam.SetTeam(TeamConfig teamConfig) => SetTeam(teamConfig);
 
         [Server]
         private void FixedUpdate() {
@@ -200,15 +214,15 @@ namespace RyanAssets.Characters.Shared {
 #endif
 
         protected void RemoveTeamRegistry(TeamConfig team) {
-            if (team != null && TeamToCharacter.ContainsKey(team.team))
-                TeamToCharacter[team.team].Remove(this);
+            if (team != null && TeamToCharacter.ContainsKey(team.realTeam))
+                TeamToCharacter[team.realTeam].Remove(this);
         }
 
         protected void UpdateTeamRegistry(TeamConfig oldTeam, TeamConfig newTeam) {
             RemoveTeamRegistry(oldTeam);
-            if (!TeamToCharacter.ContainsKey(newTeam.team))
-                TeamToCharacter[newTeam.team] = new HashSet<GameCharacter>();
-            TeamToCharacter[newTeam.team].Add(this);
+            if (!TeamToCharacter.ContainsKey(newTeam.realTeam))
+                TeamToCharacter[newTeam.realTeam] = new HashSet<GameCharacter>();
+            TeamToCharacter[newTeam.realTeam].Add(this);
         }
 
         public virtual TeamConfig GetTeam() => Team;
@@ -218,6 +232,12 @@ namespace RyanAssets.Characters.Shared {
             if (!transform.tag.StartsWith("Dead"))
                 transform.tag = "Dead" + transform.tag;
             RemoveTeamRegistry(GetTeam());
+        }
+
+        protected virtual void SharedRevived() {
+            if (transform.tag.StartsWith("Dead"))
+                transform.tag = transform.tag.Substring("Dead".Length);
+            UpdateTeamRegistry(default, GetTeam());
         }
 
         public override void OnStopNetwork() {
@@ -263,7 +283,7 @@ public class GameCharacterEditor : UnityEditor.Editor {
 
         using (new UnityEditor.EditorGUI.DisabledScope(true)) {
             UnityEditor.EditorGUILayout.TextField("Display Name", character.DisplayName);
-            UnityEditor.EditorGUILayout.EnumPopup("Team", character.Team?.team ?? TeamColor.None);
+            UnityEditor.EditorGUILayout.EnumPopup("Team", character.Team?.realTeam ?? TeamColor.None);
             UnityEditor.EditorGUILayout.EnumPopup("Displayed Team", character.Team?.displayTeam ?? TeamColor.None);
             UnityEditor.EditorGUILayout.ObjectField("Active Tool", character.ActiveTool.Value, typeof(RyanAssets.Tools.Shared.ToolBaseShared), true);
             UnityEditor.EditorGUILayout.Vector3Field("Character Scale", character.CharacterScale.Value);

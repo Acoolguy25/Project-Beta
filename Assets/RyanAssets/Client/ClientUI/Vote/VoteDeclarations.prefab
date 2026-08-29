@@ -56,6 +56,6 @@ MonoBehaviour:
     - title: Classic
       description: Anonymous murderer(s) vs anonymous sheriff(s)
       image: {fileID: 21300000, guid: 5b0fd8522a40a554a810f072a4904f3a, type: 3}
-    - title: Unarmed Brawl
-      description: NPCs are unarmed, who can kill them all?
+    - title: Infection
+      description: Some NPCs are infected, but the virus spreads quickly!
       image: {fileID: 21300000, guid: e4f22ee5b54a42bfbbf0c4d60e1c1d42, type: 3}

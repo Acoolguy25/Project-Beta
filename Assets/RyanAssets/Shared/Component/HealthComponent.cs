@@ -19,6 +19,7 @@ namespace RyanAssets.Shared.Component {
         public bool IsFullHealth => Health.Value == MaxHealth.Value && !IsDead;
         public event Action<DamageType, IEntity> OnDamage;
         public event Action<DamageType, IEntity> OnDied;
+        public event Action OnRevive;
 
         private EffectsComponent Effects => GetComponent<EffectsComponent>();
         private IEntity Entity => GetComponent<IEntity>();
@@ -64,7 +65,7 @@ namespace RyanAssets.Shared.Component {
                     && InvulDamageTypes.Contains(damageType))
                 || (sourceEntity != null
                     && entity != null
-                    && sourceEntity.Team.team == entity.Team.team
+                    && sourceEntity.Team.realTeam == entity.Team.realTeam
                     && SharedGlobalEvents.Instance.TeamKillEnabled)
                 || IsEntityDead(sourceEntity);
         }
@@ -133,6 +134,15 @@ namespace RyanAssets.Shared.Component {
         }
 
         [Server]
+        public virtual void Revive(long hp, long maxHp) {
+            if (!IsDead)
+                return;
+            Init(hp, maxHp);
+            SharedRevive(hp, maxHp);
+            RpcRevive(hp, maxHp);
+        }
+
+        [Server]
         protected virtual void SetHealth(long hitpoints) {
             Health.Value = hitpoints;
 #if UNITY_EDITOR
@@ -147,8 +157,17 @@ namespace RyanAssets.Shared.Component {
             SharedDied(source, sourceObject ? sourceObject.GetComponent<IEntity>() : null);
         }
 
+        [ObserversRpc]
+        private void RpcRevive(long hp, long maxHp) {
+            SharedRevive(hp, maxHp);
+        }
+
         protected virtual void SharedDied(DamageType source, IEntity sourceEntity) {
             OnDied?.Invoke(source, sourceEntity);
+        }
+
+        protected virtual void SharedRevive(long hp, long maxHp) {
+            OnRevive?.Invoke();
         }
 
         private static bool IsEntityDead(IEntity entity) {

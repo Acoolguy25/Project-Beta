@@ -1,4 +1,5 @@
 using UnityEngine;
+using RyanAssets.Shared.Declarations;
 #if !UNITY_SERVER
 using System.Collections.Generic;
 using FishNet;
@@ -37,15 +38,15 @@ namespace Universes.UniverseData.dot_invaders {
 
     public sealed class DI_ClientController : MonoBehaviour {
 #if !UNITY_SERVER
-        static readonly Color[] TeamColors = {
-            new(0.20f, 0.62f, 1f),
-            new(1f, 0.29f, 0.34f),
-            new(0.27f, 0.90f, 0.48f),
-            new(1f, 0.72f, 0.20f),
-            new(0.72f, 0.38f, 1f),
-            new(0.10f, 0.90f, 0.88f),
-            new(1f, 0.36f, 0.76f),
-            new(0.72f, 0.82f, 0.20f)
+        static readonly TeamColor[] DotInvadersTeamOrder = {
+            TeamColor.Blue,
+            TeamColor.Red,
+            TeamColor.Green,
+            TeamColor.Orange,
+            TeamColor.Purple,
+            TeamColor.Cyan,
+            TeamColor.Pink,
+            TeamColor.Lime
         };
 
         [Header("View Prefabs")]
@@ -215,13 +216,12 @@ namespace Universes.UniverseData.dot_invaders {
         }
 
         static string GetTeamName(int teamId) {
-            string color = GetTeamColorName(teamId);
-            return teamId >= 100 ? $"{color} NPC TEAM" : $"{color} TEAM";
+            string name = GetDotInvadersTeam(teamId).ToString().ToUpperInvariant();
+            return teamId >= 100 ? $"{name} NPC TEAM" : $"{name} TEAM";
         }
 
-        static string GetTeamColorName(int teamId) {
-            string[] names = { "BLUE", "RED", "GREEN", "ORANGE", "PURPLE", "CYAN", "PINK", "LIME" };
-            return names[Mathf.Abs(teamId) % names.Length];
+        static TeamColor GetDotInvadersTeam(int teamId) {
+            return teamId < 0 ? TeamColor.None : DotInvadersTeamOrder[teamId % DotInvadersTeamOrder.Length];
         }
 
         void ResizeViews<T>(List<T> views, int count, GameObject prefab) where T : Component {
@@ -384,9 +384,7 @@ namespace Universes.UniverseData.dot_invaders {
         }
 
         static Color GetTeamColor(int teamId) {
-            return teamId < 0
-                ? new Color(0.42f, 0.46f, 0.54f)
-                : TeamColors[teamId % TeamColors.Length];
+            return TeamConfig.TeamToColor(GetDotInvadersTeam(teamId));
         }
 
         void OnDestroy() {

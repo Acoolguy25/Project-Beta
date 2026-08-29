@@ -78,7 +78,26 @@ namespace RyanAssets.Tools.Shared {
         public int hitDamage => hitDamageSync.Value;
         public float attackCooldown => attackCooldownSync.Value;
         public float reloadDuration => reloadDurationSync.Value;
-        public int maxClipAmmo => maxClipAmmoSync.Value;
+        public int maxClipAmmo {
+            get => maxClipAmmoSync.Value;
+            set => maxClipAmmoSync.Value = value;
+        }
+
+        /// <summary>
+        /// Copies the Inspector tuning values to the authoritative runtime stats.
+        /// This is intentionally server-only: the SyncVars then replicate the
+        /// changed values to every client that has this tool spawned.
+        /// </summary>
+        public void ApplyInitialStatsLive() {
+            if (!Application.isPlaying || !IsSpawned || !IsServerStarted)
+                return;
+
+            staminaCostSync.Value = staminaCostInit;
+            hitDamageSync.Value = hitDamageInit;
+            attackCooldownSync.Value = attackCooldownInit;
+            reloadDurationSync.Value = reloadDurationInit;
+            maxClipAmmoSync.Value = maxClipAmmoInit;
+        }
 
         [SerializeField]
         public GameObject weaponRoot;
@@ -235,6 +254,7 @@ namespace RyanAssets.Tools.Shared {
         }
         void SpawnClientScript() {
             if (clientScript != "") {
+                currentAmmo = maxClipAmmo;
                 Type clientScriptType = Type.GetType(clientScript);
                 gameObject.AddComponent(clientScriptType);
             }
@@ -243,6 +263,13 @@ namespace RyanAssets.Tools.Shared {
             weaponRoot = transform.GetChild(0).gameObject;
             audioSource = weaponRoot.GetComponent<AudioSource>();
         }
+#if UNITY_EDITOR
+        void OnValidate() {
+            // Runtime Inspector edits change serialized fields, not SyncVars.
+            // Mirror them immediately when this is the spawned server copy.
+            ApplyInitialStatsLive();
+        }
+#endif
         public override void OnStopNetwork() {
             if (equipped)
                 Unequip();
@@ -286,3 +313,31 @@ namespace RyanAssets.Tools.Shared {
         }
     }
 }
+
+#if UNITY_EDITOR
+[UnityEditor.CustomEditor(typeof(RyanAssets.Tools.Shared.ToolBaseShared), true)]
+public class ToolBaseSharedEditor : UnityEditor.Editor {
+    public override bool RequiresConstantRepaint() => UnityEngine.Application.isPlaying;
+
+    public override void OnInspectorGUI() {
+        DrawDefaultInspector();
+
+        if (!UnityEngine.Application.isPlaying)
+            return;
+
+        var tool = (RyanAssets.Tools.Shared.ToolBaseShared)target;
+        UnityEditor.EditorGUILayout.Space();
+        UnityEditor.EditorGUILayout.LabelField("Live Runtime Stats", UnityEditor.EditorStyles.boldLabel);
+        using (new UnityEditor.EditorGUI.DisabledScope(true)) {
+            UnityEditor.EditorGUILayout.IntField("Stamina Cost", tool.staminaCost);
+            UnityEditor.EditorGUILayout.IntField("Hit Damage", tool.hitDamage);
+            UnityEditor.EditorGUILayout.FloatField("Attack Cooldown", tool.attackCooldown);
+            UnityEditor.EditorGUILayout.FloatField("Reload Duration", tool.reloadDuration);
+            UnityEditor.EditorGUILayout.IntField("Max Clip Ammo", tool.maxClipAmmo);
+        }
+
+        if (tool.IsSpawned && !tool.IsServerStarted)
+            UnityEditor.EditorGUILayout.HelpBox("Edit init values in the server Editor to apply them live to all clients.", UnityEditor.MessageType.Info);
+    }
+}
+#endif

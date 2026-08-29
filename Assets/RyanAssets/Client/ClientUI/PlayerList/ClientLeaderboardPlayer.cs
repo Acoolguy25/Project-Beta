@@ -61,7 +61,7 @@ namespace RyanAssets.Client.ClientUI.PlayerList {
             UpdatePlayerDisplay();
         }
         public void UpdatePlayerDisplay() {
-            TeamColor team = player.IsOwner ? player.team.Value.team : player.team.Value.displayTeam;
+            TeamColor team = player.IsOwner ? player.team.Value.realTeam : player.team.Value.displayTeam;
             string playerName = player.username.Value;
 
             Color32 color = TeamConfig.TeamToColor(team);

@@ -1,5 +1,6 @@
 #if !UNITY_SERVER
 using RyanAssets.Characters.Client;
+using RyanAssets.Client.ClientUI.GameSettings;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
 using UnityEngine;
@@ -10,7 +11,8 @@ namespace RyanAssets.Cameras
     public class TwoDimController : ICamera
     {
         [Header("Movement")]
-        [SerializeField, Min(0f)] private float moveSpeed = 10f;
+        [SerializeField, Min(0f)] private float moveSpeed = 20f;
+        [SerializeField, Min(1f)] private float sprintSpeedMultiplier = 2f;
 
         [Header("View")]
         [SerializeField] private Vector3 initialFocusPoint = Vector3.zero;
@@ -62,6 +64,8 @@ namespace RyanAssets.Cameras
             Vector2 input = CharacterMovement.GetAdaptedMoveVector(movementInput);
             float inputMagnitude = movementInput.analogMovement ? Mathf.Clamp01(input.magnitude) : 1f;
             input = input.sqrMagnitude > 0f ? input.normalized * inputMagnitude : Vector2.zero;
+            input.x *= GameSettingsClient.GetSettingValue<int>("HorizontalTurnSensitivity") / 100f;
+            input.y *= GameSettingsClient.GetSettingValue<int>("VerticalTurnSensitivity") / 100f;
 
             Vector3 screenRight = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
             Vector3 screenUp = Vector3.ProjectOnPlane(transform.up, Vector3.up).normalized;
@@ -70,7 +74,9 @@ namespace RyanAssets.Cameras
             if (screenUp.sqrMagnitude < Mathf.Epsilon)
                 screenUp = Vector3.forward;
 
-            unsnappedFocusPoint += (screenRight * input.x + screenUp * input.y) * moveSpeed * Time.deltaTime;
+            float speedMultiplier = movementInput.sprint ? sprintSpeedMultiplier : 1f;
+            unsnappedFocusPoint += (screenRight * input.x + screenUp * input.y)
+                * moveSpeed * speedMultiplier * Time.deltaTime;
             unsnappedFocusPoint = ClampToBounds(unsnappedFocusPoint);
         }
 
@@ -83,6 +89,7 @@ namespace RyanAssets.Cameras
         {
             gridSize = Mathf.Max(0.0001f, gridSize);
             cameraDistance = Mathf.Max(1f, cameraDistance);
+            sprintSpeedMultiplier = Mathf.Max(1f, sprintSpeedMultiplier);
             maximumBounds = Vector2.Max(minimumBounds, maximumBounds);
         }
 

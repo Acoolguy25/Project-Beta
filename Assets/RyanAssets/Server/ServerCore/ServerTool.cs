@@ -3,12 +3,14 @@ using FishNet.Connection;
 using FishNet.Object;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
+using RyanAssets.Item.FloatingTool;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Tools.Shared;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
-using RyanAssets.Item.FloatingTool;
 
 namespace RyanAssets.Server.ServerCore
 {
@@ -54,7 +56,7 @@ namespace RyanAssets.Server.ServerCore
             }
             tools[toolBase.toolEnum] = toolBase;
         }
-        public ToolBaseShared SpawnTool(NetworkObject networkObject, ToolEnum tool) {
+        public ToolBaseShared SpawnTool(NetworkObject networkObject, ToolEnum tool, Action<ToolBaseShared> onSpawned = null) {
             if (networkObject == null || !networkObject.IsSpawned) {
                 Debug.LogWarning($"Tried to add tool {tool} to an unspawned character");
                 return null;
@@ -73,6 +75,7 @@ namespace RyanAssets.Server.ServerCore
             toolBase.transform.localRotation = Quaternion.identity;
             toolBase.connectedCharacter = networkObject.GetComponent<GameCharacter>();
             InitTool(toolBase);
+            onSpawned?.Invoke(toolBase);
             InstanceFinder.ServerManager.Spawn(toolClone, ownerConnection: networkObject.Owner);
             TrackTool(networkObject, toolBase);
             return toolBase;
@@ -86,21 +89,22 @@ namespace RyanAssets.Server.ServerCore
                 return null;
             }
         }
-        public void DespawnTool(NetworkConnection player, ToolEnum tool) {
+        public bool DespawnTool(NetworkConnection player, ToolEnum tool) {
             if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {
-                DespawnTool(character.NetworkObject, tool);
+                return DespawnTool(character.NetworkObject, tool);
             }
+            return false;
         }
-        public void DespawnTool(NetworkObject character, ToolEnum tool) {
+        public bool DespawnTool(NetworkObject character, ToolEnum tool) {
             if (character == null)
-                return;
+                return false;
 
             if (TryGetTrackedTool(character, tool, out ToolBaseShared toolBase)) {
                 characterTools[character].Remove(tool);
                 if (characterTools[character].Count == 0)
                     characterTools.Remove(character);
                 InstanceFinder.ServerManager.Despawn(toolBase.gameObject);
-                return;
+                return true;
             }
 
             // Compatibility cleanup for tools created before they were tracked.
@@ -108,6 +112,7 @@ namespace RyanAssets.Server.ServerCore
                 if (attachedTool.toolEnum == tool && attachedTool.IsSpawned)
                     InstanceFinder.ServerManager.Despawn(attachedTool.gameObject);
             }
+            return false;
         }
         public void DespawnTools(NetworkObject character) {
             if (character == null)
@@ -187,10 +192,34 @@ namespace RyanAssets.Server.ServerCore
             }
             return null;
         }
-        public void RemoveTool(NetworkConnection player, ToolEnum tool) {
+        public bool RemoveTool(NetworkConnection player, ToolEnum tool) {
             if (PlayerData.Players.TryGetValue(player, out PlayerData stats)) {
                 stats.tools.Remove(tool);
-                DespawnTool(player, tool);
+                return DespawnTool(player, tool);
+            }
+            return false;
+        }
+
+        void _clearTools(GameCharacter character) {
+            foreach (ToolBaseShared tool in character.Tools) {
+                DespawnTool(character, tool.toolEnum);
+            }
+        }
+        public void ClearTools(GameCharacter character) {
+            if (character != null) {
+                ClearTools(character.Owner);
+            }
+            else {
+                _clearTools(character);
+            }
+        }
+
+        public void ClearTools(NetworkConnection player) {
+            if (PlayerData.Players.TryGetValue(player, out PlayerData stats)) {
+                if (LocalCharacter.Characters.TryGetValue(player, out LocalCharacter character)) {
+                    _clearTools(character);
+                }
+                stats.tools.Clear();
             }
         }
 

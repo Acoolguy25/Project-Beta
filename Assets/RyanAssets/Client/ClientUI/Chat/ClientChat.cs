@@ -55,6 +55,7 @@ namespace RyanAssets.Client.ClientUI.Chat {
         }
         private void OnCreateMessage(GameObject prefab, LocalChatMessage message) {
             TextMeshProUGUI usernameText = prefab.GetComponent<TextMeshProUGUI>();
+            usernameText.richText = true;
             string displayText = message.message;
             if (message.player == null) { // System / Custom Message
                 switch (message.type) {

@@ -5,9 +5,12 @@ using UnityEngine;
 using System.Collections.Generic;
 using RyanAssets.DataService;
 using RyanAssets.Shared.Declarations;
+using FishNet.Component.Transforming;
 
 namespace RyanAssets.Characters.Shared {
     public class LocalCharacter : GameCharacter {
+        private const float RespawnVerticalOffset = 0.05f;
+
         public static Dictionary<NetworkConnection, LocalCharacter> Characters = new();
         public void InstantiateSelf(NetworkConnection prevOwner) {
             if (Characters.TryGetValue(prevOwner, out LocalCharacter newCharacter) && newCharacter != this)
@@ -90,6 +93,42 @@ namespace RyanAssets.Characters.Shared {
         protected override void SharedDied(DamageType source, IEntity sourceEntity) {
             base.SharedDied(source, sourceEntity);
         }
+
+        [Server]
+        public bool ReviveAtPosition(long hp, Vector3 position) {
+#if UNITY_SERVER
+            if (!IsDead)
+                return false;
+
+            Vector3 respawnPosition = position + Vector3.down * RespawnVerticalOffset;
+            Revive(hp);
+            ApplyRespawnPosition(respawnPosition);
+            RpcApplyRespawnPosition(respawnPosition);
+            return true;
+#else
+            return false;
+#endif
+        }
+
+        [ObserversRpc]
+        private void RpcApplyRespawnPosition(Vector3 position) {
+            ApplyRespawnPosition(position);
+        }
+
+        private void ApplyRespawnPosition(Vector3 position) {
+            transform.position = position;
+
+            if (TryGetComponent(out Rigidbody rootBody)) {
+                rootBody.position = position;
+                rootBody.linearVelocity = Vector3.zero;
+                rootBody.angularVelocity = Vector3.zero;
+            }
+
+            Physics.SyncTransforms();
+            if (TryGetComponent(out NetworkTransform networkTransform))
+                networkTransform.Teleport();
+        }
+
         public override void OnStopNetwork() {
             base.OnStopNetwork();
             Characters.Remove(Owner);
@@ -99,6 +138,22 @@ namespace RyanAssets.Characters.Shared {
         }
         public override TeamConfig GetTeam() {
             return PlayerData.GetPlayerData(Owner)?.team.Value ?? new();
+        }
+    }
+
+    public static class PlayerDataCharacterExtensions {
+        public static LocalCharacter GetCharacter(this PlayerData playerData) {
+            if (playerData == null)
+                return null;
+
+            return LocalCharacter.Characters.TryGetValue(playerData.Owner, out LocalCharacter character)
+                ? character
+                : null;
+        }
+
+        public static bool TryGetCharacter(this PlayerData playerData, out LocalCharacter character) {
+            character = playerData.GetCharacter();
+            return character != null;
         }
     }
 }

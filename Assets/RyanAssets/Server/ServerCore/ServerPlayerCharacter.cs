@@ -61,7 +61,10 @@ namespace RyanAssets.Server.ServerCore {
         }
         public async void OnPlayerCharacterDie(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){
             await Awaitable.WaitForSecondsAsync(RespawnTime, cancellationToken);
-            if (!cancellationToken.IsCancellationRequested && ClientToCharacter.TryGetValue(player, out LocalCharacter localChar) && localChar.transform == character){
+            if (!cancellationToken.IsCancellationRequested
+                && ClientToCharacter.TryGetValue(player, out LocalCharacter localChar)
+                && localChar.transform == character
+                && localChar.IsDead) {
                 DespawnPlayerCharacter(player);
                 if (player.IsValid) // Make sure bro didn't leave
                     SpawnPlayerCharacter(player);

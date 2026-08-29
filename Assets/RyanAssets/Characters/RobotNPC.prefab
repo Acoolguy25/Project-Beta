@@ -4131,8 +4131,8 @@ GameObject:
   - component: {fileID: 5344553774358299964}
   - component: {fileID: -291742417468123223}
   - component: {fileID: 2862851711235735417}
-  - component: {fileID: 7091241065695170515}
   - component: {fileID: 3857622150104325183}
+  - component: {fileID: 8773375834170994751}
   m_Layer: 12
   m_Name: RobotNPC
   m_TagString: NPC
@@ -4168,7 +4168,7 @@ Animator:
   m_GameObject: {fileID: 6865002775998532502}
   m_Enabled: 1
   m_Avatar: {fileID: 9000000, guid: 73ffbc06802a247cfb1b26f4ee67eba8, type: 3}
-  m_Controller: {fileID: 9100000, guid: 40db3173a05ae3242b1c182a09b0a183, type: 2}
+  m_Controller: {fileID: 9100000, guid: c9b30a59aa737cf498800dfa9e7013fb, type: 2}
   m_CullingMode: 1
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
@@ -4276,7 +4276,7 @@ MonoBehaviour:
   - {fileID: 8134790421318710112}
   - {fileID: 8134790421318710113}
   - {fileID: 2862851711235735417}
-  - {fileID: 7091241065695170515}
+  - {fileID: 8773375834170994751}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -4287,7 +4287,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584141616877377759
+  _initializedTimestamp: -8584136335477564371
 --- !u!114 &2508271702602764159
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4381,8 +4381,10 @@ MonoBehaviour:
   CharacterCamera: {fileID: 7279864874766871779}
   effectsComponent: {fileID: 8134790421318710112}
   healthComponent: {fileID: 8134790421318710113}
+  fallHeightEnabled: 1
+  fallenPartsDestroyHeight: 0
   teamEditor:
-    team: 1
+    realTeam: 1
     displayTeam: 1
 --- !u!114 &8134790421318710112
 MonoBehaviour:
@@ -4475,8 +4477,10 @@ MonoBehaviour:
   shaderVariants:
   - {fileID: 2100000, guid: ee992a4b0874bd8468f8b0f18394cfd7, type: 2}
   - {fileID: 2100000, guid: a6ccb999c762eac44bf6d16ae0ccebf8, type: 2}
+  - {fileID: 2100000, guid: cb35775081a2b714ab55df83e9c70e2c, type: 2}
   - {fileID: 2100000, guid: c08cc850b0f8fde49b68ee5f253dd660, type: 2}
   - {fileID: 2100000, guid: a49c0d754a9cf4c4a849708d32e0d772, type: 2}
+  - {fileID: 2100000, guid: 70f369d782899534cb2c34c9b01300b8, type: 2}
   - {fileID: 2100000, guid: 06d2f46ad7e0d0e4cabbf8d1eb7fe439, type: 2}
   - {fileID: 2100000, guid: 52491b03b6789e341b175d7475ef1ea9, type: 2}
   - {fileID: 2100000, guid: 787650c4434ab4d4da8514c0a6d407ee, type: 2}
@@ -4486,35 +4490,6 @@ MonoBehaviour:
   - {fileID: 2100000, guid: e8ba7e19805871a4bbc9c210d9c04517, type: 2}
   targetMaterialSlot: 0
   randomizeOnStart: 1
---- !u!114 &7091241065695170515
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6865002775998532502}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0ff2350129a577a4c8c76d71116eb639, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.CharacterAnimator
-  _componentIndexCache: 7
-  _addedNetworkObject: {fileID: 9155375541221003514}
-  _networkObjectCache: {fileID: 9155375541221003514}
-  LandingAudioClip: {fileID: 8300000, guid: ff697d3070687ce4583faa0561a145a2, type: 3}
-  FootstepAudioClips:
-  - {fileID: 8300000, guid: 72f526a6a9890f643a88e85a61c86c8a, type: 3}
-  - {fileID: 8300000, guid: 85016e0f2b01da248b9663dd49a161b0, type: 3}
-  - {fileID: 8300000, guid: 186de84b3207156479abe98f4958fed0, type: 3}
-  - {fileID: 8300000, guid: 1a91fcd19acf1e54bba0945d9f390849, type: 3}
-  - {fileID: 8300000, guid: 14e8a8d2158bec840b56c54f5266e692, type: 3}
-  - {fileID: 8300000, guid: 29841e7d5bbfb5b419c9ad16ca8bc4c1, type: 3}
-  - {fileID: 8300000, guid: dd1af302b8902684d9381de1f2d3a5af, type: 3}
-  - {fileID: 8300000, guid: 67c8b33e424ccdc4486edf538ab91c5a, type: 3}
-  - {fileID: 8300000, guid: 274649b0e221539409070ebf6c18918b, type: 3}
-  - {fileID: 8300000, guid: a3194b8bbc96ef84fab1f98f4b7dae3e, type: 3}
-  GroundCheck: 0
-  Grounded: 0
 --- !u!82 &3857622150104325183
 AudioSource:
   m_ObjectHideFlags: 0
@@ -4612,6 +4587,35 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &8773375834170994751
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ff2350129a577a4c8c76d71116eb639, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.CharacterAnimator
+  _componentIndexCache: 7
+  _addedNetworkObject: {fileID: 9155375541221003514}
+  _networkObjectCache: {fileID: 9155375541221003514}
+  LandingAudioClip: {fileID: 8300000, guid: ff697d3070687ce4583faa0561a145a2, type: 3}
+  FootstepAudioClips:
+  - {fileID: 8300000, guid: 72f526a6a9890f643a88e85a61c86c8a, type: 3}
+  - {fileID: 8300000, guid: 85016e0f2b01da248b9663dd49a161b0, type: 3}
+  - {fileID: 8300000, guid: 186de84b3207156479abe98f4958fed0, type: 3}
+  - {fileID: 8300000, guid: 1a91fcd19acf1e54bba0945d9f390849, type: 3}
+  - {fileID: 8300000, guid: 14e8a8d2158bec840b56c54f5266e692, type: 3}
+  - {fileID: 8300000, guid: 29841e7d5bbfb5b419c9ad16ca8bc4c1, type: 3}
+  - {fileID: 8300000, guid: dd1af302b8902684d9381de1f2d3a5af, type: 3}
+  - {fileID: 8300000, guid: 67c8b33e424ccdc4486edf538ab91c5a, type: 3}
+  - {fileID: 8300000, guid: 274649b0e221539409070ebf6c18918b, type: 3}
+  - {fileID: 8300000, guid: a3194b8bbc96ef84fab1f98f4b7dae3e, type: 3}
+  GroundCheck: 0
+  Grounded: 0
 --- !u!1 &6939272679828119506
 GameObject:
   m_ObjectHideFlags: 0

@@ -2418,7 +2418,7 @@ MonoBehaviour:
   fallHeightEnabled: 1
   fallenPartsDestroyHeight: 0
   teamEditor:
-    team: 1
+    realTeam: 1
     displayTeam: 1
 --- !u!114 &2508271702602764159
 MonoBehaviour:
@@ -2532,8 +2532,10 @@ MonoBehaviour:
   shaderVariants:
   - {fileID: 2100000, guid: ee992a4b0874bd8468f8b0f18394cfd7, type: 2}
   - {fileID: 2100000, guid: a6ccb999c762eac44bf6d16ae0ccebf8, type: 2}
+  - {fileID: 2100000, guid: cb35775081a2b714ab55df83e9c70e2c, type: 2}
   - {fileID: 2100000, guid: c08cc850b0f8fde49b68ee5f253dd660, type: 2}
   - {fileID: 2100000, guid: a49c0d754a9cf4c4a849708d32e0d772, type: 2}
+  - {fileID: 2100000, guid: 70f369d782899534cb2c34c9b01300b8, type: 2}
   - {fileID: 2100000, guid: 06d2f46ad7e0d0e4cabbf8d1eb7fe439, type: 2}
   - {fileID: 2100000, guid: 52491b03b6789e341b175d7475ef1ea9, type: 2}
   - {fileID: 2100000, guid: 787650c4434ab4d4da8514c0a6d407ee, type: 2}

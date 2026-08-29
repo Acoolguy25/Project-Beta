@@ -87,7 +87,6 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 currentCharacter.TeamSync.OnChange -= OnPlayerTeamChanged;
                 currentCharacter.Health.OnChange -= OnPlayerHealthChanged;
                 currentCharacter.MaxHealth.OnChange -= OnPlayerHealthChanged;
-                currentCharacter.OnDied -= OnPlayerDied;
                 currentCharacter.MyGameCharacterRemoved -= OnMyGameCharacterRemoved;
             }
 
@@ -108,7 +107,6 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 currentCharacter.TeamSync.OnChange += OnPlayerTeamChanged;
                 currentCharacter.Health.OnChange += OnPlayerHealthChanged;
                 currentCharacter.MaxHealth.OnChange += OnPlayerHealthChanged;
-                currentCharacter.OnDied += OnPlayerDied;
                 currentCharacter.MyGameCharacterRemoved += OnMyGameCharacterRemoved;
 
                 controller.SetCameraTarget(character);
@@ -138,9 +136,6 @@ namespace RyanAssets.Client.ClientUI.Spectate
         }
         void OnPlayerXPChanged(ulong oldVal, ulong newVal, bool asServer) {
             UpdatePlayerLevel();
-        }
-        void OnPlayerDied(DamageType source, IEntity sourceEntity) {
-            AdvancePosition(1);
         }
         void OnMyGameCharacterRemoved(GameCharacter character) {
             AdvancePosition(1);

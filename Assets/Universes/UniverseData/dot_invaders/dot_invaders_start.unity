@@ -258,6 +258,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Dot Invaders Board
       objectReference: {fileID: 0}
+    - target: {fileID: 3923722423940765027, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4294960849
+      objectReference: {fileID: 0}
+    - target: {fileID: 3923722423940765027, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
     - target: {fileID: 6318334348915651464, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -302,10 +310,53 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1876968901638892953, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 767247297}
     - targetCorrespondingSourceObject: {fileID: 2672367727000605459, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
   m_SourcePrefab: {fileID: 100100000, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
+--- !u!1 &767247294 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1876968901638892953, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
+  m_PrefabInstance: {fileID: 767247293}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &767247295 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3074514017627796893, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
+  m_PrefabInstance: {fileID: 767247293}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 767247294}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53e0e41a837fb7649a067aa197e7001a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.DI_HomeBaseTeleporter
+--- !u!114 &767247296 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4583222241009846999, guid: 04c28b4f9e3519d43bb3b12197eeae9b, type: 3}
+  m_PrefabInstance: {fileID: 767247293}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 767247294}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 06320a99f2323ad4ab0c7803a9a0ec98, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.DI_ClientController
+--- !u!1652712579 &767247297
+MultiplayerRolesData:
+  m_ObjectHideFlags: 2
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 767247294}
+  m_GameObjectRolesMask: 1
+  m_ComponentsRolesMasks:
+  - m_Object: {fileID: 767247295}
+    m_RolesMask: 1
+  - m_Object: {fileID: 767247296}
+    m_RolesMask: 1
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0

@@ -63,6 +63,8 @@ namespace RyanAssets.Cameras
                         return;
                     }
                 }
+                activeCamera?.DisableCamera(null, default);
+                activeCamera?.gameObject.SetActive(false);
                 activeIndex = -1; // if not set one, then remind it to set it active later
             }
         }
@@ -86,6 +88,7 @@ namespace RyanAssets.Cameras
         private void OnCharacterAdded(LocalCharacter localCharacter)
         {
             localCharacter.OnDied += OnCharacterDied;
+            localCharacter.OnRevive += OnCharacterRevived;
             SetCameraAvailable(GameCameraType.SpectateCamera, false);
             SetCameraAvailable(GameCameraType.DeathCamera, false);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, true);
@@ -95,7 +98,18 @@ namespace RyanAssets.Cameras
             SetCameraAvailable(GameCameraType.DeathCamera, true);
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
         }
+        private void OnCharacterRevived() {
+            SetCameraAvailable(GameCameraType.SpectateCamera, false);
+            SetCameraAvailable(GameCameraType.DeathCamera, false);
+            SetCameraAvailable(GameCameraType.ThirdPersonCamera, true);
+            if (LocalPlayer.Character)
+                SetCameraTarget(LocalPlayer.Character);
+        }
         private void OnCharacterRemoved(LocalCharacter localCharacter) {
+            if (localCharacter != null) {
+                localCharacter.OnDied -= OnCharacterDied;
+                localCharacter.OnRevive -= OnCharacterRevived;
+            }
             SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
             SetCameraAvailable(GameCameraType.DeathCamera, false);
             SetCameraAvailable(GameCameraType.SpectateCamera, true);
@@ -134,8 +148,7 @@ namespace RyanAssets.Cameras
             LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
             playerData.cameraTypes.OnChange -= OnCameraTypeSyncChanged;
 
-            SetCameraAvailable(GameCameraType.SpectateCamera, false);
-            SetCameraAvailable(GameCameraType.ThirdPersonCamera, false);
+            OnCameraTypeSyncChanged(SyncHashSetOperation.Clear, default, false);
             SetCameraTarget(null);
         }
         private void Start() {
@@ -166,8 +179,10 @@ namespace RyanAssets.Cameras
             PlayerData.OnMyPlayerRemoved -= OnMyPlayerRemoved;
             //ClientConnector.OnConnected -= OnConnected;
             //ClientConnector.OnDisconnected -= OnDisconnected;
-            if (LocalPlayer.Character)
+            if (LocalPlayer.Character) {
                 LocalPlayer.Character.OnDied -= OnCharacterDied;
+                LocalPlayer.Character.OnRevive -= OnCharacterRevived;
+            }
             if (PlayerData.localData)
                 OnMyPlayerRemoved(PlayerData.localData);
         }

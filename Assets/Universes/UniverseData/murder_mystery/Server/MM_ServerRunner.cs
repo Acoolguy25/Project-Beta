@@ -24,9 +24,14 @@ namespace Universes.murder_mystery.Server {
     enum MM_Mode {
         NPCsVsPlayers,
         Classic,
-        Unarmed
+        Infection,
+        Unarmed, // Deprecated
     }
     public class MM_ServerRunner : ServerRunner {
+        // Infection needs a broad, team-neutral search radius so infected NPCs actively
+        // hunt both innocents and sheriffs without restoring the sheriff-only override.
+        private const float InfectionAttackDetectionMultiplier = 6f;
+
         [SerializeField]
         GameObject RobotNPC_Prefab;
         [SerializeField]
@@ -47,7 +52,7 @@ namespace Universes.murder_mystery.Server {
         public static Action UpdateGameBarEvent;
         bool gameInProgress;
         string[] alienNames;
-        int startNPCs, startPlayers;
+        int startNPCs, startPlayers, gameDurationLeft;
         int startMurd, startSheriff, startInnocent;
         protected override void Awake(){
             base.Awake();
@@ -78,13 +83,26 @@ namespace Universes.murder_mystery.Server {
             }
         }
         bool CanSpawnFunction(NetworkConnection player) {
-            return !gameInProgress || mode != MM_Mode.Classic;
+            if (!gameInProgress)
+                return true;
+            if (mode == MM_Mode.Infection) {
+                PlayerData playerData = PlayerData.GetPlayerData(player);
+                //return gameDurationLeft > 30
+                //    && playerData != null
+                //    && playerData.team.Value.realTeam != TeamColor.Red;
+                return false;
+            }
+
+            return mode switch {
+                MM_Mode.Classic => false,
+                _ => true
+            };
         }
         Vector3 SpawnLocationFunction(NetworkConnection player) {
             return DebugSingleNpc.Value ? new Vector3(1120.56995f, 12.12100029f, 1008.34003f) : ServerPathfinding.GetRandomPosition();
         }
         protected void OnSetPlayerTeam(PlayerData player, TeamConfig teamConfig) {
-            switch (teamConfig.team) {
+            switch (teamConfig.realTeam) {
                 case TeamColor.Red: // Murderer
                     player.staminaMax.Value = 165f;
                     player.staminaRegen.Value = 25f;
@@ -101,6 +119,7 @@ namespace Universes.murder_mystery.Server {
         }
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
+            player.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
             //data.leaderboard.AddRange(new[] { 0 });
             //data.tools.AddRange(new[] { ToolEnum.Dagger });
             //ServerTool.Instance.AddTool(player, ToolEnum.Dagger);
@@ -112,7 +131,10 @@ namespace Universes.murder_mystery.Server {
                     player.SetPlayerTeam(new TeamConfig(TeamColor.Blue, TeamColor.Blue));
                     break;
                 case MM_Mode.Classic:
-                    player.SetPlayerTeam(new TeamConfig(TeamColor.Ghost, TeamColor.Ghost));
+                    player.SetPlayerTeam(new TeamConfig(TeamColor.White, TeamColor.White));
+                    break;
+                case MM_Mode.Infection:
+                    player.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
                     break;
                 case MM_Mode.Unarmed:
                     player.SetPlayerTeam(new TeamConfig(TeamColor.Blue, TeamColor.Blue));
@@ -130,6 +152,9 @@ namespace Universes.murder_mystery.Server {
                 case MM_Mode.Classic:
                     // Classic roles are assigned once in SpawnPlayers. Late joins
                     // cannot spawn while a Classic round is already in progress.
+                    break;
+                case MM_Mode.Infection:
+                    player.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
                     break;
             }
             player.walkSpeed.Value = 16f;
@@ -160,13 +185,13 @@ namespace Universes.murder_mystery.Server {
             GameCharacter killerCharacter = killer as GameCharacter;
             if (mode == MM_Mode.Classic) {
                 if (killerCharacter != null) {
-                    if (killerCharacter.Owner.IsValid && source == DamageType.Gun && character.GetTeam().team != TeamColor.Red) {
+                    if (killerCharacter.Owner.IsValid && source == DamageType.Gun && character.GetTeam().realTeam != TeamColor.Red) {
                         //ServerTool.Instance.DespawnTool(killerCharacter.Owner, ToolEnum.Pistol);
                         ToolBaseShared tool = ServerTool.Instance.GetTool(killerCharacter.Owner, ToolEnum.Pistol);
                         tool.UpdateServerCooldown(20f);
                         //tool.
                     }
-                    if (killerCharacter.GetTeam().team == TeamColor.Red) {
+                    if (killerCharacter.GetTeam().realTeam == TeamColor.Red) {
                         killerCharacter.HealMaxHealth(character.Owner.IsValid ? 60 : 20);
                     }
                 }
@@ -174,7 +199,7 @@ namespace Universes.murder_mystery.Server {
                     ServerTool.Instance.SpawnFloatingTool(ToolEnum.Pistol, character.transform.position + character.transform.lossyScale.y / 2 * Vector3.up).OnToolCollectedFunc = OnTryCollectToolFunc;
                 if (character.Tools.Any((tool) => tool.toolEnum == ToolEnum.Dagger))
                     ServerTool.Instance.SpawnFloatingTool(ToolEnum.Dagger, character.transform.position + character.transform.lossyScale.y / 2 * Vector3.up).OnToolCollectedFunc = OnTryCollectToolFunc;
-                if (character.GetTeam().team == TeamColor.Blue) {
+                if (character.GetTeam().realTeam == TeamColor.Blue) {
                     if (GetTeamCount(TeamColor.Blue) == 0) {
                         foreach (GameCharacter gameCharacter in GameCharacter.TeamToCharacter[TeamColor.Red]) {
                             if (gameCharacter.TryGetComponent<LocalNPC>(out LocalNPC localNPC)) {
@@ -183,8 +208,20 @@ namespace Universes.murder_mystery.Server {
                         }
                     }
                 }
+                character.SetRealColor(TeamColor.White);
+            } else if (mode == MM_Mode.Infection) {
+                if (killerCharacter != null
+                    && killerCharacter.GetTeam().realTeam == TeamColor.Red
+                    && character.GetTeam().realTeam != TeamColor.Red) {
+                    // Capture this before the delayed revive. The owner-authoritative
+                    // root can continue changing while the character is ragdolled.
+                    ReviveAsInfected(character, character.transform.position);
+                }
+                else {
+                    character.SetRealColor(TeamColor.White);
+                }
             }
-            if (killerCharacter != null) {
+            if (killerCharacter != null && killerCharacter.Owner.IsValid) {
                 switch (mode) {
                     case MM_Mode.Classic:
                         switch (source) {
@@ -203,8 +240,37 @@ namespace Universes.murder_mystery.Server {
             }
             UpdateGameBarEvent?.Invoke();
         }
+        async void ReviveAsInfected(GameCharacter character, Vector3 deathPosition) {
+            // HealthComponent sends the death RPC after its server-side OnDied event.
+            // Wait one frame so observers process death before the revive RPC, rather
+            // than receiving the two lifecycle notifications in reverse order.
+            character.SetTeam(new TeamConfig(TeamColor.Red));
+            character.GetComponent<RobotColor>().ApplyColor(TeamColor.Green);
+            UpdateGameBarEvent?.Invoke();
+            await UniTask.Yield();
+            await UniTask.WaitForSeconds(3f);
+            if (character == null || !character.IsDead || mode != MM_Mode.Infection)
+                return;
+
+            if (character.Owner.IsValid)
+                ServerTool.Instance.ClearTools(character);
+            else
+                ServerTool.Instance.DespawnTools(character.NetworkObject);
+
+            if (character is LocalCharacter localCharacter)
+                localCharacter.ReviveAtPosition(75, deathPosition);
+            else
+                character.Revive(75);
+
+            if (character.TryGetComponent(out MM_LocalNPC mmLocalNPC)) {
+                character.GetComponent<LocalNPC>().AttackDetectionRadius *= InfectionAttackDetectionMultiplier;
+                mmLocalNPC.InitializeAttackState();
+            } else
+                ServerTool.Instance.SpawnTool(character, ToolEnum.Dagger);
+
+        }
         bool OnTryCollectToolFunc(NetworkBehaviour collectObject, ToolEnum tool) {
-            if (collectObject.TryGetComponent<GameCharacter>(out GameCharacter gameCharacter) && gameCharacter.Tools.Length == 0 && gameCharacter.GetTeam().team == TeamColor.Green) {
+            if (collectObject.TryGetComponent<GameCharacter>(out GameCharacter gameCharacter) && gameCharacter.Tools.Length == 0 && gameCharacter.GetTeam().realTeam == TeamColor.Green) {
                 if (tool == ToolEnum.Dagger)
                     gameCharacter.SetTeam(new TeamConfig(TeamColor.Red, TeamColor.Red));
                 else if (tool == ToolEnum.Pistol)
@@ -228,6 +294,14 @@ namespace Universes.murder_mystery.Server {
                         break;
                     case MM_Mode.Classic:
                         gameCharacter.SetTeam(new TeamConfig(npcRoles[i], TeamColor.None));
+                        break;
+                    case MM_Mode.Infection:
+                        gameCharacter.SetTeam(new TeamConfig(npcRoles[i]));
+                        npc.AllowAttackTargetOverrides = false;
+                        if (npcRoles[i] == TeamColor.Red) {
+                            gameCharacter.GetComponent<RobotColor>().ApplyColor(TeamColor.Green);
+                            npc.AttackDetectionRadius *= InfectionAttackDetectionMultiplier;
+                        }
                         break;
                     case MM_Mode.Unarmed:
                         gameCharacter.SetTeam(new TeamConfig(TeamColor.Green, TeamColor.Green));
@@ -258,12 +332,16 @@ namespace Universes.murder_mystery.Server {
         void SpawnPlayerTools(PlayerData player, NetworkObject character) {
             if (mode == MM_Mode.Unarmed)
                 ServerTool.Instance.SpawnTool(character, ToolEnum.Dagger);
-            switch (player.team.Value.team) {
+            switch (player.team.Value.realTeam) {
                 case TeamColor.Red:
                     ServerTool.Instance.SpawnTool(character, ToolEnum.Dagger);
                     break;
                 case TeamColor.Blue:
-                    ServerTool.Instance.SpawnTool(character, ToolEnum.Pistol);
+                    ToolBaseShared toolBase = ServerTool.Instance.SpawnTool(character, ToolEnum.Pistol, (tool) => {
+                        if (mode == MM_Mode.Infection) {
+                            tool.maxClipAmmo = 6;
+                        }
+                    });
                     break;
                 default:
                     break;
@@ -285,6 +363,9 @@ namespace Universes.murder_mystery.Server {
                     case MM_Mode.Classic:
                         player.SetPlayerTeam(new TeamConfig(i < playerRoles.Count ? playerRoles[i] : TeamColor.Green, TeamColor.None));
                         break;
+                    case MM_Mode.Infection:
+                        player.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
+                        break;
                     case MM_Mode.Unarmed:
                         player.SetPlayerTeam(new TeamConfig(TeamColor.Blue, TeamColor.Blue));
                         break;
@@ -295,7 +376,7 @@ namespace Universes.murder_mystery.Server {
                     continue;
                 RandomizeCharacterName(character);
                 SpawnPlayerTools(player, character.NetworkObject);
-                string teamName = GetTeamName(player.team.Value.team);
+                string teamName = GetTeamName(player.team.Value.realTeam);
                 ServerChat.SendSystemMessage(player.Owner, new($"Welcome to the {teamName} team!", SystemMessageSource.CustomMessage));
                 i++;
             }
@@ -314,9 +395,47 @@ namespace Universes.murder_mystery.Server {
                 _ => "Unknown"
             };
         }
+        string GetWinnerName(TeamColor team) {
+            return team switch {
+                TeamColor.Red => mode == MM_Mode.Infection ? "Infected" : "Murderers",
+                TeamColor.Green => "Innocents",
+                TeamColor.Blue => "Sheriffs",
+                _ => "Nobody"
+            };
+        }
         int GetNPCCount() => GameObject.FindGameObjectsWithTag("NPC").Count();
         int GetPlayerCount() => GameObject.FindGameObjectsWithTag("Player").Count();
         int GetTeamCount(TeamColor team) => GameCharacter.TeamToCharacter.TryGetValue(team, out var characters) ? characters.Count : 0;
+        void AssignInfectionRoles() {
+            npcRoles = Enumerable.Repeat(TeamColor.Green, startNPCs).ToList();
+            playerRoles = Enumerable.Repeat(TeamColor.Blue, startPlayers).ToList();
+
+            int murdererTarget = Mathf.RoundToInt(startNPCs * MM_Roles.murdererBaseChance);
+            murdererTarget = Mathf.Max(murdererTarget, MM_Roles.minMurderers);
+            murdererTarget = Mathf.Min(murdererTarget, Mathf.Max(MM_Roles.minMurderers, Mathf.FloorToInt(startNPCs * MM_Roles.murdererMaxRatio)));
+            murdererTarget = Mathf.Min(murdererTarget, startNPCs);
+
+            foreach (int index in Enumerable.Range(0, startNPCs).OrderBy(_ => UnityEngine.Random.value).Take(murdererTarget))
+                npcRoles[index] = TeamColor.Red;
+
+            startMurd = murdererTarget;
+            startSheriff = startPlayers;
+            startInnocent = startNPCs - murdererTarget;
+        }
+        bool AreAllPlayersInfected() {
+            List<PlayerData> activePlayers = PlayerData.Players.Values
+                .Where(player => player.Owner.IsValid && player.Owner.IsAuthenticated)
+                .ToList();
+            return activePlayers.Count > 0
+                && activePlayers.All(player => new[] { TeamColor.Red, TeamColor.White }.Contains(player.team.Value.realTeam));
+        }
+        TeamColor GetInfectionWinnerTeam() {
+            if (GetTeamCount(TeamColor.Red) == 0)
+                return TeamColor.Blue;
+            if (AreAllPlayersInfected())
+                return TeamColor.Red;
+            return TeamColor.None;
+        }
         TeamColor GetWinnerTeam(bool isRunning) {
             if (GetTeamCount(TeamColor.Red) == 0) {
                 return TeamColor.Blue;
@@ -330,6 +449,7 @@ namespace Universes.murder_mystery.Server {
             return TeamColor.None;
         }
         bool UpdateInGameBar(int durationLeft, bool interrupted) {
+            gameDurationLeft = durationLeft;
             switch (mode) {
                 case MM_Mode.NPCsVsPlayers:
                 case MM_Mode.Unarmed:
@@ -339,6 +459,9 @@ namespace Universes.murder_mystery.Server {
                 case MM_Mode.Classic:
                     SetTopMessage($"Mystery In Progress ({durationLeft})");
                     return GetWinnerTeam(GetPlayerCount() > 0) == TeamColor.None;
+                case MM_Mode.Infection:
+                    SetTopMessage($"Infection In Progress ({durationLeft})");
+                    return GetInfectionWinnerTeam() == TeamColor.None;
                 default:
                     Debug.LogError($"Unknown mode: {mode}");
                     return false;
@@ -366,16 +489,24 @@ namespace Universes.murder_mystery.Server {
             startPlayers = PlayerData.Players.Count;
             if (mode == MM_Mode.Classic) {
                 GetComponent<MM_Roles>().AssignRoles(startNPCs, startPlayers, out npcRoles, out playerRoles, out startMurd, out startSheriff, out startInnocent);
+            } else if (mode == MM_Mode.Infection) {
+                AssignInfectionRoles();
             }
 
             SpawnNpcs();
             SpawnPlayers();
             base.SetGlobalInvul(false);
             int gameTime = mode == MM_Mode.Classic ? 180 : 90;
+            gameDurationLeft = DebugTimerSpeedUp.Value ? 10 : gameTime;
             gameInProgress = true;
-            CancellationTokenSource coinCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            using CancellationTokenSource coinCts = CancellationTokenSource.CreateLinkedTokenSource(token);
             SpawnCoinLoop(coinCts.Token);
-            await base.CustomTimerCountdown(DebugTimerSpeedUp.Value ? 10 : gameTime, UpdateInGameBar, interrupt => UpdateGameBarEvent += interrupt, token);
+            await base.CustomTimerCountdown(
+                DebugTimerSpeedUp.Value ? 10 : gameTime,
+                UpdateInGameBar,
+                interrupt => UpdateGameBarEvent += interrupt,
+                interrupt => UpdateGameBarEvent -= interrupt,
+                token);
             coinCts.Cancel();
             ServerCoin.ClearAllCoins();
             base.SetGlobalInvul(true);
@@ -389,8 +520,14 @@ namespace Universes.murder_mystery.Server {
                     await TimerCountdown($"Game over: {GetNPCCount()}/{startNPCs} NPCs survived! ({{0}})", DebugTimerSpeedUp.Value ? 2 : 5, token);
                     break;
                 case MM_Mode.Classic:
-                    string winnerTeam = GetTeamName(GetWinnerTeam(false));
-                    await TimerCountdown($"{winnerTeam}s Win: {GetTeamCount(TeamColor.Red)}/{startMurd} Murderers, {GetTeamCount(TeamColor.Blue)}/{startSheriff} Sheriffs, {GetTeamCount(TeamColor.Green)}/{startInnocent} Innocents remaining! ({{0}})", DebugTimerSpeedUp.Value ? 2 : 10, token);
+                    string winnerName = GetWinnerName(GetWinnerTeam(false));
+                    await TimerCountdown($"{winnerName} Win: {GetTeamCount(TeamColor.Red)}/{startMurd} Murderers, {GetTeamCount(TeamColor.Blue)}/{startSheriff} Sheriffs, {GetTeamCount(TeamColor.Green)}/{startInnocent} Innocents remaining! ({{0}})", DebugTimerSpeedUp.Value ? 2 : 10, token);
+                    break;
+                case MM_Mode.Infection:
+                    TeamColor infectionWinner = GetInfectionWinnerTeam();
+                    if (infectionWinner == TeamColor.None)
+                        infectionWinner = TeamColor.Blue;
+                    await TimerCountdown($"{GetWinnerName(infectionWinner)} Win! ({{0}})", DebugTimerSpeedUp.Value ? 2 : 10, token);
                     break;
             }
 
@@ -399,12 +536,20 @@ namespace Universes.murder_mystery.Server {
         protected override void Stop() {
             base.Stop();
             gameInProgress = false;
+            gameDurationLeft = 0;
         }
         protected override void Reset() {
             base.Reset();
             ServerNPC.ClearAllNPC();
             ServerCoin.ClearAllCoins();
-            SetPlayerTeams(new TeamConfig(TeamColor.Ghost));
+
+            // Tools are stored in PlayerData and are copied into every newly spawned
+            // character. Clear the round inventory before respawning lobby characters,
+            // otherwise an infection dagger survives into the next round.
+            foreach (PlayerData player in PlayerData.Players.Values)
+                ServerTool.Instance.ClearTools(player.Owner);
+
+            SetPlayerTeams(new TeamConfig(TeamColor.White));
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
             SetLeaderboardEnabled("Kills", false);
         }

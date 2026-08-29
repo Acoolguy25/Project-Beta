@@ -13,7 +13,7 @@ using UnityEditor;
 using UnityEngine;
 
 namespace RyanAssets.DataService {
-    public class PlayerData : NetworkBehaviour {
+    public class PlayerData : NetworkBehaviour, ITeam {
         // Player Settings
         readonly public SyncVar<string> player_id = new();
         readonly public SyncVar<string> username = new();
@@ -105,6 +105,10 @@ namespace RyanAssets.DataService {
                 return;
             team.Value = teamConfig;
         }
+
+        public TeamConfig GetTeam() => team.Value;
+
+        public void SetTeam(TeamConfig teamConfig) => SetPlayerTeam(teamConfig);
         // Helpful Static Methods
         public static List<string> GetPlayerNames(Func<NetworkConnection, PlayerData, bool> selector = null) {
             List<string> strings = new();
@@ -195,7 +199,7 @@ public class PlayerDataEditor : Editor {
         EditorGUILayout.IntField("Lives", data.lives.Value);
         EditorGUILayout.IntField("Deaths", data.deaths.Value);
 
-        EditorGUILayout.LabelField("Team", data.team.Value?.team.ToString() ?? "None");
+        EditorGUILayout.LabelField("Team", data.team.Value?.realTeam.ToString() ?? "None");
         EditorGUILayout.LabelField("DisplayTeam", data.team.Value?.displayTeam.ToString() ?? "None");
 
         EditorGUILayout.FloatField("Walk Speed", data.walkSpeed.Value);

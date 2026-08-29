@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -10,6 +11,8 @@ using Universes;
 public class SceneSwitcherWindow : EditorWindow {
     private const string AllUniversesLabel = "All Universes";
     private const string UniverseScenesRoot = "Assets/Universes/UniverseData";
+    private const string ClientDebugPlayGameSourcePath = "Assets/EasyDebug/Client/DebugPlayGame.cs";
+    private const string ServerBootStrapSourcePath = "Assets/RyanAssets/Server/ServerCore/ServerBootStrap.cs";
 
     private static string previousScenePath;
 
@@ -56,8 +59,8 @@ public class SceneSwitcherWindow : EditorWindow {
             if (EditorGUI.EndChangeCheck())
                 RefreshScenes();
 
-            if (GUILayout.Button("Refresh", GUILayout.Width(70)))
-                Refresh();
+            if (GUILayout.Button("Update", GUILayout.Width(70)))
+                UpdateUniverseIds();
         }
 
         EditorGUILayout.Space(4);
@@ -127,6 +130,76 @@ public class SceneSwitcherWindow : EditorWindow {
                 left.displayName,
                 right.displayName,
                 System.StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UpdateUniverseIds() {
+        if (selectedUniverse <= 0 || selectedUniverse >= universeIds.Length) {
+            EditorUtility.DisplayDialog(
+                "Update Universe",
+                "Select a specific universe before updating the client and server.",
+                "OK");
+            return;
+        }
+
+        string universeId = universeIds[selectedUniverse];
+        string universeLabel = universeLabels[selectedUniverse];
+
+        bool confirmed = EditorUtility.DisplayDialog(
+            "Update Universe",
+            $"Set both the client and server universe source values to:\n\n{universeLabel} ({universeId})?\n\nThe source changes will persist after restart.",
+            "Update",
+            "Cancel");
+
+        if (!confirmed)
+            return;
+
+        if (!UpdateUniverseIdSource(
+                ClientDebugPlayGameSourcePath,
+                "PlayGameUniverseId",
+                universeId) ||
+            !UpdateUniverseIdSource(
+                ServerBootStrapSourcePath,
+                "universe_id",
+                universeId))
+            return;
+
+#if UNITY_SERVER
+        RyanAssets.Server.ServerCore.ServerBootStrap.serverInfo.universe_id = universeId;
+
+        if (Application.isPlaying) {
+            RyanAssets.Server.ServerCore.ServerBootStrap.ApplyServerInfo();
+        }
+#endif
+
+        AssetDatabase.Refresh();
+
+        ShowNotification(new GUIContent($"Updated client and server to {universeId}"));
+    }
+
+    private static bool UpdateUniverseIdSource(
+        string sourcePath,
+        string fieldName,
+        string universeId) {
+        if (!File.Exists(sourcePath)) {
+            EditorUtility.DisplayDialog(
+                "Update Universe",
+                $"The source file was not found: {sourcePath}",
+                "OK");
+            return false;
+        }
+
+        string source = File.ReadAllText(sourcePath);
+        string pattern = $@"(?<prefix>\b{Regex.Escape(fieldName)}\s*=\s*"")[^""]*(?<suffix>"")";
+        string updatedSource = new Regex(pattern).Replace(
+            source,
+            match => match.Groups["prefix"].Value + universeId + match.Groups["suffix"].Value,
+            1);
+
+        if (source == updatedSource)
+            return source.Contains($"{fieldName} = \"{universeId}\"");
+
+        File.WriteAllText(sourcePath, updatedSource);
+        return true;
     }
 
     private static bool IsSceneInUniverse(string scenePath, string universeId) {

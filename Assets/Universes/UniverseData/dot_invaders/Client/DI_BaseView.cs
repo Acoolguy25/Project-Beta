@@ -32,7 +32,7 @@ namespace Universes.UniverseData.dot_invaders {
             SetRendererColor(bodyRenderer, color);
 
             if (troopLabel != null) {
-                troopLabel.text = pendingTroops > 0 ? $"{troops}\n<size=55%>-{pendingTroops}</size>" : troops.ToString();
+                troopLabel.text = troops.ToString();
                 troopLabel.color = Color.white;
             }
             RefreshGlow();

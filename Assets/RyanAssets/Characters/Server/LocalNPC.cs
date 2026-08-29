@@ -64,7 +64,7 @@ namespace RyanAssets.Characters.Server {
                 if (gameCharacter == null || SharedGlobalEvents.TeamEnemies == null)
                     return EmptyTeamSet;
 
-                return SharedGlobalEvents.TeamEnemies.TryGetValue(gameCharacter.GetTeam().team, out HashSet<TeamColor> teams)
+                return SharedGlobalEvents.TeamEnemies.TryGetValue(gameCharacter.GetTeam().realTeam, out HashSet<TeamColor> teams)
                     ? teams
                     : EmptyTeamSet;
             }
@@ -76,6 +76,7 @@ namespace RyanAssets.Characters.Server {
         [SerializeField] private float AttackClearRadius = 15f;     // no enemies this close -> stop attacking
         [SerializeField] private float AttackCooldown = 1f;         // min seconds between AttackFunction invocations
         [SerializeField] private float RetargetSwitchThreshold = 0.7f; // on each retarget check, only switch off a still-valid target onto a different enemy if the alternative is at least this much closer (as a fraction of the current target's distance) - stops the NPC fixating on whichever enemy it happened to see first while a much closer attacker goes ignored, while still avoiding thrash between two similarly-distant targets every retarget tick
+        [SerializeField] public bool AllowAttackTargetOverrides = true; // permits game-specific forced targets, range multipliers, and target priorities
         // MaxAttackRange is also a valid engagement distance: a ranged NPC should enter combat
         // and fire at an enemy that is already in its configured attack band, even if the
         // inspector's detection radius was left at its smaller melee-era default.
@@ -100,6 +101,14 @@ namespace RyanAssets.Characters.Server {
         // Not serialized - Unity can't show a delegate in the Inspector, so it must be
         // wired up in code.
         public Action<GameCharacter> AttackFunction;
+
+        public bool IsTargetInAttackRange(GameCharacter target) {
+            if (target == null || target.IsDead)
+                return false;
+
+            float distance = Vector3.Distance(transform.position, target.transform.position);
+            return distance >= MinAttackRange && distance <= MaxAttackRange;
+        }
 
         // Optional game-specific hooks. A multiplier greater than one lets a target be
         // acquired and retained from farther away; a higher priority is selected before a
@@ -402,12 +411,16 @@ namespace RyanAssets.Characters.Server {
         }
 
         private float GetAttackTargetRange(GameCharacter target, float baseRange) {
-            float multiplier = AttackTargetRangeMultiplier?.Invoke(target) ?? 1f;
+            float multiplier = AllowAttackTargetOverrides
+                ? AttackTargetRangeMultiplier?.Invoke(target) ?? 1f
+                : 1f;
             return baseRange * Mathf.Max(0f, multiplier);
         }
 
         private float GetAttackTargetPriority(GameCharacter target) {
-            return AttackTargetPriority?.Invoke(target) ?? 0f;
+            return AllowAttackTargetOverrides
+                ? AttackTargetPriority?.Invoke(target) ?? 0f
+                : 0f;
         }
 
         private bool AnyEnemyInAttackRange(float baseRange) {
@@ -427,12 +440,12 @@ namespace RyanAssets.Characters.Server {
         private bool IsValidAttackTarget(GameCharacter target) {
             return target != null
                 && !target.IsDead
-                && EnemyTeams.Contains(target.GetTeam().team)
+                && EnemyTeams.Contains(target.GetTeam().realTeam)
                 && !target.IsProtected(gameCharacter, AttackDamageType);
         }
 
         private bool HasValidForcedAttackTarget() {
-            return IsValidAttackTarget(_forcedAttackTarget);
+            return AllowAttackTargetOverrides && IsValidAttackTarget(_forcedAttackTarget);
         }
 
         /// <summary>
@@ -441,7 +454,7 @@ namespace RyanAssets.Characters.Server {
         /// retaliating against an attacker outside the NPC's normal acquisition radius.
         /// </summary>
         public bool TargetCharacter(GameCharacter target) {
-            if (!IsValidAttackTarget(target)) return false;
+            if (!AllowAttackTargetOverrides || !IsValidAttackTarget(target)) return false;
 
             SetTargetingType(NPCTargetingType.Attack);
             _forcedAttackTarget = target;
@@ -484,7 +497,9 @@ namespace RyanAssets.Characters.Server {
             while (true) {
                 yield return new WaitForSeconds(AttackRetargetInterval);
 
-                if (_forcedAttackTarget != null) {
+                if (!AllowAttackTargetOverrides)
+                    _forcedAttackTarget = null;
+                else if (_forcedAttackTarget != null) {
                     if (IsValidAttackTarget(_forcedAttackTarget)) {
                         SetAttackTarget(_forcedAttackTarget);
                         continue;
