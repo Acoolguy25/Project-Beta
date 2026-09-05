@@ -2,6 +2,7 @@
     "name": "RyanAssets.Characters.Client",
     "rootNamespace": "RyanAssets.Characters.Client",
     "references": [
+        "RyanAssets.Shared.Component",
         "GUID:d80e5027280713447b70339fca3efe66",
         "GUID:d81c570acb0546e47865a9bb58cc7645",
         "GUID:75469ad4d38634e559750d17036d5f7c",

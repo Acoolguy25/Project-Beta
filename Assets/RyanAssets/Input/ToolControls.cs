@@ -66,21 +66,28 @@ namespace RyanAssets.Input {
 
             return true; // nothing visible under the cursor
         }
-        public static Vector3 GetCursorWorldPosition() {
-            Vector2 mousePosition = Mouse.current.position.ReadValue();
-
-            Ray ray = Camera.main.ScreenPointToRay(mousePosition);
-
-            if (Physics.Raycast(ray, out RaycastHit hit, float.MaxValue, ~LayerMask.GetMask("LocalCharacter", "Ignore Raycast"))) {
-                return hit.point;
+        public static bool TryGetCursorWorldPosition(out Vector3 worldPosition, int layerMask = Physics.DefaultRaycastLayers) {
+            Mouse mouse = Mouse.current;
+            Camera camera = Camera.main;
+            if (mouse != null && camera != null) {
+                Ray ray = camera.ScreenPointToRay(mouse.position.ReadValue());
+                int cursorMask = layerMask & ~LayerMask.GetMask("LocalCharacter", "Ignore Raycast");
+                if (Physics.Raycast(ray, out RaycastHit hit, float.MaxValue, cursorMask, QueryTriggerInteraction.Ignore)) {
+                    worldPosition = hit.point;
+                    return true;
+                }
             }
 
-            return Vector3.zero;
+            worldPosition = default;
+            return false;
+        }
+        public static Vector3 GetCursorWorldPosition() {
+            TryGetCursorWorldPosition(out Vector3 worldPosition);
+            return worldPosition;
         }
         public void OnActivateTool() {
-            if (IsCursorFree()) {
-                activateToolPressed?.Invoke(GetCursorWorldPosition());
-            }
+            if (IsCursorFree() && TryGetCursorWorldPosition(out Vector3 worldPosition))
+                activateToolPressed?.Invoke(worldPosition);
         }
     }
 }

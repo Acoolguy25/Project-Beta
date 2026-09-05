@@ -2,6 +2,7 @@
     "name": "RyanAssets.Item.FloatingTool",
     "rootNamespace": "RyanAssets.Item.FloatingTool",
     "references": [
+        "RyanAssets.Shared.Component",
         "GUID:da01a9a0aa24eb94ea427fd540755587",
         "GUID:d81c570acb0546e47865a9bb58cc7645",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",

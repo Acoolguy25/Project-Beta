@@ -27,6 +27,7 @@ namespace RyanAssets.Cameras
         private int activeIndex;
         public ICamera activeCamera { get; private set; }
         public static GameCharacter targetCharacter { get; private set; }
+        //private AudioListener audioListener;
 
         public static event Action<GameCharacter> OnCameraTargetAdded, OnCameraTargetRemoved;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -49,6 +50,7 @@ namespace RyanAssets.Cameras
             newCamera.gameObject.SetActive(true);
             activeCamera = newCamera;
             activeIndex = index;
+            //audioListener.enabled = false;
         }
         public void SetCameraAvailable(GameCameraType camType, bool active) {
             int index = (int) camType;
@@ -65,6 +67,7 @@ namespace RyanAssets.Cameras
                 }
                 activeCamera?.DisableCamera(null, default);
                 activeCamera?.gameObject.SetActive(false);
+                //audioListener.enabled = true;
                 activeIndex = -1; // if not set one, then remind it to set it active later
             }
         }
@@ -85,8 +88,7 @@ namespace RyanAssets.Cameras
         private void Awake() {
             Instance = this;
         }
-        private void OnCharacterAdded(LocalCharacter localCharacter)
-        {
+        private void OnCharacterAdded(LocalCharacter localCharacter) {
             localCharacter.OnDied += OnCharacterDied;
             localCharacter.OnRevive += OnCharacterRevived;
             SetCameraAvailable(GameCameraType.SpectateCamera, false);
@@ -152,6 +154,7 @@ namespace RyanAssets.Cameras
             SetCameraTarget(null);
         }
         private void Start() {
+            //audioListener = GetComponent<AudioListener>();
             activeCamera = null;
             activeIndex = -1;
             for (int i = 0; i < transform.childCount; i++){

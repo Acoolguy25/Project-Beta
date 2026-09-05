@@ -76,7 +76,7 @@ namespace RyanAssets.Server.ServerFeatures {
             }
         }
 
-        public async UniTask CustomTimerCountdown(
+        public async UniTask<bool> CustomTimerCountdown(
             int duration,
             Func<int, bool, bool> activationFunc,
             Action<Action> registerInterrupt,
@@ -97,15 +97,16 @@ namespace RyanAssets.Server.ServerFeatures {
                 registerInterrupt(interrupt);
                 interruptRegistered = true;
 
-                while (duration > 0) {
+                while (duration != 0) {
                     if (!activationFunc(duration, false))
-                        return;
+                        return true;
 
                     await AwaitTime(1000, cts.Token);
 
                     duration--;
                 }
-            } catch (OperationCanceledException) when (!token.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested) {
                 // An interrupt ended this countdown. Cancellation of the owning
                 // runner token still propagates and stops the old round entirely.
             } finally {
@@ -114,6 +115,7 @@ namespace RyanAssets.Server.ServerFeatures {
                     unregisterInterrupt(interrupt);
                 }
             }
+            return token.IsCancellationRequested;
         }
 
         public async UniTask WaitForPlayersAsync(int playerRequirement = 1, CancellationToken token = default) {
@@ -180,6 +182,9 @@ namespace RyanAssets.Server.ServerFeatures {
         protected virtual void OnPlayerAdded(PlayerData playerData) {
             playerData.leaderboard.AddRange(Enumerable.Repeat(0, SharedGlobalEvents.Instance.LeaderboardHeaders.Count));
         }
+        protected virtual void OnCharacterAdded(LocalCharacter localCharacter) {
+
+        }
         public static void SetTopMessage(string topMessage) {
             SharedGlobalEvents.Instance.TopMessage = topMessage;
         }
@@ -199,6 +204,7 @@ namespace RyanAssets.Server.ServerFeatures {
             Instance = this;
             DontDestroyOnLoad(gameObject);
             PlayerData.OnPlayerAdded += OnPlayerAdded;
+            ServerPlayerCharacter.CharacterAdded += OnCharacterAdded;
             ServerIdleTimeout.OnIdleTimeoutStarted += Restart;
             ServerBootStrap.RestartServerEvent += Restart;
         }
@@ -209,7 +215,13 @@ namespace RyanAssets.Server.ServerFeatures {
             serverRunnerCTS = cts;
             previousCts?.Cancel();
             previousCts?.Dispose();
-            StartAsync(cts.Token).Forget();
+            StartAsync(cts.Token).ContinueWith(() => {
+                // A previous round can finish after a manual restart has installed a
+                // replacement token. Only the currently-owned round may start another
+                // restart cycle.
+                if (serverRunnerCTS == cts && !cts.IsCancellationRequested)
+                    Restart();
+            });
         }
 
         protected virtual async UniTask StartAsync(CancellationToken token) {
@@ -230,7 +242,8 @@ namespace RyanAssets.Server.ServerFeatures {
             OnResetEvent?.Invoke();
             ClearLeaderboard();
             ServerTool.ClearFloatingTools();
-            ServerBootStrap.LoadInitialScene();
+            // TODO: Implement reset for resetting the scenes, but only if needed
+            //ServerBootStrap.LoadInitialScene();
         }
 
         protected virtual void Restart() {
@@ -241,6 +254,7 @@ namespace RyanAssets.Server.ServerFeatures {
 
         protected virtual void OnDestroy() {
             PlayerData.OnPlayerAdded -= OnPlayerAdded;
+            ServerPlayerCharacter.CharacterAdded -= OnCharacterAdded;
             ServerIdleTimeout.OnIdleTimeoutStarted -= Restart;
             ServerBootStrap.RestartServerEvent -= Restart;
             if (Instance == this) {

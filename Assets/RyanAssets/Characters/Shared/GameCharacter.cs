@@ -10,18 +10,15 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace RyanAssets.Characters.Shared {
-    [RequireComponent(typeof(EffectsComponent), typeof(HealthComponent))]
-    public class GameCharacter : NetworkBehaviour, IEntity, ITeam {
+    public class GameCharacter : Entity, ITeam {
         public const string AnonymousDisplayName = "Anonymous";
 
+        [Header("Character References")]
         [SerializeField] public Transform CharacterCamera;
-        [SerializeField] private EffectsComponent effectsComponent;
-        [SerializeField] private HealthComponent healthComponent;
+
+        [Header("Fall Handling")]
         [SerializeField] private bool fallHeightEnabled = true;
         [SerializeField] private float fallenPartsDestroyHeight = 0.0f;
-
-        public EffectsComponent EffectsComponent => effectsComponent;
-        public HealthComponent HealthComponent => healthComponent;
 
         public static Dictionary<TeamColor, HashSet<GameCharacter>> TeamToCharacter = new();
         public static event Action<GameCharacter> GameCharacterAdded, GameCharacterRemoved;
@@ -33,33 +30,14 @@ namespace RyanAssets.Characters.Shared {
         public readonly SyncVar<Vector3> CharacterScale = new(Vector3.one);
         public readonly SyncVar<bool> CanSpectate = new(true);
 
-        public TeamConfig Team => TeamSync.Value;
-        public string DisplayName {
+        public override TeamConfig Team => TeamSync.Value;
+        public override string DisplayName {
             get => NormalizeDisplayName(DisplayNameSync.Value);
             set => DisplayNameSync.Value = NormalizeDisplayName(value);
         }
         public bool FallHeightEnabled => fallHeightEnabled;
         public float FallenPartsDestroyHeight => fallenPartsDestroyHeight;
-        public bool IsDead => HealthComponent.IsDead;
-        public bool IsFullHealth => HealthComponent.IsFullHealth;
-        public SyncVar<long> Health => HealthComponent.Health;
-        public SyncVar<long> MaxHealth => HealthComponent.MaxHealth;
-        public SyncDictionary<CharacterEffect, float> ActiveEffects => EffectsComponent.ActiveEffects;
         public ToolBaseShared[] Tools => gameObject.GetComponentsInChildren<ToolBaseShared>(false);
-        public event Action<DamageType, IEntity> OnDamage {
-            add => HealthComponent.OnDamage += value;
-            remove => HealthComponent.OnDamage -= value;
-        }
-        public event Action<DamageType, IEntity> OnDied {
-            add => HealthComponent.OnDied += value;
-            remove => HealthComponent.OnDied -= value;
-        }
-
-        public event Action OnRevive {
-            add => HealthComponent.OnRevive += value;
-            remove => HealthComponent.OnRevive -= value;
-        }
-
         public static string NormalizeDisplayName(string value) =>
             string.IsNullOrWhiteSpace(value) ? AnonymousDisplayName : value.Trim();
 
@@ -70,22 +48,46 @@ namespace RyanAssets.Characters.Shared {
             TeamToCharacter.Clear();
         }
 
-        protected virtual void Awake() {
-            effectsComponent ??= GetComponent<EffectsComponent>();
-            healthComponent ??= GetComponent<HealthComponent>();
-            if (effectsComponent == null || healthComponent == null)
-                throw new MissingComponentException($"{nameof(GameCharacter)} requires {nameof(EffectsComponent)} and {nameof(HealthComponent)}.");
-            healthComponent.OnDied += SharedDied;
-            healthComponent.OnRevive += SharedRevived;
+        protected override void Awake() {
+            base.Awake();
+            OnDied += SharedDied;
+            OnRevive += SharedRevived;
+            CharacterScale.OnChange += OnCharacterScaleChanged;
+        }
+
+        protected virtual void OnCharacterScaleChanged(Vector3 oldScale, Vector3 newScale, bool asServer) {
+            ApplyScale(newScale);
+        }
+
+        private void ApplyScale(Vector3 newScale) {
+            transform.localScale = newScale;
+            Physics.SyncTransforms();
+
+            foreach (Rigidbody rigidbody in GetComponentsInChildren<Rigidbody>(true)) {
+                rigidbody.ResetCenterOfMass();
+                rigidbody.ResetInertiaTensor();
+            }
+
+            // PhysX retains each joint constraint at the scale where it was created.
+            // Reconnecting rebuilds the constraint from the newly scaled transforms.
+            foreach (Joint joint in GetComponentsInChildren<Joint>(true)) {
+                Rigidbody connectedBody = joint.connectedBody;
+                if (connectedBody == null)
+                    continue;
+
+                joint.connectedBody = null;
+                joint.connectedBody = connectedBody;
+            }
         }
 
         protected virtual void OnDestroy() {
             DisplayNameSync.OnChange -= OnDisplayNameChanged;
-            if (healthComponent != null)
+            if (HealthComponent != null)
             {
-                healthComponent.OnDied -= SharedDied;
-                healthComponent.OnRevive -= SharedRevived;
+                OnDied -= SharedDied;
+                OnRevive -= SharedRevived;
             }
+            CharacterScale.OnChange -= OnCharacterScaleChanged;
         }
 
         private void OnDisplayNameChanged(string _, string newValue, bool __) {
@@ -113,9 +115,13 @@ namespace RyanAssets.Characters.Shared {
             ActiveTool.Value = tool;
         }
 
-        public bool Equipped(ToolBaseShared tool) => ActiveTool.Value == tool;
-        public bool IsEffectActive(CharacterEffect effect) => EffectsComponent.IsEffectActive(effect);
+        public void SetScale(Vector3 newScale) {
+            CharacterScale.Value = newScale;
+            if (transform.localScale != newScale)
+                ApplyScale(newScale);
+        }
 
+        public bool Equipped(ToolBaseShared tool) => ActiveTool.Value == tool;
 
 #if UNITY_EDITOR
         [SerializeField] private TeamConfig teamEditor;
@@ -134,35 +140,7 @@ namespace RyanAssets.Characters.Shared {
 #endif
 
 #if UNITY_SERVER
-        [Server]
-        public virtual bool IsProtected(GameCharacter sourceCharacter = null, DamageType damageType = DamageType.None) {
-            return HealthComponent.IsProtected(sourceCharacter, damageType);
-        }
-
-        [Server]
-        public bool IsProtected(GameCharacter sourceCharacter) => IsProtected(sourceCharacter, DamageType.None);
-
-        [Server]
-        public virtual bool TakeDamage(long damage, DamageType source = DamageType.None, NetworkObject sourceObject = null) {
-            IEntity sourceEntity = sourceObject ? sourceObject.GetComponent<IEntity>() : null;
-            if (sourceObject != null && sourceEntity == null)
-                Debug.LogError($"Damage source object {sourceObject.name} does not implement {nameof(IEntity)}.");
-            return HealthComponent.TakeDamage(damage, source, sourceEntity);
-        }
-
-        [Server] public virtual void HealHealth(long hitpoints) => HealthComponent.HealHealth(hitpoints);
-        [Server] public virtual void HealMaxHealth(long hitpoints) => HealthComponent.HealMaxHealth(hitpoints);
-        [Server] public virtual void AddEffect(CharacterEffect effect, float duration) => EffectsComponent.AddEffect(effect, duration);
-        [Server] public virtual void RemoveEffect(CharacterEffect effect) => EffectsComponent.RemoveEffect(effect);
-        [Server] public virtual void ClearEffects() => EffectsComponent.ClearEffects();
-        [Server] public virtual void Init(long hp, long maxHp) => HealthComponent.Init(hp, maxHp);
-        [Server] public void Init(long hp) => HealthComponent.Init(hp);
         [Server] public void InitDefaultEffects() => EffectsComponent.AddEffect(CharacterEffect.Invul, 5f);
-        [Server] public void Revive(long hp, long maxHp) => HealthComponent.Revive(hp, maxHp);
-        [Server] public void Revive(long hp) => Revive(hp, hp);
-        [Server] public virtual void Kill(DamageType source, NetworkObject sourceObject = null) {
-            HealthComponent.Kill(source, sourceObject ? sourceObject.GetComponent<IEntity>() : null);
-        }
 
         [Server]
         public virtual void SetTeam(TeamConfig teamConfig) {
@@ -225,6 +203,7 @@ namespace RyanAssets.Characters.Shared {
             TeamToCharacter[newTeam.realTeam].Add(this);
         }
 
+        public static int TeamCount(TeamColor teamColor) => TeamToCharacter.ContainsKey(teamColor) ? TeamToCharacter[teamColor].Count : 0;
         public virtual TeamConfig GetTeam() => Team;
 
         protected virtual void SharedDied(DamageType source, IEntity sourceEntity) {
@@ -282,22 +261,33 @@ public class GameCharacterEditor : UnityEditor.Editor {
         UnityEditor.EditorGUILayout.LabelField("Runtime State", UnityEditor.EditorStyles.boldLabel);
 
         using (new UnityEditor.EditorGUI.DisabledScope(true)) {
+            DrawSectionHeader("Identity & Team");
             UnityEditor.EditorGUILayout.TextField("Display Name", character.DisplayName);
             UnityEditor.EditorGUILayout.EnumPopup("Team", character.Team?.realTeam ?? TeamColor.None);
             UnityEditor.EditorGUILayout.EnumPopup("Displayed Team", character.Team?.displayTeam ?? TeamColor.None);
+
+            DrawSectionHeader("Equipment & Character");
             UnityEditor.EditorGUILayout.ObjectField("Active Tool", character.ActiveTool.Value, typeof(RyanAssets.Tools.Shared.ToolBaseShared), true);
             UnityEditor.EditorGUILayout.Vector3Field("Character Scale", character.CharacterScale.Value);
             UnityEditor.EditorGUILayout.Toggle("Can Spectate", character.CanSpectate.Value);
+
+            DrawSectionHeader("Health & Effects");
             UnityEditor.EditorGUILayout.LongField("Health", character.Health?.Value ?? 0L);
             UnityEditor.EditorGUILayout.LongField("Max Health", character.MaxHealth?.Value ?? 0L);
             UnityEditor.EditorGUILayout.Toggle("Is Dead", character.HealthComponent != null && character.IsDead);
             UnityEditor.EditorGUILayout.Toggle("Is Full Health", character.HealthComponent != null && character.IsFullHealth);
             UnityEditor.EditorGUILayout.IntField("Active Effects", character.ActiveEffects?.Count ?? 0);
             UnityEditor.EditorGUILayout.IntField("Equipped Tools", character.Tools?.Length ?? 0);
+
+            DrawSectionHeader("Network");
             UnityEditor.EditorGUILayout.Toggle("Is Spawned", character.IsSpawned);
             UnityEditor.EditorGUILayout.IntField("Network Object ID", character.NetworkObject != null ? character.NetworkObject.ObjectId : -1);
         }
+    }
 
+    private static void DrawSectionHeader(string label) {
+        UnityEditor.EditorGUILayout.Space(6f);
+        UnityEditor.EditorGUILayout.LabelField(label, UnityEditor.EditorStyles.boldLabel);
     }
 }
 #endif

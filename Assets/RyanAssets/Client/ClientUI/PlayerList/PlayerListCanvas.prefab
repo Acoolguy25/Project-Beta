@@ -121,6 +121,7 @@ MonoBehaviour:
   modelPrefab: {fileID: 9100000000000000002, guid: 1bf6557e59c045f6af9cf2b4f7c6f83e, type: 3}
   scrollRect: {fileID: 512075336484954312}
   AutoScroll: 0
+  searchInputField: {fileID: 0}
 --- !u!225 &2734802407931793214
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -946,6 +947,7 @@ MonoBehaviour:
   modelPrefab: {fileID: 5762901201985447543, guid: 3ec7e6efafce43443bac2fd66ce5bbdc, type: 3}
   scrollRect: {fileID: 7985124574552971927}
   AutoScroll: 0
+  searchInputField: {fileID: 0}
   playerNameText: {fileID: 8788745008169444661}
   leaderboardParent: {fileID: 6343413182358734939}
 --- !u!1001 &8442920245683878699
@@ -1030,7 +1032,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.000045776367
+      value: -0.000030517578
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426465, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.x

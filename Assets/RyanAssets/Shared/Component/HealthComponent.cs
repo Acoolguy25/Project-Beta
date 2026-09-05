@@ -33,7 +33,7 @@ namespace RyanAssets.Shared.Component {
             base.OnValidate();
             // Inspector validation also runs for prefab/unspawned objects. SyncVars cannot
             // be changed through [Server] methods until FishNet has initialized this object.
-            if (!IsSpawned)
+            if (NetworkObject == null || !IsSpawned)
                 return;
             MaxHealth.Value = maxHealthEditor;
             TakeDamage(Health.Value - healthEditor);
@@ -171,9 +171,7 @@ namespace RyanAssets.Shared.Component {
         }
 
         private static bool IsEntityDead(IEntity entity) {
-            return entity is UnityEngine.Component component
-                && component.TryGetComponent(out HealthComponent health)
-                && health.IsDead;
+            return entity != null && entity.IsDead;
         }
 
         private static NetworkObject GetNetworkObject(IEntity entity) {

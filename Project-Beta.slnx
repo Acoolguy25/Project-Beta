@@ -6,6 +6,7 @@
   <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
   <Project Path="RyanAssets.Shared.Global.csproj" />
+  <Project Path="Universes.UniverseData.war_valley.Shared.csproj" />
   <Project Path="EasyDebug.Client.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Stamina.csproj" />
@@ -43,6 +44,7 @@
   <Project Path="RyanAssets.Authentication.csproj" />
   <Project Path="RyanAssets.Client.Audio.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.NameTag.csproj" />
+  <Project Path="RyanAssets.Shared.Component.csproj" />
   <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="RyanAssets.UI.Textbox.csproj" />
   <Project Path="RyanAssets.Items.Coin.csproj" />
@@ -53,8 +55,9 @@
   <Project Path="EasyDebug.Shared.csproj" />
   <Project Path="RyanAssets.Levels.Shared.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
+  <Project Path="RyanAssets.Client.ClientUI.Build.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="RyanAssets.Shared.Globals.csproj" />
   <Project Path="RpcGen.Runtime.csproj" />
-  <Project Path="RyanAssets.Shared.Component.csproj" />
   <Project Path="Universes.csproj" />
 </Solution>

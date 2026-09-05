@@ -43,6 +43,12 @@ MonoBehaviour:
   - m_enabled: 1
     m_path: Assets/Universes/UniverseData/dot_invaders/dot_invaders_server.unity
     m_guid: 827dacbb87369344eae78f1578ce3b8d
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/war_valley/war_valley_server.unity
+    m_guid: 176031dbecba781499f2cf250a9a1d0f
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/war_valley/war_valley_start.unity
+    m_guid: 30e340e58ffb3bc49804a715738f24e7
   m_HasScriptingDefines: 0
   m_ScriptingDefines: []
   m_PlayerSettingsYaml:
@@ -195,7 +201,7 @@ MonoBehaviour:
     - line: '|   loadStoreDebugModeEnabled: 0'
     - line: '|   visionOSBundleVersion: 1.0'
     - line: '|   tvOSBundleVersion: 1.0'
-    - line: '|   bundleVersion: 0.03a'
+    - line: '|   bundleVersion: 0.03b'
     - line: '|   preloadedAssets:'
     - line: '|   - {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b,
         type: 3}'
@@ -223,11 +229,11 @@ MonoBehaviour:
     - line: '|     iPhone: com.Unity-Technologies.com.unity.template.urp-blank'
     - line: '|   buildNumber:'
     - line: '|     Standalone: 0'
-    - line: '|     VisionOS: 9'
-    - line: '|     iPhone: 9'
-    - line: '|     tvOS: 9'
+    - line: '|     VisionOS: 10'
+    - line: '|     iPhone: 10'
+    - line: '|     tvOS: 10'
     - line: '|   overrideDefaultApplicationIdentifier: 1'
-    - line: '|   AndroidBundleVersionCode: 10'
+    - line: '|   AndroidBundleVersionCode: 11'
     - line: '|   AndroidMinSdkVersion: 26'
     - line: '|   AndroidTargetSdkVersion: 0'
     - line: '|   AndroidPreferredInstallLocation: 1'
@@ -921,7 +927,7 @@ MonoBehaviour:
     - line: '|   m_RenderingPath: 1'
     - line: '|   m_MobileRenderingPath: 1'
     - line: '|   metroPackageName: Project Beta'
-    - line: '|   metroPackageVersion: 1.0.9.0'
+    - line: '|   metroPackageVersion: 1.0.10.0'
     - line: '|   metroCertificatePath: '
     - line: '|   metroCertificatePassword: '
     - line: '|   metroCertificateSubject: '

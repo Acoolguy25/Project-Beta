@@ -49,6 +49,13 @@ namespace Universes {
                 description = "Grow your bases, send dot armies to neighboring bases, and conquer the board.",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
+            },
+            new(){
+                id = "war_valley",
+                title = "War Valley",
+                description = "A strategic battle for control of the territory.",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Protected
             }
         };
         public static UniverseStruct GetUniverseFromId(string id) {

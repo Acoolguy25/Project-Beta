@@ -89,6 +89,7 @@ namespace RyanAssets.Characters.Shared
         }
         private Vector3 GetVelocity() {
             Vector3 velocity = (transform.position - prevPosition) / Time.fixedDeltaTime;
+            velocity.y = 0; // velocity in the y direction is not relevant for animation purposes
             prevPosition = transform.position;
             return velocity;
         }

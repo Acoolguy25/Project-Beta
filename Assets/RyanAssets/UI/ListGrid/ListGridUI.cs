@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using RyanAssets.UI.Textbox;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
@@ -14,6 +15,8 @@ namespace RyanAssets.UI.ListGrid {
         protected ScrollRect scrollRect;
         [SerializeField]
         protected bool AutoScroll;
+        [SerializeField]
+        protected CustomInputField searchInputField;
         protected Transform contentTarget;
         GridLayoutGroup gridLayoutGroup;
         VerticalLayoutGroup verticalLayoutGroup;
@@ -43,6 +46,17 @@ namespace RyanAssets.UI.ListGrid {
             }
             globalOrder = 0;
         }
+        public void SetPrefabActive(GameObject prefab) {
+            if (searchInputField == null)
+                return; // do nothing if search textbox does not exist
+
+            string prefabName = prefab.name;
+
+            bool active = string.IsNullOrEmpty(searchInputField.text) ||
+                          prefabName.Contains(searchInputField.text, StringComparison.OrdinalIgnoreCase);
+
+            prefab.SetActive(active);
+        }
         public void ClearPrefabs() {
             ClearPendingPrefabs();
             ClearActivePrefabs();
@@ -64,7 +78,8 @@ namespace RyanAssets.UI.ListGrid {
                 }
                 prefabOrder.Add(prefabClone.transform, order);
                 prefabClone.transform.SetParent(contentTarget, false);
-
+                prefabClone.name = data.ToString();
+                SetPrefabActive(prefabClone);
 
                 OnCreatePrefab?.Invoke(prefabClone.gameObject, data);
                 UpdateLayout();
@@ -86,6 +101,9 @@ namespace RyanAssets.UI.ListGrid {
             ClearPrefabs();
             AddPrefabs(objects);
         }
+        public void UpdateSearchText(string searchText) {
+            UpdateLayout();
+        }
         protected void UpdateLayout() {
             if (contentRT == null || !isActiveAndEnabled)
                 return;
@@ -103,6 +121,7 @@ namespace RyanAssets.UI.ListGrid {
 
             for (int i = 0; i < children.Count; i++) {
                 children[i].SetSiblingIndex(i);
+                SetPrefabActive(children[i].gameObject);
             }
         }
         private IEnumerator UpdateLayoutRoutine() {
@@ -231,10 +250,14 @@ namespace RyanAssets.UI.ListGrid {
             contentRT = contentTarget.GetComponent<RectTransform>();
             gridLayoutGroup = contentRT.GetComponent<GridLayoutGroup>();
             verticalLayoutGroup = contentRT.GetComponent<VerticalLayoutGroup>();
+            if (searchInputField)
+                searchInputField.onValueChanged.AddListener(UpdateSearchText);
             globalOrder = 0;
         }
         virtual protected void OnDestroy() {
             IsDestroyed = true;
+            if (searchInputField)
+                searchInputField.onValueChanged.RemoveListener(UpdateSearchText);
             ClearPendingPrefabs();
         }
     }

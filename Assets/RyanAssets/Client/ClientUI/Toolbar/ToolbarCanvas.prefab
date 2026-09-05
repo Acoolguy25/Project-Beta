@@ -348,8 +348,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 3159643220
-  m_fontColor: {r: 0.3301887, g: 0.3301887, b: 0.3301887, a: 0.7372549}
+    rgba: 4286611584
+  m_fontColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -485,8 +485,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 3308598581
-  m_fontColor: {r: 0.20754719, g: 0.20754719, b: 0.20754719, a: 0.77254903}
+    rgba: 4286611584
+  m_fontColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -990,8 +990,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 3159643220
-  m_fontColor: {r: 0.3301887, g: 0.3301887, b: 0.3301887, a: 0.7372549}
+    rgba: 4286611584
+  m_fontColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1340,5 +1340,7 @@ MonoBehaviour:
   modelPrefab: {fileID: 1431714335202357900, guid: 9076db7e67be3064eb8f4c8d21fcc05e, type: 3}
   scrollRect: {fileID: 415989829327915786}
   AutoScroll: 0
+  searchInputField: {fileID: 0}
   SwitchToolDelay: 0.1
+  toolUI: {fileID: 359035441056141818}
   weaponAmmoUI: {fileID: 996839098844020407}

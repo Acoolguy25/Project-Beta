@@ -29,6 +29,10 @@ namespace RyanAssets.Shared.Global {
         public readonly SyncList<int> VoteTotals = new(new());
         public readonly SyncVar<int> SkipVoteCount = new(0);
 
+        // Structure building
+        public readonly SyncList<ushort> Builds = new();
+        public readonly SyncVar<bool> CanBuild = new(false);
+
 #if UNITY_SERVER
         [NonSerialized]
         public bool TeamKillEnabled = true;
@@ -84,6 +88,10 @@ namespace RyanAssets.Shared.Global {
                     OnInstanceReady += action;
             } else
                 action();
+        }
+        public static void UnbindInstanceReady(Action action) {
+            OnInstanceReady -= action;
+            OnInstanceReadyPersistent -= action;
         }
 #endif
         public static int GetLeaderboardIndex(string name) {

@@ -140,7 +140,6 @@ namespace Universes.UniverseData.dot_invaders {
             BroadcastState();
             UpdateTopMessage();
             await UniTask.Delay(TimeSpan.FromSeconds(8), cancellationToken: token);
-            Restart();
         }
 
         protected override void OnPlayerAdded(PlayerData playerData) {

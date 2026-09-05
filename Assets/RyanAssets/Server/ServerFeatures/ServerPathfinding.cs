@@ -172,5 +172,19 @@ namespace RyanAssets.Server.ServerFeatures{
         public static void GetRandomPositionRef(ref Vector3? pos) {
             pos ??= GetRandomPosition();
         }
+
+        public static Vector3 GetRandomPositionOnCircle(Vector3 center, float maxRadius, float minRadius = 0f) {
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float radius = Mathf.Sqrt(UnityEngine.Random.Range(
+                minRadius * minRadius,
+                maxRadius * maxRadius
+            ));
+
+            return center + new Vector3(
+                Mathf.Cos(angle) * radius,
+                0f,
+                Mathf.Sin(angle) * radius
+            );
+        }
     }
 }

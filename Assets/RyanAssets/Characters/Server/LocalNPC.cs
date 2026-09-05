@@ -2,6 +2,7 @@ using FishNet.Object;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
 using RyanAssets.Server.ServerFeatures;
+using RyanAssets.Shared.Component;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Global;
 using System;
@@ -101,12 +102,19 @@ namespace RyanAssets.Characters.Server {
         // Not serialized - Unity can't show a delegate in the Inspector, so it must be
         // wired up in code.
         public Action<GameCharacter> AttackFunction;
+        // Non-character objectives and structures can opt into the same movement/attack
+        // pipeline without masquerading as GameCharacters. Character-only game modes can
+        // keep using AttackFunction unchanged.
+        public Action<IEntity> AttackEntityFunction;
 
-        public bool IsTargetInAttackRange(GameCharacter target) {
-            if (target == null || target.IsDead)
+        public bool IsTargetInAttackRange(GameCharacter target) =>
+            IsTargetInAttackRange((IEntity)target);
+
+        public bool IsTargetInAttackRange(IEntity target) {
+            if (!TryGetTargetHealth(target, out HealthComponent health) || health.IsDead)
                 return false;
 
-            float distance = Vector3.Distance(transform.position, target.transform.position);
+            float distance = GetAttackDistance(health);
             return distance >= MinAttackRange && distance <= MaxAttackRange;
         }
 
@@ -124,15 +132,17 @@ namespace RyanAssets.Characters.Server {
 
         private Vector3 _lastFleeDestination = Vector3.zero;
 
-        private GameCharacter _currentAttackTarget;
-        public GameCharacter CurrentAttackTarget => _currentAttackTarget;
-        private GameCharacter _forcedAttackTarget;
+        private HealthComponent _currentAttackTarget;
+        public GameCharacter CurrentAttackTarget =>
+            _currentAttackTarget != null ? _currentAttackTarget.GetComponent<GameCharacter>() : null;
+        public IEntity CurrentAttackEntityTarget => GetTargetEntity(_currentAttackTarget);
+        private HealthComponent _forcedAttackTarget;
         private float _lastAttackTime = -Mathf.Infinity;
 
         // Estimated target velocity, used to predict where it's going instead of chasing/fleeing
         // where it currently is. We have to estimate this ourselves by sampling its position over
         // time - there's no velocity we can read directly off an arbitrary GameCharacter.
-        private GameCharacter _velocityTrackedTarget;
+        private HealthComponent _velocityTrackedTarget;
         private Vector3 _lastTargetPosition;
         private float _lastTargetSampleTime = -1f;
         private Vector3 _targetVelocity;
@@ -233,7 +243,7 @@ namespace RyanAssets.Characters.Server {
             if (_attackCoroutine != null) {
                 StopCoroutine(_attackCoroutine);
                 _attackCoroutine = null;
-                SetAttackTarget(null);
+                SetAttackTarget((HealthComponent)null);
                 _forcedAttackTarget = null;
                 _velocityTrackedTarget = null;
                 _targetVelocity = Vector3.zero;
@@ -410,16 +420,24 @@ namespace RyanAssets.Characters.Server {
             return nearest;
         }
 
-        private float GetAttackTargetRange(GameCharacter target, float baseRange) {
+        private float GetAttackTargetRange(GameCharacter target, float baseRange) =>
+            GetAttackTargetRange(target != null ? target.HealthComponent : null, baseRange);
+
+        private float GetAttackTargetRange(HealthComponent target, float baseRange) {
+            GameCharacter targetCharacter = target != null ? target.GetComponent<GameCharacter>() : null;
             float multiplier = AllowAttackTargetOverrides
-                ? AttackTargetRangeMultiplier?.Invoke(target) ?? 1f
+                ? AttackTargetRangeMultiplier?.Invoke(targetCharacter) ?? 1f
                 : 1f;
             return baseRange * Mathf.Max(0f, multiplier);
         }
 
-        private float GetAttackTargetPriority(GameCharacter target) {
+        private float GetAttackTargetPriority(GameCharacter target) =>
+            GetAttackTargetPriority(target != null ? target.HealthComponent : null);
+
+        private float GetAttackTargetPriority(HealthComponent target) {
+            GameCharacter targetCharacter = target != null ? target.GetComponent<GameCharacter>() : null;
             return AllowAttackTargetOverrides
-                ? AttackTargetPriority?.Invoke(target) ?? 0f
+                ? AttackTargetPriority?.Invoke(targetCharacter) ?? 0f
                 : 0f;
         }
 
@@ -437,10 +455,13 @@ namespace RyanAssets.Characters.Server {
             return false;
         }
 
-        private bool IsValidAttackTarget(GameCharacter target) {
+        private bool IsValidAttackTarget(HealthComponent target) {
+            IEntity entity = GetTargetEntity(target);
             return target != null
+                && entity != null
                 && !target.IsDead
-                && EnemyTeams.Contains(target.GetTeam().realTeam)
+                && entity.Team != null
+                && EnemyTeams.Contains(entity.Team.realTeam)
                 && !target.IsProtected(gameCharacter, AttackDamageType);
         }
 
@@ -454,11 +475,22 @@ namespace RyanAssets.Characters.Server {
         /// retaliating against an attacker outside the NPC's normal acquisition radius.
         /// </summary>
         public bool TargetCharacter(GameCharacter target) {
-            if (!AllowAttackTargetOverrides || !IsValidAttackTarget(target)) return false;
+            return TargetEntity(target);
+        }
+
+        /// <summary>
+        /// Immediately enters attack mode and holds a health-bearing enemy entity as the
+        /// target. This is the objective/structure counterpart to TargetCharacter.
+        /// </summary>
+        public bool TargetEntity(IEntity target) {
+            if (!AllowAttackTargetOverrides
+                || !TryGetTargetHealth(target, out HealthComponent health)
+                || !IsValidAttackTarget(health))
+                return false;
 
             SetTargetingType(NPCTargetingType.Attack);
-            _forcedAttackTarget = target;
-            SetAttackTarget(target);
+            _forcedAttackTarget = health;
+            SetAttackTarget(health);
             return true;
         }
 
@@ -467,7 +499,10 @@ namespace RyanAssets.Characters.Server {
         // Centralizes changing _currentAttackTarget so the OnDied subscription always stays in
         // sync - subscribe to the new target, unsubscribe from the old one, and clear any stale
         // movement/velocity tracking that referred to the previous target.
-        private void SetAttackTarget(GameCharacter target) {
+        private void SetAttackTarget(GameCharacter target) =>
+            SetAttackTarget(target != null ? target.HealthComponent : null);
+
+        private void SetAttackTarget(HealthComponent target) {
             if (_currentAttackTarget == target) return;
 
             if (_currentAttackTarget != null)
@@ -488,7 +523,7 @@ namespace RyanAssets.Characters.Server {
         private void HandleAttackTargetDied(DamageType source, IEntity killer) {
             if (_forcedAttackTarget == _currentAttackTarget)
                 _forcedAttackTarget = null;
-            SetAttackTarget(null);
+            SetAttackTarget((HealthComponent)null);
         }
 
         private IEnumerator AttackRoutine() {
@@ -526,7 +561,7 @@ namespace RyanAssets.Characters.Server {
                 // meaningfully closer (RetargetSwitchThreshold) so it doesn't thrash between two
                 // similarly-distant targets every retarget tick.
                 GameCharacter closest = GetNearestCharacter(EnemyTeams, AttackTrackingRadius);
-                if (closest != null && closest != _currentAttackTarget) {
+                if (closest != null && closest.HealthComponent != _currentAttackTarget) {
                     float closestDist = Vector3.Distance(transform.position, closest.transform.position);
                     float currentDist = Vector3.Distance(transform.position, _currentAttackTarget.transform.position);
                     float closestPriority = GetAttackTargetPriority(closest);
@@ -548,7 +583,7 @@ namespace RyanAssets.Characters.Server {
         private void HandleAttackTick() {
             // Extra safety net - see HandleAttackTargetDied for the primary (immediate) path.
             if (_currentAttackTarget != null && _currentAttackTarget.IsDead)
-                SetAttackTarget(null);
+                SetAttackTarget((HealthComponent)null);
 
             if (_currentAttackTarget == null) {
                 SetAttackTarget(GetNearestCharacter(EnemyTeams, AttackTrackingRadius));
@@ -557,7 +592,7 @@ namespace RyanAssets.Characters.Server {
 
             TrackTargetVelocity();
 
-            float dist = Vector3.Distance(transform.position, _currentAttackTarget.transform.position);
+            float dist = GetAttackDistance(_currentAttackTarget);
 
             UpdateAttackMovement(dist);
 
@@ -747,10 +782,42 @@ namespace RyanAssets.Characters.Server {
             if (Time.time - _lastAttackTime < AttackCooldown) return;
             _lastAttackTime = Time.time;
 
-            if (AttackFunction != null)
-                AttackFunction.Invoke(_currentAttackTarget);
+            IEntity entity = GetTargetEntity(_currentAttackTarget);
+            GameCharacter targetCharacter = _currentAttackTarget != null
+                ? _currentAttackTarget.GetComponent<GameCharacter>()
+                : null;
+
+            if (targetCharacter != null && AttackFunction != null)
+                AttackFunction.Invoke(targetCharacter);
+            else if (entity != null && AttackEntityFunction != null)
+                AttackEntityFunction.Invoke(entity);
             else
-                Debug.LogWarning($"[{name}] In range to attack {_currentAttackTarget.name} but no AttackFunction is assigned.");
+                Debug.LogWarning($"[{name}] In range to attack {_currentAttackTarget.name} but no compatible attack function is assigned.");
+        }
+
+        private static IEntity GetTargetEntity(HealthComponent health) =>
+            health != null ? health.GetComponent<IEntity>() : null;
+
+        private static bool TryGetTargetHealth(IEntity target, out HealthComponent health) {
+            health = target is Component component ? component.GetComponent<HealthComponent>() : null;
+            return health != null;
+        }
+
+        private float GetAttackDistance(HealthComponent target) {
+            if (target == null)
+                return float.PositiveInfinity;
+
+            // Character pivots are already authored around their combat center. Structures can
+            // have a high root pivot (for example, a wall centered several metres above the
+            // NavMesh), so use their physical boundary instead of making melee NPCs chase an
+            // unreachable pivot.
+            if (target.GetComponent<GameCharacter>() == null) {
+                Collider targetCollider = target.GetComponentInChildren<Collider>();
+                if (targetCollider != null)
+                    return Vector3.Distance(transform.position, targetCollider.ClosestPoint(transform.position));
+            }
+
+            return Vector3.Distance(transform.position, target.transform.position);
         }
 
         // --- Flee ------------------------------------------------------------

@@ -65,7 +65,7 @@ namespace Universes.murder_mystery.Server {
             UpdateGameBarEvent = null;
             ForceEndGame = false;
             SpawnMultiplier = 1f;
-            ServerPlayerCharacter.CharacterAdded += OnCharacterAdded;
+            //ServerPlayerCharacter.CharacterAdded += OnCharacterAdded;
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
             ServerPlayerCharacter.SpawnLocationFunction = SpawnLocationFunction;
 
@@ -160,14 +160,14 @@ namespace Universes.murder_mystery.Server {
             player.walkSpeed.Value = 16f;
             player.sprintSpeed.Value = 21f;
         }
-        void OnCharacterAdded(LocalCharacter character){
+        protected override void OnCharacterAdded(LocalCharacter character){
+            base.OnCharacterAdded(character);
             character.Init(100);
             character.InitDefaultEffects();
             
             character.OnDied += (source, killer) => SharedOnDied(character, source, killer);
             //new Vector3(1120.56995f, -8.12100029f, 1008.34003f);
-            //character.transform.localScale = 0.7f * Vector3.one;  
-            //character.GetComponent<CharacterScaler>().SetScale(0.7f * Vector3.one);
+            //character.SetScale(0.7f * Vector3.one);
             //character.SetTeam(new TeamConfig(TeamColor.Green, TeamColor.Green));
             if (!gameInProgress)
                 return;
@@ -530,8 +530,6 @@ namespace Universes.murder_mystery.Server {
                     await TimerCountdown($"{GetWinnerName(infectionWinner)} Win! ({{0}})", DebugTimerSpeedUp.Value ? 2 : 10, token);
                     break;
             }
-
-            Restart();
         }
         protected override void Stop() {
             base.Stop();
@@ -554,7 +552,7 @@ namespace Universes.murder_mystery.Server {
             SetLeaderboardEnabled("Kills", false);
         }
         protected override void OnDestroy() {
-            ServerPlayerCharacter.CharacterAdded -= OnCharacterAdded;
+            //ServerPlayerCharacter.CharacterAdded -= OnCharacterAdded;
             if (ServerPlayerCharacter.CanSpawnFunction == CanSpawnFunction)
                 ServerPlayerCharacter.CanSpawnFunction = null;
             if (ServerPlayerCharacter.SpawnLocationFunction == SpawnLocationFunction)

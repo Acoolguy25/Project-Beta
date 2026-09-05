@@ -4253,7 +4253,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 3
+  <PrefabId>k__BackingField: 4
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 11792183194642439485
   SceneId: 0
@@ -4287,7 +4287,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584136335477564371
+  _initializedTimestamp: -8584131185174932786
 --- !u!114 &2508271702602764159
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4378,9 +4378,9 @@ MonoBehaviour:
   _componentIndexCache: 3
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
-  CharacterCamera: {fileID: 7279864874766871779}
   effectsComponent: {fileID: 8134790421318710112}
   healthComponent: {fileID: 8134790421318710113}
+  CharacterCamera: {fileID: 7279864874766871779}
   fallHeightEnabled: 1
   fallenPartsDestroyHeight: 0
   teamEditor:

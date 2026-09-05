@@ -14,6 +14,16 @@ namespace RyanAssets.Core {
             }
         }
 
+        public static string AddCommas(ulong number) {
+            return number.ToString("N0");
+        }
+        public static string AddCommas(long number) {
+            return number.ToString("N0");
+        }
+        public static string AddCommas(int number) {
+            return number.ToString("N0");
+        }
+
         // Returns a random float between min [inclusive] and max [inclusive].
         // Thread safe version of UnityEngine.Random.Range for floats.
         private static readonly ThreadLocal<System.Random> _random =

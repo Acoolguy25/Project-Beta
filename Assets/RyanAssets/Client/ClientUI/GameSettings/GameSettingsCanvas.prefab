@@ -234,7 +234,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &9100000000000000001
 RectTransform:
   m_ObjectHideFlags: 0
@@ -358,15 +358,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8c94b4461f4448448a6a0e5c4d0fc568, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Client.ClientUI.GameSettings::RyanAssets.Client.ClientUI.GameSettings.GameSettingsClient
-  modelPrefab: {fileID: 5284603660741424744, guid: cde42d9e69da2d34995db897a7b07c53, type: 3}
+  modelPrefab: {fileID: 9100000000000000002, guid: 2db4cd15a6b94754a8d8a41e8e659a25, type: 3}
   scrollRect: {fileID: 1894304943560295692}
   AutoScroll: 0
+  searchInputField: {fileID: 0}
   settingToAdditionalPrefab:
   - {fileID: 5353221908039646243, guid: bbfc346cb6ec7d04bb296e5b3f772cc0, type: 3}
   - {fileID: 5129439638430744528, guid: 813acaa4f6f0a46478cb91b8d5b0cf38, type: 3}
   categoryHeaderPrefab: {fileID: 9100000000000000002, guid: 2db4cd15a6b94754a8d8a41e8e659a25, type: 3}
   gameActionButtonsContainer: {fileID: 9100000000000000111}
   hideGameActionButtons: 0
+  resumeButton: {fileID: 9100000000000000099}
 --- !u!1 &9100000000000000007
 GameObject:
   m_ObjectHideFlags: 0
@@ -2168,7 +2170,20 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 9100000000000000089}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 2396861670928556661}
+        m_TargetAssemblyTypeName: RyanAssets.Client.ClientUI.GameSettings.GameSettingsClient,
+          RyanAssets.Client.ClientUI.GameSettings
+        m_MethodName: OnReset_ButtonPressed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &9100000000000000092
 GameObject:
   m_ObjectHideFlags: 0
@@ -2518,11 +2533,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426342, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.x
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426342, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426342, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMin.y
@@ -2530,7 +2545,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426410, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_Value
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_SizeDelta.y
@@ -2538,15 +2553,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.00024414062
+      value: -0.000030517578
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426617, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.x
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426617, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426637, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_Name

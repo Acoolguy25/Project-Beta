@@ -197,7 +197,8 @@ MonoBehaviour:
   modelPrefab: {fileID: 9100000000000000002, guid: 56d26f8b3fc2437da2e13789255c204a, type: 3}
   scrollRect: {fileID: 898951070834908149}
   AutoScroll: 1
-  chatBox: {fileID: 0}
+  searchInputField: {fileID: 0}
+  chatBox: {fileID: 4817761948271484070}
 --- !u!225 &5683709899323602274
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -544,8 +545,8 @@ GameObject:
   - component: {fileID: 9100000000000000024}
   - component: {fileID: 9100000000000000026}
   - component: {fileID: 5754910597484933578}
-  - component: {fileID: 5614910597484933578}
   - component: {fileID: 7951222224592546335}
+  - component: {fileID: 4817761948271484070}
   m_Layer: 5
   m_Name: ChatInput
   m_TagString: Untagged
@@ -612,7 +613,7 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &5614910597484933578
+--- !u!114 &7951222224592546335
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -621,9 +622,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 9100000000000000025}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2da0c512f12947e489f739169773d7ca, type: 3}
+  m_Script: {fileID: 11500000, guid: 9307a04a390f95f47ab2870089721408, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TMP_InputField
+  m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.TextboxHelper
+--- !u!114 &4817761948271484070
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9100000000000000025}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8b4448515be12d4f981d298f61f1e92, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.UI.Textbox::RyanAssets.UI.Textbox.TMP_InputField
   m_Navigation:
     m_Mode: 3
     m_WrapAround: 0
@@ -653,6 +666,7 @@ MonoBehaviour:
     m_DisabledTrigger: Disabled
   m_Interactable: 1
   m_TargetGraphic: {fileID: 5754910597484933578}
+  AutocompleteActive: 1
   m_TextViewport: {fileID: 9100000000000000035}
   m_TextComponent: {fileID: 6707111725028665878}
   m_Placeholder: {fileID: 9100000000000000031}
@@ -660,14 +674,14 @@ MonoBehaviour:
   m_VerticalScrollbarEventHandler: {fileID: 0}
   m_LayoutGroup: {fileID: 0}
   m_ScrollSensitivity: 1
-  m_ContentType: 9
+  m_ContentType: 1
   m_InputType: 1
   m_AsteriskChar: 42
-  m_KeyboardType: 1
+  m_KeyboardType: 0
   m_LineType: 0
   m_HideMobileInput: 0
   m_HideSoftKeyboard: 0
-  m_CharacterValidation: 8
+  m_CharacterValidation: 0
   m_RegexValue: 
   m_GlobalPointSize: 14
   m_CharacterLimit: 0
@@ -713,18 +727,6 @@ MonoBehaviour:
   isAlert: 0
   m_InputValidator: {fileID: 11400000, guid: 719e4074dbbebd440ade18f8310f5802, type: 2}
   m_ShouldActivateOnSelect: 1
---- !u!114 &7951222224592546335
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9100000000000000025}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9307a04a390f95f47ab2870089721408, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.TextboxHelper
 --- !u!1 &9100000000000000029
 GameObject:
   m_ObjectHideFlags: 0
@@ -970,6 +972,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 9100000000000000032}
+  - {fileID: 7605491199203531700}
   m_Father: {fileID: 9100000000000000024}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -977,6 +980,128 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: -2}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1001 &6681265016847332833
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 9100000000000000035}
+    m_Modifications:
+    - target: {fileID: 1726256880735152810, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: inputField
+      value: 
+      objectReference: {fileID: 4817761948271484070}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_Pivot.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_Pivot.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 550
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 190
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -38
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112552, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_Name
+      value: AutocompleteScrollView
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112603, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112707, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112707, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3833898989763112783, guid: a416575fc3806894682a546156d47690, type: 3}
+      propertyPath: m_Value
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: a416575fc3806894682a546156d47690, type: 3}
+--- !u!224 &7605491199203531700 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 3833898989763112533, guid: a416575fc3806894682a546156d47690, type: 3}
+  m_PrefabInstance: {fileID: 6681265016847332833}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &9100000000000000022
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1115,6 +1240,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426410, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_Size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426410, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
+      propertyPath: m_Value
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
@@ -1127,7 +1256,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 32600
+      value: 0.000045776367
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426465, guid: cb4f6859bd2c30847ba50af92874f66c, type: 3}
       propertyPath: m_AnchoredPosition.x

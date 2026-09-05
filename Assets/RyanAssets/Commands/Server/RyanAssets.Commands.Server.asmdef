@@ -2,6 +2,7 @@
     "name": "RyanAssets.Commands.Server",
     "rootNamespace": "RyanAssets.Commands.Server",
     "references": [
+        "RyanAssets.Shared.Component",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
         "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
         "GUID:a3b180a6f5474ea4a80ed95b8af4670f",

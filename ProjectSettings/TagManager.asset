@@ -13,6 +13,7 @@ TagManager:
   - CharacterNameTag
   - CoinItem
   - FloatingTool
+  - Structure
   layers:
   - Default
   - TransparentFX
@@ -28,7 +29,7 @@ TagManager:
   - 
   - Character
   - LocalCharacter
-  - 
+  - Structure
   - 
   - 
   - 

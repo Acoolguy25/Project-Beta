@@ -446,7 +446,8 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 71570343c4cad764cb5e434194ad5b54, type: 3}
   ParentObjectName: RightHand
   weaponRoot: {fileID: 2401834043414206446}
-  Accuracy: 160
+  BestAccuracy: 240
+  WorstAccuracy: 300
   MaxRange: 60
   FireRate: 0.35
   MuzzleCollisionRadius: 0.1
@@ -488,7 +489,7 @@ MonoBehaviour:
   <AssetPathHash>k__BackingField: 1110731868221280132
   SceneId: 0
   SerializedTransformProperties:
-    Position: {x: 0.15, y: 0.03, z: -0.04}
+    Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0.5, y: -0.5, z: 0.5, w: 0.5}
     Scale: {x: 1, y: 1, z: 1}
     IsValid: 1
@@ -510,7 +511,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584141478023831705
+  _initializedTimestamp: -8584131185174932786
 --- !u!114 &3334228999619063352
 MonoBehaviour:
   m_ObjectHideFlags: 0

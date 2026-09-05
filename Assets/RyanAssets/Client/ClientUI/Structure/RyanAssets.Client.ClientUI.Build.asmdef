@@ -1,0 +1,30 @@
+{
+    "name": "RyanAssets.Client.ClientUI.Build",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Build",
+    "references": [
+        "GUID:00196c2529079474c8ba52d5e10eae13",
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
+        "GUID:d62649f20bc2ba349a434c5eba6f7556",
+        "GUID:a225d37a9b46aa14a967ffdeff667c71",
+        "GUID:30b4aa37ab8e7994987c0bdb87f386dd",
+        "RyanAssets.Shared.Global",
+        "RyanAssets.Shared.Globals",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Requests",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

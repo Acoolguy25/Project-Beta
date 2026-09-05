@@ -500,6 +500,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "ToggleStructureMenu",
+                    "type": "Button",
+                    "id": "89bb6931-9e62-4d76-b30d-9bed8db816ec",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -533,6 +542,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "TogglePlayerList",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "93817661-b851-4863-aa28-28f44afa419e",
+                    "path": "<Keyboard>/b",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "ToggleStructureMenu",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

@@ -2,6 +2,7 @@
     "name": "RyanAssets.Client.ClientUI.Toolbar",
     "rootNamespace": "RyanAssets.Client.ClientUI.Toolbar",
     "references": [
+        "RyanAssets.Shared.Component",
         "GUID:d81c570acb0546e47865a9bb58cc7645",
         "GUID:bbe124153e03c834bb9c5fb786ef908a",
         "GUID:6ac2de33d550f6e43ab52d2391cf5802",

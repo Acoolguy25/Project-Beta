@@ -11,6 +11,7 @@ namespace RyanAssets.UI {
         float timer, targetTime;
         float startAlpha;
         public float targetAlpha;
+        public bool isVisible => targetAlpha != 0f;
         void Awake() {
             if (canvasGroup != null || gameObject == null)
                 return; // already initalized or destroyed

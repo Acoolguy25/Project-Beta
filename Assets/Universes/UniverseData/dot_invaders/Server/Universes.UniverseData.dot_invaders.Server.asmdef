@@ -2,6 +2,7 @@
     "name": "Universes.UniverseData.dot_invaders.Server",
     "rootNamespace": "Universes.UniverseData.dot_invaders",
     "references": [
+        "RyanAssets.Shared.Component",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
         "GUID:17810ac72512f5d41b3e56d099b5d894",
         "GUID:301d878e906f4e0d81e7383ad088de42",

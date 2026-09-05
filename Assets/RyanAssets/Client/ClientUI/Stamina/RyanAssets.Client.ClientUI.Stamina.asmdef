@@ -2,6 +2,7 @@
     "name": "RyanAssets.Client.ClientUI.Stamina",
     "rootNamespace": "RyanAssets.Client.ClientUI.Stamina",
     "references": [
+        "RyanAssets.Shared.Component",
         "GUID:bbe124153e03c834bb9c5fb786ef908a",
         "GUID:d81c570acb0546e47865a9bb58cc7645",
         "GUID:ed67ee73c62f4dd4086a7f7f2bbde5ed",

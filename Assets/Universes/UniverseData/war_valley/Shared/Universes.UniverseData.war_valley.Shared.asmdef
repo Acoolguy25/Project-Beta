@@ -1,0 +1,19 @@
+{
+    "name": "Universes.UniverseData.war_valley.Shared",
+    "rootNamespace": "Universes.UniverseData.war_valley.Shared",
+    "references": [
+        "FishNet.Runtime",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Declarations",
+        "Unity.AI.Navigation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
