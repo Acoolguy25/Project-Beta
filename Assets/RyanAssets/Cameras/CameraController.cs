@@ -25,6 +25,7 @@ namespace RyanAssets.Cameras
         private List<bool> CameraActive = new();
 
         private int activeIndex;
+        private int cameraLock = -1;
         public ICamera activeCamera { get; private set; }
         public static GameCharacter targetCharacter { get; private set; }
         //private AudioListener audioListener;
@@ -36,8 +37,11 @@ namespace RyanAssets.Cameras
             targetCharacter = null;
         }
         public void SwitchCamera(int index) {
-            if (!this)
+            if (!this || index < 0 || index >= CameraComponents.Count)
                 return;
+            int lockedIndex = cameraLock;
+            if (lockedIndex >= 0 && lockedIndex < CameraComponents.Count && index != lockedIndex)
+                index = lockedIndex;
             ICamera newCamera = CameraComponents[index];
             Assert.IsNotNull(newCamera, "Active Camera cannot be null");
             Assert.IsTrue(newCamera.transform.parent == transform, "Cameras must be parented to GameObject.Cameras");
@@ -46,7 +50,7 @@ namespace RyanAssets.Cameras
             ICamera newController = newCamera.GetComponent<ICamera>();
             oldController?.DisableCamera(newCamera.transform, (GameCameraType) index);
             newController?.EnableCamera(activeCamera?.transform, (GameCameraType) activeIndex);
-            activeCamera.gameObject.SetActive(false);
+            activeCamera?.gameObject.SetActive(false);
             newCamera.gameObject.SetActive(true);
             activeCamera = newCamera;
             activeIndex = index;
@@ -54,7 +58,15 @@ namespace RyanAssets.Cameras
         }
         public void SetCameraAvailable(GameCameraType camType, bool active) {
             int index = (int) camType;
+            if (index < 0 || index >= CameraActive.Count)
+                return;
             CameraActive[index] = active;
+            int lockedIndex = cameraLock;
+            if (lockedIndex >= 0 && lockedIndex < CameraComponents.Count) {
+                if (activeIndex != lockedIndex || !CameraComponents[lockedIndex].gameObject.activeSelf)
+                    SwitchCamera(lockedIndex);
+                return;
+            }
             if (active && index > activeIndex){
                 SwitchCamera(index);
             }
@@ -138,25 +150,50 @@ namespace RyanAssets.Cameras
             }
         }
         void OnMyPlayerAdded(PlayerData playerData) {
+            cameraLock = playerData.lockedCameraType.Value;
             OnCharacterRemoved(null);
             LocalPlayer.OnCharacterAdded.Subscribe(OnCharacterAdded);
             LocalPlayer.OnCharacterRemoved += OnCharacterRemoved;
             playerData.cameraTypes.OnChange += OnCameraTypeSyncChanged;
+            playerData.lockedCameraType.OnChange += OnCameraLockChanged;
 
             OnCameraTypeSyncChanged(SyncHashSetOperation.Set, GameCameraType.SpectateCamera, false);
         }
         void OnMyPlayerRemoved(PlayerData playerData) {
+            cameraLock = -1;
             LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
             LocalPlayer.OnCharacterRemoved -= OnCharacterRemoved;
             playerData.cameraTypes.OnChange -= OnCameraTypeSyncChanged;
+            playerData.lockedCameraType.OnChange -= OnCameraLockChanged;
 
             OnCameraTypeSyncChanged(SyncHashSetOperation.Clear, default, false);
             SetCameraTarget(null);
+        }
+        void OnCameraLockChanged(int previous, int next, bool asServer) {
+            cameraLock = next;
+            if (next >= 0 && next < CameraComponents.Count) {
+                SwitchCamera(next);
+                return;
+            }
+            for (int i = CameraActive.Count - 1; i >= 0; i--) {
+                if (CameraActive[i]) {
+                    SwitchCamera(i);
+                    return;
+                }
+            }
         }
         private void Start() {
             //audioListener = GetComponent<AudioListener>();
             activeCamera = null;
             activeIndex = -1;
+            // Existing camera rigs acquire the reusable mode without requiring every
+            // universe's client scene to duplicate a first-person camera prefab.
+            if (transform.Find(nameof(GameCameraType.FirstPersonCamera)) == null) {
+                var firstPerson = new GameObject(nameof(GameCameraType.FirstPersonCamera));
+                firstPerson.SetActive(false);
+                firstPerson.transform.SetParent(transform, false);
+                firstPerson.AddComponent<FirstPersonController>();
+            }
             for (int i = 0; i < transform.childCount; i++){
                 ICamera cam = transform.GetChild(i).GetComponent<ICamera>();
                 bool cam_active = cam.gameObject.activeSelf;

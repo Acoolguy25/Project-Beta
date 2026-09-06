@@ -1,0 +1,6 @@
+{
+  "name": "Universes.UniverseData.classic_horror.Shared",
+  "rootNamespace": "Universes.UniverseData.classic_horror",
+  "references": ["FishNet.Runtime", "RyanAssets.Core"],
+  "autoReferenced": true
+}

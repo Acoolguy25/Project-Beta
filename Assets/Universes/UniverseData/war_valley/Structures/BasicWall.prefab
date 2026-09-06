@@ -140,9 +140,9 @@ MonoBehaviour:
   Description: A very basic structure
   Cost: 0
   Duration: 0
-  DisplayName: Basic Wall
   Sprite: {fileID: 0}
-  Team:
+  displayName: Basic Wall
+  team:
     realTeam: 2
     displayTeam: 2
   Category: Defense
@@ -176,7 +176,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 6
+  <PrefabId>k__BackingField: 8
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 13561180965149319898
   SceneId: 0
@@ -206,7 +206,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584130693389850853
+  _initializedTimestamp: -8584128733573846258
 --- !u!114 &7408282882128479229
 MonoBehaviour:
   m_ObjectHideFlags: 0

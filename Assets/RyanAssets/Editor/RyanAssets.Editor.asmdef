@@ -3,7 +3,11 @@
     "rootNamespace": "RyanAssets.Editor",
     "references": [
         "GUID:9bc24441b1edc054a980e2afec52bdcc",
-        "GUID:f51ebe6a0ceec4240a699833d6309b23"
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "FishNet.Runtime",
+        "RyanAssets.Characters.Shared",
+        "GameKit.Dependencies",
+        "RyanAssets.Shared.Component"
     ],
     "includePlatforms": [
         "Editor"

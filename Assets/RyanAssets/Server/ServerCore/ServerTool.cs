@@ -130,7 +130,7 @@ namespace RyanAssets.Server.ServerCore
                 toolsToDespawn.Add(tool);
 
             foreach (ToolBaseShared tool in toolsToDespawn) {
-                if (tool != null && tool.IsSpawned)
+                if (tool != null && tool.IsSpawned && tool.gameObject.scene.IsValid() && InstanceFinder.IsServerStarted)
                     InstanceFinder.ServerManager.Despawn(tool.gameObject);
             }
         }

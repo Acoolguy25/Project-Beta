@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca5f5d0dc325de14e8aeecc6f3f4d44a, type: 3}
+  m_Name: NPCCharacters
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.NPCCharacterCatalog
+  robot: {fileID: 6865002775998532502, guid: 464ffb59118c58248a4e3c9bc1c665f9, type: 3}
+  monster: {fileID: 7685284495195834801, guid: bed017e4c8cfbfc47847d191bdfe95c4, type: 3}

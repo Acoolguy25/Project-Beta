@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Universes.UniverseData.war_valley.Shared {
     /// <summary>The networked War Valley objective attacked by hostile teams.</summary>
     [RequireComponent(typeof(EffectsComponent), typeof(HealthComponent))]
-    public sealed class WV_Flag : Entity, ITeam {
+    public sealed class WV_Flag : EntityBase, ITeam {
         [SerializeField] private string displayName = "War Valley Flag";
         [SerializeField] private TeamConfig team = new(TeamColor.Blue);
         [SerializeField, Min(1)] private long maxHealth = 1000;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,11 +11,18 @@ namespace RyanAssets.Input {
         public static event Action<int> toolBarHotkeyPressed;
         public static event Action<Vector3> activateToolPressed;
         public static event Action reloadToolPressed;
+        public static event Action interactPressed, primaryPressed, journalPressed;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             toolBarHotkeyPressed = null;
             activateToolPressed = null;
+            reloadToolPressed = null;
+            interactPressed = primaryPressed = journalPressed = null;
         }
+        // Utility actions live in the existing Tool action map and inherit the
+        // normal prompt/menu/chat input policy.
+        public void OnInteract() => interactPressed?.Invoke();
+        public void OnJournal() => journalPressed?.Invoke();
         public void On_0() {
             toolBarHotkeyPressed?.Invoke(0);
         }
@@ -50,6 +57,9 @@ namespace RyanAssets.Input {
             reloadToolPressed?.Invoke();
         }
         bool IsCursorFree() {
+            if (Cursor.lockState == CursorLockMode.Locked || EventSystem.current == null)
+                return true;
+            if (Mouse.current == null) return false;
             PointerEventData pointerData = new(EventSystem.current) {
                 position = Mouse.current.position.ReadValue()
             };
@@ -69,8 +79,8 @@ namespace RyanAssets.Input {
         public static bool TryGetCursorWorldPosition(out Vector3 worldPosition, int layerMask = Physics.DefaultRaycastLayers) {
             Mouse mouse = Mouse.current;
             Camera camera = Camera.main;
-            if (mouse != null && camera != null) {
-                Ray ray = camera.ScreenPointToRay(mouse.position.ReadValue());
+            if (camera != null && (mouse != null || Cursor.lockState == CursorLockMode.Locked)) {
+                Ray ray = GetAimRay(camera);
                 int cursorMask = layerMask & ~LayerMask.GetMask("LocalCharacter", "Ignore Raycast");
                 if (Physics.Raycast(ray, out RaycastHit hit, float.MaxValue, cursorMask, QueryTriggerInteraction.Ignore)) {
                     worldPosition = hit.point;
@@ -85,8 +95,15 @@ namespace RyanAssets.Input {
             TryGetCursorWorldPosition(out Vector3 worldPosition);
             return worldPosition;
         }
+        public static Ray GetAimRay(Camera camera) {
+            return Cursor.lockState == CursorLockMode.Locked || Mouse.current == null
+                ? camera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0))
+                : camera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        }
         public void OnActivateTool() {
-            if (IsCursorFree() && TryGetCursorWorldPosition(out Vector3 worldPosition))
+            if (!IsCursorFree()) return;
+            primaryPressed?.Invoke();
+            if (TryGetCursorWorldPosition(out Vector3 worldPosition))
                 activateToolPressed?.Invoke(worldPosition);
         }
     }

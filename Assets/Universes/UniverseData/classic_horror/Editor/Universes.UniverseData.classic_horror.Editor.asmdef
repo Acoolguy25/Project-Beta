@@ -1,0 +1,25 @@
+{
+    "name": "Universes.UniverseData.classic_horror.Editor",
+    "references": [
+        "Universes.UniverseData.classic_horror.Shared",
+        "Universes.UniverseData.classic_horror.Client",
+        "RyanAssets.Tools.Shared",
+        "RyanAssets.Tools.Client",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Declarations",
+        "FishNet.Runtime",
+        "GameKit.Dependencies",
+        "Unity.TextMeshPro",
+        "Unity.ugui",
+        "Unity.AI.Navigation",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "RyanAssets.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ]
+}

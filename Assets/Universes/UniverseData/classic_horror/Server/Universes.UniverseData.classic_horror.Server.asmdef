@@ -1,0 +1,42 @@
+{
+    "name":  "Universes.UniverseData.classic_horror.Server",
+    "rootNamespace":  "Universes.UniverseData.classic_horror.Server",
+    "references":  [
+                       "Universes.UniverseData.classic_horror.Shared",
+                       "RyanAssets.Shared.Globals",
+                       "RyanAssets.Shared.Component",
+                       "RyanAssets.Tools.Shared",
+                       "FishNet.Runtime",
+                       "RyanAssets.Levels.Server",
+                       "RyanAssets.Commands.Server",
+                       "RyanAssets.Server.ServerCore",
+                       "RyanAssets.Server.ServerFeatures",
+                       "RyanAssets.Shared.Global",
+                       "RyanAssets.Characters.Server",
+                       "RyanAssets.Characters.Shared",
+                       "RyanAssets.DataService",
+                       "RyanAssets.Shared.Declarations",
+                       "RyanAssets.Shared.Requests",
+                       "GUID:f51ebe6a0ceec4240a699833d6309b23",
+                       "RyanAssets.Core"
+                   ],
+    "includePlatforms":  [
+
+                         ],
+    "excludePlatforms":  [
+
+                         ],
+    "allowUnsafeCode":  false,
+    "overrideReferences":  false,
+    "precompiledReferences":  [
+
+                              ],
+    "autoReferenced":  true,
+    "defineConstraints":  [
+                              "UNITY_SERVER"
+                          ],
+    "versionDefines":  [
+
+                       ],
+    "noEngineReferences":  false
+}

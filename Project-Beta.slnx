@@ -1,6 +1,7 @@
 ﻿<Solution>
   <Project Path="FishNet.Runtime.csproj" />
   <Project Path="FishNet.Codegen.Cecil.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Universes.UniverseData.dot_invaders.Client.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="RyanAssets.Cameras.csproj" />
@@ -9,15 +10,18 @@
   <Project Path="Universes.UniverseData.war_valley.Shared.csproj" />
   <Project Path="EasyDebug.Client.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Stamina.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Toolbar.csproj" />
+  <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.Tools.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="RyanAssets.Shared.Requests.csproj" />
   <Project Path="RyanAssets.Characters.Client.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Spectate.csproj" />
   <Project Path="RyanAssets.Characters.Shared.csproj" />
+  <Project Path="RyanAssets.Shared.Component.csproj" />
   <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="RyanAssets.Tools.Client.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
@@ -37,6 +41,7 @@
   <Project Path="RyanAssets.Client.ClientModules.csproj" />
   <Project Path="RyanAssets.PromptService.csproj" />
   <Project Path="RyanAssets.TweenService.TweenComponents.csproj" />
+  <Project Path="Universes.UniverseData.classic_horror.Shared.csproj" />
   <Project Path="RyanAssets.Commands.Client.csproj" />
   <Project Path="RyanAssets.UI.Autocomplete.csproj" />
   <Project Path="URPWizard.csproj" />
@@ -44,20 +49,18 @@
   <Project Path="RyanAssets.Authentication.csproj" />
   <Project Path="RyanAssets.Client.Audio.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.NameTag.csproj" />
-  <Project Path="RyanAssets.Shared.Component.csproj" />
   <Project Path="RyanAssets.Client.ClientCore.csproj" />
   <Project Path="RyanAssets.UI.Textbox.csproj" />
+  <Project Path="Universes.UniverseData.classic_horror.Tests.csproj" />
   <Project Path="RyanAssets.Items.Coin.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.Client.CharacterEffects.csproj" />
+  <Project Path="Universes.UniverseData.classic_horror.Client.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
   <Project Path="EasyDebug.Shared.csproj" />
   <Project Path="RyanAssets.Levels.Shared.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Build.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
-  <Project Path="RyanAssets.Shared.Globals.csproj" />
   <Project Path="RpcGen.Runtime.csproj" />
+  <Project Path="Universes.UniverseData.classic_horror.Editor.csproj" />
   <Project Path="Universes.csproj" />
 </Solution>

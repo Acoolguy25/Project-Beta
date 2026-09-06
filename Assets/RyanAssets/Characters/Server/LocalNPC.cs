@@ -17,7 +17,8 @@ namespace RyanAssets.Characters.Server {
         Random,
         Character,
         Flee,
-        Attack
+        Attack,
+        External
     }
 
     [RequireComponent(typeof(NavMeshAgent))]
@@ -35,6 +36,8 @@ namespace RyanAssets.Characters.Server {
 
         [Header("Targeting")]
         public NPCTargetingType TargetingType = NPCTargetingType.Random;
+        [Tooltip("Disable when a game-specific perception policy chooses targets.")]
+        public bool AutomaticTargeting = true;
         private NPCTargetingType _previousTargetingType = NPCTargetingType.Random;
         [NonSerialized] public DamageType AttackDamageType; // set in runtime by game specific script
         public GameObject PreviousTarget;
@@ -172,7 +175,7 @@ namespace RyanAssets.Characters.Server {
 
         void OnEnable() {
             agent.enabled = true;
-            agent.isStopped = TargetingType == NPCTargetingType.None;
+            if (agent.isOnNavMesh) agent.isStopped = TargetingType == NPCTargetingType.None;
             UpdateSpeed();
         }
 
@@ -235,6 +238,25 @@ namespace RyanAssets.Characters.Server {
                 _attackCoroutine = StartCoroutine(AttackRoutine());
         }
 
+        /// <summary>Move to a reachable position chosen by an external policy while
+        /// retaining shared navigation validation, rotation, and ragdoll lifecycle.</summary>
+        Vector3 externalDestination;
+        float nextExternalPath;
+        public bool MoveTo(Vector3 destination, float speed) {
+            if (!CanNavigate()) return false;
+            SetTargetingType(NPCTargetingType.External);
+            agent.speed = Mathf.Max(0, speed);
+            if (Time.time < nextExternalPath && (destination - externalDestination).sqrMagnitude < 1f
+                && agent.hasPath && !agent.isPathStale && agent.pathStatus == NavMeshPathStatus.PathComplete) {
+                agent.isStopped = false;
+                return true;
+            }
+            if (!TrySetDestination(destination)) return false;
+            externalDestination = destination;
+            nextExternalPath = Time.time + 0.75f;
+            return true;
+        }
+
         private void StopStateCoroutines() {
             if (_fleeCoroutine != null) {
                 StopCoroutine(_fleeCoroutine);
@@ -262,12 +284,12 @@ namespace RyanAssets.Characters.Server {
             HandleRotation();
 
             // Flee takes priority over everything, including attacking.
-            if (TargetingType != NPCTargetingType.Flee
+            if (AutomaticTargeting && TargetingType != NPCTargetingType.Flee
                 && _fleeTeamSet.Count > 0
                 && AnyCharacterInRange(_fleeTeamSet, FleeEnterRadius)) {
                 SetTargetingType(NPCTargetingType.Flee);
             }
-            else if (TargetingType != NPCTargetingType.Flee
+            else if (AutomaticTargeting && TargetingType != NPCTargetingType.Flee
                 && TargetingType != NPCTargetingType.Attack
                 && EnemyTeams != null
                 && AnyEnemyInAttackRange(AttackEngagementRadius)) {
@@ -698,12 +720,13 @@ namespace RyanAssets.Characters.Server {
         // from the NPC's current position.
         private bool TrySetDestination(Vector3 candidate) {
             if (!CanNavigate() || _destinationPath == null) return false;
-            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 4f, agent.areaMask)) return false;
-            if (!NavMesh.CalculatePath(transform.position, hit.position, agent.areaMask, _destinationPath)) return false;
+            var filter = new NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 4f, filter)) return false;
+            if (!agent.CalculatePath(hit.position, _destinationPath)) return false;
             if (_destinationPath.status != NavMeshPathStatus.PathComplete) return false;
 
             agent.isStopped = false;
-            return agent.SetDestination(hit.position);
+            return agent.SetPath(_destinationPath);
         }
 
         private void StopMovement() {

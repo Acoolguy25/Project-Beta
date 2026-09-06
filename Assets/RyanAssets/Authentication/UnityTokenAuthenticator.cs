@@ -22,6 +22,8 @@ namespace RyanAssets.Authentication {
 #pragma warning restore CS0414
         public GameObject playerDataPrefab;
         Dictionary<NetworkConnection, JObject> joinPlayerData = new();
+        readonly Dictionary<NetworkConnection, int> pendingAuthentication = new();
+        int authenticationSequence;
 
         public override void InitializeOnce(NetworkManager networkManager) {
             base.InitializeOnce(networkManager);
@@ -84,9 +86,12 @@ namespace RyanAssets.Authentication {
                 return;
             }
 
-            ValidateToken(conn, req.Token, req.ClientVersion).Forget();
+            if (pendingAuthentication.ContainsKey(conn)) return;
+            int request = ++authenticationSequence;
+            pendingAuthentication[conn] = request;
+            ValidateToken(conn, req.Token, req.ClientVersion, request).Forget();
         }
-        private async UniTask ValidateToken(NetworkConnection conn, string token, string clientVersion) {
+        private async UniTask ValidateToken(NetworkConnection conn, string token, string clientVersion, int request) {
             if (IsShuttingDown) {
                 Fail(conn, "This server is shutting down!");
                 return;
@@ -102,18 +107,23 @@ namespace RyanAssets.Authentication {
             }
             var (res, json) = await BackendNetwork.PostRequest("/api/internal/v1/user/add", accessToken: token);
 
+            // The connection can disconnect or be pooled and reused while the
+            // backend request is in flight. Never authenticate that later session.
+            if (!pendingAuthentication.TryGetValue(conn, out int activeRequest) || activeRequest != request
+                || !NetworkManager.IsServerStarted || !conn.IsValid || !conn.IsActive || conn.Disconnecting) {
+                if (res == null) EarlyPlayerDisconnected?.Invoke(conn, json);
+                return;
+            }
+            pendingAuthentication.Remove(conn);
+
             if (res == null) {
-                if (conn.Disconnecting) {
-                    EarlyPlayerDisconnected.Invoke(conn, json);
-                    return;
-                }
+                joinPlayerData[conn] = json;
+                conn.OnLoadedStartScenes += OnPlayerAuthenticated;
                 NetworkManager.ServerManager.Broadcast(conn, new AuthResponse {
                     Success = true
                 }, false);
 
                 OnAuthenticationResult?.Invoke(conn, true);
-                joinPlayerData[conn] = json;
-                conn.OnLoadedStartScenes += OnPlayerAuthenticated;
             } else {
                 Fail(conn, res);
             }
@@ -133,6 +143,8 @@ namespace RyanAssets.Authentication {
             OnAuthenticationSucceeded?.Invoke(conn, playerData, json);
         }
         private void Fail(NetworkConnection conn, string reason) {
+            pendingAuthentication.Remove(conn);
+            if (!conn.IsValid || !conn.IsActive || conn.Disconnecting) return;
             Debug.Log("Auth Failed: " + reason);
 
             NetworkManager.ServerManager.Broadcast(conn, new AuthResponse {
@@ -147,10 +159,11 @@ namespace RyanAssets.Authentication {
         void ServerConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args) {
             if (args.ConnectionState != RemoteConnectionState.Stopped)
                 return;
+            pendingAuthentication.Remove(conn);
             conn.OnLoadedStartScenes -= OnPlayerAuthenticated; // Emergency cleanup
             if (joinPlayerData.TryGetValue(conn, out JObject json)) {
                 joinPlayerData.Remove(conn);
-                EarlyPlayerDisconnected.Invoke(conn, json);
+                EarlyPlayerDisconnected?.Invoke(conn, json);
             }
         }
 #endif

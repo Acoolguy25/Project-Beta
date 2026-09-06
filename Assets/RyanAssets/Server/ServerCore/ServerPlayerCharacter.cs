@@ -86,7 +86,9 @@ namespace RyanAssets.Server.ServerCore {
             ClientToCharacter.Remove(character.Owner);
             //if (character.TryGetComponent(out LocalCharacter localCharacter) && !localCharacter.IsDead)
             //    localCharacter.Kill(DamageType.Despawn);
-            if (character.IsSpawned) {
+            // Scene teardown can invalidate the object before FishNet finishes
+            // player removal callbacks. The registry still needs clearing.
+            if (character.IsSpawned && character.gameObject.scene.IsValid() && InstanceFinder.IsServerStarted) {
                 InstanceFinder.ServerManager.Despawn(character);
                 //Debug.Log("Despawning PlayerCharacter {}", character);
             }

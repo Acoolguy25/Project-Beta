@@ -12,6 +12,8 @@ using RyanAssets.Client.ClientCore;
 
 namespace RyanAssets.Client.ClientUI.PlayerList {
     public class ClientPlayerList : ListGridUI<(NetworkConnection conn, PlayerData data)> {
+        protected override string GetItemName((NetworkConnection conn, PlayerData data) player) =>
+            player.data != null ? player.data.player_id.Value : "Disconnected player";
         protected override void Start() {
             base.Start();
             PlayerData.OnPlayerAdded += OnPlayerAdded;

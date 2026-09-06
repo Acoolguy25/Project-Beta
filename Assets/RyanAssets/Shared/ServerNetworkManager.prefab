@@ -458,6 +458,7 @@ MonoBehaviour:
   toolPrefab:
   - {fileID: 4644704030424568041, guid: 22d87e29756248f49818058520841b2d, type: 3}
   - {fileID: 3268832193828849133, guid: a845bcc7174ef9549aca2d92ae07b0b0, type: 3}
+  - {fileID: 5349086242600688562, guid: b2a29febcf9664f46b15ad8259c3e6d9, type: 3}
   floatingToolPrefab: {fileID: 6259617292625988322, guid: 3caae25cec659784aaa74635395b009a, type: 3}
 --- !u!1001 &4203954240468426244
 PrefabInstance:

@@ -10,8 +10,11 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace RyanAssets.Characters.Shared {
-    public class GameCharacter : Entity, ITeam {
+    public class GameCharacter : EntityBase, ITeam {
         public const string AnonymousDisplayName = "Anonymous";
+        [Tooltip("Whether this character receives the shared overhead name and health UI.")]
+        [SerializeField] bool showNameTag = true;
+        public bool ShowNameTag => showNameTag;
 
         [Header("Character References")]
         [SerializeField] public Transform CharacterCamera;

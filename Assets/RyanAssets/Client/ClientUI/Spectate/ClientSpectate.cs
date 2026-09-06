@@ -51,13 +51,11 @@ namespace RyanAssets.Client.ClientUI.Spectate
         void AdvancePosition(int deltaPosition) {
             List<GameCharacter> characters = GameCharacter.TeamToCharacter.Values
                 .SelectMany(x => x)
-                // A despawning Unity object can compare equal to null. Require a live
-                // object before allowing the current selection through the fallback.
-                .Where(c => c && ((!c.IsDead && c.CanSpectate.Value) || currentCharacter == c))
+                // Dead or excluded characters must never remain selected as a fallback.
+                .Where(c => c && !c.IsDead && c.CanSpectate.Value)
                 .ToList();
-            if (characters.Count == 0 || (characters.Count == 1 && characters[0] == currentCharacter)) {
+            if (characters.Count == 0) {
                 // This is expected while waiting for the next round to spawn.
-                currentCharacter = null;
                 //Debug.LogWarning($"No valid characters to spectate. Waiting for next round.");
                 SetCamera(null);
                 return;
@@ -88,6 +86,8 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 currentCharacter.Health.OnChange -= OnPlayerHealthChanged;
                 currentCharacter.MaxHealth.OnChange -= OnPlayerHealthChanged;
                 currentCharacter.MyGameCharacterRemoved -= OnMyGameCharacterRemoved;
+                currentCharacter.OnDied -= OnSpectatedCharacterDied;
+                currentCharacter.CanSpectate.OnChange -= OnSpectateEligibilityChanged;
             }
 
             currentCharacter = null;
@@ -108,10 +108,11 @@ namespace RyanAssets.Client.ClientUI.Spectate
                 currentCharacter.Health.OnChange += OnPlayerHealthChanged;
                 currentCharacter.MaxHealth.OnChange += OnPlayerHealthChanged;
                 currentCharacter.MyGameCharacterRemoved += OnMyGameCharacterRemoved;
+                currentCharacter.OnDied += OnSpectatedCharacterDied;
+                currentCharacter.CanSpectate.OnChange += OnSpectateEligibilityChanged;
 
-                controller.SetCameraTarget(character);
             }
-
+            controller.SetCameraTarget(character);
             UpdatePlayerLabel();
             UpdatePlayerHealth();
             UpdatePlayerLevel();
@@ -132,13 +133,18 @@ namespace RyanAssets.Client.ClientUI.Spectate
             UpdatePlayerLabel();
         }
         void OnPlayerHealthChanged(long oldVal, long newVal, bool asServer) {
-            UpdatePlayerHealth();
+            if (currentCharacter != null && currentCharacter.IsDead) AdvancePosition(1);
+            else UpdatePlayerHealth();
         }
         void OnPlayerXPChanged(ulong oldVal, ulong newVal, bool asServer) {
             UpdatePlayerLevel();
         }
         void OnMyGameCharacterRemoved(GameCharacter character) {
             AdvancePosition(1);
+        }
+        void OnSpectatedCharacterDied(DamageType damage, IEntity source) => AdvancePosition(1);
+        void OnSpectateEligibilityChanged(bool before, bool after, bool asServer) {
+            if (!after) AdvancePosition(1);
         }
 
         void UpdatePlayerLabel() {

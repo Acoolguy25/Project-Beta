@@ -10,6 +10,14 @@ using RyanAssets.Shared.Global;
 
 namespace RyanAssets.Characters.Server { 
     public static class ServerNPC {
+        /// <summary>Spawn a catalog character. Existing calls default to the original robot.</summary>
+        public static LocalNPC SpawnNPC(NPCCharacter character = NPCCharacter.Robot, Vector3? location = null,
+            UnityEngine.SceneManagement.Scene scene = default) {
+            var catalog = Resources.Load<NPCCharacterCatalog>("NPCCharacters");
+            var prefab = catalog != null ? catalog.GetPrefab(character) : null;
+            if (prefab == null) throw new InvalidOperationException($"NPCCharacters catalog has no {character} prefab.");
+            return SpawnNPC(prefab, location, scene);
+        }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
             ServerRunner.OnResetEvent += Reset;
@@ -22,13 +30,13 @@ namespace RyanAssets.Characters.Server {
             }
             return count;
         }
-        public static LocalNPC SpawnNPC(GameObject original, Vector3? location = null) {
+        public static LocalNPC SpawnNPC(GameObject original, Vector3? location = null, UnityEngine.SceneManagement.Scene scene = default) {
             GameObject clone = GameObject.Instantiate(original);
             if (location == null)
                 location = ServerPathfinding.GetRandomPosition();
             clone.transform.position = location.Value;
             GameCharacter gameCharacter = clone.GetComponent<GameCharacter>();
-            InstanceFinder.ServerManager.Spawn(clone, null); // spawn with server ownership
+            InstanceFinder.ServerManager.Spawn(clone, null, scene); // spawn with server ownership in the observing scene
             // Init writes SyncVars and therefore must happen after FishNet initializes the object.
             gameCharacter.Init(100);
             LocalNPC npc = clone.AddComponent<LocalNPC>();

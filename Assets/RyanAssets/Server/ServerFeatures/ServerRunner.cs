@@ -124,7 +124,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 SetTopMessage($"Waiting for players ({activePlayers}/{playerRequirement})");
                 await TaskHelper.WaitForAction<PlayerData>(
                     h => PlayerData.OnPlayerAdded += h,
-                    h => PlayerData.OnPlayerRemoved -= h,
+                    h => PlayerData.OnPlayerAdded -= h,
                     token
                 );
             }

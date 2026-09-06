@@ -2,6 +2,7 @@
     "name": "RyanAssets.Cameras",
     "rootNamespace": "RyanAssets.Cameras",
     "references": [
+        "Unity.RenderPipelines.Universal.Runtime",
         "RyanAssets.Shared.Component",
         "GUID:da01a9a0aa24eb94ea427fd540755587",
         "GUID:4307f53044263cf4b835bd812fc161a4",

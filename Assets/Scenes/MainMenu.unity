@@ -93,7 +93,7 @@ LightmapSettings:
     m_ExportTrainingData: 0
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
-  m_LightingDataAsset: {fileID: 20201, guid: 0000000000000000f000000000000000, type: 0}
+  m_LightingDataAsset: {fileID: 112000000, guid: abb699236fe98f04ab5b16c7cfa94ece, type: 2}
   m_LightingSettings: {fileID: 0}
 --- !u!196 &4
 NavMeshSettings:
@@ -823,7 +823,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e6495cf6e9073c41a76dabfdb4e8347, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Debug::EasyDebug.DebugPlayGame
-  PlayGameUniverseId: murder_mystery
   continueButton: {fileID: 643041136}
 --- !u!4 &1955165352
 Transform:

@@ -8,6 +8,9 @@ namespace RyanAssets.Input {
         public Vector2 look;
         public bool jump;
         public bool sprint;
+        PlayerInput playerInput;
+        public bool LookIsRate => playerInput != null && playerInput.actions["Character/Look"].activeControl?.device is Gamepad;
+        void Awake() => playerInput = GetComponent<PlayerInput>();
 
         [Header("Movement Settings")]
         public bool analogMovement;

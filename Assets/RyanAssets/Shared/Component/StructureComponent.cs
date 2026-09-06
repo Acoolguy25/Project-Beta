@@ -7,7 +7,7 @@ using UnityEngine.UI;
 
 namespace RyanAssets.Shared.Declarations {
     [Serializable]
-    public class StructureComponent : Entity, IStructure {
+    public class StructureComponent : EntityBase, IStructure {
         [Header("Structure Info")]
         public string StructureID;
         public string Description;

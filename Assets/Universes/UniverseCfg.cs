@@ -51,12 +51,19 @@ namespace Universes {
                 access = UniverseAccess.Public
             },
             new(){
+                id = "classic_horror",
+                title = "Investigator",
+                description = "A horror story where you investigate an unknown horror source",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
+            },
+            new(){
                 id = "war_valley",
                 title = "War Valley",
                 description = "A strategic battle for control of the territory.",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Protected
-            }
+            },
         };
         public static UniverseStruct GetUniverseFromId(string id) {
             foreach (UniverseStruct universe in ActiveUniverses) {

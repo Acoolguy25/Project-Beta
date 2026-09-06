@@ -122,7 +122,7 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
 
             WV_Flag flag = WV_Flag.Instance;
-            if (flag != null && !flag.IsDead && localNPC.CurrentAttackEntityTarget != flag)
+            if (flag != null && !flag.IsDead && localNPC.CurrentAttackEntityTarget != flag.GetComponent<IEntity>())
                 TargetFlag();
         }
 

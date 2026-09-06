@@ -26,8 +26,10 @@ namespace RyanAssets.Login {
             return await BackendNetwork.PostRequest("/api/players/v1/me");
         }
         async void SignedIn() {
+            if (this == null || loginScreen == null) return;
             loginScreen.RefreshScreen();
             (string res, JObject json) = await BackendClient.RequestAsync(LoadPlayerStats, "Login", promptWaiting: PromptId.UsernameCheckAwait, promptResult: PromptId.UsernameResponse);
+            if (this == null || loginScreen == null || usernameInputField == null) return;
             if (res != null || json == null) {
                 Debug.LogError($"Login player stats request failed: {res ?? "Response JSON was empty"}");
                 return;

@@ -26,6 +26,9 @@ namespace RyanAssets.Tools.Client
         protected Collider hitCollider;
         protected float StartCooldown, StopCooldown;
         protected bool IsAttacking;
+        /// <summary>Utility tools can activate even when the aim ray hits only sky.</summary>
+        protected virtual bool RequiresWorldTarget => true;
+        void OnPrimaryPressed() => TryActivate();
         protected virtual void Awake() {
             toolBaseShared = GetComponent<ToolBaseShared>();
             hitCollider = toolBaseShared.weaponRoot.GetComponentInChildren<Collider>(true);
@@ -38,7 +41,8 @@ namespace RyanAssets.Tools.Client
         }
         protected virtual void OnEquip(ToolBaseShared _) {
 #if !UNITY_SERVER
-            ToolControls.activateToolPressed += TryActivate;
+            if (RequiresWorldTarget) ToolControls.activateToolPressed += TryActivate;
+            else ToolControls.primaryPressed += OnPrimaryPressed;
             ToolControls.reloadToolPressed += TryReload;
 #endif
             characterAnimator.LethalAttackStarted += OnLethalAttackStart;
@@ -47,6 +51,7 @@ namespace RyanAssets.Tools.Client
         protected virtual void OnUnequip(ToolBaseShared _) {
 #if !UNITY_SERVER
             ToolControls.activateToolPressed -= TryActivate;
+            ToolControls.primaryPressed -= OnPrimaryPressed;
             ToolControls.reloadToolPressed -= TryReload;
 #endif
             characterAnimator.LethalAttackStarted -= OnLethalAttackStart;

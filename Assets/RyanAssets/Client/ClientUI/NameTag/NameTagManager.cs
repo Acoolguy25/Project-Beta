@@ -32,6 +32,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             return null;
         }
         void GameCharacterAdded(GameCharacter gameCharater) {
+            if (!gameCharater.ShowNameTag) return;
             Transform head = GetHead(gameCharater.transform);
             GameObject nameTag = Instantiate(nameTagPrefab, head, true);
             Canvas nameTagCanvas = nameTag.GetComponent<Canvas>();

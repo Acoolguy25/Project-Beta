@@ -1,0 +1,7 @@
+{
+  "name": "Universes.UniverseData.classic_horror.Tests",
+  "references": ["Universes.UniverseData.classic_horror.Shared", "RyanAssets.Core"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

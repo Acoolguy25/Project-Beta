@@ -66,19 +66,26 @@ namespace RyanAssets.UI.ListGrid {
             Destroy(obj.gameObject);
             prefabOrder.Remove(obj);
         }
+        // Models may contain network connections whose ToString queries a transport.
+        // Let each list provide its display key without triggering those side effects.
+        protected virtual string GetItemName(T data) => data?.ToString() ?? typeof(T).Name;
         protected void AddPrefab(T data, int order) {
             AsyncInstantiateOperation<GameObject> op = InstantiateAsync(modelPrefab);
 
             op.completed += _ => {
-                GameObject prefabClone = (op.Result != null) ? op.Result[0] : null;
-                if (IsDestroyed || gameObject.IsDestroying() || !pending_ops.Remove(op) || prefabClone == null) { // destroyed gameobject or cancelled operation
+                GameObject prefabClone = op.Result != null && op.Result.Length > 0 ? op.Result[0] : null;
+                bool wasPending = pending_ops.Remove(op);
+                // Networked tools and other Unity objects can despawn while their
+                // asynchronous UI row is being created. Never dereference stale data.
+                bool dataDestroyed = data is UnityEngine.Object source && source == null;
+                if (this == null || IsDestroyed || gameObject.IsDestroying() || !wasPending || prefabClone == null || dataDestroyed) {
                     if (prefabClone != null)
                         DestroyImmediate(prefabClone);
                     return; // cancelled
                 }
                 prefabOrder.Add(prefabClone.transform, order);
                 prefabClone.transform.SetParent(contentTarget, false);
-                prefabClone.name = data.ToString();
+                prefabClone.name = GetItemName(data);
                 SetPrefabActive(prefabClone);
 
                 OnCreatePrefab?.Invoke(prefabClone.gameObject, data);

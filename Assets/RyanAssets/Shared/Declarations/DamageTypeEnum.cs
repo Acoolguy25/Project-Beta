@@ -7,8 +7,10 @@ namespace RyanAssets.Shared.Declarations {
         Fall,
         Melee,
         Gun,
-        Despawn,
+        Water,
+        Lava,
 
+        Despawn,
         Reset,
 
         Command

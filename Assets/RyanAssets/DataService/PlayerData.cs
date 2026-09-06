@@ -41,6 +41,18 @@ namespace RyanAssets.DataService {
 
         // Camera Data
         readonly public SyncHashSet<GameCameraType> cameraTypes = new();
+        // -1 permits normal camera selection. A server-selected mode remains locked
+        // through character creation, death, and revival until explicitly released.
+        readonly public SyncVar<int> lockedCameraType = new(-1);
+
+        [Server]
+        public void LockCamera(GameCameraType cameraType) {
+            cameraTypes.Add(cameraType);
+            lockedCameraType.Value = (int)cameraType;
+        }
+
+        [Server]
+        public void UnlockCamera() => lockedCameraType.Value = -1;
 
         // Events
         public static Action<PlayerData> OnPlayerAdded;

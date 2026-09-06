@@ -5,6 +5,7 @@ namespace RyanAssets.Shared.Declarations {
         ThirdPersonCamera = 2,
         TwoDimCamera = 3,
         DeathCamera = 4,
-        CutsceneCamera = 5
+        CutsceneCamera = 5,
+        FirstPersonCamera = 6
     }
 }
