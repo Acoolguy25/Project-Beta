@@ -2252,7 +2252,7 @@ Animator:
   m_Enabled: 1
   m_Avatar: {fileID: 9000000, guid: 73ffbc06802a247cfb1b26f4ee67eba8, type: 3}
   m_Controller: {fileID: 9100000, guid: 40db3173a05ae3242b1c182a09b0a183, type: 2}
-  m_CullingMode: 1
+  m_CullingMode: 0
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
   m_LinearVelocityBlending: 0
@@ -2363,7 +2363,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 8
+  <PrefabId>k__BackingField: 10
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 16495638397274493063
   SceneId: 0
@@ -2396,7 +2396,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584131185174932786
+  _initializedTimestamp: -8584128708912997053
 --- !u!114 &1039838637883914799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2412,10 +2412,11 @@ MonoBehaviour:
   _componentIndexCache: 1
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 9155375541221003514}
-  effectsComponent: {fileID: 0}
-  healthComponent: {fileID: 0}
+  effectsComponent: {fileID: 8293697685302373730}
+  healthComponent: {fileID: 36641937799527138}
+  showNameTag: 1
   CharacterCamera: {fileID: 7279864874766871779}
-  fallHeightEnabled: 0
+  fallHeightEnabled: 1
   fallenPartsDestroyHeight: 0
   teamEditor:
     realTeam: 1
@@ -2447,6 +2448,8 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 67c8b33e424ccdc4486edf538ab91c5a, type: 3}
   - {fileID: 8300000, guid: 274649b0e221539409070ebf6c18918b, type: 3}
   - {fileID: 8300000, guid: a3194b8bbc96ef84fab1f98f4b7dae3e, type: 3}
+  footstepPaceMultiplier: 1
+  duplicateSoundWindow: 0.08
   GroundCheck: 1
   Grounded: 0
 --- !u!114 &8624230890759636101

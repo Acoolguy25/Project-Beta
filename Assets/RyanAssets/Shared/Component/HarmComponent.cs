@@ -39,9 +39,9 @@ namespace RyanAssets.Shared.Component {
             nextHarmTimes[character] = Time.time + repeatDelay;
 
 #if UNITY_SERVER
-            HarmServerRpc(character);
-#else
             Harm(character);
+#else
+            HarmServerRpc(character);
 #endif
         }
 
@@ -66,8 +66,10 @@ namespace RyanAssets.Shared.Component {
             Harm(character);
 #endif
         }
+#if UNITY_SERVER
         private void Harm(EntityBase character) {
             character.TakeDamage(damageConfig.damageAmount, damageConfig.damageType);
         }
+#endif
     }
 }

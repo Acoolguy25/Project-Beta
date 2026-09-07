@@ -46,6 +46,7 @@ namespace RyanAssets.Server.ServerCore {
             // NetworkBehaviour [Server] methods require the NetworkObject to be initialized.
             // Spawn before setting replicated health so FishNet can apply the change.
             localChar.Init(health);
+            localChar.InitDefaultEffects();
             // Insert player tools
             foreach (var tool in playerData.tools) {
                 ServerTool.Instance.SpawnTool(localChar.NetworkObject, tool);
@@ -61,14 +62,27 @@ namespace RyanAssets.Server.ServerCore {
         }
         public async void OnPlayerCharacterDie(NetworkConnection player, Transform character, CancellationToken cancellationToken = default){
             await Awaitable.WaitForSecondsAsync(RespawnTime, cancellationToken);
-            if (!cancellationToken.IsCancellationRequested
-                && ClientToCharacter.TryGetValue(player, out LocalCharacter localChar)
-                && localChar.transform == character
-                && localChar.IsDead) {
-                DespawnPlayerCharacter(player);
-                if (player.IsValid) // Make sure bro didn't leave
-                    SpawnPlayerCharacter(player);
+            if (cancellationToken.IsCancellationRequested || !player.IsValid)
+                return;
+
+            if (ClientToCharacter.TryGetValue(player, out LocalCharacter localChar)) {
+                // A newer character means another system already handled this death. A living
+                // character can likewise be an in-place revival, such as Infection conversion.
+                if (localChar != null && (localChar.transform != character || !localChar.IsDead))
+                    return;
+
+                // Unity's destroyed-object null can leave a stale dictionary entry behind.
+                if (localChar == null)
+                    ClientToCharacter.Remove(player);
+                else
+                    DespawnPlayerCharacter(player);
             }
+
+            // Falling below the kill plane kills and immediately despawns the character. In that
+            // case the registry is already empty by the time this delay completes, but the player
+            // still needs a replacement. SpawnPlayerCharacter retains the active game mode's
+            // CanSpawnFunction gate, so eliminated/non-respawning modes remain authoritative.
+            SpawnPlayerCharacter(player);
         }
         public static void DespawnPlayerCharacter(NetworkConnection player) {
             if (ClientToCharacter.TryGetValue(player, out LocalCharacter character))

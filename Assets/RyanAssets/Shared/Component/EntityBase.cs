@@ -11,7 +11,9 @@ namespace RyanAssets.Shared.Component {
     /// </summary>
     [RequireComponent(typeof(EffectsComponent), typeof(HealthComponent))]
     public abstract class EntityBase : NetworkBehaviour, IEntity {
+        [SerializeField]
         private EffectsComponent effectsComponent;
+        [SerializeField]
         private HealthComponent healthComponent;
 
         public abstract string DisplayName { get; set; }
@@ -66,12 +68,13 @@ namespace RyanAssets.Shared.Component {
         [Server] public virtual void HealHealth(long hitpoints) => HealthComponent.HealHealth(hitpoints);
         [Server] public virtual void HealMaxHealth(long hitpoints) => HealthComponent.HealMaxHealth(hitpoints);
         [Server] public virtual void Init(long hp, long maxHp) => HealthComponent.Init(hp, maxHp);
-        [Server] public void Init(long hp) => Init(hp, hp);
+        [Server] public void Init(long hp = 100) => Init(hp, hp);
         [Server] public virtual void Revive(long hp, long maxHp) => HealthComponent.Revive(hp, maxHp);
-        [Server] public void Revive(long hp) => Revive(hp, hp);
+        [Server] public void Revive(long hp = 100) => Revive(hp, hp);
         [Server] public virtual void Kill(DamageType source, IEntity sourceEntity = null) => HealthComponent.Kill(source, sourceEntity);
         [Server] public void Kill(DamageType source, NetworkObject sourceObject) => Kill(source, GetEntity(sourceObject));
         [Server] public virtual void AddEffect(CharacterEffect effect, float duration) => EffectsComponent.AddEffect(effect, duration);
+        [Server] public virtual void SetEffect(CharacterEffect effect, float duration) => EffectsComponent.SetEffect(effect, duration);
         [Server] public virtual void RemoveEffect(CharacterEffect effect) => EffectsComponent.RemoveEffect(effect);
         [Server] public virtual void ClearEffects() => EffectsComponent.ClearEffects();
 

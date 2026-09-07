@@ -9,9 +9,11 @@ using Channel = FishNet.Transporting.Channel;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
+using RyanAssets.Levels.Server;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Global;
 using RyanAssets.Shared.Globals;
 using RyanAssets.Tools.Shared;
 using UnityEngine;
@@ -27,6 +29,15 @@ namespace Universes.UniverseData.classic_horror.Server {
         [SerializeField, Min(0)] int revivesPerPlayer = 3;
         [SerializeField, Min(3)] int nextCaseDelay = 18;
         [SerializeField, Min(1)] float interactionReach = 3.5f;
+        [Header("Progression Rewards")]
+        [Tooltip("XP granted to the investigator who secures an evidence item, memory, or offering.")]
+        [SerializeField] ulong itemXPReward = 10;
+        [Tooltip("Credits (stored as gold) granted to the investigator who secures an evidence item, memory, or offering.")]
+        [SerializeField] ulong itemCreditReward = 5;
+        [Tooltip("XP granted to every investigator who survives a completed case.")]
+        [SerializeField] ulong winXPReward = 100;
+        [Tooltip("Credits (stored as gold) granted to every investigator who survives a completed case.")]
+        [SerializeField] ulong winCreditReward = 50;
         [Tooltip("Zero creates a fresh case every round. Nonzero reproduces a case for authoring.")]
         [SerializeField] int fixedSeed;
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
@@ -34,17 +45,23 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly HashSet<NetworkConnection> eliminated = new();
         readonly HashSet<NetworkConnection> reviving = new();
         readonly Dictionary<NetworkConnection, float> nextScare = new();
+        readonly Dictionary<NetworkConnection, int> nonfatalScares = new();
+        const int NonfatalScaresPerCase = 2;
+        const float ScareCooldown = 90f;
         int scareSequence;
         CH_Map map;
         CH_Case current;
         CH_Monster monster;
         string dialogue = "", ending = "";
         int dialogueRevision, losses, completedCases, lastSeed, secondsLeft;
-        float deadline;
+        float deadline, chaseMusicUntil;
         bool acceptingPlayers;
         public CH_Case CurrentCase => current;
         public CH_Map Map => map;
         public bool CaseActive => current != null && current.Phase is CH_Phase.Investigation or CH_Phase.Descent or CH_Phase.Escape;
+        const float PlayerSpawnClearance = 1.25f;
+        // Keep tension continuous when the monster briefly loses sight of an investigator.
+        const float ChaseMusicReleaseDelay = 4f;
 
         protected override void Awake() {
             base.Awake();
@@ -58,7 +75,10 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         bool CanSpawn(NetworkConnection conn) => acceptingPlayers && map != null && !eliminated.Contains(conn);
         Vector3 SpawnPosition(NetworkConnection conn) => map != null && map.arrival != null
-            ? map.arrival.position + Vector3.up * 0.35f : new Vector3(500, 25, 490);
+            // Arrival is authored directly on the terrain. Spawn a full collider-safe
+            // distance above it so client physics can settle the character onto the map
+            // instead of beginning partially embedded in the ground.
+            ? map.arrival.position + Vector3.up * PlayerSpawnClearance : new Vector3(500, 25, 490);
 
         void PreparePlayer(PlayerData player) {
             player.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
@@ -80,13 +100,15 @@ namespace Universes.UniverseData.classic_horror.Server {
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
             reviving.Remove(character.Owner);
+            character.Init();
+            character.SetEffect(CharacterEffect.Invul, 15f);
             character.SetScale(Vector3.one * 1.05f);
             character.CanSpectate.Value = true;
             if (PlayerData.TryGetPlayerData(character.Owner, out var player)) PreparePlayer(player);
             // The character event may precede this runner's player event on join.
             ServerTool.Instance.SpawnTool(character.NetworkObject, ToolEnum.Flashlight);
         }
-        void OnPlayerLeft(PlayerData player) { requestTimes.Remove(player.Owner); snapshotTimes.Remove(player.Owner); eliminated.Remove(player.Owner); reviving.Remove(player.Owner); nextScare.Remove(player.Owner); }
+        void OnPlayerLeft(PlayerData player) { requestTimes.Remove(player.Owner); snapshotTimes.Remove(player.Owner); eliminated.Remove(player.Owner); reviving.Remove(player.Owner); nextScare.Remove(player.Owner); nonfatalScares.Remove(player.Owner); }
 
         protected override async UniTask StartAsync(CancellationToken token) {
             acceptingPlayers = false;
@@ -106,7 +128,9 @@ namespace Universes.UniverseData.classic_horror.Server {
             eliminated.Clear();
             reviving.Clear();
             nextScare.Clear();
+            nonfatalScares.Clear();
             scareSequence = 0;
+            chaseMusicUntil = 0;
             ending = "";
             requestTimes.Clear();
             snapshotTimes.Clear();
@@ -119,9 +143,10 @@ namespace Universes.UniverseData.classic_horror.Server {
             npc.GetComponent<GameCharacter>().SetScale(Vector3.one * 1.1f);
             npc.GetComponent<GameCharacter>().SetTeam(new TeamConfig(TeamColor.Red));
             npc.GetComponent<GameCharacter>().CanSpectate.Value = false;
-            npc.GetComponent<GameCharacter>().DisplayName = "The Presence";
+            npc.GetComponent<GameCharacter>().DisplayName = "The Cursed Priest";
             monster = npc.gameObject.AddComponent<CH_Monster>();
             monster.Initialize(this, npc, current.Temperament, seed);
+            SetHorrorMusic(MusicSelection.HorrorAmbientMusic);
             deadline = Time.time + investigationSeconds;
             Speak(current.Introduction);
             while (CaseActive) {
@@ -133,10 +158,16 @@ namespace Universes.UniverseData.classic_horror.Server {
                     Speak("DISPATCH / We have lost the signal. A new investigation will begin shortly.");
                 }
                 SetTopMessage(Objective());
+                if (monster != null && monster.IsChasing)
+                    chaseMusicUntil = Time.time + ChaseMusicReleaseDelay;
+                SetHorrorMusic(Time.time <= chaseMusicUntil
+                    ? MusicSelection.HorrorChaseMusic
+                    : MusicSelection.HorrorAmbientMusic);
                 BroadcastState();
                 await AwaitTime(1000, token);
             }
             acceptingPlayers = false;
+            SetHorrorMusic(MusicSelection.VictoryMusic);
             SetGlobalInvul(true);
             if (monster != null) monster.Suspend();
             if (current.Phase == CH_Phase.Complete) completedCases++;
@@ -152,7 +183,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (!CaseActive || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
             losses++;
-            Scare(character, 2, true);
+            if (monster != null && source == monster.GetComponent<GameCharacter>()) Scare(character, 2, true);
             character.CanSpectate.Value = false;
             if (PlayerData.TryGetPlayerData(character.Owner, out var player) && player.lives.Value > 0) {
                 player.lives.Value--;
@@ -176,9 +207,14 @@ namespace Universes.UniverseData.classic_horror.Server {
         }
 
         public void Scare(LocalCharacter character, byte kind = 0, bool fatal = false) {
-            if (character == null || !character.Owner.IsAuthenticated || current == null) return;
-            if (!fatal && nextScare.TryGetValue(character.Owner, out float next) && Time.time < next) return;
-            nextScare[character.Owner] = Time.time + 28f;
+            if (character == null || !character.Owner.IsAuthenticated || !CaseActive) return;
+            if (!fatal) {
+                nonfatalScares.TryGetValue(character.Owner, out int count);
+                if (character.IsDead || count >= NonfatalScaresPerCase
+                    || (nextScare.TryGetValue(character.Owner, out float next) && Time.time < next)) return;
+                nonfatalScares[character.Owner] = count + 1;
+            }
+            nextScare[character.Owner] = Time.time + ScareCooldown;
             InstanceFinder.ServerManager.Broadcast(character.Owner, new CH_ScareBroadcast {
                 seed = current.Seed, sequence = ++scareSequence, kind = kind
             });
@@ -206,8 +242,11 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (!WorldInteraction.CanReach(eye, point, interactionReach + 0.35f, mask)) { RejectInteraction(connection, "Something blocks your reach. Try the other side."); return; }
 
             CH_Phase oldPhase = current.Phase;
+            bool itemCollected = false;
             if (request.targetId < 9) {
                 if (!current.Collect(request.targetId)) { RejectInteraction(connection, "This record has already been secured."); return; }
+                itemCollected = true;
+                AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
                 // A seed-dependent discovery sting changes location with every case.
                 if (request.targetId == (int)(unchecked((uint)current.Seed) % 4)) Scare(character, 1);
                 Speak(request.targetId < 6 ? current.Evidence[request.targetId]
@@ -225,6 +264,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                     Speak("That was the wrong order. The seal has broken; begin again. Consult the keeper's instructions in your journal.");
                 }
             } else if (request.targetId == 10 && current.Extract()) {
+                AwardVictoryRewards();
                 ending = current.MemoryCount == 2
                     ? "THE WATER REMEMBERS\nYou brought the lost names home. At dawn, the settlement's windows reflect the sky again."
                     : "BORROWED SILENCE\nYou escaped and sealed the source. But the names you left behind still whisper beneath the water.";
@@ -242,7 +282,28 @@ namespace Universes.UniverseData.classic_horror.Server {
                 }
             }
             BroadcastState();
-            InstanceFinder.ServerManager.Broadcast(connection, new CH_InteractionResult { seed = current.Seed, accepted = true, message = "" });
+            // The collector receives the cue only after the server has accepted the pickup.
+            InstanceFinder.ServerManager.Broadcast(connection, new CH_InteractionResult {
+                seed = current.Seed, accepted = true, playObjectiveCollect = itemCollected, message = ""
+            });
+        }
+
+        void AwardVictoryRewards() {
+            foreach (var player in PlayerData.Players.Values) {
+                if (player == null || eliminated.Contains(player.Owner)) continue;
+                AwardReward(player.Owner, winXPReward, winCreditReward, "surviving the case");
+            }
+        }
+
+        static void AwardReward(NetworkConnection connection, ulong xp, ulong credits, string reason) {
+            if (xp == 0 && credits == 0) return;
+            if (!LevelsServer.AwardPlayerXPAndGold(connection, xp, credits))
+                Debug.LogWarning($"Classic Horror could not award {reason} rewards to connection {connection.ClientId}.");
+        }
+
+        static void SetHorrorMusic(MusicSelection selection) {
+            if (SharedGlobalEvents.Instance != null && SharedGlobalEvents.Instance.MusicTrack.Value != selection)
+                SharedGlobalEvents.Instance.MusicTrack.Value = selection;
         }
 
         void RejectInteraction(NetworkConnection connection, string message) {
@@ -284,18 +345,28 @@ namespace Universes.UniverseData.classic_horror.Server {
             for (int i = 0; i < 9; i++) {
                 if (i >= 6 && current.Phase == CH_Phase.Investigation) continue;
                 Transform socket = map.searchLocations[current.LocationIndices[i]];
-                points.Add(new CH_PointState { id = i, position = socket.position + Vector3.up * 1.3f, title = labels[i], area = socket.name, collected = current.Collected(i) });
+                points.Add(new CH_PointState {
+                    id = i, position = socket.position + Vector3.up * 1.3f, title = labels[i], area = socket.name,
+                    collected = current.Collected(i), navigationTarget = i < 4 || i >= 6
+                });
             }
             if (current.Phase != CH_Phase.Investigation) {
                 Transform source = map.sourceLocations[current.SourceIndex];
-                points.Add(new CH_PointState { id = 9, position = source.position + Vector3.up * 1.3f, title = "The source", area = source.name, collected = current.Phase != CH_Phase.Descent });
+                points.Add(new CH_PointState {
+                    id = 9, position = source.position + Vector3.up * 1.3f, title = "The source", area = source.name,
+                    collected = current.Phase != CH_Phase.Descent, navigationTarget = false
+                });
             }
             if (current.Phase == CH_Phase.Descent && current.RelicCount == 3)
                 for (int i = 0; i < 3; i++) points.Add(new CH_PointState {
                     id = 11 + i, position = OfferingPosition(i), title = "Offer " + CH_Case.Offerings[i],
-                    area = map.sourceLocations[current.SourceIndex].name, collected = false
+                    area = map.sourceLocations[current.SourceIndex].name, collected = false,
+                    navigationTarget = i == current.Order[current.RitualStep]
                 });
-            points.Add(new CH_PointState { id = 10, position = map.extraction.position + Vector3.up * 1.3f, title = "Extraction radio", area = "Arrival jetty", collected = current.Phase != CH_Phase.Escape });
+            points.Add(new CH_PointState {
+                id = 10, position = map.extraction.position + Vector3.up * 1.3f, title = "Extraction radio", area = "Arrival jetty",
+                collected = current.Phase != CH_Phase.Escape, navigationTarget = current.Phase == CH_Phase.Escape
+            });
             var journal = new List<string> { current.Introduction };
             for (int i = 0; i < 6; i++) if (current.Collected(i)) journal.Add(current.Evidence[i]);
             return new CH_StateBroadcast {
@@ -314,6 +385,8 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (monster != null && monster.GetComponent<GameCharacter>().IsSpawned) InstanceFinder.ServerManager.Despawn(monster.gameObject);
             monster = null;
             current = null;
+            chaseMusicUntil = 0;
+            SetHorrorMusic(MusicSelection.GameMusic);
             base.Reset();
         }
         protected override void OnDestroy() {

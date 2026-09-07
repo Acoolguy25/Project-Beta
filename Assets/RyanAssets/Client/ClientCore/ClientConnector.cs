@@ -18,7 +18,7 @@ namespace RyanAssets.Client.ClientCore {
         public static bool IsConnected;
         [SerializeField]
         GameObject[] gameOnlyObjects;
-        static bool wasAuthenticated, isConnecting, hasCanceled;
+        public static bool wasAuthenticated, isConnecting, hasCanceled;
         public static string joinServerId, joinUniverseId;
         void OnEnable() {
             Instance = this;
@@ -108,12 +108,12 @@ namespace RyanAssets.Client.ClientCore {
                     OnDisconnected?.Invoke();
                     IsConnected = false;
                     SetJoinResult(null); // remove any other prompts!
-                    if (!PromptManager.PromptDelete(PromptId.LeaveGameAwait) && !hasCanceled){
+                    if (!PromptManager.PromptDelete(PromptId.LeaveGameAwait) && !hasCanceled) {
                         if (wasAuthenticated) {
                             wasAuthenticated = false;
                             SetJoinResult("You were unexpectedly disconnected from game server", "Disconnected");
                         } else if (!hasCanceled && !PromptManager.HasPrompt(PromptId.AuthenticationFail)) { // make sure not handled by UnityTokenAuthenticator
-                             SetJoinResult("Join Game Failed!");
+                            SetJoinResult("Join Game Failed!");
                         }
                     }
                     if (!SceneManager.GetSceneByName("MainMenu").isLoaded)
@@ -135,7 +135,7 @@ namespace RyanAssets.Client.ClientCore {
             IsConnected = true;
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void Init(){
+        static void Init() {
             OnConnected = null;
             OnDisconnected = null;
         }

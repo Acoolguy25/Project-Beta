@@ -20,7 +20,7 @@ namespace RyanAssets.Shared.Global {
         //public readonly SyncDictionary<NetworkConnection, ServerPlayerStats> Players = new();
         public readonly SyncList<CommandConfig> Commands = new();
         public readonly SyncList<string> LeaderboardHeaders = new();
-        public readonly SyncVar<MusicTracks> MusicTrack = new(initialValue: MusicTracks.GameMusic1);
+        public readonly SyncVar<MusicSelection> MusicTrack = new(initialValue: MusicSelection.GameMusic);
         readonly SyncVar<string> _topMessage = new();
         public static Dictionary<TeamColor, HashSet<TeamColor>> TeamEnemies;
 

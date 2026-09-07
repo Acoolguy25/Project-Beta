@@ -5,6 +5,7 @@ using RyanAssets.Characters.Shared;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Tools.Client;
 using RyanAssets.Tools.Shared;
+using RyanAssets.UI.Navigation;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
@@ -185,20 +186,27 @@ namespace Universes.UniverseData.classic_horror.Editor {
             var scaler = root.GetComponent<UnityEngine.UI.CanvasScaler>(); scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize; scaler.referenceResolution = new Vector2(1920, 1080); scaler.matchWidthOrHeight = 0.5f;
             var client = root.AddComponent<CH_ClientController>();
             client.dangerOverlay = Panel("Danger", root.transform, Vector2.zero, Vector2.one, new Color(0.3f, 0.035f, 0.025f, 0));
-            var top = Panel("CaseHeader", root.transform, new Vector2(0.33f, 0.79f), new Vector2(0.86f, 0.94f), Ink);
+            // A single centered status panel keeps the active evidence/offerings count
+            // and the authoritative case timer together without competing with play.
+            var top = Panel("EvidenceHUD", root.transform, new Vector2(0.34f, 0.855f), new Vector2(0.66f, 0.955f), Ink);
             Panel("AmberRule", top.transform, new Vector2(0, 0), new Vector2(0.006f, 1), Amber);
-            client.caseLabel = Text("Case", top.transform, new Vector2(0.01f, 0.7f), new Vector2(1, 1), 19, Amber);
-            client.chapterLabel = Text("Chapter", top.transform, new Vector2(0.01f, 0.32f), new Vector2(1, 0.75f), 35, Paper);
-            client.objectiveLabel = Text("Objective", top.transform, new Vector2(0.01f, 0), new Vector2(1, 0.33f), 24, Paper);
-            client.clockLabel = Text("Clock", root.transform, new Vector2(0.85f, 0.75f), new Vector2(0.98f, 0.84f), 42, Paper, TextAlignmentOptions.TopRight);
-            client.bearingLabel = Text("Search bearing", root.transform, new Vector2(0.33f, 0.735f), new Vector2(0.85f, 0.785f), 20, Paper);
-            client.countersLabel = Text("Case progress", root.transform, new Vector2(0.33f, 0.68f), new Vector2(0.88f, 0.73f), 19, Amber);
+            client.chapterLabel = Text("Chapter", top.transform, new Vector2(0.02f, 0.66f), new Vector2(0.98f, 0.96f), 18, Amber, TextAlignmentOptions.Center);
+            client.objectiveLabel = Text("Objective", top.transform, new Vector2(0.02f, 0.30f), new Vector2(0.98f, 0.70f), 23, Paper, TextAlignmentOptions.Center);
+            client.countersLabel = Text("Case progress", top.transform, new Vector2(0.02f, 0.03f), new Vector2(0.49f, 0.32f), 16, Amber, TextAlignmentOptions.Left);
+            client.timerLabel = Text("Timer", top.transform, new Vector2(0.51f, 0.03f), new Vector2(0.98f, 0.32f), 16, Amber, TextAlignmentOptions.Right);
+            var compassPanel = Panel("ObjectiveCompass", root.transform, new Vector2(0.39f, 0.785f), new Vector2(0.61f, 0.84f), Ink);
+            Panel("AmberRule", compassPanel.transform, new Vector2(0, 0), new Vector2(0.008f, 1), Amber);
+            var compassPointer = Rect("DirectionPointer", compassPanel.transform, new Vector2(0.03f, 0.08f), new Vector2(0.22f, 0.92f), Vector2.zero, Vector2.zero);
+            Panel("NeedleShaft", compassPointer, new Vector2(0.45f, 0.04f), new Vector2(0.55f, 0.62f), Amber);
+            Text("NeedleTip", compassPointer, new Vector2(0.15f, 0.47f), new Vector2(0.85f, 0.98f), 34, Amber, TextAlignmentOptions.Center).text = "▲";
+            var compassReadout = Text("Readout", compassPanel.transform, new Vector2(0.20f, 0.08f), new Vector2(0.98f, 0.92f), 17, Paper, TextAlignmentOptions.Center);
+            client.objectiveCompass = root.AddComponent<ObjectiveCompass>();
+            client.objectiveCompass.Configure(compassPanel.gameObject, compassPointer, compassReadout, "SEARCH");
             Text("Reticle", root.transform, new Vector2(0.475f, 0.475f), new Vector2(0.525f, 0.525f), 25, Paper, TextAlignmentOptions.Center).text = "+";
             client.interactionLabel = Text("Interaction", root.transform, new Vector2(0.22f, 0.35f), new Vector2(0.78f, 0.44f), 26, Paper, TextAlignmentOptions.Center);
             var dialogue = Panel("RadioTranscript", root.transform, new Vector2(0.2f, 0.17f), new Vector2(0.8f, 0.34f), Ink);
             client.dialoguePanel = dialogue.gameObject;
             client.dialogueLabel = Text("Transcript", dialogue.transform, new Vector2(0.01f, 0.06f), new Vector2(0.99f, 0.94f), 25, Paper);
-            client.controlsLabel = Text("Controls", root.transform, new Vector2(0.12f, 0.10f), new Vector2(0.88f, 0.145f), 20, Paper, TextAlignmentOptions.Center);
             var journal = Panel("FieldJournal", root.transform, new Vector2(0.17f, 0.17f), new Vector2(0.83f, 0.83f), new Color(0.04f, 0.06f, 0.065f, 0.995f));
             journal.raycastTarget = true; client.journalPanel = journal.gameObject;
             client.journalPageLabel = Text("Field notes", journal.transform, new Vector2(0.035f, 0.85f), new Vector2(0.97f, 0.97f), 25, Amber);
@@ -212,6 +220,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.endingLabel = Text("Ending", ending.transform, new Vector2(0.045f, 0.07f), new Vector2(0.955f, 0.93f), 32, Paper, TextAlignmentOptions.Center);
             var radio = new GameObject("RadioAudio"); radio.transform.SetParent(root.transform, false); client.radioAudio = radio.AddComponent<AudioSource>(); client.radioAudio.playOnAwake = false;
             client.radioCue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Flooded_Grounds/Content/Sounds/Taps.mp3");
+            var objectiveCollect = new GameObject("ObjectiveCollectAudio"); objectiveCollect.transform.SetParent(root.transform, false); client.objectiveCollectAudio = objectiveCollect.AddComponent<AudioSource>();
+            client.objectiveCollectAudio.playOnAwake = false; client.objectiveCollectAudio.spatialBlend = 0;
+            client.objectiveCollectCue = AssetDatabase.LoadAssetAtPath<AudioClip>(Root + "/Audio/objective-collect.mp3");
             var danger = new GameObject("PresenceAudio"); danger.transform.SetParent(root.transform, false); client.dangerAudio = danger.AddComponent<AudioSource>();
             client.dangerAudio.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Flooded_Grounds/Content/Sounds/DeepRattle.mp3"); client.dangerAudio.loop = true; client.dangerAudio.volume = 0;
             client.dangerAudio.playOnAwake = true;
@@ -224,7 +235,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             var portrait = face.gameObject.AddComponent<UnityEngine.UI.RawImage>();
             portrait.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(RyanAssets.Editor.NPCCharacterAuthoring.Root + "/Data/PresencePortrait.png"); portrait.raycastTarget = false;
             scare.sting = scarePanel.gameObject.AddComponent<AudioSource>();
-            scare.sting.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Flooded_Grounds/Content/Sounds/Horn.mp3");
+            scare.sting.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/RyanAssets/Client/ClientAudio/JumpscareAudio/jumpscare.mp3");
             scare.sting.playOnAwake = false; scare.sting.volume = 0.75f; scare.sting.spatialBlend = 0;
             PrefabUtility.SaveAsPrefabAsset(root, Root + "/Prefabs/InvestigationHUD.prefab"); Object.DestroyImmediate(root);
         }

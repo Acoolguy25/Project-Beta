@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 1239666489485108828}
   - component: {fileID: 8228474297486781905}
   m_Layer: 5
-  m_Name: MuteMusic
+  m_Name: MuteMusicIcon
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

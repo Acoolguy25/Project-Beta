@@ -17,14 +17,19 @@ namespace RyanAssets.Shared.Component {
         [Server]
         public virtual void AddEffect(CharacterEffect effect, float duration) {
             if (IsEffectActive(effect))
-                ActiveEffects[effect] += duration;
+                SetEffect(effect, ActiveEffects[effect] + duration);
             else
-                ActiveEffects[effect] = NetworkHelper.GetServerTime() + duration;
+                SetEffect(effect, duration);
         }
 
         [Server]
         public virtual void RemoveEffect(CharacterEffect effect) {
             ActiveEffects.Remove(effect);
+        }
+
+        [Server]
+        public virtual void SetEffect(CharacterEffect effect, float duration) {
+            ActiveEffects[effect] = NetworkHelper.GetServerTime() + duration;
         }
 
         [Server]

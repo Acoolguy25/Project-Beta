@@ -28,6 +28,13 @@ namespace RyanAssets.Characters.Client {
         public float LandJumpTimeout = 0.05f;
         public float FallTimeout = 0.05f;
 
+        [Header("Collision Movement")]
+        [Min(0f)] public float MaxStepHeight = 0.6f;
+        [Min(0.01f)] public float StepProbeDistance = 0.12f;
+        [Range(0.01f, 0.1f)] public float CollisionSkin = 0.03f;
+        [Range(0f, 1f)] public float MinimumStepGroundNormal = 0.65f;
+        [Min(0f)] public float MaxDepenetrationVelocity = 5f;
+
 
         private float _animationBlend;
         private float _targetRotation = 0.0f;
@@ -42,8 +49,9 @@ namespace RyanAssets.Characters.Client {
         private Animator _animator;
         private Rigidbody _rb;
         private CharacterControls _input;
-        private BoxCollider boxCollider;
+        private BoxCollider _boxCollider;
         private CharacterAnimator characterAnimator;
+        private CharacterCollisionRelay _collisionRelay;
         private bool LastGrounded;
         private bool _jumpInProgress;
         // private MovementControl _movementControl;
@@ -76,11 +84,16 @@ namespace RyanAssets.Characters.Client {
         private void OnCharacterAdded(LocalCharacter c) {
             _hasAnimator = LocalPlayer.Character.TryGetComponent(out _animator);
             _rb = LocalPlayer.Character.GetComponent<Rigidbody>();
-            _rb.constraints = RigidbodyConstraints.FreezeRotation & ~RigidbodyConstraints.FreezeRotationY;
+            _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             _rb.isKinematic = false;
+            _rb.maxDepenetrationVelocity = MaxDepenetrationVelocity;
             _input = InputService.characterControls;
-            boxCollider = LocalPlayer.Character.GetComponent<BoxCollider>();
+            _boxCollider = LocalPlayer.Character.GetComponent<BoxCollider>();
             characterAnimator = LocalPlayer.Character.GetComponent<CharacterAnimator>();
+            _collisionRelay = LocalPlayer.Character.GetComponent<CharacterCollisionRelay>();
+            if (_collisionRelay == null)
+                _collisionRelay = LocalPlayer.Character.gameObject.AddComponent<CharacterCollisionRelay>();
+            _collisionRelay.Initialize(_rb, this);
 
             //_playerInput = GetComponent<PlayerInput>();
             // _movementControl = GetComponent<MovementControl>();
@@ -92,6 +105,7 @@ namespace RyanAssets.Characters.Client {
         private void FixedUpdate() {
             if (_animator == null || !_animator.enabled) return;
             if (!_input) return;
+            if (!InstanceFinder.ClientManager.Connection.LoadedStartScenes(false)) return;
 
             JumpAndGravity();
             Move();
@@ -143,6 +157,7 @@ namespace RyanAssets.Characters.Client {
 
             Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
             Vector3 move = targetDirection.normalized * (_animationBlend * inputMagnitude);
+            TryStepUp(targetDirection, move.magnitude, characterAnimator.Grounded);
             //if (!Grounded)
             move.y = _rb.linearVelocity.y;
             _rb.linearVelocity = move;
@@ -154,6 +169,63 @@ namespace RyanAssets.Characters.Client {
             //    _animator.SetFloat(_animIDMotionSpeed, inputMagnitude);
             //}
         }
+
+        private void TryStepUp(Vector3 direction, float speed, bool grounded) {
+            if (_boxCollider == null || !grounded || speed <= 0f || MaxStepHeight <= 0f)
+                return;
+
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 0.001f)
+                return;
+            direction.Normalize();
+
+            Transform characterTransform = _boxCollider.transform;
+            Vector3 scale = characterTransform.lossyScale;
+            scale = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+            Vector3 halfExtents = Vector3.Scale(_boxCollider.size * 0.5f, scale);
+            halfExtents = new Vector3(
+                Mathf.Max(0.01f, halfExtents.x - CollisionSkin),
+                Mathf.Max(0.01f, halfExtents.y - CollisionSkin),
+                Mathf.Max(0.01f, halfExtents.z - CollisionSkin)
+            );
+
+            Vector3 center = characterTransform.TransformPoint(_boxCollider.center) + Vector3.up * CollisionSkin;
+            Quaternion orientation = characterTransform.rotation;
+            float distance = speed * Time.fixedDeltaTime + StepProbeDistance;
+            int collisionMask = ~LayerMask.GetMask("Character", "LocalCharacter");
+            PhysicsScene physicsScene = _boxCollider.gameObject.scene.GetPhysicsScene();
+
+            if (!physicsScene.BoxCast(center, halfExtents, direction, out _, orientation, distance, collisionMask, QueryTriggerInteraction.Ignore))
+                return;
+
+            Vector3 raisedCenter = center + Vector3.up * (MaxStepHeight + CollisionSkin);
+            if (physicsScene.BoxCast(raisedCenter, halfExtents, direction, out _, orientation, distance, collisionMask, QueryTriggerInteraction.Ignore))
+                return;
+
+            float forwardExtent = Mathf.Abs(direction.x) * halfExtents.x + Mathf.Abs(direction.z) * halfExtents.z;
+            Vector3 feet = center - Vector3.up * halfExtents.y;
+            Vector3 landingProbe = feet
+                + direction * (forwardExtent + distance)
+                + Vector3.up * (MaxStepHeight + CollisionSkin);
+
+            if (!physicsScene.Raycast(
+                    landingProbe,
+                    Vector3.down,
+                    out RaycastHit landing,
+                    MaxStepHeight + CollisionSkin * 2f,
+                    collisionMask,
+                    QueryTriggerInteraction.Ignore)
+                || landing.normal.y < MinimumStepGroundNormal)
+                return;
+
+            float stepHeight = landing.point.y - feet.y;
+            if (stepHeight <= CollisionSkin || stepHeight > MaxStepHeight)
+                return;
+
+            _rb.MovePosition(_rb.position + Vector3.up * (stepHeight + CollisionSkin));
+        }
+
+        internal bool IsJumpVelocityProtected => _jumpInProgress || _jumpTimeoutDelta > 0f;
         //private float wasJumping = 0f;
         private void JumpAndGravity() {
             _jumpTimeoutDelta -= Time.fixedDeltaTime;

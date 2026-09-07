@@ -39,7 +39,9 @@ namespace Universes.UniverseData.war_valley.Server
     }
     public class WV_ServerRunner : ServerRunner
     {
-        private static readonly Vector3 SpawnCenter = new Vector3(750, 51, 750);
+        // The half-scale terrain's central playable ground is around Y=75. Keep
+        // players clear of the terrain while their client Rigidbody initializes.
+        private static readonly Vector3 SpawnCenter = new Vector3(750, 75, 750);
         private static readonly Vector3 FlagSpawnPosition = new Vector3(750f, 51.60288f, 750f);
         private const float SpawnRadius = 25f;
         [SerializeField]

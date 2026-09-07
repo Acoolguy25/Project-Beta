@@ -25,9 +25,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 250449657484227700}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalRotation: {x: -0.025610607, y: 0.97376794, z: 0.14127643, w: 0.17652476}
+  m_LocalPosition: {x: 0.09, y: 0.05, z: 0}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7935301463443090767}
@@ -35,7 +35,7 @@ Transform:
   - {fileID: 2955944043126573923}
   - {fileID: 2962250642343561498}
   m_Father: {fileID: 9016726954104004908}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -16.51, y: 159.45, z: 0}
 --- !u!82 &3878107277030885471
 AudioSource:
   m_ObjectHideFlags: 0
@@ -350,7 +350,9 @@ MonoBehaviour:
   equipAudio: {fileID: 0}
   unequipAudio: {fileID: 0}
   attackAudio: {fileID: 0}
-  extraAudios: []
+  extraAudios:
+  - {fileID: 8300000, guid: d2e04ccbf876f4148959d5a5f5e16719, type: 3}
+  - {fileID: 8300000, guid: 06139420780cb3849a68fec99e013b4e, type: 3}
   ParentObjectName: RightHand
   weaponRoot: {fileID: 250449657484227700}
   beam: {fileID: 4040964509083960579}

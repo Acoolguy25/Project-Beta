@@ -54,4 +54,8 @@ MonoBehaviour:
   revivesPerPlayer: 3
   nextCaseDelay: 18
   interactionReach: 3.5
+  itemXPReward: 10
+  itemCreditReward: 5
+  winXPReward: 100
+  winCreditReward: 50
   fixedSeed: 0

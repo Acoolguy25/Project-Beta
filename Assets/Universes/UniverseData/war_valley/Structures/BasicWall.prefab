@@ -136,6 +136,8 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 3098581370753645214}
   _networkObjectCache: {fileID: 3098581370753645214}
+  effectsComponent: {fileID: 0}
+  healthComponent: {fileID: 0}
   StructureID: basic_wall
   Description: A very basic structure
   Cost: 0
@@ -176,7 +178,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 8
+  <PrefabId>k__BackingField: 9
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 13561180965149319898
   SceneId: 0
@@ -206,7 +208,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584128733573846258
+  _initializedTimestamp: -8584127973611696000
 --- !u!114 &7408282882128479229
 MonoBehaviour:
   m_ObjectHideFlags: 0

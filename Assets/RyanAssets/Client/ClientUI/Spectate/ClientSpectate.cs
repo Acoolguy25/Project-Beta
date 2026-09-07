@@ -12,10 +12,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using RyanAssets.UI;
 
-namespace RyanAssets.Client.ClientUI.Spectate
-{
-    public class ClientSpectate : ICamera
-    {
+namespace RyanAssets.Client.ClientUI.Spectate {
+    public class ClientSpectate : ICamera {
         [SerializeField]
         TMP_Text playerName, characterHealth, playerLevel;
         [SerializeField]
@@ -38,7 +36,6 @@ namespace RyanAssets.Client.ClientUI.Spectate
         public override void EnableCamera(Transform oldCamera, GameCameraType oldCameraType) {
             base.EnableCamera(oldCamera, oldCameraType);
             GameCharacter.GameCharacterAdded += OnGameCharacterAdded;
-            canvasGroupController.SetVisible(true, 0.3f);
             currentCharacter = null;
             AdvancePosition(0);
         }
@@ -96,7 +93,7 @@ namespace RyanAssets.Client.ClientUI.Spectate
         void SetCamera(GameCharacter character) {
             UnsetCamera();
             currentCharacter = character;
-            currentPlayer = character? PlayerData.GetPlayerData(character.Owner) : null;
+            currentPlayer = character ? PlayerData.GetPlayerData(character.Owner) : null;
 
             if (character != null) {
                 if (currentPlayer) {
@@ -113,6 +110,7 @@ namespace RyanAssets.Client.ClientUI.Spectate
 
             }
             controller.SetCameraTarget(character);
+            canvasGroupController.SetVisible(character != null, 0.3f);
             UpdatePlayerLabel();
             UpdatePlayerHealth();
             UpdatePlayerLevel();
@@ -149,8 +147,8 @@ namespace RyanAssets.Client.ClientUI.Spectate
 
         void UpdatePlayerLabel() {
             if (currentCharacter == null) {
-                playerName.text = "No Characters Found";
-                playerName.color = Color.white;
+                // playerName.text = "No Characters Found";
+                // playerName.color = Color.white;
             } else {
                 playerName.text = (currentPlayer && currentPlayer.username.Value != currentCharacter.DisplayName) ?
                         $"{currentCharacter.DisplayName} (@{currentPlayer.username.Value})"
@@ -159,21 +157,22 @@ namespace RyanAssets.Client.ClientUI.Spectate
             }
         }
         void UpdatePlayerHealth() {
-            if (currentCharacter == null)
-                characterHealth.text = $"";
-            else {
+            if (currentCharacter == null) {
+                // characterHealth.text = $"";
+            } else {
                 characterHealth.text = $"{currentCharacter.Health.Value}/{currentCharacter.MaxHealth.Value}";
                 characterHealth.color = Color.Lerp(Color.darkRed, Color.darkGreen, (currentCharacter.MaxHealth.Value == 0) ? 1f :
                         currentCharacter.Health.Value / currentCharacter.MaxHealth.Value);
             }
         }
         void UpdatePlayerLevel() {
-            if (currentCharacter == null)
-                playerLevel.text = $"";
-            else if (currentPlayer)
-                playerLevel.text = $"Level {(currentPlayer? LevelsCalc.GetRank(currentPlayer.xp.Value): 67)}";
-            else
+            if (currentCharacter == null) {
+                // playerLevel.text = $"";
+            } else if (currentPlayer) {
+                playerLevel.text = $"Level {(currentPlayer ? LevelsCalc.GetRank(currentPlayer.xp.Value) : 67)}";
+            } else {
                 playerLevel.text = $"NPC";
+            }
         }
     }
 }

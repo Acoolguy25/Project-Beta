@@ -3,9 +3,11 @@ using FishNet;
 using FishNet.Managing.Client;
 using FishNet.Transporting;
 using RyanAssets.Characters.Client;
+using RyanAssets.Characters.Shared;
 using RyanAssets.Input;
 using RyanAssets.Shared.Globals;
 using RyanAssets.Tools.Shared;
+using RyanAssets.UI.Navigation;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -13,14 +15,17 @@ using UnityEngine.InputSystem;
 namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>Presentation and input only; the server decides every case outcome.</summary>
     public sealed class CH_ClientController : MonoBehaviour {
-        public TMP_Text caseLabel, chapterLabel, objectiveLabel, countersLabel, clockLabel, interactionLabel;
-        public TMP_Text dialogueLabel, controlsLabel, bearingLabel, journalBody, journalPageLabel, endingLabel;
+        const float FootstepPaceMultiplier = 3f;
+        public TMP_Text chapterLabel, objectiveLabel, countersLabel, timerLabel, interactionLabel;
+        public TMP_Text dialogueLabel, journalBody, journalPageLabel, endingLabel;
+        public ObjectiveCompass objectiveCompass;
         public GameObject dialoguePanel, journalPanel, endingPanel;
         public UnityEngine.UI.Image dangerOverlay;
         public UnityEngine.UI.Button journalClose, journalNext, journalPrevious;
-        public AudioSource radioAudio, dangerAudio;
-        public AudioClip radioCue;
+        public AudioSource radioAudio, dangerAudio, objectiveCollectAudio;
+        public AudioClip radioCue, objectiveCollectCue;
         readonly Dictionary<int, GameObject> pointViews = new();
+        readonly List<Vector3> navigationObjectives = new();
         CH_Map map;
         ClientManager manager;
         CH_StateBroadcast state;
@@ -32,6 +37,8 @@ namespace Universes.UniverseData.classic_horror.Client {
         bool hasState, journalOpen;
         CH_Jumpscare jumpscare;
         int visibilityMask;
+        CharacterAnimator localCharacterAnimator;
+        float previousFootstepPaceMultiplier = 1f;
 
         void Awake() {
             map = GetComponentInParent<CH_Map>();
@@ -49,13 +56,13 @@ namespace Universes.UniverseData.classic_horror.Client {
             dialoguePanel.SetActive(false);
             chapterLabel.text = "INVESTIGATOR";
             objectiveLabel.text = "Establishing the radio link...";
-            controlsLabel.text = "E  Interact    F  Journal";
         }
         void OnEnable() {
             ToolControls.interactPressed += Interact;
             ToolControls.journalPressed += OpenJournal;
         }
         void Update() {
+            ConfigureLocalFootsteps();
             if (manager == null && InstanceFinder.ClientManager != null) {
                 manager = InstanceFinder.ClientManager;
                 manager.RegisterBroadcast<CH_StateBroadcast>(OnState);
@@ -70,21 +77,26 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (Time.unscaledTime > nextFocus) { nextFocus = Time.unscaledTime + 0.08f; UpdateFocus(); }
             dialoguePanel.SetActive(!journalOpen && Time.unscaledTime < dialogueUntil && !endingPanel.activeSelf);
             UpdateThreat();
-            bool outOfCase = LocalPlayer.Character == null || LocalPlayer.Character.IsDead;
-            bool spectating = RyanAssets.DataService.PlayerData.localData != null
-                && RyanAssets.DataService.PlayerData.localData.lockedCameraType.Value == (int)RyanAssets.Shared.Declarations.GameCameraType.SpectateCamera;
-            controlsLabel.text = outOfCase ? spectating ? "SPECTATING / Return with the next investigation    F  Journal"
-                : "REVIVING / Your evidence is safe    F  Journal" : "E  Interact    F  Journal";
         }
 
         void OnScare(CH_ScareBroadcast scare, Channel channel) {
             if (!hasState || scare.seed != state.seed || jumpscare == null) return;
             jumpscare.Play(scare.sequence, scare.kind);
         }
+
+        void ConfigureLocalFootsteps() {
+            if (localCharacterAnimator != null || LocalPlayer.Character == null
+                || !LocalPlayer.Character.TryGetComponent(out localCharacterAnimator)) return;
+
+            previousFootstepPaceMultiplier = localCharacterAnimator.FootstepPaceMultiplier;
+            localCharacterAnimator.FootstepPaceMultiplier = FootstepPaceMultiplier;
+        }
         void OnInteractionResult(CH_InteractionResult result, Channel channel) {
             if (!hasState || result.seed != state.seed) return;
             interactionFeedback = result.accepted ? "" : result.message;
             feedbackUntil = result.accepted ? 0 : Time.unscaledTime + 2.5f;
+            if (result.accepted && result.playObjectiveCollect && objectiveCollectAudio != null && objectiveCollectCue != null)
+                objectiveCollectAudio.PlayOneShot(objectiveCollectCue);
             nextFocus = 0;
         }
 
@@ -103,12 +115,12 @@ namespace Universes.UniverseData.classic_horror.Client {
             bool chapterChanged = !fresh && next.phase != state.phase;
             state = next;
             hasState = true;
-            caseLabel.text = $"CASE {unchecked((uint)next.seed):X8}    /    {next.caseTitle}";
             chapterLabel.text = next.phase == CH_Phase.Investigation ? "I   /   THE LAST CALL" : "II   /   WHAT ANSWERED";
             objectiveLabel.text = next.objective.Contains("|") ? next.objective.Substring(next.objective.IndexOf('|') + 1).Trim() : next.objective;
-            int revives = RyanAssets.DataService.PlayerData.localData != null ? RyanAssets.DataService.PlayerData.localData.lives.Value : 0;
-            countersLabel.text = $"EVIDENCE  {next.evidenceCount}/4     OFFERINGS  {next.relicCount}/3     REVIVES  {revives}";
-            clockLabel.text = $"{next.secondsLeft / 60:00}:{next.secondsLeft % 60:00}";
+            countersLabel.text = next.phase == CH_Phase.Investigation
+                ? $"EVIDENCE  {next.evidenceCount}/4"
+                : $"OFFERINGS  {next.relicCount}/3";
+            timerLabel.text = $"TIME  {FormatTime(next.secondsLeft)}";
             if (lastDialogue != next.dialogueRevision) {
                 lastDialogue = next.dialogueRevision;
                 dialogueLabel.text = next.dialogue;
@@ -132,21 +144,22 @@ namespace Universes.UniverseData.classic_horror.Client {
                 }
                 view.SetActive(!point.collected && !endingPanel.activeSelf);
             }
+            RefreshNavigationObjectives();
         }
 
         void UpdateFocus() {
             focusedId = -1;
             interactionLabel.text = "";
-            bearingLabel.text = "";
             var camera = Camera.main;
-            if (camera == null || LocalPlayer.Character == null || LocalPlayer.Character.IsDead || journalOpen || endingPanel.activeSelf) return;
-            float best = 0.9f, nearest = float.MaxValue;
-            CH_PointState nearestPoint = default;
+            bool canNavigate = camera != null && LocalPlayer.Character != null && !LocalPlayer.Character.IsDead
+                && !journalOpen && !endingPanel.activeSelf;
+            objectiveCompass?.SetDisplayAllowed(canNavigate);
+            if (!canNavigate) return;
+            float best = 0.9f;
             foreach (var point in state.points) {
                 if (point.collected || point.id == 9 && state.relicCount == 3) continue;
                 Vector3 direction = point.position - camera.transform.position;
                 float distance = direction.magnitude;
-                if (distance < nearest && (point.id < 4 || point.id >= 6)) { nearest = distance; nearestPoint = point; }
                 float alignment = distance < 0.1f ? 1 : Vector3.Dot(camera.transform.forward, direction / distance);
                 if (distance <= 3.5f && alignment > best && WorldInteraction.CanReach(camera.transform.position, point.position, 3.5f, visibilityMask)) {
                     best = alignment;
@@ -156,13 +169,21 @@ namespace Universes.UniverseData.classic_horror.Client {
                         : $"[E]  {point.title.ToUpperInvariant()}";
                 }
             }
-            if (nearest < float.MaxValue) {
-                Vector3 direction = nearestPoint.position - camera.transform.position;
-                float bearing = Vector3.SignedAngle(Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up), Vector3.ProjectOnPlane(direction, Vector3.up), Vector3.up);
-                string heading = Mathf.Abs(bearing) < 25 ? "AHEAD" : Mathf.Abs(bearing) > 140 ? "BEHIND" : bearing < 0 ? "LEFT" : "RIGHT";
-                bearingLabel.text = $"SEARCH / {nearestPoint.area}   {heading}   {Mathf.CeilToInt(nearest)} m";
-            }
             if (Time.unscaledTime < feedbackUntil) interactionLabel.text = interactionFeedback;
+        }
+        void RefreshNavigationObjectives() {
+            navigationObjectives.Clear();
+            if (state.points != null && state.phase is not (CH_Phase.Complete or CH_Phase.Failed)) {
+                foreach (var point in state.points) {
+                    if (point.navigationTarget && !point.collected && (point.id != 9 || state.relicCount < 3))
+                        navigationObjectives.Add(point.position);
+                }
+            }
+            objectiveCompass?.SetObjectives(navigationObjectives);
+        }
+        static string FormatTime(int seconds) {
+            seconds = Mathf.Max(0, seconds);
+            return $"{seconds / 60:00}:{seconds % 60:00}";
         }
         void Interact() {
             // Input can arrive between focus scans, especially while turning.
@@ -220,9 +241,12 @@ namespace Universes.UniverseData.classic_horror.Client {
         void OnDisable() {
             ToolControls.interactPressed -= Interact;
             ToolControls.journalPressed -= OpenJournal;
+            objectiveCompass?.SetDisplayAllowed(false);
             CloseJournal();
         }
         void OnDestroy() {
+            if (localCharacterAnimator != null)
+                localCharacterAnimator.FootstepPaceMultiplier = previousFootstepPaceMultiplier;
             if (manager != null) {
                 manager.UnregisterBroadcast<CH_StateBroadcast>(OnState);
                 manager.UnregisterBroadcast<CH_ScareBroadcast>(OnScare);

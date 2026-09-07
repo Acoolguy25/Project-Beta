@@ -268,6 +268,11 @@ MonoBehaviour:
   JumpTimeout: 0.35
   LandJumpTimeout: 0
   FallTimeout: 0.15
+  MaxStepHeight: 0.6
+  StepProbeDistance: 0.12
+  CollisionSkin: 0.03
+  MinimumStepGroundNormal: 0.65
+  MaxDepenetrationVelocity: 5
 --- !u!1 &927006960755515547
 GameObject:
   m_ObjectHideFlags: 0
@@ -787,21 +792,56 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Client.Audio::RyanAssets.Client.ClientAudio.MusicService
   trackList:
-  - audioMixerGroup: {fileID: 1723131322840602690, guid: a3706924799c36f459396edda30f4552, type: 2}
+  - musicSelection: 1
+    savePlaybackState: 1
+    minDelay: 0
+    maxDelay: 0
+    audioMixerGroup: {fileID: 1723131322840602690, guid: a3706924799c36f459396edda30f4552, type: 2}
     Tracks:
     - {fileID: 8300000, guid: baa2c93bfb8c7b24b92d741d7974c312, type: 3}
     - {fileID: 8300000, guid: 84796d88bee0abc45bc502b261e70fe8, type: 3}
     - {fileID: 8300000, guid: b52df030f79618245874db817e87cf11, type: 3}
-  - audioMixerGroup: {fileID: 9112474433413628405, guid: a3706924799c36f459396edda30f4552, type: 2}
+  - musicSelection: 2
+    savePlaybackState: 1
+    minDelay: 0
+    maxDelay: 0
+    audioMixerGroup: {fileID: 9112474433413628405, guid: a3706924799c36f459396edda30f4552, type: 2}
     Tracks:
     - {fileID: 8300000, guid: fd79d813bdd610845930a2f529deb38a, type: 3}
     - {fileID: 8300000, guid: 26e68b7a96197d3458de3136951eeb18, type: 3}
     - {fileID: 8300000, guid: 8d108472289639f419ce41120cc74114, type: 3}
     - {fileID: 8300000, guid: 826e4ce2ad15e224cbd0570dc5747240, type: 3}
-  - audioMixerGroup: {fileID: 9112474433413628405, guid: a3706924799c36f459396edda30f4552, type: 2}
+  - musicSelection: 5
+    savePlaybackState: 0
+    minDelay: 0
+    maxDelay: 0
+    audioMixerGroup: {fileID: 9112474433413628405, guid: a3706924799c36f459396edda30f4552, type: 2}
     Tracks:
     - {fileID: 8300000, guid: c2bb525456b66f843b70517a7fcac441, type: 3}
+  - musicSelection: 3
+    savePlaybackState: 1
+    minDelay: 6
+    maxDelay: 10
+    audioMixerGroup: {fileID: 9112474433413628405, guid: a3706924799c36f459396edda30f4552, type: 2}
+    Tracks:
+    - {fileID: 8300000, guid: f41922d12ef8fcf4fb0747690e71e280, type: 3}
+    - {fileID: 8300000, guid: 1afa55170d312d0499b7d726f01a2951, type: 3}
+    - {fileID: 8300000, guid: e355b08c631c548458b8bcd10ed94131, type: 3}
+    - {fileID: 8300000, guid: 1a94a0b30b8874c4294b3705e17c9583, type: 3}
+    - {fileID: 8300000, guid: 275e8cd0da2720344984bde0f9c16272, type: 3}
+    - {fileID: 8300000, guid: 29e8f21d01d3a514691d055dd00416ff, type: 3}
+    - {fileID: 8300000, guid: 922699ce0c8020b4b9a4a28c18e3f230, type: 3}
+    - {fileID: 8300000, guid: ba594ec10b58f534098c19b85037ce09, type: 3}
+    - {fileID: 8300000, guid: 6574a9e27f9cc544f8419f2a536c6e85, type: 3}
+  - musicSelection: 4
+    savePlaybackState: 0
+    minDelay: 0
+    maxDelay: 0
+    audioMixerGroup: {fileID: 9112474433413628405, guid: a3706924799c36f459396edda30f4552, type: 2}
+    Tracks:
+    - {fileID: 8300000, guid: aeff7dd51bfd8fe40acf6800b88fafbc, type: 3}
   audioMixer: {fileID: 24100000, guid: a3706924799c36f459396edda30f4552, type: 2}
+  fadeDuration: 1
 --- !u!82 &8336438271952084663
 AudioSource:
   m_ObjectHideFlags: 0
@@ -2348,7 +2388,7 @@ Transform:
   m_GameObject: {fileID: 7148509618839998651}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -0.0000005703648, y: 0.00000031353815, z: 0.0000009698555}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3386,6 +3426,18 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3695389477760585212, guid: c5f25102bdad88f48893e9e3ffbf67cd, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3695389477760585212, guid: c5f25102bdad88f48893e9e3ffbf67cd, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3695389477760585212, guid: c5f25102bdad88f48893e9e3ffbf67cd, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 9124784151788795523, guid: c5f25102bdad88f48893e9e3ffbf67cd, type: 3}
       propertyPath: m_Name
       value: StructureCanvas
@@ -3885,15 +3937,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907900, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Size
-      value: 0.14114995
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907900, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Value
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 898951070834907918, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: -0.000015258789
+      objectReference: {fileID: 0}
+    - target: {fileID: 898951070834908079, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 898951070834908079, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7605491199203531490, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchorMax.x

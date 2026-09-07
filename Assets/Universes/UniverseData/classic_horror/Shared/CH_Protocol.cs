@@ -10,7 +10,7 @@ namespace Universes.UniverseData.classic_horror {
         public int option;
     }
     public struct CH_ScareBroadcast : IBroadcast { public int seed, sequence; public byte kind; }
-    public struct CH_InteractionResult : IBroadcast { public int seed; public bool accepted; public string message; }
+    public struct CH_InteractionResult : IBroadcast { public int seed; public bool accepted, playObjectiveCollect; public string message; }
     public struct CH_StateRequest : IBroadcast { public byte version; }
     public struct CH_PointState {
         public int id;
@@ -18,6 +18,7 @@ namespace Universes.UniverseData.classic_horror {
         public string title;
         public string area;
         public bool collected;
+        public bool navigationTarget;
     }
     public struct CH_StateBroadcast : IBroadcast {
         public int seed;

@@ -10,13 +10,15 @@ namespace Universes.UniverseData.classic_horror.Client {
         int lastSequence;
         float started = -100, duration;
         public int PlayedCount { get; private set; }
-        public void ResetCase() { lastSequence = 0; started = -100; if (overlay != null) overlay.alpha = 0; }
+        public void ResetCase() { lastSequence = 0; started = -100; if (overlay != null) overlay.alpha = 0; if (sting != null) sting.Stop(); }
         public void Play(int sequence, byte kind) {
             if (sequence <= lastSequence || overlay == null) return;
             lastSequence = sequence;
+            // A fatal encounter may replace a warning; warnings never restart an active scare.
+            if (kind != 2 && Time.unscaledTime - started < duration) return;
             PlayedCount++;
             started = Time.unscaledTime;
-            duration = kind == 2 ? 0.85f : kind == 1 ? 0.48f : 0.65f;
+            duration = kind == 2 ? 3.5f : kind == 1 ? 1.75f : 2.25f;
             overlay.alpha = 1;
             if (sting != null) { sting.pitch = kind == 1 ? 1.25f : 0.85f; sting.Play(); }
         }

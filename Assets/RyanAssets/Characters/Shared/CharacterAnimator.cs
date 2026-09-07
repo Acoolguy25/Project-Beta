@@ -6,11 +6,21 @@ namespace RyanAssets.Characters.Shared
 {
     [RequireComponent(typeof(AudioSource))]
     [RequireComponent(typeof(Animator))]
+    [DisallowMultipleComponent]
     public class CharacterAnimator: NetworkBehaviour {
         public event System.Action LethalAttackStarted, LethalAttackEnded;
         public bool LethalAttackEnabled { get; set; } = false;
         public AudioClip LandingAudioClip;
         public AudioClip[] FootstepAudioClips;
+
+        [Header("Locomotion Audio")]
+        [SerializeField, Min(1f)] private float footstepPaceMultiplier = 1f;
+        [SerializeField, Min(0f)] private float duplicateSoundWindow = 0.08f;
+
+        public float FootstepPaceMultiplier {
+            get => footstepPaceMultiplier;
+            set => footstepPaceMultiplier = Mathf.Max(1f, value);
+        }
 
         [SerializeField]
         public bool GroundCheck;
@@ -25,28 +35,37 @@ namespace RyanAssets.Characters.Shared
 
         private Vector3 prevPosition;
         private float jumpStart = float.MinValue;
+        private float _lastFootstepTime = float.NegativeInfinity;
+        private float _lastLandingTime = float.NegativeInfinity;
         public void OnFootstep(AnimationEvent animationEvent) {
-            if (animationEvent.animatorClipInfo.weight > 0.5f && FootstepAudioClips.Length > 0) {
-                int index = Random.Range(0, FootstepAudioClips.Length);
-                var clip = FootstepAudioClips[index];
+            if (FootstepAudioClips == null || FootstepAudioClips.Length == 0)
+                return;
 
-                //var audioGO = new GameObject("FootstepAudio");
-                //audioGO.transform.position = transform.position;
-                //var source = audioGO.AddComponent<AudioSource>();
-                //source.clip = clip;
-                //source.volume = FootstepAudioVolume;
-                //source.pitch = 1.0f; //_input.sprint ? (1.25f) : 1.0f;
-                //source.Play();
-#if AUDIO_ENABLED
-                _footStepSource.PlayOneShot(clip);
-#endif
-                //Destroy(audioGO, clip.length / source.pitch);
-            }
+            // Walk/run clips can both contribute less than half of the blend while still
+            // producing a valid foot plant. Use time-based de-duplication instead of clip
+            // weight so blended locomotion never suppresses every footstep event.
+            if (Time.time - _lastFootstepTime < duplicateSoundWindow)
+                return;
+
+            _lastFootstepTime = Time.time;
+            PlayOneShot(FootstepAudioClips[Random.Range(0, FootstepAudioClips.Length)]);
         }
         public void OnLand(AnimationEvent animationEvent) {
-            if (animationEvent.animatorClipInfo.weight > 0.5f) {
-                _footStepSource.PlayOneShot(LandingAudioClip);
-            }
+            if (Time.time - _lastLandingTime < duplicateSoundWindow)
+                return;
+
+            _lastLandingTime = Time.time;
+            PlayOneShot(LandingAudioClip);
+        }
+        private void PlayOneShot(AudioClip clip) {
+            if (clip == null)
+                return;
+
+            if (_footStepSource == null)
+                _footStepSource = GetComponent<AudioSource>();
+
+            if (_footStepSource != null && _footStepSource.isActiveAndEnabled)
+                _footStepSource.PlayOneShot(clip);
         }
         public void OnLethalAttackStart(AnimationEvent animationEvent) {
             LethalAttackEnabled = true;
@@ -60,6 +79,11 @@ namespace RyanAssets.Characters.Shared
             _animator = GetComponent<Animator>();
             _collider = GetComponent<Collider>();
             _footStepSource = GetComponent<AudioSource>();
+
+            // Animation events drive locomotion audio. First-person games such as
+            // classic_horror may keep the local mesh outside every camera, so renderer-
+            // based culling must not stop animation updates or their audio events.
+            _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             GroundMask = ~LayerMask.GetMask("Character", "LocalCharacter");
             _animator.SetBool("Grounded", true);
@@ -78,7 +102,7 @@ namespace RyanAssets.Characters.Shared
             Vector3 velocity = GetVelocity();
             float newSpeed = Mathf.Lerp(_animator.GetFloat("Speed"), velocity.magnitude * SpeedThreshold, 1f);
             _animator.SetFloat("Speed", newSpeed);
-            _animator.SetFloat("MotionSpeed", newSpeed);
+            _animator.SetFloat("MotionSpeed", newSpeed * footstepPaceMultiplier);
             _animator.SetBool("Jump", (Time.fixedTime - jumpStart) < JumpThreshold);
             //_animator.SetBool("Jump", false);
         }

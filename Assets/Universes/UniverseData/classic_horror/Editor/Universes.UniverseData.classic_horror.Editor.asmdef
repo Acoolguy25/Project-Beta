@@ -14,7 +14,8 @@
         "Unity.ugui",
         "Unity.AI.Navigation",
         "Unity.RenderPipelines.Universal.Runtime",
-        "RyanAssets.Editor"
+        "RyanAssets.Editor",
+        "RyanAssets.UI"
     ],
     "includePlatforms": [
         "Editor"

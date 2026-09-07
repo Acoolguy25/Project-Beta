@@ -21,6 +21,10 @@ namespace RyanAssets.Tools.Shared {
                 || connectedCharacter.GetComponent<IEntity>()?.IsDead == true) return;
             nextToggle = Time.unscaledTime + toggleCooldown;
             LightOn.Value = !LightOn.Value;
+            if (LightOn.Value)
+                PlayAudioRpc(0);
+            else
+                PlayAudioRpc(1);
         }
 
         [ServerRpc]
