@@ -1,10 +1,10 @@
 {
     "name": "Universes.UniverseData.dot_invaders.Client",
-    "rootNamespace": "Universes.UniverseData.dot_invaders",
+    "rootNamespace": "Universes.UniverseData.dot_invaders.Client",
     "references": [
-        "FishNet.Runtime",
-        "Unity.InputSystem",
-        "Unity.TextMeshPro",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:75469ad4d38634e559750d17036d5f7c",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
         "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc"
     ],
     "includePlatforms": [],

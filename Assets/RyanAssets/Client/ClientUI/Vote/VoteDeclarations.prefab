@@ -59,3 +59,13 @@ MonoBehaviour:
     - title: Infection
       description: Some NPCs are infected, but the virus spreads quickly!
       image: {fileID: 21300000, guid: e4f22ee5b54a42bfbbf0c4d60e1c1d42, type: 3}
+  - voteId: 1
+    title: Gamemode Select
+    description: Select your favorite gamemodes
+    options:
+    - title: Guess Code
+      description: Get the secret code out of the AI before the time runs out!
+      image: {fileID: 21300000, guid: ed2cd71f5af94fbbadf5953230fe36e8, type: 3}
+    - title: Force Word
+      description: Force the AI to say a special word before the time runs out!
+      image: {fileID: 21300000, guid: 2e1665ccf4ea43919dfe664c779da521, type: 3}

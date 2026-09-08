@@ -7,6 +7,7 @@ namespace RyanAssets.Shared.Declarations {
     public enum VoteEnum : sbyte {
         None = -1,
         MM_VoteMode,
+        CS_VoteMode,
     }
 
     /// <summary>Small, server-authoritative description of the currently running vote.</summary>

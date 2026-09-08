@@ -9,7 +9,7 @@ using TMPro;
 using UnityEngine.InputSystem;
 #endif
 
-namespace Universes.UniverseData.dot_invaders {
+namespace Universes.UniverseData.dot_invaders.Client {
 #if !UNITY_SERVER
     public struct DI_SendRequest : IBroadcast {
         public int sourceBaseId;

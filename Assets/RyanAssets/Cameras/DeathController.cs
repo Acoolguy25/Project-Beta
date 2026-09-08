@@ -13,7 +13,7 @@ namespace RyanAssets.Cameras {
 
         public override void EnableCamera(Transform oldCamera, RyanAssets.Shared.Declarations.GameCameraType oldCameraType) {
             base.EnableCamera(oldCamera, oldCameraType);
-            Object.FindFirstObjectByType<MusicService>()?.StopAllMusic();
+            Object.FindAnyObjectByType<MusicService>()?.StopAllMusic();
             EnsureBlackOverlay();
         }
 

@@ -14,6 +14,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float NavigationRadius = 0.1f;
         const float NavigationHeight = 1.05f;
         const float PursuitMemorySeconds = 30f;
+        // Preserve the relative urgency of each authored state while giving
+        // investigators about 12.5% more room to evade.
+        const float MovementSpeedMultiplier = 0.875f;
         const float UnreachableGiveUpSeconds = 3f;
         const float UnreachableRetrySeconds = 4f;
         const float ReachableApproachRadius = 3f;
@@ -208,7 +211,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                     // Use the health contract so a successful hit is lethal at any
                     // player health, while still respecting spawn protection.
                     sensed.TakeDamage(System.Math.Max(1L, sensed.Health.Value), DamageType.Melee, (IEntity)entity);
-                } else if (closest < 6f && WorldInteraction.CanReach(eye, sensedEye, 6f, obstacleMask)) runner.Scare(sensed);
+                }
                 if (closest < 38f && Time.time > nextWhisper) {
                     nextWhisper = Time.time + 35f;
                     runner.Speak(runner.CurrentCase.Warnings[warningIndex++ % runner.CurrentCase.Warnings.Length]);
@@ -331,7 +334,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if ((transform.position - progressPosition).sqrMagnitude > 0.09f) {
                 lastProgress = Time.time; progressPosition = transform.position;
             }
-            bool accepted = locomotion.MoveTo(destination, speed);
+            bool accepted = locomotion.MoveTo(destination, speed * MovementSpeedMultiplier);
             var agent = locomotion.agent;
             // If the closest projection landed on a disconnected shoreline/prop
             // polygon, use the reachable approach selected during perception.

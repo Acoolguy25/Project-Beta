@@ -49,7 +49,6 @@ namespace Universes.murder_mystery.Server {
         
         public static float SpawnMultiplier;
         public static bool ForceEndGame;
-        public static Action UpdateGameBarEvent;
         bool gameInProgress;
         string[] alienNames;
         int startNPCs, startPlayers, gameDurationLeft;
@@ -62,7 +61,6 @@ namespace Universes.murder_mystery.Server {
                 [TeamColor.Blue] = new() { TeamColor.Red },
                 [TeamColor.Green] = new() // can't kill anyone!
             };
-            UpdateGameBarEvent = null;
             ForceEndGame = false;
             SpawnMultiplier = 1f;
             //ServerPlayerCharacter.CharacterAdded += OnCharacterAdded;
@@ -238,7 +236,7 @@ namespace Universes.murder_mystery.Server {
                         break;
                 }
             }
-            UpdateGameBarEvent?.Invoke();
+            RefreshInGameBar();
         }
         async void ReviveAsInfected(GameCharacter character, Vector3 deathPosition) {
             // HealthComponent sends the death RPC after its server-side OnDied event.
@@ -246,7 +244,7 @@ namespace Universes.murder_mystery.Server {
             // than receiving the two lifecycle notifications in reverse order.
             character.SetTeam(new TeamConfig(TeamColor.Red));
             character.GetComponent<RobotColor>().ApplyColor(TeamColor.Green);
-            UpdateGameBarEvent?.Invoke();
+            RefreshInGameBar();
             await UniTask.Yield();
             await UniTask.WaitForSeconds(3f);
             if (character == null || !character.IsDead || mode != MM_Mode.Infection)
@@ -324,7 +322,7 @@ namespace Universes.murder_mystery.Server {
                         if (kills != -1) // if it exists
                             PlayerData.GetPlayerData(killerCharacter.Owner).leaderboard[kills]++;
                     }
-                    UpdateGameBarEvent?.Invoke();
+                    RefreshInGameBar();
                 };
                 RandomizeCharacterName(gameCharacter);
             }
@@ -448,7 +446,7 @@ namespace Universes.murder_mystery.Server {
             }
             return TeamColor.None;
         }
-        bool UpdateInGameBar(int durationLeft, bool interrupted) {
+        protected override bool UpdateInGameBar(int durationLeft, bool interrupted) {
             gameDurationLeft = durationLeft;
             switch (mode) {
                 case MM_Mode.NPCsVsPlayers:
@@ -501,12 +499,7 @@ namespace Universes.murder_mystery.Server {
             gameInProgress = true;
             using CancellationTokenSource coinCts = CancellationTokenSource.CreateLinkedTokenSource(token);
             SpawnCoinLoop(coinCts.Token);
-            await base.CustomTimerCountdown(
-                DebugTimerSpeedUp.Value ? 10 : gameTime,
-                UpdateInGameBar,
-                interrupt => UpdateGameBarEvent += interrupt,
-                interrupt => UpdateGameBarEvent -= interrupt,
-                token);
+            await GameTimerCountdown(DebugTimerSpeedUp.Value ? 10 : gameTime, token);
             coinCts.Cancel();
             ServerCoin.ClearAllCoins();
             base.SetGlobalInvul(true);

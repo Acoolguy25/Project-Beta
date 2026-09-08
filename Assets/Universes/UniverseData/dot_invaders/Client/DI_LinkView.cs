@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Universes.UniverseData.dot_invaders {
+namespace Universes.UniverseData.dot_invaders.Client {
     public sealed class DI_LinkView : MonoBehaviour {
 #if !UNITY_SERVER
         LineRenderer lineRenderer;

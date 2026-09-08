@@ -44,10 +44,6 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly Dictionary<NetworkConnection, float> snapshotTimes = new();
         readonly HashSet<NetworkConnection> eliminated = new();
         readonly HashSet<NetworkConnection> reviving = new();
-        readonly Dictionary<NetworkConnection, float> nextScare = new();
-        readonly Dictionary<NetworkConnection, int> nonfatalScares = new();
-        const int NonfatalScaresPerCase = 2;
-        const float ScareCooldown = 90f;
         int scareSequence;
         CH_Map map;
         CH_Case current;
@@ -108,7 +104,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             // The character event may precede this runner's player event on join.
             ServerTool.Instance.SpawnTool(character.NetworkObject, ToolEnum.Flashlight);
         }
-        void OnPlayerLeft(PlayerData player) { requestTimes.Remove(player.Owner); snapshotTimes.Remove(player.Owner); eliminated.Remove(player.Owner); reviving.Remove(player.Owner); nextScare.Remove(player.Owner); nonfatalScares.Remove(player.Owner); }
+        void OnPlayerLeft(PlayerData player) { requestTimes.Remove(player.Owner); snapshotTimes.Remove(player.Owner); eliminated.Remove(player.Owner); reviving.Remove(player.Owner); }
 
         protected override async UniTask StartAsync(CancellationToken token) {
             acceptingPlayers = false;
@@ -127,8 +123,6 @@ namespace Universes.UniverseData.classic_horror.Server {
             losses = 0;
             eliminated.Clear();
             reviving.Clear();
-            nextScare.Clear();
-            nonfatalScares.Clear();
             scareSequence = 0;
             chaseMusicUntil = 0;
             ending = "";
@@ -183,7 +177,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (!CaseActive || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
             losses++;
-            if (monster != null && source == monster.GetComponent<GameCharacter>()) Scare(character, 2, true);
+            if (monster != null && source == monster.GetComponent<GameCharacter>()) ScareCaughtByMonster(character);
             character.CanSpectate.Value = false;
             if (PlayerData.TryGetPlayerData(character.Owner, out var player) && player.lives.Value > 0) {
                 player.lives.Value--;
@@ -206,17 +200,11 @@ namespace Universes.UniverseData.classic_horror.Server {
             return true;
         }
 
-        public void Scare(LocalCharacter character, byte kind = 0, bool fatal = false) {
+        /// <summary>Plays the scare only after the monster has killed this investigator.</summary>
+        void ScareCaughtByMonster(LocalCharacter character) {
             if (character == null || !character.Owner.IsAuthenticated || !CaseActive) return;
-            if (!fatal) {
-                nonfatalScares.TryGetValue(character.Owner, out int count);
-                if (character.IsDead || count >= NonfatalScaresPerCase
-                    || (nextScare.TryGetValue(character.Owner, out float next) && Time.time < next)) return;
-                nonfatalScares[character.Owner] = count + 1;
-            }
-            nextScare[character.Owner] = Time.time + ScareCooldown;
             InstanceFinder.ServerManager.Broadcast(character.Owner, new CH_ScareBroadcast {
-                seed = current.Seed, sequence = ++scareSequence, kind = kind
+                seed = current.Seed, sequence = ++scareSequence, kind = 2
             });
         }
 
@@ -247,8 +235,6 @@ namespace Universes.UniverseData.classic_horror.Server {
                 if (!current.Collect(request.targetId)) { RejectInteraction(connection, "This record has already been secured."); return; }
                 itemCollected = true;
                 AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
-                // A seed-dependent discovery sting changes location with every case.
-                if (request.targetId == (int)(unchecked((uint)current.Seed) % 4)) Scare(character, 1);
                 Speak(request.targetId < 6 ? current.Evidence[request.targetId]
                     : $"Recovered the {CH_Case.Offerings[request.targetId - 6]}. {current.RelicCount}/3 offerings secured. Check the ritual order in your journal.");
             } else if (request.targetId >= 11 && request.targetId <= 13 && current.Phase == CH_Phase.Descent) {
@@ -260,7 +246,6 @@ namespace Universes.UniverseData.classic_horror.Server {
                         : $"The {CH_Case.Offerings[offering]} is accepted. {current.RitualStep}/3. Read the next step carefully.");
                 } else {
                     monster?.Enrage(14f);
-                    Scare(character, 1);
                     Speak("That was the wrong order. The seal has broken; begin again. Consult the keeper's instructions in your journal.");
                 }
             } else if (request.targetId == 10 && current.Extract()) {

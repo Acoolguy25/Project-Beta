@@ -26,13 +26,26 @@ namespace Universes {
             Assert.IsNotNull(textAsset, $"{id} TextAsset Not Found: {localPath}");
             return textAsset.text;
         }
+        public string LoadRandomText(string localPath) {
+            TextAsset textAsset = Resources.Load<TextAsset>(GetResourcePath(localPath));
+            Assert.IsNotNull(textAsset, $"{id} TextAsset Not Found: {localPath}");
+            string[] lines = textAsset.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
+            return lines[Random.Range(0, lines.Length)];
+        }
     };
     public static class UniverseCfg {
         public readonly static UniverseStruct[] ActiveUniverses = {
             new(){
+                id = "example",
+                title = "Example Place",
+                description = "This is an example!",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Private
+            },
+            new(){
                 id = "empty_baseplate",
                 title = "Empty Baseplate",
-                description = "This is your very first creation. Check it out, then make it your own with Ryan's help!",
+                description = "This is your very first creation. Check it out!",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
             },
@@ -54,6 +67,13 @@ namespace Universes {
                 id = "classic_horror",
                 title = "Investigator",
                 description = "A horror story where you investigate an unknown horror source",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
+            },
+            new(){
+                id = "customer_service",
+                title = "Customer Service",
+                description = "A game where you contact 24/7 customer service representatives.",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
             },

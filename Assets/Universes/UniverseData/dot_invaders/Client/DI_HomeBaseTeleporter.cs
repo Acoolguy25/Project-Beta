@@ -1,7 +1,7 @@
 using FishNet.Object;
 using UnityEngine;
 
-namespace Universes.UniverseData.dot_invaders {
+namespace Universes.UniverseData.dot_invaders.Client {
     public sealed class DI_HomeBaseTeleporter : MonoBehaviour {
 #if !UNITY_SERVER
         [SerializeField] float heightAboveBoard = 1f;
@@ -29,7 +29,7 @@ namespace Universes.UniverseData.dot_invaders {
             if (teleported || !hasHomeBase)
                 return;
 
-            NetworkObject[] networkObjects = FindObjectsByType<NetworkObject>(FindObjectsSortMode.None);
+            NetworkObject[] networkObjects = FindObjectsByType<NetworkObject>();
             for (int i = 0; i < networkObjects.Length; i++) {
                 NetworkObject networkObject = networkObjects[i];
                 if (!networkObject.IsOwner || networkObject.GetComponent("LocalCharacter") == null)

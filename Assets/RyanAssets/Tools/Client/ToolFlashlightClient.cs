@@ -10,15 +10,15 @@ namespace RyanAssets.Tools.Client {
 #if !UNITY_SERVER
         float nextAim;
         protected override bool RequiresWorldTarget => false;
-        protected ToolFlashlightShared tool => (ToolFlashlightShared)toolBaseShared;
+        private ToolFlashlightShared Tool => (ToolFlashlightShared)toolBaseShared;
         protected override void OnActivate(Vector3 point) {
             base.OnActivate(point);
-            tool.ToggleLightServerRpc();
+            Tool.ToggleLightServerRpc();
         }
         void Update() {
-            if (!tool.IsOwner || !tool.IsSpawned || !tool.equipped || Time.unscaledTime < nextAim || Camera.main == null) return;
+            if (!Tool.IsOwner || !Tool.IsSpawned || !Tool.equipped || Time.unscaledTime < nextAim || Camera.main == null) return;
             nextAim = Time.unscaledTime + 0.1f;
-            tool.AimServerRpc(Camera.main.transform.forward);
+            Tool.AimServerRpc(Camera.main.transform.forward);
         }
 #endif
     }

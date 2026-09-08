@@ -12,6 +12,8 @@ namespace Universes.UniverseData.war_valley.Shared {
         [SerializeField] private TeamConfig team = new(TeamColor.Blue);
         [SerializeField, Min(1)] private long maxHealth = 1000;
 
+        private long InitialMaxHealth => maxHealth;
+
         public static WV_Flag Instance { get; private set; }
 
         public override string DisplayName {
@@ -37,7 +39,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 #if UNITY_SERVER
         public override void OnStartServer() {
             base.OnStartServer();
-            Init(maxHealth);
+            Init(InitialMaxHealth);
         }
 
         [Server]

@@ -22,6 +22,9 @@ namespace Universes.UniverseData.war_valley.Shared {
         [SerializeField, Min(0.05f)] private float linkClearance = 0.35f;
         [SerializeField, Min(0f)] private float despawnDelay = 3f;
 
+        private long MaxHealth => maxHealth;
+        private float DespawnDelay => despawnDelay;
+
         private StructureComponent structure;
         private NavMeshObstacle obstacle;
         private NavMeshLink breachLink;
@@ -36,7 +39,8 @@ namespace Universes.UniverseData.war_valley.Shared {
             ConfigureNavigation();
         }
 
-        private void OnValidate() {
+        protected override void OnValidate() {
+            base.OnValidate();
             CacheComponents();
             ConfigureNavigation();
         }
@@ -57,7 +61,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 #if UNITY_SERVER
         public override void OnStartServer() {
             base.OnStartServer();
-            structure.Init(maxHealth);
+            structure.Init(MaxHealth);
         }
 #endif
 
@@ -131,8 +135,8 @@ namespace Universes.UniverseData.war_valley.Shared {
 
 #if UNITY_SERVER
         private IEnumerator DespawnAfterDelay() {
-            if (despawnDelay > 0f)
-                yield return new WaitForSeconds(despawnDelay);
+            if (DespawnDelay > 0f)
+                yield return new WaitForSeconds(DespawnDelay);
             if (IsSpawned)
                 Despawn();
         }

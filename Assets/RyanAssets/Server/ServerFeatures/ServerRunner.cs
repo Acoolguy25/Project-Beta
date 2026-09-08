@@ -24,6 +24,7 @@ namespace RyanAssets.Server.ServerFeatures {
         public static bool serverRunning => serverRunnerCTS != null && !serverRunnerCTS.IsCancellationRequested;
         public static ServerRunner Instance;
         protected static CancellationTokenSource serverRunnerCTS = null;
+        event Action UpdateGameBarEvent;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             OnResetEvent = null;
@@ -116,6 +117,30 @@ namespace RyanAssets.Server.ServerFeatures {
                 }
             }
             return token.IsCancellationRequested;
+        }
+
+        /// <summary>
+        /// Runs the standard active-game countdown. Derived runners override
+        /// <see cref="UpdateInGameBar"/> to publish their mode-specific status and
+        /// return false when their game should end early.
+        /// </summary>
+        protected UniTask<bool> GameTimerCountdown(int duration, CancellationToken token = default) {
+            return CustomTimerCountdown(
+                duration,
+                UpdateInGameBar,
+                interrupt => UpdateGameBarEvent += interrupt,
+                interrupt => UpdateGameBarEvent -= interrupt,
+                token);
+        }
+
+        /// <summary>Refreshes the active-game countdown after game-state changes.</summary>
+        protected void RefreshInGameBar() {
+            UpdateGameBarEvent?.Invoke();
+        }
+
+        protected virtual bool UpdateInGameBar(int durationLeft, bool interrupted) {
+            SetTopMessage($"Game in progress ({durationLeft})");
+            return true;
         }
 
         public async UniTask WaitForPlayersAsync(int playerRequirement = 1, CancellationToken token = default) {

@@ -9,7 +9,6 @@ using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Requests;
 using RyanAssets.Shared.Global;
-using RyanAssets.Shared.Requests;
 using RyanAssets.UI;
 using RyanAssets.UI.Textbox;
 using RyanAssets.UI.ListGrid;
@@ -60,13 +59,17 @@ namespace RyanAssets.Client.ClientUI.Chat {
             if (message.player == null) { // System / Custom Message
                 switch (message.type) {
                     case SystemMessageSource.LocalPlayerJoinMessage:
-                        displayText = "{System}: " + message.message;
+                        displayText = "{System}: " + displayText;
                         break;
                     case SystemMessageSource.PlayerAdd:
-                        usernameText.color = Color.teal;
+                        usernameText.color = Color.lightCyan;
                         break;
                     case SystemMessageSource.PlayerRemove:
-                        usernameText.color = Color.teal;
+                        usernameText.color = Color.lightCyan;
+                        break;
+                    case SystemMessageSource.ChatbotResponse:
+                        usernameText.color = Color.red;
+                        displayText = ClientChatHelper.EscapeRichText(displayText);
                         break;
                     default:
                         break;
@@ -94,7 +97,7 @@ namespace RyanAssets.Client.ClientUI.Chat {
                         return;
                     }
                 }
-                InstanceFinder.ClientManager.Broadcast<MessageRequest>(new() { message = text });
+                InstanceFinder.ClientManager.Broadcast<ChatMessageRequest>(new() { message = text });
             }
             chatBox.text = string.Empty;
         }

@@ -189,7 +189,7 @@ public class SceneSwitcherWindow : EditorWindow {
         }
 
         string source = File.ReadAllText(sourcePath);
-        string pattern = $@"(?<prefix>\b{Regex.Escape(fieldName)}\s*=\s*"")[^""]*(?<suffix>"")";
+        string pattern = $@"(?<prefix>\b{Regex.Escape(fieldName)}\s*=\s*(?:EditorPrefs\.GetString\(\s*""[^""]+""\s*,\s*)?"")[^""]*(?<suffix>""\)?)";
         string updatedSource = new Regex(pattern).Replace(
             source,
             match => match.Groups["prefix"].Value + universeId + match.Groups["suffix"].Value,

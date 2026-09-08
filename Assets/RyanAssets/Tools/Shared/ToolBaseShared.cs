@@ -264,7 +264,8 @@ namespace RyanAssets.Tools.Shared {
             audioSource = weaponRoot.GetComponent<AudioSource>();
         }
 #if UNITY_EDITOR
-        void OnValidate() {
+        protected override void OnValidate() {
+            base.OnValidate();
             // Runtime Inspector edits change serialized fields, not SyncVars.
             // Mirror them immediately when this is the spawned server copy.
             ApplyInitialStatsLive();

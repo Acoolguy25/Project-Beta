@@ -6,6 +6,7 @@ namespace RyanAssets.Shared.Declarations {
         ClientCommand,
         PlayerLevelUp,
         ServerRestart,
+        ChatbotResponse,
         CustomMessage,
         CommandError
     }

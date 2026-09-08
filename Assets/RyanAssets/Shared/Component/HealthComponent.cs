@@ -17,7 +17,11 @@ namespace RyanAssets.Shared.Component {
         public readonly SyncVar<long> MaxHealth = new();
         public bool IsDead => Health.Value == 0 && MaxHealth.Value != 0;
         public bool IsFullHealth => Health.Value == MaxHealth.Value && !IsDead;
-        public event Action<DamageType, IEntity> OnDamage;
+        private Action<DamageType, IEntity> onDamage;
+        public event Action<DamageType, IEntity> OnDamage {
+            add => onDamage += value;
+            remove => onDamage -= value;
+        }
         public event Action<DamageType, IEntity> OnDied;
         public event Action OnRevive;
 
@@ -84,7 +88,7 @@ namespace RyanAssets.Shared.Component {
             // hit while the damaged entity is still valid. Healing intentionally does not
             // count as damage.
             if (damage > 0)
-                OnDamage?.Invoke(source, sourceEntity);
+                onDamage?.Invoke(source, sourceEntity);
 
             if (damage >= Health.Value && MaxHealth.Value >= 0)
                 Died(source, sourceEntity);

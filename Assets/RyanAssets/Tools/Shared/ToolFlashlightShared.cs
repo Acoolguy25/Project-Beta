@@ -7,7 +7,7 @@ namespace RyanAssets.Tools.Shared {
     /// <summary>Replicated utility light. Charge is intentionally unlimited; game
     /// modes can make visibility itself a cost without stranding a dark player.</summary>
     public sealed class ToolFlashlightShared : ToolBaseShared {
-        public readonly SyncVar<bool> LightOn = new(true);
+        public readonly SyncVar<bool> LightOn = new(false);
         public readonly SyncVar<Vector3> AimDirection = new(Vector3.forward);
         [SerializeField] Light beam;
         [SerializeField] float toggleCooldown = 0.2f;

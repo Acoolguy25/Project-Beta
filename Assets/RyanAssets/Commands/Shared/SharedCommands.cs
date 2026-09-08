@@ -2,12 +2,6 @@ namespace RyanAssets.Commands.Shared {
     public static class SharedCommands {
         public static readonly CommandConfig[] AllGameCommands = {
             new() {
-                commandType = "environment",
-                commandName = "help",
-                description = "Lists available commands.",
-                arguments = new CommandArgumentConfig[0]
-            },
-            new() {
                 commandType = "player",
                 commandName = "walkspeed",
                 description = "Sets player walkspeed.",

@@ -441,7 +441,9 @@ MonoBehaviour:
   equipAudio: {fileID: 0}
   unequipAudio: {fileID: 0}
   attackAudio: {fileID: 0}
-  extraAudios: []
+  extraAudios:
+  - {fileID: 8300000, guid: d2e04ccbf876f4148959d5a5f5e16719, type: 3}
+  - {fileID: 8300000, guid: 06139420780cb3849a68fec99e013b4e, type: 3}
   ParentObjectName: RightHand
   weaponRoot: {fileID: 885635097917213702}
   beam: {fileID: 618149118681309094}

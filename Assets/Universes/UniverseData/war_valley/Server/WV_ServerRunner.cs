@@ -67,7 +67,6 @@ namespace Universes.UniverseData.war_valley.Server
         private WV_Flag spawnedFlag;
 
         public WV_ActiveGameState GameState;
-        public static Action UpdateGameBarEvent;
         protected override void Awake() {
             base.Awake();
             SharedGlobalEvents.TeamEnemies = new()
@@ -90,7 +89,7 @@ namespace Universes.UniverseData.war_valley.Server
         Vector3 SpawnLocationFunction(NetworkConnection conn) {
             return ServerPathfinding.GetRandomPositionOnCircle(SpawnCenter, SpawnRadius);
         }
-        bool UpdateInGameBar(int durationLeft, bool interrupted) {
+        protected override bool UpdateInGameBar(int durationLeft, bool interrupted) {
             // Account for wave index being zero-based
             switch (GameState) {
                 case WV_ActiveGameState.Wave:
@@ -116,12 +115,7 @@ namespace Universes.UniverseData.war_valley.Server
             //character.SetScale(UnityEngine.Random.Range(1f, 3f) * 5 * Vector3.one);
         }
         protected async UniTask<bool> StartTimerCountdown(int duration, CancellationToken token) {
-            return await CustomTimerCountdown(
-                duration,
-                UpdateInGameBar,
-                interrupt => UpdateGameBarEvent += interrupt,
-                interrupt => UpdateGameBarEvent -= interrupt,
-                token);
+            return await GameTimerCountdown(duration, token);
         }
         protected Vector3 GetSpawnLocation() {
             Vector3 pos = NPCSpawnLocs[UnityEngine.Random.Range(0, NPCSpawnLocs.Length)];
@@ -136,7 +130,7 @@ namespace Universes.UniverseData.war_valley.Server
             character.OnDied += (DamageType source, IEntity sourceEntity) =>
             {
                 if (GameState == WV_ActiveGameState.FinishEnemiesOff) {
-                    UpdateGameBarEvent.Invoke();
+                    RefreshInGameBar();
                 }
             };
         }

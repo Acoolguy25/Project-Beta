@@ -58,13 +58,6 @@ namespace RyanAssets.Commands.Server {
             return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
         }
         // Comamnds
-        public static void help(NetworkConnection caller, string commandName, string[] args) {
-            string commandList = string.Join(", ", ServerCommandService.GetRegisteredCommandConfigs()
-                .Select(config => "/" + config.commandName)
-                .OrderBy(command => command, StringComparer.OrdinalIgnoreCase));
-
-            ServerCommandService.SendSystemMessage(caller, $"Commands: {commandList}");
-        }
         public static void walkspeed(NetworkConnection caller, string commandName, string[] args) {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns)

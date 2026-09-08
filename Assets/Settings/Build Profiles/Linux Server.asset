@@ -55,6 +55,12 @@ MonoBehaviour:
   - m_enabled: 1
     m_path: Assets/Universes/UniverseData/classic_horror/Scenes/classic_horror_start.unity
     m_guid: 872b0a7a6c902f14fbfe3720c5d58572
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/customer_service/customer_service_server.unity
+    m_guid: 5fdbc400b18f21c409746c67e2d6d725
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/customer_service/customer_service_start.unity
+    m_guid: 13b9b2ce7f23f784492430ebc604759e
   m_HasScriptingDefines: 0
   m_ScriptingDefines: []
   m_PlayerSettingsYaml:

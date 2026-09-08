@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Universes.UniverseData.dot_invaders {
+namespace Universes.UniverseData.dot_invaders.Client {
     public sealed class DI_DotView : MonoBehaviour {
 #if !UNITY_SERVER
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
