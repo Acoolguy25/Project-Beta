@@ -66,7 +66,7 @@ namespace RyanAssets.Server.ServerCore {
             //Debug.Log("============ ServerBootStrap ============");
 #if UNITY_EDITOR
             serverInfo = new(){
-                universe_id = "customer_service",
+                universe_id = "classic_horror",
                 server_id = "unity-test-server",
                 server_port = 20000
             };

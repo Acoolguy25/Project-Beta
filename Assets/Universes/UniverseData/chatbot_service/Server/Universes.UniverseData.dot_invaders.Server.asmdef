@@ -1,6 +1,6 @@
 {
-    "name": "Universes.UniverseData.customer_service.Server",
-    "rootNamespace": "Universes.UniverseData.customer_service.Server",
+    "name": "Universes.UniverseData.chatbot_service.Server",
+    "rootNamespace": "Universes.UniverseData.chatbot_service.Server",
     "references": [
         "GUID:cf7c06d97d9c3b7db881733f839f5ae3",
         "GUID:d10be3939e0d62e4c8925b00521e5e17",

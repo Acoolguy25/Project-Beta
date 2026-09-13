@@ -60,6 +60,10 @@ namespace RyanAssets.UI.ListGrid {
         public void ClearPrefabs() {
             ClearPendingPrefabs();
             ClearActivePrefabs();
+            if (AutoScroll && scrollRect != null) {
+                scrollRect.StopMovement();
+                scrollRect.verticalNormalizedPosition = 0f;
+            }
         }
         public void RemovePrefab(Transform obj) {
             OnDeletePrefab?.Invoke(obj.gameObject);
@@ -83,13 +87,15 @@ namespace RyanAssets.UI.ListGrid {
                         DestroyImmediate(prefabClone);
                     return; // cancelled
                 }
+                // Capture the scroll state before the new row changes the content bounds.
+                bool keepAtBottom = AutoScroll && IsAtBottom();
                 prefabOrder.Add(prefabClone.transform, order);
                 prefabClone.transform.SetParent(contentTarget, false);
                 prefabClone.name = GetItemName(data);
                 SetPrefabActive(prefabClone);
 
                 OnCreatePrefab?.Invoke(prefabClone.gameObject, data);
-                UpdateLayout();
+                UpdateLayout(keepAtBottom);
             };
             pending_ops.Add(op);
         }
@@ -111,16 +117,28 @@ namespace RyanAssets.UI.ListGrid {
         public void UpdateSearchText(string searchText) {
             UpdateLayout();
         }
-        protected void UpdateLayout() {
+        private bool IsAtBottom() {
+            if (scrollRect == null || scrollRect.viewport == null)
+                return false;
+
+            // ScrollRect reports the top position while content fits the viewport.
+            return contentRT.rect.height <= scrollRect.viewport.rect.height + 0.01f ||
+                   scrollRect.verticalNormalizedPosition <= 0.01f;
+        }
+        protected void UpdateLayout(bool keepAtBottom = false) {
             if (contentRT == null || !isActiveAndEnabled)
                 return;
 
-            if (layoutRoutine != null)
-                StopCoroutine(layoutRoutine);
+            if (layoutRoutine != null) {
+                autoScrollAfterLayout |= keepAtBottom;
+                return;
+            }
 
+            autoScrollAfterLayout = AutoScroll && (keepAtBottom || IsAtBottom());
             layoutRoutine = StartCoroutine(UpdateLayoutRoutine());
         }
         private Coroutine layoutRoutine;
+        private bool autoScrollAfterLayout;
         private void UpdateLayoutOrder() {
             var children = contentTarget.Cast<Transform>()
                 .OrderBy(t => prefabOrder[t])
@@ -132,10 +150,6 @@ namespace RyanAssets.UI.ListGrid {
             }
         }
         private IEnumerator UpdateLayoutRoutine() {
-            bool wasAtBottom = AutoScroll &&
-                            scrollRect != null &&
-                            scrollRect.verticalNormalizedPosition <= 0.01f;
-
             yield return new WaitForEndOfFrame();
 
             UpdateLayoutOrder();
@@ -204,11 +218,12 @@ namespace RyanAssets.UI.ListGrid {
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRT);
 
-            if (AutoScroll && wasAtBottom && scrollRect != null) {
+            if (autoScrollAfterLayout && scrollRect != null) {
                 scrollRect.StopMovement();
                 scrollRect.verticalNormalizedPosition = 0f;
             }
 
+            autoScrollAfterLayout = false;
             layoutRoutine = null;
         }
         public void ScrollIntoView(GameObject obj, float time = 0f) {

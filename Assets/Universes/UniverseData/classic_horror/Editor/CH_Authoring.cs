@@ -57,6 +57,32 @@ namespace Universes.UniverseData.classic_horror.Editor {
             if (opened) scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(path, UnityEditor.SceneManagement.OpenSceneMode.Additive);
             try {
                 UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
+                EnsureFolders();
+                var skyShader = Shader.Find("Classic Horror/Night Sky");
+                if (skyShader == null) throw new System.InvalidOperationException("Classic Horror night sky shader is missing.");
+                string skyPath = Root + "/Materials/NightSky.mat";
+                var sky = AssetDatabase.LoadAssetAtPath<Material>(skyPath);
+                if (sky == null) {
+                    sky = new Material(skyShader) { name = "NightSky" };
+                    AssetDatabase.CreateAsset(sky, skyPath);
+                }
+                RenderSettings.skybox = sky;
+                RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+                RenderSettings.ambientLight = new Color(0.009f, 0.013f, 0.02f);
+                RenderSettings.ambientIntensity = 1f;
+                // The imported daylight cubemap makes wet surfaces shine even at night.
+                RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Skybox;
+                RenderSettings.customReflectionTexture = null;
+                RenderSettings.reflectionIntensity = 0.1f;
+                RenderSettings.fog = true;
+                RenderSettings.fogMode = FogMode.ExponentialSquared;
+                RenderSettings.fogColor = new Color(0.018f, 0.028f, 0.045f);
+                RenderSettings.fogDensity = 0.014f;
+                if (RenderSettings.sun != null) {
+                    RenderSettings.sun.color = new Color(0.47f, 0.6f, 0.78f);
+                    RenderSettings.sun.intensity = 0.025f;
+                    EditorUtility.SetDirty(RenderSettings.sun);
+                }
                 // FishNet creates unsaved holding scenes during loading. Baking here opens a
                 // save dialog for those scenes, even with both GI options disabled.
                 Lightmapping.bakeOnSceneLoad = Lightmapping.BakeOnSceneLoadMode.Never;

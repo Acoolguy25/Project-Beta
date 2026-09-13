@@ -10,6 +10,7 @@ using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System;
 using RyanAssets.TweenService.TweenComponents;
+using System.Linq;
 
 namespace Universes.GameBrowser {
     public class GameListUI : ButtonGridUI<UniverseStruct> {
@@ -63,7 +64,11 @@ namespace Universes.GameBrowser {
                 JSONUniverseData JSONuniverse = GetUniverseFromJSONResponse(universeResponse, data.id);
                 selectedGameUI.OpenUniversePage(data, JSONuniverse.active_players);
             };
+#if UNITY_EDITOR
             RefreshPrefabs(UniverseCfg.ActiveUniverses);
+#else
+            RefreshPrefabs(UniverseCfg.ActiveUniverses.Where(u => u.access == UniverseAccess.Public));
+#endif
         }
         private void OnEnable() {
             LocalPlayerDataHandler.username_changed_event += UsernameRefresh;

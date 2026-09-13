@@ -590,6 +590,7 @@ MonoBehaviour:
   modelPrefab: {fileID: 5731677610784897225, guid: f1786d7509dbc2f4a92bc5cf8bcda0a2, type: 3}
   scrollRect: {fileID: 2000000000000001083}
   AutoScroll: 0
+  searchInputField: {fileID: 0}
   UsernameTextUI: {fileID: 2000000000000001026}
   selectedGameUI: {fileID: 7845956060144586742}
   refreshImage: {fileID: 6726965459729942909}
@@ -3673,15 +3674,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426410, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
       propertyPath: m_Size
-      value: 0.89633614
+      value: 0.7892969
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426410, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
       propertyPath: m_Value
-      value: 1
+      value: 0.9999997
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
       propertyPath: m_Constraint
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8228084169341426443, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
+      propertyPath: m_ChildAlignment
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8228084169341426456, guid: 5c2c37db237994640997ce98e6f0341e, type: 3}
       propertyPath: m_AnchoredPosition.y

@@ -29,7 +29,10 @@ namespace RyanAssets.Client.ClientUI.Vote {
         readonly System.Collections.Generic.Dictionary<Image, Color> buttonColors = new();
         Image selectedVoteButtonImage;
         Image selectedSkipButtonImage;
-        bool subscribed;
+        SharedGlobalEvents subscribedEvents;
+        bool initialized;
+        bool displayedVote;
+        SharedVoteHeader displayedHeader;
 
         protected override void Start() {
             base.Start();
@@ -44,11 +47,14 @@ namespace RyanAssets.Client.ClientUI.Vote {
             SharedGlobalEvents.OnInstanceReady += OnSharedEventsReady;
             PlayerData.OnPlayerAdded += OnPlayerChanged;
             PlayerData.OnPlayerRemoved += OnPlayerChanged;
+            initialized = true;
             Subscribe();
             Refresh();
         }
 
         void OnEnable() {
+            if (!initialized)
+                return;
             Subscribe();
             Refresh();
         }
@@ -68,30 +74,44 @@ namespace RyanAssets.Client.ClientUI.Vote {
         }
 
         void Update() {
-            if (timerText == null || !SharedGlobalEvents.isVoting)
+            if (!initialized)
                 return;
 
-            timerText.text = $"{Mathf.CeilToInt(Mathf.Max(1f, SharedGlobalEvents.Instance.SharedVoteHeader.Value.endTime - RyanAssets.Core.NetworkHelper.ServerTime))}s";
+            bool sourceChanged = Subscribe();
+            bool voting = SharedGlobalEvents.isVoting;
+            SharedVoteHeader header = voting ? SharedGlobalEvents.Instance.SharedVoteHeader.Value : default;
+            if (sourceChanged || voting != displayedVote || (voting && (header.voteId != displayedHeader.voteId || header.endTime != displayedHeader.endTime)))
+                Refresh();
+
+            if (timerText != null && displayedVote)
+                timerText.text = $"{Mathf.CeilToInt(Mathf.Max(1f, displayedHeader.endTime - RyanAssets.Core.NetworkHelper.ServerTime))}s";
         }
 
-        void Subscribe() {
-            if (subscribed || SharedGlobalEvents.Instance == null)
-                return;
+        bool Subscribe() {
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            if (ReferenceEquals(subscribedEvents, events))
+                return false;
 
-            SharedGlobalEvents.Instance.SharedVoteHeader.OnChange += OnVoteHeaderChanged;
-            SharedGlobalEvents.Instance.VoteTotals.OnChange += OnVoteTotalsChanged;
-            SharedGlobalEvents.Instance.SkipVoteCount.OnChange += OnSkipVoteCountChanged;
-            subscribed = true;
+            Unsubscribe();
+            if (events == null)
+                return true;
+
+            events.SharedVoteHeader.OnChange += OnVoteHeaderChanged;
+            events.VoteTotals.OnChange += OnVoteTotalsChanged;
+            events.SkipVoteCount.OnChange += OnSkipVoteCountChanged;
+            subscribedEvents = events;
+            return true;
         }
 
         void Unsubscribe() {
-            if (!subscribed || SharedGlobalEvents.Instance == null)
+            SharedGlobalEvents events = subscribedEvents;
+            subscribedEvents = null;
+            if (events == null)
                 return;
 
-            SharedGlobalEvents.Instance.SharedVoteHeader.OnChange -= OnVoteHeaderChanged;
-            SharedGlobalEvents.Instance.VoteTotals.OnChange -= OnVoteTotalsChanged;
-            SharedGlobalEvents.Instance.SkipVoteCount.OnChange -= OnSkipVoteCountChanged;
-            subscribed = false;
+            events.SharedVoteHeader.OnChange -= OnVoteHeaderChanged;
+            events.VoteTotals.OnChange -= OnVoteTotalsChanged;
+            events.SkipVoteCount.OnChange -= OnSkipVoteCountChanged;
         }
 
         void OnVoteHeaderChanged(SharedVoteHeader previous, SharedVoteHeader next, bool asServer) => Refresh();
@@ -106,13 +126,18 @@ namespace RyanAssets.Client.ClientUI.Vote {
         void OnPlayerChanged(PlayerData player) => UpdateVoteCounts();
 
         void Refresh() {
+            if (!initialized)
+                return;
+
             Subscribe();
-            bool visible = SharedGlobalEvents.isVoting;
+            bool visible = SharedGlobalEvents.isVoting && VoteDeclarations.Instance != null;
+            displayedVote = visible;
             SetVisible(visible);
             if (!visible)
                 return;
 
-            ClientVoteInfo voteInfo = VoteDeclarations.GetVoteInfo(SharedGlobalEvents.Instance.SharedVoteHeader.Value.voteId);
+            displayedHeader = SharedGlobalEvents.Instance.SharedVoteHeader.Value;
+            ClientVoteInfo voteInfo = VoteDeclarations.GetVoteInfo(displayedHeader.voteId);
             if (titleText != null)
                 titleText.text = voteInfo.title;
             if (descriptionText != null) {

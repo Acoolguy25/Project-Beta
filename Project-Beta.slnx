@@ -38,6 +38,7 @@
   <Project Path="RyanAssets.Shared.Declarations.csproj" />
   <Project Path="Universes.GameBrowser.csproj" />
   <Project Path="RyanAssets.Levels.Client.csproj" />
+  <Project Path="Universes.UniverseData.chatbot_service.Client.csproj" />
   <Project Path="RyanAssets.Login.csproj" />
   <Project Path="RyanAssets.Client.ClientEffects.csproj" />
   <Project Path="RyanAssets.Commands.Shared.csproj" />
@@ -68,5 +69,4 @@
   <Project Path="RpcGen.Runtime.csproj" />
   <Project Path="Universes.UniverseData.classic_horror.Editor.csproj" />
   <Project Path="Universes.csproj" />
-  <Project Path="Universes.UniverseData.customer_service.Client.csproj" />
 </Solution>

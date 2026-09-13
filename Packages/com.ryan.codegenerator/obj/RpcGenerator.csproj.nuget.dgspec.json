@@ -41,7 +41,7 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "10.0.300"
+        "SdkAnalysisLevel": "10.0.400"
       },
       "frameworks": {
         "netstandard2.0": {
@@ -56,7 +56,7 @@
             "Microsoft.CodeAnalysis.CSharp": {
               "suppressParent": "All",
               "target": "Package",
-              "version": "[3.0.0, )"
+              "version": "[4.8.0, )"
             },
             "NETStandard.Library": {
               "suppressParent": "All",
@@ -76,7 +76,7 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.302\\RuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400\\RuntimeIdentifierGraph.json"
         }
       }
     }

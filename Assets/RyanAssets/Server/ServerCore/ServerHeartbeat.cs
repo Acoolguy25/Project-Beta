@@ -21,7 +21,7 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         static async UniTask HeartbeatLoop(CancellationToken token) {
-            Debug.Log($"Heartbeat loop started: {NetworkSettings.BackendAPIURL}");
+            //Debug.Log($"Heartbeat loop started: {NetworkSettings.BackendAPIURL}");
 
             while (!token.IsCancellationRequested) {
                 try {

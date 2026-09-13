@@ -9,10 +9,3 @@ MonoImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 273604
-  packageName: LLM for Unity
-  packageVersion: 3.0.3
-  assetPath: Assets/LLMUnity/Runtime/LlamaLib/LlamaLib.cs
-  uploadId: 876676

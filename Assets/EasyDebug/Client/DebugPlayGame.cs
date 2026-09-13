@@ -7,7 +7,7 @@ using Universes.GameBrowser;
 
 namespace EasyDebug.Debug {
     public class DebugPlayGame : MonoBehaviour {
-        const string PlayGameUniverseId = "customer_service";
+        const string PlayGameUniverseId = "classic_horror";
         [SerializeField]
         Button continueButton;
 #if UNITY_EDITOR

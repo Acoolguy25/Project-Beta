@@ -866,21 +866,23 @@ namespace UndreamAI.LlamaLib
 
         public IntPtr CreateLLMWithFallback(Func<IntPtr> createFunc)
         {
+            List<string> failures = new List<string>();
             while (true)
             {
                 try
                 {
                     IntPtr llmInstance = createFunc();
-                    if (llmInstance == IntPtr.Zero) throw new InvalidOperationException("LLMService construction returned null pointer");
                     CheckStatus();
+                    if (llmInstance == IntPtr.Zero) throw new InvalidOperationException("LLMService construction returned null pointer");
                     return llmInstance;
                 }
                 catch (Exception ex)
                 {
+                    failures.Add($"{architecture}: {ex.Message}");
                     if (!TryNextLibrary())
                     {
                         throw new InvalidOperationException(
-                            $"Failed LLMService construction with all available libraries. Last error: {ex.Message}",
+                            $"Failed LLMService construction with all available libraries. {string.Join("; ", failures)}",
                             ex);
                     }
                 }

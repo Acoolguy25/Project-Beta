@@ -71,9 +71,9 @@ namespace Universes {
                 access = UniverseAccess.Public
             },
             new(){
-                id = "customer_service",
-                title = "Customer Service",
-                description = "A game where you contact 24/7 customer service representatives.",
+                id = "chatbot_service",
+                title = "Chatbot Service",
+                description = "A game where you contact 24/7 chatbot service representatives.",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
             },
