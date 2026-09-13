@@ -1,5 +1,7 @@
 using FishNet;
+using FishNet.Managing.Scened;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Client.ClientCore;
 using RyanAssets.Client.ClientUI.GameSettings;
 using RyanAssets.Core;
 using RyanAssets.DataService;
@@ -54,6 +56,7 @@ namespace RyanAssets.Characters.Client {
         private CharacterCollisionRelay _collisionRelay;
         private bool LastGrounded;
         private bool _jumpInProgress;
+        private bool _sceneLoading;
         // private MovementControl _movementControl;
 
 
@@ -73,6 +76,7 @@ namespace RyanAssets.Characters.Client {
             //SharedGlobalEvents.OnMyPlayerUpdated -= Refresh;
             //PlayerData.localData.walkSpeed.Unsubscribe(Refresh);
         }
+        
         void OnMyPlayerAdded(PlayerData data) {
             data.walkSpeed.OnChange += (_, _, _) => Refresh();
             data.sprintSpeed.OnChange += (_, _, _) => Refresh();
@@ -105,7 +109,7 @@ namespace RyanAssets.Characters.Client {
         private void FixedUpdate() {
             if (_animator == null || !_animator.enabled) return;
             if (!_input) return;
-            if (!InstanceFinder.ClientManager.Connection.LoadedStartScenes(false)) return;
+            if (!InstanceFinder.ClientManager.Connection.LoadedStartScenes(false) || ClientConnector.IsLoadingScenes) return;
 
             JumpAndGravity();
             Move();

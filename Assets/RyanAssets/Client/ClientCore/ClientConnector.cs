@@ -1,21 +1,20 @@
+using Cysharp.Threading.Tasks;
+using FishNet;
+using FishNet.Managing.Scened;
+using FishNet.Transporting;
 using Newtonsoft.Json.Linq;
-using UnityEngine;
-
+using RyanAssets.Client.ClientModules;
+using RyanAssets.Input;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
-using UnityEngine.SceneManagement;
-
-using FishNet;
-using FishNet.Transporting;
-using Cysharp.Threading.Tasks;
-using RyanAssets.Client.ClientModules;
 using System;
-using RyanAssets.Input;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 namespace RyanAssets.Client.ClientCore {
     public class ClientConnector : MonoBehaviour {
         public static ClientConnector Instance;
         public static Action OnConnected, OnDisconnected;
-        public static bool IsConnected;
+        public static bool IsConnected, IsLoadingScenes;
         [SerializeField]
         GameObject[] gameOnlyObjects;
         public static bool wasAuthenticated, isConnecting, hasCanceled;
@@ -25,6 +24,8 @@ namespace RyanAssets.Client.ClientCore {
             InstanceFinder.ClientManager.OnClientConnectionState += OnClientState;
             InstanceFinder.ClientManager.OnClientTimeOut += OnClientTimeOut;
             InstanceFinder.ClientManager.OnAuthenticated += OnClientAuthenticated;
+            InstanceFinder.SceneManager.OnLoadStart += OnSceneLoadStart;
+            InstanceFinder.SceneManager.OnLoadEnd += OnSceneLoadEnd;
             SetGameActive(false);
         }
         void SetGameActive(bool active) {
@@ -116,8 +117,8 @@ namespace RyanAssets.Client.ClientCore {
                             SetJoinResult("Join Game Failed!");
                         }
                     }
-                    if (!SceneManager.GetSceneByName("MainMenu").isLoaded)
-                        SceneManager.LoadScene("MainMenu");
+                    if (!UnityEngine.SceneManagement.SceneManager.GetSceneByName("MainMenu").isLoaded)
+                        UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
                     hasCanceled = false;
                     SetGameActive(false);
                     break;
@@ -134,10 +135,18 @@ namespace RyanAssets.Client.ClientCore {
             OnConnected?.Invoke();
             IsConnected = true;
         }
+        void OnSceneLoadStart(SceneLoadStartEventArgs args) {
+            IsLoadingScenes = true;
+        }
+        void OnSceneLoadEnd(SceneLoadEndEventArgs args) {
+            IsLoadingScenes = false;
+        }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
             OnConnected = null;
             OnDisconnected = null;
+            IsConnected = false;
+            IsLoadingScenes = false;
         }
     }
 }

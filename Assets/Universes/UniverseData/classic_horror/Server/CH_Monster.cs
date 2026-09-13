@@ -17,8 +17,11 @@ namespace Universes.UniverseData.classic_horror.Server {
         // Preserve the relative urgency of each authored state while giving
         // investigators about 12.5% more room to evade.
         const float MovementSpeedMultiplier = 0.875f;
-        const float UnreachableGiveUpSeconds = 3f;
-        const float UnreachableRetrySeconds = 4f;
+        const float InvestigationHuntSpeed = 8.5f;
+        const float RitualHuntSpeed = 10f;
+        const float EnragedHuntSpeed = 11.5f;
+        const float UnreachableGiveUpSeconds = 10f;
+        const float UnreachableRetrySeconds = 12f;
         const float ReachableApproachRadius = 3f;
         static readonly Vector3 HitboxSize = new(0.2f, 0.9f, 0.2f);
         static readonly Vector3 HitboxCenter = new(0, 0.45f, 0);
@@ -45,7 +48,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         public bool IsChasing => !suspended && pursued != null && Time.time - lastSeen < PursuitMemorySeconds;
         public string State { get; private set; } = "Emerging";
         Vector3 lastKnown, patrolPoint, progressPosition;
-        float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, enragedUntil, nextWhisper, nextPatrol;
+        float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, lightHeldUntil, enragedUntil, nextWhisper, nextPatrol;
         float unreachableSince = -1f;
         bool suspended;
         int warningIndex;
@@ -54,11 +57,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly struct SensedCandidate {
             public readonly LocalCharacter Character;
             public readonly float Distance;
-            public readonly float Score;
-            public SensedCandidate(LocalCharacter character, float distance, float score) {
+            public SensedCandidate(LocalCharacter character, float distance) {
                 Character = character;
                 Distance = distance;
-                Score = score;
             }
         }
 
@@ -100,7 +101,10 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
             locomotion.SetTargetingType(NPCTargetingType.External);
             obstacleMask = ~LayerMask.GetMask("Character", "LocalCharacter", "Ignore Raycast", "UI");
-            repelledUntil = Time.time + 25f;
+            // Investigators already have 15 seconds of spawn protection. Begin
+            // hunting as soon as that protection expires instead of roaming for
+            // another ten seconds.
+            repelledUntil = Time.time + 15f;
             nextWhisper = Time.time + 30f;
             lastThink = Time.time;
             progressPosition = transform.position;
@@ -133,23 +137,26 @@ namespace Universes.UniverseData.classic_horror.Server {
                 bool sight = WorldInteraction.CanReach(eye, targetEye, 85f, obstacleMask);
                 bool beamOnMonster = lit && sight && distance < 32f && Vector3.Dot(light.BeamDirection, (eye - targetEye).normalized) > 0.86f;
                 if (temperament == CH_Temperament.LightShy && beamOnMonster) heldByLight = true;
-                float range = temperament switch {
-                    CH_Temperament.LightSeeker => lit ? 78f : 17f,
-                    CH_Temperament.Listener => movement > 6f ? 75f : 14f,
-                    _ => 44f
+                float sightRange = temperament switch {
+                    CH_Temperament.LightSeeker => lit ? 85f : 55f,
+                    CH_Temperament.Listener => movement > 3f ? 85f : 60f,
+                    _ => 60f
                 };
-                if (Time.time < enragedUntil) range = 85f;
+                if (Time.time < enragedUntil) sightRange = 85f;
                 // Temperament controls acquisition. Once a chase begins, retain a
                 // visible investigator across the map instead of dropping them as
                 // soon as they cross the shorter initial detection radius.
-                if (character == pursued) range = Mathf.Max(range, 85f);
-                // Sound crosses cover only at short range; sight/light never do.
-                bool heard = temperament == CH_Temperament.Listener && movement > 6f && distance < 32f;
-                if ((sight || heard) && distance < range)
-                    // Retain a visible current pursuit unless another investigator is
-                    // substantially closer. This prevents rapid target/path flipping in groups.
-                    sensedCandidates.Add(new SensedCandidate(character, distance,
-                        character == pursued ? distance * 0.75f : distance));
+                if (character == pursued) sightRange = 85f;
+                // Footsteps carry through cover. Walking speed in this universe is
+                // 4.5 m/s, so a 6 m/s threshold missed ordinary movement entirely.
+                float hearingRange = movement > 6f
+                    ? (temperament == CH_Temperament.Listener ? 55f : 34f)
+                    : movement > 1.25f
+                        ? (temperament == CH_Temperament.Listener ? 40f : 20f)
+                        : 0f;
+                bool heard = distance < hearingRange;
+                if ((sight && distance < sightRange) || heard)
+                    sensedCandidates.Add(new SensedCandidate(character, distance));
             }
             staleCharacters.Clear();
             foreach (var pair in previousPositions) if (pair.Key == null || !pair.Key.IsSpawned) staleCharacters.Add(pair.Key);
@@ -159,8 +166,13 @@ namespace Universes.UniverseData.classic_horror.Server {
                 reachability.Remove(stale);
             }
 
-            if (heldByLight || Time.time < repelledUntil) {
-                State = heldByLight ? "Retreating from light" : "Keeping distance";
+            if (heldByLight) lightHeldUntil = Time.time + 1.5f;
+            if (Time.time < lightHeldUntil || Time.time < repelledUntil) {
+                // Keep the same pursuit while light-shy retreat is active. A short
+                // hold prevents tiny beam/occlusion changes from flipping between
+                // retreat and hunt on consecutive perception ticks.
+                unreachableSince = -1f;
+                State = Time.time < lightHeldUntil ? "Retreating from light" : "Keeping distance";
                 Roam(true);
                 return;
             }
@@ -177,8 +189,11 @@ namespace Universes.UniverseData.classic_horror.Server {
                 GiveUp(unreachableTarget);
             }
 
-            sensedCandidates.Sort((a, b) => a.Score.CompareTo(b.Score));
+            sensedCandidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
             foreach (SensedCandidate candidate in sensedCandidates) {
+                // Commit to an eligible investigator through cover and nearby
+                // teammates. Reconsider others only after this pursuit ends.
+                if (pursued != null && candidate.Character != pursued) continue;
                 if (ignoredUntil.TryGetValue(candidate.Character, out float ignoreTime) && Time.time < ignoreTime)
                     continue;
                 // A pursuit that was reachable when acquired remains valid while its
@@ -199,11 +214,12 @@ namespace Universes.UniverseData.classic_horror.Server {
                     unreachableSince = -1f;
                     lastProgress = Time.time;
                     progressPosition = transform.position;
+                    runner.OnMonsterChaseStarted();
                 }
                 lastSeen = Time.time;
                 lastKnown = sensed.transform.position;
-                float speed = runner.CurrentCase.Phase == CH_Phase.Investigation ? 11f : 13f;
-                if (Time.time < enragedUntil) speed = 15f;
+                float speed = runner.CurrentCase.Phase == CH_Phase.Investigation ? InvestigationHuntSpeed : RitualHuntSpeed;
+                if (Time.time < enragedUntil) speed = EnragedHuntSpeed;
                 Navigate(lastKnown, speed);
                 Vector3 sensedEye = sensed.CharacterCamera != null ? sensed.CharacterCamera.position : sensed.transform.position + Vector3.up * 2f;
                 if (closest < 1.85f && Time.time >= nextAttack && WorldInteraction.CanReach(eye, sensedEye, 2.2f, obstacleMask)) {

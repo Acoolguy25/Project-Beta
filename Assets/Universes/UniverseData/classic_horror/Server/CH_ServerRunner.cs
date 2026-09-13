@@ -291,6 +291,14 @@ namespace Universes.UniverseData.classic_horror.Server {
                 SharedGlobalEvents.Instance.MusicTrack.Value = selection;
         }
 
+        // A short pursuit can begin and end between the case loop's one-second ticks.
+        // Switch on acquisition so even that chase reaches the clients.
+        public void OnMonsterChaseStarted() {
+            if (!CaseActive) return;
+            chaseMusicUntil = Time.time + ChaseMusicReleaseDelay;
+            SetHorrorMusic(MusicSelection.HorrorChaseMusic);
+        }
+
         void RejectInteraction(NetworkConnection connection, string message) {
             InstanceFinder.ServerManager.Broadcast(connection, new CH_InteractionResult { seed = current.Seed, accepted = false, message = message });
             InstanceFinder.ServerManager.Broadcast(connection, MakeState());

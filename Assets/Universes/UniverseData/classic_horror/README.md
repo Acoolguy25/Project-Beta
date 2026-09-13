@@ -42,6 +42,8 @@ The case uses authored, composable story templates in `Data/StoryLibrary.asset`,
 
 **Ryan > Classic Horror > Rebuild Presentation Prefabs** rebuilds the HUD, flashlight, priest, and evidence presentation. It preserves authored map layout and an existing story library. The shared Monster prefab uses the Cursed Priest's original weighted Humanoid skeleton and avatar with RobotNPC's exact controller, walking/jumping clips, network animation, health, and LocalNPC movement. It has one CharacterAnimator driver and project-owned URP materials. `ServerNPC.SpawnNPC(NPCCharacter.Monster, ...)` selects it through `NPCCharacters`; omitted character selection defaults to Robot. PresenceFace and the jumpscare portrait are generated from the same priest head and hat.
 
+**Ryan > Classic Horror > Rebuild Evidence Prefabs** refreshes only the evidence table and haunting altar. They retain linked Flooded Grounds furniture and use project-owned URP materials for imported portal and spectral electricity effects; their imported colliders are disabled so investigation rays still reach the case interactions.
+
 A successful priest melee hit consumes the investigator's remaining health through the shared damage API, respecting spawn invulnerability. Nonfatal scares are limited to two per investigator per case, with a 90-second cooldown shared by proximity and discovery/ritual encounters. Proximity scares require visibility within six units. Priest kills can always show a fatal scare; environmental deaths do not show the priest. Warning, discovery, and fatal scares last 2.25, 1.75, and 3.5 seconds respectively, with a single appearance and gradual fade.
 
 ## Shared additions

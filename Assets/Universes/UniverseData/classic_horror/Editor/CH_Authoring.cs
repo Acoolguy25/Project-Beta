@@ -165,23 +165,113 @@ namespace Universes.UniverseData.classic_horror.Editor {
 
 
 
-        static void BuildClueViews() {
-            var paper = Material("EvidencePaper", new Color(0.65f, 0.58f, 0.41f));
-            var metal = Material("RitualMetal", new Color(0.12f, 0.16f, 0.16f));
-            var rune = Material("EvidenceGlow", new Color(0.78f, 0.54f, 0.25f), true);
-            var clue = new GameObject("EvidenceRecord");
-            Shape("Record", PrimitiveType.Cube, clue.transform, Vector3.zero, new Vector3(0.55f, 0.08f, 0.4f), paper, new Vector3(-15, 0, 0));
-            Shape("Seal", PrimitiveType.Cylinder, clue.transform, new Vector3(0, 0.15f, 0), new Vector3(0.2f, 0.025f, 0.2f), rune);
-            var lamp = clue.AddComponent<Light>(); lamp.type = LightType.Point; lamp.color = Amber; lamp.range = 5; lamp.intensity = 1.2f;
-            PrefabUtility.SaveAsPrefabAsset(clue, Root + "/Prefabs/EvidenceRecord.prefab"); Object.DestroyImmediate(clue);
-            var source = new GameObject("HauntingSource");
-            Shape("SubmergedBell", PrimitiveType.Cylinder, source.transform, Vector3.zero, new Vector3(2, 1.1f, 2), metal);
-            for (int i = 0; i < 3; i++) {
-                float a = i * Mathf.PI * 2 / 3;
-                Shape("Offering" + i, PrimitiveType.Cube, source.transform, new Vector3(Mathf.Sin(a) * 1.6f, -0.75f, Mathf.Cos(a) * 1.6f), new Vector3(0.7f, 0.12f, 0.7f), rune);
+        const string FloodedProps = "Assets/Flooded_Grounds/Prefabs/Props/";
+        const string QuickEffects = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs/";
+
+        static GameObject PlaceVisual(string path, Transform parent, Vector3 position, Vector3 scale, Vector3 angles = default) {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) throw new System.InvalidOperationException("Missing Classic Horror presentation asset: " + path);
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            // Imported Flooded Grounds props carry their demo-scene world transforms.
+            instance.transform.localPosition = position;
+            instance.transform.localRotation = Quaternion.Euler(angles);
+            instance.transform.localScale = scale;
+            // These are presentation-only children. Keep their prefab links, but do
+            // not let imported demo colliders block the case's interaction rays.
+            foreach (var collider in instance.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
+            foreach (var body in instance.GetComponentsInChildren<Rigidbody>(true)) {
+                body.isKinematic = true;
+                body.detectCollisions = false;
             }
-            var sourceLight = source.AddComponent<Light>(); sourceLight.type = LightType.Point; sourceLight.range = 14; sourceLight.intensity = 0.7f; sourceLight.color = new Color(0.33f, 0.73f, 0.64f);
-            PrefabUtility.SaveAsPrefabAsset(source, Root + "/Prefabs/HauntingSource.prefab"); Object.DestroyImmediate(source);
+            return instance;
+        }
+
+        static Material UrpParticleMaterial(Material source) {
+            string path = Root + "/Materials/VFX_" + source.name + ".mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader == null) throw new System.InvalidOperationException("URP particle shader is missing.");
+            if (material == null) {
+                material = new Material(shader) { name = "VFX_" + source.name };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.shader = shader;
+            material.SetTexture("_BaseMap", source.mainTexture);
+            material.SetColor("_BaseColor", Color.white);
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 2f);
+            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            material.SetFloat("_ZWrite", 0f);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        static GameObject PlaceEffect(string path, Transform parent, Vector3 position, float scale, Color tint) {
+            var effect = PlaceVisual(path, parent, position, Vector3.one * scale);
+            foreach (var particle in effect.GetComponentsInChildren<ParticleSystem>(true)) {
+                var main = particle.main;
+                main.startColor = tint;
+            }
+            foreach (var renderer in effect.GetComponentsInChildren<ParticleSystemRenderer>(true)) {
+                var materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                    if (materials[i] != null && !materials[i].shader.name.StartsWith("Universal Render Pipeline/"))
+                        materials[i] = UrpParticleMaterial(materials[i]);
+                renderer.sharedMaterials = materials;
+            }
+            return effect;
+        }
+
+        static void ClearVisualChildren(GameObject root) {
+            for (int i = root.transform.childCount - 1; i >= 0; i--)
+                Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
+        }
+
+        [MenuItem("Ryan/Classic Horror/Rebuild Evidence Prefabs")]
+        public static void BuildClueViews() {
+            EnsureFolders();
+            var paper = Material("EvidencePaper", new Color(0.65f, 0.58f, 0.41f));
+            var ink = Material("EvidenceInk", new Color(0.12f, 0.16f, 0.15f));
+            var rune = Material("EvidenceGlow", new Color(0.78f, 0.54f, 0.25f), true);
+            string cluePath = Root + "/Prefabs/EvidenceRecord.prefab";
+            var clue = PrefabUtility.LoadPrefabContents(cluePath);
+            try {
+                ClearVisualChildren(clue);
+                PlaceVisual(FloodedProps + "Prop_SmallTable_B.prefab", clue.transform, Vector3.zero, Vector3.one);
+                PlaceVisual(FloodedProps + "Prop_Lamp_A.prefab", clue.transform, new Vector3(0.32f, 0.70f, 0.19f), Vector3.one * 0.68f);
+                var notes = Shape("Field Notes", PrimitiveType.Quad, clue.transform, new Vector3(-0.16f, 0.735f, -0.04f), new Vector3(0.48f, 0.34f, 1f), paper, new Vector3(90f, 18f, 0f));
+                Shape("Case Heading", PrimitiveType.Quad, notes.transform, new Vector3(-0.06f, 0.28f, -0.004f), new Vector3(0.68f, 0.09f, 1f), ink);
+                for (int i = 0; i < 3; i++)
+                    Shape("Handwritten Line " + i, PrimitiveType.Quad, notes.transform,
+                        new Vector3(-0.08f, 0.06f - i * 0.17f, -0.004f), new Vector3(0.55f - i * 0.08f, 0.025f, 1f), ink);
+                Shape("Wax Seal", PrimitiveType.Sphere, clue.transform, new Vector3(-0.34f, 0.745f, -0.15f), new Vector3(0.065f, 0.012f, 0.065f), rune);
+                PlaceEffect(QuickEffects + "vfx_Portal_01.prefab", clue.transform, new Vector3(-0.16f, 0.76f, 0f), 0.1f, new Color(0.95f, 0.62f, 0.3f, 0.35f));
+                var light = clue.GetComponent<Light>();
+                light.color = Amber; light.range = 4f; light.intensity = 0.85f;
+                PrefabUtility.SaveAsPrefabAsset(clue, cluePath);
+            } finally { PrefabUtility.UnloadPrefabContents(clue); }
+
+            string sourcePath = Root + "/Prefabs/HauntingSource.prefab";
+            var source = PrefabUtility.LoadPrefabContents(sourcePath);
+            try {
+                ClearVisualChildren(source);
+                PlaceVisual(FloodedProps + "Prop_Pulpit_A.prefab", source.transform, Vector3.zero, Vector3.one * 0.82f);
+                PlaceVisual(FloodedProps + "Prop_Vase_A.prefab", source.transform, new Vector3(0f, 1.75f, 0.15f), Vector3.one * 0.9f);
+                for (int i = 0; i < 3; i++) {
+                    float a = i * Mathf.PI * 2f / 3f;
+                    PlaceVisual(FloodedProps + "Prop_Lamp_C.prefab", source.transform,
+                        new Vector3(Mathf.Sin(a) * 1.3f, 0.58f, Mathf.Cos(a) * 1.3f), Vector3.one * 0.6f);
+                }
+                PlaceEffect(QuickEffects + "vfx_Portal_01.prefab", source.transform, new Vector3(0f, 1.9f, 0.22f), 0.34f, new Color(0.3f, 0.75f, 0.7f, 0.7f));
+                PlaceEffect(QuickEffects + "vfx_Electricity_01.prefab", source.transform, new Vector3(0f, 2.0f, 0.16f), 0.16f, new Color(0.45f, 0.85f, 0.78f, 0.45f));
+                var light = source.GetComponent<Light>();
+                light.color = new Color(0.33f, 0.73f, 0.64f); light.range = 11f; light.intensity = 0.75f;
+                PrefabUtility.SaveAsPrefabAsset(source, sourcePath);
+            } finally { PrefabUtility.UnloadPrefabContents(source); }
+            AssetDatabase.SaveAssets();
         }
 
         static RectTransform Rect(string name, Transform parent, Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax) {
