@@ -1,0 +1,18 @@
+{
+    "name": "RyanAssets.Items.Platform",
+    "rootNamespace": "RyanAssets.Items.Platform",
+    "references": [
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:a8e23967f92bb984dbade4a7176fb550",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

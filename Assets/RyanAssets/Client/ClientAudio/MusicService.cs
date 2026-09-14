@@ -31,6 +31,7 @@ namespace RyanAssets.Client.ClientAudio {
                 MathHelper.Shuffle(playbackOrder);
             }
         }
+        public static MusicService Instance { get; private set; }
 
         public MusicSelection activeTrack { get; private set; }
         [SerializeField]
@@ -103,6 +104,9 @@ namespace RyanAssets.Client.ClientAudio {
             destination.velocityUpdateMode = source.velocityUpdateMode;
         }
 
+        void Awake() {
+            Instance = this;
+        }
         void Start() {
             audioSource = GetComponent<AudioSource>();
             musicSourceVolume = audioSource.volume;

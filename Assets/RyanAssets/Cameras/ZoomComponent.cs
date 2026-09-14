@@ -1,7 +1,10 @@
 #if !UNITY_SERVER
 using RyanAssets.Client.ClientUI.GameSettings;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 namespace RyanAssets.Cameras
 {
@@ -25,6 +28,26 @@ namespace RyanAssets.Cameras
         private float zoomVelocity;
 
         public float DesiredZoom { get; private set; }
+        private static readonly List<RaycastResult> RaycastResults = new();
+
+        private bool IsPointerOverScrollRect() {
+            if (EventSystem.current == null || Mouse.current == null)
+                return false;
+
+            PointerEventData eventData = new(EventSystem.current) {
+                position = Mouse.current.position.ReadValue()
+            };
+
+            RaycastResults.Clear();
+            EventSystem.current.RaycastAll(eventData, RaycastResults);
+
+            foreach (RaycastResult result in RaycastResults) {
+                if (result.gameObject.GetComponentInParent<ScrollRect>() != null)
+                    return true;
+            }
+
+            return false;
+        }
 
         private void Awake()
         {
@@ -64,7 +87,8 @@ namespace RyanAssets.Cameras
             if (useGameSettingsSensitivity)
                 sensitivity *= GameSettingsClient.GetSettingValue<int>("ZoomSensitivity") / 100f;
 
-            SetZoom(DesiredZoom + scrollWheel.ReadValue<float>() * sensitivity);
+            if (!IsPointerOverScrollRect())
+                SetZoom(DesiredZoom + scrollWheel.ReadValue<float>() * sensitivity);
 
             float targetZoom = Mathf.Min(DesiredZoom, maximumAllowedZoom);
             targetZoom = Mathf.Clamp(targetZoom, MinZoom, MaxZoom);

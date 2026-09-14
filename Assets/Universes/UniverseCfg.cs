@@ -73,9 +73,16 @@ namespace Universes {
             new(){
                 id = "chatbot_service",
                 title = "Chatbot Service",
-                description = "A game where you contact 24/7 chatbot service representatives.",
+                description = "A game where you manipulate the smartest artifical intelligence possible.",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
+            },
+            new(){
+                id = "escape",
+                title = "Escape",
+                description = "Do you get virtigo? Escape the unvierse!",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Protected
             },
             new(){
                 id = "war_valley",

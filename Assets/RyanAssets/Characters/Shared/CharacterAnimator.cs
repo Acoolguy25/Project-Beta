@@ -22,18 +22,15 @@ namespace RyanAssets.Characters.Shared
             set => footstepPaceMultiplier = Mathf.Max(1f, value);
         }
 
-        [SerializeField]
-        public bool GroundCheck;
-        public bool Grounded;
         public static float JumpThreshold = 0.4f;
         public static float SpeedThreshold = 0.125f;
 
         Animator _animator;
-        LayerMask GroundMask;
-        Collider _collider;
+        GroundPhysics _groundPhysics;
         AudioSource _footStepSource;
 
         private Vector3 prevPosition;
+        private bool hasPreviousPosition;
         private float jumpStart = float.MinValue;
         private float _lastFootstepTime = float.NegativeInfinity;
         private float _lastLandingTime = float.NegativeInfinity;
@@ -77,7 +74,7 @@ namespace RyanAssets.Characters.Shared
         }
         void Start(){
             _animator = GetComponent<Animator>();
-            _collider = GetComponent<Collider>();
+            _groundPhysics = GetComponent<GroundPhysics>();
             _footStepSource = GetComponent<AudioSource>();
 
             // Animation events drive locomotion audio. First-person games such as
@@ -85,7 +82,6 @@ namespace RyanAssets.Characters.Shared
             // based culling must not stop animation updates or their audio events.
             _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
-            GroundMask = ~LayerMask.GetMask("Character", "LocalCharacter");
             _animator.SetBool("Grounded", true);
             _animator.SetBool("FreeFall", false);
             _animator.SetBool("Jump", false);
@@ -94,10 +90,9 @@ namespace RyanAssets.Characters.Shared
         void FixedUpdate(){
             if (!IsController)
                 return;
-            if (GroundCheck) {
-                FixedUpdateGround();
-                _animator.SetBool("Grounded", Grounded);
-                _animator.SetBool("FreeFall", !Grounded);
+            if (_groundPhysics != null) {
+                _animator.SetBool("Grounded", _groundPhysics.Grounded);
+                _animator.SetBool("FreeFall", !_groundPhysics.Grounded);
             }
             Vector3 velocity = GetVelocity();
             float newSpeed = Mathf.Lerp(_animator.GetFloat("Speed"), velocity.magnitude * SpeedThreshold, 1f);
@@ -112,52 +107,16 @@ namespace RyanAssets.Characters.Shared
             jumpStart = Time.fixedTime;
         }
         private Vector3 GetVelocity() {
-            Vector3 velocity = (transform.position - prevPosition) / Time.fixedDeltaTime;
-            velocity.y = 0; // velocity in the y direction is not relevant for animation purposes
-            prevPosition = transform.position;
+            Vector3 position = transform.position;
+            Vector3 velocity = hasPreviousPosition
+                ? (position - prevPosition) / Time.fixedDeltaTime
+                : Vector3.zero;
+            prevPosition = position;
+            hasPreviousPosition = true;
+            if (_groundPhysics != null)
+                velocity -= _groundPhysics.InheritedGroundVelocity;
+            velocity.y = 0f; // Vertical movement does not drive locomotion animation.
             return velocity;
-        }
-        private void FixedUpdateGround() {
-            Bounds b = _collider.bounds;
-            float upOff = 0.03f;
-            Grounded = Physics.BoxCast(
-                b.center + Vector3.down * (b.extents.y - upOff),
-                new Vector3(b.extents.x, 0.01f, b.extents.z),
-                Vector3.down,
-                out _,
-                Quaternion.identity,
-                0.085f,
-                GroundMask,
-                QueryTriggerInteraction.Ignore
-            );
-
-#if UNITY_EDITOR
-            // Four bottom corners of the box for debug purposes
-            Vector3[] origins = new Vector3[]{
-                new Vector3(b.min.x, b.min.y, b.min.z),
-                new Vector3(b.max.x, b.min.y, b.min.z),
-                new Vector3(b.min.x, b.min.y, b.max.z),
-                new Vector3(b.max.x, b.min.y, b.max.z),
-            };
-            foreach (Vector3 origin in origins) {
-                Vector3 targetOrigin = origin + Vector3.up * upOff;
-                bool hit = Physics.Raycast(
-                    targetOrigin,
-                    Vector3.down,
-                    out RaycastHit rayHit,
-                    0.085f,
-                    GroundMask,
-                    QueryTriggerInteraction.Ignore
-                );
-
-                // DEBUG RAY
-                Debug.DrawRay(
-                    targetOrigin,
-                    Vector3.down * 0.05f,
-                    hit ? Color.green : Color.red
-                );
-            }
-#endif
         }
     }
 }

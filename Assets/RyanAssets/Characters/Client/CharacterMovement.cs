@@ -22,10 +22,6 @@ namespace RyanAssets.Characters.Client {
         public float SpeedChangeRate = 10.0f;
 
         [Space(10)]
-        public float JumpHeight = 1.2f;
-        public float Gravity = -15.0f;
-
-        [Space(10)]
         public float JumpTimeout = 0.35f;
         public float LandJumpTimeout = 0.05f;
         public float FallTimeout = 0.05f;
@@ -37,6 +33,8 @@ namespace RyanAssets.Characters.Client {
         [Range(0f, 1f)] public float MinimumStepGroundNormal = 0.65f;
         [Min(0f)] public float MaxDepenetrationVelocity = 5f;
 
+        public float JumpHeight => PlayerData.localData.jumpHeight.Value;
+        public float Gravity => PlayerData.localData.gravity.Value;
 
         private float _animationBlend;
         private float _targetRotation = 0.0f;
@@ -53,6 +51,7 @@ namespace RyanAssets.Characters.Client {
         private CharacterControls _input;
         private BoxCollider _boxCollider;
         private CharacterAnimator characterAnimator;
+        private GroundPhysics groundPhysics;
         private CharacterCollisionRelay _collisionRelay;
         private bool LastGrounded;
         private bool _jumpInProgress;
@@ -73,13 +72,12 @@ namespace RyanAssets.Characters.Client {
         void OnDisable() {
             LocalPlayer.OnCharacterAdded.Unsubscribe(OnCharacterAdded);
             PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
-            //SharedGlobalEvents.OnMyPlayerUpdated -= Refresh;
-            //PlayerData.localData.walkSpeed.Unsubscribe(Refresh);
         }
         
         void OnMyPlayerAdded(PlayerData data) {
             data.walkSpeed.OnChange += (_, _, _) => Refresh();
             data.sprintSpeed.OnChange += (_, _, _) => Refresh();
+            Refresh();
         }
         private void Refresh() {
             MoveSpeed = PlayerData.localData.walkSpeed.Value;
@@ -90,10 +88,12 @@ namespace RyanAssets.Characters.Client {
             _rb = LocalPlayer.Character.GetComponent<Rigidbody>();
             _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             _rb.isKinematic = false;
+            _rb.interpolation = RigidbodyInterpolation.Interpolate;
             _rb.maxDepenetrationVelocity = MaxDepenetrationVelocity;
             _input = InputService.characterControls;
             _boxCollider = LocalPlayer.Character.GetComponent<BoxCollider>();
             characterAnimator = LocalPlayer.Character.GetComponent<CharacterAnimator>();
+            groundPhysics = LocalPlayer.Character.GetComponent<GroundPhysics>();
             _collisionRelay = LocalPlayer.Character.GetComponent<CharacterCollisionRelay>();
             if (_collisionRelay == null)
                 _collisionRelay = LocalPlayer.Character.gameObject.AddComponent<CharacterCollisionRelay>();
@@ -132,13 +132,12 @@ namespace RyanAssets.Characters.Client {
             return move;
         }
         private void Move() {
-            //if (LocalPlayer.Character.ConsumeStamina(previousSpeed.magnitude > 3f && _input.sprint)) {
-
-            //}
             Vector2 moveVec = GetAdaptedMoveVector(_input);
-            Vector2 lastMoveVec = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
-
-            float targetSpeed = (_input.sprint && moveVec.magnitude > 0f && lastMoveVec.magnitude > SprintSpeed/4f && StaminaController.ConsumeStamina(SprintStaminaConsumptionRate * Time.fixedDeltaTime)) ? SprintSpeed : MoveSpeed;
+            bool canSprint = _input.sprint
+                && moveVec.sqrMagnitude > 0f
+                && SprintSpeed > 0f
+                && StaminaController.ConsumeStamina(SprintStaminaConsumptionRate * Time.fixedDeltaTime);
+            float targetSpeed = canSprint ? SprintSpeed : MoveSpeed;
             if (moveVec == Vector2.zero) targetSpeed = 0.0f;
 
             float inputMagnitude = _input.analogMovement ? moveVec.magnitude : 1f;
@@ -161,10 +160,15 @@ namespace RyanAssets.Characters.Client {
 
             Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
             Vector3 move = targetDirection.normalized * (_animationBlend * inputMagnitude);
-            TryStepUp(targetDirection, move.magnitude, characterAnimator.Grounded);
+            TryStepUp(targetDirection, move.magnitude, groundPhysics.Grounded);
+            // Carry the dynamic body through physics so its render pose can interpolate
+            // alongside the platform, rather than teleporting it in GroundPhysics.
+            move += groundPhysics.GroundVelocity;
             //if (!Grounded)
-            move.y = _rb.linearVelocity.y;
-            _rb.linearVelocity = move;
+            Vector3 velocityChange = move - _rb.linearVelocity;
+            velocityChange.y = 0f;
+
+            _rb.AddForce(velocityChange, ForceMode.VelocityChange);
             _rb.angularVelocity = Vector3.zero;
 
             // Animation updates
@@ -233,7 +237,7 @@ namespace RyanAssets.Characters.Client {
         //private float wasJumping = 0f;
         private void JumpAndGravity() {
             _jumpTimeoutDelta -= Time.fixedDeltaTime;
-            if (characterAnimator.Grounded) {
+            if (groundPhysics.Grounded) {
                 if (LastGrounded)
                     _landTimeoutDelta -= Time.fixedDeltaTime;
                 else
@@ -273,7 +277,7 @@ namespace RyanAssets.Characters.Client {
             if (_rb.linearVelocity.y < _terminalVelocity) {
                 _rb.linearVelocity += new Vector3(0f, Gravity * Time.fixedDeltaTime, 0f);
             }
-            LastGrounded = characterAnimator.Grounded;
+            LastGrounded = groundPhysics.Grounded;
         }
     }
 }

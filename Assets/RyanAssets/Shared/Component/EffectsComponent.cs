@@ -16,10 +16,11 @@ namespace RyanAssets.Shared.Component {
 #if UNITY_SERVER
         [Server]
         public virtual void AddEffect(CharacterEffect effect, float duration) {
-            if (IsEffectActive(effect))
-                SetEffect(effect, ActiveEffects[effect] + duration);
-            else
-                SetEffect(effect, duration);
+            float now = NetworkHelper.GetServerTime();
+            float expiresAt = ActiveEffects.TryGetValue(effect, out float currentExpiry)
+                ? System.Math.Max(now, currentExpiry) + duration
+                : now + duration;
+            ActiveEffects[effect] = expiresAt;
         }
 
         [Server]

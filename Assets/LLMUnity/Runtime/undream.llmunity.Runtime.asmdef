@@ -1,7 +1,19 @@
 {
     "name": "undream.llmunity.Runtime",
+    "rootNamespace": "",
     "references": [
         "Cloud.Unum.USearch",
         "Unity.Nuget.Newtonsoft-Json"
-    ]
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER || UNITY_EDITOR"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

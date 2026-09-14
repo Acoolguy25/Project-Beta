@@ -67,7 +67,7 @@ namespace Universes.GameBrowser {
 #if UNITY_EDITOR
             RefreshPrefabs(UniverseCfg.ActiveUniverses);
 #else
-            RefreshPrefabs(UniverseCfg.ActiveUniverses.Where(u => u.access == UniverseAccess.Public));
+            RefreshPrefabs(UniverseCfg.ActiveUniverses.Where(u => u.access == UniverseAccess.Public).ToArray());
 #endif
         }
         private void OnEnable() {

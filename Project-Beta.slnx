@@ -8,9 +8,9 @@
   <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
   <Project Path="RyanAssets.Shared.Global.csproj" />
   <Project Path="Universes.UniverseData.war_valley.Shared.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="EasyDebug.Client.csproj" />
   <Project Path="RyanAssets.TweenService.TweenEasing.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Stamina.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Toolbar.csproj" />
@@ -29,6 +29,7 @@
   <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
   <Project Path="undream.llmunity.Editor.csproj" />
+  <Project Path="RyanAssets.Items.Platform.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
   <Project Path="Cloud.Unum.USearch.csproj" />
   <Project Path="RyanAssets.UI.ButtonGrid.csproj" />
@@ -58,7 +59,6 @@
   <Project Path="Universes.UniverseData.classic_horror.Tests.csproj" />
   <Project Path="RyanAssets.Items.Coin.csproj" />
   <Project Path="RyanAssets.Client.CharacterEffects.csproj" />
-  <Project Path="undream.llmunity.Editor.Tests.csproj" />
   <Project Path="Universes.UniverseData.classic_horror.Client.csproj" />
   <Project Path="RyanAssets.TweenService.csproj" />
   <Project Path="EasyDebug.Shared.csproj" />

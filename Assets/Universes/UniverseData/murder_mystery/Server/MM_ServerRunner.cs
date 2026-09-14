@@ -46,17 +46,17 @@ namespace Universes.murder_mystery.Server {
         MM_Mode mode;
         [SerializeField]
         List<TeamColor> npcRoles, playerRoles;
-        
+
         public static float SpawnMultiplier;
         public static bool ForceEndGame;
         bool gameInProgress;
+        readonly HashSet<GameCharacter> pendingInfectionRevives = new();
         string[] alienNames;
         int startNPCs, startPlayers, gameDurationLeft;
         int startMurd, startSheriff, startInnocent;
-        protected override void Awake(){
+        protected override void Awake() {
             base.Awake();
-            SharedGlobalEvents.TeamEnemies = new()
-            {
+            SharedGlobalEvents.TeamEnemies = new() {
                 [TeamColor.Red] = new() { TeamColor.Blue, TeamColor.Green },
                 [TeamColor.Blue] = new() { TeamColor.Red },
                 [TeamColor.Green] = new() // can't kill anyone!
@@ -73,8 +73,7 @@ namespace Universes.murder_mystery.Server {
                 LocalNPC.FleeSpeedMultiplier = 0f;
                 LocalNPC.WalkSpeedMultiplier = 0f;
                 LocalNPC.AttackSpeedMultiplier = 0f;
-            }
-            else {
+            } else {
                 LocalNPC.FleeSpeedMultiplier = 1f;
                 LocalNPC.WalkSpeedMultiplier = 1f;
                 LocalNPC.AttackSpeedMultiplier = 1f;
@@ -158,11 +157,10 @@ namespace Universes.murder_mystery.Server {
             player.walkSpeed.Value = 16f;
             player.sprintSpeed.Value = 21f;
         }
-        protected override void OnCharacterAdded(LocalCharacter character){
+        protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
             character.Init(100);
-            character.InitDefaultEffects();
-            
+
             character.OnDied += (source, killer) => SharedOnDied(character, source, killer);
             //new Vector3(1120.56995f, -8.12100029f, 1008.34003f);
             //character.SetScale(0.7f * Vector3.one);
@@ -208,14 +206,16 @@ namespace Universes.murder_mystery.Server {
                 }
                 character.SetRealColor(TeamColor.White);
             } else if (mode == MM_Mode.Infection) {
-                if (killerCharacter != null
+                if (gameInProgress && serverRunning && killerCharacter != null
                     && killerCharacter.GetTeam().realTeam == TeamColor.Red
                     && character.GetTeam().realTeam != TeamColor.Red) {
                     // Capture this before the delayed revive. The owner-authoritative
                     // root can continue changing while the character is ragdolled.
-                    ReviveAsInfected(character, character.transform.position);
-                }
-                else {
+                    pendingInfectionRevives.Add(character);
+                    character.SetTeam(new TeamConfig(TeamColor.Red));
+                    ReviveAsInfected(character, character.transform.position, serverRunnerCTS.Token)
+                        .Forget(exception => Debug.LogException(exception, this));
+                } else {
                     character.SetRealColor(TeamColor.White);
                 }
             }
@@ -238,33 +238,45 @@ namespace Universes.murder_mystery.Server {
             }
             RefreshInGameBar();
         }
-        async void ReviveAsInfected(GameCharacter character, Vector3 deathPosition) {
-            // HealthComponent sends the death RPC after its server-side OnDied event.
-            // Wait one frame so observers process death before the revive RPC, rather
-            // than receiving the two lifecycle notifications in reverse order.
-            character.SetTeam(new TeamConfig(TeamColor.Red));
-            character.GetComponent<RobotColor>().ApplyColor(TeamColor.Green);
-            RefreshInGameBar();
-            await UniTask.Yield();
-            await UniTask.WaitForSeconds(3f);
-            if (character == null || !character.IsDead || mode != MM_Mode.Infection)
-                return;
+        async UniTask ReviveAsInfected(GameCharacter character, Vector3 deathPosition, CancellationToken token) {
+            bool revived = false;
+            try {
+                // HealthComponent sends the death RPC after its server-side OnDied event.
+                // Wait one frame so observers process death before the revive RPC, rather
+                // than receiving the two lifecycle notifications in reverse order.
+                if (await UniTask.Yield(PlayerLoopTiming.Update, token).SuppressCancellationThrow())
+                    return;
+                if (await UniTask.WaitForSeconds(3f, cancellationToken: token).SuppressCancellationThrow())
+                    return;
+                if (character == null || !character.IsDead || mode != MM_Mode.Infection)
+                    return;
 
-            if (character.Owner.IsValid)
-                ServerTool.Instance.ClearTools(character);
-            else
-                ServerTool.Instance.DespawnTools(character.NetworkObject);
+                if (character.Owner.IsValid)
+                    ServerTool.Instance.ClearTools(character);
+                else
+                    ServerTool.Instance.DespawnTools(character.NetworkObject);
 
-            if (character is LocalCharacter localCharacter)
-                localCharacter.ReviveAtPosition(75, deathPosition);
-            else
-                character.Revive(75);
+                if (character is LocalCharacter localCharacter) {
+                    if (!localCharacter.ReviveAtPosition(75, deathPosition))
+                        return;
+                } else {
+                    character.Revive(75);
+                }
+                revived = true;
+                character.GetComponent<RobotColor>().ApplyColor(TeamColor.Green);
 
-            if (character.TryGetComponent(out MM_LocalNPC mmLocalNPC)) {
-                character.GetComponent<LocalNPC>().AttackDetectionRadius *= InfectionAttackDetectionMultiplier;
-                mmLocalNPC.InitializeAttackState();
-            } else
-                ServerTool.Instance.SpawnTool(character, ToolEnum.Dagger);
+                if (character.TryGetComponent(out MM_LocalNPC mmLocalNPC)) {
+                    LocalNPC npc = character.GetComponent<LocalNPC>();
+                    npc.AllowAttackTargetOverrides = false;
+                    npc.AttackDetectionRadius *= InfectionAttackDetectionMultiplier;
+                    mmLocalNPC.InitializeAttackState();
+                } else
+                    ServerTool.Instance.SpawnTool(character, ToolEnum.Dagger);
+            } finally {
+                pendingInfectionRevives.Remove(character);
+                if (revived)
+                    RefreshInGameBar();
+            }
 
         }
         bool OnTryCollectToolFunc(NetworkBehaviour collectObject, ToolEnum tool) {
@@ -307,8 +319,7 @@ namespace Universes.murder_mystery.Server {
                 }
                 npc.gameObject.AddComponent<MM_LocalNPC>();
                 npc.gameObject.AddComponent<MM_NPC>();
-                gameCharacter.OnDied += (source, killer) =>
-                {
+                gameCharacter.OnDied += (source, killer) => {
                     SharedOnDied(gameCharacter, source, killer);
                     if (source == DamageType.Fall) {
                         if (FallTest.Value)
@@ -385,8 +396,7 @@ namespace Universes.murder_mystery.Server {
             gameCharacter.DisplayName = alienNames[UnityEngine.Random.Range(0, alienNames.Length)];
         }
         string GetTeamName(TeamColor team) {
-            return team switch
-            {
+            return team switch {
                 TeamColor.Red => "Murderer",
                 TeamColor.Green => "Innocent",
                 TeamColor.Blue => "Sheriff",
@@ -420,17 +430,10 @@ namespace Universes.murder_mystery.Server {
             startSheriff = startPlayers;
             startInnocent = startNPCs - murdererTarget;
         }
-        bool AreAllPlayersInfected() {
-            List<PlayerData> activePlayers = PlayerData.Players.Values
-                .Where(player => player.Owner.IsValid && player.Owner.IsAuthenticated)
-                .ToList();
-            return activePlayers.Count > 0
-                && activePlayers.All(player => new[] { TeamColor.Red, TeamColor.White }.Contains(player.team.Value.realTeam));
-        }
         TeamColor GetInfectionWinnerTeam() {
             if (GetTeamCount(TeamColor.Red) == 0)
                 return TeamColor.Blue;
-            if (AreAllPlayersInfected())
+            if (GetTeamCount(TeamColor.Blue) == 0)
                 return TeamColor.Red;
             return TeamColor.None;
         }
@@ -452,7 +455,7 @@ namespace Universes.murder_mystery.Server {
                 case MM_Mode.NPCsVsPlayers:
                 case MM_Mode.Unarmed:
                     int npcsLeft = GetNPCCount();
-                    SetTopMessage(string.Format(mode == MM_Mode.Unarmed?"Civilians Left: {0} ({1})":"NPC Killers Left: {0} ({1})", npcsLeft, durationLeft));
+                    SetTopMessage(string.Format(mode == MM_Mode.Unarmed ? "Civilians Left: {0} ({1})" : "NPC Killers Left: {0} ({1})", npcsLeft, durationLeft));
                     return npcsLeft > 0;
                 case MM_Mode.Classic:
                     SetTopMessage($"Mystery In Progress ({durationLeft})");
@@ -465,16 +468,16 @@ namespace Universes.murder_mystery.Server {
                     return false;
             }
         }
-        async void SpawnCoinLoop(CancellationToken token) {
-            do {
+        async UniTask SpawnCoinLoop(CancellationToken token) {
+            while (!token.IsCancellationRequested) {
                 ServerCoin.SpawnCoin(null);
                 await UniTask.Delay(
                     TimeSpan.FromSeconds(MathHelper.Range(5f, 15f)),
                     cancellationToken: token
                 ).SuppressCancellationThrow();
-            } while (!token.IsCancellationRequested);
+            }
         }
-        protected override async UniTask StartAsync(CancellationToken token){
+        protected override async UniTask StartAsync(CancellationToken token) {
             await base.StartAsync(token);
 
             if (!DebugNoIntermission.Value) {
@@ -498,9 +501,12 @@ namespace Universes.murder_mystery.Server {
             gameDurationLeft = DebugTimerSpeedUp.Value ? 10 : gameTime;
             gameInProgress = true;
             using CancellationTokenSource coinCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            SpawnCoinLoop(coinCts.Token);
-            await GameTimerCountdown(DebugTimerSpeedUp.Value ? 10 : gameTime, token);
-            coinCts.Cancel();
+            SpawnCoinLoop(coinCts.Token).Forget(exception => Debug.LogException(exception, this));
+            try {
+                await GameTimerCountdown(DebugTimerSpeedUp.Value ? 10 : gameTime, token);
+            } finally {
+                coinCts.Cancel();
+            }
             ServerCoin.ClearAllCoins();
             base.SetGlobalInvul(true);
             switch (mode) {
@@ -528,6 +534,7 @@ namespace Universes.murder_mystery.Server {
             base.Stop();
             gameInProgress = false;
             gameDurationLeft = 0;
+            pendingInfectionRevives.Clear();
         }
         protected override void Reset() {
             base.Reset();

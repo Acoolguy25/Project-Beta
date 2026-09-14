@@ -2217,6 +2217,7 @@ GameObject:
   - component: {fileID: 3857622150104325183}
   - component: {fileID: 8293697685302373730}
   - component: {fileID: 36641937799527138}
+  - component: {fileID: 3610477358266564413}
   m_Layer: 12
   m_Name: RobotPlayer
   m_TagString: Player
@@ -2450,8 +2451,6 @@ MonoBehaviour:
   - {fileID: 8300000, guid: a3194b8bbc96ef84fab1f98f4b7dae3e, type: 3}
   footstepPaceMultiplier: 1
   duplicateSoundWindow: 0.08
-  GroundCheck: 1
-  Grounded: 0
 --- !u!114 &8624230890759636101
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2677,6 +2676,18 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 9155375541221003514}
   healthEditor: 0
   maxHealthEditor: 0
+--- !u!114 &3610477358266564413
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac9ab5877fb203e4ca8f12045b37b0d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.GroundPhysics
 --- !u!1 &7044496254920343005
 GameObject:
   m_ObjectHideFlags: 0

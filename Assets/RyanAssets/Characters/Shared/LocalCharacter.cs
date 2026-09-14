@@ -8,8 +8,18 @@ using RyanAssets.Shared.Declarations;
 using FishNet.Component.Transforming;
 
 namespace RyanAssets.Characters.Shared {
+    [DefaultExecutionOrder(-100)]
     public class LocalCharacter : GameCharacter {
         private const float RespawnVerticalOffset = 0.05f;
+        private GroundPhysics groundPhysics;
+
+        protected override void FixedUpdate() {
+            base.FixedUpdate();
+#if !UNITY_SERVER
+            if (IsOwner && !IsDead && groundPhysics != null)
+                groundPhysics.SyncWithGround();
+#endif
+        }
 
         public static Dictionary<NetworkConnection, LocalCharacter> Characters = new();
         public void InstantiateSelf(NetworkConnection prevOwner) {
@@ -72,6 +82,7 @@ namespace RyanAssets.Characters.Shared {
         }
         protected override void Awake() {
             base.Awake();
+            groundPhysics = GetComponent<GroundPhysics>();
             CharacterCamera = transform.Find("CharacterCamera");
             OnDied += OnDiedEvent;
             foreach (Transform t in GetComponentsInChildren<Transform>(true)) {
@@ -116,6 +127,7 @@ namespace RyanAssets.Characters.Shared {
         }
 
         private void ApplyRespawnPosition(Vector3 position) {
+            groundPhysics?.ResetGround();
             transform.position = position;
 
             if (TryGetComponent(out Rigidbody rootBody)) {

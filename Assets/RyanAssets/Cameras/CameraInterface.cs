@@ -6,8 +6,10 @@ namespace RyanAssets.Cameras {
     public class ICamera: MonoBehaviour {
         public virtual void EnableCamera(Transform oldCamera, GameCameraType oldCameraType) {
             // default
-            if (oldCamera != null)
+            if (oldCamera != null) {
                 transform.position = oldCamera.position;
+                transform.rotation = oldCamera.rotation;
+            }
         }
         public virtual void DisableCamera(Transform newCamera, GameCameraType newCameraType) {
             // default

@@ -34,6 +34,8 @@ namespace RyanAssets.DataService {
 
         readonly public SyncVar<float> walkSpeed = new(initialValue: 10f);
         readonly public SyncVar<float> sprintSpeed = new(initialValue: 23f);
+        readonly public SyncVar<float> jumpHeight = new(initialValue: 1.4f);
+        readonly public SyncVar<float> gravity = new(initialValue: -15f);
 
         readonly public SyncVar<float> staminaMax = new(initialValue: 250f);
         readonly public SyncVar<float> staminaRegen = new(initialValue: 30f);

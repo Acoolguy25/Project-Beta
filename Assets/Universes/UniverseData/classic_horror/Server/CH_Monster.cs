@@ -17,9 +17,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         // Preserve the relative urgency of each authored state while giving
         // investigators about 12.5% more room to evade.
         const float MovementSpeedMultiplier = 0.875f;
-        const float InvestigationHuntSpeed = 8.5f;
-        const float RitualHuntSpeed = 10f;
-        const float EnragedHuntSpeed = 11.5f;
+        const float InvestigationHuntSpeed = 10f;
+        const float RitualHuntSpeed = 11.5f;
+        const float EnragedHuntSpeed = 13f;
         const float UnreachableGiveUpSeconds = 10f;
         const float UnreachableRetrySeconds = 12f;
         const float ReachableApproachRadius = 3f;
@@ -47,9 +47,12 @@ namespace Universes.UniverseData.classic_horror.Server {
         public int AbandonedChases { get; private set; }
         public bool IsChasing => !suspended && pursued != null && Time.time - lastSeen < PursuitMemorySeconds;
         public string State { get; private set; } = "Emerging";
-        Vector3 lastKnown, patrolPoint, progressPosition;
+        Vector3 patrolPoint, progressPosition;
         float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, lightHeldUntil, enragedUntil, nextWhisper, nextPatrol;
         float unreachableSince = -1f;
+        Vector3 committedPursuitDestination;
+        float nextPursuitRepath;
+        bool hasCommittedPursuitDestination;
         bool suspended;
         int warningIndex;
         int obstacleMask;
@@ -111,7 +114,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             lastProgress = Time.time;
         }
         public void Enrage(float seconds) { enragedUntil = Time.time + seconds; repelledUntil = 0; }
-        public void Repel(float seconds) { repelledUntil = Time.time + seconds; nextPatrol = 0; pursued = null; lastSeen = -100; unreachableSince = -1f; }
+        public void Repel(float seconds) { repelledUntil = Time.time + seconds; nextPatrol = 0; pursued = null; lastSeen = -100; unreachableSince = -1f; hasCommittedPursuitDestination = false; }
         public void Suspend() { suspended = true; locomotion.SetTargetingType(NPCTargetingType.None); }
 
         void Update() {
@@ -217,10 +220,9 @@ namespace Universes.UniverseData.classic_horror.Server {
                     runner.OnMonsterChaseStarted();
                 }
                 lastSeen = Time.time;
-                lastKnown = sensed.transform.position;
                 float speed = runner.CurrentCase.Phase == CH_Phase.Investigation ? InvestigationHuntSpeed : RitualHuntSpeed;
                 if (Time.time < enragedUntil) speed = EnragedHuntSpeed;
-                Navigate(lastKnown, speed);
+                NavigatePursued(speed);
                 Vector3 sensedEye = sensed.CharacterCamera != null ? sensed.CharacterCamera.position : sensed.transform.position + Vector3.up * 2f;
                 if (closest < 1.85f && Time.time >= nextAttack && WorldInteraction.CanReach(eye, sensedEye, 2.2f, obstacleMask)) {
                     nextAttack = Time.time + 2f;
@@ -237,8 +239,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 // Once acquired, keep tracking the investigator through cover. This
                 // lets the monster commit to entering a house instead of stopping at
                 // the doorway where line of sight was lost.
-                lastKnown = pursued.transform.position;
-                Navigate(lastKnown, 10f);
+                NavigatePursued(10f);
             } else {
                 if (pursued != null) GiveUp(pursued);
                 State = "Roaming"; Roam(false);
@@ -314,6 +315,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (target != null) AbandonedChases++;
             if (pursued == target) pursued = null;
             lastSeen = -100; nextPatrol = 0; lastProgress = Time.time; unreachableSince = -1f;
+            hasCommittedPursuitDestination = false;
             State = "Giving up pursuit";
         }
         float NearestInvestigator(Vector3 position) {
@@ -327,6 +329,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             // the agent settles at its target instead of overshooting and turning
             // back every frame.
             locomotion.agent.autoBraking = false;
+            hasCommittedPursuitDestination = false;
             if (Time.time > nextPatrol || (transform.position - patrolPoint).sqrMagnitude < 4f || Time.time - lastProgress > 5f) {
                 nextPatrol = 0;
                 for (int i = 0; i < runner.Map.searchLocations.Length * 2; i++) {
@@ -342,33 +345,57 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (nextPatrol > 0 && !Navigate(patrolPoint, 7f)) nextPatrol = 0;
         }
 
-        // Preserve a valid route while tracking and keep retrying transiently invalid
-        // moving-player projections. Random side detours made the monster look
-        // indecisive and could replace a correct route with a short path into a wall.
+        bool NavigatePursued(float speed) {
+            var agent = locomotion.agent;
+            if (!agent.enabled || !agent.isOnNavMesh || pursued == null) return false;
+            agent.autoBraking = true;
+            locomotion.SetTargetingType(NPCTargetingType.External);
+            agent.speed = speed * MovementSpeedMultiplier;
+
+            // Use the reachable projection selected for this investigator. MoveTo
+            // samples a second time with a wider radius, which can select an
+            // isolated polygon beside a house and repeatedly reject the chase.
+            Reachability route = default;
+            bool reachable = CanReachTarget(pursued)
+                && reachability.TryGetValue(pursued, out route) && route.Reachable;
+            bool usablePath = agent.hasPath && !agent.isPathStale
+                && agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathComplete;
+            if (!reachable) {
+                if (usablePath) agent.isStopped = false;
+                return usablePath;
+            }
+
+            Vector3 destination = route.Destination;
+            if (usablePath && hasCommittedPursuitDestination
+                && Time.time < nextPursuitRepath
+                && (destination - committedPursuitDestination).sqrMagnitude < 1.56f) {
+                agent.isStopped = false;
+                return true;
+            }
+
+            reachPath ??= new UnityEngine.AI.NavMeshPath();
+            if (!agent.CalculatePath(destination, reachPath)
+                || reachPath.status != UnityEngine.AI.NavMeshPathStatus.PathComplete) {
+                if (usablePath) agent.isStopped = false;
+                return usablePath;
+            }
+            agent.isStopped = false;
+            if (!agent.SetPath(reachPath)) return usablePath;
+            committedPursuitDestination = destination;
+            hasCommittedPursuitDestination = true;
+            nextPursuitRepath = Time.time + 0.5f;
+            return true;
+        }
+
+        // Patrol destinations still use the shared navigation validation.
         bool Navigate(Vector3 destination, float speed) {
-            locomotion.agent.autoBraking = State is "Hunting" or "Searching";
             if ((transform.position - progressPosition).sqrMagnitude > 0.09f) {
                 lastProgress = Time.time; progressPosition = transform.position;
             }
             bool accepted = locomotion.MoveTo(destination, speed * MovementSpeedMultiplier);
             var agent = locomotion.agent;
-            // If the closest projection landed on a disconnected shoreline/prop
-            // polygon, use the reachable approach selected during perception.
-            if (!accepted && pursued != null
-                && reachability.TryGetValue(pursued, out Reachability cached)
-                && cached.Reachable
-                && (destination - cached.Position).sqrMagnitude < 2.25f) {
-                reachPath ??= new UnityEngine.AI.NavMeshPath();
-                if (agent.CalculatePath(cached.Destination, reachPath)
-                    && reachPath.status == UnityEngine.AI.NavMeshPathStatus.PathComplete) {
-                    agent.isStopped = false;
-                    accepted = agent.SetPath(reachPath);
-                }
-            }
             bool usablePath = agent.hasPath && !agent.isPathStale
                 && agent.pathStatus != UnityEngine.AI.NavMeshPathStatus.PathInvalid;
-            // A moving player can be briefly unsampleable while jumping. Preserve the
-            // previous route instead of abandoning the chase on that single frame.
             return accepted || usablePath;
         }
     }

@@ -4,6 +4,7 @@ using FishNet.Managing.Client;
 using FishNet.Transporting;
 using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Client.ClientAudio;
 using RyanAssets.Input;
 using RyanAssets.Shared.Globals;
 using RyanAssets.Tools.Shared;
@@ -54,9 +55,15 @@ namespace Universes.UniverseData.classic_horror.Client {
             journalPanel.SetActive(false);
             endingPanel.SetActive(false);
             dialoguePanel.SetActive(false);
+            // LocalCharacter.OnCharacterAdded.Subscribe();
             chapterLabel.text = "INVESTIGATOR";
             objectiveLabel.text = "Establishing the radio link...";
         }
+        // void OnCharacterAdded(LocalCharacter character){
+        //     character.OnDied += (_, _) => [
+
+        //     ]
+        // }
         void OnEnable() {
             ToolControls.interactPressed += Interact;
             ToolControls.journalPressed += OpenJournal;
@@ -236,7 +243,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                 dangerAudio.pitch = 0.7f + intensity * 0.35f;
             }
             if (map.practicalLights != null) foreach (var light in map.practicalLights)
-                if (light != null) light.intensity = Mathf.Lerp(0.55f, 0.06f + Mathf.PerlinNoise(Time.time * 7, light.transform.position.x) * 0.45f, intensity);
+                    if (light != null) light.intensity = Mathf.Lerp(0.55f, 0.06f + Mathf.PerlinNoise(Time.time * 7, light.transform.position.x) * 0.45f, intensity);
         }
         void OnDisable() {
             ToolControls.interactPressed -= Interact;

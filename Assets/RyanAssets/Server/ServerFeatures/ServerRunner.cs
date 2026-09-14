@@ -145,7 +145,7 @@ namespace RyanAssets.Server.ServerFeatures {
 
         public async UniTask WaitForPlayersAsync(int playerRequirement = 1, CancellationToken token = default) {
             int activePlayers;
-            while ((activePlayers = GetActivePlayers()) < playerRequirement) {
+            while ((activePlayers = GetActivePlayersCount()) < playerRequirement) {
                 SetTopMessage($"Waiting for players ({activePlayers}/{playerRequirement})");
                 await TaskHelper.WaitForAction<PlayerData>(
                     h => PlayerData.OnPlayerAdded += h,
@@ -219,8 +219,11 @@ namespace RyanAssets.Server.ServerFeatures {
         public void SetTeamKillEnabled(bool enabled) {
             SharedGlobalEvents.Instance.TeamKillEnabled = enabled;
         }
-        public int GetActivePlayers() {
-            return InstanceFinder.ServerManager.Clients.Values.Count((conn) => conn.IsActive && conn.IsAuthenticated && conn.LoadedStartScenes());
+        public PlayerData[] GetActivePlayers() {
+            return PlayerData.Players.Values.Where(player => player.Owner.IsActive && player.Owner.IsAuthenticated && player.Owner.LoadedStartScenes()).ToArray();
+        }
+        public int GetActivePlayersCount() {
+            return GetActivePlayers().Length;
         }
 
         // LIFECYCLE FUNCTIONS
@@ -240,13 +243,36 @@ namespace RyanAssets.Server.ServerFeatures {
             serverRunnerCTS = cts;
             previousCts?.Cancel();
             previousCts?.Dispose();
-            StartAsync(cts.Token).ContinueWith(() => {
+            RunRoundAsync(cts).Forget(exception => Debug.LogException(exception, this));
+        }
+
+        async UniTask RunRoundAsync(CancellationTokenSource cts) {
+            CancellationToken token = cts.Token;
+            try {
+                await StartAsync(token);
+                // The concrete base runner has no round to restart. Derived runners
+                // await base.StartAsync only for scene/player readiness.
+                if (GetType() == typeof(ServerRunner))
+                    await UniTask.WaitUntilCanceled(token);
+
+                // Even an immediately completed round must not recurse into Start.
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
                 // A previous round can finish after a manual restart has installed a
                 // replacement token. Only the currently-owned round may start another
                 // restart cycle.
-                if (serverRunnerCTS == cts && !cts.IsCancellationRequested)
+                if (serverRunnerCTS == cts && !token.IsCancellationRequested)
                     Restart();
-            });
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) {
+                // Stopping or replacing this round is expected.
+            }
+            catch (Exception exception) {
+                Debug.LogException(exception, this);
+                // A failed round is not running. Never stop a replacement round
+                // or automatically retry a broken setup every frame.
+                if (serverRunnerCTS == cts)
+                    Stop();
+            }
         }
 
         protected virtual async UniTask StartAsync(CancellationToken token) {

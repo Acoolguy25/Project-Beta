@@ -134,7 +134,8 @@ namespace Universes.UniverseData.chatbot_service.Server {
                     }
                     break;
             }
-            ServerChat.SendSystemMessage(player, new(displayMessage, SystemMessageSource.ChatbotResponse));
+            ServerChat.SendSystemMessage(new(displayMessage, SystemMessageSource.ChatbotResponse));
+            //ServerChat.SendSystemMessage(player, new(displayMessage, SystemMessageSource.ChatbotResponse));
             switch (mode) {
                 case CS_Mode.ForceWord:
                     if (message.ToLowerInvariant().Contains(codeWord.ToLowerInvariant())) {
@@ -145,10 +146,10 @@ namespace Universes.UniverseData.chatbot_service.Server {
         }
         protected override bool UpdateInGameBar(int durationLeft, bool interrupted) {
             int winners = passedPlayers.Count;
-            int totalPlayers = GetActivePlayers();
+            int totalPlayers = GetActivePlayersCount();
             switch (mode) {
                 case CS_Mode.GuessCode:
-                    SetTopMessage($"Guess the code! ({durationLeft})");
+                    SetTopMessage($"Guess the four digit code! ({durationLeft})");
                     break;
                 case CS_Mode.ForceWord:
                     SetTopMessage($"Force the AI to use the code word \"{codeWord}\"! ({durationLeft})");

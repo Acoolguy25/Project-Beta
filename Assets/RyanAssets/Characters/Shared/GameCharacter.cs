@@ -147,11 +147,10 @@ namespace RyanAssets.Characters.Shared {
 
         [Server]
         public virtual void SetTeam(TeamConfig teamConfig) {
-            if (IsDead) {
-                //Debug.LogWarning($"Cannot set team for dead character {gameObject.name}");
-                return;
-            }
-            UpdateTeamRegistry(Team, teamConfig);
+            // Dead characters have a role, but only living characters belong in
+            // the attack-team registry. SharedRevived adds the new role back.
+            if (!IsDead)
+                UpdateTeamRegistry(Team, teamConfig);
             TeamSync.Value = teamConfig;
 #if UNITY_EDITOR
             UpdateTeamEditorOptions(default, teamConfig, true);
@@ -159,14 +158,6 @@ namespace RyanAssets.Characters.Shared {
         }
 
         void ITeam.SetTeam(TeamConfig teamConfig) => SetTeam(teamConfig);
-
-        [Server]
-        private void FixedUpdate() {
-            if (FallHeightEnabled && IsSpawned && transform.position.y < FallenPartsDestroyHeight) {
-                Kill(DamageType.Fall);
-                InstanceFinder.ServerManager.Despawn(gameObject);
-            }
-        }
 
         [Server]
         public override void OnStopServer() {
@@ -190,8 +181,23 @@ namespace RyanAssets.Characters.Shared {
         }
 
         private void UpdateTeamClient(TeamConfig oldTeam, TeamConfig newTeam, bool _) {
-            UpdateTeamRegistry(oldTeam, newTeam);
+            if (IsDead)
+                RemoveTeamRegistry(oldTeam);
+            else
+                UpdateTeamRegistry(oldTeam, newTeam);
         }
+#endif
+
+#if UNITY_SERVER
+        [Server]
+        protected virtual void FixedUpdate() {
+            if (FallHeightEnabled && IsSpawned && transform.position.y < FallenPartsDestroyHeight) {
+                Kill(DamageType.Fall);
+                InstanceFinder.ServerManager.Despawn(gameObject);
+            }
+        }
+#else
+        protected virtual void FixedUpdate() { }
 #endif
 
         protected void RemoveTeamRegistry(TeamConfig team) {

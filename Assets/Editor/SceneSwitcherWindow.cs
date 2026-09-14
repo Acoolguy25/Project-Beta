@@ -13,8 +13,7 @@ public class SceneSwitcherWindow : EditorWindow {
     private const string UniverseScenesRoot = "Assets/Universes/UniverseData";
     private const string ClientDebugPlayGameSourcePath = "Assets/EasyDebug/Client/DebugPlayGame.cs";
     private const string ServerBootStrapSourcePath = "Assets/RyanAssets/Server/ServerCore/ServerBootStrap.cs";
-
-    private static string previousScenePath;
+    private const string PreviousScenePathSessionKey = "SceneSwitcherWindow.PreviousScenePath";
 
     private readonly List<SceneEntry> scenes = new();
     private string[] universeLabels = { AllUniversesLabel };
@@ -30,7 +29,8 @@ public class SceneSwitcherWindow : EditorWindow {
     private static void OnPlayModeStateChanged(PlayModeStateChange state) {
         switch (state) {
             case PlayModeStateChange.ExitingEditMode:
-                previousScenePath = SceneManager.GetActiveScene().path;
+                // A domain reload clears static fields before EnteredEditMode fires.
+                SessionState.SetString(PreviousScenePathSessionKey, SceneManager.GetActiveScene().path);
                 RevertToDefaultScene();
                 break;
 
@@ -244,6 +244,8 @@ public class SceneSwitcherWindow : EditorWindow {
     }
 
     private static void RestorePreviousScene() {
+        string previousScenePath = SessionState.GetString(PreviousScenePathSessionKey, string.Empty);
+
         if (string.IsNullOrEmpty(previousScenePath))
             return;
 
@@ -251,14 +253,14 @@ public class SceneSwitcherWindow : EditorWindow {
             Debug.LogWarning(
                 $"Previous scene no longer exists: {previousScenePath}");
 
-            previousScenePath = null;
+            SessionState.SetString(PreviousScenePathSessionKey, string.Empty);
             return;
         }
 
         if (SceneManager.GetActiveScene().path != previousScenePath)
             OpenScene(previousScenePath);
 
-        previousScenePath = null;
+        SessionState.SetString(PreviousScenePathSessionKey, string.Empty);
     }
 
     private readonly struct SceneEntry {

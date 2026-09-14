@@ -44400,9 +44400,9 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 223055974}
   _networkObjectCache: {fileID: 0}
   damageConfig:
-    <damageAmount>k__BackingField: 30
+    <damageAmount>k__BackingField: 10
     <damageType>k__BackingField: 4
-  repeatDelay: 1.5
+  repeatDelay: 0.5
   targetTeams: 010002000400
 --- !u!64 &223055976
 MeshCollider:

@@ -1,27 +1,22 @@
-using Cysharp.Threading.Tasks;
 using FishNet.Object.Synchronizing;
-using NUnit.Framework.Internal;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Core;
 using RyanAssets.Shared.Declarations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using UnityEngine;
-using static UnityEngine.ParticleSystem;
 
 namespace RyanAssets.Client.CharacterEffects {
     internal struct CharacterEffectParticle {
         public ParticleSystem particleSystem;
-        public CancellationTokenSource cancellationTokenSource;
-        public Vector3 localPosition;
     }
     internal class GameCharacterEffectManager : IDisposable {
         private const float CameraFacingOffset = 0.5f;
         public GameCharacter character;
         public GameObject root;
         Dictionary<CharacterEffect, CharacterEffectParticle> activeEffectParticles = new();
+        readonly List<CharacterEffect> expiredEffects = new();
         List<GameObject> PositiveEffectsPrefab, NegativeEffectsPrefab;
         public GameCharacterEffectManager(GameCharacter character, GameObject root, List<GameObject> positiveEffectsPrefab, List<GameObject> negativeEffectsPrefab) {
             this.character = character;
@@ -29,17 +24,19 @@ namespace RyanAssets.Client.CharacterEffects {
             this.PositiveEffectsPrefab = positiveEffectsPrefab;
             this.NegativeEffectsPrefab = negativeEffectsPrefab;
             character.ActiveEffects.OnChange += OnActiveEffectsChanged;
+            // SyncDictionary contents may already be present when this character is registered.
+            foreach (var effect in character.ActiveEffects)
+                if (effect.Value > NetworkHelper.GetServerTime()) AddEffect(effect.Key);
         }
         public void OnActiveEffectsChanged(SyncDictionaryOperation op, CharacterEffect key, float timeEnd, bool asServer) {
             switch (op) {
                 case SyncDictionaryOperation.Add:
                 case SyncDictionaryOperation.Set:
                 case SyncDictionaryOperation.Remove:
-                    float serverTime = NetworkHelper.GetServerTime();
-                    if (op == SyncDictionaryOperation.Remove || timeEnd < serverTime) {
+                    if (op == SyncDictionaryOperation.Remove || timeEnd <= NetworkHelper.GetServerTime()) {
                         RemoveEffect(key);
                     } else {
-                        AddEffect(key, timeEnd - serverTime);
+                        AddEffect(key);
                     }
                     break;
                 case SyncDictionaryOperation.Clear:
@@ -55,48 +52,33 @@ namespace RyanAssets.Client.CharacterEffects {
                 RemoveEffect(effect);
             }
         }
-        private static void CancelAndDispose(CancellationTokenSource cts) {
-            if (cts == null)
+        public void Update() {
+            // Expiry does not generate a SyncDictionary change. Read the same server
+            // clock as damage protection so a shield cannot outlive its effect.
+            if (character == null || !character.IsSpawned) {
+                ClearEffects();
                 return;
-            try {
-                cts.Cancel();
-                cts.Dispose();
-            } catch (ObjectDisposedException) {
-                // Cleaned up already
             }
-        }
-        private async UniTask RemoveEffectAfterDelay(CharacterEffect effect, float duration, CancellationToken token) {
-            bool isCancelled = await UniTask.Delay(
-                TimeSpan.FromSeconds(duration),
-                cancellationToken: token
-            ).SuppressCancellationThrow();
-
-            if (!isCancelled)
+            expiredEffects.Clear();
+            foreach (CharacterEffect effect in activeEffectParticles.Keys)
+                if (!character.IsEffectActive(effect)) expiredEffects.Add(effect);
+            foreach (CharacterEffect effect in expiredEffects)
                 RemoveEffect(effect);
         }
-        public void AddEffect(CharacterEffect effect, float duration) {
-            CancellationTokenSource cts = new CancellationTokenSource();
-            if (!activeEffectParticles.TryGetValue(effect, out CharacterEffectParticle existingParticle)) {
+        public void AddEffect(CharacterEffect effect) {
+            if (!activeEffectParticles.ContainsKey(effect)) {
                 int effectIdx = Mathf.Abs((int)effect) - 1;
                 GameObject effectClone = GameObject.Instantiate((((int)effect > 0) ? PositiveEffectsPrefab[effectIdx] : NegativeEffectsPrefab[effectIdx]));
                 effectClone.transform.SetParent(root.transform, false);
                 activeEffectParticles[effect] = new CharacterEffectParticle {
-                    particleSystem = effectClone.GetComponent<ParticleSystem>(),
-                    cancellationTokenSource = cts,
-                    localPosition = effectClone.transform.localPosition
+                    particleSystem = effectClone.GetComponent<ParticleSystem>()
                 };
-            } else {
-                CancelAndDispose(existingParticle.cancellationTokenSource);
-                existingParticle.cancellationTokenSource = cts;
-                activeEffectParticles[effect] = existingParticle;
             }
-            RemoveEffectAfterDelay(effect, duration, cts.Token).Forget();
         }
         public void RemoveEffect(CharacterEffect effect) {
             if (activeEffectParticles.TryGetValue(effect, out CharacterEffectParticle particle)) {
                 if (particle.particleSystem)
                     GameObject.Destroy(particle.particleSystem.gameObject);
-                CancelAndDispose(particle.cancellationTokenSource);
                 activeEffectParticles.Remove(effect);
             }
         }
@@ -113,6 +95,10 @@ namespace RyanAssets.Client.CharacterEffects {
         void Start() {
             GameCharacter.GameCharacterAdded += OnGameCharacterAdded;
             GameCharacter.GameCharacterRemoved += OnGameCharacterRemoved;
+        }
+        void Update() {
+            foreach (GameCharacterEffectManager manager in effectInstances)
+                manager.Update();
         }
         void OnGameCharacterAdded(GameCharacter character) {
             // Effects should follow the character as a whole. Parenting to Hips makes the
