@@ -23,6 +23,8 @@ namespace RyanAssets.Cameras
             processors: "scale(factor=-0.01)");
         [SerializeField] private bool useGameSettingsSensitivity = true;
         [SerializeField, Min(0f)] private float zoomSensitivity = 1f;
+        [SerializeField, Min(0f), Tooltip("Zoom units per second while Q (out) or E (in) is held.")]
+        private float keyboardZoomSpeed = 12f;
         [Min(0f)] public float ZoomSmoothTime = 0.12f;
 
         private float zoomVelocity;
@@ -88,7 +90,19 @@ namespace RyanAssets.Cameras
                 sensitivity *= GameSettingsClient.GetSettingValue<int>("ZoomSensitivity") / 100f;
 
             if (!IsPointerOverScrollRect())
-                SetZoom(DesiredZoom + scrollWheel.ReadValue<float>() * sensitivity);
+            {
+                float keyboardZoom = 0f;
+                if (Keyboard.current != null)
+                {
+                    if (Keyboard.current.eKey.isPressed)
+                        keyboardZoom -= 1f;
+                    if (Keyboard.current.qKey.isPressed)
+                        keyboardZoom += 1f;
+                }
+
+                SetZoom(DesiredZoom + scrollWheel.ReadValue<float>() * sensitivity +
+                    keyboardZoom * keyboardZoomSpeed * Time.unscaledDeltaTime);
+            }
 
             float targetZoom = Mathf.Min(DesiredZoom, maximumAllowedZoom);
             targetZoom = Mathf.Clamp(targetZoom, MinZoom, MaxZoom);

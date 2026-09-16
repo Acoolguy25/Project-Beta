@@ -69,4 +69,5 @@
   <Project Path="RpcGen.Runtime.csproj" />
   <Project Path="Universes.UniverseData.classic_horror.Editor.csproj" />
   <Project Path="Universes.csproj" />
+  <Project Path="Universes.UniverseData.dot_invaders.Shared.csproj" />
 </Solution>

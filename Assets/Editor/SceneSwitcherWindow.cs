@@ -96,12 +96,44 @@ public class SceneSwitcherWindow : EditorWindow {
             .Concat(configuredUniverses.Select(universe => universe.id))
             .ToArray();
 
-        selectedUniverse = Mathf.Clamp(
-            selectedUniverse,
-            0,
-            universeLabels.Length - 1);
+        SelectConfiguredDefaultUniverse();
 
         RefreshScenes();
+    }
+
+    private void SelectConfiguredDefaultUniverse() {
+        string configuredUniverseId = GetConfiguredDefaultUniverseId();
+        int configuredUniverseIndex = System.Array.IndexOf(
+            universeIds,
+            configuredUniverseId);
+
+        selectedUniverse = configuredUniverseIndex >= 0
+            ? configuredUniverseIndex
+            : Mathf.Clamp(selectedUniverse, 0, universeLabels.Length - 1);
+    }
+
+    private static string GetConfiguredDefaultUniverseId() {
+        // Debug Play is the active client-side selection. Fall back to the server
+        // bootstrap value so the window remains useful in server-only setups.
+        return ReadUniverseIdSource(
+                   ClientDebugPlayGameSourcePath,
+                   "PlayGameUniverseId")
+               ?? ReadUniverseIdSource(
+                   ServerBootStrapSourcePath,
+                   "universe_id")
+               ?? string.Empty;
+    }
+
+    private static string ReadUniverseIdSource(string sourcePath, string fieldName) {
+        if (!File.Exists(sourcePath))
+            return null;
+
+        string source = File.ReadAllText(sourcePath);
+        Match match = Regex.Match(
+            source,
+            $@"\b{Regex.Escape(fieldName)}\s*=\s*""(?<universeId>[^""]+)""");
+
+        return match.Success ? match.Groups["universeId"].Value : null;
     }
 
     private void RefreshScenes() {

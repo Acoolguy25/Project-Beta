@@ -3,39 +3,12 @@ using RyanAssets.Shared.Declarations;
 #if !UNITY_SERVER
 using System.Collections.Generic;
 using FishNet;
-using FishNet.Broadcast;
 using FishNet.Transporting;
 using TMPro;
 using UnityEngine.InputSystem;
 #endif
 
 namespace Universes.UniverseData.dot_invaders.Client {
-#if !UNITY_SERVER
-    public struct DI_SendRequest : IBroadcast {
-        public int sourceBaseId;
-        public int targetBaseId;
-    }
-
-    public struct DI_StateBroadcast : IBroadcast {
-        public int revision;
-        public int yourClientId;
-        public int yourTeamId;
-        public int secondsRemaining;
-        public bool matchEnded;
-        public int winningTeamId;
-        public Vector2[] basePositions;
-        public int[] baseTroops;
-        public int[] baseOwners;
-        public int[] baseTeams;
-        public int[] basePendingTroops;
-        public int[] linkSources;
-        public int[] linkTargets;
-        public int[] dotIds;
-        public Vector2[] dotPositions;
-        public int[] dotTeams;
-    }
-#endif
-
     public sealed class DI_ClientController : MonoBehaviour {
 #if !UNITY_SERVER
         static readonly TeamColor[] DotInvadersTeamOrder = {
@@ -54,6 +27,11 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField] GameObject dotPrefab;
         [SerializeField] GameObject linkPrefab;
 
+        [Header("Pointer Assistance")]
+        [SerializeField, Min(1f)] float minimumPickRadiusPixels = 24f;
+        [SerializeField, Min(0f)] float pickPaddingPixels = 8f;
+        [SerializeField, Min(1f)] float neighborSnapRadiusPixels = 38f;
+
         readonly List<DI_BaseView> baseViews = new();
         readonly List<DI_LinkView> linkViews = new();
         readonly Dictionary<int, DI_DotView> dotViews = new();
@@ -66,6 +44,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
         TextMeshPro boardTitle;
         DI_HomeBaseTeleporter homeBaseTeleporter;
         int dragSource = -1;
+        int hoveredBase = -1;
         bool registered;
         bool focusedOnHome;
 
@@ -114,7 +93,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             SynchronizeViews();
 
             if (dragSource >= 0 &&
-                (dragSource >= state.baseOwners.Length || state.baseOwners[dragSource] != state.yourClientId))
+                (state.matchEnded || dragSource >= state.baseOwners.Length || state.baseOwners[dragSource] != state.yourClientId))
                 CancelDrag();
         }
 
@@ -139,6 +118,12 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     pending,
                     state.baseOwners[i] == state.yourClientId,
                     GetTeamColor(state.baseTeams[i]));
+                bool isTurret = state.baseTurrets != null && i < state.baseTurrets.Length && state.baseTurrets[i];
+                int shot = state.turretShotSequences != null && i < state.turretShotSequences.Length
+                    ? state.turretShotSequences[i] : 0;
+                Vector3 shotPosition = state.turretShotPositions != null && i < state.turretShotPositions.Length
+                    ? ToWorld(state.turretShotPositions[i], 0.8f) : Vector3.zero;
+                baseViews[i].SetDefense(isTurret, state.baseTroops[i], shot, shotPosition);
             }
 
             int linkCount = state.linkSources == null || state.linkTargets == null
@@ -157,14 +142,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 linkViews[i].SetLine(
                     ToWorld(state.basePositions[source], 0.08f),
                     ToWorld(state.basePositions[target], 0.08f),
-                    new Color(0.24f, 0.31f, 0.43f, 1f),
-                    0.16f);
+                    new Color(0.12f, 0.16f, 0.22f, 1f),
+                    0.09f);
             }
 
             int dotCount = state.dotIds == null || state.dotPositions == null || state.dotTeams == null
                 ? 0
                 : Mathf.Min(state.dotIds.Length, Mathf.Min(state.dotPositions.Length, state.dotTeams.Length));
             SynchronizeDots(dotCount);
+            RefreshInteraction();
             UpdateBoardTitle();
         }
 
@@ -249,11 +235,17 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
 
             Mouse mouse = Mouse.current;
-            if (mouse == null || state.basePositions == null || Camera.main == null)
+            if (mouse == null || state.basePositions == null || Camera.main == null || !Application.isFocused) {
+                CancelDrag();
                 return;
+            }
 
             Vector2 screenPosition = mouse.position.ReadValue();
-            if (mouse.rightButton.wasPressedThisFrame && TryFindBase(screenPosition, out DI_BaseView stoppedBase) &&
+            if (mouse.rightButton.wasPressedThisFrame && dragSource >= 0) {
+                CancelDrag();
+                return;
+            }
+            if (mouse.rightButton.wasPressedThisFrame && TryFindBase(screenPosition, out DI_BaseView stoppedBase, true) &&
                 stoppedBase.BaseId >= 0 && stoppedBase.BaseId < state.baseOwners.Length &&
                 state.baseOwners[stoppedBase.BaseId] == state.yourClientId &&
                 state.basePendingTroops != null && stoppedBase.BaseId < state.basePendingTroops.Length &&
@@ -264,7 +256,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 return;
             }
 
-            if (mouse.leftButton.wasPressedThisFrame && TryFindBase(screenPosition, out DI_BaseView source) &&
+            if (mouse.leftButton.wasPressedThisFrame && TryFindBase(screenPosition, out DI_BaseView source, true) &&
                 source.BaseId >= 0 && source.BaseId < state.baseOwners.Length &&
                 state.baseOwners[source.BaseId] == state.yourClientId &&
                 (state.baseTroops[source.BaseId] > 0 ||
@@ -276,22 +268,30 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     dragLink.gameObject.SetActive(true);
             }
 
-            if (dragSource < 0)
+            if (dragSource < 0) {
+                hoveredBase = TryFindBase(screenPosition, out DI_BaseView idleHover, true) ? idleHover.BaseId : -1;
+                RefreshInteraction();
                 return;
+            }
 
             Vector3 start = ToWorld(state.basePositions[dragSource], 0.2f);
             Vector3 end = TryGetBoardPoint(screenPosition, out Vector3 boardPoint) ? boardPoint : start;
-            bool validTarget = TryFindBase(screenPosition, out DI_BaseView hovered) &&
+            bool validTarget = TryFindBase(screenPosition, out DI_BaseView hovered, false, true) &&
                                hovered.BaseId != dragSource && AreNeighbors(dragSource, hovered.BaseId);
             if (validTarget)
                 end = ToWorld(state.basePositions[hovered.BaseId], 0.2f);
+            hoveredBase = validTarget ? hovered.BaseId : -1;
+            RefreshInteraction();
 
             dragLink?.SetLine(start, end,
                 validTarget ? GetTeamColor(state.baseTeams[dragSource]) : new Color(0.75f, 0.8f, 0.9f),
                 0.28f);
 
-            if (!mouse.leftButton.wasReleasedThisFrame)
+            if (!mouse.leftButton.wasReleasedThisFrame) {
+                if (!mouse.leftButton.isPressed)
+                    CancelDrag();
                 return;
+            }
 
             if (validTarget) {
                 SendRequest(dragSource, hovered.BaseId);
@@ -327,15 +327,27 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
         }
 
-        bool TryFindBase(Vector2 screenPosition, out DI_BaseView baseView) {
+        bool TryFindBase(Vector2 screenPosition, out DI_BaseView baseView, bool ownedOnly = false, bool neighborsOnly = false) {
             baseView = null;
-            Ray ray = Camera.main.ScreenPointToRay(screenPosition);
-            RaycastHit[] hits = Physics.RaycastAll(ray, 500f);
+            Camera camera = Camera.main;
+            if (camera == null)
+                return false;
             float nearestDistance = float.MaxValue;
-            for (int i = 0; i < hits.Length; i++) {
-                DI_BaseView candidate = hits[i].collider.GetComponentInParent<DI_BaseView>();
-                if (candidate != null && hits[i].distance < nearestDistance) {
-                    nearestDistance = hits[i].distance;
+            foreach (DI_BaseView candidate in baseViews) {
+                int id = candidate.BaseId;
+                if (!IsValidBase(id) || ownedOnly && state.baseOwners[id] != state.yourClientId ||
+                    neighborsOnly && (id == dragSource || !AreNeighbors(dragSource, id)))
+                    continue;
+                Vector3 center = camera.WorldToScreenPoint(candidate.transform.position);
+                if (center.z <= 0f)
+                    continue;
+                Vector3 edge = camera.WorldToScreenPoint(candidate.transform.position + camera.transform.right * candidate.PickRadius);
+                float radius = Mathf.Max(minimumPickRadiusPixels, Vector2.Distance(center, edge) + pickPaddingPixels);
+                if (neighborsOnly)
+                    radius = Mathf.Max(radius, neighborSnapRadiusPixels);
+                float distance = (screenPosition - (Vector2)center).sqrMagnitude;
+                if (distance <= radius * radius && distance < nearestDistance) {
+                    nearestDistance = distance;
                     baseView = candidate;
                 }
             }
@@ -371,9 +383,35 @@ namespace Universes.UniverseData.dot_invaders.Client {
             if (dragSource >= 0 && dragSource < baseViews.Count)
                 baseViews[dragSource].SetSelected(false);
             dragSource = -1;
+            hoveredBase = -1;
             if (dragLink != null)
                 dragLink.gameObject.SetActive(false);
+            RefreshInteraction();
         }
+
+        void RefreshInteraction() {
+            for (int i = 0; i < baseViews.Count; i++)
+                baseViews[i].SetInteraction(i == dragSource,
+                    dragSource >= 0 && AreNeighbors(dragSource, i), i == hoveredBase);
+
+            for (int i = 0; i < linkViews.Count; i++) {
+                int source = state.linkSources[i], target = state.linkTargets[i];
+                if (!IsValidBase(source) || !IsValidBase(target))
+                    continue;
+                bool highlighted = dragSource >= 0 && (source == dragSource || target == dragSource);
+                Vector3 start = ToWorld(state.basePositions[source], 0.12f);
+                Vector3 end = ToWorld(state.basePositions[target], 0.12f);
+                Vector3 direction = (end - start).normalized;
+                // End roads at the edge of the enlarged base, keeping the labels clear.
+                start += direction * baseViews[source].PickRadius;
+                end -= direction * baseViews[target].PickRadius;
+                linkViews[i].SetLine(start, end,
+                    highlighted ? new Color(0.9f, 0.7f, 0.2f) : new Color(0.12f, 0.16f, 0.22f),
+                    highlighted ? 0.18f : 0.09f);
+            }
+        }
+
+        void OnDisable() => CancelDrag();
 
         bool IsValidBase(int baseId) {
             return state.basePositions != null && baseId >= 0 && baseId < state.basePositions.Length;

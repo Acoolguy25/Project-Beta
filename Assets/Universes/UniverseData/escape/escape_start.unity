@@ -475,7 +475,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 4054911922964013672, guid: 84b1e706f7933f34188d2f9a6168fb07, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -581,6 +581,7 @@ MonoBehaviour:
   deltaRotation: {x: 0, y: 360, z: 0}
   reverseMovement: 1
   reverseRotation: 0
+  clockCorrectionRate: 0.1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

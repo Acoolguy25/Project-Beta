@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using FishNet;
-using FishNet.Broadcast;
 using FishNet.Connection;
 using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
@@ -13,30 +12,6 @@ using RyanAssets.Shared.Requests;
 using UnityEngine;
 
 namespace Universes.UniverseData.dot_invaders {
-    public struct DI_SendRequest : IBroadcast {
-        public int sourceBaseId;
-        public int targetBaseId;
-    }
-
-    public struct DI_StateBroadcast : IBroadcast {
-        public int revision;
-        public int yourClientId;
-        public int yourTeamId;
-        public int secondsRemaining;
-        public bool matchEnded;
-        public int winningTeamId;
-        public Vector2[] basePositions;
-        public int[] baseTroops;
-        public int[] baseOwners;
-        public int[] baseTeams;
-        public int[] basePendingTroops;
-        public int[] linkSources;
-        public int[] linkTargets;
-        public int[] dotIds;
-        public Vector2[] dotPositions;
-        public int[] dotTeams;
-    }
-
     public sealed class DI_ServerRunner : ServerRunner {
         static readonly TeamColor[] DotInvadersTeamOrder = {
             TeamColor.Blue,
@@ -71,6 +46,7 @@ namespace Universes.UniverseData.dot_invaders {
         const int NpcTroopReserve = 3;
 
         [SerializeField, Min(30)] int matchDurationSeconds = 300;
+        [SerializeField, Range(1, 2)] int turretBaseCount = 2;
 
         sealed class BaseState {
             public Vector2 position;
@@ -81,6 +57,10 @@ namespace Universes.UniverseData.dot_invaders {
             public int pendingTroops;
             public float actionTimer;
             public float productionDelay;
+            public bool isTurret;
+            public float turretCooldown;
+            public int shotSequence;
+            public Vector2 shotPosition;
         }
 
         sealed class DotState {
@@ -184,6 +164,7 @@ namespace Universes.UniverseData.dot_invaders {
 
             GenerateBases();
             GenerateLinks();
+            AssignTurrets();
             initialized = true;
 
             foreach (PlayerData player in PlayerData.Players.Values)
@@ -228,18 +209,28 @@ namespace Universes.UniverseData.dot_invaders {
         void GenerateLinks() {
             var edgeKeys = new HashSet<ulong>();
 
-            // Connecting every new base to an earlier base guarantees one connected graph.
-            for (int i = 1; i < bases.Count; i++) {
-                int nearest = 0;
-                float nearestDistance = float.MaxValue;
-                for (int j = 0; j < i; j++) {
-                    float distance = (bases[i].position - bases[j].position).sqrMagnitude;
-                    if (distance < nearestDistance) {
-                        nearestDistance = distance;
-                        nearest = j;
+            // Prim's minimum spanning tree keeps the board connected without the
+            // long, crossing roads introduced by random base creation order.
+            var connected = new HashSet<int> { 0 };
+            while (connected.Count < bases.Count) {
+                int source = -1, target = -1;
+                float shortest = float.MaxValue;
+                foreach (int i in connected) {
+                    for (int j = 0; j < bases.Count; j++) {
+                        if (connected.Contains(j))
+                            continue;
+                        float distance = (bases[i].position - bases[j].position).sqrMagnitude;
+                        if (distance < shortest) {
+                            shortest = distance;
+                            source = i;
+                            target = j;
+                        }
                     }
                 }
-                AddLink(i, nearest, edgeKeys);
+                if (target < 0)
+                    break;
+                AddLink(source, target, edgeKeys);
+                connected.Add(target);
             }
 
             // Add local alternatives so every base has useful neighboring choices.
@@ -253,8 +244,45 @@ namespace Universes.UniverseData.dot_invaders {
                     (bases[i].position - bases[a].position).sqrMagnitude.CompareTo(
                         (bases[i].position - bases[b].position).sqrMagnitude));
 
-                for (int j = 0; j < Mathf.Min(3, neighbors.Count); j++)
-                    AddLink(i, neighbors[j], edgeKeys);
+                for (int j = 0; j < Mathf.Min(2, neighbors.Count); j++) {
+                    int neighbor = neighbors[j];
+                    if (Vector2.Distance(bases[i].position, bases[neighbor].position) <= 40f &&
+                        !CrossesLink(i, neighbor))
+                        AddLink(i, neighbor, edgeKeys);
+                }
+            }
+        }
+
+        bool CrossesLink(int a, int b) {
+            static float Cross(Vector2 u, Vector2 v) => u.x * v.y - u.y * v.x;
+            Vector2 start = bases[a].position, end = bases[b].position;
+            foreach (Vector2Int link in links) {
+                if (link.x == a || link.x == b || link.y == a || link.y == b)
+                    continue;
+                Vector2 c = bases[link.x].position, d = bases[link.y].position;
+                if (Cross(end - start, c - start) * Cross(end - start, d - start) < 0f &&
+                    Cross(d - c, start - c) * Cross(d - c, end - c) < 0f)
+                    return true;
+            }
+            return false;
+        }
+
+        void AssignTurrets() {
+            // Two separated objectives near the middle of each half of the board.
+            int count = Mathf.Clamp(turretBaseCount, 1, 2);
+            for (int t = 0; t < count; t++) {
+                Vector2 objective = new Vector2(count == 1 ? 0f : (t == 0 ? -35f : 35f), 0f);
+                int best = -1;
+                float distance = float.MaxValue;
+                for (int i = 0; i < bases.Count; i++) {
+                    float candidate = (bases[i].position - objective).sqrMagnitude;
+                    if (!bases[i].isTurret && candidate < distance) {
+                        best = i;
+                        distance = candidate;
+                    }
+                }
+                if (best >= 0)
+                    bases[best].isTurret = true;
             }
         }
 
@@ -337,7 +365,7 @@ namespace Universes.UniverseData.dot_invaders {
             float bestDistance = float.MinValue;
 
             for (int i = 0; i < bases.Count; i++) {
-                if (bases[i].teamId >= 0)
+                if (bases[i].teamId >= 0 || bases[i].isTurret)
                     continue;
 
                 float nearestOwnedDistance = float.MaxValue;
@@ -502,13 +530,14 @@ namespace Universes.UniverseData.dot_invaders {
                     continue;
                 }
 
-                if (state.productionDelay > 0f || HasOutgoingTroops(i)) {
+                if (state.isTurret || state.troops >= DI_Rules.MaximumTroops ||
+                    state.productionDelay > 0f || HasOutgoingTroops(i)) {
                     state.actionTimer = 0f;
                     continue;
                 }
 
                 state.actionTimer += deltaTime;
-                while (state.actionTimer >= ProductionInterval) {
+                while (state.actionTimer >= ProductionInterval && state.troops < DI_Rules.MaximumTroops) {
                     state.actionTimer -= ProductionInterval;
                     state.troops++;
                 }
@@ -536,6 +565,9 @@ namespace Universes.UniverseData.dot_invaders {
         }
 
         void UpdateDots(float deltaTime) {
+            // Shoot before advancing/arriving so even a troop on its final step
+            // is still a moving target. Stationary garrisons are never queried.
+            UpdateTurrets(deltaTime);
             for (int i = 0; i < dots.Count; i++) {
                 DotState dot = dots[i];
                 float distance = Vector2.Distance(
@@ -581,10 +613,37 @@ namespace Universes.UniverseData.dot_invaders {
                 Mathf.Clamp01(dot.progress));
         }
 
+        void UpdateTurrets(float deltaTime) {
+            foreach (BaseState turret in bases) {
+                turret.turretCooldown = Mathf.Max(0f, turret.turretCooldown - deltaTime);
+                if (!turret.isTurret || turret.teamId < 0 || turret.turretCooldown > 0f)
+                    continue;
+
+                int target = -1;
+                float nearest = DI_Rules.TurretRange * DI_Rules.TurretRange;
+                for (int i = 0; i < dots.Count; i++) {
+                    DotState dot = dots[i];
+                    if (dot.teamId == turret.teamId || dot.progress >= 1f)
+                        continue;
+                    float distance = (GetDotPosition(dot) - turret.position).sqrMagnitude;
+                    if (distance <= nearest) {
+                        nearest = distance;
+                        target = i;
+                    }
+                }
+                if (target < 0)
+                    continue;
+                turret.shotPosition = GetDotPosition(dots[target]);
+                turret.shotSequence++;
+                turret.turretCooldown = DI_Rules.TurretFireInterval;
+                dots.RemoveAt(target);
+            }
+        }
+
         void ResolveArrival(DotState dot) {
             BaseState target = bases[dot.targetBaseId];
             if (target.teamId == dot.teamId) {
-                target.troops++;
+                target.troops = Mathf.Min(DI_Rules.MaximumTroops, target.troops + 1);
                 return;
             }
 
@@ -597,6 +656,7 @@ namespace Universes.UniverseData.dot_invaders {
             target.ownerClientId = dot.ownerClientId;
             target.teamId = dot.teamId;
             target.troops = 1;
+            target.turretCooldown = DI_Rules.TurretFireInterval;
             ClearSend(target);
         }
 
@@ -775,7 +835,10 @@ namespace Universes.UniverseData.dot_invaders {
                 linkTargets = new int[linkCount],
                 dotIds = new int[dotCount],
                 dotPositions = new Vector2[dotCount],
-                dotTeams = new int[dotCount]
+                dotTeams = new int[dotCount],
+                baseTurrets = new bool[baseCount],
+                turretShotSequences = new int[baseCount],
+                turretShotPositions = new Vector2[baseCount]
             };
 
             for (int i = 0; i < baseCount; i++) {
@@ -784,6 +847,9 @@ namespace Universes.UniverseData.dot_invaders {
                 state.baseOwners[i] = bases[i].ownerClientId;
                 state.baseTeams[i] = bases[i].teamId;
                 state.basePendingTroops[i] = bases[i].pendingTroops;
+                state.baseTurrets[i] = bases[i].isTurret;
+                state.turretShotSequences[i] = bases[i].shotSequence;
+                state.turretShotPositions[i] = bases[i].shotPosition;
             }
 
             for (int i = 0; i < linkCount; i++) {
