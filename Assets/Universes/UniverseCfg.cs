@@ -13,6 +13,7 @@ namespace Universes {
         public string description;
         public string creator_playerid;
         public UniverseAccess access;
+        public bool disableDefaultCommands;
         public string GetResourcePath(string localPath) {
             return $"UniverseDataPub/{id}/{localPath}";
         }
@@ -61,7 +62,8 @@ namespace Universes {
                 title = "Dot Invaders",
                 description = "Grow your bases, send dot armies to neighboring bases, and conquer the board.",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
-                access = UniverseAccess.Public
+                access = UniverseAccess.Public,
+                disableDefaultCommands = true
             },
             new(){
                 id = "classic_horror",

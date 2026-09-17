@@ -2,8 +2,8 @@
     "name": "Universes.UniverseData.dot_invaders.Server",
     "rootNamespace": "Universes.UniverseData.dot_invaders",
     "references": [
-        "Universes.UniverseData.dot_invaders.Shared",
-        "RyanAssets.Shared.Component",
+        "GUID:47c97f93fde516d47a5cf2e5214e9a30",
+        "GUID:d10be3939e0d62e4c8925b00521e5e17",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
         "GUID:17810ac72512f5d41b3e56d099b5d894",
         "GUID:301d878e906f4e0d81e7383ad088de42",
@@ -15,7 +15,8 @@
         "GUID:fe264023cf80b5c4d970ee18f18982a1",
         "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
         "GUID:aecf8615d7e72ef4291bf847c34b8e7c",
-        "UniTask"
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:bfd322f9e92d453cb49ee5c0a75355a7"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

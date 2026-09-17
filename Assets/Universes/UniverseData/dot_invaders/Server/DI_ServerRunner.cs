@@ -35,8 +35,11 @@ namespace Universes.UniverseData.dot_invaders {
         const int WinnerGoldReward = 50;
         const float ArenaHalfWidth = 100f;
         const float ArenaHalfHeight = 74f;
+        // Keep complete base/dot visuals inside the border, not just their
+        // center points. Dots interpolate between bases, so this also bounds
+        // every route inside the same inset rectangle.
+        const float ArenaEdgeClearance = 5f;
         const float MinimumBaseSpacing = 12f;
-        const float DotSpeed = 12f;
         const float CollisionDistance = 0.75f;
         const float SnapshotInterval = 0.1f;
         const float ProductionInterval = 0.8f;
@@ -47,6 +50,8 @@ namespace Universes.UniverseData.dot_invaders {
 
         [SerializeField, Min(30)] int matchDurationSeconds = 300;
         [SerializeField, Range(1, 2)] int turretBaseCount = 2;
+        [SerializeField, Range(3, 8)] int nearbyPathsPerBase = 6;
+        [SerializeField, Min(12f)] float maximumLocalPathLength = 65f;
 
         sealed class BaseState {
             public Vector2 position;
@@ -61,6 +66,7 @@ namespace Universes.UniverseData.dot_invaders {
             public float turretCooldown;
             public int shotSequence;
             public Vector2 shotPosition;
+            public int[] pendingRoute;
         }
 
         sealed class DotState {
@@ -70,6 +76,8 @@ namespace Universes.UniverseData.dot_invaders {
             public int ownerClientId;
             public int teamId;
             public float progress;
+            public int[] route;
+            public int routeIndex;
         }
 
         sealed class NpcTeamState {
@@ -95,12 +103,18 @@ namespace Universes.UniverseData.dot_invaders {
         bool initialized;
         bool matchInProgress;
         bool hadHumanParticipant;
+        float npcIntelligence = DI_Rules.DefaultNPCIntelligence;
+        float turretRange = DI_Rules.DefaultTurretRange;
+        float turretFireRate = DI_Rules.DefaultTurretFireRate;
+        int maxCapacity = DI_Rules.DefaultMaxCapacity;
+        float moveSpeed = DI_Rules.DefaultMoveSpeed;
 
         protected override void Awake() {
             base.Awake();
             ServerPlayerCharacter.CanSpawnFunction = _ => false;
             InstanceFinder.ServerManager.RegisterBroadcast<DI_SendRequest>(OnSendRequest, true);
             PlayerData.OnPlayerRemoved += OnPlayerRemoved;
+            DI_Commands.Register(this);
         }
 
         protected override async UniTask StartAsync(System.Threading.CancellationToken token) {
@@ -182,8 +196,10 @@ namespace Universes.UniverseData.dot_invaders {
 
             while (bases.Count < BaseCount && attempts++ < 5000) {
                 var candidate = new Vector2(
-                    Mathf.Lerp(-ArenaHalfWidth, ArenaHalfWidth, (float)random.NextDouble()),
-                    Mathf.Lerp(-ArenaHalfHeight, ArenaHalfHeight, (float)random.NextDouble()));
+                    Mathf.Lerp(-ArenaHalfWidth + ArenaEdgeClearance, ArenaHalfWidth - ArenaEdgeClearance,
+                        (float)random.NextDouble()),
+                    Mathf.Lerp(-ArenaHalfHeight + ArenaEdgeClearance, ArenaHalfHeight - ArenaEdgeClearance,
+                        (float)random.NextDouble()));
 
                 bool overlaps = false;
                 for (int i = 0; i < bases.Count; i++) {
@@ -233,7 +249,8 @@ namespace Universes.UniverseData.dot_invaders {
                 connected.Add(target);
             }
 
-            // Add local alternatives so every base has useful neighboring choices.
+            // Dense local alternatives; the spanning tree still connects any isolated
+            // clusters. Crossings are allowed, but roads cannot pass through a base.
             for (int i = 0; i < bases.Count; i++) {
                 var neighbors = new List<int>();
                 for (int j = 0; j < bases.Count; j++) {
@@ -244,24 +261,23 @@ namespace Universes.UniverseData.dot_invaders {
                     (bases[i].position - bases[a].position).sqrMagnitude.CompareTo(
                         (bases[i].position - bases[b].position).sqrMagnitude));
 
-                for (int j = 0; j < Mathf.Min(2, neighbors.Count); j++) {
+                for (int j = 0; j < Mathf.Min(nearbyPathsPerBase, neighbors.Count); j++) {
                     int neighbor = neighbors[j];
-                    if (Vector2.Distance(bases[i].position, bases[neighbor].position) <= 40f &&
-                        !CrossesLink(i, neighbor))
+                    if (Vector2.Distance(bases[i].position, bases[neighbor].position) <= maximumLocalPathLength &&
+                        !PassesThroughBase(i, neighbor))
                         AddLink(i, neighbor, edgeKeys);
                 }
             }
         }
 
-        bool CrossesLink(int a, int b) {
-            static float Cross(Vector2 u, Vector2 v) => u.x * v.y - u.y * v.x;
+        bool PassesThroughBase(int a, int b) {
             Vector2 start = bases[a].position, end = bases[b].position;
-            foreach (Vector2Int link in links) {
-                if (link.x == a || link.x == b || link.y == a || link.y == b)
+            Vector2 direction = end - start;
+            for (int i = 0; i < bases.Count; i++) {
+                if (i == a || i == b)
                     continue;
-                Vector2 c = bases[link.x].position, d = bases[link.y].position;
-                if (Cross(end - start, c - start) * Cross(end - start, d - start) < 0f &&
-                    Cross(d - c, start - c) * Cross(d - c, end - c) < 0f)
+                float along = Mathf.Clamp01(Vector2.Dot(bases[i].position - start, direction) / Mathf.Max(0.001f, direction.sqrMagnitude));
+                if ((bases[i].position - (start + direction * along)).sqrMagnitude < 4.5f * 4.5f)
                     return true;
             }
             return false;
@@ -326,6 +342,7 @@ namespace Universes.UniverseData.dot_invaders {
             home.troops = StartingTroops;
             home.pendingTarget = -1;
             home.pendingTroops = 0;
+            home.pendingRoute = null;
             home.actionTimer = 0f;
             home.productionDelay = 0f;
             hadHumanParticipant = true;
@@ -354,6 +371,7 @@ namespace Universes.UniverseData.dot_invaders {
                     state.troops = NpcStartingTroops;
                     state.pendingTarget = -1;
                     state.pendingTroops = 0;
+                    state.pendingRoute = null;
                     state.actionTimer = 0f;
                     state.productionDelay = 0f;
                 }
@@ -402,6 +420,7 @@ namespace Universes.UniverseData.dot_invaders {
                 state.troops = NeutralTroops;
                 state.pendingTarget = -1;
                 state.pendingTroops = 0;
+                state.pendingRoute = null;
                 state.actionTimer = 0f;
                 state.productionDelay = 0f;
             }
@@ -422,19 +441,18 @@ namespace Universes.UniverseData.dot_invaders {
                 return;
 
             if (request.targetBaseId == -1) {
-                if (source.pendingTroops > 0) {
-                    ClearSend(source);
-                    BroadcastState();
-                }
+                CancelOrders(request.sourceBaseId, connection.ClientId);
+                BroadcastState();
                 return;
             }
 
-            if (request.targetBaseId < 0 || request.targetBaseId >= bases.Count ||
-                !AreNeighbors(request.sourceBaseId, request.targetBaseId))
+            int[] route = request.route ?? new[] { request.sourceBaseId, request.targetBaseId };
+            if (!IsValidRoute(request.sourceBaseId, request.targetBaseId, route))
                 return;
 
             if (source.pendingTroops > 0) {
-                source.pendingTarget = request.targetBaseId;
+                source.pendingTarget = route[1];
+                source.pendingRoute = (int[])route.Clone();
                 BroadcastState();
                 return;
             }
@@ -442,8 +460,30 @@ namespace Universes.UniverseData.dot_invaders {
             if (source.troops <= 0)
                 return;
 
-            QueueSend(source, request.targetBaseId, source.troops);
+            QueueSend(source, route[1], source.troops);
+            source.pendingRoute = (int[])route.Clone();
             BroadcastState();
+        }
+
+        bool IsValidRoute(int source, int target, int[] route) {
+            if (route == null || route.Length < 2 || route.Length > bases.Count ||
+                route[0] != source || route[route.Length - 1] != target)
+                return false;
+            var visited = new HashSet<int>();
+            for (int i = 0; i < route.Length; i++) {
+                if (route[i] < 0 || route[i] >= bases.Count || !visited.Add(route[i]) ||
+                    i > 0 && !AreNeighbors(route[i - 1], route[i]))
+                    return false;
+            }
+            return true;
+        }
+
+        void CancelOrders(int sourceBaseId, int ownerClientId) {
+            ClearSend(bases[sourceBaseId]);
+            // Already moving troops finish their current leg, then stop routing.
+            foreach (DotState dot in dots)
+                if (dot.ownerClientId == ownerClientId && dot.route != null && dot.route[0] == sourceBaseId)
+                    dot.route = null;
         }
 
         bool AreNeighbors(int source, int target) {
@@ -468,7 +508,7 @@ namespace Universes.UniverseData.dot_invaders {
                 float bestScore = float.MinValue;
                 for (int sourceId = 0; sourceId < bases.Count; sourceId++) {
                     BaseState source = bases[sourceId];
-                    if (source.teamId != npcTeam.teamId || source.pendingTroops > 0 ||
+                    if (source.teamId != npcTeam.teamId || source.pendingTroops > 0 || HasOutgoingTroops(sourceId) ||
                         source.troops <= NpcTroopReserve)
                         continue;
 
@@ -479,8 +519,20 @@ namespace Universes.UniverseData.dot_invaders {
                             continue;
 
                         BaseState target = bases[targetId];
-                        float enemyPriority = target.ownerClientId >= 0 ? 80f : target.teamId >= 0 ? 55f : 20f;
-                        float score = enemyPriority + source.troops * 2f - target.troops * 3f + UnityEngine.Random.value * 4f;
+                        int sending = source.troops - NpcTroopReserve;
+                        int losses = EstimateTurretLosses(sourceId, targetId, npcTeam.teamId, sending);
+                        float travelTime = Vector2.Distance(source.position, target.position) / moveSpeed;
+                        // Allow for defenders trained before the first arrival. Once
+                        // attacks start, the existing production-delay rule applies.
+                        int growth = target.teamId >= 0 && !target.isTurret && target.pendingTroops == 0 && !HasOutgoingTroops(targetId)
+                            ? Mathf.Min(Mathf.Max(0, maxCapacity - target.troops), Mathf.CeilToInt(travelTime / ProductionInterval)) : 0;
+                        int survivors = sending - losses;
+                        if (survivors < target.troops + growth + 1 + NpcTroopReserve)
+                            continue;
+                        float enemyPriority = target.isTurret ? 90f : target.ownerClientId >= 0 ? 80f : target.teamId >= 0 ? 55f : 20f;
+                        float strategicScore = enemyPriority + survivors * 2f - target.troops * 3f - losses * 4f - travelTime;
+                        float intelligence = npcIntelligence / 100f;
+                        float score = Mathf.Lerp(UnityEngine.Random.Range(0f, 100f), strategicScore, intelligence);
                         if (score <= bestScore)
                             continue;
 
@@ -493,8 +545,75 @@ namespace Universes.UniverseData.dot_invaders {
                 if (bestSource >= 0) {
                     BaseState source = bases[bestSource];
                     QueueSend(source, bestTarget, source.troops - NpcTroopReserve);
+                } else
+                    TryConsolidateNpcTroops(npcTeam.teamId);
+            }
+        }
+
+        int EstimateTurretLosses(int sourceId, int targetId, int teamId, int troopCount) {
+            Vector2 start = bases[sourceId].position;
+            Vector2 delta = bases[targetId].position - start;
+            float length = delta.magnitude;
+            if (length < 0.001f || troopCount <= 0)
+                return 0;
+            Vector2 direction = delta / length;
+            int losses = 0;
+            foreach (BaseState turret in bases) {
+                if (!turret.isTurret || turret.teamId >= 0 && turret.teamId == teamId)
+                    continue;
+                Vector2 offset = turret.position - start;
+                float center = Vector2.Dot(offset, direction);
+                float perpendicularSquared = Mathf.Max(0f, offset.sqrMagnitude - center * center);
+                float radiusSquared = turretRange * turretRange;
+                if (perpendicularSquared >= radiusSquared)
+                    continue;
+                float halfChord = Mathf.Sqrt(radiusSquared - perpendicularSquared);
+                float enter = Mathf.Max(0f, center - halfChord);
+                float leave = Mathf.Min(length, center + halfChord);
+                if (leave <= enter)
+                    continue;
+                // A stream remains exposed between its first and last troop.
+                // Assume every hostile/neutral turret can concentrate on this wave.
+                float exposure = (leave - enter) / moveSpeed + (troopCount - 1) * SendInterval;
+                losses += 1 + Mathf.FloorToInt(exposure / turretFireRate);
+            }
+            return Mathf.Min(troopCount, losses);
+        }
+
+        void TryConsolidateNpcTroops(int teamId) {
+            int bestSource = -1, bestTarget = -1;
+            float bestScore = float.MinValue;
+            for (int i = 0; i < bases.Count; i++) {
+                BaseState source = bases[i];
+                if (source.teamId != teamId || source.pendingTroops > 0 || HasOutgoingTroops(i) || source.troops <= NpcTroopReserve + 2)
+                    continue;
+                foreach (Vector2Int link in links) {
+                    int targetId = link.x == i ? link.y : link.y == i ? link.x : -1;
+                    if (targetId < 0)
+                        continue;
+                    BaseState target = bases[targetId];
+                    // Pool into the stronger productive base, preventing back-and-forth
+                    // transfers. Reinforcement stacking can overcome overlapping turrets.
+                    if (target.teamId != teamId || target.isTurret || target.pendingTroops > 0 ||
+                        target.troops < source.troops || target.troops == source.troops && targetId > i)
+                        continue;
+                    int sending = source.troops - NpcTroopReserve;
+                    int losses = EstimateTurretLosses(i, targetId, teamId, sending);
+                    if (losses > sending / 4)
+                        continue;
+                    bool onFront = false;
+                    foreach (Vector2Int targetLink in links) {
+                        int enemy = targetLink.x == targetId ? targetLink.y : targetLink.y == targetId ? targetLink.x : -1;
+                        if (enemy >= 0 && bases[enemy].teamId != teamId) { onFront = true; break; }
+                    }
+                    if (!onFront)
+                        continue;
+                    float score = sending - losses * 4f - Vector2.Distance(source.position, target.position) * 0.1f;
+                    if (score > bestScore) { bestScore = score; bestSource = i; bestTarget = targetId; }
                 }
             }
+            if (bestSource >= 0)
+                QueueSend(bases[bestSource], bestTarget, bases[bestSource].troops - NpcTroopReserve);
         }
 
         void UpdateBases(float deltaTime) {
@@ -518,7 +637,9 @@ namespace Universes.UniverseData.dot_invaders {
                             sourceBaseId = i,
                             targetBaseId = state.pendingTarget,
                             ownerClientId = state.ownerClientId,
-                            teamId = state.teamId
+                            teamId = state.teamId,
+                            route = state.pendingRoute,
+                            routeIndex = 1
                         });
                         state.troops--;
                         state.pendingTroops--;
@@ -530,14 +651,14 @@ namespace Universes.UniverseData.dot_invaders {
                     continue;
                 }
 
-                if (state.isTurret || state.troops >= DI_Rules.MaximumTroops ||
+                if (state.isTurret || state.troops >= maxCapacity ||
                     state.productionDelay > 0f || HasOutgoingTroops(i)) {
                     state.actionTimer = 0f;
                     continue;
                 }
 
                 state.actionTimer += deltaTime;
-                while (state.actionTimer >= ProductionInterval && state.troops < DI_Rules.MaximumTroops) {
+                while (state.actionTimer >= ProductionInterval && state.troops < maxCapacity) {
                     state.actionTimer -= ProductionInterval;
                     state.troops++;
                 }
@@ -556,12 +677,14 @@ namespace Universes.UniverseData.dot_invaders {
             source.pendingTarget = targetBaseId;
             source.pendingTroops = Mathf.Clamp(troopCount, 0, source.troops);
             source.actionTimer = 0f;
+            source.pendingRoute = null;
         }
 
         static void ClearSend(BaseState state) {
             state.pendingTarget = -1;
             state.pendingTroops = 0;
             state.actionTimer = 0f;
+            state.pendingRoute = null;
         }
 
         void UpdateDots(float deltaTime) {
@@ -573,7 +696,7 @@ namespace Universes.UniverseData.dot_invaders {
                 float distance = Vector2.Distance(
                     bases[dot.sourceBaseId].position,
                     bases[dot.targetBaseId].position);
-                dot.progress += DotSpeed * deltaTime / Mathf.Max(0.01f, distance);
+                dot.progress += moveSpeed * deltaTime / Mathf.Max(0.01f, distance);
             }
 
             var destroyed = new HashSet<int>();
@@ -600,10 +723,24 @@ namespace Universes.UniverseData.dot_invaders {
                 if (destroyed.Contains(i)) {
                     dots.RemoveAt(i);
                 } else if (dot.progress >= 1f) {
-                    ResolveArrival(dot);
-                    dots.RemoveAt(i);
+                    if (!ContinueRoute(dot)) {
+                        ResolveArrival(dot);
+                        dots.RemoveAt(i);
+                    }
                 }
             }
+        }
+
+        bool ContinueRoute(DotState dot) {
+            // Hostile intermediate bases must be captured before later troops
+            // can pass through. Friendly waypoints do not consume garrison space.
+            if (bases[dot.targetBaseId].teamId != dot.teamId || dot.route == null ||
+                dot.routeIndex + 1 >= dot.route.Length)
+                return false;
+            dot.sourceBaseId = dot.targetBaseId;
+            dot.targetBaseId = dot.route[++dot.routeIndex];
+            dot.progress = 0f;
+            return true;
         }
 
         Vector2 GetDotPosition(DotState dot) {
@@ -616,14 +753,14 @@ namespace Universes.UniverseData.dot_invaders {
         void UpdateTurrets(float deltaTime) {
             foreach (BaseState turret in bases) {
                 turret.turretCooldown = Mathf.Max(0f, turret.turretCooldown - deltaTime);
-                if (!turret.isTurret || turret.teamId < 0 || turret.turretCooldown > 0f)
+                if (!turret.isTurret || turret.turretCooldown > 0f)
                     continue;
 
                 int target = -1;
-                float nearest = DI_Rules.TurretRange * DI_Rules.TurretRange;
+                float nearest = turretRange * turretRange;
                 for (int i = 0; i < dots.Count; i++) {
                     DotState dot = dots[i];
-                    if (dot.teamId == turret.teamId || dot.progress >= 1f)
+                    if (turret.teamId >= 0 && dot.teamId == turret.teamId || dot.progress >= 1f)
                         continue;
                     float distance = (GetDotPosition(dot) - turret.position).sqrMagnitude;
                     if (distance <= nearest) {
@@ -635,7 +772,7 @@ namespace Universes.UniverseData.dot_invaders {
                     continue;
                 turret.shotPosition = GetDotPosition(dots[target]);
                 turret.shotSequence++;
-                turret.turretCooldown = DI_Rules.TurretFireInterval;
+                turret.turretCooldown = turretFireRate;
                 dots.RemoveAt(target);
             }
         }
@@ -643,7 +780,7 @@ namespace Universes.UniverseData.dot_invaders {
         void ResolveArrival(DotState dot) {
             BaseState target = bases[dot.targetBaseId];
             if (target.teamId == dot.teamId) {
-                target.troops = Mathf.Min(DI_Rules.MaximumTroops, target.troops + 1);
+                target.troops++;
                 return;
             }
 
@@ -656,7 +793,7 @@ namespace Universes.UniverseData.dot_invaders {
             target.ownerClientId = dot.ownerClientId;
             target.teamId = dot.teamId;
             target.troops = 1;
-            target.turretCooldown = DI_Rules.TurretFireInterval;
+            target.turretCooldown = turretFireRate;
             ClearSend(target);
         }
 
@@ -826,6 +963,11 @@ namespace Universes.UniverseData.dot_invaders {
                 secondsRemaining = secondsRemaining,
                 matchEnded = initialized && !matchInProgress,
                 winningTeamId = winningTeamId,
+                npcIntelligence = npcIntelligence,
+                turretRange = turretRange,
+                turretFireRate = turretFireRate,
+                maxCapacity = maxCapacity,
+                moveSpeed = moveSpeed,
                 basePositions = new Vector2[baseCount],
                 baseTroops = new int[baseCount],
                 baseOwners = new int[baseCount],
@@ -838,7 +980,8 @@ namespace Universes.UniverseData.dot_invaders {
                 dotTeams = new int[dotCount],
                 baseTurrets = new bool[baseCount],
                 turretShotSequences = new int[baseCount],
-                turretShotPositions = new Vector2[baseCount]
+                turretShotPositions = new Vector2[baseCount],
+                baseRoutes = new DI_Route[baseCount]
             };
 
             for (int i = 0; i < baseCount; i++) {
@@ -850,6 +993,15 @@ namespace Universes.UniverseData.dot_invaders {
                 state.baseTurrets[i] = bases[i].isTurret;
                 state.turretShotSequences[i] = bases[i].shotSequence;
                 state.turretShotPositions[i] = bases[i].shotPosition;
+                state.baseRoutes[i] = new DI_Route { baseIds = bases[i].pendingRoute };
+            }
+
+            foreach (DotState dot in dots) {
+                if (dot.route == null || dot.route.Length < 2)
+                    continue;
+                int source = dot.route[0];
+                if (bases[source].ownerClientId == dot.ownerClientId && state.baseRoutes[source].baseIds == null)
+                    state.baseRoutes[source] = new DI_Route { baseIds = dot.route };
             }
 
             for (int i = 0; i < linkCount; i++) {
@@ -864,6 +1016,31 @@ namespace Universes.UniverseData.dot_invaders {
             }
 
             return state;
+        }
+
+        internal void SetNPCIntelligence(float value) {
+            npcIntelligence = Mathf.Clamp(value, 0f, 100f);
+            BroadcastState();
+        }
+
+        internal void SetTurretRange(float value) {
+            turretRange = Mathf.Max(0f, value);
+            BroadcastState();
+        }
+
+        internal void SetTurretFireRate(float value) {
+            turretFireRate = Mathf.Max(0.01f, value);
+            BroadcastState();
+        }
+
+        internal void SetMaxCapacity(int value) {
+            maxCapacity = Mathf.Max(1, value);
+            BroadcastState();
+        }
+
+        internal void SetMoveSpeed(float value) {
+            moveSpeed = Mathf.Max(0.01f, value);
+            BroadcastState();
         }
 
         protected override void Reset() {
@@ -886,6 +1063,7 @@ namespace Universes.UniverseData.dot_invaders {
         }
 
         protected override void OnDestroy() {
+            DI_Commands.Unregister();
             if (InstanceFinder.ServerManager != null)
                 InstanceFinder.ServerManager.UnregisterBroadcast<DI_SendRequest>(OnSendRequest);
             PlayerData.OnPlayerRemoved -= OnPlayerRemoved;

@@ -32,6 +32,10 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Min(0f)] float pickPaddingPixels = 8f;
         [SerializeField, Min(1f)] float neighborSnapRadiusPixels = 38f;
 
+        [Header("Road Visibility")]
+        [SerializeField] Color roadColor = new Color(0.35f, 0.45f, 0.6f);
+        [SerializeField, Min(0.05f)] float roadWidth = 0.3f;
+
         readonly List<DI_BaseView> baseViews = new();
         readonly List<DI_LinkView> linkViews = new();
         readonly Dictionary<int, DI_DotView> dotViews = new();
@@ -45,6 +49,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         DI_HomeBaseTeleporter homeBaseTeleporter;
         int dragSource = -1;
         int hoveredBase = -1;
+        int[] previewRoute = System.Array.Empty<int>();
+        int routeTarget = -1;
         bool registered;
         bool focusedOnHome;
 
@@ -90,6 +96,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
 
             state = next;
+            routeTarget = -1;
             SynchronizeViews();
 
             if (dragSource >= 0 &&
@@ -123,7 +130,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     ? state.turretShotSequences[i] : 0;
                 Vector3 shotPosition = state.turretShotPositions != null && i < state.turretShotPositions.Length
                     ? ToWorld(state.turretShotPositions[i], 0.8f) : Vector3.zero;
-                baseViews[i].SetDefense(isTurret, state.baseTroops[i], shot, shotPosition);
+                baseViews[i].SetDefense(isTurret, state.baseTroops[i], shot, shotPosition,
+                    state.turretRange, state.maxCapacity);
             }
 
             int linkCount = state.linkSources == null || state.linkTargets == null
@@ -142,8 +150,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 linkViews[i].SetLine(
                     ToWorld(state.basePositions[source], 0.08f),
                     ToWorld(state.basePositions[target], 0.08f),
-                    new Color(0.12f, 0.16f, 0.22f, 1f),
-                    0.09f);
+                    roadColor,
+                    roadWidth);
             }
 
             int dotCount = state.dotIds == null || state.dotPositions == null || state.dotTeams == null
@@ -198,7 +206,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
 
             int minutes = Mathf.Max(0, state.secondsRemaining) / 60;
             int seconds = Mathf.Max(0, state.secondsRemaining) % 60;
-            boardTitle.text = $"DOT INVADERS  -  {minutes}:{seconds:00}  -  DRAG TO RETARGET / RMB TO STOP";
+            boardTitle.text = $"DOT INVADERS  -  {minutes}:{seconds:00}  -  DRAG TO ROUTE / ESC CANCEL / RMB STOP";
         }
 
         static string GetTeamName(int teamId) {
@@ -241,15 +249,17 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
 
             Vector2 screenPosition = mouse.position.ReadValue();
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) {
+                CancelDrag();
+                return;
+            }
             if (mouse.rightButton.wasPressedThisFrame && dragSource >= 0) {
                 CancelDrag();
                 return;
             }
             if (mouse.rightButton.wasPressedThisFrame && TryFindBase(screenPosition, out DI_BaseView stoppedBase, true) &&
                 stoppedBase.BaseId >= 0 && stoppedBase.BaseId < state.baseOwners.Length &&
-                state.baseOwners[stoppedBase.BaseId] == state.yourClientId &&
-                state.basePendingTroops != null && stoppedBase.BaseId < state.basePendingTroops.Length &&
-                state.basePendingTroops[stoppedBase.BaseId] > 0) {
+                state.baseOwners[stoppedBase.BaseId] == state.yourClientId) {
                 SendRequest(stoppedBase.BaseId, -1);
                 if (dragSource == stoppedBase.BaseId)
                     CancelDrag();
@@ -277,15 +287,22 @@ namespace Universes.UniverseData.dot_invaders.Client {
             Vector3 start = ToWorld(state.basePositions[dragSource], 0.2f);
             Vector3 end = TryGetBoardPoint(screenPosition, out Vector3 boardPoint) ? boardPoint : start;
             bool validTarget = TryFindBase(screenPosition, out DI_BaseView hovered, false, true) &&
-                               hovered.BaseId != dragSource && AreNeighbors(dragSource, hovered.BaseId);
+                               hovered.BaseId != dragSource;
+            int targetId = validTarget ? hovered.BaseId : -1;
+            if (routeTarget != targetId) {
+                routeTarget = targetId;
+                previewRoute = DI_Rules.FindRoute(state.basePositions, state.linkSources, state.linkTargets, dragSource, targetId);
+            }
+            validTarget &= previewRoute.Length >= 2;
             if (validTarget)
                 end = ToWorld(state.basePositions[hovered.BaseId], 0.2f);
             hoveredBase = validTarget ? hovered.BaseId : -1;
             RefreshInteraction();
 
-            dragLink?.SetLine(start, end,
-                validTarget ? GetTeamColor(state.baseTeams[dragSource]) : new Color(0.75f, 0.8f, 0.9f),
-                0.28f);
+            if (validTarget)
+                dragLink?.SetRoute(state.basePositions, previewRoute, Color.Lerp(GetTeamColor(state.baseTeams[dragSource]), Color.white, 0.4f), 0.3f);
+            else
+                dragLink?.SetLine(start, end, new Color(0.75f, 0.8f, 0.9f), 0.18f);
 
             if (!mouse.leftButton.wasReleasedThisFrame) {
                 if (!mouse.leftButton.isPressed)
@@ -294,15 +311,16 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
 
             if (validTarget) {
-                SendRequest(dragSource, hovered.BaseId);
+                SendRequest(dragSource, hovered.BaseId, previewRoute);
             }
             CancelDrag();
         }
 
-        static void SendRequest(int sourceBaseId, int targetBaseId) {
+        static void SendRequest(int sourceBaseId, int targetBaseId, int[] route = null) {
             InstanceFinder.ClientManager.Broadcast(new DI_SendRequest {
                 sourceBaseId = sourceBaseId,
-                targetBaseId = targetBaseId
+                targetBaseId = targetBaseId,
+                route = route
             });
         }
 
@@ -327,7 +345,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
         }
 
-        bool TryFindBase(Vector2 screenPosition, out DI_BaseView baseView, bool ownedOnly = false, bool neighborsOnly = false) {
+        bool TryFindBase(Vector2 screenPosition, out DI_BaseView baseView, bool ownedOnly = false, bool targetOnly = false) {
             baseView = null;
             Camera camera = Camera.main;
             if (camera == null)
@@ -336,14 +354,14 @@ namespace Universes.UniverseData.dot_invaders.Client {
             foreach (DI_BaseView candidate in baseViews) {
                 int id = candidate.BaseId;
                 if (!IsValidBase(id) || ownedOnly && state.baseOwners[id] != state.yourClientId ||
-                    neighborsOnly && (id == dragSource || !AreNeighbors(dragSource, id)))
+                    targetOnly && id == dragSource)
                     continue;
                 Vector3 center = camera.WorldToScreenPoint(candidate.transform.position);
                 if (center.z <= 0f)
                     continue;
                 Vector3 edge = camera.WorldToScreenPoint(candidate.transform.position + camera.transform.right * candidate.PickRadius);
                 float radius = Mathf.Max(minimumPickRadiusPixels, Vector2.Distance(center, edge) + pickPaddingPixels);
-                if (neighborsOnly)
+                if (targetOnly)
                     radius = Mathf.Max(radius, neighborSnapRadiusPixels);
                 float distance = (screenPosition - (Vector2)center).sqrMagnitude;
                 if (distance <= radius * radius && distance < nearestDistance) {
@@ -384,6 +402,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 baseViews[dragSource].SetSelected(false);
             dragSource = -1;
             hoveredBase = -1;
+            routeTarget = -1;
+            previewRoute = System.Array.Empty<int>();
             if (dragLink != null)
                 dragLink.gameObject.SetActive(false);
             RefreshInteraction();
@@ -392,13 +412,17 @@ namespace Universes.UniverseData.dot_invaders.Client {
         void RefreshInteraction() {
             for (int i = 0; i < baseViews.Count; i++)
                 baseViews[i].SetInteraction(i == dragSource,
-                    dragSource >= 0 && AreNeighbors(dragSource, i), i == hoveredBase);
+                    dragSource >= 0 && (AreNeighbors(dragSource, i) || System.Array.IndexOf(previewRoute, i) >= 0), i == hoveredBase);
 
             for (int i = 0; i < linkViews.Count; i++) {
                 int source = state.linkSources[i], target = state.linkTargets[i];
                 if (!IsValidBase(source) || !IsValidBase(target))
                     continue;
                 bool highlighted = dragSource >= 0 && (source == dragSource || target == dragSource);
+                bool onRoute = RouteContainsLink(previewRoute, source, target);
+                bool queued = false;
+                if (dragSource < 0 && hoveredBase >= 0 && state.baseRoutes != null && hoveredBase < state.baseRoutes.Length)
+                    queued = RouteContainsLink(state.baseRoutes[hoveredBase].baseIds, source, target);
                 Vector3 start = ToWorld(state.basePositions[source], 0.12f);
                 Vector3 end = ToWorld(state.basePositions[target], 0.12f);
                 Vector3 direction = (end - start).normalized;
@@ -406,9 +430,19 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 start += direction * baseViews[source].PickRadius;
                 end -= direction * baseViews[target].PickRadius;
                 linkViews[i].SetLine(start, end,
-                    highlighted ? new Color(0.9f, 0.7f, 0.2f) : new Color(0.12f, 0.16f, 0.22f),
-                    highlighted ? 0.18f : 0.09f);
+                    onRoute ? Color.white : queued ? new Color(0.3f, 0.85f, 1f) :
+                        highlighted ? new Color(0.9f, 0.7f, 0.2f) : roadColor,
+                    roadWidth * (onRoute || queued ? 1.6f : highlighted ? 1.3f : 1f));
             }
+        }
+
+        static bool RouteContainsLink(int[] route, int source, int target) {
+            if (route == null)
+                return false;
+            for (int i = 1; i < route.Length; i++)
+                if (route[i - 1] == source && route[i] == target || route[i - 1] == target && route[i] == source)
+                    return true;
+            return false;
         }
 
         void OnDisable() => CancelDrag();

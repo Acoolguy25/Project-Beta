@@ -10,6 +10,7 @@ using RyanAssets.Shared.Requests;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Global;
 using UnityEngine;
+using RyanAssets.Server.ServerCore;
 
 namespace RyanAssets.Commands.Server {
     public static class ServerCommandService {
@@ -61,6 +62,9 @@ namespace RyanAssets.Commands.Server {
         }
 
         static void RegisterAllGameCommands() {
+            if (ServerBootStrap.universeCfg.disableDefaultCommands)
+                return;
+
             foreach (CommandConfig config in SharedCommands.AllGameCommands) {
                 RegisterCommand(config);
             }
