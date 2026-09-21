@@ -49,6 +49,8 @@ namespace Universes.UniverseData.war_valley.Server
         [SerializeField]
         private WV_Flag _flagPrefab;
         [SerializeField]
+        private WV_Economy _economyPrefab;
+        [SerializeField]
         private int WaveNumber = -1;
         [SerializeField]
         private static Vector3[] NPCSpawnLocs = {
@@ -65,6 +67,9 @@ namespace Universes.UniverseData.war_valley.Server
 
         private Vector3 WaveSpawnLocation;
         private WV_Flag spawnedFlag;
+        private WV_Economy spawnedEconomy;
+        private WV_ServerEconomy serverEconomy;
+        private WV_ServerArmy serverArmy;
 
         public WV_ActiveGameState GameState;
         protected override void Awake() {
@@ -81,6 +86,12 @@ namespace Universes.UniverseData.war_valley.Server
                 if (structure != null && structure.NetworkObject != null)
                     SharedGlobalEvents.Instance.Builds.Add(structure.NetworkObject.PrefabId);
             }
+
+            // The build economy and the unit roster are server-only behaviours, so they are attached
+            // here rather than serialized on the runner prefab, which a client build also loads.
+            serverEconomy = gameObject.AddComponent<WV_ServerEconomy>();
+            serverArmy = gameObject.AddComponent<WV_ServerArmy>();
+            WV_ServerCommand.Register();
         }
         bool CanSpawnFunction(NetworkConnection conn) {
             //PlayerData.GetPlayerData(conn)
@@ -107,7 +118,14 @@ namespace Universes.UniverseData.war_valley.Server
         }
         protected override void OnPlayerAdded(PlayerData playerData) {
             base.OnPlayerAdded(playerData);
-            playerData.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
+            // Every commander fights on the same real team, so ownership is carried by the display
+            // half of the existing team setting rather than by a second parallel colour field. The
+            // player list already tints names by display team, so a base and its owner's name match.
+            int clientId = playerData.Owner != null && playerData.Owner.IsValid
+                ? playerData.Owner.ClientId
+                : WV_Owned.NoOwner;
+            playerData.SetPlayerTeam(
+                new TeamConfig(TeamColor.Blue, WV_Rules.GetCommanderColor(clientId)));
             playerData.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
         }
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -147,6 +165,11 @@ namespace Universes.UniverseData.war_valley.Server
         protected override async UniTask StartAsync(CancellationToken token) {
             await base.StartAsync(token);
 
+            // Enabled before the economy opens accounts so the column exists by the time balances
+            // are first published, and so players joining later are given the matching row.
+            SetLeaderboardEnabled(WV_Rules.CoinsLeaderboard, true);
+
+            SpawnEconomy();
             SpawnFlag();
 
             SharedGlobalEvents.Instance.CanBuild.Value = true;
@@ -190,9 +213,7 @@ namespace Universes.UniverseData.war_valley.Server
             }
 
             GameObject clone = Instantiate(_flagPrefab.gameObject, FlagSpawnPosition, Quaternion.identity);
-            Scene startScene = SceneManager.GetSceneByName("war_valley_start");
-            if (startScene.IsValid() && startScene.isLoaded)
-                SceneManager.MoveGameObjectToScene(clone, startScene);
+            MoveToStartScene(clone);
             spawnedFlag = clone.GetComponent<WV_Flag>();
             InstanceFinder.ServerManager.Spawn(clone);
         }
@@ -210,7 +231,47 @@ namespace Universes.UniverseData.war_valley.Server
 
         protected override void Reset() {
             DespawnFlag();
+            DespawnEconomy();
             base.Reset();
+        }
+
+        protected override void OnDestroy() {
+            WV_ServerCommand.Unregister();
+            base.OnDestroy();
+        }
+
+        private void SpawnEconomy() {
+            DespawnEconomy();
+            if (_economyPrefab == null) {
+                Debug.LogError($"{nameof(WV_ServerRunner)} is missing its economy prefab; nobody can build.");
+                return;
+            }
+
+            GameObject clone = Instantiate(_economyPrefab.gameObject);
+            MoveToStartScene(clone);
+            spawnedEconomy = clone.GetComponent<WV_Economy>();
+            InstanceFinder.ServerManager.Spawn(clone);
+
+            // Accounts are opened only once the ledger exists, so players who joined during the
+            // lobby get their starting funds instead of an empty wallet.
+            serverEconomy.ResetAccounts();
+        }
+
+        private void DespawnEconomy() {
+            if (spawnedEconomy == null)
+                return;
+
+            if (InstanceFinder.IsServerStarted && spawnedEconomy.IsSpawned)
+                spawnedEconomy.Despawn();
+            else
+                Destroy(spawnedEconomy.gameObject);
+            spawnedEconomy = null;
+        }
+
+        private static void MoveToStartScene(GameObject clone) {
+            Scene startScene = SceneManager.GetSceneByName("war_valley_start");
+            if (startScene.IsValid() && startScene.isLoaded)
+                SceneManager.MoveGameObjectToScene(clone, startScene);
         }
     }
 }

@@ -12,6 +12,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         Renderer bodyRenderer;
         Renderer glowRenderer;
         TextMeshPro troopLabel;
+        TextMeshPro productionLabel;
+        TextMeshPro speedLabel;
         Color teamColor;
         bool owned;
         bool selected;
@@ -27,6 +29,14 @@ namespace Universes.UniverseData.dot_invaders.Client {
         float shotUntil;
         int lastShotSequence = -1;
         MaterialPropertyBlock colorBlock;
+
+        // Super base visual enhancement
+        private float superBasePulseTimer;
+        private bool isSuperBase;
+        private Vector3 originalScale;
+
+        // Speed base visual enhancement
+        private bool isSpeedBase;
 
         public float PickRadius => bodyRenderer != null
             ? Mathf.Max(bodyRenderer.bounds.extents.x, bodyRenderer.bounds.extents.z) : 3.7f;
@@ -44,25 +54,63 @@ namespace Universes.UniverseData.dot_invaders.Client {
             rangeRenderer = transform.Find("TurretRange")?.GetComponent<Renderer>();
             capacityIcon = transform.Find("CapacityIcon");
             shotLine = transform.Find("TurretShot")?.GetComponent<LineRenderer>();
+            speedLabel = transform.Find("SpeedLabel")?.GetComponent<TextMeshPro>();
+
+            // Store original scale for super base pulsing
+            originalScale = transform.localScale;
         }
 
-        public void SetState(int baseId, Vector3 position, int troops, int pendingTroops, bool isOwned, Color color) {
+        public void SetState(int baseId, Vector3 position, int troops, int pendingTroops, bool isOwned, Color color, bool isSpeedBase) {
             BaseId = baseId;
             transform.position = position;
             owned = isOwned;
             teamColor = color;
+            this.isSpeedBase = isSpeedBase;
             SetRendererColor(bodyRenderer, color);
 
             if (troopLabel != null) {
                 troopLabel.text = troops.ToString();
                 troopLabel.color = Color.white;
             }
+
+            if (speedLabel != null) {
+                speedLabel.gameObject.SetActive(isSpeedBase);
+                if (isSpeedBase) {
+                    speedLabel.text = ">> SPEED";
+                    speedLabel.color = new Color(0.55f, 0.95f, 1f);
+                }
+            }
+
             RefreshGlow();
         }
 
         public void SetSelected(bool value) {
             selected = value;
             RefreshGlow();
+        }
+
+        public void SetProduction(bool isSuperProducer, float charge, float rate, bool active, bool full) {
+            // Track if this is a super base for visual enhancement
+            isSuperBase = isSuperProducer;
+
+            if (isSuperProducer && productionLabel == null && troopLabel != null) {
+                productionLabel = Instantiate(troopLabel, transform);
+                productionLabel.name = "SuperProductionIndicator";
+                productionLabel.transform.localPosition = troopLabel.transform.localPosition + new Vector3(0f, 0f, -4f);
+                productionLabel.fontSize = troopLabel.fontSize * 0.3f;
+                productionLabel.enableAutoSizing = false;
+                productionLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                productionLabel.rectTransform.sizeDelta = new Vector2(9f, 2.2f);
+                productionLabel.alignment = TextAlignmentOptions.Center;
+            }
+            if (productionLabel == null) return;
+            productionLabel.gameObject.SetActive(isSuperProducer);
+            if (!isSuperProducer) return;
+            int filled = Mathf.RoundToInt(Mathf.Clamp01(charge) * 5f);
+            string meter = new string('|', filled) + new string('.', 5 - filled);
+            string status = full ? "FULL" : rate > 0f ? $"{rate:0.0}/s" : "PAUSED";
+            productionLabel.text = active ? $"SUPER [{meter}]\n{status}" : "SUPER [.....]";
+            productionLabel.color = Color.Lerp(new Color(1f, 0.72f, 0.22f), Color.white, charge);
         }
 
         public void SetInteraction(bool isSelected, bool isNeighbor, bool isHovered) {
@@ -118,15 +166,63 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 return;
 
             glowRenderer.gameObject.SetActive(owned || selected || neighbor || hovered);
-            SetRendererColor(glowRenderer, selected || hovered ? Color.white :
-                neighbor ? new Color(1f, 0.8f, 0.2f) : teamColor);
+
+            // Enhanced glow for super bases
+            if (isSuperBase) {
+                // Super bases have a more intense, pulsating glow
+                float glowIntensity = Mathf.PingPong(Time.unscaledTime * 0.5f, 0.3f) + 0.7f;
+                if (selected || hovered) {
+                    SetRendererColor(glowRenderer, Color.white * glowIntensity);
+                } else if (neighbor) {
+                    SetRendererColor(glowRenderer, new Color(1f, 0.8f, 0.2f) * glowIntensity);
+                } else {
+                    SetRendererColor(glowRenderer, teamColor * glowIntensity);
+                }
+            }
+            // Enhanced glow for speed bases
+            else if (isSpeedBase) {
+                // Speed bases have a distinct cyan-tinted glow
+                float glowIntensity = Mathf.PingPong(Time.unscaledTime * 0.4f, 0.2f) + 0.6f;
+                if (selected || hovered) {
+                    SetRendererColor(glowRenderer, Color.white * glowIntensity);
+                } else if (neighbor) {
+                    SetRendererColor(glowRenderer, new Color(1f, 0.8f, 0.2f) * glowIntensity);
+                } else {
+                    SetRendererColor(glowRenderer, new Color(0.6f, 0.8f, 1f) * glowIntensity);
+                }
+            } else {
+                SetRendererColor(glowRenderer, selected || hovered ? Color.white :
+                    neighbor ? new Color(1f, 0.8f, 0.2f) : teamColor);
+            }
         }
 
         void LateUpdate() {
-            if (troopLabel != null && Camera.main != null)
-                troopLabel.transform.rotation = Camera.main.transform.rotation;
+            Camera camera = Camera.main;
+            if (troopLabel != null && camera != null)
+                troopLabel.transform.rotation = camera.transform.rotation;
+            if (productionLabel != null && troopLabel != null && camera != null) {
+                productionLabel.transform.rotation = camera.transform.rotation;
+                productionLabel.transform.position = troopLabel.transform.position -
+                    camera.transform.up * (3.4f * transform.lossyScale.x);
+            }
+            if (speedLabel != null && troopLabel != null && camera != null) {
+                speedLabel.transform.rotation = camera.transform.rotation;
+                speedLabel.transform.position = troopLabel.transform.position +
+                    camera.transform.up * (3.4f * transform.lossyScale.x);
+            }
             if (shotLine != null && Time.unscaledTime >= shotUntil)
                 shotLine.gameObject.SetActive(false);
+
+            // Super base visual enhancement: pulsing and size increase
+            if (isSuperBase) {
+                // Pulsing effect (scale between 1.0 and 1.2)
+                superBasePulseTimer += Time.unscaledDeltaTime;
+                float pulseFactor = Mathf.Sin(superBasePulseTimer * 2f) * 0.1f + 1.1f;
+                transform.localScale = originalScale * pulseFactor;
+            } else {
+                // Reset to original scale if not a super base
+                transform.localScale = originalScale;
+            }
         }
 
         void SetRendererColor(Renderer target, Color color) {

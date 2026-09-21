@@ -24,6 +24,10 @@ namespace Universes.UniverseData.war_valley.Server {
         private const float ProgressDistance = 0.25f;
         private const float FallbackPathInterval = 0.5f;
         private const float TargetNavMeshSampleRadius = 8f;
+        // A wave NPC that walks past a player's tank to reach the flag makes the whole army
+        // pointless, so it engages whatever hostile thing is standing in front of it first.
+        private const float ThreatEngageRadius = 16f;
+        private const float ThreatScanInterval = 0.75f;
 
         private LocalNPC localNPC;
         private GameCharacter gameCharacter;
@@ -38,6 +42,7 @@ namespace Universes.UniverseData.war_valley.Server {
         private Vector3 lastProgressPosition;
         private WV_DestructibleObstacle wallTarget;
         private bool traversingClearedWall;
+        private float nextThreatScanTime;
 
         private void Awake() {
             localNPC = GetComponent<LocalNPC>();
@@ -121,9 +126,38 @@ namespace Universes.UniverseData.war_valley.Server {
             if (blockingWall != null && TargetWall(blockingWall))
                 return;
 
+            if (IsHoldingThreat() || TryTargetNearbyThreat())
+                return;
+
             WV_Flag flag = WV_Flag.Instance;
             if (flag != null && !flag.IsDead && localNPC.CurrentAttackEntityTarget != flag.GetComponent<IEntity>())
                 TargetFlag();
+        }
+
+        /// <summary>True while already engaging something other than the objective itself.</summary>
+        private bool IsHoldingThreat() {
+            IEntity current = localNPC.CurrentAttackEntityTarget;
+            return current is not null
+                && current is not WV_Flag
+                && WV_Combat.IsValidTarget(current, gameCharacter.GetTeam());
+        }
+
+        /// <summary>
+        /// Engages the nearest player unit or structure within reach. Scanned on an interval rather
+        /// than per frame: this is a physics sweep running on every NPC in the wave.
+        /// </summary>
+        private bool TryTargetNearbyThreat() {
+            if (Time.time < nextThreatScanTime)
+                return false;
+
+            nextThreatScanTime = Time.time + ThreatScanInterval;
+            IEntity threat = WV_Combat.FindNearestEnemy(
+                transform.position,
+                ThreatEngageRadius,
+                gameCharacter.GetTeam(),
+                preferCharacters: true,
+                ignoreRoot: transform);
+            return threat != null && localNPC.TargetEntity(threat);
         }
 
         private bool TargetWall(WV_DestructibleObstacle wall) {

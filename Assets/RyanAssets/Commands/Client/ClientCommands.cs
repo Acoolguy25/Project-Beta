@@ -10,8 +10,14 @@ namespace RyanAssets.Commands.Client {
             new() {
                 commandType = "environment",
                 commandName = "help",
-                description = "Lists available commands.",
-                arguments = Array.Empty<CommandArgumentConfig>()
+                description = "Lists available commands and their descriptions. Pass a command name for its details.",
+                arguments = new[] {
+                    new CommandArgumentConfig {
+                        name = "command",
+                        type = CommandArgumentType.String,
+                        optional = true
+                    }
+                }
             },
             new() {
                 commandType = "environment",
@@ -22,6 +28,21 @@ namespace RyanAssets.Commands.Client {
         };
 
         static readonly Dictionary<string, CommandHandler> Actions = BuildActions();
+
+        /// <summary>
+        /// Suggestions that depend on live state and so cannot live in the serialized
+        /// <see cref="CommandArgumentConfig.suggestions"/> array.
+        /// </summary>
+        public static bool TryGetDynamicSuggestions(string commandName, int argumentIndex,
+            IEnumerable<CommandConfig> commands, out List<string> suggestions) {
+            if (argumentIndex == 0 && string.Equals(commandName, "help", StringComparison.OrdinalIgnoreCase)) {
+                suggestions = CommandVerification.GetCommandPredictions(commands, string.Empty);
+                return true;
+            }
+
+            suggestions = null;
+            return false;
+        }
 
         public delegate void CommandHandler(ClientCommandController controller, string commandName, string[] args);
 
@@ -63,10 +84,32 @@ namespace RyanAssets.Commands.Client {
 
         // Add actions with this signature and a matching config above.
         static void Help(ClientCommandController controller, string commandName, string[] args) {
-            string commandList = string.Join(", ", controller.GetCommandConfigs()
-                .Select(config => "/" + config.commandName)
-                .OrderBy(command => command, StringComparer.OrdinalIgnoreCase));
-            controller.ShowSystemMessage($"Commands: {commandList}");
+            List<CommandConfig> configs = controller.GetCommandConfigs()
+                .OrderBy(config => config.commandName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            string requested = args is { Length: > 0 } ? args[0].TrimStart('/') : string.Empty;
+            if (!string.IsNullOrWhiteSpace(requested)) {
+                if (!CommandVerification.TryGetCommandConfig(configs, requested, out CommandConfig config)) {
+                    controller.ShowCommandError($"Command '{requested}' does not exist.");
+                    return;
+                }
+
+                controller.ShowSystemMessage(DescribeCommand(config));
+                return;
+            }
+
+            controller.ShowSystemMessage("Commands:\n" + string.Join("\n", configs.Select(DescribeCommand)));
+        }
+
+        static string DescribeCommand(CommandConfig config) {
+            string usage = "/" + config.commandName;
+            foreach (CommandArgumentConfig argument in config.arguments ?? Array.Empty<CommandArgumentConfig>()) {
+                string argName = string.IsNullOrWhiteSpace(argument.name) ? argument.type.ToString().ToLowerInvariant() : argument.name;
+                usage += argument.optional ? $" [{argName}]" : $" <{argName}>";
+            }
+
+            return string.IsNullOrWhiteSpace(config.description) ? usage : $"{usage} - {config.description}";
         }
 
         static void Clear(ClientCommandController controller, string commandName, string[] args) {

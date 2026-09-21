@@ -32,8 +32,8 @@ namespace Universes.UniverseData.classic_horror {
         public int evidenceCount;
         public int relicCount;
         public int ritualStep;
-        public int losses;
-        public int lossLimit;
+        public int livesLost;
+        public int livesPerPlayer;
         public int secondsLeft;
         public int monsterId;
         public int completedCases;

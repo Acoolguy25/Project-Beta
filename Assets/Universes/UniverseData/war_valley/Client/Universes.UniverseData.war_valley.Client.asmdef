@@ -1,0 +1,30 @@
+{
+    "name": "Universes.UniverseData.war_valley.Client",
+    "rootNamespace": "Universes.UniverseData.war_valley.Client",
+    "references": [
+        "Universes.UniverseData.war_valley.Shared",
+        "FishNet.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Input",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Declarations",
+        "RyanAssets.Shared.Global",
+        "RyanAssets.UI",
+        "RyanAssets.UI.ButtonGrid",
+        "RyanAssets.UI.ListGrid",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -10,6 +10,9 @@ namespace RyanAssets.Shared.Globals {
         // Leave enough seam tolerance for grid-aligned structures with decorative
         // geometry that extends beyond their intended footprint (such as wall caps).
         public const float OverlapBoundsScale = 0.75f;
+        // The occupancy test starts just above the ground so a structure standing on the terrain
+        // does not register against it, while still covering the whole cell it sits in.
+        public const float OverlapGroundClearance = 0.05f;
 
         public static Vector3 SnapToGrid(Vector3 position) {
             position.x = Mathf.Round(position.x / GridSize) * GridSize;
@@ -21,6 +24,31 @@ namespace RyanAssets.Shared.Globals {
 
         public static Vector3 GetOverlapHalfExtents(Bounds bounds) =>
             Vector3.Max(bounds.extents * OverlapBoundsScale, Vector3.one * 0.05f);
+
+        /// <summary>
+        /// The volume a structure claims on the build grid, for the occupancy test that rejects a
+        /// placement on top of an existing structure.
+        /// <para>
+        /// Horizontally this is the structure's own extents, pulled in by
+        /// <see cref="OverlapBoundsScale"/> so decorative overhang does not make grid-adjacent
+        /// structures reject one another. Vertically it is anchored to the ground and spans the
+        /// structure's full height. Centring it on the bounds instead would lift the test box clear
+        /// of anything short: a watchtower is forty units tall, so its bounds-centred box started
+        /// five units above a barracks roof and the two could be stacked in the same cell.
+        /// </para>
+        /// </summary>
+        public static void GetOverlapVolume(
+            Bounds bounds, Vector3 groundPoint, out Vector3 center, out Vector3 halfExtents) {
+            Vector3 extents = GetOverlapHalfExtents(bounds);
+
+            // Measure from the ground rather than from the bounds' own minimum, so a model whose
+            // pivot art floats still tests the cell it was placed on.
+            float top = Mathf.Max(bounds.max.y, groundPoint.y + OverlapGroundClearance * 2f);
+            float bottom = groundPoint.y + OverlapGroundClearance;
+
+            halfExtents = new Vector3(extents.x, Mathf.Max((top - bottom) * 0.5f, 0.05f), extents.z);
+            center = new Vector3(bounds.center.x, bottom + halfExtents.y, bounds.center.z);
+        }
 
         public static int GroundMask => ~LayerMask.GetMask("Character", "LocalCharacter", "Structure", "Ignore Raycast");
 

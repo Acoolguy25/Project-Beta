@@ -23,9 +23,18 @@ namespace RyanAssets.Characters.Shared {
         [SerializeField] private bool fallHeightEnabled = true;
         [SerializeField] private float fallenPartsDestroyHeight = 0.0f;
 
-        public static Dictionary<TeamColor, HashSet<GameCharacter>> TeamToCharacter = new();
+        // Ordered so that anything cycling through a team (spectating, target selection) keeps a
+        // stable sequence instead of the arbitrary order a HashSet produces after each add.
+        public static Dictionary<TeamColor, List<GameCharacter>> TeamToCharacter = new();
         public static event Action<GameCharacter> GameCharacterAdded, GameCharacterRemoved;
         public event Action<GameCharacter> MyGameCharacterRemoved;
+        // The bucket this character is actually in, or null when it is not registered.
+        // Registration reads Team, but removal used to re-read the virtual GetTeam(), which
+        // resolves through Owner and PlayerData and returns a different team -- or the White
+        // default once Owner is cleared during despawn. Every such removal missed the real
+        // bucket and left a destroyed character behind for the next iteration to trip over.
+        // Recording the key the add used makes the two halves symmetric by construction.
+        TeamColor? registeredTeam;
 
         public readonly SyncVar<TeamConfig> TeamSync = new(new(), new(WritePermission.ClientUnsynchronized));
         public readonly SyncVar<ToolBaseShared> ActiveTool = new(null, new(WritePermission.ClientUnsynchronized));
@@ -84,6 +93,10 @@ namespace RyanAssets.Characters.Shared {
         }
 
         protected virtual void OnDestroy() {
+            // OnStopNetwork already does this for a normal despawn. Repeating it here covers
+            // teardown paths that destroy the object without one, so the registry can never
+            // hand a destroyed character to an iterator.
+            RemoveTeamRegistry();
             DisplayNameSync.OnChange -= OnDisplayNameChanged;
             if (HealthComponent != null)
             {
@@ -150,7 +163,7 @@ namespace RyanAssets.Characters.Shared {
             // Dead characters have a role, but only living characters belong in
             // the attack-team registry. SharedRevived adds the new role back.
             if (!IsDead)
-                UpdateTeamRegistry(Team, teamConfig);
+                UpdateTeamRegistry(teamConfig);
             TeamSync.Value = teamConfig;
 #if UNITY_EDITOR
             UpdateTeamEditorOptions(default, teamConfig, true);
@@ -176,15 +189,15 @@ namespace RyanAssets.Characters.Shared {
         public override void OnStartClient() {
             TeamSync.OnChange += UpdateTeamClient;
             if (!IsDead)
-                UpdateTeamRegistry(default, Team);
+                UpdateTeamRegistry(Team);
             GameCharacterAdded?.Invoke(this);
         }
 
         private void UpdateTeamClient(TeamConfig oldTeam, TeamConfig newTeam, bool _) {
             if (IsDead)
-                RemoveTeamRegistry(oldTeam);
+                RemoveTeamRegistry();
             else
-                UpdateTeamRegistry(oldTeam, newTeam);
+                UpdateTeamRegistry(newTeam);
         }
 #endif
 
@@ -200,16 +213,34 @@ namespace RyanAssets.Characters.Shared {
         protected virtual void FixedUpdate() { }
 #endif
 
-        protected void RemoveTeamRegistry(TeamConfig team) {
-            if (team != null && TeamToCharacter.ContainsKey(team.realTeam))
-                TeamToCharacter[team.realTeam].Remove(this);
+        /// <summary>
+        /// Drops this character out of the registry, whichever bucket it actually sits in.
+        /// </summary>
+        protected void RemoveTeamRegistry() {
+            if (registeredTeam is not TeamColor team)
+                return;
+
+            // Cleared before the removal so a re-entrant registry call cannot see a key that
+            // no longer holds this character.
+            registeredTeam = null;
+            if (TeamToCharacter.TryGetValue(team, out List<GameCharacter> characters))
+                characters.Remove(this);
         }
 
-        protected void UpdateTeamRegistry(TeamConfig oldTeam, TeamConfig newTeam) {
-            RemoveTeamRegistry(oldTeam);
-            if (!TeamToCharacter.ContainsKey(newTeam.realTeam))
-                TeamToCharacter[newTeam.realTeam] = new HashSet<GameCharacter>();
-            TeamToCharacter[newTeam.realTeam].Add(this);
+        /// <summary>
+        /// Moves this character into <paramref name="newTeam"/>'s bucket, leaving whichever
+        /// bucket it currently occupies.
+        /// </summary>
+        protected void UpdateTeamRegistry(TeamConfig newTeam) {
+            TeamColor team = newTeam != null ? newTeam.realTeam : default;
+            if (registeredTeam == team)
+                return;
+
+            RemoveTeamRegistry();
+            if (!TeamToCharacter.TryGetValue(team, out List<GameCharacter> characters))
+                TeamToCharacter[team] = characters = new List<GameCharacter>();
+            characters.Add(this);
+            registeredTeam = team;
         }
 
         public static int TeamCount(TeamColor teamColor) => TeamToCharacter.ContainsKey(teamColor) ? TeamToCharacter[teamColor].Count : 0;
@@ -219,18 +250,18 @@ namespace RyanAssets.Characters.Shared {
             SwitchTool(null);
             if (!transform.tag.StartsWith("Dead"))
                 transform.tag = "Dead" + transform.tag;
-            RemoveTeamRegistry(GetTeam());
+            RemoveTeamRegistry();
         }
 
         protected virtual void SharedRevived() {
             if (transform.tag.StartsWith("Dead"))
                 transform.tag = transform.tag.Substring("Dead".Length);
-            UpdateTeamRegistry(default, GetTeam());
+            UpdateTeamRegistry(GetTeam());
         }
 
         public override void OnStopNetwork() {
             DisplayNameSync.OnChange -= OnDisplayNameChanged;
-            RemoveTeamRegistry(GetTeam());
+            RemoveTeamRegistry();
             SwitchTool(null);
             GameCharacterRemoved?.Invoke(this);
             MyGameCharacterRemoved?.Invoke(this);

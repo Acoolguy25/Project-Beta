@@ -3,8 +3,10 @@
     "rootNamespace": "Universes.UniverseData.war_valley.Shared",
     "references": [
         "FishNet.Runtime",
+        "RyanAssets.Core",
         "RyanAssets.Shared.Component",
         "RyanAssets.Shared.Declarations",
+        "RyanAssets.Shared.Global",
         "Unity.AI.Navigation"
     ],
     "includePlatforms": [],

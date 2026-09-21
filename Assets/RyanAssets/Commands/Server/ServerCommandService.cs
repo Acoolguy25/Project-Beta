@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using FishNet;
 using FishNet.Connection;
@@ -15,6 +16,7 @@ using RyanAssets.Server.ServerCore;
 namespace RyanAssets.Commands.Server {
     public static class ServerCommandService {
         public delegate void CommandHandler(NetworkConnection caller, string commandName, string[] args);
+        public delegate object CommandGetter(NetworkConnection caller, string[] args);
 
         static readonly Dictionary<string, CommandRegistration> Commands = new(StringComparer.OrdinalIgnoreCase);
         static bool registeredBroadcast;
@@ -38,19 +40,23 @@ namespace RyanAssets.Commands.Server {
             SyncRegisteredCommandConfigs();
         }
 
-        public static void RegisterCommand(CommandConfig config, CommandHandler handler) {
+        public static void RegisterCommand(CommandConfig config, CommandHandler handler, CommandGetter getter = null) {
             if (string.IsNullOrWhiteSpace(config.commandName))
                 throw new ArgumentException("Command name cannot be empty.", nameof(config));
 
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
 
-            Commands[config.commandName] = new CommandRegistration(config, handler);
+            if (getter != null && (config.arguments == null || config.arguments.Length == 0))
+                throw new ArgumentException("A getter requires a final value argument.", nameof(config));
+
+            config.supportsGetter = getter != null;
+            Commands[config.commandName] = new CommandRegistration(config, handler, getter);
             SyncCommandConfig(config);
         }
 
         public static void RegisterCommand(CommandConfig config) {
-            RegisterCommand(config, ServerCommandsActions.Resolve(config.commandName));
+            RegisterCommand(config, ServerCommandsActions.Resolve(config.commandName), ServerCommandsActions.ResolveGetter(config.commandName));
         }
 
         public static bool UnregisterCommand(string commandName) {
@@ -62,10 +68,11 @@ namespace RyanAssets.Commands.Server {
         }
 
         static void RegisterAllGameCommands() {
-            if (ServerBootStrap.universeCfg.disableDefaultCommands)
-                return;
-
             foreach (CommandConfig config in SharedCommands.AllGameCommands) {
+                if (ServerBootStrap.universeCfg.disableDefaultCommands
+                    && string.Equals(config.commandType, "character", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 RegisterCommand(config);
             }
         }
@@ -86,7 +93,12 @@ namespace RyanAssets.Commands.Server {
                 return;
             }
 
-            registration.Handler(conn, registration.Config.commandName, args);
+            if (CommandVerification.IsGetterRequest(registration.Config, args)) {
+                object value = registration.Getter(conn, args);
+                SendSystemMessage(conn, $"{registration.Config.commandName}: {Convert.ToString(value, CultureInfo.InvariantCulture)}");
+            } else {
+                registration.Handler(conn, registration.Config.commandName, args);
+            }
         }
 
         static void SyncCommandConfig(CommandConfig config) {
@@ -143,10 +155,12 @@ namespace RyanAssets.Commands.Server {
         readonly struct CommandRegistration {
             public readonly CommandConfig Config;
             public readonly CommandHandler Handler;
+            public readonly CommandGetter Getter;
 
-            public CommandRegistration(CommandConfig config, CommandHandler handler) {
+            public CommandRegistration(CommandConfig config, CommandHandler handler, CommandGetter getter) {
                 Config = config;
                 Handler = handler;
+                Getter = getter;
             }
         }
     }

@@ -2,9 +2,10 @@ namespace RyanAssets.Commands.Shared {
     public static class SharedCommands {
         public static readonly CommandConfig[] AllGameCommands = {
             new() {
-                commandType = "player",
+                commandType = "character",
                 commandName = "walkspeed",
-                description = "Sets player walkspeed.",
+                supportsGetter = true,
+                description = "Reads or sets player walkspeed. Omit the value to read; omit the player to read your own.",
                 arguments = new CommandArgumentConfig[] {
                     new() {
                         name = "players",
@@ -20,9 +21,10 @@ namespace RyanAssets.Commands.Shared {
                 }
             },
             new() {
-                commandType = "player",
+                commandType = "character",
                 commandName = "sprintspeed",
-                description = "Sets player sprintspeed.",
+                supportsGetter = true,
+                description = "Reads or sets player sprintspeed. Omit the value to read; omit the player to read your own.",
                 arguments = new CommandArgumentConfig[] {
                     new() {
                         name = "players",
@@ -38,9 +40,10 @@ namespace RyanAssets.Commands.Shared {
                 }
             },
             new() {
-                commandType = "player",
+                commandType = "character",
                 commandName = "maxstamina",
-                description = "Sets player max stamina.",
+                supportsGetter = true,
+                description = "Reads or sets player max stamina. Omit the value to read; omit the player to read your own.",
                 arguments = new CommandArgumentConfig[] {
                     new() {
                         name = "players",
@@ -56,9 +59,10 @@ namespace RyanAssets.Commands.Shared {
                 }
             },
             new() {
-                commandType = "player",
+                commandType = "character",
                 commandName = "staminaregen",
-                description = "Sets player stamina regeneration.",
+                supportsGetter = true,
+                description = "Reads or sets player stamina regeneration. Omit the value to read; omit the player to read your own.",
                 arguments = new CommandArgumentConfig[] {
                     new() {
                         name = "players",
@@ -74,9 +78,10 @@ namespace RyanAssets.Commands.Shared {
                 }
             },
             new() {
-                commandType = "player",
+                commandType = "character",
                 commandName = "staminacooldown",
-                description = "Sets player stamina regeneration cooldown.",
+                supportsGetter = true,
+                description = "Reads or sets player stamina regeneration cooldown. Omit the value to read; omit the player to read your own.",
                 arguments = new CommandArgumentConfig[] {
                     new() {
                         name = "players",
@@ -92,7 +97,7 @@ namespace RyanAssets.Commands.Shared {
                 }
             },
             new() {
-                commandType = "player",
+                commandType = "character",
                 commandName = "kill",
                 description = "Kill player character.",
                 arguments = new CommandArgumentConfig[] {
@@ -103,7 +108,7 @@ namespace RyanAssets.Commands.Shared {
                 }
             },
             new() {
-                commandType = "player",
+                commandType = "character",
                 commandName = "respawn",
                 description = "Respawn player character.",
                 arguments = new CommandArgumentConfig[] {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using FishNet;
@@ -22,6 +23,29 @@ namespace RyanAssets.Commands.Server {
                 return action;
 
             return ServerCommandService.UnknownGlobalCommand;
+        }
+
+        public static ServerCommandService.CommandGetter ResolveGetter(string commandName) {
+            Func<PlayerData, float> read = Normalize(commandName) switch {
+                "walkspeed" => player => player.walkSpeed.Value,
+                "sprintspeed" => player => player.sprintSpeed.Value,
+                "maxstamina" => player => player.staminaMax.Value,
+                "staminaregen" => player => player.staminaRegen.Value,
+                "staminacooldown" => player => player.staminaCooldown.Value,
+                _ => null
+            };
+            if (read == null)
+                return null;
+
+            return (caller, args) => {
+                string selector = args.Length == 0 ? "me" : args[0];
+                List<string> values = new();
+                foreach (NetworkConnection conn in CommandVerification.GetPlayersFromArgument(selector, PlayerData.Players, caller)) {
+                    if (PlayerData.Players.TryGetValue(conn, out var player))
+                        values.Add($"{player.username.Value} = {read(player).ToString(CultureInfo.InvariantCulture)}");
+                }
+                return values.Count == 0 ? "No matching players." : string.Join(", ", values);
+            };
         }
 
         static Dictionary<string, ServerCommandService.CommandHandler> BuildActions() {
@@ -64,7 +88,7 @@ namespace RyanAssets.Commands.Server {
             {
                 if (PlayerData.Players.TryGetValue(conn, out var player))
                 {
-                    player.walkSpeed.Value = float.Parse(args[1]);
+                    player.walkSpeed.Value = float.Parse(args[1], CultureInfo.InvariantCulture);
                 }
             }
         }
@@ -75,7 +99,7 @@ namespace RyanAssets.Commands.Server {
             {
                 if (PlayerData.Players.TryGetValue(conn, out var player))
                 {
-                    player.sprintSpeed.Value = float.Parse(args[1]);
+                    player.sprintSpeed.Value = float.Parse(args[1], CultureInfo.InvariantCulture);
                 }
             }
         }
@@ -83,7 +107,7 @@ namespace RyanAssets.Commands.Server {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns) {
                 if (PlayerData.Players.TryGetValue(conn, out var player)) {
-                    player.staminaMax.Value = float.Parse(args[1]);
+                    player.staminaMax.Value = float.Parse(args[1], CultureInfo.InvariantCulture);
                 }
             }
         }
@@ -91,7 +115,7 @@ namespace RyanAssets.Commands.Server {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns) {
                 if (PlayerData.Players.TryGetValue(conn, out var player)) {
-                    player.staminaRegen.Value = float.Parse(args[1]);
+                    player.staminaRegen.Value = float.Parse(args[1], CultureInfo.InvariantCulture);
                 }
             }
         }
@@ -99,7 +123,7 @@ namespace RyanAssets.Commands.Server {
             List<NetworkConnection> conns = CommandVerification.GetPlayersFromArgument(args[0], PlayerData.Players, caller);
             foreach (NetworkConnection conn in conns) {
                 if (PlayerData.Players.TryGetValue(conn, out var player)) {
-                    player.staminaCooldown.Value = float.Parse(args[1]);
+                    player.staminaCooldown.Value = float.Parse(args[1], CultureInfo.InvariantCulture);
                 }
             }
         }

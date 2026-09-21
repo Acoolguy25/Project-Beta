@@ -26,58 +26,64 @@ namespace RyanAssets.Client.ClientUI.Spectate {
 
         PlayerData currentPlayer;
         GameCharacter currentCharacter;
+        // Where the current target sat in the rotation. A character that leaves the registry
+        // vacates its slot to whoever followed it, so resuming at the same index hands the
+        // camera to the next investigator rather than restarting at the first one.
+        int currentIndex;
         bool isSpectating => gameObject.activeSelf;
         void Awake() {
             cinemachineCamera = GetComponent<CinemachineCamera>();
             controller = transform.parent.GetComponent<CameraController>();
             leftArrow.onClick.AddListener(() => AdvancePosition(-1));
             rightArrow.onClick.AddListener(() => AdvancePosition(1));
+            // Departures arrive through the spectated character's own MyGameCharacterRemoved,
+            // which is all this camera reacts to; the rotation itself is re-read each time.
+            GameCharacter.GameCharacterAdded += OnGameCharacterAdded;
         }
         public override void EnableCamera(Transform oldCamera, GameCameraType oldCameraType) {
             base.EnableCamera(oldCamera, oldCameraType);
-            GameCharacter.GameCharacterAdded += OnGameCharacterAdded;
-            currentCharacter = null;
+            UnsetCamera();
             AdvancePosition(0);
         }
         public override void DisableCamera(Transform newCamera, GameCameraType newCameraType) {
             base.DisableCamera(newCamera, newCameraType);
-            GameCharacter.GameCharacterAdded -= OnGameCharacterAdded;
             canvasGroupController.SetVisible(false, 0.3f);
             UnsetCamera();
         }
+        static bool CanSpectate(GameCharacter character) =>
+            character && !character.IsDead && character.CanSpectate.Value;
+        /// <summary>
+        /// The current rotation, read straight from the shared team registry. The registry
+        /// drops a character when it dies, despawns or is destroyed and takes it back when it
+        /// revives or respawns, so no separate list is kept in step with it here.
+        /// </summary>
+        static List<GameCharacter> Spectatable() =>
+            GameCharacter.TeamToCharacter.Values.SelectMany(characters => characters)
+                .Where(CanSpectate).ToList();
         void AdvancePosition(int deltaPosition) {
-            List<GameCharacter> characters = GameCharacter.TeamToCharacter.Values
-                .SelectMany(x => x)
-                // Dead or excluded characters must never remain selected as a fallback.
-                .Where(c => c && !c.IsDead && c.CanSpectate.Value)
-                .ToList();
+            List<GameCharacter> characters = Spectatable();
             if (characters.Count == 0) {
                 // This is expected while waiting for the next round to spawn.
-                //Debug.LogWarning($"No valid characters to spectate. Waiting for next round.");
+                currentIndex = 0;
                 SetCamera(null);
                 return;
             }
-            int currentIndex = characters.FindIndex(c => c == currentCharacter);
-            GameCharacter nextCharacter = null;
-            if (currentIndex == -1) {
-                nextCharacter = characters[0];
-            } else {
-                int newIndex = MathHelper.Mod(currentIndex + deltaPosition, characters.Count);
-                nextCharacter = characters[newIndex];
-            }
-            if (nextCharacter == null) {
-                Debug.LogError("No valid character found for spectating.");
-                SetCamera(null);
-                return;
-            }
-            SetCamera(nextCharacter);
+            int index = characters.IndexOf(currentCharacter);
+            // A target still in the rotation steps from where it is. One that has left is
+            // replaced by whoever now holds its slot.
+            index = index >= 0 ? index + deltaPosition : currentIndex;
+            currentIndex = MathHelper.Mod(index, characters.Count);
+            SetCamera(characters[currentIndex]);
         }
         void UnsetCamera() {
-            if (currentPlayer) {
+            // Unity reports a destroyed character as null. Comparing against a real null keeps
+            // these detaches running so this camera cannot stay subscribed to a character it
+            // no longer shows and be pulled off a live target by that character's last events.
+            if (currentPlayer is not null) {
                 currentPlayer.username.OnChange -= OnPlayerNameChanged;
                 currentPlayer.xp.OnChange -= OnPlayerXPChanged;
             }
-            if (currentCharacter) {
+            if (currentCharacter is not null) {
                 currentCharacter.DisplayNameSync.OnChange -= OnPlayerNameChanged;
                 currentCharacter.TeamSync.OnChange -= OnPlayerTeamChanged;
                 currentCharacter.Health.OnChange -= OnPlayerHealthChanged;
@@ -117,11 +123,22 @@ namespace RyanAssets.Client.ClientUI.Spectate {
 
         }
         void OnGameCharacterAdded(GameCharacter character) {
+            // A respawned investigator is picked up immediately when this camera is showing
+            // nobody, and stays reachable through the arrows when it is already following one.
             if (isSpectating && currentCharacter == null)
                 AdvancePosition(0);
         }
         void OnDestroy() {
+            GameCharacter.GameCharacterAdded -= OnGameCharacterAdded;
             UnsetCamera();
+        }
+        /// <summary>Moves on only once the spectated character has actually left the rotation.</summary>
+        void ReselectIfLost() {
+            if (CanSpectate(currentCharacter))
+                return;
+            // One death raises death, health, eligibility and removal notifications. Re-resolving
+            // instead of stepping forward on each keeps them from skipping past living players.
+            AdvancePosition(0);
         }
         // Dumb wrappers
         void OnPlayerNameChanged(string oldVal, string newVal, bool asServer) {
@@ -131,18 +148,18 @@ namespace RyanAssets.Client.ClientUI.Spectate {
             UpdatePlayerLabel();
         }
         void OnPlayerHealthChanged(long oldVal, long newVal, bool asServer) {
-            if (currentCharacter != null && currentCharacter.IsDead) AdvancePosition(1);
+            if (currentCharacter != null && currentCharacter.IsDead) ReselectIfLost();
             else UpdatePlayerHealth();
         }
         void OnPlayerXPChanged(ulong oldVal, ulong newVal, bool asServer) {
             UpdatePlayerLevel();
         }
         void OnMyGameCharacterRemoved(GameCharacter character) {
-            AdvancePosition(1);
+            ReselectIfLost();
         }
-        void OnSpectatedCharacterDied(DamageType damage, IEntity source) => AdvancePosition(1);
+        void OnSpectatedCharacterDied(DamageType damage, IEntity source) => ReselectIfLost();
         void OnSpectateEligibilityChanged(bool before, bool after, bool asServer) {
-            if (!after) AdvancePosition(1);
+            if (!after) ReselectIfLost();
         }
 
         void UpdatePlayerLabel() {

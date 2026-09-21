@@ -18,7 +18,7 @@
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.nuget.mono-cecil": "1.11.6",
     "com.unity.nuget.newtonsoft-json": "3.2.2",
-    "com.unity.pipeline": "0.5.0-exp.1",
+    "com.unity.pipeline": "0.6.0-exp.1",
     "com.unity.postprocessing": "3.5.4",
     "com.unity.recorder": "5.1.6",
     "com.unity.render-pipelines.core": "17.5.0",

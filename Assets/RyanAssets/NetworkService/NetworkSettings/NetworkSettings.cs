@@ -3,7 +3,7 @@ using UnityEngine;
 namespace RyanAssets.NetworkService {
     public static class NetworkSettings {
 #if UNITY_EDITOR
-        public static readonly string DEPLOY_SERVER_IP = "5.78.211.52";
+        public static readonly string DEPLOY_SERVER_IP = "ryangames.duckdns.org";
 #endif
         // public static readonly ushort BackendAPIPort = 8212;
         // #if (LOCAL_BACKEND && UNITY_EDITOR) || SERVER_BUILD
@@ -17,31 +17,31 @@ namespace RyanAssets.NetworkService {
         public static bool noNetworkLogin;
         // public static NetworkScriptableObject productionConfig;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void Init(){
-            #if UNITY_SERVER
+        static void Init() {
+#if UNITY_SERVER
                 activeConfig = loadResource("ServerNetworkConfig");
-            #else
-                NetworkScriptableObject productionConfig = loadResource("ProductionNetworkConfig");
-                #if UNITY_EDITOR
-                    if (!productionConfig.use_in_debug){
-                        activeConfig = loadResource("LocalNetworkConfig");
-                    } else {
-                        activeConfig = productionConfig;
-                    }
-                    noNetworkLogin = activeConfig.no_login;
-                #else
+#else
+            NetworkScriptableObject productionConfig = loadResource("ProductionNetworkConfig");
+#if UNITY_EDITOR
+            if (!productionConfig.use_in_debug) {
+                activeConfig = loadResource("LocalNetworkConfig");
+            } else {
+                activeConfig = productionConfig;
+            }
+            noNetworkLogin = activeConfig.no_login;
+#else
                     activeConfig = productionConfig;
                     noNetworkLogin = false;
-                #endif
-            #endif
+#endif
+#endif
             InitConfig();
             BackendNetwork.SetBackendURL(BackendAPIURL);
             BackendSocket.SetBaseAddress(BackendAPIURL);
         }
-        static NetworkScriptableObject loadResource(string name){
+        static NetworkScriptableObject loadResource(string name) {
             return Resources.Load<NetworkScriptableObject>("NetworkSettings/" + name);
         }
-        static void InitConfig(){
+        static void InitConfig() {
             if (activeConfig.backend_server_encrypted)
                 BackendAPIURL = $"https://{activeConfig.backend_server_ip}";
             else

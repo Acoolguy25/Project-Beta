@@ -26,7 +26,7 @@ The game locks the camera to first person. The journal releases the cursor and d
 
 **II — What Answered:** recover the salt, bell, and lantern from newly revealed locations. Reach the source and offer them in the order recorded in this case's journal. A mistake resets the ritual and enrages the monster. Once the seal holds, return to the arrival radio within two minutes. Recovering both optional memories earns the fuller ending.
 
-Each investigator has three revives per case. A death consumes one revive and returns that investigator after five seconds, including when the last revive is consumed. Only a subsequent death with no revives remaining enters spectate. Evidence survives a death; the case fails when every investigator is eliminated. Successful and failed rounds automatically restart after 18 seconds with a new seed. Chapter limits default to 12 and 9 minutes; tune them on `Server/CH_ServerRunner.prefab`.
+Each investigator has four lives per case, counting the spawn they start the case with. A death spends one life and returns that investigator after five seconds; spending the last life eliminates them into spectate for the rest of the case. Investigators spawn at a random authored location each time, scattered within a few metres of it, and a spawn point is only accepted where the navigation mesh exists and above the map's `waterLevel`, so nobody starts in the flooded ground. Evidence survives a death; the case fails when every investigator is eliminated. Successful and failed rounds automatically restart after 18 seconds with a new seed. Chapter limits default to 12 and 9 minutes; tune them on `Server/CH_ServerRunner.prefab`.
 
 ## Replayability and authoring
 

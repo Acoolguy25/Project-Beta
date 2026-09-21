@@ -21,6 +21,7 @@ namespace RyanAssets.UI.Autocomplete {
         Dictionary<GameObject, AutocompleteElementData> elementToPrefab = new();
         List<GameObject> activeElementToPrefabs = new();
         GameObject selectedElement;
+        protected virtual bool CompleteCommandOnSpace => false;
         protected override void Start() {
             base.Start();
             OnCreatePrefab += OnPrefabAdded;
@@ -127,16 +128,30 @@ namespace RyanAssets.UI.Autocomplete {
             inputField.caretPosition = inputField.text.Length;
             SetToEnd();
         }
+        void OnSpace() {
+            string text = inputField.text;
+            if (!CompleteCommandOnSpace || !selectedElement || !selectedElement.activeSelf
+                || !text.StartsWith(AutocompletePrefix) || text.Length <= AutocompletePrefix.Length
+                || text.Any(char.IsWhiteSpace)
+                || inputField.selectionStringAnchorPosition != text.Length
+                || inputField.selectionStringFocusPosition != text.Length)
+                return;
+
+            OnTab();
+        }
+
         void OnEnable() {
             TextboxControls.upEvent += OnUp;
             TextboxControls.downEvent += OnDown;
             TextboxControls.tabEvent += OnTab;
+            inputField.BeforeSpaceInput += OnSpace;
             inputField.AutocompleteActive = true;
         }
         void OnDisable() {
             TextboxControls.upEvent -= OnUp;
             TextboxControls.downEvent -= OnDown;
             TextboxControls.tabEvent -= OnTab;
+            inputField.BeforeSpaceInput -= OnSpace;
             inputField.AutocompleteActive = false;
         }
     }

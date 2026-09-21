@@ -20,6 +20,8 @@ namespace RyanAssets.UI.Textbox {
     public class CustomInputField : Selectable, IUpdateSelectedHandler, IEventSystemHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, ISubmitHandler, ICancelHandler, ICanvasElement, ILayoutElement, IScrollHandler {
         // RYAN ENTIIES
         public bool AutocompleteActive;
+        // Runs before a typed space is inserted, so completion can move the caret first.
+        public event Action BeforeSpaceInput;
 
         public enum ContentType {
             Standard,
@@ -1896,6 +1898,8 @@ namespace RyanAssets.UI.Textbox {
             }
 
             if (IsValidChar(c)) {
+                if (c == ' ' && !m_ReadOnly && InPlaceEditing())
+                    BeforeSpaceInput?.Invoke();
                 Append(c);
             }
 

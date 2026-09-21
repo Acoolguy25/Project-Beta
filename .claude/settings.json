@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(unity status *)",
+      "Bash(unity command recompile_status *)",
+      "Bash(unity command get_console_logs *)",
+      "Bash(unity pipeline list)",
+      "Bash(unity pipeline list *)"
+    ]
+  }
+}

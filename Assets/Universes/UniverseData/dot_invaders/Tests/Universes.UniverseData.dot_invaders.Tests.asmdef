@@ -1,0 +1,7 @@
+{
+    "name": "Universes.UniverseData.dot_invaders.Tests",
+    "references": ["Universes.UniverseData.dot_invaders.Shared"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

@@ -56,7 +56,11 @@ namespace RyanAssets.Input {
         public void OnReloadTool() {
             reloadToolPressed?.Invoke();
         }
-        bool IsCursorFree() {
+        /// <summary>
+        /// Whether a world click at the cursor should be allowed through. Exposed so game modes that
+        /// read the pointer directly apply the same UI-blocking rules as the shared tool input.
+        /// </summary>
+        public static bool IsCursorFree() {
             if (Cursor.lockState == CursorLockMode.Locked || EventSystem.current == null)
                 return true;
             if (Mouse.current == null) return false;

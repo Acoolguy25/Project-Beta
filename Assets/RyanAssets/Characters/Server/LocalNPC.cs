@@ -467,7 +467,7 @@ namespace RyanAssets.Characters.Server {
             if (gameCharacter == null) return false;
 
             foreach (TeamColor team in EnemyTeams) {
-                if (!GameCharacter.TeamToCharacter.TryGetValue(team, out HashSet<GameCharacter> characters)) continue;
+                if (!GameCharacter.TeamToCharacter.TryGetValue(team, out List<GameCharacter> characters)) continue;
                 foreach (GameCharacter character in characters) {
                     if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < GetAttackTargetRange(character, baseRange))

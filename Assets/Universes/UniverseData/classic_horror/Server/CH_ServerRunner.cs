@@ -17,6 +17,7 @@ using RyanAssets.Shared.Global;
 using RyanAssets.Shared.Globals;
 using RyanAssets.Tools.Shared;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace Universes.UniverseData.classic_horror.Server {
@@ -25,10 +26,16 @@ namespace Universes.UniverseData.classic_horror.Server {
         [SerializeField, Min(60)] int investigationSeconds = 720;
         [SerializeField, Min(60)] int descentSeconds = 540;
         [SerializeField, Min(30)] int escapeSeconds = 120;
-        [UnityEngine.Serialization.FormerlySerializedAs("sharedLossLimit")]
-        [SerializeField, Min(0)] int revivesPerPlayer = 3;
+        [Tooltip("Spawns each investigator gets per case, counting the one they start the case with. "
+            + "Losing the last one eliminates them until the next case.")]
+        [SerializeField, Min(1)] int livesPerPlayer = 4;
         [SerializeField, Min(3)] int nextCaseDelay = 18;
         [SerializeField, Min(1)] float interactionReach = 3.5f;
+        [Header("Investigator Spawning")]
+        [Tooltip("How far from the chosen authored location a spawn may be scattered.")]
+        [SerializeField, Min(0)] float spawnScatterRadius = 6f;
+        [Tooltip("Scattered candidates tried before falling back to the arrival jetty.")]
+        [SerializeField, Min(1)] int spawnCandidateAttempts = 12;
         [Header("Progression Rewards")]
         [Tooltip("XP granted to the investigator who secures an evidence item, memory, or offering.")]
         [SerializeField] ulong itemXPReward = 10;
@@ -49,13 +56,16 @@ namespace Universes.UniverseData.classic_horror.Server {
         CH_Case current;
         CH_Monster monster;
         string dialogue = "", ending = "";
-        int dialogueRevision, losses, completedCases, lastSeed, secondsLeft;
+        readonly List<Transform> spawnAnchors = new();
+        int dialogueRevision, livesLost, completedCases, lastSeed, secondsLeft;
         float deadline, chaseMusicUntil;
         bool acceptingPlayers;
         public CH_Case CurrentCase => current;
         public CH_Map Map => map;
         public bool CaseActive => current != null && current.Phase is CH_Phase.Investigation or CH_Phase.Descent or CH_Phase.Escape;
         const float PlayerSpawnClearance = 1.25f;
+        // Used only when the map is missing or every authored anchor is rejected.
+        static readonly Vector3 FallbackSpawn = new(500, 25, 490);
         // Keep tension continuous when the monster briefly loses sight of an investigator.
         const float ChaseMusicReleaseDelay = 4f;
 
@@ -70,11 +80,47 @@ namespace Universes.UniverseData.classic_horror.Server {
         }
 
         bool CanSpawn(NetworkConnection conn) => acceptingPlayers && map != null && !eliminated.Contains(conn);
-        Vector3 SpawnPosition(NetworkConnection conn) => map != null && map.arrival != null
-            // Arrival is authored directly on the terrain. Spawn a full collider-safe
-            // distance above it so client physics can settle the character onto the map
+
+        /// <summary>Collects the authored dry-land anchors a spawn may be scattered around.</summary>
+        void RebuildSpawnAnchors() {
+            spawnAnchors.Clear();
+            if (map == null) return;
+            // The source locations are deliberately excluded: one of them is the active
+            // haunting's source and is no place to put an investigator who just arrived.
+            if (map.arrival != null) spawnAnchors.Add(map.arrival);
+            foreach (Transform location in map.searchLocations)
+                if (location != null) spawnAnchors.Add(location);
+        }
+
+        Vector3 SpawnPosition(NetworkConnection conn) {
+            if (map == null) return FallbackSpawn;
+            for (int attempt = 0; attempt < spawnCandidateAttempts && spawnAnchors.Count > 0; attempt++) {
+                Transform anchor = spawnAnchors[UnityEngine.Random.Range(0, spawnAnchors.Count)];
+                Vector2 scatter = UnityEngine.Random.insideUnitCircle * spawnScatterRadius;
+                if (TryResolveSpawn(anchor.position + new Vector3(scatter.x, 0f, scatter.y), out Vector3 resolved))
+                    return resolved;
+            }
+            // Every scattered candidate was rejected. The authored arrival is always dry land.
+            return map.arrival != null ? map.arrival.position + Vector3.up * PlayerSpawnClearance : FallbackSpawn;
+        }
+
+        /// <summary>
+        /// Accepts a spawn point only where the navigation mesh exists and only above the map's
+        /// water line. Both checks are required: the map's deep-water exclusion volume already
+        /// carves the flooded ground out of the mesh and keeps a spawn off geometry nobody can
+        /// stand on, while the water line rejects the shallows the mesh still covers.
+        /// </summary>
+        bool TryResolveSpawn(Vector3 candidate, out Vector3 spawnPosition) {
+            spawnPosition = default;
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, spawnScatterRadius + 2f, NavMesh.AllAreas))
+                return false;
+            if (hit.position.y <= map.waterLevel) return false;
+            // Authored anchors sit directly on the terrain. Spawn a full collider-safe distance
+            // above the resolved point so client physics can settle the character onto the map
             // instead of beginning partially embedded in the ground.
-            ? map.arrival.position + Vector3.up * PlayerSpawnClearance : new Vector3(500, 25, 490);
+            spawnPosition = hit.position + Vector3.up * PlayerSpawnClearance;
+            return true;
+        }
 
         void PreparePlayer(PlayerData player) {
             player.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
@@ -90,7 +136,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         }
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
-            player.lives.Value = revivesPerPlayer;
+            player.lives.Value = livesPerPlayer;
             PreparePlayer(player);
         }
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -112,6 +158,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             map = FindAnyObjectByType<CH_Map>();
             if (map == null || !map.IsConfigured)
                 throw new InvalidOperationException("Classic Horror requires its configured map and story library.");
+            RebuildSpawnAnchors();
             await WaitForPlayersAsync(1, token);
             int seed;
             do { seed = fixedSeed != 0 ? fixedSeed : Guid.NewGuid().GetHashCode(); } while (fixedSeed == 0 && seed == lastSeed);
@@ -120,7 +167,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             string sourceName = map.sourceLocations[current.SourceIndex].name;
             for (int i = 0; i < current.Evidence.Length; i++) current.Evidence[i] = current.Evidence[i].Replace("{source}", sourceName);
             current.ChapterTwoLine = current.ChapterTwoLine.Replace("{source}", sourceName);
-            losses = 0;
+            livesLost = 0;
             eliminated.Clear();
             reviving.Clear();
             scareSequence = 0;
@@ -130,7 +177,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             snapshotTimes.Clear();
             SetGlobalInvul(false);
             SetTeamKillEnabled(true);
-            foreach (var player in PlayerData.Players.Values) { player.lives.Value = revivesPerPlayer; PreparePlayer(player); }
+            foreach (var player in PlayerData.Players.Values) { player.lives.Value = livesPerPlayer; PreparePlayer(player); }
             acceptingPlayers = true;
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
             var npc = ServerNPC.SpawnNPC(NPCCharacter.Monster, map.monsterSpawn.position, map.gameObject.scene);
@@ -176,15 +223,18 @@ namespace Universes.UniverseData.classic_horror.Server {
         void OnInvestigatorDied(LocalCharacter character, DamageType damage, GameCharacter source) {
             if (!CaseActive || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
-            losses++;
+            livesLost++;
             if (monster != null && source == monster.GetComponent<GameCharacter>()) ScareCaughtByMonster(character);
             character.CanSpectate.Value = false;
-            if (PlayerData.TryGetPlayerData(character.Owner, out var player) && player.lives.Value > 0) {
-                player.lives.Value--;
+            PlayerData.TryGetPlayerData(character.Owner, out var player);
+            // lives counts the spawns an investigator has left including the one they just lost,
+            // so the last life is spent here rather than granting one more return to play.
+            int livesLeft = player != null ? Mathf.Max(0, player.lives.Value - 1) : 0;
+            if (player != null) player.lives.Value = livesLeft;
+            if (livesLeft > 0) {
                 reviving.Add(character.Owner);
                 // Keep the first-person lock through the shared respawn delay.
-                // Exhausting the last revive still grants this return to play.
-                Speak($"DISPATCH / Recovering an investigator. {player.lives.Value} revives remain for them. Your evidence is safe.");
+                Speak($"DISPATCH / Recovering an investigator. {livesLeft} {(livesLeft == 1 ? "life remains" : "lives remain")} for them. Your evidence is safe.");
             } else {
                 eliminated.Add(character.Owner);
                 if (player != null) player.LockCamera(GameCameraType.SpectateCamera);
@@ -366,7 +416,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 seed = current.Seed, phase = current.Phase, caseTitle = current.Title, objective = Objective(),
                 dialogue = dialogue, dialogueRevision = dialogueRevision, journal = journal.ToArray(), points = points.ToArray(),
                 evidenceCount = current.EvidenceCount, relicCount = current.RelicCount, ritualStep = current.RitualStep,
-                losses = losses, lossLimit = revivesPerPlayer, secondsLeft = secondsLeft, completedCases = completedCases,
+                livesLost = livesLost, livesPerPlayer = livesPerPlayer, secondsLeft = secondsLeft, completedCases = completedCases,
                 monsterId = monster != null ? monster.GetComponent<GameCharacter>().ObjectId : -1, ending = ending
             };
         }

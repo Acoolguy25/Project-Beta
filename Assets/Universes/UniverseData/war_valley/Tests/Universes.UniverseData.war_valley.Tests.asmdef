@@ -1,0 +1,7 @@
+{
+    "name": "Universes.UniverseData.war_valley.Tests",
+    "references": ["Universes.UniverseData.war_valley.Shared"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

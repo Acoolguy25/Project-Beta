@@ -263,8 +263,6 @@ MonoBehaviour:
   SprintStaminaConsumptionRate: 10
   RotationSmoothTime: 0.12
   SpeedChangeRate: 10
-  JumpHeight: 1.2
-  Gravity: -15
   JumpTimeout: 0.35
   LandJumpTimeout: 0
   FallTimeout: 0.15
@@ -745,7 +743,9 @@ MonoBehaviour:
     m_Flags: 0
   useGameSettingsSensitivity: 1
   zoomSensitivity: 1
+  keyboardZoomSpeed: 12
   ZoomSmoothTime: 0.12
+  starterAssetsInputActions: {fileID: 0}
 --- !u!1 &2585095697572318277
 GameObject:
   m_ObjectHideFlags: 0
@@ -1746,7 +1746,9 @@ MonoBehaviour:
     m_Flags: 0
   useGameSettingsSensitivity: 1
   zoomSensitivity: 1
+  keyboardZoomSpeed: 12
   ZoomSmoothTime: 0.12
+  starterAssetsInputActions: {fileID: 0}
 --- !u!1 &4719298393698695764
 GameObject:
   m_ObjectHideFlags: 0
@@ -2220,7 +2222,9 @@ MonoBehaviour:
     m_Flags: 0
   useGameSettingsSensitivity: 1
   zoomSensitivity: 2
+  keyboardZoomSpeed: 12
   ZoomSmoothTime: 0.08
+  starterAssetsInputActions: {fileID: 0}
 --- !u!1 &5486539985080819849
 GameObject:
   m_ObjectHideFlags: 0
@@ -2932,11 +2936,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2116724677564175234, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_fontSize
-      value: 45.25
+      value: 45.75
       objectReference: {fileID: 0}
     - target: {fileID: 3111625660306725814, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_fontSize
-      value: 27.55
+      value: 27.85
       objectReference: {fileID: 0}
     - target: {fileID: 4066911039856087898, guid: 9357dd78fc8e07948b1f8f4d1f04f387, type: 3}
       propertyPath: m_SortingOrder
@@ -3518,15 +3522,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 100001, guid: 51a7b7b31f544a43831d6e0044f4399d, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 100001, guid: 51a7b7b31f544a43831d6e0044f4399d, type: 3}
       propertyPath: m_LocalScale.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 100001, guid: 51a7b7b31f544a43831d6e0044f4399d, type: 3}
       propertyPath: m_LocalScale.z
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 100001, guid: 51a7b7b31f544a43831d6e0044f4399d, type: 3}
       propertyPath: m_LocalPosition.x
@@ -3955,6 +3959,10 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7605491199203531438, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_Size
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7605491199203531490, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -3962,6 +3970,14 @@ PrefabInstance:
     - target: {fileID: 7605491199203531490, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7605491199203531490, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7605491199203531612, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -0.000022888184
       objectReference: {fileID: 0}
     - target: {fileID: 9100000000000000001, guid: d37614a3c1304fdda914f4818063ee68, type: 3}
       propertyPath: m_Pivot.x

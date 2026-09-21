@@ -74,7 +74,7 @@ namespace RyanAssets.Editor
                 await UniTask.SwitchToThreadPool();
                 try {
                     string keyPath = Environment.ExpandEnvironmentVariables(
-                        @"%USERPROFILE%\.ssh\id_hetzner"
+                        @"%USERPROFILE%\.ssh\linveo"
                     );
                     switch (syncMethod) {
                         case SyncMethod.SCP:

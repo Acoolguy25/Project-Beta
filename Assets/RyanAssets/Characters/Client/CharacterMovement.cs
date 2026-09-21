@@ -154,8 +154,10 @@ namespace RyanAssets.Characters.Client {
             if (moveVec != Vector2.zero) {
                 float CamEulerAngleY = Camera.main.transform.eulerAngles.y;
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg + CamEulerAngleY;
-                float rotation = Mathf.SmoothDampAngle(LocalPlayer.Character.transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, RotationSmoothTime);
-                LocalPlayer.Character.transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
+                float rotation = Mathf.SmoothDampAngle(_rb.rotation.eulerAngles.y, _targetRotation, ref _rotationVelocity, RotationSmoothTime);
+                _rb.MoveRotation(Quaternion.Euler(0.0f, rotation, 0.0f));
+            } else if (groundPhysics.GroundRotationDelta != Quaternion.identity) {
+                _rb.MoveRotation(groundPhysics.GroundRotationDelta * _rb.rotation);
             }
 
             Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;

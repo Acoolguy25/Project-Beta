@@ -1,9 +1,9 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using RyanAssets.Characters.Server;
 using RyanAssets.Commands.Server;
 using RyanAssets.Commands.Shared;
 using RyanAssets.Shared.Global;
-using System.Collections;
+using System.Globalization;
 using UnityEngine;
 using Universes.UniverseData.murder_mystery.Server;
 
@@ -176,43 +176,56 @@ namespace Universes.murder_mystery.Server
         static readonly ServerCommandService.CommandHandler[] commandActions =
         {
             (NetworkConnection caller, string commandName, string[] args) => {
-                LocalNPC.WalkSpeedMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
+                LocalNPC.WalkSpeedMultiplier = float.Parse(args[0], CultureInfo.InvariantCulture);
                 MM_ServerRunner.RefreshNPCSpeeds();
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                LocalNPC.FleeSpeedMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
+                LocalNPC.FleeSpeedMultiplier = float.Parse(args[0], CultureInfo.InvariantCulture);
                 MM_ServerRunner.RefreshNPCSpeeds();
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                LocalNPC.AttackSpeedMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
+                LocalNPC.AttackSpeedMultiplier = float.Parse(args[0], CultureInfo.InvariantCulture);
                 MM_ServerRunner.RefreshNPCSpeeds();
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                MM_ServerRunner.SpawnMultiplier = (float)System.Convert.ChangeType(args[0], typeof(float));
+                MM_ServerRunner.SpawnMultiplier = float.Parse(args[0], CultureInfo.InvariantCulture);
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.murdererBaseChance = (float)System.Convert.ChangeType(args[0], typeof(float));
+                MM_Roles.murdererBaseChance = float.Parse(args[0], CultureInfo.InvariantCulture);
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.minMurderers = (int)System.Convert.ChangeType(args[0], typeof(int));
+                MM_Roles.minMurderers = int.Parse(args[0], CultureInfo.InvariantCulture);
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.murdererMaxRatio = (float)System.Convert.ChangeType(args[0], typeof(float));
+                MM_Roles.murdererMaxRatio = float.Parse(args[0], CultureInfo.InvariantCulture);
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.sheriffBaseChance = (float)System.Convert.ChangeType(args[0], typeof(float));
+                MM_Roles.sheriffBaseChance = float.Parse(args[0], CultureInfo.InvariantCulture);
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.minSheriffs = (int)System.Convert.ChangeType(args[0], typeof(int));
+                MM_Roles.minSheriffs = int.Parse(args[0], CultureInfo.InvariantCulture);
             },
             (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.sheriffMaxRatio = (float)System.Convert.ChangeType(args[0], typeof(float));
+                MM_Roles.sheriffMaxRatio = float.Parse(args[0], CultureInfo.InvariantCulture);
             }
         };
+        static readonly ServerCommandService.CommandGetter[] commandGetters = {
+            (_, _) => LocalNPC.WalkSpeedMultiplier,
+            (_, _) => LocalNPC.FleeSpeedMultiplier,
+            (_, _) => LocalNPC.AttackSpeedMultiplier,
+            (_, _) => MM_ServerRunner.SpawnMultiplier,
+            (_, _) => MM_Roles.murdererBaseChance,
+            (_, _) => MM_Roles.minMurderers,
+            (_, _) => MM_Roles.murdererMaxRatio,
+            (_, _) => MM_Roles.sheriffBaseChance,
+            (_, _) => MM_Roles.minSheriffs,
+            (_, _) => MM_Roles.sheriffMaxRatio
+        };
+
         void Start() {
             for (int i = 0; i < commands.Length; i++)
             {
-                ServerCommandService.RegisterCommand(commands[i], commandActions[i]); 
+                ServerCommandService.RegisterCommand(commands[i], commandActions[i], commandGetters[i]);
             }
         }
     }

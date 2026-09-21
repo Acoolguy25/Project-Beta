@@ -15,8 +15,6 @@ namespace Universes.UniverseData.war_valley.Shared {
     [RequireComponent(typeof(StructureComponent), typeof(EffectsComponent), typeof(HealthComponent))]
     [RequireComponent(typeof(NavMeshObstacle), typeof(NavMeshLink))]
     public sealed class WV_DestructibleObstacle : NetworkBehaviour {
-        private const int WarValleyAgentType = -902729914;
-
         [SerializeField, Min(1)] private long maxHealth = 300;
         [SerializeField, Min(1.01f)] private float breachCost = 8f;
         [SerializeField, Min(0.05f)] private float linkClearance = 0.35f;
@@ -61,7 +59,10 @@ namespace Universes.UniverseData.war_valley.Shared {
 #if UNITY_SERVER
         public override void OnStartServer() {
             base.OnStartServer();
-            structure.Init(MaxHealth);
+            // A wall that also goes through a construction phase gets its health from
+            // WV_Constructable instead, which starts the site fragile and heals it as it is built.
+            if (GetComponent<WV_Constructable>() == null)
+                structure.Init(MaxHealth);
         }
 #endif
 
@@ -107,7 +108,7 @@ namespace Universes.UniverseData.war_valley.Shared {
             breachLink.endPoint = inverseRotation
                 * (linkCenter + transform.forward * endpointDistance - transform.position);
             breachLink.width = Mathf.Max(0f, worldWidth - linkClearance * 2f);
-            breachLink.agentTypeID = WarValleyAgentType;
+            breachLink.agentTypeID = WV_Rules.NavMeshAgentTypeId;
             breachLink.area = NavMesh.GetAreaFromName("Walkable");
             breachLink.costModifier = breachCost;
             breachLink.bidirectional = true;

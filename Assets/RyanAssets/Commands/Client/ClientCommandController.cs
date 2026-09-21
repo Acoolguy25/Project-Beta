@@ -1,4 +1,4 @@
-using FishNet;
+﻿using FishNet;
 using RyanAssets.Client.ClientUI.Chat;
 using RyanAssets.Commands.Shared;
 using RyanAssets.DataService;
@@ -14,6 +14,7 @@ namespace RyanAssets.Commands.Client {
     public class ClientCommandController : AutocompleteUI {
         readonly Dictionary<string, ClientCommandRegistration> clientCommands = new(StringComparer.OrdinalIgnoreCase);
         int oldSpaces = -1;
+        protected override bool CompleteCommandOnSpace => true;
 
         protected override void Start() {
             base.Start();
@@ -82,8 +83,11 @@ namespace RyanAssets.Commands.Client {
                     && commandConfig.arguments != null
                     && commandConfig.arguments.Length > spaces - 1
                     && parts.Length > spaces - 1) {
-                    options = CommandVerification.GetArgumentPredictions(
-                        commandConfig.arguments[spaces - 1], parts[spaces - 1], PlayerData.GetPlayerNames());
+                    options = ClientCommands.TryGetDynamicSuggestions(commandConfig.commandName, spaces - 1,
+                        commandConfigs.Values, out List<string> dynamicOptions)
+                        ? dynamicOptions
+                        : CommandVerification.GetArgumentPredictions(
+                            commandConfig.arguments[spaces - 1], parts[spaces - 1], PlayerData.GetPlayerNames());
                 }
             }
 

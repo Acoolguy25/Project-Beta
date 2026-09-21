@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: caa270e5da552dc4693b77f915cbb476, type: 3}
   m_Name: ProductionNetworkConfig
   m_EditorClassIdentifier: RyanAssets.NetworkSettings::RyanAssets.NetworkService.NetworkScriptableObject
-  backend_server_ip: project-beta.duckdns.org
+  backend_server_ip: ryangames.duckdns.org
   backend_server_encrypted: 1
   use_in_debug: 0
   no_login: 0

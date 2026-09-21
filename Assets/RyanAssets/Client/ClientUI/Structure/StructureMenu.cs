@@ -9,6 +9,7 @@ using RyanAssets.Shared.Globals;
 using RyanAssets.Shared.Requests;
 using RyanAssets.UI;
 using RyanAssets.UI.ButtonGrid;
+using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
@@ -17,6 +18,16 @@ namespace RyanAssets.Client.ClientUI.Build {
     public class StructureMenu : ButtonGridUI<StructureComponent> {
         [SerializeField] private CanvasGroupController canvasGroupController;
 
+        [Header("Categories")]
+        [Tooltip("Parent the category tabs are cloned under. Laid out by the prefab's layout group.")]
+        [SerializeField] private RectTransform categoryButtonRoot;
+        [Tooltip("Authored tab prefab, cloned once per category the build list contains.")]
+        [SerializeField] private StructureCategoryButton categoryButtonPrefab;
+        [Tooltip("Shows how many structures the current filter leaves visible.")]
+        [SerializeField] private TextMeshProUGUI itemCountText;
+        [SerializeField] private string allCategoriesLabel = "ALL ITEMS";
+        [SerializeField] private string uncategorizedLabel = "OTHER";
+
         [Header("Placement")]
         [SerializeField] private GameObject placementPanel;
         [SerializeField] private TextMeshProUGUI placementTitle;
@@ -24,6 +35,13 @@ namespace RyanAssets.Client.ClientUI.Build {
 
         private static readonly Color ValidPreviewColor = new(0.2f, 1f, 0.55f, 0.72f);
         private static readonly Color InvalidPreviewColor = new(1f, 0.2f, 0.2f, 0.72f);
+
+        // Row -> its structure's category, so the sidebar can filter without re-deriving the
+        // category from a row's display name.
+        private readonly Dictionary<GameObject, string> rowCategories = new();
+        private readonly List<StructureCategoryButton> categoryTabs = new();
+        /// <summary>The category the sidebar is filtered to, or null for "all items".</summary>
+        private string selectedCategory;
 
         private MaterialPropertyBlock previewProperties;
         private StructureComponent selectedStructure;
@@ -97,8 +115,98 @@ namespace RyanAssets.Client.ClientUI.Build {
                 .Select(FindStructurePrefab)
                 .Where(structure => structure != null)
                 .ToArray();
+            rowCategories.Clear();
             RefreshPrefabs(structures);
+            RebuildCategoryTabs(structures);
         }
+
+        // --- Categories -------------------------------------------------------
+
+        /// <summary>
+        /// Rebuilds the sidebar from the categories the live build list actually contains. The tabs
+        /// were previously five fixed buttons authored into the canvas with no handlers and labels
+        /// that matched no real category, so nothing they named could ever be selected.
+        /// </summary>
+        private void RebuildCategoryTabs(StructureComponent[] structures) {
+            if (categoryButtonRoot == null || categoryButtonPrefab == null)
+                return;
+
+            foreach (StructureCategoryButton tab in categoryTabs) {
+                if (tab != null)
+                    Destroy(tab.gameObject);
+            }
+            categoryTabs.Clear();
+
+            string[] categories = structures
+                .Select(structure => NormalizeCategory(structure.Category))
+                .Distinct()
+                .OrderBy(category => category)
+                .ToArray();
+
+            CreateCategoryTab(null, allCategoriesLabel);
+            foreach (string category in categories)
+                CreateCategoryTab(category, category);
+
+            // A category can disappear between rebuilds when the server changes the build list.
+            if (selectedCategory != null && !categories.Contains(selectedCategory))
+                selectedCategory = null;
+            SelectCategory(selectedCategory);
+        }
+
+        private void CreateCategoryTab(string category, string label) {
+            StructureCategoryButton tab = Instantiate(categoryButtonPrefab, categoryButtonRoot);
+            tab.gameObject.name = $"{label}Button";
+            tab.Bind(category, label.ToUpperInvariant(), () => SelectCategory(category));
+            categoryTabs.Add(tab);
+        }
+
+        private void SelectCategory(string category) {
+            selectedCategory = category;
+            foreach (StructureCategoryButton tab in categoryTabs) {
+                if (tab != null)
+                    tab.SetSelected(tab.Category == category);
+            }
+            RefreshFilter();
+            RefreshItemCount();
+        }
+
+        /// <summary>Rows are filtered by category on top of the shared search box.</summary>
+        public override void SetPrefabActive(GameObject prefab) {
+            base.SetPrefabActive(prefab);
+            // The base pass applies the search box. Only narrow further - never re-show a row the
+            // search already hid.
+            if (!prefab.activeSelf)
+                return;
+            if (selectedCategory == null)
+                return;
+            prefab.SetActive(
+                rowCategories.TryGetValue(prefab, out string category) && category == selectedCategory);
+        }
+
+        public override void UpdateSearchText(string searchText) {
+            base.UpdateSearchText(searchText);
+            if (contentTarget == null)
+                return;
+            // UpdateLayout re-applies the filter next frame; the rows themselves are already
+            // re-evaluated synchronously, so the count can be refreshed now.
+            foreach (Transform row in contentTarget)
+                SetPrefabActive(row.gameObject);
+            RefreshItemCount();
+        }
+
+        private void RefreshItemCount() {
+            if (itemCountText == null || contentTarget == null)
+                return;
+            int visible = 0;
+            foreach (Transform row in contentTarget) {
+                if (row.gameObject.activeSelf)
+                    visible++;
+            }
+            itemCountText.text = visible == 1 ? "1 ITEM" : $"{visible} ITEMS";
+        }
+
+        private string NormalizeCategory(string category) =>
+            string.IsNullOrWhiteSpace(category) ? uncategorizedLabel : category.Trim();
 
         private void OnInstanceRemoved() {
             if (SharedGlobalEvents.Instance != null)
@@ -113,11 +221,24 @@ namespace RyanAssets.Client.ClientUI.Build {
         }
 
         private void OnAddPrefab(GameObject prefab, StructureComponent structure) {
-            prefab.transform.GetChild(1).GetComponent<UnityEngine.UI.Image>().sprite = structure.Sprite;
+            var icon = prefab.transform.GetChild(1).GetComponent<UnityEngine.UI.Image>();
+            icon.sprite = structure.Sprite;
+            // An Image with no sprite draws an opaque white box over the card's icon frame, which is
+            // what made every shop icon read as "not rendering". Hide it instead.
+            icon.enabled = structure.Sprite != null;
+
             prefab.transform.GetChild(2).GetComponent<TextMeshProUGUI>().text = structure.Category;
             prefab.transform.GetChild(3).GetComponent<TextMeshProUGUI>().text = structure.DisplayName;
             prefab.transform.GetChild(4).GetComponent<TextMeshProUGUI>().text = structure.Description;
             prefab.transform.GetChild(5).GetComponent<TextMeshProUGUI>().text = MathHelper.AddCommas(structure.Cost);
+
+            rowCategories[prefab] = NormalizeCategory(structure.Category);
+            SetPrefabActive(prefab);
+            RefreshItemCount();
+        }
+
+        private void OnRemovePrefab(GameObject prefab) {
+            rowCategories.Remove(prefab);
         }
 
         private static StructureComponent FindStructurePrefab(ushort prefabId) {
@@ -183,9 +304,11 @@ namespace RyanAssets.Client.ClientUI.Build {
             }
 
             placementPosition = groundPoint;
+            StructurePlacement.GetOverlapVolume(
+                bounds, groundPoint, out Vector3 overlapCenter, out Vector3 overlapHalfExtents);
             placementValid = !Physics.CheckBox(
-                bounds.center,
-                StructurePlacement.GetOverlapHalfExtents(bounds),
+                overlapCenter,
+                overlapHalfExtents,
                 Quaternion.identity,
                 LayerMask.GetMask("Structure"),
                 QueryTriggerInteraction.Ignore);
@@ -255,6 +378,7 @@ namespace RyanAssets.Client.ClientUI.Build {
             ToolControls.reloadToolPressed += RotatePlacement;
             SharedGlobalEvents.BindInstanceReady(OnInstanceReady);
             OnCreatePrefab += OnAddPrefab;
+            OnDeletePrefab += OnRemovePrefab;
             OnClickPrefab += OnSelectStructure;
         }
 
@@ -264,6 +388,7 @@ namespace RyanAssets.Client.ClientUI.Build {
             ToolControls.reloadToolPressed -= RotatePlacement;
             SharedGlobalEvents.UnbindInstanceReady(OnInstanceReady);
             OnCreatePrefab -= OnAddPrefab;
+            OnDeletePrefab -= OnRemovePrefab;
             OnClickPrefab -= OnSelectStructure;
             OnInstanceRemoved();
             SetVisible(false, true);

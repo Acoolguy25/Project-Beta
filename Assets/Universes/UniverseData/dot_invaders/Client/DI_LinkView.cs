@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Universes.UniverseData.dot_invaders.Client {
     public sealed class DI_LinkView : MonoBehaviour {
@@ -23,6 +23,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             if (lineRenderer == null)
                 return;
 
+            lineRenderer.loop = false;
             lineRenderer.positionCount = 2;
             lineRenderer.SetPosition(0, start);
             lineRenderer.SetPosition(1, end);
@@ -33,10 +34,25 @@ namespace Universes.UniverseData.dot_invaders.Client {
             SetColor(color);
         }
 
+        /// <summary>Closed outline, used by the board's drag-selection marquee.</summary>
+        public void SetLoop(Vector3[] corners, Color color, float width) {
+            lineRenderer ??= GetComponent<LineRenderer>();
+            if (lineRenderer == null || corners == null || corners.Length < 3)
+                return;
+
+            lineRenderer.loop = true;
+            lineRenderer.positionCount = corners.Length;
+            lineRenderer.SetPositions(corners);
+            lineRenderer.startColor = lineRenderer.endColor = color;
+            lineRenderer.startWidth = lineRenderer.endWidth = width;
+            SetColor(color);
+        }
+
         public void SetRoute(Vector2[] positions, int[] route, Color color, float width) {
             lineRenderer ??= GetComponent<LineRenderer>();
             if (lineRenderer == null || route == null || route.Length < 2)
                 return;
+            lineRenderer.loop = false;
             lineRenderer.positionCount = route.Length;
             for (int i = 0; i < route.Length; i++) {
                 Vector2 point = positions[route[i]];

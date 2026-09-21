@@ -48,8 +48,21 @@ MonoBehaviour:
     _editor_value: 1
   DebugTimerInfinite:
     _editor_value: 1
-  _buildableStructures: []
+  _buildableStructures:
+  - {fileID: 6833282079580836474, guid: 53a0525c09a3ef446a2b214054881b98, type: 3}
+  - {fileID: 816667712998810890, guid: 88381a80ab9a1bc4cb0b2a639a5915f1, type: 3}
+  - {fileID: 6118914889549440593, guid: 563d1666740567042bdf05f364c4c25b, type: 3}
+  - {fileID: 1277259211358940640, guid: ae163808659cc4b4aaa3fb6061bee71f, type: 3}
+  - {fileID: 6936835669902203661, guid: 809b1852821e33747af3670a94679b70, type: 3}
+  - {fileID: 618905935157528692, guid: 47bb38226937caa4b8d313cc5c3d19af, type: 3}
+  - {fileID: 6192131556406775436, guid: 551546627fa03aa4cbcc87f3b863a8bc, type: 3}
+  - {fileID: 4550634728526722399, guid: afdb6e4260fab8a478cd98cd0669b2e5, type: 3}
+  - {fileID: 669514642784407488, guid: b90eb24e477ebd541958ec909e357e33, type: 3}
+  - {fileID: 3479097406870347081, guid: f377741704fd4aa4fa65164c585d074c, type: 3}
+  - {fileID: 922411531152070464, guid: 739ed8ac40305ae45aa59c8e049d1678, type: 3}
+  - {fileID: 3060155646031363214, guid: 9468a22068486cf47b490f0c2fa23635, type: 3}
   _flagPrefab: {fileID: 8119421105460553467, guid: f15c10e3854a2a448ac5eb03f720e52d, type: 3}
+  _economyPrefab: {fileID: 3705710000442935751, guid: ab8e3a233105dd549a1e7b6cc8f99f70, type: 3}
   WaveNumber: -1
   RobotNPC_Prefab: []
   WaveSpawnData: []

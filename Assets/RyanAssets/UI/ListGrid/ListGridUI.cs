@@ -46,7 +46,9 @@ namespace RyanAssets.UI.ListGrid {
             }
             globalOrder = 0;
         }
-        public void SetPrefabActive(GameObject prefab) {
+        // Virtual so a list with a second filter dimension - the structure menu's category
+        // sidebar - can narrow the same rows without duplicating the search behaviour.
+        public virtual void SetPrefabActive(GameObject prefab) {
             if (searchInputField == null)
                 return; // do nothing if search textbox does not exist
 
@@ -56,6 +58,15 @@ namespace RyanAssets.UI.ListGrid {
                           prefabName.Contains(searchInputField.text, StringComparison.OrdinalIgnoreCase);
 
             prefab.SetActive(active);
+        }
+
+        /// <summary>Re-applies the current filter to every row and resizes the content to match.</summary>
+        public void RefreshFilter() {
+            if (contentTarget == null)
+                return;
+            foreach (Transform row in contentTarget)
+                SetPrefabActive(row.gameObject);
+            UpdateLayout();
         }
         public void ClearPrefabs() {
             ClearPendingPrefabs();
@@ -114,7 +125,7 @@ namespace RyanAssets.UI.ListGrid {
             ClearPrefabs();
             AddPrefabs(objects);
         }
-        public void UpdateSearchText(string searchText) {
+        public virtual void UpdateSearchText(string searchText) {
             UpdateLayout();
         }
         private bool IsAtBottom() {

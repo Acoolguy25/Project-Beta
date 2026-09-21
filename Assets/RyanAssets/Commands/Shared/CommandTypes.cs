@@ -24,6 +24,8 @@ namespace RyanAssets.Commands.Shared {
         public string commandType;
         public string commandName;
         public string description;
+        // A getter accepts the selector arguments with the final value omitted.
+        public bool supportsGetter;
         public CommandArgumentConfig[] arguments;
     }
 }

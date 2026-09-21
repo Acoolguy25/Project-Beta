@@ -72,22 +72,19 @@ namespace RyanAssets.Commands.Shared {
             CommandArgumentConfig[] expectedArgs = config.arguments ?? Array.Empty<CommandArgumentConfig>();
             string[] providedArgs = args ?? Array.Empty<string>();
 
-            if (providedArgs.Length != expectedArgs.Length) {
-                errorMessage = $"Command '{config.commandName}' expects {expectedArgs.Length} argument(s), got {providedArgs.Length}.";
+            // Trailing arguments flagged optional may be omitted.
+            int requiredArgs = expectedArgs.Length;
+            while (requiredArgs > 0 && expectedArgs[requiredArgs - 1].optional)
+                requiredArgs--;
+
+            if ((providedArgs.Length < requiredArgs || providedArgs.Length > expectedArgs.Length) && !IsGetterRequest(config, providedArgs)) {
+                string expectation = requiredArgs == expectedArgs.Length
+                    ? $"{expectedArgs.Length}"
+                    : $"{requiredArgs} to {expectedArgs.Length}";
+                string getterHint = config.supportsGetter ? " Omit the final value to read the current value." : string.Empty;
+                errorMessage = $"Command '{config.commandName}' expects {expectation} argument(s), got {providedArgs.Length}.{getterHint}";
                 return false;
             }
-            //for (int i = 0; i < expectedArgs.Length; i++)
-            //{
-            //    if (i >= providedArgs.Length)
-            //    {
-            //        if (!expectedArgs[i].optional)
-            //        {
-            //            errorMessage = $"Command '{config.commandName}' expects at least {expectedArgs.Length} argument(s), got {providedArgs.Length}.";
-            //            return false;
-            //        }
-            //    }
-            //}
-
 
             HashSet<string> names = new(playerNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < providedArgs.Length; i++) {
@@ -96,6 +93,20 @@ namespace RyanAssets.Commands.Shared {
             }
 
             return true;
+        }
+
+        public static bool IsGetterRequest(CommandConfig config, string[] args) {
+            if (!config.supportsGetter || config.arguments == null || config.arguments.Length == 0)
+                return false;
+
+            int count = args?.Length ?? 0;
+            if (count == config.arguments.Length - 1)
+                return true;
+
+            // Bare player-setting commands read the caller's value.
+            return count == 0 && config.arguments.Length == 2
+                && (config.arguments[0].type == CommandArgumentType.Player
+                    || config.arguments[0].type == CommandArgumentType.Players);
         }
 
         public static List<string> GetCommandPredictions(IEnumerable<CommandConfig> commands, string typedCommand) {

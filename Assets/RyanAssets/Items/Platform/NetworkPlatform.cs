@@ -1,12 +1,11 @@
 using RyanAssets.Core;
 using UnityEngine;
-using RyanAssets.TweenService.TweenEasing;
 
 namespace RyanAssets.Items.Platform {
     [RequireComponent(typeof(Rigidbody))]
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-100)]
-    public class NetworkPlatform : MonoBehaviour {
+    public class NetworkPlatform : MonoBehaviour, IPhysicsMotionSource {
 
         [Header("Base Properties")]
         [SerializeField] private float movementSpeed = 2f; // Movement speed in meters per second
@@ -23,19 +22,26 @@ namespace RyanAssets.Items.Platform {
         [SerializeField] private bool reverseRotation = false;
 
         private Rigidbody _rb;
+        private RigidbodyReposition _reposition;
         private Vector3 _startPosition, _startRotation;
         private float _movementHalfPeriod, _rotationHalfPeriod;
         private NetworkHelper.MotionClock _clock;
         private bool _placed;
 
+        // The queued physics pose is not necessarily visible via Rigidbody.position
+        // until simulation. GroundPhysics consumes it during the same FixedUpdate.
+        public bool HasScheduledPose { get; private set; }
+        public Vector3 ScheduledPosition { get; private set; }
+        public Quaternion ScheduledRotation { get; private set; }
+
         private bool movementEnabled => deltaPosition != Vector3.zero;
         private bool rotationEnabled => deltaRotation != Vector3.zero;
 
-        private readonly EasingClass _movement_easing = new LinearEasing();
-        private readonly EasingClass _rotation_easing = new LinearEasing();
-
         private void Awake() {
             _rb = GetComponent<Rigidbody>();
+            _reposition = GetComponent<RigidbodyReposition>();
+            if (_reposition == null)
+                _reposition = gameObject.AddComponent<RigidbodyReposition>();
             _startPosition = _rb.position;
             _startRotation = _rb.rotation.eulerAngles;
             Precompute();
@@ -52,6 +58,7 @@ namespace RyanAssets.Items.Platform {
                 _clock.PhysicsStep -= MovePlatform;
             _clock = null;
             _placed = false;
+            HasScheduledPose = false;
         }
 
         private void Update() {
@@ -65,19 +72,17 @@ namespace RyanAssets.Items.Platform {
                 _clock.PhysicsStep += MovePlatform;
         }
 
-        private void FixedUpdate() => _clock?.UnityFixedUpdate();
-
         private void MovePlatform(double time, double deltaTime) {
-            Vector3 targetPosition = _startPosition + deltaPosition * Progress(time, _movementHalfPeriod, reverseMovement, _movement_easing);
+            Vector3 targetPosition = _startPosition + deltaPosition * Progress(time, _movementHalfPeriod, reverseMovement);
             Quaternion targetRotation = RotationAt(time);
             if (!_placed || _clock.IsResynchronizing) {
                 // A long pause is a placement at the current server phase. Never sweep
                 // that distance in a single physics step or interpolate from the old pose.
-                _rb.interpolation = RigidbodyInterpolation.None;
-                _rb.position = targetPosition;
-                _rb.rotation = targetRotation;
-                _rb.interpolation = RigidbodyInterpolation.Interpolate;
+                _reposition.Reposition(targetPosition, targetRotation);
                 _placed = true;
+                ScheduledPosition = targetPosition;
+                ScheduledRotation = targetRotation;
+                HasScheduledPose = true;
                 return;
             }
 
@@ -85,11 +90,14 @@ namespace RyanAssets.Items.Platform {
             // speed limiter prevents resynchronization and leaves clients on different phases.
             _rb.MovePosition(targetPosition);
             _rb.MoveRotation(targetRotation);
+            ScheduledPosition = targetPosition;
+            ScheduledRotation = targetRotation;
+            HasScheduledPose = true;
         }
 
         private Quaternion RotationAt(double time) {
             if (reverseRotation || _rotationHalfPeriod <= 0f)
-                return Quaternion.Euler(_startRotation + deltaRotation * Progress(time, _rotationHalfPeriod, reverseRotation, _rotation_easing));
+                return Quaternion.Euler(_startRotation + deltaRotation * Progress(time, _rotationHalfPeriod, reverseRotation));
 
             // Continuous rotation must not jump back after an arbitrary Euler delta
             // (e.g. 90 degrees). Wrap each axis only after a complete revolution,
@@ -108,7 +116,7 @@ namespace RyanAssets.Items.Platform {
             _rotationHalfPeriod = rotationEnabled && rotateSpeed > 0f ? deltaRotation.magnitude / rotateSpeed : 0f;
         }
 
-        private static float Progress(double time, float halfPeriod, bool reverse, EasingClass easing) {
+        private static float Progress(double time, float halfPeriod, bool reverse) {
             if (halfPeriod <= 0f)
                 return 0f;
 
@@ -117,7 +125,7 @@ namespace RyanAssets.Items.Platform {
             if (reverse && fraction > 1d)
                 fraction = 2d - fraction;
 
-            return easing.TransformValue((float)fraction);
+            return (float)fraction;
         }
     }
 }

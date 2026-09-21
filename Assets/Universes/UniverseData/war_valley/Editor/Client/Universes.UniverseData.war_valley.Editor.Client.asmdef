@@ -1,0 +1,25 @@
+{
+    "name": "Universes.UniverseData.war_valley.Editor.Client",
+    "rootNamespace": "Universes.UniverseData.war_valley.Editor.Client",
+    "references": [
+        "Universes.UniverseData.war_valley.Client",
+        "Universes.UniverseData.war_valley.Shared",
+        "RyanAssets.UI.ButtonGrid",
+        "RyanAssets.UI.ListGrid",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

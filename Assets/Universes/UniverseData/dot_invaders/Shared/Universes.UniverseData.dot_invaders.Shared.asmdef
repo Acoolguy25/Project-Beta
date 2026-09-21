@@ -1,6 +1,6 @@
 {
     "name": "Universes.UniverseData.dot_invaders.Shared",
     "rootNamespace": "Universes.UniverseData.dot_invaders",
-    "references": ["FishNet.Runtime"],
+    "references": ["FishNet.Runtime", "RyanAssets.Shared.Declarations"],
     "autoReferenced": true
 }

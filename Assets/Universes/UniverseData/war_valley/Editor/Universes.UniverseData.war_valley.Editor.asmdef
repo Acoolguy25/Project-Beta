@@ -1,0 +1,22 @@
+{
+    "name": "Universes.UniverseData.war_valley.Editor",
+    "rootNamespace": "Universes.UniverseData.war_valley.Editor",
+    "references": [
+        "Universes.UniverseData.war_valley.Shared",
+        "FishNet.Runtime",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Declarations",
+        "Unity.AI.Navigation"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
