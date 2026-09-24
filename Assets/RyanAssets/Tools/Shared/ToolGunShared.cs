@@ -1,13 +1,8 @@
-﻿using FishNet.Object;
-using System;
-
-#if !UNITY_SERVER
-    using RyanAssets.Clients.ClientEffects;
-#endif
+using RyanAssets.Shared.Combat;
 using UnityEngine;
 using RpcGen;
 
-namespace RyanAssets.Tools.Shared { 
+namespace RyanAssets.Tools.Shared {
     public partial class ToolGunShared : ToolBaseShared {
         [Header("Gun Stats")]
         [SerializeField]
@@ -28,103 +23,41 @@ namespace RyanAssets.Tools.Shared {
         public float BurstDelay = 0.1f;
 
         public ParticleSystem FireParticleSystem;
-        static LayerMask hitLayers;
-        protected override void Awake() {
-            base.Awake();
-            hitLayers = ~LayerMask.GetMask("Ignore Raycast");
-        }
+
+        /// <summary>
+        /// Traces one shot toward <paramref name="targetLocation"/>.
+        /// <para>
+        /// The trace itself lives in <see cref="HitscanShot"/> so a turret or a vehicle mount fires
+        /// through exactly the same muzzle check, spread cone, and hit resolution this gun does.
+        /// </para>
+        /// </summary>
         public RaycastHit? Shoot(Vector3 targetLocation) {
-            //Debug.DrawRay(
-            //    weaponRoot.transform.position,
-            //    (targetLocation - weaponRoot.transform.position).normalized * MaxRange,
-            //    Color.red,
-            //    2f
-            //);
             Vector3 origin = weaponRoot.transform.position;
-            if (targetLocation == origin)
-                return null; // safety check!
-            if (TryGetMuzzleObstruction(origin, out RaycastHit muzzleHit))
-                return muzzleHit; // The muzzle is inside a solid object; never raycast past it.
-            Debug.DrawLine(origin, origin + Vector3.forward*0.3f, Color.red, 2f);
-
-            Vector3 dir = GetSpreadDirection(origin, targetLocation, UnityEngine.Random.Range(WorstAccuracy / 360f, BestAccuracy / 360f));
-            RaycastHit[] hits = Physics.RaycastAll(origin, dir, MaxRange, hitLayers);
-            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-            foreach (RaycastHit h in hits) {
-                if (h.transform != null && h.transform.root != null && !h.transform.IsChildOf(connectedCharacter.transform)) {
-                    return h;
-                }
-            }
-            return new RaycastHit {
-                point = origin + dir * MaxRange,
-                normal = -dir,
-                distance = MaxRange,
-            };
-        }
-        bool TryGetMuzzleObstruction(Vector3 origin, out RaycastHit hit) {
-            // Raycasts do not reliably report a collider when their origin is already inside it.
-            // Check the muzzle volume first, ignoring the wielder and the weapon itself.
-            Collider[] overlaps = Physics.OverlapSphere(
+            return HitscanShot.Fire(
                 origin,
+                targetLocation,
+                MaxRange,
+                UnityEngine.Random.Range(WorstAccuracy / 360f, BestAccuracy / 360f),
+                connectedCharacter != null ? connectedCharacter.transform : null,
                 MuzzleCollisionRadius,
-                hitLayers,
-                QueryTriggerInteraction.Ignore);
-
-            foreach (Collider overlap in overlaps) {
-                if (IsShooterOrWeaponCollider(overlap))
-                    continue;
-
-                Vector3 closestPoint = overlap.ClosestPoint(origin);
-                Vector3 normal = origin - closestPoint;
-                if (normal.sqrMagnitude < 0.0001f)
-                    normal = -weaponRoot.transform.forward;
-
-                // RaycastHit cannot be constructed with a Collider, but a hit with no
-                // transform is intentionally non-damaging and stops the bullet visual here.
-                hit = new RaycastHit {
-                    point = closestPoint,
-                    normal = normal.normalized,
-                    distance = 0f,
-                };
-                return true;
-            }
-
-            hit = default;
-            return false;
+                // The whole tool, not just its weapon root: the muzzle check must not treat the
+                // gun's own casing as something it is buried inside.
+                transform);
         }
-        bool IsShooterOrWeaponCollider(Collider collider) {
-            Transform colliderTransform = collider.transform;
-            return colliderTransform.IsChildOf(transform) ||
-                   (connectedCharacter != null && colliderTransform.IsChildOf(connectedCharacter.transform));
-        }
-        Vector3 GetSpreadDirection(Vector3 origin, Vector3 targetPosition, float accuracy) {
-            Vector3 baseDir = (targetPosition - origin).normalized;
-            float spreadAngle = (1f - accuracy) * 15f;
 
-            Vector3 randomAxis = Vector3.Cross(baseDir, UnityEngine.Random.onUnitSphere);
-            if (randomAxis.sqrMagnitude < 0.0001f)
-                randomAxis = Vector3.Cross(baseDir, Vector3.up); // fallback
-
-            Quaternion spread = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, spreadAngle), randomAxis.normalized);
-            return spread * baseDir;
-        }
-        //[ObserversRpc(ExcludeOwner = true)]
-        //public void VisualizeBulletRpc(Vector3 targetLocation) {
-        //    VisualizeBullet(Shoot(targetLocation));
-        //}
         public void VisualizeBulletLocally(RaycastHit? hit) {
             if (hit == null)
                 return;
-#if !UNITY_SERVER
-            //GunVisualEffects.VisualizeBullet(hit.Value, weaponRoot.transform.position);
-            GunVisualEffects.VisualizeBullet(hit.Value, FireParticleSystem.transform.position, FireParticleSystem);
-#endif
-            PlayAudio(attackAudio);
+
+            // The tracer starts at the particle system rather than at the trace origin, because the
+            // authored muzzle effect is where a player sees the shot leave the weapon.
+            Vector3 muzzlePosition = FireParticleSystem != null
+                ? FireParticleSystem.transform.position
+                : weaponRoot.transform.position;
+
+            WeaponFireEffects.Play(muzzlePosition, hit.Value, FireParticleSystem, audioSource, attackAudio);
         }
-        //[ServerRpc]
-        //public void ShootServerRpc(Vector3 targetLocation) {
-        //    VisualizeBulletRpc(targetLocation);
-        //}
+
         [SharedRpc(RunOnServer = true, RunOnCallingClient = false)]
         public void VisualizeBullet(Vector3 targetLocation) {
             VisualizeBulletLocally(Shoot(targetLocation));

@@ -149,6 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Universes.UniverseData.war_valley.Client::Universes.UniverseData.war_valley.Client.WV_ClientController
   hudPrefab: {fileID: 1307344703195898989, guid: cbf8ae651e945e9438119105f2ef05b8, type: 3}
+  troopSelectionIndicator: {fileID: 2854674636289431624, guid: 9417d0883bab0b048b93d3c662505a9b, type: 3}
   maxSelection: 120
 --- !u!4 &77648418
 Transform:

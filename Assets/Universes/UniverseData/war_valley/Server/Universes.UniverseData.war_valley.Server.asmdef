@@ -4,6 +4,7 @@
     "references": [
         "Universes.UniverseData.war_valley.Shared",
         "RyanAssets.Tools.Shared",
+        "RyanAssets.Tools.Client",
         "RyanAssets.Core",
         "GUID:f51ebe6a0ceec4240a699833d6309b23",
         "GUID:7c88a4a7926ee5145ad2dfa06f454c67",

@@ -1,3 +1,4 @@
+using RyanAssets.Shared.WorldUI;
 using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
@@ -13,6 +14,32 @@ namespace Universes.UniverseData.war_valley.Shared {
         Jet = 6,
         Bomber = 7,
         UAV = 8
+    }
+
+    /// <summary>
+    /// The weapon a War Valley foot soldier carries. Wave troops and the troops a commander trains
+    /// are the same character with a different tool in their hands, so one enum describes both.
+    /// </summary>
+    public enum WV_TroopKind : byte {
+        Knife = 0,
+        Gunner = 1
+    }
+
+    /// <summary>
+    /// Why the server would not queue something at a production building.
+    /// <para>
+    /// Queueing is refused for several perfectly ordinary reasons, and a button that silently does
+    /// nothing is indistinguishable from a broken one, so the reason comes back to the sender and
+    /// the HUD says which it was. The numbering is unchanged from when this covered troops alone.
+    /// </para>
+    /// </summary>
+    public enum WV_TroopRefusal : byte {
+        None = 0,
+        NotEnoughFunds = 1,
+        SquadFull = 2,
+        QueueFull = 3,
+        NotOperational = 4,
+        Unavailable = 5
     }
 
     /// <summary>The order a selected group is currently carrying out.</summary>
@@ -123,6 +150,38 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static Color GetOwnerTint(int clientId) =>
             Color.Lerp(Color.white, TeamConfig.TeamToColor(GetCommanderColor(clientId)), OwnerTintStrength);
 
+        /// <summary>
+        /// The commander's colour at full strength, for UI drawn over the world rather than for a
+        /// model's albedo. A build timer's owner strip should read as the commander's colour outright,
+        /// not as the washed-out tint that keeps the Cartoon Military art visible underneath it.
+        /// </summary>
+        public static Color GetCommanderUIColor(int clientId) =>
+            TeamConfig.TeamToColor(GetCommanderColor(clientId));
+
+        /// <summary>
+        /// The health fraction at which a structure starts visibly failing. Above this it carries its
+        /// commander's colour cleanly; below it the colour is progressively eaten by corrosion, so a
+        /// building about to go up is readable as such from across the valley.
+        /// </summary>
+        public const float CorrosionHealthFraction = 0.3f;
+
+        /// <summary>Rusted-through albedo a structure reaches at the instant it dies.</summary>
+        public static readonly Color CorrodedTint = new(0.29f, 0.17f, 0.09f);
+
+        /// <summary>
+        /// The albedo a structure of this owner shows at <paramref name="healthFraction"/> of its
+        /// maximum health. Undamaged and lightly damaged structures are untouched; past the
+        /// corrosion threshold the owner tint is pulled toward rust, reaching it at zero health.
+        /// </summary>
+        public static Color GetDamagedTint(int clientId, float healthFraction) {
+            Color ownerTint = GetOwnerTint(clientId);
+            if (healthFraction >= CorrosionHealthFraction)
+                return ownerTint;
+
+            float corrosion = 1f - Mathf.Clamp01(healthFraction / CorrosionHealthFraction);
+            return Color.Lerp(ownerTint, CorrodedTint, corrosion);
+        }
+
         /// <summary>Spacing between units fanned out around a single group order.</summary>
         public const float GroupFormationSpacing = 3.2f;
 
@@ -151,13 +210,13 @@ namespace Universes.UniverseData.war_valley.Shared {
             }
         }
 
-        /// <summary>Formats remaining build or production time for the HUD.</summary>
-        public static string FormatCountdown(float secondsRemaining) {
-            if (secondsRemaining <= 0f)
-                return "0s";
-            int total = Mathf.CeilToInt(secondsRemaining);
-            return total >= 60 ? $"{total / 60}m {total % 60}s" : $"{total}s";
-        }
+        /// <summary>
+        /// Formats remaining build or production time for the HUD. Forwards to the shared world-timer
+        /// formatter so the HUD's production queue and the bar floating over the site itself round and
+        /// abbreviate the same countdown identically.
+        /// </summary>
+        public static string FormatCountdown(float secondsRemaining) =>
+            WorldTimerBar.FormatCountdown(secondsRemaining);
 
         public static string GetUnitDisplayName(WV_UnitKind kind) => kind switch {
             WV_UnitKind.Infantry => "Infantry",
@@ -170,6 +229,70 @@ namespace Universes.UniverseData.war_valley.Shared {
             WV_UnitKind.UAV => "UAV",
             _ => "Unit"
         };
+
+        // --- Foot soldiers ----------------------------------------------------
+
+        /// <summary>
+        /// How far a troop holding a gun will engage from. Deliberately far short of the pistol's own
+        /// 60m trace: a rifleman that opened fire the moment a target crossed the horizon would
+        /// never close on an objective, and the shot would spend most of its life blocked by terrain.
+        /// </summary>
+        public const float GunnerEngageRange = 24f;
+
+        /// <summary>
+        /// The distance a gunner tries to hold. Anything that closes inside this is too near to
+        /// shoot comfortably, so the troop gives ground instead of standing there being stabbed.
+        /// </summary>
+        public const float GunnerStandoffRange = 11f;
+
+        /// <summary>
+        /// How often a gunner offers to pull the trigger. The weapon's own fire rate, clip, and
+        /// reload remain the real limit; this only has to be short enough not to add a second one.
+        /// </summary>
+        public const float GunnerAttackInterval = 0.35f;
+
+        /// <summary>Funds a commander is charged to field one troop.</summary>
+        public static int GetTroopCost(WV_TroopKind kind) => kind switch {
+            WV_TroopKind.Gunner => 150,
+            _ => 80
+        };
+
+        public static string GetTroopDisplayName(WV_TroopKind kind) => kind switch {
+            WV_TroopKind.Gunner => "Gunner",
+            _ => "Knife"
+        };
+
+        /// <summary>
+        /// Seconds a barracks spends training one troop. Foot soldiers are the cheapest and fastest
+        /// thing on the field, so these sit well under any vehicle's build time - but they are no
+        /// longer instant, because a queue is what makes them cost tempo as well as funds.
+        /// </summary>
+        public static float GetTroopBuildSeconds(WV_TroopKind kind) => kind switch {
+            WV_TroopKind.Gunner => 10f,
+            _ => 6f
+        };
+
+        /// <summary>One line describing how this troop fights, for the production card.</summary>
+        public static string GetTroopDescription(WV_TroopKind kind) => kind switch {
+            WV_TroopKind.Gunner => "Rifleman. Holds range and shoots.",
+            _ => "Melee rusher. Cheap and fast."
+        };
+
+        /// <summary>What the HUD tells the commander when an order to build is refused.</summary>
+        public static string GetProductionRefusalMessage(WV_TroopRefusal refusal, WV_ProductionItem item) =>
+            refusal switch {
+                WV_TroopRefusal.NotEnoughFunds => $"Not enough funds for a {item.DisplayName}",
+                WV_TroopRefusal.SquadFull => $"Squad is full ({MaxTroopsPerCommander} troops)",
+                WV_TroopRefusal.QueueFull => "Build queue is full",
+                WV_TroopRefusal.NotOperational => "That building is not finished",
+                _ => $"Cannot build a {item.DisplayName} here"
+            };
+
+        /// <summary>Upper bound on the troops one commander can have alive at once.</summary>
+        public const int MaxTroopsPerCommander = 12;
+
+        /// <summary>How far from its barracks spawn point a newly trained troop is placed.</summary>
+        public const float TroopSpawnRadius = 5f;
 
         /// <summary>Aircraft ignore the NavMesh and hold this altitude above their ground target.</summary>
         public static float GetCruiseAltitude(WV_UnitKind kind) => kind switch {

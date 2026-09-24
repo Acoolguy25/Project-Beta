@@ -200,6 +200,41 @@ namespace RyanAssets.Characters.Server {
 
         // Call this instead of mutating FleeTeams directly at runtime, so the cached HashSet
         // used for lookups stays in sync with the serialized list.
+        /// <summary>The engagement band this NPC currently fights inside.</summary>
+        public float AttackMinRange => MinAttackRange;
+        public float AttackMaxRange => MaxAttackRange;
+
+        /// <summary>
+        /// Re-tunes the engagement band for the weapon an NPC is actually carrying.
+        /// <para>
+        /// The Inspector defaults describe a melee fighter, which is the wrong shape entirely for one
+        /// holding a gun: a ranged NPC has to stop at the far edge of its reach, hold that distance
+        /// while it fires, and give ground when something closes on it. Those four movement flags
+        /// only make sense as one decision, so they are set together here rather than being poked
+        /// individually by every game that arms an NPC.
+        /// </para>
+        /// </summary>
+        /// <param name="minRange">Closer than this and the NPC backs away instead of attacking.</param>
+        /// <param name="maxRange">Farther than this and it closes the distance.</param>
+        /// <param name="holdDistance">
+        /// True for a ranged weapon: stand at the near edge of the band and stay planted while
+        /// firing. False keeps the melee behaviour of walking into the target.
+        /// </param>
+        /// <param name="attackCooldown">Seconds between attacks, or a non-positive value to keep the authored one.</param>
+        public void ConfigureAttackRange(float minRange, float maxRange, bool holdDistance, float attackCooldown = 0f) {
+            MinAttackRange = Mathf.Max(0f, minRange);
+            MaxAttackRange = Mathf.Max(MinAttackRange + 0.1f, maxRange);
+            ApproachToMinRangeEdge = holdDistance;
+            AllowMovementWhileAttacking = !holdDistance;
+            RetreatToMinRangeEdge = holdDistance;
+            // Acquisition must reach at least as far as the weapon does, or a rifleman would walk
+            // into knife range before it ever noticed the thing it could already shoot.
+            AttackDetectionRadius = Mathf.Max(AttackDetectionRadius, MaxAttackRange);
+            AttackClearRadius = Mathf.Max(AttackClearRadius, MaxAttackRange * 1.25f);
+            if (attackCooldown > 0f)
+                AttackCooldown = attackCooldown;
+        }
+
         public void SetFleeTeams(List<TeamColor> teams) {
             FleeTeams = teams ?? new List<TeamColor>();
             RebuildFleeTeamSet();

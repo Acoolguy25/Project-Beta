@@ -29,8 +29,18 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static readonly Color PanelFill = new(0.05f, 0.07f, 0.09f, 0.78f);
         static readonly Color Ink = new(0.88f, 0.93f, 0.98f);
         static readonly Color Accent = new(0.45f, 0.85f, 1f);
-        static readonly Color Money = new(0.55f, 0.95f, 0.6f);
         static readonly Color BoxFill = new(0.35f, 1f, 0.55f, 0.15f);
+
+        // --- The shared settings menu's palette ------------------------------
+        // Taken from Assets/RyanAssets/Client/ClientUI/GameSettings so the funds readout reads as
+        // part of the same interface as the pause menu rather than as a mode-specific overlay. The
+        // settings menu is flat neutral grey with a soft blue header and a muted sub-label; it has
+        // no green, which is why the funds number is no longer money-coloured.
+        static readonly Color SettingsPanelFill = new(0.105f, 0.105f, 0.12f, 0.96f);
+        static readonly Color SettingsBorder = new(0.2f, 0.22f, 0.24f, 1f);
+        static readonly Color SettingsHeader = new(0.72f, 0.86f, 1f, 1f);
+        static readonly Color SettingsInk = new(0.93f, 0.96f, 1f, 1f);
+        static readonly Color SettingsMuted = new(0.65f, 0.68f, 0.74f, 1f);
 
         [MenuItem("Ryan/War Valley/Rebuild HUD")]
         public static void RebuildHud() {
@@ -103,24 +113,34 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 Outline(selectionBox, new Color(0.35f, 1f, 0.55f, 0.85f));
                 selectionBox.SetActive(false);
 
-                GameObject economyPanel = Panel(root.transform, "EconomyPanel", PanelFill);
-                Anchor(economyPanel, Vector2.one, Vector2.one, new Vector2(-24f, -96f),
-                    new Vector2(300f, 92f), Vector2.one);
-                TextMeshProUGUI caption = Label(economyPanel.transform, "Caption", "FUNDS", 16f,
-                    new Color(0.6f, 0.68f, 0.75f), TextAlignmentOptions.MidlineLeft);
-                Anchor(caption.gameObject, Vector2.zero, Vector2.one, new Vector2(14f, 16f), Vector2.zero,
-                    new Vector2(0.5f, 0.5f));
-                TextMeshProUGUI funds = Label(economyPanel.transform, "FundsLabel", "0", 34f, Money,
-                    TextAlignmentOptions.MidlineRight);
-                Anchor(funds.gameObject, Vector2.zero, Vector2.one, new Vector2(-12f, 16f), Vector2.zero,
-                    new Vector2(0.5f, 0.5f));
-                TextMeshProUGUI income = Label(economyPanel.transform, "IncomeLabel", "No income", 20f, Accent,
-                    TextAlignmentOptions.MidlineRight);
-                Anchor(income.gameObject, Vector2.zero, Vector2.one, new Vector2(-12f, -22f), Vector2.zero,
-                    new Vector2(0.5f, 0.5f));
+                // Funds sit in the bottom-left corner, the one part of the screen no panel opens
+                // over: production comes up bottom-right and the selection summary stacks above
+                // this. Each label is anchored to the corner it belongs to rather than stretched
+                // across the panel and nudged, so the readout holds its shape at any canvas scale.
+                GameObject economyPanel = Panel(root.transform, "EconomyPanel", SettingsPanelFill);
+                Anchor(economyPanel, Vector2.zero, Vector2.zero, new Vector2(24f, 24f),
+                    new Vector2(300f, 92f), Vector2.zero);
+                Outline(economyPanel, SettingsBorder);
 
+                TextMeshProUGUI caption = Label(economyPanel.transform, "Caption", "FUNDS", 15f,
+                    SettingsHeader, TextAlignmentOptions.MidlineLeft);
+                caption.fontStyle = FontStyles.Bold;
+                Anchor(caption.gameObject, Vector2.up, Vector2.up, new Vector2(14f, -10f),
+                    new Vector2(150f, 20f), Vector2.up);
+
+                TextMeshProUGUI income = Label(economyPanel.transform, "IncomeLabel", "No income", 15f,
+                    SettingsMuted, TextAlignmentOptions.MidlineRight);
+                Anchor(income.gameObject, Vector2.one, Vector2.one, new Vector2(-14f, -10f),
+                    new Vector2(150f, 20f), Vector2.one);
+
+                TextMeshProUGUI funds = Label(economyPanel.transform, "FundsLabel", "0", 34f, SettingsInk,
+                    TextAlignmentOptions.MidlineLeft);
+                Anchor(funds.gameObject, Vector2.zero, Vector2.right, new Vector2(0f, 12f),
+                    new Vector2(-28f, 42f), new Vector2(0.5f, 0f));
+
+                // Above the funds card, which now owns the corner itself.
                 GameObject selectionPanel = Panel(root.transform, "SelectionPanel", PanelFill);
-                Anchor(selectionPanel, Vector2.zero, Vector2.zero, new Vector2(24f, 24f),
+                Anchor(selectionPanel, Vector2.zero, Vector2.zero, new Vector2(24f, 128f),
                     new Vector2(280f, 180f), Vector2.zero);
                 TextMeshProUGUI selectionLabel = Label(selectionPanel.transform, "SelectionLabel", string.Empty,
                     20f, Ink, TextAlignmentOptions.TopLeft);

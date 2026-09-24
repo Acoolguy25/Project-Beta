@@ -66,58 +66,98 @@ namespace Universes.UniverseData.war_valley.Server {
             // some ids in the request are rejected.
             int commanded = 0;
             for (int i = 0; i < count; i++) {
-                if (!TryGetOwnedBrain(sender, request.unitObjectIds[i], out WV_UnitBrain brain))
+                if (!TryGetOwnedCommandable(sender, request.unitObjectIds[i], out WV_ICommandable commandable))
                     continue;
 
                 switch (orderType) {
                     case WV_OrderType.Move:
-                        brain.OrderMove(WV_Rules.GetGroupDestination(request.position, commanded, count));
+                        commandable.OrderMove(WV_Rules.GetGroupDestination(request.position, commanded, count));
                         break;
                     case WV_OrderType.AttackMove:
-                        brain.OrderAttackMove(WV_Rules.GetGroupDestination(request.position, commanded, count));
+                        commandable.OrderAttackMove(WV_Rules.GetGroupDestination(request.position, commanded, count));
                         break;
                     case WV_OrderType.Attack:
-                        brain.OrderAttack(attackTarget);
+                        commandable.OrderAttack(attackTarget);
                         break;
                     case WV_OrderType.HoldPosition:
-                        brain.OrderHoldPosition();
+                        commandable.OrderHoldPosition();
                         break;
                     default:
-                        brain.OrderStop();
+                        commandable.OrderStop();
                         break;
                 }
                 commanded++;
             }
         }
 
+        /// <summary>
+        /// Queues or cancels one item at a building the sender owns.
+        /// <para>
+        /// A barracks queues foot soldiers through exactly this path, so the cost, the refund, and
+        /// the cap all live here rather than in a second training route. Every outcome is answered:
+        /// a button that silently does nothing is indistinguishable from a broken one.
+        /// </para>
+        /// </summary>
         static void OnProduction(NetworkConnection sender, WV_ProductionRequest request, Channel channel) {
-            if (sender == null
-                || !sender.IsValid
-                || !TryGetOwnedComponent(sender, request.buildingObjectId, out WV_ProductionBuilding building))
+            if (sender == null || !sender.IsValid)
                 return;
+
+            WV_ProductionItem item = WV_ProductionItem.Decode(request.unitKind);
+            WV_TroopRefusal refusal = Produce(sender, request, item);
+
+            // A cancel that found nothing to cancel is not worth reporting; it means the queue moved
+            // on under the player's click, which the refreshed queue already shows.
+            if (request.cancel)
+                return;
+
+            sender.Broadcast(new WV_ProductionResult {
+                queued = refusal == WV_TroopRefusal.None,
+                refusal = (byte)refusal,
+                item = request.unitKind
+            });
+        }
+
+        static WV_TroopRefusal Produce(
+            NetworkConnection sender, WV_ProductionRequest request, WV_ProductionItem item) {
+            if (item.IsNone
+                || !TryGetOwnedComponent(sender, request.buildingObjectId, out WV_ProductionBuilding building))
+                return WV_TroopRefusal.Unavailable;
 
             WV_Economy economy = WV_Economy.Instance;
             if (economy == null)
-                return;
-
-            var kind = (WV_UnitKind)request.unitKind;
+                return WV_TroopRefusal.Unavailable;
 
             if (request.cancel) {
-                if (building.TryCancel(kind, out int refund))
+                if (building.TryCancel(item, out int refund))
                     economy.Credit(sender.ClientId, refund);
-                return;
+                return WV_TroopRefusal.None;
             }
 
-            WV_Unit prefab = building.FindPrefab(kind);
-            if (prefab == null || building.QueueLength >= building.MaxQueueLength)
-                return;
+            if (!building.CanProduce(item))
+                return WV_TroopRefusal.Unavailable;
+            if (!building.IsOperational)
+                return WV_TroopRefusal.NotOperational;
+            if (building.QueueLength >= building.MaxQueueLength)
+                return WV_TroopRefusal.QueueFull;
+
+            // The squad cap is checked before payment as well as on delivery. Refusing here is what
+            // makes the cap legible: the alternative is charging for a troop that is refunded
+            // silently several seconds later.
+            if (item.IsTroop
+                && WV_ServerTroops.Instance != null
+                && WV_ServerTroops.Instance.IsSquadFull(sender.ClientId))
+                return WV_TroopRefusal.SquadFull;
 
             // Charge first, then queue. A failed enqueue hands the money straight back rather than
             // leaving the player short for a unit they never got.
-            if (!economy.TryDebit(sender.ClientId, prefab.Cost))
-                return;
-            if (!building.TryEnqueue(kind))
-                economy.Credit(sender.ClientId, prefab.Cost);
+            int cost = building.GetCost(item);
+            if (!economy.TryDebit(sender.ClientId, cost))
+                return WV_TroopRefusal.NotEnoughFunds;
+            if (!building.TryEnqueue(item)) {
+                economy.Credit(sender.ClientId, cost);
+                return WV_TroopRefusal.Unavailable;
+            }
+            return WV_TroopRefusal.None;
         }
 
         static void OnRallyPoint(NetworkConnection sender, WV_RallyPointRequest request, Channel channel) {
@@ -130,17 +170,32 @@ namespace Universes.UniverseData.war_valley.Server {
             building.SetRallyPoint(request.position);
         }
 
-        static bool TryGetOwnedBrain(NetworkConnection sender, int objectId, out WV_UnitBrain brain) {
-            brain = null;
+        /// <summary>
+        /// Resolves one commandable object the sender actually owns. Produced units carry their
+        /// commander in a replicated <see cref="WV_Owned"/>; a trained troop is a server-owned
+        /// character whose commander is recorded only on the server, so the two are checked through
+        /// their own authorities rather than through one shared assumption.
+        /// </summary>
+        static bool TryGetOwnedCommandable(
+            NetworkConnection sender, int objectId, out WV_ICommandable commandable) {
+            commandable = null;
             if (!TryGetSpawned(objectId, out NetworkObject networkObject))
                 return false;
 
             WV_Owned owned = networkObject.GetComponent<WV_Owned>();
-            if (owned == null || !owned.IsOwnedBy(sender.ClientId))
-                return false;
+            if (owned != null && owned.IsOwnedBy(sender.ClientId)) {
+                commandable = networkObject.GetComponent<WV_UnitBrain>();
+                if (commandable != null)
+                    return true;
+            }
 
-            brain = networkObject.GetComponent<WV_UnitBrain>();
-            return brain != null;
+            if (WV_ServerTroops.Instance != null
+                && WV_ServerTroops.Instance.TryGetOwnedTroop(sender.ClientId, objectId, out WV_TroopBrain troop)) {
+                commandable = troop;
+                return true;
+            }
+
+            return false;
         }
 
         static bool TryGetOwnedComponent<T>(NetworkConnection sender, int objectId, out T component)

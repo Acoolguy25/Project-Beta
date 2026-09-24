@@ -6,6 +6,7 @@
         "FishNet.Runtime",
         "RyanAssets.Core",
         "RyanAssets.Input",
+        "RyanAssets.Characters.Shared",
         "RyanAssets.Shared.Component",
         "RyanAssets.Shared.Declarations",
         "RyanAssets.Shared.Global",

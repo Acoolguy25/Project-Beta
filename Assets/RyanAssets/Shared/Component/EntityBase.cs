@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using RyanAssets.Shared.Declarations;
@@ -44,6 +45,41 @@ namespace RyanAssets.Shared.Component {
         }
 
         public bool IsEffectActive(CharacterEffect effect) => EffectsComponent.IsEffectActive(effect);
+
+        static readonly List<EntityBase> all = new();
+
+        /// <summary>
+        /// Every spawned entity that routes its network callbacks through this base: structures,
+        /// objectives, and vehicles. Characters deliberately do not appear here - they never chain to
+        /// <see cref="OnStartNetwork"/> and publish their own roster through
+        /// <c>GameCharacter.GameCharacterAdded</c>.
+        /// </summary>
+        public static IReadOnlyList<EntityBase> All => all;
+
+        /// <summary>
+        /// Raised on every build as an entity spawns or despawns. Shared presentation - the overhead
+        /// health tag, for one - binds to this instead of sweeping the scene for damageable objects.
+        /// </summary>
+        public static event Action<EntityBase> EntityAdded, EntityRemoved;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() {
+            all.Clear();
+            EntityAdded = null;
+            EntityRemoved = null;
+        }
+
+        public override void OnStartNetwork() {
+            base.OnStartNetwork();
+            all.Add(this);
+            EntityAdded?.Invoke(this);
+        }
+
+        public override void OnStopNetwork() {
+            if (all.Remove(this))
+                EntityRemoved?.Invoke(this);
+            base.OnStopNetwork();
+        }
 
         protected virtual void Awake() {
             effectsComponent ??= GetComponent<EffectsComponent>();

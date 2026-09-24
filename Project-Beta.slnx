@@ -6,6 +6,7 @@
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="RyanAssets.Cameras.csproj" />
   <Project Path="Universes.UniverseData.classic_horror.FloodedGrounds.PostProcessing.Editor.csproj" />
+  <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="Universes.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.GameSettings.csproj" />
   <Project Path="RyanAssets.Shared.Global.csproj" />
@@ -17,7 +18,6 @@
   <Project Path="RyanAssets.Client.ClientUI.Stamina.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Toolbar.csproj" />
-  <Project Path="RyanAssets.Editor.csproj" />
   <Project Path="RyanAssets.Tools.Shared.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Topbar.csproj" />
   <Project Path="RyanAssets.Shared.Requests.csproj" />
@@ -28,13 +28,16 @@
   <Project Path="RyanAssets.Shared.Component.csproj" />
   <Project Path="RyanAssets.DataService.csproj" />
   <Project Path="Cloud.Unum.USearch.csproj" />
+  <Project Path="RyanAssets.Shared.Combat.csproj" />
   <Project Path="RyanAssets.Tools.Client.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
   <Project Path="Universes.UniverseData.war_valley.Client.csproj" />
   <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
+  <Project Path="Universes.UniverseData.war_valley.Tests.csproj" />
   <Project Path="RyanAssets.Items.Platform.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
+  <Project Path="RyanAssets.Shared.WorldUI.csproj" />
   <Project Path="RyanAssets.UI.ButtonGrid.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Vote.csproj" />
   <Project Path="RyanAssets.NetworkSettings.csproj" />
@@ -70,7 +73,6 @@
   <Project Path="Universes.UniverseData.war_valley.Editor.csproj" />
   <Project Path="RyanAssets.Levels.Shared.csproj" />
   <Project Path="RyanAssets.UI.ListGrid.csproj" />
-  <Project Path="Universes.UniverseData.war_valley.Tests.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Universes.UniverseData.example.Client.csproj" />
   <Project Path="RpcGen.Runtime.csproj" />

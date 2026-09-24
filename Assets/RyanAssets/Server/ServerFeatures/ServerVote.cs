@@ -105,7 +105,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 SharedGlobalEvents.Instance.TopMessage = "Voting in progress...";
                 await UniTask.WhenAny(
                     //UniTask.Delay(TimeSpan.FromSeconds(duration), cancellationToken: token),
-                    ServerRunner.Instance.AwaitTime((int)(duration * 1000), token),
+                    ServerRunner.Instance.AwaitTime((int)(duration * 1000), token).AsUniTask(),
                     skipVoteCompletion.Task);
                 return GetWinningOption(events);
             } finally {

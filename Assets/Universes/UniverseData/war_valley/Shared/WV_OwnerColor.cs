@@ -1,14 +1,22 @@
+using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
 namespace Universes.UniverseData.war_valley.Shared {
     /// <summary>
-    /// Tints a structure or unit in its commander's colour so ownership is readable at a glance.
+    /// The single authority over a structure's albedo: whose it is, and what shape it is in.
     /// <para>
-    /// The colour comes from <see cref="WV_Rules.GetCommanderColor"/>, which derives it from the
-    /// owning client id, so the server and every client agree without replicating a palette. It is
-    /// applied through a <see cref="MaterialPropertyBlock"/> rather than by instancing materials:
-    /// every War Valley structure of a kind shares one authored material, and assigning
-    /// <c>renderer.material</c> would clone it per instance and break batching.
+    /// Ownership comes from <see cref="WV_Rules.GetCommanderColor"/>, which derives it from the
+    /// owning client id, so the server and every client agree without replicating a palette. Battle
+    /// damage is layered on top of that: past <see cref="WV_Rules.CorrosionHealthFraction"/> the
+    /// owner's colour is progressively eaten by rust, so a building that is nearly finished off
+    /// reads that way from across the valley rather than only in a health bar.
+    /// </para>
+    /// <para>
+    /// Both live here rather than in two components because both write the same
+    /// <see cref="MaterialPropertyBlock"/> on the same renderers, and the second writer would
+    /// silently discard the first one's colour. A property block is used rather than
+    /// <c>renderer.material</c> because every War Valley structure of a kind shares one authored
+    /// material, and assigning the instance material would clone it per structure and break batching.
     /// </para>
     /// </summary>
     [RequireComponent(typeof(WV_Owned))]
@@ -20,28 +28,60 @@ namespace Universes.UniverseData.war_valley.Shared {
                  "effects, and the construction hoarding can be left at their own colours.")]
         [SerializeField] Renderer[] tintedRenderers = System.Array.Empty<Renderer>();
 
+        [Tooltip("Entity whose health drives the corrosion. Optional: leave unset for a structure " +
+                 "that should only ever show its owner's colour.")]
+        [SerializeField] StructureComponent damageSource;
+
         MaterialPropertyBlock properties;
         WV_Owned owned;
 
         void Awake() {
             owned = GetComponent<WV_Owned>();
             properties = new MaterialPropertyBlock();
+            if (damageSource == null)
+                damageSource = GetComponent<StructureComponent>();
         }
 
         void OnEnable() {
-            owned.OwnerChanged += Apply;
-            Apply(owned.OwnerClientId);
+            owned.OwnerChanged += HandleOwnerChanged;
+            if (damageSource != null) {
+                damageSource.Health.OnChange += HandleHealthChanged;
+                damageSource.MaxHealth.OnChange += HandleHealthChanged;
+            }
+            Apply();
         }
 
         void OnDisable() {
-            owned.OwnerChanged -= Apply;
+            owned.OwnerChanged -= HandleOwnerChanged;
+            if (damageSource != null) {
+                damageSource.Health.OnChange -= HandleHealthChanged;
+                damageSource.MaxHealth.OnChange -= HandleHealthChanged;
+            }
         }
 
-        void Apply(int clientId) {
+        void HandleOwnerChanged(int clientId) => Apply();
+
+        void HandleHealthChanged(long previous, long next, bool asServer) => Apply();
+
+        /// <summary>
+        /// 1 while the structure is untouched, falling to 0 as it dies. A structure with no health
+        /// source, or one whose health has not been initialized yet, counts as undamaged so a freshly
+        /// spawned building is not painted as a rusted wreck for its first frame.
+        /// </summary>
+        float HealthFraction {
+            get {
+                if (damageSource == null)
+                    return 1f;
+                long max = damageSource.MaxHealth.Value;
+                return max <= 0 ? 1f : Mathf.Clamp01(damageSource.Health.Value / (float)max);
+            }
+        }
+
+        void Apply() {
             if (tintedRenderers.Length == 0)
                 return;
 
-            Color tint = WV_Rules.GetOwnerTint(clientId);
+            Color tint = WV_Rules.GetDamagedTint(owned.OwnerClientId, HealthFraction);
             // URP Lit reads _BaseColor and the older Standard path reads _Color. Writing both keeps
             // the tint working across the pack's materials without branching on the shader.
             properties.SetColor(BaseColorId, tint);

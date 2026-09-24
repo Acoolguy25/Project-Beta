@@ -159,6 +159,11 @@ namespace RyanAssets.Commands.Server {
             ServerBootStrap.StopServer($"Shutdown by {PlayerData.GetPlayerName(caller) ?? "anonymous"}");
         }
 
+        /// <summary>Ends the running timer (or vote) immediately, as if it had reached zero.</summary>
+        public static void skip(NetworkConnection caller, string commandName, string[] args) {
+            ServerRunner.SkipTimer();
+        }
+
         public static void restart(NetworkConnection caller, string commandName, string[] args) {
             ServerChat.SendSystemMessage(new("Server is restarting...", SystemMessageSource.ServerRestart));
             ServerBootStrap.RestartServerEvent?.Invoke();

@@ -20,10 +20,25 @@ namespace RyanAssets.Server.ServerFeatures {
     public class ServerRunner : MonoBehaviour {
         [SerializeField]
         protected DebugBool DebugTimerSpeedUp, DebugTimerInfinite;
+        /// <summary>
+        /// How much faster <see cref="DebugTimerSpeedUp"/> runs every wait this runner performs.
+        /// <para>
+        /// The speed-up used to be a hardcoded tenth, which made it an all-or-nothing switch: fine
+        /// for skipping an intermission, useless for watching a round at double pace. The factor is
+        /// authored here instead, and 10 keeps the original behaviour for a scene that already had
+        /// the switch on.
+        /// </para>
+        /// </summary>
+        [SerializeField]
+        [Tooltip("Editor only. How much faster DebugTimerSpeedUp runs the clock: 10 gives the " +
+                 "original tenth-length timers, 2 runs the round at double pace.")]
+        protected DebugFloat DebugTimerSpeed = new(10f);
         public static event Action OnResetEvent;
         public static bool serverRunning => serverRunnerCTS != null && !serverRunnerCTS.IsCancellationRequested;
         public static ServerRunner Instance;
         protected static CancellationTokenSource serverRunnerCTS = null;
+        // Cancelled by /skip to end the current wait/countdown immediately.
+        static CancellationTokenSource skipCTS = new CancellationTokenSource();
         event Action UpdateGameBarEvent;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
@@ -32,7 +47,19 @@ namespace RyanAssets.Server.ServerFeatures {
             serverRunnerCTS = null;
             cts?.Cancel();
             cts?.Dispose();
+            CancellationTokenSource skip = skipCTS;
+            skipCTS = new CancellationTokenSource();
+            skip?.Cancel();
+            skip?.Dispose();
             Instance = null;
+        }
+
+        /// <summary>Ends the wait or countdown that is currently running, as if its time ran out.</summary>
+        public static void SkipTimer() {
+            CancellationTokenSource skip = skipCTS;
+            skipCTS = new CancellationTokenSource();
+            skip?.Cancel();
+            skip?.Dispose();
         }
 
         // TIMER FUNCTIONS
@@ -61,9 +88,20 @@ namespace RyanAssets.Server.ServerFeatures {
 
             return tcs.Task;
         }
-        public async UniTask AwaitTime(int durationMs, CancellationToken cts = default) {
-            int time2Sleep = DebugTimerInfinite.Value ? int.MaxValue : DebugTimerSpeedUp.Value ? Mathf.Max(1, durationMs / 10) : durationMs;
-            await UniTask.Delay(time2Sleep, cancellationToken: cts);
+        /// <summary>Waits out a timer slice. Returns true when <see cref="SkipTimer"/> ended the wait early.</summary>
+        public async UniTask<bool> AwaitTime(int durationMs, CancellationToken cts = default) {
+            int time2Sleep = DebugTimerInfinite.Value ? int.MaxValue
+                : DebugTimerSpeedUp.Value ? Mathf.Max(1, Mathf.RoundToInt(durationMs / DebugTimerSpeed.Value))
+                : durationMs;
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts, skipCTS.Token);
+            try {
+                await UniTask.Delay(time2Sleep, cancellationToken: linked.Token);
+            }
+            catch (OperationCanceledException) when (!cts.IsCancellationRequested) {
+                // A skip ended this wait. The owning token still cancels normally.
+                return true;
+            }
+            return false;
         }
 
         public async UniTask Intermission(int duration, CancellationToken token = default) {
@@ -73,7 +111,8 @@ namespace RyanAssets.Server.ServerFeatures {
         public async UniTask TimerCountdown(string message, int duration, CancellationToken token = default) {
             for (int i = duration; i > 0; i--) {
                 SharedGlobalEvents.Instance.TopMessage = string.Format(message, i);
-                await AwaitTime(1000, token);
+                if (await AwaitTime(1000, token))
+                    return;
             }
         }
 
@@ -102,7 +141,8 @@ namespace RyanAssets.Server.ServerFeatures {
                     if (!activationFunc(duration, false))
                         return true;
 
-                    await AwaitTime(1000, cts.Token);
+                    if (await AwaitTime(1000, cts.Token))
+                        break;
 
                     duration--;
                 }

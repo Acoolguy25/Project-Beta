@@ -4,8 +4,10 @@ using System.Linq;
 using FishNet.Component.Animating;
 using FishNet.Component.Transforming;
 using FishNet.Object;
+using RyanAssets.Shared.Combat;
 using RyanAssets.Shared.Component;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.WorldUI;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.AI;
@@ -35,6 +37,14 @@ namespace Universes.UniverseData.war_valley.Editor {
         const string RobotControllerPath = "Assets/RyanAssets/Characters/CustomAnimations/RobotNPC.controller";
         const string CircleTexturePath = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Textures/Circle01_v1.png";
 
+        // Shared presentation every structure reuses rather than growing a War Valley copy of.
+        const string WorldTimerBarPath = "Assets/RyanAssets/Shared/WorldUI/WorldTimerBar.prefab";
+        const string EffectsRoot = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs";
+        const string ExplosionVfxPath = EffectsRoot + "/vfx_Explosion_01.prefab";
+        const string SmokeVfxPath = EffectsRoot + "/vfx_Smoke_01.prefab";
+        const string MuzzleFlashVfxPath = EffectsRoot + "/vfx_MuzzleFlash_01.prefab";
+        const string GunShotAudioPath = "Assets/RyanAssets/Tools/Audio/pistol-gun-shot.mp3";
+
         static readonly int StructureLayer = LayerMask.NameToLayer("Structure");
         static readonly int CharacterLayer = LayerMask.NameToLayer("Character");
 
@@ -51,6 +61,8 @@ namespace Universes.UniverseData.war_valley.Editor {
             public StructureRole Role = StructureRole.Plain;
             public int IncomePerTick;
             public WV_UnitKind[] Produces = Array.Empty<WV_UnitKind>();
+            /// <summary>Foot soldiers this structure trains. Priced from WV_Rules, not from a prefab.</summary>
+            public WV_TroopKind[] Trains = Array.Empty<WV_TroopKind>();
             public float TurretRange, TurretCooldown;
             public long TurretDamage;
             public bool AntiAir;
@@ -87,10 +99,11 @@ namespace Universes.UniverseData.war_valley.Editor {
             },
             new() {
                 Id = "wv_barracks", DisplayName = "Barracks", Category = "Military",
-                Description = "Trains infantry squads.",
+                Description = "Trains infantry squads and the commander's own foot soldiers.",
                 ModelPath = PackRoot + "/Building_Prefebs/PersonLivePlace_Prefeb.prefab",
                 FootprintCells = 2, Cost = 500, BuildSeconds = 25f, MaxHealth = 800,
-                Role = StructureRole.Production, Produces = new[] { WV_UnitKind.Infantry }
+                Role = StructureRole.Production, Produces = new[] { WV_UnitKind.Infantry },
+                Trains = new[] { WV_TroopKind.Knife, WV_TroopKind.Gunner }
             },
             new() {
                 Id = "wv_vehicle_hangar", DisplayName = "Vehicle Hangar", Category = "Military",
@@ -476,16 +489,29 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Ensure<WV_Owned>(root);
 
                 // Only the building's own renderers are tinted. The hoarding and the site box keep
-                // their own colours, so a site under construction still reads as a site.
+                // their own colours, so a site under construction still reads as a site. The same
+                // component corrodes those renderers as the structure is worn down, which is why it
+                // is also given the structure's health to read.
                 var ownerColor = Ensure<WV_OwnerColor>(root);
                 SetPrivateField(
                     ownerColor, "tintedRenderers", buildingRoot.GetComponentsInChildren<Renderer>(true));
+                SetPrivateField(ownerColor, "damageSource", structure);
+
+                // The countdown floats clear of the finished model rather than on it, so it is still
+                // readable while the building is rising out of the ground underneath it.
+                GameObject timerBar = (GameObject)PrefabUtility.InstantiatePrefab(
+                    Load<GameObject>(WorldTimerBarPath), root.transform);
+                timerBar.name = "BuildTimer";
+                timerBar.transform.localPosition = new Vector3(0f, modelHeight + span * 0.25f, 0f);
 
                 var constructable = root.AddComponent<WV_Constructable>();
                 SetPrivateField(constructable, "footprintCells", def.FootprintCells);
                 SetPrivateField(constructable, "maxHealth", def.MaxHealth);
                 SetPrivateField(constructable, "buildingRoot", buildingRoot.transform);
                 SetPrivateField(constructable, "constructionScaffold", site);
+                SetPrivateField(constructable, "buildTimer", timerBar.GetComponent<WorldTimerBar>());
+
+                AddDemolitionExplosion(root, buildingRoot.transform, def);
 
                 NavMeshObstacle obstacle = Ensure<NavMeshObstacle>(root);
                 obstacle.shape = NavMeshObstacleShape.Box;
@@ -500,6 +526,78 @@ namespace Universes.UniverseData.war_valley.Editor {
             } finally {
                 UnityEngine.Object.DestroyImmediate(root);
             }
+        }
+
+        /// <summary>
+        /// Gives a structure the shared explosion it goes out on.
+        /// <para>
+        /// A demolished building deals no damage to anything: the blast is the shared effect used
+        /// with its damage set to zero, so a base collapsing under fire does not chain-detonate the
+        /// buildings around it. The same component with a radius and a figure is what a bomb would
+        /// use, which is the point of it being one component rather than two.
+        /// </para>
+        /// </summary>
+        static void AddDemolitionExplosion(GameObject root, Transform buildingRoot, StructureDef def) {
+            var explosion = Ensure<ExplosionEffect>(root);
+            SetPrivateField(explosion, "damageRadius", 0f);
+            SetPrivateField(explosion, "damage", 0L);
+            SetPrivateField(explosion, "damageType", (int)DamageType.Explosion);
+            SetPrivateField(explosion, "damageOwnTeam", false);
+
+            SetPrivateField(explosion, "explosionVfxPrefab", Load<GameObject>(ExplosionVfxPath));
+            SetPrivateField(explosion, "smokeVfxPrefab", Load<GameObject>(SmokeVfxPath));
+            // One authored effect serves a fence and a hangar by scaling with the slot.
+            SetPrivateField(explosion, "vfxScale", (float)def.FootprintCells);
+            // No explosion audio exists in the project yet. The hook is authored and left empty so
+            // the clip can be dropped in without another rebuild.
+            SetPrivateField(explosion, "explosionAudio", null);
+
+            SetPrivateField(explosion, "debrisSource", buildingRoot);
+            // Larger structures throw their wreckage further, so a hangar does not come apart with
+            // the same little hop a fence post does.
+            float mass = Mathf.Sqrt(def.FootprintCells);
+            SetPrivateField(explosion, "debrisUpwardForce", 8f * mass);
+            SetPrivateField(explosion, "debrisOutwardForce", 3.5f * mass);
+            SetPrivateField(explosion, "debrisSpin", 200f);
+            SetPrivateField(explosion, "debrisBurnSeconds", 3.5f);
+
+            SetPrivateField(explosion, "detonateOnDeath", true);
+            // Long enough for the observers RPC to reach every client before the sender despawns,
+            // short enough that the wreck does not keep holding its build slot.
+            SetPrivateField(explosion, "despawnDelay", 0.5f);
+        }
+
+        /// <summary>
+        /// Gives a turret the shared muzzle flash, tracer, and report every client sees and hears.
+        /// The muzzle hangs off the yaw part so the flash tracks whatever the barrel is pointed at.
+        /// </summary>
+        static NetworkedWeaponFire AddTurretWeaponFire(GameObject root, Transform yaw, float span) {
+            var muzzle = new GameObject("Muzzle");
+            muzzle.transform.SetParent(yaw, false);
+            muzzle.transform.localPosition = new Vector3(0f, 0f, span * 0.5f);
+
+            GameObject flash = (GameObject)PrefabUtility.InstantiatePrefab(
+                Load<GameObject>(MuzzleFlashVfxPath), muzzle.transform);
+            flash.name = "MuzzleFlash";
+            flash.transform.localPosition = Vector3.zero;
+            flash.transform.localRotation = Quaternion.identity;
+
+            var audioSource = muzzle.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            // Fully spatialised: a turret firing across the valley should be heard from where it is.
+            audioSource.spatialBlend = 1f;
+            audioSource.rolloffMode = AudioRolloffMode.Linear;
+            audioSource.minDistance = span;
+            audioSource.maxDistance = 90f;
+
+            var weaponFire = Ensure<NetworkedWeaponFire>(root);
+            SetPrivateField(weaponFire, "muzzle", muzzle.transform);
+            SetPrivateField(weaponFire, "muzzleFlash", flash.GetComponent<ParticleSystem>());
+            SetPrivateField(weaponFire, "audioSource", audioSource);
+            // The project's only authored gun report. It is a pistol shot standing in for a
+            // turret's, and should be replaced when heavier weapon audio is imported.
+            SetPrivateField(weaponFire, "fireAudio", Load<AudioClip>(GunShotAudioPath));
+            return weaponFire;
         }
 
         static void ApplyRole(
@@ -532,6 +630,8 @@ namespace Universes.UniverseData.war_valley.Editor {
                             "Rebuild unit prefabs first.");
                     }
                     SetPrivateField(production, "producibleUnits", producible);
+                    // Troops have no prefab to look up: the kind itself is the whole authored value.
+                    SetPrivateField(production, "producibleTroops", def.Trains);
                     SetPrivateField(production, "spawnPoint", spawnPoint.transform);
                     break;
                 }
@@ -548,6 +648,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                     SetPrivateField(turret, "cooldown", def.TurretCooldown);
                     SetPrivateField(turret, "antiAir", def.AntiAir);
                     SetPrivateField(turret, "turretYaw", yaw.transform);
+                    SetPrivateField(turret, "weaponFire", AddTurretWeaponFire(root, yaw.transform, span));
                     break;
                 }
                 case StructureRole.Wall: {

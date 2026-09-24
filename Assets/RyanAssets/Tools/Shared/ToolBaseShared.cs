@@ -296,7 +296,10 @@ namespace RyanAssets.Tools.Shared {
 
         // AUDIO
         protected virtual void PlayAudio(AudioClip audioClip) {
-#if ENABLE_AUDIO && !UNITY_SERVER
+            // Guarded on UNITY_SERVER alone. This was previously gated on ENABLE_AUDIO, which is
+            // defined nowhere in the project, so every tool's equip, unequip, and attack sound was
+            // compiled out of the client as well as the server and nothing was ever heard.
+#if !UNITY_SERVER
             if (audioClip == null)
                 return;
             if (audioSource.isActiveAndEnabled)

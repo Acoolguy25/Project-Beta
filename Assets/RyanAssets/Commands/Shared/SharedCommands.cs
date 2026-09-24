@@ -140,6 +140,12 @@ namespace RyanAssets.Commands.Shared {
                 commandName = "restart",
                 description = "Restarts current server.",
                 arguments = new CommandArgumentConfig[0]
+            },
+            new() {
+                commandType = "server",
+                commandName = "skip",
+                description = "Skips the running timer or vote.",
+                arguments = new CommandArgumentConfig[0]
             }
         };
     }

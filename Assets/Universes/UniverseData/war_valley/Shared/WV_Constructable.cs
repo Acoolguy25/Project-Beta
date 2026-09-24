@@ -2,6 +2,7 @@ using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using RyanAssets.Core;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.WorldUI;
 using UnityEngine;
 
 namespace Universes.UniverseData.war_valley.Shared {
@@ -14,6 +15,12 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// rises out of the ground at its authored proportions, and carries only a fraction of its
     /// health; every War Valley behaviour that makes a structure do something gates itself on
     /// <see cref="IsOperational"/>.
+    /// </para>
+    /// <para>
+    /// The countdown floating over the site is the shared <see cref="WorldTimerBar"/>, handed the
+    /// same replicated deadline this component works from. Nothing about the bar's progress is sent
+    /// separately: every client derives it from <see cref="completionTime"/> and
+    /// <see cref="buildDuration"/>, which is why the bar and the building rise in step.
     /// </para>
     /// </summary>
     [RequireComponent(typeof(StructureComponent))]
@@ -29,6 +36,8 @@ namespace Universes.UniverseData.war_valley.Shared {
         [SerializeField] Transform buildingRoot;
         [Tooltip("Construction hoarding placed around the slot. Hidden once the structure completes.")]
         [SerializeField] GameObject constructionScaffold;
+        [Tooltip("Countdown and progress bar drawn above the site while it is being built.")]
+        [SerializeField] WorldTimerBar buildTimer;
 
         [Header("Presentation")]
         [Tooltip("How far below the ground the finished building starts, as a fraction of its height. " +
@@ -41,6 +50,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         readonly SyncVar<bool> complete = new();
 
         StructureComponent structure;
+        WV_Owned owned;
         Vector3 finishedLocalPosition;
         float buildingHeight;
 
@@ -49,6 +59,11 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>True once the build timer has elapsed. Every gameplay behaviour checks this first.</summary>
         public bool IsOperational => complete.Value;
+
+        /// <summary>The replicated deadline, as a <see cref="NetworkHelper.ServerTime"/> reading.</summary>
+        public float CompletionServerTime => completionTime.Value;
+
+        public float BuildDuration => buildDuration.Value;
 
         public float SecondsRemaining =>
             complete.Value ? 0f : Mathf.Max(0f, completionTime.Value - NetworkHelper.ServerTime);
@@ -65,6 +80,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         void Awake() {
             structure = GetComponent<StructureComponent>();
+            owned = GetComponent<WV_Owned>();
             if (buildingRoot == null)
                 return;
 
@@ -101,15 +117,28 @@ namespace Universes.UniverseData.war_valley.Shared {
         public override void OnStartNetwork() {
             base.OnStartNetwork();
             complete.OnChange += HandleCompleteChanged;
+            // A client receives the deadline as part of the object's first state, after Awake. The
+            // bar is started from that callback rather than from OnStartNetwork alone, so a site
+            // spawned mid-build shows the right countdown instead of an empty bar.
+            completionTime.OnChange += HandleDeadlineChanged;
+            if (owned != null)
+                owned.OwnerChanged += HandleOwnerChanged;
             ApplyPresentation();
         }
 
         public override void OnStopNetwork() {
             complete.OnChange -= HandleCompleteChanged;
+            completionTime.OnChange -= HandleDeadlineChanged;
+            if (owned != null)
+                owned.OwnerChanged -= HandleOwnerChanged;
             base.OnStopNetwork();
         }
 
         void HandleCompleteChanged(bool previous, bool next, bool asServer) => ApplyPresentation();
+
+        void HandleDeadlineChanged(float previous, float next, bool asServer) => ApplyPresentation();
+
+        void HandleOwnerChanged(int clientId) => ApplyTimerOwnerColor();
 
         void Update() {
             if (complete.Value)
@@ -130,6 +159,26 @@ namespace Universes.UniverseData.war_valley.Shared {
             if (constructionScaffold != null)
                 constructionScaffold.SetActive(!operational);
             ApplyProgressVisuals(operational ? 1f : Progress);
+            ApplyTimerState();
+        }
+
+        void ApplyTimerState() {
+            if (buildTimer == null)
+                return;
+
+            if (complete.Value || completionTime.Value <= 0f) {
+                buildTimer.Stop();
+                return;
+            }
+
+            ApplyTimerOwnerColor();
+            buildTimer.StartCountdown(completionTime.Value, buildDuration.Value);
+        }
+
+        void ApplyTimerOwnerColor() {
+            if (buildTimer == null || owned == null)
+                return;
+            buildTimer.SetAccentColor(WV_Rules.GetCommanderUIColor(owned.OwnerClientId));
         }
 
         /// <summary>

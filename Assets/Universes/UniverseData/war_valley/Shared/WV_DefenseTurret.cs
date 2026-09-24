@@ -1,6 +1,7 @@
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using RyanAssets.Core;
+using RyanAssets.Shared.Combat;
 using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
@@ -9,6 +10,12 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// A structure that defends itself: guard post or missile battery. Acquires through the same
     /// <see cref="WV_Combat"/> sweep the mobile units use, and stays inert until its construction
     /// finishes so a half-built battery cannot hold a line on its own.
+    /// <para>
+    /// Every shot is drawn and heard on every client through the shared
+    /// <see cref="NetworkedWeaponFire"/>, and traced with the same <see cref="HitscanShot"/> the
+    /// handheld tool gun fires through. Before that, a turret killed things silently and invisibly
+    /// from a client's point of view: the damage was replicated but the shot was not.
+    /// </para>
     /// </summary>
     [RequireComponent(typeof(StructureComponent), typeof(WV_Constructable))]
     public sealed class WV_DefenseTurret : NetworkBehaviour {
@@ -25,6 +32,8 @@ namespace Universes.UniverseData.war_valley.Shared {
         [SerializeField] Transform turretYaw;
         [Tooltip("Pitch part, if the model has one. Optional.")]
         [SerializeField] Transform turretPitch;
+        [Tooltip("Replicated muzzle flash, tracer, and report for this turret's shots.")]
+        [SerializeField] NetworkedWeaponFire weaponFire;
 
         [Header("Tracking")]
         [SerializeField, Min(1f)] float traverseSpeed = 120f;
@@ -104,8 +113,46 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return;
 
             nextFireTime = now + cooldown;
-            WV_Combat.DealDamage(target, damage, damageType, structure);
+            Fire(targetPosition);
         }
+
+        /// <summary>
+        /// Applies the hit and replicates the shot.
+        /// <para>
+        /// The damage is deliberately not conditioned on what the trace struck. A turret in range has
+        /// always hit what it was aiming at, and making cover block it would be a balance change
+        /// rather than the presentation fix this is. The trace decides only where the tracer stops,
+        /// so a shot that clips a wall on the way out terminates at the wall instead of passing
+        /// visibly through it.
+        /// </para>
+        /// </summary>
+        void Fire(Vector3 targetPosition) {
+            WV_Combat.DealDamage(target, damage, damageType, structure);
+
+            if (weaponFire == null)
+                return;
+
+            Vector3 origin = weaponFire.MuzzlePosition;
+            RaycastHit? traced = HitscanShot.Fire(
+                origin,
+                targetPosition,
+                range * TracerRangeMargin,
+                accuracy: 1f,
+                ignoreRoot: transform,
+                muzzleRadius: 0f);
+
+            if (traced.HasValue)
+                weaponFire.ShowShot(origin, traced.Value.point, traced.Value.normal, traced.Value.collider != null);
+            else
+                weaponFire.ShowShot(origin, targetPosition, Vector3.up, false);
+        }
+
+        /// <summary>
+        /// The trace is allowed slightly past the engagement range so a target at the very edge of it
+        /// is still reached by the tracer rather than the line stopping just short of the thing that
+        /// was hit.
+        /// </summary>
+        const float TracerRangeMargin = 1.15f;
 
         IEntity AcquireTarget() {
             IEntity candidate = WV_Combat.FindNearestEnemy(

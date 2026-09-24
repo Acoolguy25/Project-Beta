@@ -348,7 +348,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4288383352
-  m_fontColor: {r: 0.47058824, g: 0.5372549, b: 0.60784316, a: 1}
+  m_fontColor: {r: 0.74, g: 0.8, b: 0.87, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -365,12 +365,12 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 10
+  m_fontSize: 13
   m_fontSizeBase: 10
   m_fontWeight: 400
-  m_enableAutoSizing: 0
-  m_fontSizeMin: 18
-  m_fontSizeMax: 72
+  m_enableAutoSizing: 1
+  m_fontSizeMin: 10
+  m_fontSizeMax: 13
   m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 4096
@@ -577,12 +577,12 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 18
+  m_fontSize: 22
   m_fontSizeBase: 20
   m_fontWeight: 400
   m_enableAutoSizing: 1
-  m_fontSizeMin: 13
-  m_fontSizeMax: 18
+  m_fontSizeMin: 15
+  m_fontSizeMax: 22
   m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 4096
@@ -789,12 +789,12 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 14
+  m_fontSize: 17
   m_fontSizeBase: 14
   m_fontWeight: 400
-  m_enableAutoSizing: 0
-  m_fontSizeMin: 18
-  m_fontSizeMax: 72
+  m_enableAutoSizing: 1
+  m_fontSizeMin: 13
+  m_fontSizeMax: 17
   m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
@@ -984,7 +984,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4290818210
-  m_fontColor: {r: 0.63529414, g: 0.6901961, b: 0.7529412, a: 1}
+  m_fontColor: {r: 0.84, g: 0.88, b: 0.93, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1001,12 +1001,12 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 12.5
+  m_fontSize: 15
   m_fontSizeBase: 12.5
   m_fontWeight: 400
-  m_enableAutoSizing: 0
-  m_fontSizeMin: 18
-  m_fontSizeMax: 72
+  m_enableAutoSizing: 1
+  m_fontSizeMin: 12
+  m_fontSizeMax: 15
   m_fontStyle: 0
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 1024
@@ -1440,12 +1440,12 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 18
+  m_fontSize: 22
   m_fontSizeBase: 18
   m_fontWeight: 400
   m_enableAutoSizing: 1
-  m_fontSizeMin: 18
-  m_fontSizeMax: 72
+  m_fontSizeMin: 16
+  m_fontSizeMax: 22
   m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
@@ -1577,12 +1577,12 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 11
+  m_fontSize: 14
   m_fontSizeBase: 11
   m_fontWeight: 400
-  m_enableAutoSizing: 0
-  m_fontSizeMin: 18
-  m_fontSizeMax: 72
+  m_enableAutoSizing: 1
+  m_fontSizeMin: 11
+  m_fontSizeMax: 14
   m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 4096

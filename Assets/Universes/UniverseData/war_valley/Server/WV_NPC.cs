@@ -1,11 +1,6 @@
-using FishNet.Object;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
-using RyanAssets.Server.ServerCore;
-using RyanAssets.Shared.Component;
 using RyanAssets.Shared.Declarations;
-using RyanAssets.Tools.Shared;
-using Unity.AI.Navigation;
 using UnityEngine;
 using UnityEngine.AI;
 using Universes.UniverseData.war_valley.Shared;
@@ -15,9 +10,8 @@ namespace Universes.UniverseData.war_valley.Server {
     /// War Valley's NPC combat policy. The flag is the strategic target; a costly wall link
     /// temporarily becomes the target when it blocks the selected route.
     /// </summary>
-    [RequireComponent(typeof(LocalNPC), typeof(GameCharacter))]
+    [RequireComponent(typeof(LocalNPC), typeof(GameCharacter), typeof(WV_NpcCombat))]
     public sealed class WV_NPC : MonoBehaviour {
-        private const float UnequipAttackDelay = 1f;
         private const float BlockingWallProbeDistance = 6f;
         private const float LongRangeFallbackDistance = 12f;
         private const float StalledDuration = 1.5f;
@@ -25,18 +19,15 @@ namespace Universes.UniverseData.war_valley.Server {
         private const float FallbackPathInterval = 0.5f;
         private const float TargetNavMeshSampleRadius = 8f;
         // A wave NPC that walks past a player's tank to reach the flag makes the whole army
-        // pointless, so it engages whatever hostile thing is standing in front of it first.
-        private const float ThreatEngageRadius = 16f;
+        // pointless, so it engages whatever hostile thing is standing in front of it first. A troop
+        // carrying a gun looks at least as far as it can shoot.
+        private const float MinimumThreatEngageRadius = 16f;
         private const float ThreatScanInterval = 0.75f;
 
         private LocalNPC localNPC;
         private GameCharacter gameCharacter;
-        private CharacterAnimator characterAnimator;
-        private Animator animator;
+        private WV_NpcCombat combat;
         private NavMeshAgent agent;
-        private ToolBaseShared weapon;
-        private IEntity pendingAttackTarget;
-        private float lastAttack = float.MinValue;
         private float lastProgressTime;
         private float nextFallbackPathTime;
         private Vector3 lastProgressPosition;
@@ -47,37 +38,24 @@ namespace Universes.UniverseData.war_valley.Server {
         private void Awake() {
             localNPC = GetComponent<LocalNPC>();
             gameCharacter = GetComponent<GameCharacter>();
-            characterAnimator = GetComponent<CharacterAnimator>();
-            animator = GetComponent<Animator>();
+            combat = GetComponent<WV_NpcCombat>();
             agent = GetComponent<NavMeshAgent>();
 
-            characterAnimator.LethalAttackStarted += HandleLethalAttackStarted;
-            characterAnimator.LethalAttackEnded += HandleLethalAttackEnded;
             localNPC.WalkSpeed = 18f;
             localNPC.FleeSpeed = 21f;
             localNPC.AttackSpeed = 21f;
-            localNPC.AttackEntityFunction = AttackEntity;
             agent.autoTraverseOffMeshLink = false;
             lastProgressPosition = transform.position;
             lastProgressTime = Time.time;
         }
 
         private void Start() {
-            weapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
-            if (weapon != null)
-                localNPC.AttackDamageType = weapon.defaultDamageType;
-
             localNPC.SetTargetingType(NPCTargetingType.Attack);
             TargetFlag();
         }
 
         private void Update() {
             UpdateWallTraversal();
-
-            if (lastAttack + UnequipAttackDelay <= Time.time) {
-                pendingAttackTarget = null;
-                gameCharacter.SwitchTool(null);
-            }
         }
 
         private void LateUpdate() {
@@ -153,7 +131,7 @@ namespace Universes.UniverseData.war_valley.Server {
             nextThreatScanTime = Time.time + ThreatScanInterval;
             IEntity threat = WV_Combat.FindNearestEnemy(
                 transform.position,
-                ThreatEngageRadius,
+                Mathf.Max(MinimumThreatEngageRadius, combat.EngageRange),
                 gameCharacter.GetTeam(),
                 preferCharacters: true,
                 ignoreRoot: transform);
@@ -248,43 +226,5 @@ namespace Universes.UniverseData.war_valley.Server {
             agent.SetDestination(hit.position);
         }
 
-        private void AttackEntity(IEntity target) {
-            if (weapon == null || target == null)
-                return;
-
-            lastAttack = Time.time;
-            pendingAttackTarget = target;
-            gameCharacter.SwitchTool(weapon);
-            animator.SetBool("KnifeAttack", true);
-        }
-
-        private void HandleLethalAttackStarted() {
-            IEntity target = pendingAttackTarget;
-            pendingAttackTarget = null;
-            if (weapon == null
-                || target is not Component targetComponent
-                || targetComponent == null
-                || gameCharacter.IsDead
-                || gameCharacter.ActiveTool.Value != weapon
-                || !localNPC.IsTargetInAttackRange(target))
-                return;
-
-            HealthComponent targetHealth = targetComponent.GetComponent<HealthComponent>();
-            if (targetHealth != null)
-                targetHealth.TakeDamage(weapon.hitDamage, weapon.defaultDamageType, gameCharacter);
-        }
-
-        private void HandleLethalAttackEnded() {
-            animator.SetBool("KnifeAttack", false);
-        }
-
-        private void OnDestroy() {
-            if (characterAnimator != null) {
-                characterAnimator.LethalAttackStarted -= HandleLethalAttackStarted;
-                characterAnimator.LethalAttackEnded -= HandleLethalAttackEnded;
-            }
-            if (localNPC != null && localNPC.AttackEntityFunction == AttackEntity)
-                localNPC.AttackEntityFunction = null;
-        }
     }
 }

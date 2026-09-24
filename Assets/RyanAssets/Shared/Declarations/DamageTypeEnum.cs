@@ -13,6 +13,11 @@ namespace RyanAssets.Shared.Declarations {
         Despawn,
         Reset,
 
-        Command
+        Command,
+
+        // Appended rather than slotted in beside the other weapon types: the ordinals of this enum
+        // are what get serialized on prefabs and sent in damage RPCs, so an existing member must
+        // never shift position.
+        Explosion
     };
 }

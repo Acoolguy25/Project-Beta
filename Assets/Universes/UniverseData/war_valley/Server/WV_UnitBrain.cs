@@ -14,7 +14,7 @@ namespace Universes.UniverseData.war_valley.Server {
     /// would otherwise load a prefab with a missing script.
     /// </para>
     /// </summary>
-    public sealed class WV_UnitBrain : MonoBehaviour {
+    public sealed class WV_UnitBrain : MonoBehaviour, WV_ICommandable {
         /// <summary>An idle unit chases an opportunistic target this far past its detection radius before giving up.</summary>
         const float IdleLeashMultiplier = 1.4f;
         const float RetargetInterval = 0.5f;
@@ -167,15 +167,24 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
 
             nextRetargetTime = now + RetargetInterval;
+            // Acquisition is measured the same way engagement is, so an aircraft never picks up a
+            // target it then turns out to be unable to shoot, or vice versa.
             currentTarget = WV_Combat.FindNearestEnemy(
-                transform.position, unit.DetectionRadius, unit.Team, preferCharacters: true, ignoreRoot: transform);
+                transform.position, unit.DetectionRadius, unit.Team, preferCharacters: true,
+                ignoreRoot: transform, verticalReach: EngagementAltitude);
         }
 
         /// <summary>Keeps an idle unit from being walked across the map by a fleeing enemy.</summary>
         bool HasBrokenLeash(IEntity target) {
             if (order is WV_OrderType.Attack or WV_OrderType.AttackMove)
                 return false;
-            return WV_Combat.DistanceTo(holdOrigin, target) > unit.DetectionRadius * IdleLeashMultiplier;
+            // Measured the same way acquisition is. Straight-line here would let an aircraft pick up
+            // a target at the edge of its reach and then immediately drop it for being out of leash,
+            // retargeting the same enemy every interval without ever engaging it.
+            float distance = unit.IsAircraft
+                ? WV_Combat.FlatDistanceTo(holdOrigin, target)
+                : WV_Combat.DistanceTo(holdOrigin, target);
+            return distance > unit.DetectionRadius * IdleLeashMultiplier;
         }
 
         void TickMove(bool engageOnTheWay) {
@@ -251,8 +260,22 @@ namespace Universes.UniverseData.war_valley.Server {
                 motor.FaceTowards(targetPosition);
         }
 
+        /// <summary>
+        /// How high this chassis sits above what it shoots at, or 0 for anything on the ground.
+        /// <para>
+        /// An aircraft cannot descend to close the distance - its cruise altitude is held by the
+        /// motor - so height is not range it can spend. Measuring engagement straight-line instead
+        /// charged it that height twice over and left three of the four aircraft unable to fire at
+        /// all: a jet at 34m carries a 28m gun, so nothing on the ground was ever in range of it,
+        /// and it would circle directly above a target forever without shooting.
+        /// </para>
+        /// </summary>
+        float EngagementAltitude => unit.IsAircraft ? WV_Rules.GetCruiseAltitude(unit.Kind) : 0f;
+
         bool InAttackRange(IEntity target) =>
-            WV_Combat.DistanceTo(transform.position, target) <= unit.AttackRange;
+            (unit.IsAircraft
+                ? WV_Combat.FlatDistanceTo(transform.position, target)
+                : WV_Combat.DistanceTo(transform.position, target)) <= unit.AttackRange;
 
         void TryFire() {
             if (currentTarget == null || !InAttackRange(currentTarget))

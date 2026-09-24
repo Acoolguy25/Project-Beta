@@ -1,0 +1,23 @@
+{
+    "name": "RyanAssets.Shared.Combat",
+    "rootNamespace": "RyanAssets.Shared.Combat",
+    "references": [
+        "FishNet.Runtime",
+        "RpcGen.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Declarations",
+        "RyanAssets.Shared.Global",
+        "RyanAssets.Client.ClientEffects",
+        "RyanAssets.Client.Audio"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

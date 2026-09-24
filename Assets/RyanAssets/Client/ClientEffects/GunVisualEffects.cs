@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace RyanAssets.Clients.ClientEffects {
     public static class GunVisualEffects {
@@ -9,11 +8,22 @@ namespace RyanAssets.Clients.ClientEffects {
             }
             VisualizeBullet(hit, origin);
         }
-    //}
-    //public static class GunVisualEffectsOld {
-        public static void VisualizeBullet(RaycastHit hit, Vector3 origin) {
-            Vector3 end = hit.point;
 
+        public static void VisualizeBullet(RaycastHit hit, Vector3 origin) {
+            // A hit with no collider is a shot that reached maximum range, which should leave a
+            // tracer but no impact spark.
+            VisualizeBullet(origin, hit.point, hit.normal, hit.collider != null);
+        }
+
+        /// <summary>
+        /// Draws one shot from <paramref name="origin"/> to <paramref name="end"/>.
+        /// <para>
+        /// This point-and-normal form is the one a replicated shot uses: a <see cref="RaycastHit"/>
+        /// cannot be sent over the wire, so a remote observer receives the two ends of the trace and
+        /// draws exactly what the shooter drew.
+        /// </para>
+        /// </summary>
+        public static void VisualizeBullet(Vector3 origin, Vector3 end, Vector3 normal, bool hasImpact) {
             GameObject lineObj = new GameObject("BulletTrail");
             LineRenderer lr = lineObj.AddComponent<LineRenderer>();
 
@@ -28,9 +38,8 @@ namespace RyanAssets.Clients.ClientEffects {
             lr.SetPosition(0, origin);
             lr.SetPosition(1, end);
 
-            // Only spawn impact effect if the raycast hit a collider (not just the max range)
-            if (hit.collider)
-                SpawnImpactEffect(hit.point, hit.normal);
+            if (hasImpact)
+                SpawnImpactEffect(end, normal);
 
             lineObj.layer = LayerMask.NameToLayer("Ignore Raycast");
             // Instant shot: hold for a single short duration then destroy, no fading
@@ -40,7 +49,10 @@ namespace RyanAssets.Clients.ClientEffects {
         private static void SpawnImpactEffect(Vector3 point, Vector3 normal) {
             GameObject spark = new GameObject("ImpactSpark");
             spark.transform.position = point;
-            spark.transform.rotation = Quaternion.LookRotation(normal);
+            // A degenerate normal (a hit reported with no surface) would make LookRotation throw.
+            spark.transform.rotation = normal.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(normal)
+                : Quaternion.identity;
 
             var ps = spark.AddComponent<ParticleSystem>();
             var main = ps.main;

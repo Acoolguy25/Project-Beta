@@ -7,7 +7,9 @@
         "RyanAssets.Shared.Component",
         "RyanAssets.Shared.Declarations",
         "RyanAssets.Shared.Global",
-        "Unity.AI.Navigation"
+        "Unity.AI.Navigation",
+        "RyanAssets.Shared.Combat",
+        "RyanAssets.Shared.WorldUI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

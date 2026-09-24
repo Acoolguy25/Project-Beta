@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using RyanAssets.Characters.Shared;
 using RyanAssets.Core;
 using TMPro;
 using UnityEngine;
@@ -29,12 +30,20 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] TextMeshProUGUI productionQueueLabel;
         [SerializeField] WV_ProductionMenu productionMenu;
 
+        [Header("Commands")]
+        [Tooltip("The command card: order and selection buttons. Stays open so every order is " +
+                 "reachable without a shortcut.")]
+        [SerializeField] GameObject commandPanel;
+        [SerializeField] WV_CommandMenu commandMenu;
+
         [Header("Hints")]
         [SerializeField] TextMeshProUGUI hintLabel;
 
         readonly StringBuilder builder = new();
+        readonly Dictionary<string, int> troopCounts = new();
 
         public WV_ProductionMenu ProductionMenu => productionMenu;
+        public WV_CommandMenu CommandMenu => commandMenu;
 
         void Awake() {
             SetSelectionBoxVisible(false);
@@ -90,31 +99,67 @@ namespace Universes.UniverseData.war_valley.Client {
 
         // --- Selection summary -----------------------------------------------
 
-        public void RefreshSelection(IReadOnlyList<WV_Unit> selection) {
-            bool any = selection != null && selection.Count > 0;
+        public void RefreshSelection(IReadOnlyList<WV_Unit> selection, IReadOnlyList<GameCharacter> troops) {
+            int unitCount = selection?.Count ?? 0;
+            int troopCount = troops?.Count ?? 0;
+            int total = unitCount + troopCount;
             if (selectionPanel != null)
-                selectionPanel.SetActive(any);
-            if (!any || selectionLabel == null)
+                selectionPanel.SetActive(total > 0);
+            if (commandMenu != null)
+                commandMenu.SetHasSelection(total > 0);
+            if (total == 0 || selectionLabel == null)
                 return;
 
             // Counted by kind rather than listed, so a thirty-unit push stays readable.
             var counts = new Dictionary<WV_UnitKind, int>();
             long health = 0;
             long maxHealth = 0;
-            foreach (WV_Unit unit in selection) {
+            for (int i = 0; i < unitCount; i++) {
+                WV_Unit unit = selection[i];
+                if (unit == null)
+                    continue;
                 counts.TryGetValue(unit.Kind, out int existing);
                 counts[unit.Kind] = existing + 1;
                 health += unit.Health.Value;
                 maxHealth += unit.MaxHealth.Value;
             }
 
+            // A troop's loadout is not replicated as a field of its own. The server names the
+            // character after it, which is the same string its name tag already shows.
+            troopCounts.Clear();
+            for (int i = 0; i < troopCount; i++) {
+                GameCharacter troop = troops[i];
+                if (troop == null)
+                    continue;
+                troopCounts.TryGetValue(troop.DisplayName, out int existing);
+                troopCounts[troop.DisplayName] = existing + 1;
+                health += troop.Health.Value;
+                maxHealth += troop.MaxHealth.Value;
+            }
+
             builder.Clear();
-            builder.Append(selection.Count).Append(selection.Count == 1 ? " unit" : " units");
+            builder.Append(total).Append(" selected");
             foreach (KeyValuePair<WV_UnitKind, int> entry in counts)
                 builder.Append("\n").Append(entry.Value).Append("x ").Append(WV_Rules.GetUnitDisplayName(entry.Key));
+            foreach (KeyValuePair<string, int> entry in troopCounts)
+                builder.Append("\n").Append(entry.Value).Append("x ").Append(entry.Key);
             if (maxHealth > 0)
                 builder.Append("\nHealth ").Append(health).Append(" / ").Append(maxHealth);
             selectionLabel.text = builder.ToString();
+        }
+
+        // --- Command card -----------------------------------------------------
+
+        /// <summary>Opens the command card. It is never hidden: an empty card still teaches the keys.</summary>
+        public void ShowCommands() {
+            if (commandPanel != null)
+                commandPanel.SetActive(true);
+        }
+
+        /// <summary>Highlights the order waiting for a click, or clears it when passed null.</summary>
+        public void SetArmedOrder(WV_OrderType? armed) {
+            if (commandMenu != null)
+                commandMenu.SetArmed(armed);
         }
 
         // --- Production panel -------------------------------------------------
@@ -147,7 +192,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
             builder.Clear();
             builder.Append("Building ")
-                .Append(WV_Rules.GetUnitDisplayName(building.GetQueuedKind(0)))
+                .Append(building.GetQueuedItem(0).DisplayName)
                 .Append(" - ")
                 .Append(WV_Rules.FormatCountdown(building.CurrentItemSecondsRemaining));
             if (building.QueueLength > 1)
