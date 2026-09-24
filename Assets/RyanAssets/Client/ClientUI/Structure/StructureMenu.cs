@@ -9,10 +9,12 @@ using RyanAssets.Shared.Globals;
 using RyanAssets.Shared.Requests;
 using RyanAssets.UI;
 using RyanAssets.UI.ButtonGrid;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace RyanAssets.Client.ClientUI.Build {
     public class StructureMenu : ButtonGridUI<StructureComponent> {
@@ -33,12 +35,60 @@ namespace RyanAssets.Client.ClientUI.Build {
         [SerializeField] private TextMeshProUGUI placementTitle;
         [SerializeField] private TextMeshProUGUI placementStatus;
 
+        [Header("Availability")]
+        [Tooltip("Description colour on a card the game mode has locked.")]
+        [SerializeField] private Color lockedTextColor = new(1f, 0.72f, 0.35f, 1f);
+        [Tooltip("Cost colour on a card the local player cannot currently pay for.")]
+        [SerializeField] private Color unaffordableCostColor = new(1f, 0.45f, 0.45f, 1f);
+
         private static readonly Color ValidPreviewColor = new(0.2f, 1f, 0.55f, 0.72f);
         private static readonly Color InvalidPreviewColor = new(1f, 0.2f, 0.2f, 0.72f);
+
+        // Card children, in the StructureItemCard prefab's authored order.
+        private const int IconChild = 1, CategoryChild = 2, NameChild = 3, DescriptionChild = 4, CostChild = 5;
+
+        /// <summary>
+        /// Optional game-mode gate consulted for every card. A locked structure stays listed - a
+        /// player should be able to see what research or progress will unlock - but cannot be
+        /// picked for placement. Leave null and every structure is available.
+        /// </summary>
+        public static Func<StructureComponent, StructureAvailability> AvailabilityProvider;
+
+        /// <summary>
+        /// Optional funds check, so a structure the player cannot pay for reads that way on its card
+        /// rather than only through a refused placement. Leave null to never mark costs.
+        /// </summary>
+        public static Func<StructureComponent, bool> AffordabilityProvider;
+
+        private static event Action AvailabilityChanged;
+
+        /// <summary>
+        /// Re-evaluates every open card against the providers. A game mode calls this when the state
+        /// its providers read changes - research finishing, funds moving - since the menu cannot
+        /// observe that state itself.
+        /// </summary>
+        public static void NotifyAvailabilityChanged() => AvailabilityChanged?.Invoke();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetProviders() {
+            // A previous session's game mode must not keep locking cards after a domain reload.
+            AvailabilityProvider = null;
+            AffordabilityProvider = null;
+            AvailabilityChanged = null;
+        }
 
         // Row -> its structure's category, so the sidebar can filter without re-deriving the
         // category from a row's display name.
         private readonly Dictionary<GameObject, string> rowCategories = new();
+        // Row -> the structure it offers and the colours its labels were authored with, so a card
+        // can be locked, unlocked, and restored in place without being rebuilt.
+        private readonly Dictionary<GameObject, RowBinding> rowBindings = new();
+
+        private sealed class RowBinding {
+            public StructureComponent Structure;
+            public Color DescriptionColor;
+            public Color CostColor;
+        }
         private readonly List<StructureCategoryButton> categoryTabs = new();
         /// <summary>The category the sidebar is filtered to, or null for "all items".</summary>
         private string selectedCategory;
@@ -221,24 +271,67 @@ namespace RyanAssets.Client.ClientUI.Build {
         }
 
         private void OnAddPrefab(GameObject prefab, StructureComponent structure) {
-            var icon = prefab.transform.GetChild(1).GetComponent<UnityEngine.UI.Image>();
+            var icon = prefab.transform.GetChild(IconChild).GetComponent<Image>();
             icon.sprite = structure.Sprite;
             // An Image with no sprite draws an opaque white box over the card's icon frame, which is
             // what made every shop icon read as "not rendering". Hide it instead.
             icon.enabled = structure.Sprite != null;
 
-            prefab.transform.GetChild(2).GetComponent<TextMeshProUGUI>().text = structure.Category;
-            prefab.transform.GetChild(3).GetComponent<TextMeshProUGUI>().text = structure.DisplayName;
-            prefab.transform.GetChild(4).GetComponent<TextMeshProUGUI>().text = structure.Description;
-            prefab.transform.GetChild(5).GetComponent<TextMeshProUGUI>().text = MathHelper.AddCommas(structure.Cost);
+            prefab.transform.GetChild(CategoryChild).GetComponent<TextMeshProUGUI>().text = structure.Category;
+            prefab.transform.GetChild(NameChild).GetComponent<TextMeshProUGUI>().text = structure.DisplayName;
+            TextMeshProUGUI description = prefab.transform.GetChild(DescriptionChild).GetComponent<TextMeshProUGUI>();
+            TextMeshProUGUI cost = prefab.transform.GetChild(CostChild).GetComponent<TextMeshProUGUI>();
+            cost.text = MathHelper.AddCommas(structure.Cost);
 
             rowCategories[prefab] = NormalizeCategory(structure.Category);
+            rowBindings[prefab] = new RowBinding {
+                Structure = structure,
+                DescriptionColor = description.color,
+                CostColor = cost.color
+            };
+            ApplyAvailability(prefab);
             SetPrefabActive(prefab);
             RefreshItemCount();
         }
 
         private void OnRemovePrefab(GameObject prefab) {
             rowCategories.Remove(prefab);
+            rowBindings.Remove(prefab);
+        }
+
+        private static StructureAvailability GetAvailability(StructureComponent structure) =>
+            AvailabilityProvider != null && structure != null
+                ? AvailabilityProvider(structure)
+                : StructureAvailability.Available;
+
+        private void RefreshAllAvailability() {
+            foreach (GameObject row in rowBindings.Keys)
+                ApplyAvailability(row);
+        }
+
+        /// <summary>
+        /// Shows a card's lock and affordability. A locked card keeps its place in the list with its
+        /// requirement in place of the description; the button is disabled so the click that would
+        /// start a doomed placement never happens.
+        /// </summary>
+        private void ApplyAvailability(GameObject row) {
+            if (row == null || !rowBindings.TryGetValue(row, out RowBinding binding))
+                return;
+
+            StructureAvailability availability = GetAvailability(binding.Structure);
+            bool affordable = AffordabilityProvider == null || AffordabilityProvider(binding.Structure);
+
+            TextMeshProUGUI description = row.transform.GetChild(DescriptionChild).GetComponent<TextMeshProUGUI>();
+            description.text = availability.IsAvailable
+                ? binding.Structure.Description
+                : $"LOCKED - {availability.LockedReason}";
+            description.color = availability.IsAvailable ? binding.DescriptionColor : lockedTextColor;
+
+            row.transform.GetChild(CostChild).GetComponent<TextMeshProUGUI>().color =
+                affordable ? binding.CostColor : unaffordableCostColor;
+
+            if (row.TryGetComponent(out Button button))
+                button.interactable = availability.IsAvailable;
         }
 
         private static StructureComponent FindStructurePrefab(ushort prefabId) {
@@ -251,6 +344,10 @@ namespace RyanAssets.Client.ClientUI.Build {
 
         private void OnSelectStructure(GameObject _, StructureComponent structure) {
             if (structure == null || SharedGlobalEvents.Instance == null || !SharedGlobalEvents.Instance.CanBuild.Value)
+                return;
+            // The card is disabled while locked, but the lock can land between the frame the card
+            // was drawn and the click, so it is re-checked here rather than trusted.
+            if (!GetAvailability(structure).IsAvailable)
                 return;
 
             CancelPlacement(false);
@@ -380,6 +477,8 @@ namespace RyanAssets.Client.ClientUI.Build {
             OnCreatePrefab += OnAddPrefab;
             OnDeletePrefab += OnRemovePrefab;
             OnClickPrefab += OnSelectStructure;
+            AvailabilityChanged += RefreshAllAvailability;
+            RefreshAllAvailability();
         }
 
         private void OnDisable() {
@@ -390,6 +489,7 @@ namespace RyanAssets.Client.ClientUI.Build {
             OnCreatePrefab -= OnAddPrefab;
             OnDeletePrefab -= OnRemovePrefab;
             OnClickPrefab -= OnSelectStructure;
+            AvailabilityChanged -= RefreshAllAvailability;
             OnInstanceRemoved();
             SetVisible(false, true);
         }

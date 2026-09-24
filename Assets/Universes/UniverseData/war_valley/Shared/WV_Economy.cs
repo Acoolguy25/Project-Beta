@@ -21,17 +21,25 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         readonly SyncDictionary<int, long> funds = new();
         readonly SyncDictionary<int, int> incomePerMinute = new();
+        /// <summary>
+        /// Debug: every purchase succeeds without touching the ledger. Replicated so each client's
+        /// HUD and menus show everything as affordable instead of greying out what the server will
+        /// in fact accept.
+        /// </summary>
+        readonly SyncVar<bool> infiniteFunds = new();
 
         public override void OnStartNetwork() {
             base.OnStartNetwork();
             Instance = this;
             funds.OnChange += HandleFundsChanged;
             incomePerMinute.OnChange += HandleIncomeChanged;
+            infiniteFunds.OnChange += HandleInfiniteFundsChanged;
         }
 
         public override void OnStopNetwork() {
             funds.OnChange -= HandleFundsChanged;
             incomePerMinute.OnChange -= HandleIncomeChanged;
+            infiniteFunds.OnChange -= HandleInfiniteFundsChanged;
             if (Instance == this)
                 Instance = null;
             base.OnStopNetwork();
@@ -47,14 +55,31 @@ namespace Universes.UniverseData.war_valley.Shared {
                 LedgerChanged?.Invoke();
         }
 
+        void HandleInfiniteFundsChanged(bool previous, bool next, bool asServer) {
+            if (!asServer)
+                LedgerChanged?.Invoke();
+        }
+
         public long GetFunds(int clientId) => funds.TryGetValue(clientId, out long value) ? value : 0;
 
         public int GetIncomePerMinute(int clientId) =>
             incomePerMinute.TryGetValue(clientId, out int value) ? value : 0;
 
-        public bool CanAfford(int clientId, long cost) => cost <= 0 || GetFunds(clientId) >= cost;
+        /// <summary>True while the debug infinite-funds switch is on for this round.</summary>
+        public bool HasInfiniteFunds => infiniteFunds.Value;
+
+        public bool CanAfford(int clientId, long cost) =>
+            cost <= 0 || infiniteFunds.Value || GetFunds(clientId) >= cost;
 
 #if UNITY_SERVER
+        /// <summary>Debug: every purchase is free. Set once by the runner, applied as each round's ledger opens.</summary>
+        public static bool DebugInfiniteFunds { get; set; }
+
+        public override void OnStartServer() {
+            base.OnStartServer();
+            infiniteFunds.Value = DebugInfiniteFunds;
+        }
+
         [Server]
         public void OpenAccount(int clientId, long startingFunds) {
             if (clientId == WV_Owned.NoOwner)
@@ -90,7 +115,8 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>
         /// Deducts <paramref name="cost"/> only if the balance covers it in full. Returns false and
-        /// leaves the ledger untouched otherwise, so callers can reject the purchase outright.
+        /// leaves the ledger untouched otherwise, so callers can reject the purchase outright. With
+        /// infinite funds on, every purchase succeeds and nothing is deducted.
         /// </summary>
         [Server]
         public bool TryDebit(int clientId, long cost) {
@@ -98,6 +124,8 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return true;
             if (clientId == WV_Owned.NoOwner)
                 return false;
+            if (infiniteFunds.Value)
+                return true;
 
             long current = GetFunds(clientId);
             if (current < cost)
@@ -105,6 +133,21 @@ namespace Universes.UniverseData.war_valley.Shared {
 
             funds[clientId] = current - cost;
             return true;
+        }
+
+        /// <summary>
+        /// Takes up to <paramref name="amount"/> from a balance, never below zero, and reports what
+        /// was actually taken. For penalties, which cannot be refused the way a purchase can.
+        /// </summary>
+        [Server]
+        public long DebitUpTo(int clientId, long amount) {
+            if (amount <= 0 || clientId == WV_Owned.NoOwner || infiniteFunds.Value)
+                return 0;
+            long current = GetFunds(clientId);
+            long taken = System.Math.Min(current, amount);
+            if (taken > 0)
+                funds[clientId] = current - taken;
+            return taken;
         }
 
         /// <summary>Publishes the headline rate the HUD shows. Purely informational.</summary>

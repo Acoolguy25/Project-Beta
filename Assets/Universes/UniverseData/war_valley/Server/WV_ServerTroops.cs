@@ -72,25 +72,24 @@ namespace Universes.UniverseData.war_valley.Server {
         public bool IsSquadFull(int clientId) => CountAlive(clientId) >= WV_Rules.MaxTroopsPerCommander;
 
         /// <summary>
-        /// Delivers a troop a barracks has finished training. The order was paid for when it was
-        /// queued, so the only question left is whether the squad still has room: a commander whose
-        /// troops all survived while this one was in the oven has legitimately hit the cap, and the
-        /// funds go back rather than the cap being quietly exceeded.
+        /// Delivers a troop a barracks has finished training to the commander who paid for it -
+        /// the barracks' owner, or an ally who queued there. The order was paid for when it was
+        /// queued, so the only question left is whether that commander's squad still has room: one
+        /// whose troops all survived while this one was in the oven has legitimately hit the cap,
+        /// and the funds go back rather than the cap being quietly exceeded.
         /// </summary>
-        public void TrainFromBuilding(WV_ProductionBuilding building, WV_TroopKind kind) {
-            if (building == null || building.Owned == null)
+        public void TrainFromBuilding(WV_ProductionBuilding building, WV_TroopKind kind, int clientId) {
+            if (building == null)
                 return;
 
-            int clientId = building.Owned.OwnerClientId;
             if (troopPrefab == null || IsSquadFull(clientId)) {
                 Refund(clientId, kind);
                 return;
             }
 
-            StructureComponent structure = building.GetComponent<StructureComponent>();
-            TeamConfig team = structure != null && structure.Team != null
-                ? structure.Team
-                : new TeamConfig(TeamColor.Blue, WV_Rules.GetCommanderColor(clientId));
+            // The troop fights under its commander's own team, in their colour - which is also how
+            // that commander's client recognises it as one of theirs to select.
+            TeamConfig team = WV_Permissions.GetCommanderTeam(clientId);
 
             WV_TroopBrain brain = SpawnTroop(building.SpawnPoint.position, team, kind, clientId);
             if (brain == null) {
@@ -127,7 +126,7 @@ namespace Universes.UniverseData.war_valley.Server {
 
             // The troop fights on its commander's team and, through the display half of that team,
             // carries their colour - the same colour their buildings and their own name already use.
-            character.SetTeam(team ?? new TeamConfig(TeamColor.Blue, WV_Rules.GetCommanderColor(clientId)));
+            character.SetTeam(team ?? WV_Permissions.GetCommanderTeam(clientId));
             character.DisplayName = WV_Rules.GetTroopDisplayName(kind);
 
             // The robot body ships with a material variant per team colour, replicated by the

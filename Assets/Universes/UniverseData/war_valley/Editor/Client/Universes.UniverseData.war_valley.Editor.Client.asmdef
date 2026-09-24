@@ -4,8 +4,9 @@
     "references": [
         "Universes.UniverseData.war_valley.Client",
         "Universes.UniverseData.war_valley.Shared",
-        "RyanAssets.UI.ButtonGrid",
-        "RyanAssets.UI.ListGrid",
+        "RyanAssets.Client.ClientUI.Command",
+        "RyanAssets.Client.ClientUI.Command.Editor",
+        "RyanAssets.UI",
         "Unity.TextMeshPro",
         "Unity.ugui"
     ],

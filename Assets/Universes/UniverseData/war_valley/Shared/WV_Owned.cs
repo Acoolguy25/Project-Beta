@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using RyanAssets.Shared.Component;
+using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
 namespace Universes.UniverseData.war_valley.Shared {
@@ -22,10 +24,22 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         static readonly List<WV_Owned> all = new();
 
+        EntityBase entity;
+
         /// <summary>Every spawned owned object, for server sweeps and client selection.</summary>
         public static IReadOnlyList<WV_Owned> All => all;
 
         public int OwnerClientId => ownerClientId.Value;
+
+        /// <summary>
+        /// The side this object fights for, read from the entity it marks. Ownership says whose it
+        /// is; this says whose side it is on, which is what alliance rules compare.
+        /// </summary>
+        public TeamConfig Team => entity != null ? entity.Team : null;
+
+        void Awake() {
+            entity = GetComponent<EntityBase>();
+        }
 
         /// <summary>
         /// Raised on every build when the commander of this object is set or changes. Presentation

@@ -24,6 +24,14 @@ namespace Universes.UniverseData.war_valley.Tests {
             Assert.That((byte)WV_TroopRefusal.QueueFull, Is.EqualTo(3));
             Assert.That((byte)WV_TroopRefusal.NotOperational, Is.EqualTo(4));
             Assert.That((byte)WV_TroopRefusal.Unavailable, Is.EqualTo(5));
+            Assert.That((byte)WV_TroopRefusal.Locked, Is.EqualTo(6));
+        }
+
+        /// <summary>A barracks trains exactly the two foot soldiers, under the names the menu shows.</summary>
+        [Test]
+        public void Troops_AreNamedKnifemanAndGunner() {
+            Assert.That(WV_Rules.GetTroopDisplayName(WV_TroopKind.Knife), Is.EqualTo("Knifeman"));
+            Assert.That(WV_Rules.GetTroopDisplayName(WV_TroopKind.Gunner), Is.EqualTo("Gunner"));
         }
 
         /// <summary>Every refusal has to say something, or a refused click reads as a broken button.</summary>

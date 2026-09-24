@@ -174,7 +174,7 @@ MonoBehaviour:
   effectsComponent: {fileID: 4246652218447843210}
   healthComponent: {fileID: 509331602248311539}
   StructureID: wv_barracks
-  Description: Trains infantry squads.
+  Description: Trains Knifemen and Gunners. Right-click it to train.
   Cost: 500
   Duration: 25
   Sprite: {fileID: 21300000, guid: 79efd5f19f0f9d6409f6193ac16e1579, type: 3}
@@ -296,8 +296,7 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 2718203642328769263}
   _networkObjectCache: {fileID: 0}
-  producibleUnits:
-  - {fileID: 8574295933440896410, guid: 43563ac8e099b9940ad02027a41167c4, type: 3}
+  producibleUnits: []
   producibleTroops: 0001
   spawnPoint: {fileID: 4753943048688558411}
   defaultRallyOffset: {x: 0, y: 0, z: 6}

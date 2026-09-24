@@ -34,9 +34,11 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         MaterialPropertyBlock properties;
         WV_Owned owned;
+        WV_Constructable constructable;
 
         void Awake() {
             owned = GetComponent<WV_Owned>();
+            constructable = GetComponent<WV_Constructable>();
             properties = new MaterialPropertyBlock();
             if (damageSource == null)
                 damageSource = GetComponent<StructureComponent>();
@@ -67,10 +69,15 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// 1 while the structure is untouched, falling to 0 as it dies. A structure with no health
         /// source, or one whose health has not been initialized yet, counts as undamaged so a freshly
         /// spawned building is not painted as a rusted wreck for its first frame.
+        /// <para>
+        /// A site under construction also counts as undamaged. It deliberately starts at a quarter
+        /// of its health and grows toward full as it rises, so reading that as battle damage painted
+        /// every new building rust-brown for most of its build instead of its owner's colour.
+        /// </para>
         /// </summary>
         float HealthFraction {
             get {
-                if (damageSource == null)
+                if (damageSource == null || (constructable != null && !constructable.IsOperational))
                     return 1f;
                 long max = damageSource.MaxHealth.Value;
                 return max <= 0 ? 1f : Mathf.Clamp01(damageSource.Health.Value / (float)max);

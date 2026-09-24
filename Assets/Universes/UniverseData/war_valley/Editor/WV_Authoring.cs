@@ -50,7 +50,7 @@ namespace Universes.UniverseData.war_valley.Editor {
 
         // --- Definitions -----------------------------------------------------
 
-        enum StructureRole { Plain, Income, Production, Turret, Wall }
+        enum StructureRole { Plain, Income, Production, Turret, Wall, Research }
 
         sealed class StructureDef {
             public string Id, DisplayName, Description, Category, ModelPath;
@@ -66,6 +66,8 @@ namespace Universes.UniverseData.war_valley.Editor {
             public float TurretRange, TurretCooldown;
             public long TurretDamage;
             public bool AntiAir;
+            /// <summary>Research throughput a research station adds to its side.</summary>
+            public float ResearchRate = 1f;
         }
 
         sealed class UnitDef {
@@ -98,11 +100,13 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Role = StructureRole.Income, IncomePerTick = 60
             },
             new() {
+                // Foot soldiers only: the Infantry vehicle duplicated the Knifeman and Gunner the
+                // barracks already trains, so it is no longer offered here.
                 Id = "wv_barracks", DisplayName = "Barracks", Category = "Military",
-                Description = "Trains infantry squads and the commander's own foot soldiers.",
+                Description = "Trains Knifemen and Gunners. Right-click it to train.",
                 ModelPath = PackRoot + "/Building_Prefebs/PersonLivePlace_Prefeb.prefab",
                 FootprintCells = 2, Cost = 500, BuildSeconds = 25f, MaxHealth = 800,
-                Role = StructureRole.Production, Produces = new[] { WV_UnitKind.Infantry },
+                Role = StructureRole.Production,
                 Trains = new[] { WV_TroopKind.Knife, WV_TroopKind.Gunner }
             },
             new() {
@@ -129,10 +133,13 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Produces = new[] { WV_UnitKind.UAV, WV_UnitKind.Jet, WV_UnitKind.Bomber }
             },
             new() {
-                Id = "wv_radar", DisplayName = "Radar Station", Category = "Support",
-                Description = "Watches the valley approaches.",
+                // Keeps the radar's id: the structure is the same asset, given a job. It is the
+                // research station every research project needs, and each extra one speeds research.
+                Id = "wv_radar", DisplayName = "Research Station", Category = "Support",
+                Description = "Runs research for your side. Every extra station adds research speed.",
                 ModelPath = PackRoot + "/Building_Prefebs/Radar_Prefeb.prefab",
-                FootprintCells = 2, Cost = 600, BuildSeconds = 25f, MaxHealth = 600
+                FootprintCells = 2, Cost = 600, BuildSeconds = 25f, MaxHealth = 600,
+                Role = StructureRole.Research, ResearchRate = 1f
             },
             new() {
                 Id = "wv_missile_battery", DisplayName = "Missile Battery", Category = "Defense",
@@ -658,6 +665,11 @@ namespace Universes.UniverseData.war_valley.Editor {
                     Ensure<WV_DestructibleObstacle>(root);
                     break;
                 }
+                case StructureRole.Research: {
+                    var station = Ensure<WV_ResearchBuilding>(root);
+                    SetPrivateField(station, "researchRate", def.ResearchRate);
+                    break;
+                }
             }
         }
 
@@ -890,8 +902,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 case Array array:
                     property.arraySize = array.Length;
                     for (int index = 0; index < array.Length; index++) {
-                        property.GetArrayElementAtIndex(index).objectReferenceValue =
-                            (UnityEngine.Object)array.GetValue(index);
+                        SerializedProperty element = property.GetArrayElementAtIndex(index);
+                        object item = array.GetValue(index);
+                        // Enum arrays - a barracks' troop kinds - serialize their backing values,
+                        // not object references; casting them to Object threw on every rebuild.
+                        if (item is Enum)
+                            element.intValue = Convert.ToInt32(item);
+                        else
+                            element.objectReferenceValue = (UnityEngine.Object)item;
                     }
                     break;
                 default:

@@ -113,15 +113,19 @@ namespace Universes.UniverseData.war_valley.Shared {
         public override void OnStartNetwork() {
             base.OnStartNetwork();
             all.Add(this);
+            teamSync.OnChange += HandleTeamChanged;
             RosterChanged?.Invoke();
         }
 
         public override void OnStopNetwork() {
+            teamSync.OnChange -= HandleTeamChanged;
             all.Remove(this);
             SelectedLocally = false;
             RosterChanged?.Invoke();
             base.OnStopNetwork();
         }
+
+        void HandleTeamChanged(TeamConfig previous, TeamConfig next, bool asServer) => RaiseTeamChanged();
 
         /// <summary>Units this client commands, used to seed box selection and control groups.</summary>
         public static void CollectOwnedBy(int clientId, List<WV_Unit> results) {

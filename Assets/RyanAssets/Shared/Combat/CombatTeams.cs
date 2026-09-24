@@ -8,6 +8,13 @@ namespace RyanAssets.Shared.Combat {
     /// which entities are hostile instead of each system carrying its own copy of the rule.
     /// </summary>
     public static class CombatTeams {
+        /// <summary>
+        /// True when both sides fight for the same real team. Display colours are deliberately
+        /// ignored: two commanders painted in different colours on the same side are still allies.
+        /// </summary>
+        public static bool AreAllies(TeamConfig a, TeamConfig b) =>
+            a != null && b != null && a.realTeam != TeamColor.None && a.realTeam == b.realTeam;
+
         public static bool AreEnemies(TeamConfig attacker, TeamConfig target) {
             if (attacker == null || target == null)
                 return false;

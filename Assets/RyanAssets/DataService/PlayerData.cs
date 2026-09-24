@@ -151,6 +151,21 @@ namespace RyanAssets.DataService {
         public static bool TryGetPlayerData(NetworkConnection conn, out PlayerData stats) {
             return Players.TryGetValue(conn, out stats);
         }
+        /// <summary>
+        /// Finds a player by FishNet client id. Game state that has to agree between the server and
+        /// every client - who owns a building, who queued a unit - is keyed by that id, because a
+        /// client holds a connection object for other players that is not the server's instance.
+        /// </summary>
+        public static bool TryGetPlayerData(int clientId, out PlayerData stats) {
+            foreach (KeyValuePair<NetworkConnection, PlayerData> entry in Players) {
+                if (entry.Key != null && entry.Key.ClientId == clientId && entry.Value != null) {
+                    stats = entry.Value;
+                    return true;
+                }
+            }
+            stats = null;
+            return false;
+        }
         public static void RunEach(Action<PlayerData> action) {
             foreach (var item in Players) {
                 action.Invoke(item.Value);

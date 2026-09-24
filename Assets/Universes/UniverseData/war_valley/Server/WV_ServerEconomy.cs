@@ -81,20 +81,39 @@ namespace Universes.UniverseData.war_valley.Server {
         // --- Placement -------------------------------------------------------
 
         /// <summary>
-        /// Rejects a placement the sender cannot pay for. Runs before the structure is instantiated,
-        /// so a refused build costs nothing and spawns nothing.
+        /// Rejects a placement the sender cannot make: one still locked behind research, or one they
+        /// cannot pay for. Runs before the structure is instantiated, so a refused build costs
+        /// nothing and spawns nothing - and says why, since the build menu's own locks are only as
+        /// current as the client's last update.
         /// </summary>
         bool CanPlaceStructure(NetworkConnection sender, StructureComponent prefabStructure) {
             if (sender == null || !sender.IsValid || prefabStructure == null)
                 return false;
 
             WV_Economy economy = WV_Economy.Instance;
-            return economy != null && economy.CanAfford(sender.ClientId, (long)prefabStructure.Cost);
+            if (economy == null)
+                return false;
+
+            WV_Tech required = WV_TechTree.GetRequirement(prefabStructure.StructureID);
+            WV_Research research = WV_Research.Instance;
+            if (required != WV_Tech.None
+                && (research == null || !research.IsResearched(WV_Permissions.GetSide(sender.ClientId), required))) {
+                WV_ServerCommand.Notify(sender,
+                    $"Research {WV_TechTree.GetDisplayName(required)} to build a {prefabStructure.DisplayName}");
+                return false;
+            }
+
+            if (!economy.CanAfford(sender.ClientId, (long)prefabStructure.Cost)) {
+                WV_ServerCommand.Notify(sender, $"Not enough funds for a {prefabStructure.DisplayName}");
+                return false;
+            }
+            return true;
         }
 
         /// <summary>
-        /// Charges the build, records its commander, and starts the construction timer. The funds
-        /// check in <see cref="CanPlaceStructure"/> is advisory; this debit is the authoritative one.
+        /// Charges the build, records its commander and their side, and starts the construction
+        /// timer. The funds check in <see cref="CanPlaceStructure"/> is advisory; this debit is the
+        /// authoritative one.
         /// </summary>
         void HandleStructurePlaced(NetworkConnection sender, StructureComponent structure) {
             if (structure == null)
@@ -113,26 +132,51 @@ namespace Universes.UniverseData.war_valley.Server {
             if (structure.TryGetComponent(out WV_Owned owned))
                 owned.SetOwnerClientId(clientId);
 
+            // The structure fights for its builder's side and wears their colour, so its overhead
+            // tag, its turret's target choice, and who counts as its ally all follow the commander
+            // rather than the prefab's authored default.
+            structure.SetTeam(WV_Permissions.GetCommanderTeam(clientId));
+
             if (structure.TryGetComponent(out WV_Constructable constructable))
                 constructable.BeginConstruction();
 
             if (structure.TryGetComponent(out WV_ProductionBuilding production))
-                WatchProductionRefund(production, structure, clientId);
+                WatchProductionRefund(production, structure);
         }
 
         /// <summary>
-        /// A destroyed factory hands back whatever was still in its queue, so a player is not charged
-        /// for units that will never arrive.
+        /// A destroyed or demolished factory hands back whatever was still in its queue, each entry
+        /// to the commander who paid for it, so nobody is charged for units that will never arrive.
         /// </summary>
-        void WatchProductionRefund(WV_ProductionBuilding production, StructureComponent structure, int clientId) {
+        static void WatchProductionRefund(WV_ProductionBuilding production, StructureComponent structure) {
             void HandleDied(DamageType source, IEntity attacker) {
                 structure.OnDied -= HandleDied;
-                int refund = production.DrainQueueRefund();
-                if (refund > 0)
-                    WV_Economy.Instance?.Credit(clientId, refund);
+                production.DrainQueue(RefundPayer);
             }
 
             structure.OnDied += HandleDied;
+        }
+
+        static void RefundPayer(int payerClientId, int refund) {
+            if (refund > 0)
+                WV_Economy.Instance?.Credit(payerClientId, refund);
+        }
+
+        // --- Penalties -------------------------------------------------------
+
+        /// <summary>
+        /// Charges a commander for losing their own character: a share of what they hold, never
+        /// taking them below zero. Their army, buildings, and research are untouched - the cost of
+        /// dying is tempo, not the base.
+        /// </summary>
+        public void ApplyDeathPenalty(int clientId) {
+            WV_Economy economy = WV_Economy.Instance;
+            if (economy == null || clientId == WV_Owned.NoOwner || economy.HasInfiniteFunds)
+                return;
+
+            long taken = economy.DebitUpTo(clientId, WV_Rules.GetDeathPenalty(economy.GetFunds(clientId)));
+            if (taken > 0)
+                WV_ServerCommand.Notify(clientId, $"You died and lost {taken:N0} funds");
         }
 
         // --- Income ----------------------------------------------------------

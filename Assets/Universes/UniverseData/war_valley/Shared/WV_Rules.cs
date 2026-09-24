@@ -39,7 +39,26 @@ namespace Universes.UniverseData.war_valley.Shared {
         SquadFull = 2,
         QueueFull = 3,
         NotOperational = 4,
-        Unavailable = 5
+        Unavailable = 5,
+        /// <summary>The item waits on research the commander's side has not finished.</summary>
+        Locked = 6
+    }
+
+    /// <summary>
+    /// Why the server would not start or cancel a research project. Travels on the wire in
+    /// <see cref="WV_ResearchResult"/>, so values may be appended but never renumbered.
+    /// </summary>
+    public enum WV_ResearchRefusal : byte {
+        None = 0,
+        NotEnoughFunds = 1,
+        AlreadyResearched = 2,
+        AlreadyResearching = 3,
+        /// <summary>No finished research station on the commander's side to run the project.</summary>
+        NoResearchStation = 4,
+        MissingPrerequisite = 5,
+        Unavailable = 6,
+        /// <summary>A cancel from someone other than the commander who paid for the project.</summary>
+        NotPermitted = 7
     }
 
     /// <summary>The order a selected group is currently carrying out.</summary>
@@ -142,9 +161,10 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// <summary>
         /// How strongly a commander's colour is mixed into their buildings' authored albedo. Full
         /// strength would replace the Cartoon Military art with flat colour, so ownership reads as a
-        /// tint over the model rather than instead of it.
+        /// tint over the model rather than instead of it - but strongly enough that whose base is
+        /// whose is readable from across the valley.
         /// </summary>
-        public const float OwnerTintStrength = 0.55f;
+        public const float OwnerTintStrength = 0.7f;
 
         /// <summary>The albedo tint applied to a structure owned by <paramref name="clientId"/>.</summary>
         public static Color GetOwnerTint(int clientId) =>
@@ -259,7 +279,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         public static string GetTroopDisplayName(WV_TroopKind kind) => kind switch {
             WV_TroopKind.Gunner => "Gunner",
-            _ => "Knife"
+            _ => "Knifeman"
         };
 
         /// <summary>
@@ -285,8 +305,56 @@ namespace Universes.UniverseData.war_valley.Shared {
                 WV_TroopRefusal.SquadFull => $"Squad is full ({MaxTroopsPerCommander} troops)",
                 WV_TroopRefusal.QueueFull => "Build queue is full",
                 WV_TroopRefusal.NotOperational => "That building is not finished",
+                WV_TroopRefusal.Locked =>
+                    $"Research {WV_TechTree.GetDisplayName(WV_TechTree.GetRequirement(item))} to build a {item.DisplayName}",
                 _ => $"Cannot build a {item.DisplayName} here"
             };
+
+        /// <summary>What the HUD tells the commander when research is refused.</summary>
+        public static string GetResearchRefusalMessage(WV_ResearchRefusal refusal, WV_Tech tech) {
+            string name = WV_TechTree.GetDisplayName(tech);
+            return refusal switch {
+                WV_ResearchRefusal.NotEnoughFunds => $"Not enough funds to research {name}",
+                WV_ResearchRefusal.AlreadyResearched => $"{name} is already researched",
+                WV_ResearchRefusal.AlreadyResearching => $"{name} is already being researched",
+                WV_ResearchRefusal.NoResearchStation => "Build a research station to research technology",
+                WV_ResearchRefusal.MissingPrerequisite => $"{name} needs earlier research first",
+                WV_ResearchRefusal.NotPermitted => "Only the commander who started that research can cancel it",
+                _ => $"Cannot research {name}"
+            };
+        }
+
+        // --- Penalties and refunds ---------------------------------------------
+
+        /// <summary>Share of a commander's funds lost each time their own character dies.</summary>
+        public const float DeathPenaltyFraction = 0.15f;
+
+        /// <summary>
+        /// The least a death costs, so a commander sitting on a small balance still feels it. Never
+        /// more than they actually hold: a penalty cannot push a balance negative.
+        /// </summary>
+        public const long DeathPenaltyMinimum = 50;
+
+        /// <summary>Funds taken from a commander holding <paramref name="funds"/> when they die.</summary>
+        public static long GetDeathPenalty(long funds) {
+            if (funds <= 0)
+                return 0;
+            long proportional = (long)System.Math.Round(funds * (double)DeathPenaltyFraction);
+            return System.Math.Min(funds, System.Math.Max(DeathPenaltyMinimum, proportional));
+        }
+
+        /// <summary>
+        /// Share of the build price handed back when a commander demolishes their own structure.
+        /// A finished building returns half; a site still under construction returns more, because
+        /// tearing down a misplaced foundation should not cost as much as scrapping a working base.
+        /// </summary>
+        public const float DemolishRefundFraction = 0.5f;
+        public const float DemolishSiteRefundFraction = 0.75f;
+
+        public static long GetDemolishRefund(ulong cost, bool operational) {
+            float fraction = operational ? DemolishRefundFraction : DemolishSiteRefundFraction;
+            return (long)System.Math.Round(System.Math.Min(cost, (ulong)long.MaxValue) * (double)fraction);
+        }
 
         /// <summary>Upper bound on the troops one commander can have alive at once.</summary>
         public const int MaxTroopsPerCommander = 12;

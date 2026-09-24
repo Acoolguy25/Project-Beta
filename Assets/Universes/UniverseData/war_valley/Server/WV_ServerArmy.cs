@@ -93,9 +93,9 @@ namespace Universes.UniverseData.war_valley.Server {
         /// per-commander cap. A troop is not a <see cref="WV_Unit"/>, so it cannot be built here the
         /// way a vehicle is.
         /// </summary>
-        static void HandleTroopProduced(WV_ProductionBuilding building, WV_TroopKind kind) {
+        static void HandleTroopProduced(WV_ProductionBuilding building, WV_TroopKind kind, int payerClientId) {
             if (WV_ServerTroops.Instance != null)
-                WV_ServerTroops.Instance.TrainFromBuilding(building, kind);
+                WV_ServerTroops.Instance.TrainFromBuilding(building, kind, payerClientId);
         }
 
         void HandleUnitProduced(WV_ProductionBuilding building, WV_Unit unit) {

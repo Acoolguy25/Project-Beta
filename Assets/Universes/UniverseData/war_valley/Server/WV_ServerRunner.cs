@@ -10,7 +10,6 @@ using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Global;
 using System;
 using System.Threading;
-using Unity.VisualScripting.Antlr3.Runtime;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Universes.UniverseData.war_valley.Shared;
@@ -79,6 +78,28 @@ namespace Universes.UniverseData.war_valley.Server
                  "time, 0.1 builds ten times faster, 3 makes a tank a real commitment.")]
         private DebugFloat DebugBuildDuration = new();
 
+        // --- Debug shortcuts for testing a base without playing a round up to it. Each one is honoured
+        // in the Editor only, so a shipped server always plays the tuned game whatever is left ticked.
+        [Header("Debug (Editor only)")]
+        [SerializeField]
+        [Tooltip("Editor only. Every purchase - structures, units, troops, research - is free, and " +
+                 "dying costs nothing.")]
+        private DebugBool DebugInfiniteMoney = new(false);
+
+        [SerializeField]
+        [Tooltip("Editor only. Structures finish construction and production queues finish each " +
+                 "item almost immediately. Overrides DebugBuildDuration.")]
+        private DebugBool DebugInstantBuild = new(false);
+
+        [SerializeField]
+        [Tooltip("Editor only. Research completes the moment it is started.")]
+        private DebugBool DebugInstantResearch = new(false);
+
+        [SerializeField]
+        [Tooltip("Editor only. Every technology starts each round already researched, so locked " +
+                 "structures and units are available from the opening whistle.")]
+        private DebugBool DebugAllResearched = new(false);
+
         private Vector3 WaveSpawnLocation;
         private WV_Flag spawnedFlag;
         private WV_Economy spawnedEconomy;
@@ -114,9 +135,29 @@ namespace Universes.UniverseData.war_valley.Server
             serverTroops.Initialize(GetNpcPrefab(WV_NpcType.Normal));
 
             // Applied here rather than read per timer so that a building which starts its queue
-            // mid-round uses the same pace as one that started at the opening whistle.
-            WV_ProductionBuilding.BuildDurationMultiplier = DebugBuildDuration.Value;
+            // mid-round uses the same pace as one that started at the opening whistle. The economy
+            // and research ledgers are respawned every round and pick their switches up as they open.
+            ApplyDebugSettings();
             WV_ServerCommand.Register();
+        }
+
+        /// <summary>
+        /// Pushes the runner's debug switches into the systems that honour them. Each system holds
+        /// its switch statically, the way <see cref="WV_ProductionBuilding.BuildDurationMultiplier"/>
+        /// already did, so this runner stays the single place a tester flips them.
+        /// </summary>
+        private void ApplyDebugSettings() {
+            bool instantBuild = DebugInstantBuild.Value;
+            WV_ProductionBuilding.BuildDurationMultiplier = instantBuild ? 0f : DebugBuildDuration.Value;
+            WV_Constructable.ConstructionDurationMultiplier = instantBuild ? 0f : 1f;
+            WV_Economy.DebugInfiniteFunds = DebugInfiniteMoney.Value;
+            WV_Research.InstantResearch = DebugInstantResearch.Value;
+            WV_Research.StartFullyResearched = DebugAllResearched.Value;
+
+            if (instantBuild || DebugInfiniteMoney.Value || DebugInstantResearch.Value || DebugAllResearched.Value)
+                Debug.LogWarning(
+                    $"War Valley debug: infinite money={DebugInfiniteMoney.Value}, instant build={instantBuild}, " +
+                    $"instant research={DebugInstantResearch.Value}, all researched={DebugAllResearched.Value}.", this);
         }
         bool CanSpawnFunction(NetworkConnection conn) {
             //PlayerData.GetPlayerData(conn)
@@ -161,6 +202,21 @@ namespace Universes.UniverseData.war_valley.Server
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
             //character.SetScale(UnityEngine.Random.Range(1f, 3f) * 5 * Vector3.one);
+
+            // A commander who dies pays for it out of their war chest. Each respawn is a new
+            // character, so this subscription lives and dies with the one it was made for.
+            int clientId = character.Owner != null && character.Owner.IsValid
+                ? character.Owner.ClientId
+                : WV_Owned.NoOwner;
+            void HandleCommanderDied(DamageType source, IEntity attacker) {
+                character.OnDied -= HandleCommanderDied;
+                // Being cleared away by a round reset or a despawn is housekeeping, not a death
+                // the commander could have avoided.
+                if (source is DamageType.Reset or DamageType.Despawn)
+                    return;
+                serverEconomy.ApplyDeathPenalty(clientId);
+            }
+            character.OnDied += HandleCommanderDied;
         }
         protected async UniTask<bool> StartTimerCountdown(int duration, CancellationToken token) {
             return await GameTimerCountdown(duration, token);

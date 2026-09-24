@@ -84,8 +84,9 @@ GameObject:
   - component: {fileID: 7687484576108790951}
   - component: {fileID: 2878093528877178933}
   - component: {fileID: 7663957517013571271}
+  - component: {fileID: 6194201324498826911}
   m_Layer: 14
-  m_Name: RadarStation
+  m_Name: ResearchStation
   m_TagString: Structure
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -237,11 +238,11 @@ MonoBehaviour:
   effectsComponent: {fileID: 1717676174257189976}
   healthComponent: {fileID: 1096403229709922731}
   StructureID: wv_radar
-  Description: Watches the valley approaches.
+  Description: Runs research for your side. Every extra station adds research speed.
   Cost: 600
   Duration: 25
   Sprite: {fileID: 21300000, guid: ca91c756775d4a04ebd875d624c53bb5, type: 3}
-  displayName: Radar Station
+  displayName: Research Station
   team:
     realTeam: 2
     displayTeam: 2
@@ -782,3 +783,19 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 495444, guid: af18218765eb9410785df3efc6bb5169, type: 3}
   m_PrefabInstance: {fileID: 7704195354533322714}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6194201324498826911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6627088688522479924}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f7e632eeefd4bfda067be042d1ffd68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.war_valley.Shared::Universes.UniverseData.war_valley.Shared.WV_ResearchBuilding
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 1843513830398927506}
+  _networkObjectCache: {fileID: 0}
+  researchRate: 1

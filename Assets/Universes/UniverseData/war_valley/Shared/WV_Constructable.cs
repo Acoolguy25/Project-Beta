@@ -198,12 +198,26 @@ namespace Universes.UniverseData.war_valley.Shared {
 
 #if UNITY_SERVER
         /// <summary>
+        /// Debug multiplier on every construction timer, where 1 is the authored build time and 0
+        /// completes a site almost immediately. Static and set once by the universe's runner, the
+        /// same way <see cref="WV_ProductionBuilding.BuildDurationMultiplier"/> is, so one runner
+        /// setting speeds up every structure without editing thirteen prefabs.
+        /// </summary>
+        public static float ConstructionDurationMultiplier { get; set; } = 1f;
+
+        /// <summary>
         /// Starts the build timer. The placement path calls this immediately after the site spawns so
         /// the deadline replicates with the object's first state.
         /// </summary>
         [Server]
         public void BeginConstruction() {
-            float duration = Mathf.Max(WV_Rules.MinConstructionSeconds, structure.Duration);
+            // Floored rather than zeroed even at an instant multiplier: a site that completes in the
+            // frame it spawns never replicates its construction state, which skips the owner's colour
+            // and the scaffold teardown clients key off.
+            float duration = Mathf.Max(
+                0.1f,
+                Mathf.Max(WV_Rules.MinConstructionSeconds, structure.Duration)
+                    * Mathf.Max(0f, ConstructionDurationMultiplier));
             buildDuration.Value = duration;
             completionTime.Value = NetworkHelper.ServerTime + duration;
             complete.Value = false;
