@@ -4,6 +4,7 @@
     "references": [
         "RyanAssets.Client.ClientUI.Command",
         "RyanAssets.UI",
+        "RyanAssets.UI.Textbox",
         "Unity.TextMeshPro",
         "Unity.ugui"
     ],

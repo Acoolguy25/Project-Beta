@@ -2,7 +2,7 @@ using NUnit.Framework;
 using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Tests {
-    /// <summary>Covers what dying and demolishing cost a commander.</summary>
+    /// <summary>Covers what dying and selling cost a commander, and the per-player limits and alliances.</summary>
     public sealed class WV_PenaltyTests {
         [Test]
         public void DeathPenalty_IsAShareOfALargeBalance() {
@@ -22,22 +22,49 @@ namespace Universes.UniverseData.war_valley.Tests {
         }
 
         [Test]
-        public void Demolishing_RefundsLessForAFinishedBuildingThanForASite() {
-            long finished = WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 1f);
-            long site = WV_Rules.GetDemolishRefund(1000, operational: false, integrity: 1f);
-
-            Assert.That(finished, Is.EqualTo(500));
-            Assert.That(site, Is.EqualTo(750));
-            Assert.That(site, Is.GreaterThan(finished));
+        public void Selling_AtFullHealthRefundsAFixedShareOfTheCost() {
+            Assert.That(WV_Rules.GetSellRefund(1000L, 1f), Is.EqualTo(500));
+            Assert.That(WV_Rules.GetSellRefund(1000UL, 1f), Is.EqualTo(500));
         }
 
         [Test]
-        public void Demolishing_RefundShrinksWithDamage() {
-            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 0.5f), Is.EqualTo(250));
-            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 0.1f), Is.EqualTo(50));
-            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 0f), Is.EqualTo(0));
-            // Out-of-range readings are clamped rather than paying out more than an intact building.
-            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 2f), Is.EqualTo(500));
+        public void Selling_RefundFallsLinearlyWithDamageToAFloor() {
+            Assert.That(WV_Rules.GetSellRefund(1000L, 0.5f), Is.EqualTo(375));
+            Assert.That(WV_Rules.GetSellRefund(1000L, 0.1f), Is.EqualTo(275));
+            // A building on its last hit point still works, so it keeps half its sale value.
+            Assert.That(WV_Rules.GetSellRefund(1000L, 0f), Is.EqualTo(250));
+        }
+
+        [Test]
+        public void Selling_ClampsOutOfRangeConditionAndIgnoresFreeItems() {
+            Assert.That(WV_Rules.GetSellRefund(1000L, 2f), Is.EqualTo(500));
+            Assert.That(WV_Rules.GetSellRefund(1000L, -1f), Is.EqualTo(250));
+            Assert.That(WV_Rules.GetSellRefund(0L, 1f), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Limits_MatchThePerPlayerCaps() {
+            Assert.That(WV_Limits.GetLimit(WV_ForceCategory.Soldier), Is.EqualTo(20));
+            Assert.That(WV_Limits.GetLimit(WV_ForceCategory.Aircraft), Is.EqualTo(10));
+            Assert.That(WV_Limits.GetLimit(WV_ForceCategory.Building), Is.EqualTo(50));
+        }
+
+        [Test]
+        public void Limits_CountTroopsAndGroundVehiclesAsSoldiersAndAircraftApart() {
+            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Troop(WV_TroopKind.Gunner)), Is.EqualTo(WV_ForceCategory.Soldier));
+            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Tank)), Is.EqualTo(WV_ForceCategory.Soldier));
+            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Chopper)), Is.EqualTo(WV_ForceCategory.Aircraft));
+            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Jet)), Is.EqualTo(WV_ForceCategory.Aircraft));
+        }
+
+        [Test]
+        public void Alliances_SurvivalPutsCommandersAgainstTheWaves() {
+            Assert.That(WV_Alliances.Mode, Is.EqualTo(WV_GameMode.Survival));
+            Assert.That(WV_Alliances.GetCommanderSide(0), Is.EqualTo(WV_Alliances.GetCommanderSide(7)));
+            var enemies = WV_Alliances.BuildEnemyTable();
+            Assert.That(enemies[WV_Alliances.Invaders], Does.Contain(WV_Alliances.Defenders));
+            Assert.That(enemies[WV_Alliances.Defenders], Does.Contain(WV_Alliances.Invaders));
+            Assert.That(enemies[WV_Alliances.Defenders], Does.Not.Contain(WV_Alliances.Defenders));
         }
     }
 }

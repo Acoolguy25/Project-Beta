@@ -81,8 +81,8 @@ namespace Universes.UniverseData.war_valley.Server {
         // --- Placement -------------------------------------------------------
 
         /// <summary>
-        /// Rejects a placement the sender cannot make: one still locked behind research, or one they
-        /// cannot pay for. Runs before the structure is instantiated, so a refused build costs
+        /// Rejects a placement the sender cannot make: one still locked behind research, one past
+        /// their building limit, or one they cannot pay for. Runs before the structure is instantiated, so a refused build costs
         /// nothing and spawns nothing - and says why, since the build menu's own locks are only as
         /// current as the client's last update.
         /// </summary>
@@ -100,6 +100,12 @@ namespace Universes.UniverseData.war_valley.Server {
                 && (research == null || !research.IsResearched(sender.ClientId, required))) {
                 WV_ServerCommand.Notify(sender,
                     $"Research {WV_TechTree.GetDisplayName(required)} to build a {prefabStructure.DisplayName}");
+                return false;
+            }
+
+            if (WV_Limits.GetCategory(prefabStructure) == WV_ForceCategory.Building
+                && WV_Limits.CountBuildings(sender.ClientId) >= WV_Limits.MaxBuildings) {
+                WV_ServerCommand.Notify(sender, WV_Limits.GetLimitMessage(WV_ForceCategory.Building));
                 return false;
             }
 

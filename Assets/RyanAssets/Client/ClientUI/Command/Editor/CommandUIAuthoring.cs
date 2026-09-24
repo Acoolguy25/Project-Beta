@@ -7,7 +7,8 @@ using static RyanAssets.Client.ClientUI.Command.Editor.UIAuthoringKit;
 namespace RyanAssets.Client.ClientUI.Command.Editor {
     /// <summary>
     /// Authors the shared command UI prefabs: the option card and the build/research panel built
-    /// from it, the queue slot, the stat row, the action button, and the selection panel.
+    /// from it, the queue slot, the stat row, the action button, the selection panel, and the funds
+    /// transfer panel with its recipient row.
     /// <para>
     /// These are the reusable half of an RTS interface. A universe's HUD nests the panels as
     /// connected prefab instances and binds its own rules to them, so a second strategy mode gets
@@ -23,6 +24,8 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
         public const string StatRowPath = Folder + "/CommandStatRow.prefab";
         public const string ActionButtonPath = Folder + "/CommandActionButton.prefab";
         public const string SelectionPanelPath = Folder + "/SelectionInfoPanel.prefab";
+        public const string RecipientRowPath = Folder + "/FundsRecipientRow.prefab";
+        public const string TransferPanelPath = Folder + "/FundsTransferPanel.prefab";
 
         /// <summary>Card size and column count of the option panel, shared so the panel is sized to fit whole cards.</summary>
         public static readonly Vector2 CardSize = new(132f, 164f);
@@ -38,6 +41,8 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
 
         public const float SelectionPanelWidth = 440f;
 
+        public static readonly Vector2 TransferPanelSize = new(380f, 420f);
+
         [MenuItem("Ryan/UI/Rebuild Command UI Prefabs")]
         public static void RebuildAll() {
             EnsureFolder(Folder);
@@ -47,6 +52,8 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             BuildActionButton();
             BuildOptionPanel();
             BuildSelectionPanel();
+            BuildRecipientRow();
+            BuildTransferPanel();
             AssetDatabase.SaveAssets();
             Debug.Log($"Rebuilt the shared command UI prefabs in {Folder}.");
         }
@@ -58,7 +65,9 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             && AssetDatabase.LoadAssetAtPath<GameObject>(QueueSlotPath) != null
             && AssetDatabase.LoadAssetAtPath<GameObject>(StatRowPath) != null
             && AssetDatabase.LoadAssetAtPath<GameObject>(ActionButtonPath) != null
-            && AssetDatabase.LoadAssetAtPath<GameObject>(SelectionPanelPath) != null;
+            && AssetDatabase.LoadAssetAtPath<GameObject>(SelectionPanelPath) != null
+            && AssetDatabase.LoadAssetAtPath<GameObject>(RecipientRowPath) != null
+            && AssetDatabase.LoadAssetAtPath<GameObject>(TransferPanelPath) != null;
 
         static T Load<T>(string path) where T : Component {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -401,6 +410,123 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
                 ("statRowPrefab", Load<CommandStatRow>(StatRowPath)), ("statRoot", Rect(stats.transform)),
                 ("actionButtonPrefab", Load<CommandActionButton>(ActionButtonPath)), ("actionRoot", Rect(actions.transform)),
                 ("queue", queue));
+        });
+
+        // --- Funds transfer -----------------------------------------------------
+
+        static void BuildRecipientRow() => RebuildPrefab(RecipientRowPath, "FundsRecipientRow", root => {
+            Rect(root.transform).sizeDelta = new Vector2(TransferPanelSize.x - PanelPadding * 2, 40f);
+            Image background = Ensure<Image>(root);
+            background.sprite = RoundedSprite;
+            background.type = Image.Type.Sliced;
+            background.color = CardFill;
+            Layout(background, preferredHeight: 40f);
+
+            var button = Ensure<Button>(root);
+            button.targetGraphic = background;
+            ColorBlock colors = ColorBlock.defaultColorBlock;
+            colors.highlightedColor = new Color(1.2f, 1.2f, 1.2f, 1f);
+            colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+            colors.fadeDuration = 0.06f;
+            button.colors = colors;
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+
+            Image accent = Panel(root.transform, "Accent", Color.white, rounded: false);
+            accent.sprite = CircleSprite;
+            accent.raycastTarget = false;
+            Anchor(accent, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(10f, 0f), new Vector2(16f, 16f));
+
+            TextMeshProUGUI name = Label(root.transform, "Name", "Player", 16f, Ink, bold: true);
+            Stretch(name, 36f, 120f, 0f, 0f);
+            TextMeshProUGUI detail = Label(root.transform, "Detail", string.Empty, 13f, Muted, TextAlignmentOptions.MidlineRight);
+            Anchor(detail, new Vector2(1f, 0f), Vector2.one, new Vector2(1f, 0.5f), new Vector2(-10f, 0f), new Vector2(110f, 0f));
+
+            var row = Ensure<FundsRecipientRow>(root);
+            Wire(row, ("button", button), ("background", background), ("accent", accent),
+                ("nameLabel", name), ("detailLabel", detail));
+        });
+
+        static void BuildTransferPanel() => RebuildPrefab(TransferPanelPath, "FundsTransferPanel", root => {
+            Rect(root.transform).sizeDelta = TransferPanelSize;
+            Image background = Ensure<Image>(root);
+            background.sprite = RoundedSprite;
+            background.type = Image.Type.Sliced;
+            background.color = PanelFill;
+            Border(background, PanelBorder);
+
+            TextMeshProUGUI title = Label(root.transform, "Title", "Donate", 22f, Header, bold: true);
+            TopBand(title, 10f, 28f, PanelPadding + 2f, 48f);
+            TextMeshProUGUI balanceCaption = Label(root.transform, "BalanceCaption", "You have", 13f, Muted);
+            TopBand(balanceCaption, 40f, 18f, PanelPadding + 2f, 150f);
+            TextMeshProUGUI balance = Label(root.transform, "Balance", "0", 15f, Gold, TextAlignmentOptions.MidlineRight, bold: true);
+            TopBand(balance, 40f, 18f, 150f, PanelPadding + 2f);
+
+            Button close = Button(root.transform, "CloseButton", "X", new Color(0.2f, 0.22f, 0.26f, 1f), 14f, out _);
+            Anchor(close, Vector2.one, Vector2.one, Vector2.one, new Vector2(-10f, -10f), new Vector2(28f, 28f));
+            Hover(close, "Close");
+
+            // Recipients: a scrolling list, since a full server has more allies than fit.
+            TextMeshProUGUI toCaption = Label(root.transform, "ToCaption", "TO", 13f, Header, bold: true);
+            TopBand(toCaption, 66f, 18f, PanelPadding + 2f, PanelPadding);
+            GameObject scrollView = Node(root.transform, "Recipients");
+            TopBand(scrollView.transform, 88f, 150f, PanelPadding, PanelPadding);
+            var scroll = scrollView.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 30f;
+            GameObject viewport = Node(scrollView.transform, "Viewport");
+            Stretch(viewport.transform, 0f);
+            viewport.AddComponent<RectMask2D>();
+            Image viewportHit = viewport.AddComponent<Image>();
+            viewportHit.color = new Color(0f, 0f, 0f, 0f);
+            viewportHit.raycastTarget = true;
+            GameObject list = Node(viewport.transform, "List");
+            RectTransform listRect = Rect(list.transform);
+            listRect.anchorMin = new Vector2(0f, 1f);
+            listRect.anchorMax = Vector2.one;
+            listRect.pivot = new Vector2(0.5f, 1f);
+            listRect.sizeDelta = Vector2.zero;
+            Column(list.transform, 0, 4f);
+            FitHeight(list.transform);
+            scroll.viewport = Rect(viewport.transform);
+            scroll.content = listRect;
+            TextMeshProUGUI empty = Label(scrollView.transform, "EmptyLabel", "No one to donate to", 14f, Muted,
+                TextAlignmentOptions.Center);
+            Stretch(empty, 0f);
+            empty.gameObject.SetActive(false);
+
+            // Amount: presets in a row, then a typed amount beside Max.
+            TextMeshProUGUI amountCaption = Label(root.transform, "AmountCaption", "AMOUNT", 13f, Header, bold: true);
+            TopBand(amountCaption, 246f, 18f, PanelPadding + 2f, PanelPadding);
+            GameObject presets = Node(root.transform, "Presets");
+            TopBand(presets.transform, 268f, 32f, PanelPadding, PanelPadding);
+            Row(presets.transform, 0, 6f);
+            var presetButtons = new Button[4];
+            for (int i = 0; i < presetButtons.Length; i++)
+                presetButtons[i] = Button(presets.transform, $"Preset{i}", "0", CardFill, 14f, out _);
+
+            TMP_InputField amount = InputField(root.transform, "AmountInput", "Type an amount", 16f,
+                TMP_InputField.ContentType.IntegerNumber);
+            amount.characterLimit = 12;
+            TopBand(amount, 306f, 34f, PanelPadding, PanelPadding + 76f);
+            Button max = Button(root.transform, "MaxButton", "Max", CardFill, 14f, out _);
+            Anchor(max, Vector2.one, Vector2.one, Vector2.one, new Vector2(-PanelPadding, -306f), new Vector2(70f, 34f));
+            Hover(max, "Everything you have");
+
+            Button send = Button(root.transform, "SendButton", "Send", Accent, 16f, out TextMeshProUGUI sendLabel);
+            BottomBand(send, 30f, 38f, PanelPadding, PanelPadding);
+            TextMeshProUGUI status = Label(root.transform, "Status", string.Empty, 13f, Warning, TextAlignmentOptions.Center);
+            BottomBand(status, 8f, 18f, PanelPadding, PanelPadding);
+            status.gameObject.SetActive(false);
+
+            var panel = Ensure<FundsTransferPanel>(root);
+            Wire(panel,
+                ("titleLabel", title), ("balanceLabel", balance),
+                ("recipientPrefab", Load<FundsRecipientRow>(RecipientRowPath)), ("recipientRoot", listRect),
+                ("emptyLabel", empty), ("maxButton", max), ("amountInput", amount),
+                ("sendButton", send), ("sendLabel", sendLabel), ("closeButton", close), ("statusLabel", status));
+            WireArray(panel, "presetButtons", presetButtons);
         });
     }
 }

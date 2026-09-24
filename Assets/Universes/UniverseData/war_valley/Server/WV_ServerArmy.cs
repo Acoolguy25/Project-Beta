@@ -113,6 +113,12 @@ namespace Universes.UniverseData.war_valley.Server {
         void WatchForDeath(WV_Unit unit) {
             void HandleDied(DamageType source, IEntity attacker) {
                 unit.OnDied -= HandleDied;
+                // A sold unit leaves at once rather than leaving a wreck behind.
+                if (source == DamageType.Despawn) {
+                    if (unit.IsSpawned)
+                        unit.Despawn();
+                    return;
+                }
                 if (isActiveAndEnabled)
                     StartCoroutine(DespawnWreck(unit));
             }

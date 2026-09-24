@@ -108,4 +108,18 @@ namespace RyanAssets.Client.ClientUI.Command {
         /// <summary>When set, the first click shows this label and only a second click fires the action.</summary>
         public string ConfirmLabel;
     }
+
+    /// <summary>
+    /// Someone a <see cref="FundsTransferPanel"/> can send funds to. The mode decides who is
+    /// eligible - an ally, a teammate - and hands back <see cref="Id"/> when the transfer is sent.
+    /// </summary>
+    public struct TransferRecipient {
+        /// <summary>Game-defined identity, such as a client id.</summary>
+        public int Id;
+        public string Name;
+        /// <summary>The recipient's colour, drawn beside their name.</summary>
+        public Color Accent;
+        /// <summary>A short second line, such as their current balance. Optional.</summary>
+        public string Detail;
+    }
 }

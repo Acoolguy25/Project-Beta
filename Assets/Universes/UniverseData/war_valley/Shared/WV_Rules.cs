@@ -36,6 +36,7 @@ namespace Universes.UniverseData.war_valley.Shared {
     public enum WV_TroopRefusal : byte {
         None = 0,
         NotEnoughFunds = 1,
+        /// <summary>The payer already fields, or has queued, as many of this kind as <see cref="WV_Limits"/> allows.</summary>
         SquadFull = 2,
         QueueFull = 3,
         NotOperational = 4,
@@ -274,6 +275,22 @@ namespace Universes.UniverseData.war_valley.Shared {
             _ => 6f
         };
 
+        /// <summary>
+        /// The loadout a troop carries, recovered from its display name. A troop's kind is not
+        /// replicated as a field; the server names the character from it, so a client reads it back
+        /// this way - to price a sale, for instance.
+        /// </summary>
+        public static bool TryGetTroopKind(string displayName, out WV_TroopKind kind) {
+            foreach (WV_TroopKind candidate in new[] { WV_TroopKind.Knife, WV_TroopKind.Gunner }) {
+                if (GetTroopDisplayName(candidate) == displayName) {
+                    kind = candidate;
+                    return true;
+                }
+            }
+            kind = WV_TroopKind.Knife;
+            return false;
+        }
+
         /// <summary>One line describing how this troop fights, for the production card.</summary>
         public static string GetTroopDescription(WV_TroopKind kind) => kind switch {
             WV_TroopKind.Gunner => "Rifleman. Holds range and shoots.",
@@ -284,7 +301,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static string GetProductionRefusalMessage(WV_TroopRefusal refusal, WV_ProductionItem item) =>
             refusal switch {
                 WV_TroopRefusal.NotEnoughFunds => $"Not enough funds for a {item.DisplayName}",
-                WV_TroopRefusal.SquadFull => $"Squad is full ({MaxTroopsPerCommander} troops)",
+                WV_TroopRefusal.SquadFull => WV_Limits.GetLimitMessage(WV_Limits.GetCategory(item)),
                 WV_TroopRefusal.QueueFull => "Build queue is full",
                 WV_TroopRefusal.NotOperational => "That building is not finished",
                 WV_TroopRefusal.Locked =>
@@ -325,27 +342,35 @@ namespace Universes.UniverseData.war_valley.Shared {
         }
 
         /// <summary>
-        /// Share of the build price handed back when a commander demolishes their own structure.
-        /// A finished building returns half; a site still under construction returns more, because
-        /// tearing down a misplaced foundation should not cost as much as scrapping a working base.
+        /// Share of the price a sale hands back for something in perfect condition - a building
+        /// demolished, a unit or troop scrapped. The rest is the cost of changing one's mind.
         /// </summary>
-        public const float DemolishRefundFraction = 0.5f;
-        public const float DemolishSiteRefundFraction = 0.75f;
+        public const float SellRefundFraction = 0.5f;
 
         /// <summary>
-        /// What demolishing returns, scaled down by the damage the structure has taken:
-        /// <paramref name="integrity"/> is its health against what it should have (see
-        /// <c>WV_Constructable.Integrity</c>), so a building half shot away refunds half as much and
-        /// scrapping a base that is about to fall anyway recovers almost nothing.
+        /// Share of that refund kept however badly damaged the thing is. Damage only trims the value
+        /// down to this floor rather than to nothing, because a building at 1 health still works as
+        /// well as a pristine one; it is merely closer to being lost.
         /// </summary>
-        public static long GetDemolishRefund(ulong cost, bool operational, float integrity) {
-            float fraction = (operational ? DemolishRefundFraction : DemolishSiteRefundFraction)
-                * Mathf.Clamp01(integrity);
-            return (long)System.Math.Round(System.Math.Min(cost, (ulong)long.MaxValue) * (double)fraction);
+        public const float SellDamagedValueFloor = 0.5f;
+
+        /// <summary>
+        /// What selling returns: <see cref="SellRefundFraction"/> of <paramref name="cost"/>, falling
+        /// linearly with <paramref name="condition"/> (health against what it should have) to
+        /// <see cref="SellDamagedValueFloor"/> of that at zero. At the defaults a sale refunds 50% at
+        /// full health and 25% at the last hit point. Buildings, vehicles, aircraft, and troops all
+        /// use this one rule, priced from what they cost to build or train.
+        /// </summary>
+        public static long GetSellRefund(long cost, float condition) {
+            if (cost <= 0)
+                return 0;
+            float value = Mathf.Lerp(SellDamagedValueFloor, 1f, Mathf.Clamp01(condition));
+            return (long)System.Math.Round(cost * (double)(SellRefundFraction * value));
         }
 
-        /// <summary>Upper bound on the troops one commander can have alive at once.</summary>
-        public const int MaxTroopsPerCommander = 12;
+        /// <summary><see cref="GetSellRefund(long, float)"/> for a structure's unsigned build price.</summary>
+        public static long GetSellRefund(ulong cost, float condition) =>
+            GetSellRefund((long)System.Math.Min(cost, (ulong)long.MaxValue), condition);
 
         /// <summary>How far from its barracks spawn point a newly trained troop is placed.</summary>
         public const float TroopSpawnRadius = 5f;

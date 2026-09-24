@@ -1,9 +1,13 @@
 using System.Collections.Generic;
 using System.Text;
 using FishNet;
+using FishNet.Connection;
 using FishNet.Object;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientUI.Build;
+using RyanAssets.Client.ClientUI.Command;
+using RyanAssets.Core;
+using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
 using FishNet.Transporting;
@@ -76,13 +80,18 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>How often the economy card's research line is rewritten while research runs.</summary>
         const float ResearchSummaryInterval = 0.25f;
 
+        /// <summary>How long a first click on Sell waits for the confirming second one.</summary>
+        const float SellConfirmSeconds = 3f;
+
         readonly List<WV_Unit> selection = new();
         readonly List<WV_Unit> ownedScratch = new();
         readonly List<int> orderScratch = new();
         readonly List<StructureComponent> structureScratch = new();
+        readonly List<TransferRecipient> donationRecipients = new();
         /// <summary>Technologies the local commander already had, so only new completions are announced.</summary>
         readonly HashSet<WV_Tech> knownResearched = new();
         readonly StringBuilder researchSummary = new();
+        readonly StringBuilder forcesSummary = new();
 
         // Every character this client can see. Troops have no client-visible roster of their own, so
         // the shared character events are the cheapest source of one that stays correct.
@@ -101,6 +110,10 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>The research ledger <see cref="knownResearched"/> was taken from; a new round brings a new one.</summary>
         WV_Research trackedResearch;
         float nextResearchSummaryTime;
+        /// <summary>Until when a Sell click is waiting for its confirming second click; 0 when none is.</summary>
+        float sellConfirmUntil;
+        /// <summary>The selection a pending sale was priced for, so a changed selection is never sold by mistake.</summary>
+        int sellConfirmSelection;
         /// <summary>
         /// The order waiting for a click to tell it where to land, or null while the left button
         /// still means selection. Move, AttackMove and Attack need a point or a target; Stop and
@@ -140,10 +153,11 @@ namespace Universes.UniverseData.war_valley.Client {
             hud.name = "War Valley HUD";
             hud.ShowCommands();
             BindCommandMenu();
-            inspector = new WV_StructureInspector(hud, () => LocalClientId, ArmRallyPoint);
+            inspector = new WV_StructureInspector(hud, () => LocalClientId, CountOwnTroops, ArmRallyPoint);
+            BindDonations();
             hud.SetHint(
                 "Click a building to open its menu • Shift-click to add • Drag to select units, or buildings\n"
-                + "M move • V attack-move • T attack • X stop • H hold • Ctrl+F1-F4 set group • F1-F4 recall");
+                + "M move • V attack-move • T attack • X stop • H hold • Del sell • Ctrl+F1-F4 set group • F1-F4 recall");
         }
 
         /// <summary>
@@ -163,6 +177,7 @@ namespace Universes.UniverseData.war_valley.Client {
             menu.SelectRequested += SelectAllOwned;
             menu.GroupRecalled += RecallControlGroup;
             menu.GroupBound += BindControlGroup;
+            menu.SellRequested += RequestSell;
             menu.SetHasSelection(false);
         }
 
@@ -174,6 +189,7 @@ namespace Universes.UniverseData.war_valley.Client {
             menu.SelectRequested -= SelectAllOwned;
             menu.GroupRecalled -= RecallControlGroup;
             menu.GroupBound -= BindControlGroup;
+            menu.SellRequested -= RequestSell;
         }
 
         /// <summary>
@@ -279,6 +295,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
         void OnDestroy() {
             UnbindCommandMenu();
+            UnbindDonations();
             inspector?.Dispose();
             if (hud != null)
                 Destroy(hud.gameObject);
@@ -291,6 +308,10 @@ namespace Universes.UniverseData.war_valley.Client {
         // --- Build menu gates -------------------------------------------------
 
         StructureAvailability GetStructureAvailability(StructureComponent structure) {
+            if (WV_Limits.GetCategory(structure) == WV_ForceCategory.Building
+                && WV_Limits.CountBuildings(LocalClientId) >= WV_Limits.MaxBuildings)
+                return StructureAvailability.Locked(WV_Limits.GetLimitMessage(WV_ForceCategory.Building));
+
             WV_Tech required = WV_TechTree.GetRequirement(structure.StructureID);
             if (required == WV_Tech.None)
                 return StructureAvailability.Available;
@@ -388,13 +409,22 @@ namespace Universes.UniverseData.war_valley.Client {
                 economyDirty = false;
                 hud.RefreshEconomy(LocalClientId);
                 inspector.MarkDirty();
+                if (hud.DonatePanel != null && hud.DonatePanel.IsOpen)
+                    RefreshDonations();
                 StructureMenu.NotifyAvailabilityChanged();
             }
 
             if (researchDirty)
                 RefreshResearch();
-            if (Time.unscaledTime >= nextResearchSummaryTime)
+            if (Time.unscaledTime >= nextResearchSummaryTime) {
                 RefreshResearchSummary();
+                RefreshForces();
+                if (hud.DonatePanel != null && hud.DonatePanel.IsOpen)
+                    RefreshDonations();
+            }
+
+            if (sellConfirmUntil > 0f && Time.unscaledTime >= sellConfirmUntil)
+                CancelSellConfirm();
 
             // A building that was destroyed, despawned, or handed out of reach drops its panel here.
             if (!inspector.Tick() && armedOrder.HasValue && SelectionCount == 0)
@@ -464,8 +494,12 @@ namespace Universes.UniverseData.war_valley.Client {
         /// </summary>
         void HandleCommandKeys() {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || !Application.isFocused || TopbarControls.IsMenuOpen || !ToolControls.IsCursorFree())
+            if (keyboard == null || !Application.isFocused || TopbarControls.IsMenuOpen || !ToolControls.IsCursorFree()
+                || IsTyping())
                 return;
+
+            if (keyboard.deleteKey.wasPressedThisFrame)
+                RequestSell();
 
             // Arming keys. M/V/T rather than the conventional A, which is the character's strafe.
             if (keyboard.mKey.wasPressedThisFrame)
@@ -486,6 +520,10 @@ namespace Universes.UniverseData.war_valley.Client {
             if (keyboard.escapeKey.wasPressedThisFrame) {
                 if (armedOrder.HasValue)
                     DisarmOrder("Order cancelled");
+                else if (sellConfirmUntil > 0f)
+                    CancelSellConfirm();
+                else if (hud.DonatePanel != null && hud.DonatePanel.IsOpen)
+                    hud.DonatePanel.Close();
                 else if (inspector.IsMenuOpen)
                     inspector.CloseMenu();
                 else if (inspector.HasSelection)
@@ -557,6 +595,17 @@ namespace Universes.UniverseData.war_valley.Client {
             SelectBuilding(null);
             RefreshSelectionUI();
             hud.SetHint($"Group F{index + 1} - {SelectionCount} selected");
+        }
+
+        /// <summary>
+        /// True while a text field - the donation amount, chat - has the keyboard, so typing a
+        /// number never also fires a hotkey.
+        /// </summary>
+        static bool IsTyping() {
+            GameObject focused = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            return focused != null
+                && focused.TryGetComponent(out TMPro.TMP_InputField field)
+                && field.isFocused;
         }
 
         static bool IsPointerOverHud() =>
@@ -851,6 +900,9 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void RefreshSelectionUI() {
+            // A pending sale named a price for the old selection; it must not sell a new one.
+            if (sellConfirmUntil > 0f && SelectionSignature() != sellConfirmSelection)
+                CancelSellConfirm();
             // An order in hand with nothing left to give it to would sit primed forever and then
             // swallow the click that was meant to start a new selection.
             if (armedOrder.HasValue && SelectionCount == 0 && inspector.RallyTargets.Count == 0)
@@ -889,6 +941,210 @@ namespace Universes.UniverseData.war_valley.Client {
             if (inspector.RallyTargets.Count == 0)
                 return;
             ArmOrder(WV_OrderType.Move);
+        }
+
+        // --- Selling ----------------------------------------------------------
+
+        /// <summary>
+        /// The Sell button and the Delete key. The first press names the refund and waits; a second
+        /// press within <see cref="SellConfirmSeconds"/>, on the same selection, sells. A sale cannot
+        /// be undone, so it is never one click.
+        /// </summary>
+        void RequestSell() {
+            if (SelectionCount == 0) {
+                hud.SetHint("Select units or troops to sell");
+                return;
+            }
+
+            long refund = EstimateSellRefund();
+            if (sellConfirmUntil <= 0f || SelectionSignature() != sellConfirmSelection) {
+                sellConfirmUntil = Time.unscaledTime + SellConfirmSeconds;
+                sellConfirmSelection = SelectionSignature();
+                if (hud.CommandMenu != null)
+                    hud.CommandMenu.SetSellConfirming(true, refund);
+                hud.SetHint($"Sell {SelectionCount} for {refund:N0}? Click Sell or press Delete again to confirm");
+                return;
+            }
+
+            CancelSellConfirm();
+            orderScratch.Clear();
+            foreach (WV_Unit unit in selection) {
+                if (unit != null && unit.IsSpawned && !unit.IsDead)
+                    orderScratch.Add(unit.NetworkObject.ObjectId);
+            }
+            foreach (GameCharacter troop in troopSelection) {
+                if (troop != null && troop.IsSpawned && !troop.IsDead)
+                    orderScratch.Add(troop.NetworkObject.ObjectId);
+            }
+            if (orderScratch.Count == 0 || InstanceFinder.ClientManager == null)
+                return;
+            InstanceFinder.ClientManager.Broadcast(new WV_SellRequest { objectIds = orderScratch.ToArray() });
+        }
+
+        void CancelSellConfirm() {
+            if (sellConfirmUntil <= 0f)
+                return;
+            sellConfirmUntil = 0f;
+            if (hud.CommandMenu != null)
+                hud.CommandMenu.SetSellConfirming(false, 0);
+        }
+
+        /// <summary>
+        /// The refund the server will pay for the current selection, by the same rule: part of what
+        /// each unit or troop cost, less for a damaged one.
+        /// </summary>
+        long EstimateSellRefund() {
+            long refund = 0;
+            foreach (WV_Unit unit in selection) {
+                if (unit != null && !unit.IsDead)
+                    refund += WV_Rules.GetSellRefund(unit.Cost, GetCondition(unit));
+            }
+            foreach (GameCharacter troop in troopSelection) {
+                if (troop != null && !troop.IsDead && WV_Rules.TryGetTroopKind(troop.DisplayName, out WV_TroopKind kind))
+                    refund += WV_Rules.GetSellRefund(WV_Rules.GetTroopCost(kind), GetCondition(troop));
+            }
+            return refund;
+        }
+
+        static float GetCondition(IEntity entity) {
+            long max = entity.MaxHealth.Value;
+            return max > 0 ? Mathf.Clamp01(entity.Health.Value / (float)max) : 1f;
+        }
+
+        /// <summary>Identifies exactly what is selected, cheaply enough to compare on every change.</summary>
+        int SelectionSignature() {
+            unchecked {
+                int hash = 17;
+                foreach (WV_Unit unit in selection)
+                    hash = hash * 31 + (unit != null ? unit.GetInstanceID() : 0);
+                foreach (GameCharacter troop in troopSelection)
+                    hash = hash * 31 + (troop != null ? troop.GetInstanceID() : 0);
+                return hash;
+            }
+        }
+
+        // --- Limits -----------------------------------------------------------
+
+        /// <summary>
+        /// Living troops this client commands. Troop ownership is recorded only on the server, so
+        /// this counts the troops the client recognises as its own, the same ones it can select.
+        /// </summary>
+        int CountOwnTroops() {
+            int count = 0;
+            foreach (GameCharacter character in characters) {
+                if (IsCommandableTroop(character))
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>The funds card's line showing how much of each per-player limit is in use.</summary>
+        void RefreshForces() {
+            int clientId = LocalClientId;
+            if (clientId == WV_Owned.NoOwner) {
+                hud.SetForces(null);
+                return;
+            }
+
+            int troops = CountOwnTroops();
+            forcesSummary.Clear();
+            AppendForce(WV_ForceCategory.Soldier, WV_Limits.CountUsed(clientId, WV_ForceCategory.Soldier, troops));
+            forcesSummary.Append("  ");
+            AppendForce(WV_ForceCategory.Aircraft, WV_Limits.CountUsed(clientId, WV_ForceCategory.Aircraft, troops));
+            forcesSummary.Append("  ");
+            AppendForce(WV_ForceCategory.Building, WV_Limits.CountUsed(clientId, WV_ForceCategory.Building, troops));
+            hud.SetForces(forcesSummary.ToString());
+        }
+
+        /// <summary>One "Soldiers 5/20" entry, drawn in the warning colour once the limit is reached.</summary>
+        void AppendForce(WV_ForceCategory category, int used) {
+            int limit = WV_Limits.GetLimit(category);
+            bool full = used >= limit;
+            if (full)
+                forcesSummary.Append("<color=#FFB85A>");
+            forcesSummary.Append(WV_Limits.GetDisplayName(category)).Append(' ').Append(used).Append('/').Append(limit);
+            if (full)
+                forcesSummary.Append("</color>");
+        }
+
+        // --- Donations --------------------------------------------------------
+
+        void BindDonations() {
+            hud.DonateClicked += ToggleDonations;
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null) {
+                Debug.LogWarning(
+                    $"{nameof(WV_ClientController)}: the HUD prefab has no donation panel. Re-run " +
+                    "Ryan/War Valley/Rebuild HUD to author it.", this);
+                return;
+            }
+            panel.TransferRequested += SendDonation;
+            panel.CloseRequested += panel.Close;
+        }
+
+        void UnbindDonations() {
+            if (hud == null)
+                return;
+            hud.DonateClicked -= ToggleDonations;
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null)
+                return;
+            panel.TransferRequested -= SendDonation;
+            panel.CloseRequested -= panel.Close;
+        }
+
+        void ToggleDonations() {
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null)
+                return;
+            if (panel.IsOpen) {
+                panel.Close();
+                return;
+            }
+            panel.Open("Donate to an ally");
+            RefreshDonations();
+        }
+
+        /// <summary>
+        /// Lists every other commander the local one is allied with - in Survival, everyone - and
+        /// the balance the local one can give from.
+        /// </summary>
+        void RefreshDonations() {
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null)
+                return;
+
+            int clientId = LocalClientId;
+            WV_Economy economy = WV_Economy.Instance;
+            donationRecipients.Clear();
+            if (PlayerData.Players != null) {
+                foreach (KeyValuePair<NetworkConnection, PlayerData> entry in PlayerData.Players) {
+                    if (entry.Key == null || entry.Value == null)
+                        continue;
+                    int recipientId = entry.Key.ClientId;
+                    if (recipientId == clientId || !WV_Alliances.AreAllied(clientId, recipientId))
+                        continue;
+                    donationRecipients.Add(new TransferRecipient {
+                        Id = recipientId,
+                        Name = entry.Value.GetPlayerName(),
+                        Accent = WV_Rules.GetCommanderUIColor(recipientId),
+                        Detail = economy != null ? MathHelper.AddCommas((ulong)System.Math.Max(0, economy.GetFunds(recipientId))) : null
+                    });
+                }
+            }
+
+            panel.SetRecipients(donationRecipients);
+            panel.SetBalance(economy != null ? economy.GetFunds(clientId) : 0, economy != null && economy.HasInfiniteFunds);
+        }
+
+        void SendDonation(int recipientClientId, long amount) {
+            if (InstanceFinder.ClientManager == null)
+                return;
+            // The server answers with a notice either way, so the hint line reports the outcome.
+            InstanceFinder.ClientManager.Broadcast(new WV_DonateRequest {
+                recipientClientId = recipientClientId,
+                amount = amount
+            });
         }
 
         // --- Orders -----------------------------------------------------------

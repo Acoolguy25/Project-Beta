@@ -6,6 +6,7 @@ using RyanAssets.Client.ClientUI.Command;
 using RyanAssets.Core;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Client {
@@ -23,8 +24,14 @@ namespace Universes.UniverseData.war_valley.Client {
         [Header("Economy")]
         [SerializeField] TextMeshProUGUI fundsLabel;
         [SerializeField] TextMeshProUGUI incomeLabel;
-        [Tooltip("One line summarising the side's research in progress.")]
+        [Tooltip("One line summarising the commander's research in progress.")]
         [SerializeField] TextMeshProUGUI researchLabel;
+        [Tooltip("How much of each per-player limit the commander is using.")]
+        [SerializeField] TextMeshProUGUI forcesLabel;
+        [Tooltip("Opens the donation panel.")]
+        [SerializeField] Button donateButton;
+        [Tooltip("The shared funds transfer panel, used to donate to allies.")]
+        [SerializeField] FundsTransferPanel donatePanel;
 
         [Header("Selection")]
         [SerializeField] RectTransform selectionBox;
@@ -61,6 +68,10 @@ namespace Universes.UniverseData.war_valley.Client {
         public WV_CommandMenu CommandMenu => commandMenu;
         public SelectionInfoPanel StructurePanel => structurePanel;
         public CommandOptionGrid OptionMenu => optionMenu;
+        public FundsTransferPanel DonatePanel => donatePanel;
+
+        /// <summary>The funds card's Donate button was clicked.</summary>
+        public event Action DonateClicked;
 
         void Awake() {
             if (structurePanel != null)
@@ -79,7 +90,18 @@ namespace Universes.UniverseData.war_valley.Client {
                 optionMenu.Close();
             if (researchLabel != null)
                 researchLabel.gameObject.SetActive(false);
+            if (donatePanel != null)
+                donatePanel.Close();
+            if (donateButton != null)
+                donateButton.onClick.AddListener(HandleDonateClicked);
         }
+
+        void OnDestroy() {
+            if (donateButton != null)
+                donateButton.onClick.RemoveListener(HandleDonateClicked);
+        }
+
+        void HandleDonateClicked() => DonateClicked?.Invoke();
 
         /// <summary>
         /// Keeps the build menu docked on top of the building panel. Both are authored on the same
@@ -134,6 +156,12 @@ namespace Universes.UniverseData.war_valley.Client {
                 researchLabel.gameObject.SetActive(show);
             if (show)
                 researchLabel.text = summary;
+        }
+
+        /// <summary>Writes how much of each per-player limit is in use.</summary>
+        public void SetForces(string summary) {
+            if (forcesLabel != null)
+                forcesLabel.text = summary ?? string.Empty;
         }
 
         // --- Selection rectangle ---------------------------------------------

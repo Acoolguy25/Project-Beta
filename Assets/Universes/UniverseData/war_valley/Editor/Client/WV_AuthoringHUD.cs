@@ -4,6 +4,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using Object = UnityEngine.Object;
 using Universes.UniverseData.war_valley.Client;
 using Universes.UniverseData.war_valley.Shared;
 using static RyanAssets.Client.ClientUI.Command.Editor.UIAuthoringKit;
@@ -43,8 +44,10 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static readonly Color ButtonFill = new(0.16f, 0.2f, 0.25f, 1f);
 
         /// <summary>Command card size. The option menu and building panel dock to the right of it.</summary>
-        static readonly Vector2 CommandCardSize = new(640f, 124f);
+        static readonly Vector2 CommandCardSize = new(720f, 124f);
         const float Margin = 16f;
+        /// <summary>Height of the funds card in the bottom-left corner; the selection summary stacks above it.</summary>
+        const float EconomyCardHeight = 124f;
 
         static WV_AuthoringHUD() {
             // Deferred: asset operations are not allowed while the domain is still loading.
@@ -86,8 +89,16 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
 
         /// <summary>True when every panel the current <see cref="WV_HUD"/> binds is present in the prefab.</summary>
         static bool IsCurrent(WV_HUD hud) {
-            var serialized = new SerializedObject(hud);
-            foreach (string field in new[] { "structurePanel", "optionMenu", "commandMenu", "researchLabel" }) {
+            if (!HasReferences(hud, "structurePanel", "optionMenu", "commandMenu", "researchLabel",
+                    "forcesLabel", "donateButton", "donatePanel"))
+                return false;
+            var menu = new SerializedObject(hud).FindProperty("commandMenu").objectReferenceValue as WV_CommandMenu;
+            return menu != null && HasReferences(menu, "sellButton", "sellLabel");
+        }
+
+        static bool HasReferences(Object target, params string[] fields) {
+            var serialized = new SerializedObject(target);
+            foreach (string field in fields) {
                 SerializedProperty property = serialized.FindProperty(field);
                 if (property == null || property.objectReferenceValue == null)
                     return false;
@@ -139,7 +150,8 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             var hud = Ensure<WV_HUD>(root);
 
             RectTransform selectionBox = BuildSelectionBox(root.transform);
-            BuildEconomy(root.transform, out TextMeshProUGUI funds, out TextMeshProUGUI income, out TextMeshProUGUI research);
+            BuildEconomy(root.transform, out TextMeshProUGUI funds, out TextMeshProUGUI income, out TextMeshProUGUI research,
+                out TextMeshProUGUI forces, out Button donate);
             GameObject selectionPanel = BuildSelectionSummary(root.transform, out TextMeshProUGUI selectionLabel);
             GameObject commandPanel = BuildCommandCard(root.transform, out WV_CommandMenu commandMenu);
 
@@ -159,6 +171,14 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 new Vector2(CommandUIAuthoring.OptionPanelWidth, CommandUIAuthoring.OptionPanelHeight));
             optionMenu.gameObject.SetActive(false);
 
+            // Donations open beside the funds card they spend from.
+            FundsTransferPanel donatePanel = Nest(
+                AssetDatabase.LoadAssetAtPath<FundsTransferPanel>(CommandUIAuthoring.TransferPanelPath),
+                root.transform, "DonatePanel");
+            Anchor(donatePanel, Vector2.zero, Vector2.zero, Vector2.zero,
+                new Vector2(Margin + 300f + 12f, Margin), CommandUIAuthoring.TransferPanelSize);
+            donatePanel.gameObject.SetActive(false);
+
             TextMeshProUGUI hint = Label(root.transform, "HintLabel", string.Empty, 18f, Ink, TextAlignmentOptions.Bottom);
             hint.textWrappingMode = TextWrappingModes.Normal;
             Anchor(hint, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
@@ -166,6 +186,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
 
             Wire(hud,
                 ("fundsLabel", funds), ("incomeLabel", income), ("researchLabel", research),
+                ("forcesLabel", forces), ("donateButton", donate), ("donatePanel", donatePanel),
                 ("selectionBox", selectionBox), ("selectionLabel", selectionLabel), ("selectionPanel", selectionPanel),
                 ("structurePanel", structurePanel), ("optionMenu", optionMenu),
                 ("commandPanel", commandPanel), ("commandMenu", commandMenu), ("hintLabel", hint));
@@ -208,12 +229,14 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
 
         /// <summary>
         /// Funds sit in the bottom-left corner, the one part of the screen no panel opens over, with
-        /// the side's research in progress on the line beneath them.
+        /// the Donate button beside them, the commander's use of their force limits beneath, and
+        /// their research in progress on the last line.
         /// </summary>
         static void BuildEconomy(Transform parent, out TextMeshProUGUI funds, out TextMeshProUGUI income,
-            out TextMeshProUGUI research) {
+            out TextMeshProUGUI research, out TextMeshProUGUI forces, out Button donate) {
             Image panel = Panel(parent, "EconomyPanel", PanelFill);
-            Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin), new Vector2(300f, 112f));
+            Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin),
+                new Vector2(300f, EconomyCardHeight));
             Border(panel, PanelBorder);
 
             TextMeshProUGUI caption = Label(panel.transform, "Caption", "FUNDS", 14f, Header, bold: true);
@@ -221,15 +244,21 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             income = Label(panel.transform, "IncomeLabel", "No income", 14f, Muted, TextAlignmentOptions.MidlineRight);
             TopBand(income, 10f, 18f, 140f, 14f);
             funds = Label(panel.transform, "FundsLabel", "0", 34f, Gold, bold: true);
-            TopBand(funds, 30f, 42f, 14f, 14f);
+            TopBand(funds, 30f, 42f, 14f, 110f);
+            donate = Button(panel.transform, "DonateButton", "Donate", Accent, 14f, out _);
+            Anchor(donate, Vector2.one, Vector2.one, Vector2.one, new Vector2(-14f, -36f), new Vector2(88f, 30f));
+            Hover(donate, "Give some of your funds to an ally.");
+            forces = Label(panel.transform, "ForcesLabel", string.Empty, 13f, Muted);
+            forces.richText = true;
+            TopBand(forces, 76f, 18f, 14f, 14f);
             research = Label(panel.transform, "ResearchLabel", string.Empty, 13f, Warning);
-            BottomBand(research, 10f, 18f, 14f, 14f);
+            TopBand(research, 96f, 18f, 14f, 14f);
         }
 
         /// <summary>The unit and troop selection summary, stacked above the funds card.</summary>
         static GameObject BuildSelectionSummary(Transform parent, out TextMeshProUGUI label) {
             Image panel = Panel(parent, "SelectionPanel", PanelFill);
-            Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin + 112f + 12f),
+            Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin + EconomyCardHeight + 12f),
                 new Vector2(300f, 170f));
             Border(panel, PanelBorder);
             label = Label(panel.transform, "SelectionLabel", string.Empty, 17f, Ink, TextAlignmentOptions.TopLeft);
@@ -254,7 +283,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             const float gap = 6f;
             float inner = CommandCardSize.x - pad * 2f;
 
-            // Row 1: the five orders.
+            // Row 1: the five orders, then Sell, set apart in the destructive colour.
             string[] orderLabels = { "Move [M]", "Attack-move [V]", "Attack [T]", "Stop [X]", "Hold [H]" };
             string[] orderTips = {
                 "Move the selection to a point. With a building selected, sets its rally point.",
@@ -263,13 +292,18 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 "Stop where you are.",
                 "Hold this position and only fight what comes into range."
             };
-            float orderWidth = (inner - gap * (orderLabels.Length - 1)) / orderLabels.Length;
+            int slots = orderLabels.Length + 1;
+            float orderWidth = (inner - gap * (slots - 1)) / slots;
             var orders = new Button[orderLabels.Length];
             for (int i = 0; i < orderLabels.Length; i++) {
                 orders[i] = Button(panel.transform, $"Order{i}", orderLabels[i], Accent, 14f, out _);
                 PlaceTopLeft(orders[i], pad + i * (orderWidth + gap), pad, orderWidth, 34f);
                 Hover(orders[i], orderTips[i]);
             }
+            Button sell = Button(panel.transform, "Sell", "Sell [Del]", Danger, 14f, out TextMeshProUGUI sellLabel);
+            PlaceTopLeft(sell, pad + orderLabels.Length * (orderWidth + gap), pad, orderWidth, 34f);
+            Hover(sell, "Sell the selected units and troops for part of what they cost; less if damaged. " +
+                        "Click twice to confirm.");
 
             // Row 2: whole-army selection on the left, control-group recall on the right.
             const float selectWidth = 112f;
@@ -305,6 +339,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             Wire(menu,
                 ("moveButton", orders[0]), ("attackMoveButton", orders[1]), ("attackButton", orders[2]),
                 ("stopButton", orders[3]), ("holdButton", orders[4]),
+                ("sellButton", sell), ("sellLabel", sellLabel),
                 ("selectUnitsButton", selects[0]), ("selectTroopsButton", selects[1]), ("selectAllButton", selects[2]),
                 ("statusText", status));
             WireArray(menu, "groupButtons", recalls);

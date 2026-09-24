@@ -2,6 +2,8 @@ using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
+using RyanAssets.DataService;
+using RyanAssets.Shared.Component;
 using RyanAssets.Shared.Declarations;
 using UnityEngine;
 using Universes.UniverseData.war_valley.Shared;
@@ -9,7 +11,7 @@ using Universes.UniverseData.war_valley.Shared;
 namespace Universes.UniverseData.war_valley.Server {
     /// <summary>
     /// Authoritative receiver for the client's RTS input: group orders, production, rally points,
-    /// demolition, and research.
+    /// demolition, selling, donations, and research.
     /// <para>
     /// Selection itself never crosses the wire - a client decides locally which of its own units are
     /// highlighted and then names them in an order. Every request here is therefore re-validated
@@ -38,6 +40,8 @@ namespace Universes.UniverseData.war_valley.Server {
             InstanceFinder.ServerManager.RegisterBroadcast<WV_QueueCancelRequest>(OnQueueCancel, true);
             InstanceFinder.ServerManager.RegisterBroadcast<WV_DemolishRequest>(OnDemolish, true);
             InstanceFinder.ServerManager.RegisterBroadcast<WV_ResearchRequest>(OnResearch, true);
+            InstanceFinder.ServerManager.RegisterBroadcast<WV_SellRequest>(OnSell, true);
+            InstanceFinder.ServerManager.RegisterBroadcast<WV_DonateRequest>(OnDonate, true);
             registered = true;
         }
 
@@ -53,6 +57,8 @@ namespace Universes.UniverseData.war_valley.Server {
             InstanceFinder.ServerManager.UnregisterBroadcast<WV_QueueCancelRequest>(OnQueueCancel);
             InstanceFinder.ServerManager.UnregisterBroadcast<WV_DemolishRequest>(OnDemolish);
             InstanceFinder.ServerManager.UnregisterBroadcast<WV_ResearchRequest>(OnResearch);
+            InstanceFinder.ServerManager.UnregisterBroadcast<WV_SellRequest>(OnSell);
+            InstanceFinder.ServerManager.UnregisterBroadcast<WV_DonateRequest>(OnDonate);
             registered = false;
         }
 
@@ -173,12 +179,10 @@ namespace Universes.UniverseData.war_valley.Server {
             if (building.QueueLength >= building.MaxQueueLength)
                 return WV_TroopRefusal.QueueFull;
 
-            // The squad cap is checked before payment as well as on delivery. Refusing here is what
-            // makes the cap legible: the alternative is charging for a troop that is refunded
-            // silently several seconds later. It is the payer's squad the troop will join.
-            if (item.IsTroop
-                && WV_ServerTroops.Instance != null
-                && WV_ServerTroops.Instance.IsSquadFull(sender.ClientId))
+            // The force limits are checked before payment. Refusing here is what makes a limit
+            // legible: the alternative is charging for a unit that is refunded silently several
+            // seconds later. It is the payer's forces the unit will join, so theirs are counted.
+            if (!WV_Limits.HasRoom(sender.ClientId, WV_Limits.GetCategory(item), CountTroops(sender.ClientId)))
                 return WV_TroopRefusal.SquadFull;
 
             // Charge first, then queue. A failed enqueue hands the money straight back rather than
@@ -263,12 +267,10 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
 
             // Measured before the kill: the refund shrinks with the damage the building has taken.
-            bool hasConstructable = structure.TryGetComponent(out WV_Constructable constructable);
-            bool operational = !hasConstructable || constructable.IsOperational;
-            float integrity = hasConstructable
+            float integrity = structure.TryGetComponent(out WV_Constructable constructable)
                 ? constructable.Integrity
-                : structure.MaxHealth.Value > 0 ? structure.Health.Value / (float)structure.MaxHealth.Value : 1f;
-            long refund = WV_Rules.GetDemolishRefund(structure.Cost, operational, integrity);
+                : GetCondition(structure);
+            long refund = WV_Rules.GetSellRefund(structure.Cost, integrity);
 
             structure.Kill(DamageType.Despawn);
 
@@ -277,6 +279,113 @@ namespace Universes.UniverseData.war_valley.Server {
             Notify(sender, refund > 0
                 ? $"{structure.DisplayName} demolished - {refund:N0} refunded"
                 : $"{structure.DisplayName} demolished");
+        }
+
+        // --- Selling ------------------------------------------------------------
+
+        /// <summary>
+        /// Sells units and troops the sender commands, the way <see cref="OnDemolish"/> sells a
+        /// building: part of what each cost to produce comes back, less for a damaged one, and the
+        /// unit leaves the field through an ordinary death so every system that watches for one -
+        /// the roster, the squad, the force limits - lets go of it the usual way.
+        /// </summary>
+        static void OnSell(NetworkConnection sender, WV_SellRequest request, Channel channel) {
+            if (sender == null || !sender.IsValid || request.objectIds == null)
+                return;
+
+            int count = Mathf.Min(request.objectIds.Length, MaxUnitsPerOrder);
+            int sold = 0;
+            long refund = 0;
+            for (int i = 0; i < count; i++) {
+                if (!TryGetSellable(sender, request.objectIds[i], out EntityBase entity, out long cost))
+                    continue;
+                refund += WV_Rules.GetSellRefund(cost, GetCondition(entity));
+                entity.Kill(DamageType.Despawn);
+                sold++;
+            }
+
+            if (sold == 0)
+                return;
+            if (refund > 0)
+                WV_Economy.Instance?.Credit(sender.ClientId, refund);
+            Notify(sender, $"Sold {sold} {(sold == 1 ? "unit" : "units")} - {refund:N0} refunded");
+        }
+
+        /// <summary>
+        /// A living unit or troop the sender commands, and what it cost to produce. A vehicle carries
+        /// its price on its prefab; a troop is priced from its loadout, the same figure it was
+        /// charged at the barracks.
+        /// </summary>
+        static bool TryGetSellable(NetworkConnection sender, int objectId, out EntityBase entity, out long cost) {
+            entity = null;
+            cost = 0;
+            if (!TryGetSpawned(objectId, out NetworkObject networkObject))
+                return false;
+
+            if (networkObject.TryGetComponent(out WV_Unit unit)) {
+                if (unit.IsDead || unit.Owned == null || !unit.Owned.IsOwnedBy(sender.ClientId))
+                    return false;
+                entity = unit;
+                cost = unit.Cost;
+                return true;
+            }
+
+            if (WV_ServerTroops.Instance != null
+                && WV_ServerTroops.Instance.TryGetOwnedTroop(sender.ClientId, objectId, out WV_TroopBrain troop)
+                && troop.Character != null
+                && !troop.Character.IsDead) {
+                entity = troop.Character;
+                cost = WV_Rules.GetTroopCost(troop.Kind);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Health as a fraction of maximum, the condition a sale is priced by.</summary>
+        static float GetCondition(IEntity entity) {
+            long max = entity.MaxHealth.Value;
+            return max > 0 ? Mathf.Clamp01(entity.Health.Value / (float)max) : 1f;
+        }
+
+        // --- Donations ----------------------------------------------------------
+
+        /// <summary>
+        /// Moves funds from the sender to an allied commander. The sender must hold the whole amount:
+        /// a donation is never partly paid, and never takes a balance below zero.
+        /// </summary>
+        static void OnDonate(NetworkConnection sender, WV_DonateRequest request, Channel channel) {
+            if (sender == null || !sender.IsValid)
+                return;
+
+            WV_Economy economy = WV_Economy.Instance;
+            int recipient = request.recipientClientId;
+            if (economy == null || request.amount <= 0 || recipient == sender.ClientId)
+                return;
+
+            if (!PlayerData.TryGetPlayerData(recipient, out PlayerData recipientData)) {
+                Notify(sender, "That commander has left");
+                return;
+            }
+            if (!WV_Alliances.AreAllied(sender.ClientId, recipient)) {
+                Notify(sender, "You can only donate to allies");
+                return;
+            }
+            if (economy.HasInfiniteFunds) {
+                Notify(sender, "Everyone has unlimited funds this round");
+                return;
+            }
+            if (!economy.TryDebit(sender.ClientId, request.amount)) {
+                Notify(sender, $"You do not have {request.amount:N0} to give");
+                return;
+            }
+
+            economy.Credit(recipient, request.amount);
+            string recipientName = recipientData.GetPlayerName();
+            string senderName = PlayerData.TryGetPlayerData(sender.ClientId, out PlayerData senderData)
+                ? senderData.GetPlayerName()
+                : "An ally";
+            Notify(sender, $"Donated {request.amount:N0} to {recipientName}");
+            Notify(recipient, $"{senderName} donated {request.amount:N0} to you");
         }
 
         // --- Research -----------------------------------------------------------
@@ -339,6 +448,10 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         // --- Resolution ---------------------------------------------------------
+
+        /// <summary>Living troops a commander fields, from the server's authoritative squad roster.</summary>
+        static int CountTroops(int clientId) =>
+            WV_ServerTroops.Instance != null ? WV_ServerTroops.Instance.CountAlive(clientId) : 0;
 
         /// <summary>
         /// Resolves one commandable object the sender actually owns. Produced units carry their

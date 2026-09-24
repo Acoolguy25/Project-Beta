@@ -49,6 +49,8 @@ namespace Universes.UniverseData.war_valley.Client {
 
         readonly WV_HUD hud;
         readonly Func<int> localClientId;
+        /// <summary>Living troops the local commander fields, which count against their soldier limit.</summary>
+        readonly Func<int> localTroopCount;
         readonly Action armRallyPoint;
 
         readonly List<StructureComponent> selection = new();
@@ -79,9 +81,10 @@ namespace Universes.UniverseData.war_valley.Client {
         MenuKind menu;
         float nextRefreshTime;
 
-        public WV_StructureInspector(WV_HUD hud, Func<int> localClientId, Action armRallyPoint) {
+        public WV_StructureInspector(WV_HUD hud, Func<int> localClientId, Func<int> localTroopCount, Action armRallyPoint) {
             this.hud = hud;
             this.localClientId = localClientId;
+            this.localTroopCount = localTroopCount;
             this.armRallyPoint = armRallyPoint;
 
             if (hud.StructurePanel != null) {
@@ -489,7 +492,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 if (!member.TryGetComponent(out WV_Owned memberOwned) || !WV_Permissions.CanManage(LocalClientId, memberOwned))
                     continue;
                 demolishable++;
-                refund += GetDemolishRefund(member);
+                refund += GetSellRefund(member);
             }
 
             actions.Add(new CommandAction {
@@ -500,18 +503,18 @@ namespace Universes.UniverseData.war_valley.Client {
                 ConfirmLabel = "Confirm?",
                 Tooltip = demolishable > 0
                     ? $"Tear down {(demolishable > 1 ? $"the {demolishable} you own" : "it")} and recover " +
-                      $"{MathHelper.AddCommas(refund)}. Damage reduces the refund. Anything queued is " +
-                      "refunded to whoever paid."
+                      $"{MathHelper.AddCommas(refund)} - half the price, less for damage. Anything " +
+                      "queued is refunded to whoever paid."
                     : "Only the commander who built a building can demolish it."
             });
         }
 
-        /// <summary>The same figure the server will pay: part of the price, scaled by how intact it is.</summary>
-        static long GetDemolishRefund(StructureComponent member) {
-            if (!member.TryGetComponent(out WV_Constructable memberConstructable))
-                return 0;
-            return WV_Rules.GetDemolishRefund(
-                member.Cost, memberConstructable.IsOperational, memberConstructable.Integrity);
+        /// <summary>The same figure the server will pay: part of the price, trimmed by damage.</summary>
+        static long GetSellRefund(StructureComponent member) {
+            float condition = member.TryGetComponent(out WV_Constructable memberConstructable)
+                ? memberConstructable.Integrity
+                : member.MaxHealth.Value > 0 ? Mathf.Clamp01(member.Health.Value / (float)member.MaxHealth.Value) : 1f;
+            return WV_Rules.GetSellRefund(member.Cost, condition);
         }
 
         void HandleAction(int id) {
@@ -705,12 +708,17 @@ namespace Universes.UniverseData.war_valley.Client {
             option.Progress = -1f;
             option.Count = queued;
 
+            WV_ForceCategory category = WV_Limits.GetCategory(item);
+            int limit = WV_Limits.GetLimit(category);
             if (!operational) {
                 option.State = CommandOptionState.Locked;
                 option.StateText = "Building not finished";
             } else if (!unlocked) {
                 option.State = CommandOptionState.Locked;
                 option.StateText = $"Requires {WV_TechTree.GetDisplayName(required)}";
+            } else if (!WV_Limits.HasRoom(LocalClientId, category, localTroopCount())) {
+                option.State = CommandOptionState.Locked;
+                option.StateText = $"{WV_Limits.GetDisplayName(category)} limit {limit}/{limit}";
             } else if (economy != null && !economy.CanAfford(LocalClientId, cost)) {
                 option.State = CommandOptionState.Unaffordable;
                 option.StateText = null;

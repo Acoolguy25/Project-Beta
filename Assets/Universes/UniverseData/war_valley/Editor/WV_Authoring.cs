@@ -489,7 +489,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 structure.Sprite = icon;
                 // Duration is the shared per-structure build time WV_Constructable reads.
                 structure.Duration = def.BuildSeconds;
-                SetPrivateField(structure, "team", new TeamConfig(TeamColor.Blue));
+                SetPrivateField(structure, "team", new TeamConfig(WV_Alliances.Defenders));
                 SetPrivateField(structure, "effectsComponent", effects);
                 SetPrivateField(structure, "healthComponent", health);
 
@@ -739,7 +739,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 var unit = root.AddComponent<WV_Unit>();
                 SetPrivateField(unit, "kind", (int)def.Kind);
                 SetPrivateField(unit, "displayName", def.DisplayName);
-                SetPrivateField(unit, "team", new TeamConfig(TeamColor.Blue));
+                SetPrivateField(unit, "team", new TeamConfig(WV_Alliances.Defenders));
                 SetPrivateField(unit, "cost", def.Cost);
                 SetPrivateField(unit, "buildSeconds", def.BuildSeconds);
                 SetPrivateField(unit, "maxHealth", def.MaxHealth);

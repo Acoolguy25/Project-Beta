@@ -10,8 +10,8 @@ using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Server {
     /// <summary>
-    /// The server half of a commander's personal squad: how many troops they may field, and how a
-    /// finished one is assembled and enrolled.
+    /// The server half of a commander's personal squad: which troops they field, and how a
+    /// finished one is assembled and enrolled. How many they may field is <see cref="WV_Limits"/>.
     /// <para>
     /// Troops are trained at a barracks, through the same queue a hangar builds tanks with, so this
     /// no longer takes requests from clients at all - <see cref="WV_ServerCommand"/> charges and
@@ -65,24 +65,24 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         /// <summary>
-        /// True when this commander is already fielding as many troops as the rules allow. Checked
-        /// before the order is charged and queued, so a commander at their cap is told no at the
-        /// button rather than paying for a soldier who cannot be delivered.
+        /// True while the commander's soldier limit has room for one more. The order was counted
+        /// against the limit while it waited in the queue; by delivery it has left the queue, so the
+        /// same check asks whether it may now take its place in the field.
         /// </summary>
-        public bool IsSquadFull(int clientId) => CountAlive(clientId) >= WV_Rules.MaxTroopsPerCommander;
+        public bool HasRoomForTroop(int clientId) =>
+            WV_Limits.HasRoom(clientId, WV_ForceCategory.Soldier, CountAlive(clientId));
 
         /// <summary>
         /// Delivers a troop a barracks has finished training to the commander who paid for it -
         /// the barracks' owner, or an ally who queued there. The order was paid for when it was
-        /// queued, so the only question left is whether that commander's squad still has room: one
-        /// whose troops all survived while this one was in the oven has legitimately hit the cap,
-        /// and the funds go back rather than the cap being quietly exceeded.
+        /// queued, so the only question left is whether that commander still has room under their
+        /// soldier limit; if not, the funds go back rather than the limit being quietly exceeded.
         /// </summary>
         public void TrainFromBuilding(WV_ProductionBuilding building, WV_TroopKind kind, int clientId) {
             if (building == null)
                 return;
 
-            if (troopPrefab == null || IsSquadFull(clientId)) {
+            if (troopPrefab == null || !HasRoomForTroop(clientId)) {
                 Refund(clientId, kind);
                 return;
             }

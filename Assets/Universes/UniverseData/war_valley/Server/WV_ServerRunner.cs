@@ -111,14 +111,19 @@ namespace Universes.UniverseData.war_valley.Server
         /// <summary>How long the defeat message is held before the next round begins.</summary>
         private const int GameOverSeconds = 8;
 
+        [Header("Mode")]
+        [SerializeField]
+        [Tooltip("The rules alliances are decided by. Survival - every player allied against the " +
+                 "waves - is the only mode.")]
+        private WV_GameMode GameMode = WV_GameMode.Survival;
+
         public WV_ActiveGameState GameState;
         protected override void Awake() {
             base.Awake();
-            SharedGlobalEvents.TeamEnemies = new()
-            {
-                [TeamColor.Red] = new() { TeamColor.Blue },
-                [TeamColor.Blue] = new() { TeamColor.Red }
-            };
+            // Alliances come from the mode: which side commanders and waves are on, and who may hurt
+            // whom. Published before anything spawns so no entity starts life on an unknown side.
+            WV_Alliances.Mode = GameMode;
+            SharedGlobalEvents.TeamEnemies = WV_Alliances.BuildEnemyTable();
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
             ServerPlayerCharacter.SpawnLocationFunction = SpawnLocationFunction;
 
@@ -176,7 +181,7 @@ namespace Universes.UniverseData.war_valley.Server
                     SetTopMessage($"Wave {WaveNumber + 2} will start in {durationLeft} seconds");
                     break;
                 case WV_ActiveGameState.FinishEnemiesOff:
-                    int npcs = GameCharacter.TeamCount(TeamColor.Red);
+                    int npcs = GameCharacter.TeamCount(WV_Alliances.GetWaveSide());
                     SetTopMessage($"Finish off remaining enemies ({npcs} left)");
                     return npcs > 0;
                 case WV_ActiveGameState.GameOver:
@@ -189,14 +194,14 @@ namespace Universes.UniverseData.war_valley.Server
         }
         protected override void OnPlayerAdded(PlayerData playerData) {
             base.OnPlayerAdded(playerData);
-            // Every commander fights on the same real team, so ownership is carried by the display
+            // The mode decides the side a commander fights for; ownership is carried by the display
             // half of the existing team setting rather than by a second parallel colour field. The
             // player list already tints names by display team, so a base and its owner's name match.
             int clientId = playerData.Owner != null && playerData.Owner.IsValid
                 ? playerData.Owner.ClientId
                 : WV_Owned.NoOwner;
             playerData.SetPlayerTeam(
-                new TeamConfig(TeamColor.Blue, WV_Rules.GetCommanderColor(clientId)));
+                new TeamConfig(WV_Alliances.GetCommanderSide(clientId), WV_Rules.GetCommanderColor(clientId)));
             playerData.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
         }
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -255,7 +260,7 @@ namespace Universes.UniverseData.war_valley.Server
             Vector3 spawnLocation = ServerPathfinding.GetRandomPositionOnCircle(WaveSpawnLocation, SpawnRadius);
             LocalNPC npc = ServerNPC.SpawnNPC(prefab, location: spawnLocation);
             GameCharacter character = npc.GetComponent<GameCharacter>();
-            character.SetTeam(new TeamConfig(TeamColor.Red));
+            character.SetTeam(new TeamConfig(WV_Alliances.GetWaveSide()));
             // The weapon half is attached before the brain so the loadout is settled before either
             // component's first frame.
             WV_NpcCombat.Attach(npc.gameObject, GetNpcLoadout(npcType));

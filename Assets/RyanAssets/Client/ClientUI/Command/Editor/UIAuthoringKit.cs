@@ -1,5 +1,6 @@
 using System;
 using RyanAssets.UI.Hover;
+using RyanAssets.UI.Textbox;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
@@ -150,6 +151,43 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             label = Label(background.transform, "Label", caption, fontSize, Ink, TextAlignmentOptions.Center, bold: true);
             Stretch(label, 4f);
             return button;
+        }
+
+        /// <summary>
+        /// A single-line TextMeshPro input field with a placeholder. It carries the shared
+        /// <see cref="TextboxHelper"/>, so while it has focus the keyboard types into it instead of
+        /// also moving the player's character and firing hotkeys.
+        /// </summary>
+        public static TMP_InputField InputField(
+            Transform parent, string name, string placeholder, float fontSize,
+            TMP_InputField.ContentType contentType = TMP_InputField.ContentType.Standard) {
+            Image background = Panel(parent, name, Track);
+            Border(background, PanelBorder, 1f);
+
+            GameObject viewport = Node(background.transform, "TextArea");
+            Stretch(viewport.transform, 10f, 10f, 4f, 4f);
+            viewport.AddComponent<RectMask2D>();
+
+            TextMeshProUGUI hint = Label(viewport.transform, "Placeholder", placeholder, fontSize, Muted);
+            hint.fontStyle = FontStyles.Italic;
+            Stretch(hint, 0f);
+            TextMeshProUGUI text = Label(viewport.transform, "Text", string.Empty, fontSize, Ink);
+            text.overflowMode = TextOverflowModes.Overflow;
+            Stretch(text, 0f);
+
+            var field = background.gameObject.AddComponent<TMP_InputField>();
+            field.targetGraphic = background;
+            field.textViewport = Rect(viewport.transform);
+            field.textComponent = text;
+            field.placeholder = hint;
+            field.contentType = contentType;
+            field.lineType = TMP_InputField.LineType.SingleLine;
+            if (Font != null)
+                field.fontAsset = Font;
+            field.pointSize = fontSize;
+            field.navigation = new Navigation { mode = Navigation.Mode.None };
+            background.gameObject.AddComponent<TextboxHelper>();
+            return field;
         }
 
         public static HoverItem Hover(Component target, string text) {

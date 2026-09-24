@@ -99,4 +99,19 @@ namespace Universes.UniverseData.war_valley.Shared {
     public struct WV_Notice : IBroadcast {
         public string message;
     }
+
+    /// <summary>
+    /// Sells units and troops the sender commands, refunding part of what each cost to produce
+    /// (see <see cref="WV_Rules.GetSellRefund(long, float)"/>). The server drops any id the sender
+    /// does not command.
+    /// </summary>
+    public struct WV_SellRequest : IBroadcast {
+        public int[] objectIds;
+    }
+
+    /// <summary>Gives some of the sender's funds to an allied commander.</summary>
+    public struct WV_DonateRequest : IBroadcast {
+        public int recipientClientId;
+        public long amount;
+    }
 }

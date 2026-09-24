@@ -1,5 +1,4 @@
 using RyanAssets.DataService;
-using RyanAssets.Shared.Combat;
 using RyanAssets.Shared.Declarations;
 
 namespace Universes.UniverseData.war_valley.Shared {
@@ -11,8 +10,8 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// </para>
     /// <list type="bullet">
     /// <item><b>Use</b> - select it, read its stats, queue units, set its rally point, start their
-    /// own research from it. Open to the owner and to every ally, because a base is shared by the side that holds it:
-    /// in survival every commander is on the same side.</item>
+    /// own research from it. Open to the owner and to every ally (<see cref="WV_Alliances"/>),
+    /// because a base is shared by the side that holds it: in Survival every commander is an ally.</item>
     /// <item><b>Manage</b> - demolish it or cancel what is in its queue. The owner alone, since both
     /// throw away something the owner built or an ally paid for.</item>
     /// </list>
@@ -29,7 +28,7 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return false;
             if (owned.IsOwnedBy(clientId))
                 return true;
-            return TryGetCommanderTeam(clientId, out TeamConfig team) && CombatTeams.AreAllies(team, owned.Team);
+            return WV_Alliances.IsAlliedWith(clientId, owned.Team);
         }
 
         /// <summary>Whether <paramref name="clientId"/> may demolish this object or cancel its queue.</summary>
@@ -38,13 +37,13 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>
         /// The team a commander's structures, units, and troops fight under: the commander's own real
-        /// team, displayed in their commander colour. Falls back to the side every War Valley
-        /// commander starts on when their player record is not available.
+        /// team, displayed in their commander colour. Falls back to the side the game mode gives
+        /// commanders when their player record is not available.
         /// </summary>
         public static TeamConfig GetCommanderTeam(int clientId) {
             TeamColor realTeam = TryGetCommanderTeam(clientId, out TeamConfig team) && team.realTeam != TeamColor.None
                 ? team.realTeam
-                : TeamColor.Blue;
+                : WV_Alliances.GetCommanderSide(clientId);
             return new TeamConfig(realTeam, WV_Rules.GetCommanderColor(clientId));
         }
 
