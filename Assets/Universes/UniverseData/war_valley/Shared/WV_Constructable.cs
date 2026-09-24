@@ -78,6 +78,23 @@ namespace Universes.UniverseData.war_valley.Shared {
             }
         }
 
+        /// <summary>
+        /// 0 to 1: how intact the structure is against the health it should have right now. A
+        /// finished building is measured against its full health; a site is measured against the
+        /// health its construction has reached, because a site that is only a quarter built is not
+        /// a quarter destroyed.
+        /// </summary>
+        public float Integrity {
+            get {
+                if (structure.IsDead)
+                    return 0f;
+                float expected = complete.Value
+                    ? maxHealth
+                    : maxHealth * Mathf.Lerp(WV_Rules.UnderConstructionHealthFraction, 1f, Progress);
+                return expected <= 0f ? 1f : Mathf.Clamp01(structure.Health.Value / expected);
+            }
+        }
+
         void Awake() {
             structure = GetComponent<StructureComponent>();
             owned = GetComponent<WV_Owned>();

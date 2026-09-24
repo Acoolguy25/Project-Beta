@@ -23,12 +23,21 @@ namespace Universes.UniverseData.war_valley.Tests {
 
         [Test]
         public void Demolishing_RefundsLessForAFinishedBuildingThanForASite() {
-            long finished = WV_Rules.GetDemolishRefund(1000, operational: true);
-            long site = WV_Rules.GetDemolishRefund(1000, operational: false);
+            long finished = WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 1f);
+            long site = WV_Rules.GetDemolishRefund(1000, operational: false, integrity: 1f);
 
             Assert.That(finished, Is.EqualTo(500));
             Assert.That(site, Is.EqualTo(750));
             Assert.That(site, Is.GreaterThan(finished));
+        }
+
+        [Test]
+        public void Demolishing_RefundShrinksWithDamage() {
+            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 0.5f), Is.EqualTo(250));
+            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 0.1f), Is.EqualTo(50));
+            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 0f), Is.EqualTo(0));
+            // Out-of-range readings are clamped rather than paying out more than an intact building.
+            Assert.That(WV_Rules.GetDemolishRefund(1000, operational: true, integrity: 2f), Is.EqualTo(500));
         }
     }
 }

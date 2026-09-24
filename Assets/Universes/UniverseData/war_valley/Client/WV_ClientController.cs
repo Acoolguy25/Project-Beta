@@ -41,10 +41,11 @@ namespace Universes.UniverseData.war_valley.Client {
     /// and their name tags carry.
     /// </para>
     /// <para>
-    /// Buildings are inspected with a left click and operated with a right click: a quick right
-    /// click on a barracks, airfield, or helipad opens its build menu, and on a research station its
-    /// research menu. The right button still belongs to the camera while it is held and dragged -
-    /// only a short, still press counts as a click. Everything about the selected building is
+    /// Everything is selected with the left button alone; the right button belongs to the camera.
+    /// Clicking a building selects it and opens its menu - the build menu of a barracks, airfield, or
+    /// helipad, the research menu of a research station. Shift-click adds or removes buildings, a
+    /// double click takes every building of that kind on screen, and a drag box picks up units and
+    /// troops, or buildings when it holds no units. Everything about the selected buildings is
     /// delegated to <see cref="WV_StructureInspector"/>.
     /// </para>
     /// </summary>
@@ -78,9 +79,8 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly List<WV_Unit> selection = new();
         readonly List<WV_Unit> ownedScratch = new();
         readonly List<int> orderScratch = new();
-        /// <summary>Tells a right click on a building from a right drag that orbits the camera.</summary>
-        readonly MouseClickTracker rightClick = new();
-        /// <summary>Technologies the local side already had, so only new completions are announced.</summary>
+        readonly List<StructureComponent> structureScratch = new();
+        /// <summary>Technologies the local commander already had, so only new completions are announced.</summary>
         readonly HashSet<WV_Tech> knownResearched = new();
         readonly StringBuilder researchSummary = new();
 
@@ -142,8 +142,8 @@ namespace Universes.UniverseData.war_valley.Client {
             BindCommandMenu();
             inspector = new WV_StructureInspector(hud, () => LocalClientId, ArmRallyPoint);
             hud.SetHint(
-                "Click a building for details • Right click a barracks, airfield, helipad or research station for its menu\n"
-                + "Drag to select units • M move • V attack-move • T attack • X stop • H hold • Ctrl+F1-F4 set group • F1-F4 recall");
+                "Click a building to open its menu • Shift-click to add • Drag to select units, or buildings\n"
+                + "M move • V attack-move • T attack • X stop • H hold • Ctrl+F1-F4 set group • F1-F4 recall");
         }
 
         /// <summary>
@@ -296,7 +296,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 return StructureAvailability.Available;
 
             WV_Research research = WV_Research.Instance;
-            return research != null && research.IsResearched(WV_Permissions.GetSide(LocalClientId), required)
+            return research != null && research.IsResearched(LocalClientId, required)
                 ? StructureAvailability.Available
                 : StructureAvailability.Locked($"Research {WV_TechTree.GetDisplayName(required)} at a research station");
         }
@@ -309,7 +309,7 @@ namespace Universes.UniverseData.war_valley.Client {
         // --- Research ---------------------------------------------------------
 
         /// <summary>
-        /// Announces research the local side has just finished and re-evaluates every lock that
+        /// Announces research the local commander has just finished and re-evaluates every lock that
         /// depends on it. The first reading of each round's ledger is taken silently, so joining a
         /// round - or the debug switch that starts it fully researched - does not flood the hint line.
         /// </summary>
@@ -326,15 +326,15 @@ namespace Universes.UniverseData.war_valley.Client {
             if (research == null)
                 return;
 
-            TeamColor side = WV_Permissions.GetSide(LocalClientId);
+            int clientId = LocalClientId;
             foreach (WV_TechDefinition definition in WV_TechTree.All) {
-                if (!research.IsResearched(side, definition.Tech) || !knownResearched.Add(definition.Tech) || baseline)
+                if (!research.IsResearched(clientId, definition.Tech) || !knownResearched.Add(definition.Tech) || baseline)
                     continue;
                 hud.SetHint($"Research complete: {definition.DisplayName} - {definition.Description}");
             }
         }
 
-        /// <summary>The economy card's one-line view of what the side is researching.</summary>
+        /// <summary>The economy card's one-line view of what the local commander is researching.</summary>
         void RefreshResearchSummary() {
             nextResearchSummaryTime = Time.unscaledTime + ResearchSummaryInterval;
             WV_Research research = WV_Research.Instance;
@@ -343,14 +343,14 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
-            TeamColor side = WV_Permissions.GetSide(LocalClientId);
+            int clientId = LocalClientId;
             researchSummary.Clear();
             foreach (WV_TechDefinition definition in WV_TechTree.All) {
-                if (research.GetPhase(side, definition.Tech) != WV_ResearchPhase.Researching)
+                if (research.GetPhase(clientId, definition.Tech) != WV_ResearchPhase.Researching)
                     continue;
                 researchSummary.Append(researchSummary.Length == 0 ? "Researching " : ", ")
                     .Append(definition.DisplayName).Append(' ')
-                    .Append(Mathf.FloorToInt(research.GetProgress(side, definition.Tech) * 100f)).Append('%');
+                    .Append(Mathf.FloorToInt(research.GetProgress(clientId, definition.Tech) * 100f)).Append('%');
             }
             hud.SetResearchSummary(researchSummary.Length > 0 ? researchSummary.ToString() : null);
         }
@@ -411,7 +411,6 @@ namespace Universes.UniverseData.war_valley.Client {
             Camera camera = Camera.main;
             if (mouse == null || camera == null || !Application.isFocused) {
                 CancelDrag();
-                rightClick.Cancel();
                 return;
             }
 
@@ -422,13 +421,6 @@ namespace Universes.UniverseData.war_valley.Client {
                 || !ToolControls.IsCursorFree()
                 || IsPointerOverHud();
             Vector2 screenPosition = mouse.position.ReadValue();
-
-            // The right button is the camera's (LookPC) while it is held, so nothing here consumes
-            // it: the tracker only reports a press that was released quickly without moving the
-            // mouse, which is a click on something rather than an orbit.
-            if (rightClick.Tick(mouse, mouse.rightButton, !TopbarControls.IsMenuOpen && !IsPointerOverHud(),
-                    out Vector2 rightClickPosition))
-                HandleRightClick(camera, rightClickPosition);
 
             if (mouse.leftButton.wasPressedThisFrame && !inputBlocked) {
                 // An armed order spends the click on itself rather than starting a selection, so a
@@ -496,7 +488,7 @@ namespace Universes.UniverseData.war_valley.Client {
                     DisarmOrder("Order cancelled");
                 else if (inspector.IsMenuOpen)
                     inspector.CloseMenu();
-                else if (inspector.Selected != null)
+                else if (inspector.HasSelection)
                     SelectBuilding(null);
             }
 
@@ -609,9 +601,41 @@ namespace Universes.UniverseData.war_valley.Client {
                     AddToSelection(character);
             }
 
-            if (SelectionCount > 0)
+            if (SelectionCount > 0) {
                 SelectBuilding(null);
+                RefreshSelectionUI();
+                return;
+            }
+
+            // A box around no units is a box around buildings: the way to take a row of barracks at
+            // once. Units win when both are inside, since that is what a drag usually means.
+            CollectUsableStructures(structureScratch, structure => IsInsideBox(camera, structure.transform.position, min, max));
+            if (structureScratch.Count > 0) {
+                if (additive)
+                    inspector.Add(structureScratch);
+                else
+                    inspector.SetSelection(structureScratch);
+                if (inspector.Count > 1)
+                    hud.SetHint($"{inspector.Count} buildings selected");
+            } else if (!additive) {
+                SelectBuilding(null);
+            }
             RefreshSelectionUI();
+        }
+
+        /// <summary>Every live building the local commander may use that passes <paramref name="filter"/>.</summary>
+        void CollectUsableStructures(List<StructureComponent> results, System.Predicate<StructureComponent> filter) {
+            results.Clear();
+            foreach (WV_Owned owned in WV_Owned.All) {
+                if (results.Count >= maxSelection)
+                    break;
+                if (owned == null
+                    || !owned.TryGetComponent(out StructureComponent structure)
+                    || !inspector.CanUse(structure)
+                    || !filter(structure))
+                    continue;
+                results.Add(structure);
+            }
         }
 
         static bool IsInsideBox(Camera camera, Vector3 worldPosition, Vector2 min, Vector2 max) {
@@ -667,12 +691,25 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
-            // Any building the commander may use - their own or an ally's - can be inspected.
+            // Any building the commander may use - their own or an ally's - can be selected, which
+            // also opens its menu. Shift adds or removes it; a double click takes every building of
+            // that kind on screen.
             StructureComponent structure = hit.collider.GetComponentInParent<StructureComponent>();
             if (inspector.CanUse(structure)) {
+                bool selectAll = ConsumeDoubleClick(structure);
                 ClearSelection();
-                SelectBuilding(structure);
+                if (selectAll)
+                    SelectAllStructuresLike(camera, structure);
+                else if (additive)
+                    inspector.Toggle(structure);
+                else
+                    SelectBuilding(structure);
                 RefreshSelectionUI();
+                return;
+            }
+
+            if (structure != null) {
+                hud.SetHint($"You cannot use that {structure.DisplayName}");
                 return;
             }
 
@@ -708,6 +745,21 @@ namespace Universes.UniverseData.war_valley.Client {
                 if (candidate != null && candidate.Kind == kind)
                     AddToSelection(candidate);
             }
+        }
+
+        /// <summary>
+        /// Selects every usable building of the clicked one's kind that is on screen, keeping the
+        /// clicked one first so the panel describes it. Unlike units, off-screen buildings stay out:
+        /// they are not going anywhere, and the gesture means "these ones here".
+        /// </summary>
+        void SelectAllStructuresLike(Camera camera, StructureComponent clicked) {
+            CollectUsableStructures(structureScratch, candidate =>
+                candidate != clicked
+                && candidate.StructureID == clicked.StructureID
+                && IsInsideBox(camera, candidate.transform.position, Vector2.zero, new Vector2(Screen.width, Screen.height)));
+            structureScratch.Insert(0, clicked);
+            inspector.SetSelection(structureScratch);
+            hud.SetHint($"{inspector.Count} x {clicked.DisplayName} selected");
         }
 
         /// <summary>
@@ -801,7 +853,7 @@ namespace Universes.UniverseData.war_valley.Client {
         void RefreshSelectionUI() {
             // An order in hand with nothing left to give it to would sit primed forever and then
             // swallow the click that was meant to start a new selection.
-            if (armedOrder.HasValue && SelectionCount == 0 && inspector.SelectedProduction == null)
+            if (armedOrder.HasValue && SelectionCount == 0 && inspector.RallyTargets.Count == 0)
                 DisarmOrder("Selection lost - order cancelled");
             hud.RefreshSelection(selection, troopSelection);
         }
@@ -824,7 +876,7 @@ namespace Universes.UniverseData.war_valley.Client {
             }
         }
 
-        /// <summary>Shows a building in the structure panel, or clears the panel when passed null.</summary>
+        /// <summary>Selects one building and opens its menu, or clears the building selection when passed null.</summary>
         void SelectBuilding(StructureComponent structure) {
             if (structure == null)
                 inspector.Clear();
@@ -832,42 +884,9 @@ namespace Universes.UniverseData.war_valley.Client {
                 inspector.Select(structure);
         }
 
-        /// <summary>
-        /// A right click that did not become a camera orbit. On a building the commander may use it
-        /// opens that building's menu; anywhere else it backs out of an armed order or an open menu.
-        /// </summary>
-        void HandleRightClick(Camera camera, Vector2 screenPosition) {
-            if (armedOrder.HasValue) {
-                DisarmOrder("Order cancelled");
-                return;
-            }
-
-            Ray ray = camera.ScreenPointToRay(screenPosition);
-            StructureComponent structure = Physics.Raycast(
-                ray, out RaycastHit hit, float.MaxValue, WV_Combat.TargetMask, QueryTriggerInteraction.Ignore)
-                ? hit.collider.GetComponentInParent<StructureComponent>()
-                : null;
-
-            if (structure == null) {
-                if (inspector.IsMenuOpen)
-                    inspector.CloseMenu();
-                return;
-            }
-
-            if (!inspector.CanUse(structure)) {
-                hud.SetHint($"You cannot use that {structure.DisplayName}");
-                return;
-            }
-
-            ClearSelection();
-            if (!inspector.OpenMenu(structure))
-                hud.SetHint($"The {structure.DisplayName} has no menu - its details are in the panel");
-            RefreshSelectionUI();
-        }
-
-        /// <summary>The panel's Set Rally button: the next ground click moves the building's gather point.</summary>
+        /// <summary>The panel's Set Rally button: the next ground click moves the selected buildings' gather point.</summary>
         void ArmRallyPoint() {
-            if (inspector.SelectedProduction == null)
+            if (inspector.RallyTargets.Count == 0)
                 return;
             ArmOrder(WV_OrderType.Move);
         }
@@ -885,7 +904,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
-            if (SelectionCount == 0 && inspector.SelectedProduction == null) {
+            if (SelectionCount == 0 && inspector.RallyTargets.Count == 0) {
                 hud.SetHint("Select something first");
                 return;
             }
@@ -934,7 +953,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
                 IEntity target = entityHit.collider.GetComponentInParent<IEntity>();
                 if (target == null || !IsHostileToLocalPlayer(target)) {
-                    hud.SetHint("Not an enemy - click a hostile target");
+                    hud.SetHint("Not a valid target - click a living, hostile enemy");
                     return;
                 }
 
@@ -949,16 +968,18 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
-            // With a building selected and nothing else, a placed Move sets its gather point. That
-            // is the only thing a move could sensibly mean for a structure that cannot walk.
-            WV_ProductionBuilding rallyBuilding = inspector.SelectedProduction;
-            if (rallyBuilding != null && SelectionCount == 0) {
+            // With buildings selected and nothing else, a placed Move sets their gather point. That
+            // is the only thing a move could sensibly mean for structures that cannot walk.
+            IReadOnlyList<WV_ProductionBuilding> rallyBuildings = inspector.RallyTargets;
+            if (rallyBuildings.Count > 0 && SelectionCount == 0) {
                 DisarmOrder(null);
-                InstanceFinder.ClientManager.Broadcast(new WV_RallyPointRequest {
-                    buildingObjectId = rallyBuilding.NetworkObject.ObjectId,
-                    position = groundHit.point
-                });
-                hud.SetHint("Rally point set");
+                foreach (WV_ProductionBuilding building in rallyBuildings) {
+                    InstanceFinder.ClientManager.Broadcast(new WV_RallyPointRequest {
+                        buildingObjectId = building.NetworkObject.ObjectId,
+                        position = groundHit.point
+                    });
+                }
+                hud.SetHint(rallyBuildings.Count > 1 ? $"Rally point set for {rallyBuildings.Count} buildings" : "Rally point set");
                 return;
             }
 
@@ -966,16 +987,21 @@ namespace Universes.UniverseData.war_valley.Client {
             SendOrder(orderType, groundHit.point, null);
         }
 
+        /// <summary>
+        /// Whether the selection may be ordered to attack <paramref name="target"/>: the same rule the
+        /// server's brains apply, so a living, hurtable enemy is accepted and a dead or invulnerable
+        /// one is refused here rather than silently dropped there.
+        /// </summary>
         bool IsHostileToLocalPlayer(IEntity target) {
             // Compare against something the player actually commands rather than against the player's
             // own character, so the answer matches what the ordered units will do on the server.
             foreach (WV_Unit unit in selection) {
                 if (unit != null)
-                    return WV_Combat.AreEnemies(unit.Team, target.Team);
+                    return WV_Combat.IsValidTarget(target, unit.Team);
             }
             foreach (GameCharacter troop in troopSelection) {
                 if (troop != null)
-                    return WV_Combat.AreEnemies(troop.Team, target.Team);
+                    return WV_Combat.IsValidTarget(target, troop.Team);
             }
             return false;
         }

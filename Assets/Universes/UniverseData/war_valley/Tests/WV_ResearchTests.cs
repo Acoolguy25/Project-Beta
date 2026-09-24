@@ -25,7 +25,6 @@ namespace Universes.UniverseData.war_valley.Tests {
             Assert.That((byte)WV_ResearchRefusal.NoResearchStation, Is.EqualTo(4));
             Assert.That((byte)WV_ResearchRefusal.MissingPrerequisite, Is.EqualTo(5));
             Assert.That((byte)WV_ResearchRefusal.Unavailable, Is.EqualTo(6));
-            Assert.That((byte)WV_ResearchRefusal.NotPermitted, Is.EqualTo(7));
         }
 
         [Test]

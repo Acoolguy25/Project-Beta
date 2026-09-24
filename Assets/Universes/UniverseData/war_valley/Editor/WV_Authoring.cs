@@ -103,7 +103,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 // Foot soldiers only: the Infantry vehicle duplicated the Knifeman and Gunner the
                 // barracks already trains, so it is no longer offered here.
                 Id = "wv_barracks", DisplayName = "Barracks", Category = "Military",
-                Description = "Trains Knifemen and Gunners. Right-click it to train.",
+                Description = "Trains Knifemen and Gunners. Click it to train.",
                 ModelPath = PackRoot + "/Building_Prefebs/PersonLivePlace_Prefeb.prefab",
                 FootprintCells = 2, Cost = 500, BuildSeconds = 25f, MaxHealth = 800,
                 Role = StructureRole.Production,

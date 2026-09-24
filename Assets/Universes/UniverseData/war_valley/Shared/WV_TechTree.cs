@@ -57,8 +57,8 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// </para>
     /// <para>
     /// Research speed is linear on both sides: every finished research station adds its rate to
-    /// its side's total, and every project running at once takes an equal share of that total.
-    /// Two projects therefore finish no sooner together than they would have one after the other.
+    /// its owner's total, and every project that commander runs at once takes an equal share of
+    /// that total. Two projects therefore finish no sooner together than one after the other.
     /// </para>
     /// </summary>
     public static class WV_TechTree {

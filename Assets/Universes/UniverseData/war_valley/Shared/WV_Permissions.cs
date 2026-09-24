@@ -10,8 +10,8 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// never disagree:
     /// </para>
     /// <list type="bullet">
-    /// <item><b>Use</b> - select it, read its stats, queue units, set its rally point, research at
-    /// it. Open to the owner and to every ally, because a base is shared by the side that holds it:
+    /// <item><b>Use</b> - select it, read its stats, queue units, set its rally point, start their
+    /// own research from it. Open to the owner and to every ally, because a base is shared by the side that holds it:
     /// in survival every commander is on the same side.</item>
     /// <item><b>Manage</b> - demolish it or cancel what is in its queue. The owner alone, since both
     /// throw away something the owner built or an ally paid for.</item>
@@ -56,8 +56,5 @@ namespace Universes.UniverseData.war_valley.Shared {
             team = player.GetTeam();
             return team != null;
         }
-
-        /// <summary>The side - real team - a commander researches and fights for.</summary>
-        public static TeamColor GetSide(int clientId) => GetCommanderTeam(clientId).realTeam;
     }
 }

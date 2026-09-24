@@ -167,7 +167,7 @@ namespace Universes.UniverseData.war_valley.Server {
             WV_Tech required = WV_TechTree.GetRequirement(item);
             WV_Research research = WV_Research.Instance;
             if (required != WV_Tech.None
-                && (research == null || !research.IsResearched(WV_Permissions.GetSide(sender.ClientId), required)))
+                && (research == null || !research.IsResearched(sender.ClientId, required)))
                 return WV_TroopRefusal.Locked;
 
             if (building.QueueLength >= building.MaxQueueLength)
@@ -262,9 +262,13 @@ namespace Universes.UniverseData.war_valley.Server {
             if (structure.IsDead)
                 return;
 
-            bool operational = !structure.TryGetComponent(out WV_Constructable constructable)
-                || constructable.IsOperational;
-            long refund = WV_Rules.GetDemolishRefund(structure.Cost, operational);
+            // Measured before the kill: the refund shrinks with the damage the building has taken.
+            bool hasConstructable = structure.TryGetComponent(out WV_Constructable constructable);
+            bool operational = !hasConstructable || constructable.IsOperational;
+            float integrity = hasConstructable
+                ? constructable.Integrity
+                : structure.MaxHealth.Value > 0 ? structure.Health.Value / (float)structure.MaxHealth.Value : 1f;
+            long refund = WV_Rules.GetDemolishRefund(structure.Cost, operational, integrity);
 
             structure.Kill(DamageType.Despawn);
 
@@ -279,7 +283,7 @@ namespace Universes.UniverseData.war_valley.Server {
 
         /// <summary>
         /// Starts or cancels research from a station the sender may use. Research belongs to the
-        /// sender's whole side; the project is paid for by, and cancellable only by, its starter.
+        /// commander who pays for it and runs on the research stations they own.
         /// </summary>
         static void OnResearch(NetworkConnection sender, WV_ResearchRequest request, Channel channel) {
             if (sender == null || !sender.IsValid)
@@ -309,8 +313,7 @@ namespace Universes.UniverseData.war_valley.Server {
             if (!station.IsOperational)
                 return WV_ResearchRefusal.NoResearchStation;
 
-            TeamColor side = WV_Permissions.GetSide(sender.ClientId);
-            WV_ResearchRefusal refusal = research.GetStartRefusal(side, tech);
+            WV_ResearchRefusal refusal = research.GetStartRefusal(sender.ClientId, tech);
             if (refusal != WV_ResearchRefusal.None)
                 return refusal;
 
@@ -319,7 +322,7 @@ namespace Universes.UniverseData.war_valley.Server {
             if (!economy.TryDebit(sender.ClientId, definition.Cost))
                 return WV_ResearchRefusal.NotEnoughFunds;
 
-            research.Begin(side, tech, sender.ClientId, paid);
+            research.Begin(sender.ClientId, tech, paid);
             return WV_ResearchRefusal.None;
         }
 
@@ -328,11 +331,11 @@ namespace Universes.UniverseData.war_valley.Server {
             if (research == null)
                 return WV_ResearchRefusal.Unavailable;
 
-            WV_ResearchRefusal refusal = research.TryCancel(
-                WV_Permissions.GetSide(sender.ClientId), tech, sender.ClientId, out int refund);
-            if (refusal == WV_ResearchRefusal.None && refund > 0)
+            if (!research.TryCancel(sender.ClientId, tech, out int refund))
+                return WV_ResearchRefusal.Unavailable;
+            if (refund > 0)
                 WV_Economy.Instance?.Credit(sender.ClientId, refund);
-            return refusal;
+            return WV_ResearchRefusal.None;
         }
 
         // --- Resolution ---------------------------------------------------------

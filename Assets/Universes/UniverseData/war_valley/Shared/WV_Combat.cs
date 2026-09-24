@@ -28,10 +28,15 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static bool AreEnemies(TeamConfig attacker, TeamConfig target) =>
             CombatTeams.AreEnemies(attacker, target);
 
+        /// <summary>
+        /// A living, hostile entity that can currently be hurt. Something invulnerable is not worth
+        /// a shot or an order: it is skipped exactly like something already dead.
+        /// </summary>
         public static bool IsValidTarget(IEntity target, TeamConfig attackerTeam) =>
             target is Component component
             && component != null
             && !target.IsDead
+            && !target.IsEffectActive(CharacterEffect.Invul)
             && AreEnemies(attackerTeam, target.Team);
 
         /// <summary>

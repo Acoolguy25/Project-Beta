@@ -56,9 +56,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// <summary>No finished research station on the commander's side to run the project.</summary>
         NoResearchStation = 4,
         MissingPrerequisite = 5,
-        Unavailable = 6,
-        /// <summary>A cancel from someone other than the commander who paid for the project.</summary>
-        NotPermitted = 7
+        Unavailable = 6
     }
 
     /// <summary>The order a selected group is currently carrying out.</summary>
@@ -159,18 +157,6 @@ namespace Universes.UniverseData.war_valley.Shared {
         }
 
         /// <summary>
-        /// How strongly a commander's colour is mixed into their buildings' authored albedo. Full
-        /// strength would replace the Cartoon Military art with flat colour, so ownership reads as a
-        /// tint over the model rather than instead of it - but strongly enough that whose base is
-        /// whose is readable from across the valley.
-        /// </summary>
-        public const float OwnerTintStrength = 0.7f;
-
-        /// <summary>The albedo tint applied to a structure owned by <paramref name="clientId"/>.</summary>
-        public static Color GetOwnerTint(int clientId) =>
-            Color.Lerp(Color.white, TeamConfig.TeamToColor(GetCommanderColor(clientId)), OwnerTintStrength);
-
-        /// <summary>
         /// The commander's colour at full strength, for UI drawn over the world rather than for a
         /// model's albedo. A build timer's owner strip should read as the commander's colour outright,
         /// not as the washed-out tint that keeps the Cartoon Military art visible underneath it.
@@ -179,8 +165,9 @@ namespace Universes.UniverseData.war_valley.Shared {
             TeamConfig.TeamToColor(GetCommanderColor(clientId));
 
         /// <summary>
-        /// The health fraction at which a structure starts visibly failing. Above this it carries its
-        /// commander's colour cleanly; below it the colour is progressively eaten by corrosion, so a
+        /// The health fraction at which a structure starts visibly failing. Above this its colours - the
+        /// commander's paint and the original art - stay clean; below it they are progressively eaten
+        /// by corrosion, so a
         /// building about to go up is readable as such from across the valley.
         /// </summary>
         public const float CorrosionHealthFraction = 0.3f;
@@ -189,18 +176,13 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static readonly Color CorrodedTint = new(0.29f, 0.17f, 0.09f);
 
         /// <summary>
-        /// The albedo a structure of this owner shows at <paramref name="healthFraction"/> of its
-        /// maximum health. Undamaged and lightly damaged structures are untouched; past the
-        /// corrosion threshold the owner tint is pulled toward rust, reaching it at zero health.
+        /// 0 while a structure is above <see cref="CorrosionHealthFraction"/> of its health, rising
+        /// to 1 as it reaches zero: how far every colour on it has been pulled toward rust.
         /// </summary>
-        public static Color GetDamagedTint(int clientId, float healthFraction) {
-            Color ownerTint = GetOwnerTint(clientId);
-            if (healthFraction >= CorrosionHealthFraction)
-                return ownerTint;
-
-            float corrosion = 1f - Mathf.Clamp01(healthFraction / CorrosionHealthFraction);
-            return Color.Lerp(ownerTint, CorrodedTint, corrosion);
-        }
+        public static float GetCorrosion(float healthFraction) =>
+            healthFraction >= CorrosionHealthFraction
+                ? 0f
+                : 1f - Mathf.Clamp01(healthFraction / CorrosionHealthFraction);
 
         /// <summary>Spacing between units fanned out around a single group order.</summary>
         public const float GroupFormationSpacing = 3.2f;
@@ -317,9 +299,8 @@ namespace Universes.UniverseData.war_valley.Shared {
                 WV_ResearchRefusal.NotEnoughFunds => $"Not enough funds to research {name}",
                 WV_ResearchRefusal.AlreadyResearched => $"{name} is already researched",
                 WV_ResearchRefusal.AlreadyResearching => $"{name} is already being researched",
-                WV_ResearchRefusal.NoResearchStation => "Build a research station to research technology",
+                WV_ResearchRefusal.NoResearchStation => "Build a research station of your own to research technology",
                 WV_ResearchRefusal.MissingPrerequisite => $"{name} needs earlier research first",
-                WV_ResearchRefusal.NotPermitted => "Only the commander who started that research can cancel it",
                 _ => $"Cannot research {name}"
             };
         }
@@ -351,8 +332,15 @@ namespace Universes.UniverseData.war_valley.Shared {
         public const float DemolishRefundFraction = 0.5f;
         public const float DemolishSiteRefundFraction = 0.75f;
 
-        public static long GetDemolishRefund(ulong cost, bool operational) {
-            float fraction = operational ? DemolishRefundFraction : DemolishSiteRefundFraction;
+        /// <summary>
+        /// What demolishing returns, scaled down by the damage the structure has taken:
+        /// <paramref name="integrity"/> is its health against what it should have (see
+        /// <c>WV_Constructable.Integrity</c>), so a building half shot away refunds half as much and
+        /// scrapping a base that is about to fall anyway recovers almost nothing.
+        /// </summary>
+        public static long GetDemolishRefund(ulong cost, bool operational, float integrity) {
+            float fraction = (operational ? DemolishRefundFraction : DemolishSiteRefundFraction)
+                * Mathf.Clamp01(integrity);
             return (long)System.Math.Round(System.Math.Min(cost, (ulong)long.MaxValue) * (double)fraction);
         }
 

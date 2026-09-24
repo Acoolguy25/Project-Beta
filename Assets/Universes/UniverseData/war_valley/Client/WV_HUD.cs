@@ -34,7 +34,7 @@ namespace Universes.UniverseData.war_valley.Client {
         [Header("Structures")]
         [Tooltip("Details, queue, and actions for the selected building.")]
         [SerializeField] SelectionInfoPanel structurePanel;
-        [Tooltip("The build and research menu opened by right-clicking a building.")]
+        [Tooltip("The build and research menu opened by selecting a building.")]
         [SerializeField] CommandOptionGrid optionMenu;
         [Tooltip("Icons for foot soldiers, which have no prefab of their own to carry one.")]
         [SerializeField] WV_TroopIcon[] troopIcons = Array.Empty<WV_TroopIcon>();

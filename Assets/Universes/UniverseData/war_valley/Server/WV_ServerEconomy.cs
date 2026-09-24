@@ -97,7 +97,7 @@ namespace Universes.UniverseData.war_valley.Server {
             WV_Tech required = WV_TechTree.GetRequirement(prefabStructure.StructureID);
             WV_Research research = WV_Research.Instance;
             if (required != WV_Tech.None
-                && (research == null || !research.IsResearched(WV_Permissions.GetSide(sender.ClientId), required))) {
+                && (research == null || !research.IsResearched(sender.ClientId, required))) {
                 WV_ServerCommand.Notify(sender,
                     $"Research {WV_TechTree.GetDisplayName(required)} to build a {prefabStructure.DisplayName}");
                 return false;

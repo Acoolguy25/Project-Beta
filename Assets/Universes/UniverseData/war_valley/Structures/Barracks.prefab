@@ -174,7 +174,7 @@ MonoBehaviour:
   effectsComponent: {fileID: 4246652218447843210}
   healthComponent: {fileID: 509331602248311539}
   StructureID: wv_barracks
-  Description: Trains Knifemen and Gunners. Right-click it to train.
+  Description: Trains Knifemen and Gunners. Click it to train.
   Cost: 500
   Duration: 25
   Sprite: {fileID: 21300000, guid: 79efd5f19f0f9d6409f6193ac16e1579, type: 3}

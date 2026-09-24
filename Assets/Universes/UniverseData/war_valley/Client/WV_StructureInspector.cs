@@ -13,14 +13,20 @@ using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Client {
     /// <summary>
-    /// Drives the building side of the War Valley HUD: the details panel for a selected structure
-    /// and the build or research menu a right click opens on it.
+    /// Drives the building side of the War Valley HUD: the details panel for the selected
+    /// structures and the build or research menu that opens with them.
     /// <para>
     /// The panels themselves are the shared command UI from RyanAssets and know nothing about War
-    /// Valley. This class is the translation: it reads the structure's replicated state and the
-    /// match rules, decides what the local commander may do - allies may use a building, only its
-    /// owner may demolish it or cancel its queue (<see cref="WV_Permissions"/>) - and turns the
-    /// panels' clicks into the same requests the server validates again.
+    /// Valley. This class is the translation: it reads the structures' replicated state and the match
+    /// rules, decides what the local commander may do - allies may use a building, only its owner may
+    /// demolish it or cancel its queue (<see cref="WV_Permissions"/>) - and turns the panels' clicks
+    /// into the same requests the server validates again.
+    /// </para>
+    /// <para>
+    /// Several buildings can be selected at once. The first one selected is the <see cref="Primary"/>
+    /// the panel describes in detail; buildings of the same kind form its group, whose queues are
+    /// shown together and share its menu - an order goes to whichever of them has the shortest
+    /// queue, and a rally point or a demolition applies to all of them.
     /// </para>
     /// <para>
     /// Redraws are throttled to a few per second and forced immediately by the events that matter
@@ -33,10 +39,9 @@ namespace Universes.UniverseData.war_valley.Client {
 
         /// <summary>Ids the building panel hands back for its action buttons.</summary>
         static class ActionId {
-            public const int OpenProduction = 1;
-            public const int OpenResearch = 2;
-            public const int SetRally = 3;
-            public const int Demolish = 4;
+            public const int OpenMenu = 1;
+            public const int SetRally = 2;
+            public const int Demolish = 3;
         }
 
         /// <summary>How often a shown panel redraws on its own, for countdowns and progress bars.</summary>
@@ -46,15 +51,23 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly Func<int> localClientId;
         readonly Action armRallyPoint;
 
+        readonly List<StructureComponent> selection = new();
+        /// <summary>Selected production buildings of the primary's kind: the ones its menu and queue cover.</summary>
+        readonly List<WV_ProductionBuilding> productionGroup = new();
+
         readonly List<CommandStat> stats = new();
         readonly List<CommandAction> actions = new();
         readonly List<CommandQueueEntry> queueEntries = new();
-        /// <summary>Research shown in a station's queue strip, parallel to <see cref="queueEntries"/>.</summary>
+        /// <summary>Where each production queue slot on the strip lives, parallel to <see cref="queueEntries"/>.</summary>
+        readonly List<(WV_ProductionBuilding building, int index)> queuedProduction = new();
+        /// <summary>Research shown on the strip, parallel to <see cref="queueEntries"/>.</summary>
         readonly List<WV_Tech> queuedResearch = new();
         readonly List<CommandOption> options = new();
+        readonly Dictionary<string, int> kindCounts = new();
         readonly Dictionary<string, Sprite> structureIcons = new();
         readonly StringBuilder builder = new();
 
+        // The primary building and its roles.
         StructureComponent structure;
         WV_Owned owned;
         WV_Constructable constructable;
@@ -65,12 +78,6 @@ namespace Universes.UniverseData.war_valley.Client {
 
         MenuKind menu;
         float nextRefreshTime;
-        /// <summary>
-        /// Tracked separately from <see cref="structure"/>, which reads as null through Unity's
-        /// overloaded equality the moment the building is destroyed - exactly when the panel still
-        /// has to be taken down.
-        /// </summary>
-        bool hasSelection;
 
         public WV_StructureInspector(WV_HUD hud, Func<int> localClientId, Action armRallyPoint) {
             this.hud = hud;
@@ -113,10 +120,15 @@ namespace Universes.UniverseData.war_valley.Client {
 
         int LocalClientId => localClientId();
 
-        public StructureComponent Selected => structure;
+        public bool HasSelection => selection.Count > 0;
 
-        /// <summary>The selected building when it trains units, for rally orders.</summary>
-        public WV_ProductionBuilding SelectedProduction => production;
+        public int Count => selection.Count;
+
+        /// <summary>The building the panel describes in detail: the first one selected.</summary>
+        public StructureComponent Primary => structure;
+
+        /// <summary>Selected production buildings that a rally point applies to.</summary>
+        public IReadOnlyList<WV_ProductionBuilding> RallyTargets => productionGroup;
 
         public bool IsMenuOpen => menu != MenuKind.None && hud.OptionMenu != null && hud.OptionMenu.IsOpen;
 
@@ -133,65 +145,109 @@ namespace Universes.UniverseData.war_valley.Client {
 
         // --- Selection ----------------------------------------------------------
 
-        /// <summary>Shows <paramref name="target"/> in the building panel. The menu closes unless it belongs to the same building.</summary>
+        /// <summary>Selects exactly one building and opens its menu, if it has one.</summary>
         public void Select(StructureComponent target) {
-            if (target == structure) {
-                MarkDirty();
+            selection.Clear();
+            if (CanUse(target))
+                selection.Add(target);
+            // Clicking a building is how its menu is reached, so a click reopens a menu closed earlier.
+            OnSelectionChanged(reopenMenu: true);
+        }
+
+        /// <summary>Replaces the selection with every usable building in <paramref name="targets"/>.</summary>
+        public void SetSelection(IEnumerable<StructureComponent> targets) {
+            selection.Clear();
+            foreach (StructureComponent target in targets) {
+                if (CanUse(target) && !selection.Contains(target))
+                    selection.Add(target);
+            }
+            OnSelectionChanged(reopenMenu: false);
+        }
+
+        /// <summary>Adds every usable building in <paramref name="targets"/> to the selection, keeping its primary.</summary>
+        public void Add(IEnumerable<StructureComponent> targets) {
+            foreach (StructureComponent target in targets) {
+                if (CanUse(target) && !selection.Contains(target))
+                    selection.Add(target);
+            }
+            OnSelectionChanged(reopenMenu: false);
+        }
+
+        /// <summary>Adds a building to the selection, or takes it out again if it was already in.</summary>
+        public void Toggle(StructureComponent target) {
+            if (!selection.Remove(target) && CanUse(target))
+                selection.Add(target);
+            OnSelectionChanged(reopenMenu: false);
+        }
+
+        public void Clear() {
+            selection.Clear();
+            OnSelectionChanged(reopenMenu: false);
+        }
+
+        void OnSelectionChanged(bool reopenMenu) {
+            StructureComponent previousPrimary = structure;
+            BindPrimary(selection.Count > 0 ? selection[0] : null);
+
+            if (structure == null) {
+                CloseMenu();
+                if (hud.StructurePanel != null)
+                    hud.StructurePanel.Hide();
                 return;
             }
 
-            CloseMenu();
-            hasSelection = true;
-            structure = target;
-            owned = target.GetComponent<WV_Owned>();
-            constructable = target.GetComponent<WV_Constructable>();
-            production = target.GetComponent<WV_ProductionBuilding>();
-            researchStation = target.GetComponent<WV_ResearchBuilding>();
-            income = target.GetComponent<WV_IncomeBuilding>();
-            turret = target.GetComponent<WV_DefenseTurret>();
+            // The menu opens with a newly selected building, and a new primary of a different kind
+            // swaps it rather than leaving the old one up. An open menu is re-titled for the new
+            // group; one the player closed stays closed while the selection merely changes size.
+            if (previousPrimary != structure || reopenMenu || IsMenuOpen)
+                OpenMenu();
             MarkDirty();
             Refresh();
         }
 
-        public void Clear() {
-            CloseMenu();
-            hasSelection = false;
-            structure = null;
-            owned = null;
-            constructable = null;
-            production = null;
-            researchStation = null;
-            income = null;
-            turret = null;
-            if (hud.StructurePanel != null)
-                hud.StructurePanel.Hide();
+        void BindPrimary(StructureComponent primary) {
+            structure = primary;
+            owned = primary != null ? primary.GetComponent<WV_Owned>() : null;
+            constructable = primary != null ? primary.GetComponent<WV_Constructable>() : null;
+            production = primary != null ? primary.GetComponent<WV_ProductionBuilding>() : null;
+            researchStation = primary != null ? primary.GetComponent<WV_ResearchBuilding>() : null;
+            income = primary != null ? primary.GetComponent<WV_IncomeBuilding>() : null;
+            turret = primary != null ? primary.GetComponent<WV_DefenseTurret>() : null;
+
+            productionGroup.Clear();
+            if (production == null)
+                return;
+            foreach (StructureComponent candidate in selection) {
+                if (candidate.StructureID == primary.StructureID
+                    && candidate.TryGetComponent(out WV_ProductionBuilding member))
+                    productionGroup.Add(member);
+            }
         }
 
-        /// <summary>
-        /// Selects <paramref name="target"/> and opens its menu: the build menu of a production
-        /// building, the research menu of a research station. Returns false for a structure that has
-        /// no menu, so the caller can say so.
-        /// </summary>
-        public bool OpenMenu(StructureComponent target) {
-            Select(target);
+        /// <summary>Opens the primary building's menu: its build menu, or the research menu of a station.</summary>
+        public bool OpenMenu() {
+            if (structure == null || hud.OptionMenu == null)
+                return false;
+
             if (production != null)
                 menu = MenuKind.Production;
             else if (researchStation != null)
                 menu = MenuKind.Research;
-            else
+            else {
+                CloseMenu();
                 return false;
+            }
 
-            if (hud.OptionMenu == null)
-                return false;
-            hud.OptionMenu.Open(
-                menu == MenuKind.Production
-                    ? (production.TrainsTroops ? $"Train at {structure.DisplayName}" : $"Build at {structure.DisplayName}")
-                    : "Research",
-                menu == MenuKind.Production
-                    ? "Click to queue - units belong to whoever pays"
-                    : "Shared with your allies - more stations research faster");
+            string title = menu == MenuKind.Research
+                ? "Research"
+                : $"{(production.TrainsTroops ? "Train" : "Build")} at {GroupName()}";
+            string subtitle = menu == MenuKind.Research
+                ? "Your own research - every station you own speeds it up"
+                : productionGroup.Count > 1
+                    ? "Each order goes to the building with the shortest queue"
+                    : "Click to queue - units belong to whoever pays";
+            hud.OptionMenu.Open(title, subtitle);
             MarkDirty();
-            Refresh();
             return true;
         }
 
@@ -202,19 +258,28 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         /// <summary>
-        /// Keeps the panel honest: drops a selection that was destroyed, despawned, or is no longer
-        /// usable, and redraws on the throttle. Returns false when the selection was dropped.
+        /// Keeps the panel honest: drops selected buildings that were destroyed, despawned, or are no
+        /// longer usable, and redraws on the throttle. Returns false when nothing is selected.
         /// </summary>
         public bool Tick() {
-            if (!hasSelection)
+            if (selection.Count == 0)
                 return false;
 
-            if (!CanUse(structure)) {
-                string name = structure != null ? structure.DisplayName : "Building";
-                bool destroyed = structure == null || !structure.IsSpawned || structure.IsDead;
-                Clear();
-                hud.SetHint(destroyed ? $"{name} destroyed" : $"{name} is no longer yours to use");
-                return false;
+            string lostName = null;
+            for (int i = selection.Count - 1; i >= 0; i--) {
+                StructureComponent candidate = selection[i];
+                if (CanUse(candidate))
+                    continue;
+                lostName ??= candidate != null ? candidate.DisplayName : "Building";
+                selection.RemoveAt(i);
+            }
+
+            if (lostName != null) {
+                bool emptied = selection.Count == 0;
+                OnSelectionChanged(reopenMenu: false);
+                if (emptied)
+                    hud.SetHint($"{lostName} destroyed");
+                return !emptied;
             }
 
             if (Time.unscaledTime >= nextRefreshTime)
@@ -229,8 +294,11 @@ namespace Universes.UniverseData.war_valley.Client {
 
             SelectionInfoPanel panel = hud.StructurePanel;
             if (panel != null) {
-                panel.Show(BuildHeader());
-                BuildStats();
+                panel.Show(selection.Count == 1 ? BuildHeader() : BuildGroupHeader());
+                if (selection.Count == 1)
+                    BuildStats();
+                else
+                    BuildGroupStats();
                 panel.SetStats(stats);
                 BuildActions();
                 panel.SetActions(actions);
@@ -247,6 +315,9 @@ namespace Universes.UniverseData.war_valley.Client {
                     : "Nothing left to research");
             }
         }
+
+        string GroupName() =>
+            productionGroup.Count > 1 ? $"{productionGroup.Count} {structure.DisplayName}s" : structure.DisplayName;
 
         // --- Header -------------------------------------------------------------
 
@@ -270,18 +341,42 @@ namespace Universes.UniverseData.war_valley.Client {
                                 WV_Rules.FormatCountdown(production.CurrentItemSecondsRemaining);
                 header.StatusProgress = production.CurrentItemProgress;
             } else if (researchStation != null) {
-                int running = WV_Research.Instance != null ? WV_Research.Instance.CountResearching(LocalSide) : 0;
-                header.Status = running > 0
-                    ? $"Researching {running} project{(running == 1 ? string.Empty : "s")}"
-                    : "Idle - right-click to research";
+                header.Status = researchStation.Owned.IsOwnedBy(LocalClientId)
+                    ? "Speeding up your research"
+                    : "Speeds up its owner's research";
             } else if (production != null) {
-                header.Status = "Idle - right-click to train";
+                header.Status = "Idle";
             } else if (income != null) {
                 header.Status = $"Earning +{income.IncomePerMinute}/min";
             } else if (turret != null) {
                 header.Status = "Guarding";
             }
             return header;
+        }
+
+        /// <summary>The header for several buildings: what they are, whose, and their combined health.</summary>
+        SelectionHeader BuildGroupHeader() {
+            long health = 0;
+            long maxHealth = 0;
+            bool allMine = true;
+            bool sameKind = true;
+            foreach (StructureComponent member in selection) {
+                health += member.Health.Value;
+                maxHealth += member.MaxHealth.Value;
+                allMine &= member.TryGetComponent(out WV_Owned memberOwned) && memberOwned.IsOwnedBy(LocalClientId);
+                sameKind &= member.StructureID == structure.StructureID;
+            }
+
+            return new SelectionHeader {
+                Title = sameKind ? $"{selection.Count} x {structure.DisplayName}" : $"{selection.Count} buildings",
+                Subtitle = allMine ? "All yours" : "Yours and your allies'",
+                Icon = sameKind ? structure.Sprite : null,
+                Accent = allMine ? WV_Rules.GetCommanderUIColor(LocalClientId) : new Color(0f, 0f, 0f, 0f),
+                Health = health,
+                MaxHealth = maxHealth,
+                StatusProgress = -1f,
+                Status = productionGroup.Count > 1 ? $"{productionGroup.Count} producing together" : null
+            };
         }
 
         string BuildOwnerLine(int ownerId) {
@@ -297,8 +392,6 @@ namespace Universes.UniverseData.war_valley.Client {
                 ? player.GetPlayerName()
                 : "Departed commander";
 
-        TeamColor LocalSide => WV_Permissions.GetSide(LocalClientId);
-
         // --- Stats --------------------------------------------------------------
 
         void BuildStats() {
@@ -313,11 +406,12 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             if (researchStation != null) {
-                TeamColor side = LocalSide;
-                float sideRate = WV_ResearchBuilding.GetResearchRate(side);
-                int stations = WV_ResearchBuilding.CountOperational(side);
+                int ownerId = researchStation.Owned.OwnerClientId;
+                float rate = WV_ResearchBuilding.GetResearchRate(ownerId);
+                int stations = WV_ResearchBuilding.CountOperational(ownerId);
                 stats.Add(new CommandStat("Station speed", $"+{researchStation.ResearchRate:0.#}"));
-                stats.Add(new CommandStat("Side research", $"{sideRate:0.#}x from {stations} station{(stations == 1 ? string.Empty : "s")}"));
+                stats.Add(new CommandStat(ownerId == LocalClientId ? "Your research" : "Owner's research",
+                    $"{rate:0.#}x from {stations} station{(stations == 1 ? string.Empty : "s")}"));
             }
 
             if (turret != null) {
@@ -327,6 +421,24 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             stats.Add(new CommandStat("Build cost", MathHelper.AddCommas(structure.Cost)));
+        }
+
+        /// <summary>For several buildings: how many of each kind, and what they earn together.</summary>
+        void BuildGroupStats() {
+            stats.Clear();
+            kindCounts.Clear();
+            int incomePerMinute = 0;
+            foreach (StructureComponent member in selection) {
+                kindCounts.TryGetValue(member.DisplayName, out int existing);
+                kindCounts[member.DisplayName] = existing + 1;
+                if (member.TryGetComponent(out WV_IncomeBuilding memberIncome) && memberIncome.IsPaying)
+                    incomePerMinute += memberIncome.IncomePerMinute;
+            }
+
+            foreach (KeyValuePair<string, int> entry in kindCounts)
+                stats.Add(new CommandStat(entry.Key, $"x{entry.Value}"));
+            if (incomePerMinute > 0)
+                stats.Add(new CommandStat("Combined income", $"+{incomePerMinute}/min"));
         }
 
         string BuildProducibleList() {
@@ -351,43 +463,55 @@ namespace Universes.UniverseData.war_valley.Client {
         void BuildActions() {
             actions.Clear();
 
-            if (production != null) {
+            if (production != null || researchStation != null) {
                 actions.Add(new CommandAction {
-                    Id = ActionId.OpenProduction,
-                    Label = production.TrainsTroops ? "Train" : "Build",
+                    Id = ActionId.OpenMenu,
+                    Label = researchStation != null ? "Research" : production.TrainsTroops ? "Train" : "Build",
                     Interactable = true,
-                    Tooltip = "Open this building's menu. Right-clicking the building does the same."
+                    Tooltip = "Reopen the menu. It also opens whenever you select the building."
                 });
+            }
+
+            if (productionGroup.Count > 0) {
                 actions.Add(new CommandAction {
                     Id = ActionId.SetRally,
                     Label = "Set Rally",
                     Interactable = true,
-                    Tooltip = "Then click the ground where new units should gather."
+                    Tooltip = productionGroup.Count > 1
+                        ? $"Then click the ground where units from all {productionGroup.Count} should gather."
+                        : "Then click the ground where new units should gather."
                 });
             }
 
-            if (researchStation != null) {
-                actions.Add(new CommandAction {
-                    Id = ActionId.OpenResearch,
-                    Label = "Research",
-                    Interactable = true,
-                    Tooltip = "Open the research menu. Right-clicking the station does the same."
-                });
+            int demolishable = 0;
+            long refund = 0;
+            foreach (StructureComponent member in selection) {
+                if (!member.TryGetComponent(out WV_Owned memberOwned) || !WV_Permissions.CanManage(LocalClientId, memberOwned))
+                    continue;
+                demolishable++;
+                refund += GetDemolishRefund(member);
             }
 
-            bool canManage = WV_Permissions.CanManage(LocalClientId, owned);
-            bool operational = constructable == null || constructable.IsOperational;
-            long refund = WV_Rules.GetDemolishRefund(structure.Cost, operational);
             actions.Add(new CommandAction {
                 Id = ActionId.Demolish,
-                Label = "Demolish",
-                Interactable = canManage,
+                Label = demolishable > 1 ? $"Demolish {demolishable}" : "Demolish",
+                Interactable = demolishable > 0,
                 Destructive = true,
                 ConfirmLabel = "Confirm?",
-                Tooltip = canManage
-                    ? $"Tear it down and recover {MathHelper.AddCommas(refund)}. Anything queued is refunded to whoever paid."
-                    : "Only the commander who built this can demolish it."
+                Tooltip = demolishable > 0
+                    ? $"Tear down {(demolishable > 1 ? $"the {demolishable} you own" : "it")} and recover " +
+                      $"{MathHelper.AddCommas(refund)}. Damage reduces the refund. Anything queued is " +
+                      "refunded to whoever paid."
+                    : "Only the commander who built a building can demolish it."
             });
+        }
+
+        /// <summary>The same figure the server will pay: part of the price, scaled by how intact it is.</summary>
+        static long GetDemolishRefund(StructureComponent member) {
+            if (!member.TryGetComponent(out WV_Constructable memberConstructable))
+                return 0;
+            return WV_Rules.GetDemolishRefund(
+                member.Cost, memberConstructable.IsOperational, memberConstructable.Integrity);
         }
 
         void HandleAction(int id) {
@@ -395,18 +519,25 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
 
             switch (id) {
-                case ActionId.OpenProduction:
-                case ActionId.OpenResearch:
-                    OpenMenu(structure);
+                case ActionId.OpenMenu:
+                    OpenMenu();
+                    Refresh();
                     break;
                 case ActionId.SetRally:
                     armRallyPoint?.Invoke();
                     break;
                 case ActionId.Demolish:
-                    InstanceFinder.ClientManager.Broadcast(new WV_DemolishRequest {
-                        buildingObjectId = structure.NetworkObject.ObjectId
-                    });
-                    hud.SetHint($"Demolishing {structure.DisplayName}");
+                    int sent = 0;
+                    foreach (StructureComponent member in selection) {
+                        if (!member.TryGetComponent(out WV_Owned memberOwned)
+                            || !WV_Permissions.CanManage(LocalClientId, memberOwned))
+                            continue;
+                        InstanceFinder.ClientManager.Broadcast(new WV_DemolishRequest {
+                            buildingObjectId = member.NetworkObject.ObjectId
+                        });
+                        sent++;
+                    }
+                    hud.SetHint(sent > 1 ? $"Demolishing {sent} buildings" : $"Demolishing {structure.DisplayName}");
                     break;
             }
         }
@@ -418,32 +549,40 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
 
             queueEntries.Clear();
+            queuedProduction.Clear();
             queuedResearch.Clear();
 
-            if (production != null) {
+            if (productionGroup.Count > 0) {
                 strip.SetVisible(true);
-                BuildProductionQueue();
-                strip.SetEntries(queueEntries, $"Queue  {production.QueueLength}/{production.MaxQueueLength}", "Queue empty");
+                int length = 0;
+                int capacity = 0;
+                foreach (WV_ProductionBuilding building in productionGroup) {
+                    BuildProductionQueue(building);
+                    length += building.QueueLength;
+                    capacity += building.MaxQueueLength;
+                }
+                strip.SetEntries(queueEntries, $"Queue  {length}/{capacity}", "Queue empty");
             } else if (researchStation != null) {
                 strip.SetVisible(true);
                 BuildResearchQueue();
-                strip.SetEntries(queueEntries, "Research in progress", "No research running");
+                strip.SetEntries(queueEntries, "Your research in progress", "No research running");
             } else {
                 strip.SetVisible(false);
             }
         }
 
-        void BuildProductionQueue() {
-            bool canCancel = WV_Permissions.CanManage(LocalClientId, owned);
-            for (int i = 0; i < production.QueueLength; i++) {
-                WV_ProductionItem item = production.GetQueuedItem(i);
-                int payer = production.GetQueuedPayer(i);
+        void BuildProductionQueue(WV_ProductionBuilding building) {
+            bool canCancel = WV_Permissions.CanManage(LocalClientId, building.Owned);
+            for (int i = 0; i < building.QueueLength; i++) {
+                WV_ProductionItem item = building.GetQueuedItem(i);
+                int payer = building.GetQueuedPayer(i);
                 string payerName = payer == LocalClientId ? "you" : GetCommanderName(payer);
+                queuedProduction.Add((building, i));
                 queueEntries.Add(new CommandQueueEntry {
-                    Icon = GetItemIcon(item),
+                    Icon = GetItemIcon(building, item),
                     Title = item.DisplayName,
-                    Progress = i == 0 ? production.CurrentItemProgress : -1f,
-                    TimeText = i == 0 ? WV_Rules.FormatCountdown(production.CurrentItemSecondsRemaining) : string.Empty,
+                    Progress = i == 0 ? building.CurrentItemProgress : -1f,
+                    TimeText = i == 0 ? WV_Rules.FormatCountdown(building.CurrentItemSecondsRemaining) : string.Empty,
                     CanCancel = canCancel,
                     Accent = WV_Rules.GetCommanderUIColor(payer),
                     Tooltip = canCancel
@@ -458,40 +597,38 @@ namespace Universes.UniverseData.war_valley.Client {
             if (research == null)
                 return;
 
-            TeamColor side = LocalSide;
+            int clientId = LocalClientId;
             foreach (WV_TechDefinition definition in WV_TechTree.All) {
-                if (research.GetPhase(side, definition.Tech) != WV_ResearchPhase.Researching)
+                if (research.GetPhase(clientId, definition.Tech) != WV_ResearchPhase.Researching)
                     continue;
 
-                int starter = research.GetStarter(side, definition.Tech);
-                bool mine = starter == LocalClientId;
-                float remaining = research.GetSecondsRemaining(side, definition.Tech);
+                float remaining = research.GetSecondsRemaining(clientId, definition.Tech);
                 queuedResearch.Add(definition.Tech);
                 queueEntries.Add(new CommandQueueEntry {
                     Icon = GetTechIcon(definition),
                     Title = definition.DisplayName,
-                    Progress = research.GetProgress(side, definition.Tech),
+                    Progress = research.GetProgress(clientId, definition.Tech),
                     TimeText = remaining < 0f ? "Stalled" : WV_Rules.FormatCountdown(remaining),
-                    CanCancel = mine,
-                    Accent = WV_Rules.GetCommanderUIColor(starter),
-                    Tooltip = mine
-                        ? $"{definition.DisplayName}. Cancel to get your {MathHelper.AddCommas(definition.Cost)} back."
-                        : $"{definition.DisplayName}, started by {GetCommanderName(starter)}. Only they can cancel it."
+                    CanCancel = true,
+                    Accent = WV_Rules.GetCommanderUIColor(clientId),
+                    Tooltip = $"{definition.DisplayName}. Cancel to get your " +
+                              $"{MathHelper.AddCommas(research.GetPaid(clientId, definition.Tech))} back."
                 });
             }
         }
 
         void HandleQueueCancel(int index) {
-            if (structure == null)
+            if (structure == null || InstanceFinder.ClientManager == null)
                 return;
 
-            if (production != null) {
-                if (index < 0 || index >= production.QueueLength)
+            if (index >= 0 && index < queuedProduction.Count) {
+                (WV_ProductionBuilding building, int slot) = queuedProduction[index];
+                if (building == null || slot >= building.QueueLength)
                     return;
                 InstanceFinder.ClientManager.Broadcast(new WV_QueueCancelRequest {
-                    buildingObjectId = structure.NetworkObject.ObjectId,
-                    queueIndex = index,
-                    item = production.GetQueuedItem(index).Encoded
+                    buildingObjectId = building.NetworkObject.ObjectId,
+                    queueIndex = slot,
+                    item = building.GetQueuedItem(slot).Encoded
                 });
                 return;
             }
@@ -525,13 +662,14 @@ namespace Universes.UniverseData.war_valley.Client {
             int count = 0;
             WV_Economy economy = WV_Economy.Instance;
             WV_Research research = WV_Research.Instance;
-            TeamColor side = LocalSide;
-            bool operational = production.IsOperational;
+            bool anyOperational = false;
+            foreach (WV_ProductionBuilding building in productionGroup)
+                anyOperational |= building.IsOperational;
 
             foreach (WV_TroopKind kind in production.ProducibleTroops) {
                 WV_ProductionItem item = WV_ProductionItem.Troop(kind);
                 FillProductionOption(NextOption(count++), item, "Infantry", WV_Rules.GetTroopDescription(kind),
-                    GetItemIcon(item), economy, research, side, operational);
+                    GetItemIcon(production, item), economy, research, anyOperational);
             }
 
             foreach (WV_Unit unit in production.ProducibleUnits) {
@@ -539,7 +677,7 @@ namespace Universes.UniverseData.war_valley.Client {
                     continue;
                 WV_ProductionItem item = WV_ProductionItem.Unit(unit.Kind);
                 FillProductionOption(NextOption(count++), item, unit.IsAircraft ? "Air" : "Ground",
-                    DescribeUnit(unit), unit.Icon, economy, research, side, operational);
+                    DescribeUnit(unit), unit.Icon, economy, research, anyOperational);
             }
 
             TrimOptions(count);
@@ -547,10 +685,15 @@ namespace Universes.UniverseData.war_valley.Client {
 
         void FillProductionOption(
             CommandOption option, WV_ProductionItem item, string role, string description, Sprite icon,
-            WV_Economy economy, WV_Research research, TeamColor side, bool operational) {
+            WV_Economy economy, WV_Research research, bool operational) {
             int cost = production.GetCost(item);
             WV_Tech required = WV_TechTree.GetRequirement(item);
-            bool unlocked = required == WV_Tech.None || (research != null && research.IsResearched(side, required));
+            bool unlocked = required == WV_Tech.None
+                || (research != null && research.IsResearched(LocalClientId, required));
+
+            int queued = 0;
+            foreach (WV_ProductionBuilding building in productionGroup)
+                queued += building.CountQueued(item);
 
             option.Id = item.Encoded;
             option.Title = item.DisplayName;
@@ -560,7 +703,7 @@ namespace Universes.UniverseData.war_valley.Client {
             option.Cost = cost;
             option.Seconds = production.GetBuildSeconds(item);
             option.Progress = -1f;
-            option.Count = production.CountQueued(item);
+            option.Count = queued;
 
             if (!operational) {
                 option.State = CommandOptionState.Locked;
@@ -583,11 +726,11 @@ namespace Universes.UniverseData.war_valley.Client {
         void BuildResearchOptions() {
             WV_Research research = WV_Research.Instance;
             WV_Economy economy = WV_Economy.Instance;
-            TeamColor side = LocalSide;
-            float sideRate = WV_ResearchBuilding.GetResearchRate(side);
-            int running = research != null ? research.CountResearching(side) : 0;
+            int clientId = LocalClientId;
+            float rate = WV_ResearchBuilding.GetResearchRate(clientId);
+            int running = research != null ? research.CountResearching(clientId) : 0;
             // What a newly started project would get: an equal share with everything already running.
-            float newProjectRate = WV_TechTree.GetProjectRate(sideRate, running + 1);
+            float newProjectRate = WV_TechTree.GetProjectRate(rate, running + 1);
 
             int count = 0;
             foreach (WV_TechDefinition definition in WV_TechTree.All) {
@@ -602,25 +745,25 @@ namespace Universes.UniverseData.war_valley.Client {
                 option.Progress = -1f;
                 option.Count = 0;
 
-                WV_ResearchPhase phase = research != null ? research.GetPhase(side, definition.Tech) : WV_ResearchPhase.None;
+                WV_ResearchPhase phase = research != null ? research.GetPhase(clientId, definition.Tech) : WV_ResearchPhase.None;
                 if (phase == WV_ResearchPhase.Complete) {
                     option.State = CommandOptionState.Done;
                     option.StateText = "Researched";
                 } else if (phase == WV_ResearchPhase.Researching) {
-                    float progress = research.GetProgress(side, definition.Tech);
-                    float remaining = research.GetSecondsRemaining(side, definition.Tech);
+                    float progress = research.GetProgress(clientId, definition.Tech);
+                    float remaining = research.GetSecondsRemaining(clientId, definition.Tech);
                     option.State = CommandOptionState.InProgress;
                     option.Progress = progress;
                     option.StateText = remaining < 0f
                         ? $"Stalled at {progress:P0} - no working station"
                         : $"{progress:P0} - {WV_Rules.FormatCountdown(remaining)}";
-                } else if (research == null || !research.ArePrerequisitesMet(side, definition)) {
+                } else if (research == null || !research.ArePrerequisitesMet(clientId, definition)) {
                     option.State = CommandOptionState.Locked;
                     option.StateText = "Needs earlier research";
-                } else if (sideRate <= 0f) {
+                } else if (rate <= 0f) {
                     option.State = CommandOptionState.Locked;
-                    option.StateText = "Station not finished";
-                } else if (economy != null && !economy.CanAfford(LocalClientId, definition.Cost)) {
+                    option.StateText = "Needs a finished research station of your own";
+                } else if (economy != null && !economy.CanAfford(clientId, definition.Cost)) {
                     option.State = CommandOptionState.Unaffordable;
                     option.StateText = null;
                 } else {
@@ -636,7 +779,7 @@ namespace Universes.UniverseData.war_valley.Client {
             builder.Clear();
             builder.Append(definition.Description);
             builder.Append("\nTakes ").Append(WV_Rules.FormatCountdown(definition.ResearchSeconds))
-                .Append(" with one station. Every extra station adds speed; projects running together share it.");
+                .Append(" with one station. Each station you own adds speed; your projects running together share it.");
             return builder.ToString();
         }
 
@@ -644,11 +787,11 @@ namespace Universes.UniverseData.war_valley.Client {
             if (structure == null || InstanceFinder.ClientManager == null)
                 return;
 
-            if (menu == MenuKind.Production && production != null) {
+            if (menu == MenuKind.Production && productionGroup.Count > 0) {
                 // The server re-checks funds, research, queue length, and the squad cap, and answers
                 // either way; the card only greys out what is certain to be refused.
                 InstanceFinder.ClientManager.Broadcast(new WV_ProductionRequest {
-                    buildingObjectId = structure.NetworkObject.ObjectId,
+                    buildingObjectId = PickProducer(WV_ProductionItem.Decode((byte)id)).NetworkObject.ObjectId,
                     unitKind = (byte)id,
                     cancel = false
                 });
@@ -661,12 +804,30 @@ namespace Universes.UniverseData.war_valley.Client {
             }
         }
 
+        /// <summary>
+        /// The building in the group that should take the next order: a finished one with room in its
+        /// queue, preferring the shortest queue so a group of barracks trains in parallel.
+        /// </summary>
+        WV_ProductionBuilding PickProducer(WV_ProductionItem item) {
+            WV_ProductionBuilding best = production;
+            int bestLength = int.MaxValue;
+            foreach (WV_ProductionBuilding building in productionGroup) {
+                if (!building.IsOperational || !building.CanProduce(item) || building.QueueLength >= building.MaxQueueLength)
+                    continue;
+                if (building.QueueLength < bestLength) {
+                    bestLength = building.QueueLength;
+                    best = building;
+                }
+            }
+            return best;
+        }
+
         // --- Icons --------------------------------------------------------------
 
-        Sprite GetItemIcon(WV_ProductionItem item) {
+        Sprite GetItemIcon(WV_ProductionBuilding building, WV_ProductionItem item) {
             if (item.IsTroop)
                 return hud.GetTroopIcon(item.TroopKind);
-            WV_Unit prefab = production != null ? production.FindPrefab(item.UnitKind) : null;
+            WV_Unit prefab = building != null ? building.FindPrefab(item.UnitKind) : null;
             return prefab != null ? prefab.Icon : null;
         }
 

@@ -50,14 +50,22 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         public bool IsOwnedBy(int clientId) => clientId != NoOwner && ownerClientId.Value == clientId;
 
+        /// <summary>
+        /// True between network start and stop. A placement preview is an unspawned copy of the
+        /// prefab, and presentation keyed to ownership leaves it alone.
+        /// </summary>
+        public bool IsLive { get; private set; }
+
         public override void OnStartNetwork() {
             base.OnStartNetwork();
+            IsLive = true;
             all.Add(this);
             ownerClientId.OnChange += HandleOwnerChanged;
             OwnerChanged?.Invoke(ownerClientId.Value);
         }
 
         public override void OnStopNetwork() {
+            IsLive = false;
             ownerClientId.OnChange -= HandleOwnerChanged;
             all.Remove(this);
             base.OnStopNetwork();
