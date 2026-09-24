@@ -127,6 +127,8 @@ namespace Universes.UniverseData.war_valley.Server {
             // The troop fights on its commander's team and, through the display half of that team,
             // carries their colour - the same colour their buildings and their own name already use.
             character.SetTeam(team ?? WV_Permissions.GetCommanderTeam(clientId));
+            // A commander's troops walk through their side's gates, never through its walls.
+            WV_NavAreas.Apply(npc.agent, character.GetTeam());
             character.DisplayName = WV_Rules.GetTroopDisplayName(kind);
 
             // The robot body ships with a material variant per team colour, replicated by the

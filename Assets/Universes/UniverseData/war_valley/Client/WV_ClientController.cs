@@ -700,8 +700,10 @@ namespace Universes.UniverseData.war_valley.Client {
 
         void SelectAtPoint(Camera camera, Vector2 screenPosition, bool additive) {
             Ray ray = camera.ScreenPointToRay(screenPosition);
+            // Triggers count: a gate standing open turns its collider into one so players can walk
+            // through, and its owner still has to be able to click it to close it again.
             bool hitSomething = Physics.Raycast(
-                ray, out RaycastHit hit, float.MaxValue, WV_Combat.TargetMask, QueryTriggerInteraction.Ignore);
+                ray, out RaycastHit hit, float.MaxValue, WV_Combat.TargetMask, QueryTriggerInteraction.Collide);
 
             if (!hitSomething) {
                 if (!additive) {
@@ -1050,19 +1052,21 @@ namespace Universes.UniverseData.war_valley.Client {
             forcesSummary.Clear();
             AppendForce(WV_ForceCategory.Soldier, WV_Limits.CountUsed(clientId, WV_ForceCategory.Soldier, troops));
             forcesSummary.Append("  ");
+            AppendForce(WV_ForceCategory.Vehicle, WV_Limits.CountUsed(clientId, WV_ForceCategory.Vehicle, troops));
+            forcesSummary.Append("  ");
             AppendForce(WV_ForceCategory.Aircraft, WV_Limits.CountUsed(clientId, WV_ForceCategory.Aircraft, troops));
             forcesSummary.Append("  ");
             AppendForce(WV_ForceCategory.Building, WV_Limits.CountUsed(clientId, WV_ForceCategory.Building, troops));
             hud.SetForces(forcesSummary.ToString());
         }
 
-        /// <summary>One "Soldiers 5/20" entry, drawn in the warning colour once the limit is reached.</summary>
+        /// <summary>One "Troops 5/20" entry, drawn in the warning colour once the limit is reached.</summary>
         void AppendForce(WV_ForceCategory category, int used) {
             int limit = WV_Limits.GetLimit(category);
             bool full = used >= limit;
             if (full)
                 forcesSummary.Append("<color=#FFB85A>");
-            forcesSummary.Append(WV_Limits.GetDisplayName(category)).Append(' ').Append(used).Append('/').Append(limit);
+            forcesSummary.Append(WV_Limits.GetShortName(category)).Append(' ').Append(used).Append('/').Append(limit);
             if (full)
                 forcesSummary.Append("</color>");
         }

@@ -45,14 +45,17 @@ namespace Universes.UniverseData.war_valley.Tests {
         [Test]
         public void Limits_MatchThePerPlayerCaps() {
             Assert.That(WV_Limits.GetLimit(WV_ForceCategory.Soldier), Is.EqualTo(20));
+            Assert.That(WV_Limits.GetLimit(WV_ForceCategory.Vehicle), Is.EqualTo(10));
             Assert.That(WV_Limits.GetLimit(WV_ForceCategory.Aircraft), Is.EqualTo(10));
             Assert.That(WV_Limits.GetLimit(WV_ForceCategory.Building), Is.EqualTo(50));
         }
 
         [Test]
-        public void Limits_CountTroopsAndGroundVehiclesAsSoldiersAndAircraftApart() {
+        public void Limits_CountTroopsVehiclesAndAircraftSeparately() {
             Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Troop(WV_TroopKind.Gunner)), Is.EqualTo(WV_ForceCategory.Soldier));
-            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Tank)), Is.EqualTo(WV_ForceCategory.Soldier));
+            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Tank)), Is.EqualTo(WV_ForceCategory.Vehicle));
+            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.APC)), Is.EqualTo(WV_ForceCategory.Vehicle));
+            Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Artillery)), Is.EqualTo(WV_ForceCategory.Vehicle));
             Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Chopper)), Is.EqualTo(WV_ForceCategory.Aircraft));
             Assert.That(WV_Limits.GetCategory(WV_ProductionItem.Unit(WV_UnitKind.Jet)), Is.EqualTo(WV_ForceCategory.Aircraft));
         }
@@ -65,6 +68,22 @@ namespace Universes.UniverseData.war_valley.Tests {
             Assert.That(enemies[WV_Alliances.Invaders], Does.Contain(WV_Alliances.Defenders));
             Assert.That(enemies[WV_Alliances.Defenders], Does.Contain(WV_Alliances.Invaders));
             Assert.That(enemies[WV_Alliances.Defenders], Does.Not.Contain(WV_Alliances.Defenders));
+        }
+
+        [Test]
+        public void ShieldGenerator_IsLockedBehindShieldTechnology() {
+            Assert.That(WV_TechTree.GetRequirement(WV_Rules.ShieldGeneratorId), Is.EqualTo(WV_Tech.ShieldTechnology));
+            Assert.That(WV_TechTree.GetRequirement(WV_Rules.GateId), Is.EqualTo(WV_Tech.None));
+        }
+
+        [Test]
+        public void NavAreas_GiveEachSideOnlyItsOwnRouteThroughWalls() {
+            int defenders = WV_NavAreas.GetAreaMask(WV_Alliances.Defenders);
+            int invaders = WV_NavAreas.GetAreaMask(WV_Alliances.Invaders);
+            Assert.That(defenders & (1 << WV_NavAreas.GatePassage), Is.Not.Zero);
+            Assert.That(defenders & (1 << WV_NavAreas.Breach), Is.Zero);
+            Assert.That(invaders & (1 << WV_NavAreas.Breach), Is.Not.Zero);
+            Assert.That(invaders & (1 << WV_NavAreas.GatePassage), Is.Zero);
         }
     }
 }

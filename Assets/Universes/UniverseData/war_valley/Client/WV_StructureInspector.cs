@@ -42,6 +42,9 @@ namespace Universes.UniverseData.war_valley.Client {
             public const int OpenMenu = 1;
             public const int SetRally = 2;
             public const int Demolish = 3;
+            public const int GateAuto = 4;
+            public const int GateHoldOpen = 5;
+            public const int GateLock = 6;
         }
 
         /// <summary>How often a shown panel redraws on its own, for countdowns and progress bars.</summary>
@@ -77,6 +80,8 @@ namespace Universes.UniverseData.war_valley.Client {
         WV_ResearchBuilding researchStation;
         WV_IncomeBuilding income;
         WV_DefenseTurret turret;
+        WV_Gate gate;
+        WV_ShieldBarrier shield;
 
         MenuKind menu;
         float nextRefreshTime;
@@ -216,6 +221,8 @@ namespace Universes.UniverseData.war_valley.Client {
             researchStation = primary != null ? primary.GetComponent<WV_ResearchBuilding>() : null;
             income = primary != null ? primary.GetComponent<WV_IncomeBuilding>() : null;
             turret = primary != null ? primary.GetComponent<WV_DefenseTurret>() : null;
+            gate = primary != null ? primary.GetComponent<WV_Gate>() : null;
+            shield = primary != null ? primary.GetComponentInChildren<WV_ShieldBarrier>(true) : null;
 
             productionGroup.Clear();
             if (production == null)
@@ -353,6 +360,14 @@ namespace Universes.UniverseData.war_valley.Client {
                 header.Status = $"Earning +{income.IncomePerMinute}/min";
             } else if (turret != null) {
                 header.Status = "Guarding";
+            } else if (gate != null) {
+                header.Status = $"{(gate.IsOpen ? "Open" : "Closed")} - {DescribeGateMode(gate.Mode)}";
+            } else if (shield != null) {
+                header.Status = shield.IsUp
+                    ? $"Shield up - {MathHelper.AddCommas(shield.Health.Value)} / {MathHelper.AddCommas(shield.MaxHealth.Value)}"
+                    : $"Shield down - back in {WV_Rules.FormatCountdown(shield.SecondsUntilRestored)}";
+                if (shield.IsUp && shield.MaxHealth.Value > 0)
+                    header.StatusProgress = shield.Health.Value / (float)shield.MaxHealth.Value;
             }
             return header;
         }
@@ -423,8 +438,23 @@ namespace Universes.UniverseData.war_valley.Client {
                 stats.Add(new CommandStat("Damage", $"{turret.Damage} every {turret.Cooldown:0.#}s"));
             }
 
+            if (gate != null)
+                stats.Add(new CommandStat("Gate", DescribeGateMode(gate.Mode)));
+
+            if (shield != null) {
+                stats.Add(new CommandStat("Shield radius", $"{shield.Radius:0}m"));
+                stats.Add(new CommandStat("Shield strength", MathHelper.AddCommas(shield.MaxHealth.Value)));
+                stats.Add(new CommandStat("Recharge", $"{shield.RegenerationSeconds:0}s after breaking"));
+            }
+
             stats.Add(new CommandStat("Build cost", MathHelper.AddCommas(structure.Cost)));
         }
+
+        static string DescribeGateMode(WV_GateMode mode) => mode switch {
+            WV_GateMode.HeldOpen => "Held open for everyone",
+            WV_GateMode.Locked => "Locked",
+            _ => "Opens for allies"
+        };
 
         /// <summary>For several buildings: how many of each kind, and what they earn together.</summary>
         void BuildGroupStats() {
@@ -486,6 +516,15 @@ namespace Universes.UniverseData.war_valley.Client {
                 });
             }
 
+            if (gate != null && gate.Owned != null && WV_Permissions.CanManage(LocalClientId, gate.Owned)) {
+                AddGateAction(ActionId.GateAuto, "Auto", WV_GateMode.Auto,
+                    "Opens by itself for allied players, and for your side's troops and vehicles when their route needs it.");
+                AddGateAction(ActionId.GateHoldOpen, "Hold Open", WV_GateMode.HeldOpen,
+                    "Stays open for everyone - the waves included - until you change it.");
+                AddGateAction(ActionId.GateLock, "Lock", WV_GateMode.Locked,
+                    "Stays shut, even for allies. Their troops and vehicles go around; with no other way, they wait.");
+            }
+
             int demolishable = 0;
             long refund = 0;
             foreach (StructureComponent member in selection) {
@@ -509,6 +548,29 @@ namespace Universes.UniverseData.war_valley.Client {
             });
         }
 
+        void AddGateAction(int id, string label, WV_GateMode mode, string tooltip) {
+            actions.Add(new CommandAction {
+                Id = id,
+                Label = label,
+                Interactable = gate.Mode != mode,
+                Tooltip = tooltip
+            });
+        }
+
+        /// <summary>Sets every selected gate the local commander owns to <paramref name="mode"/>.</summary>
+        void SetGateMode(WV_GateMode mode) {
+            foreach (StructureComponent member in selection) {
+                if (!member.TryGetComponent(out WV_Gate memberGate)
+                    || !WV_Permissions.CanManage(LocalClientId, memberGate.Owned))
+                    continue;
+                InstanceFinder.ClientManager.Broadcast(new WV_GateModeRequest {
+                    gateObjectId = member.NetworkObject.ObjectId,
+                    mode = (byte)mode
+                });
+            }
+            hud.SetHint($"Gate: {DescribeGateMode(mode)}");
+        }
+
         /// <summary>The same figure the server will pay: part of the price, trimmed by damage.</summary>
         static long GetSellRefund(StructureComponent member) {
             float condition = member.TryGetComponent(out WV_Constructable memberConstructable)
@@ -528,6 +590,15 @@ namespace Universes.UniverseData.war_valley.Client {
                     break;
                 case ActionId.SetRally:
                     armRallyPoint?.Invoke();
+                    break;
+                case ActionId.GateAuto:
+                    SetGateMode(WV_GateMode.Auto);
+                    break;
+                case ActionId.GateHoldOpen:
+                    SetGateMode(WV_GateMode.HeldOpen);
+                    break;
+                case ActionId.GateLock:
+                    SetGateMode(WV_GateMode.Locked);
                     break;
                 case ActionId.Demolish:
                     int sent = 0;

@@ -75,6 +75,13 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// agree on belongs here rather than being duplicated per structure.
     /// </summary>
     public static class WV_Rules {
+        /// <summary>
+        /// Structure ids the rules refer to by name: the research lock and the connected-shield
+        /// placement rule both key on the shield generator.
+        /// </summary>
+        public const string ShieldGeneratorId = "wv_shield_generator";
+        public const string GateId = "wv_gate";
+
         /// <summary>Funds every player starts a round with, enough for one mineshaft plus a barracks.</summary>
         public const long StartingFunds = 900;
 

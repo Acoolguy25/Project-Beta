@@ -10,7 +10,9 @@ namespace Universes.UniverseData.war_valley.Shared {
     public enum WV_Tech : byte {
         None = 0,
         /// <summary>Helicopter flight: unlocks the helipad and the attack chopper it launches.</summary>
-        RotaryAviation = 1
+        RotaryAviation = 1,
+        /// <summary>Energy shields: unlocks the shield generator.</summary>
+        ShieldTechnology = 2
     }
 
     /// <summary>
@@ -67,7 +69,12 @@ namespace Universes.UniverseData.war_valley.Shared {
                 "Helicopter flight. Unlocks the Helipad and the attack Chopper it launches.",
                 cost: 500, researchSeconds: 60f,
                 unlockedStructureIds: new[] { "wv_helipad" },
-                unlockedUnits: new[] { WV_UnitKind.Chopper })
+                unlockedUnits: new[] { WV_UnitKind.Chopper }),
+            new(WV_Tech.ShieldTechnology, "Shield Technology", "Defense",
+                "Energy shields. Unlocks the Shield Generator, which raises a shield enemies must " +
+                "break before they can hurt anything inside it.",
+                cost: 900, researchSeconds: 75f,
+                unlockedStructureIds: new[] { WV_Rules.ShieldGeneratorId })
         };
 
         public static IReadOnlyList<WV_TechDefinition> All => definitions;

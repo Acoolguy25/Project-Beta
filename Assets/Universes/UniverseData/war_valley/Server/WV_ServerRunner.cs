@@ -261,6 +261,8 @@ namespace Universes.UniverseData.war_valley.Server
             LocalNPC npc = ServerNPC.SpawnNPC(prefab, location: spawnLocation);
             GameCharacter character = npc.GetComponent<GameCharacter>();
             character.SetTeam(new TeamConfig(WV_Alliances.GetWaveSide()));
+            // Waves may break through walls and gates but never use a gate's own passage.
+            WV_NavAreas.Apply(npc.agent, character.GetTeam());
             // The weapon half is attached before the brain so the loadout is settled before either
             // component's first frame.
             WV_NpcCombat.Attach(npc.gameObject, GetNpcLoadout(npcType));

@@ -71,7 +71,8 @@ namespace RyanAssets.Shared.Component {
                     && entity != null
                     && sourceEntity.Team.realTeam == entity.Team.realTeam
                     && SharedGlobalEvents.Instance.TeamKillEnabled)
-                || IsEntityDead(sourceEntity);
+                || IsEntityDead(sourceEntity)
+                || DamageShields.IsShielded(entity, sourceEntity, damageType);
         }
 
         [Server]

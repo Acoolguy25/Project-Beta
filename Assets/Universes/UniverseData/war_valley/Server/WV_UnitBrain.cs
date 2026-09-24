@@ -18,6 +18,8 @@ namespace Universes.UniverseData.war_valley.Server {
         /// <summary>An idle unit chases an opportunistic target this far past its detection radius before giving up.</summary>
         const float IdleLeashMultiplier = 1.4f;
         const float RetargetInterval = 0.5f;
+        /// <summary>How long a line-of-sight answer is trusted before the ray is cast again.</summary>
+        const float LineOfSightInterval = 0.2f;
 
         static readonly List<WV_UnitBrain> all = new();
 
@@ -35,6 +37,9 @@ namespace Universes.UniverseData.war_valley.Server {
         IEntity currentTarget;
         float nextFireTime;
         float nextRetargetTime;
+        IEntity sightTarget;
+        bool hasSight;
+        float nextSightTime;
 
         public WV_Unit Unit => unit;
         public WV_OrderType CurrentOrder => order;
@@ -48,8 +53,11 @@ namespace Universes.UniverseData.war_valley.Server {
             WV_UnitMotor motor;
             if (unit.IsAircraft)
                 motor = go.AddComponent<WV_AircraftMotor>();
-            else if (go.GetComponent<NavMeshAgent>() != null)
+            else if (go.TryGetComponent(out NavMeshAgent agent)) {
+                // Gates open for their own side's vehicles; walls never do.
+                WV_NavAreas.Apply(agent, unit.Team);
                 motor = go.AddComponent<WV_GroundUnitMotor>();
+            }
             else {
                 Debug.LogError(
                     $"{go.name} ({unit.Kind}) is a ground unit with no NavMeshAgent, so it cannot move. " +
@@ -188,7 +196,7 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         void TickMove(bool engageOnTheWay) {
-            if (engageOnTheWay && currentTarget != null && !InAttackRange(currentTarget)) {
+            if (engageOnTheWay && currentTarget != null && !CanEngage(currentTarget)) {
                 // Close on the threat but keep the original destination, so the group resumes its
                 // advance once the fight in front of it is finished.
                 if (WV_Combat.TryGetPosition(currentTarget, out Vector3 targetPosition)) {
@@ -197,7 +205,7 @@ namespace Universes.UniverseData.war_valley.Server {
                 }
             }
 
-            if (engageOnTheWay && currentTarget != null && InAttackRange(currentTarget)) {
+            if (engageOnTheWay && currentTarget != null && CanEngage(currentTarget)) {
                 motor.Stop();
                 FaceCurrentTarget();
                 return;
@@ -217,12 +225,14 @@ namespace Universes.UniverseData.war_valley.Server {
             if (currentTarget == null || !WV_Combat.TryGetPosition(currentTarget, out Vector3 targetPosition))
                 return;
 
-            if (InAttackRange(currentTarget)) {
+            if (CanEngage(currentTarget)) {
                 motor.Stop();
                 FaceCurrentTarget();
                 return;
             }
 
+            // Out of range, or in range with a wall in the way: the NavMesh route closes on the
+            // target around the wall, and the shot is taken once the line is clear.
             MoveToward(targetPosition);
         }
 
@@ -232,7 +242,7 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
             }
 
-            if (InAttackRange(currentTarget)) {
+            if (CanEngage(currentTarget)) {
                 motor.Stop();
                 FaceCurrentTarget();
                 return;
@@ -277,8 +287,30 @@ namespace Universes.UniverseData.war_valley.Server {
                 ? WV_Combat.FlatDistanceTo(transform.position, target)
                 : WV_Combat.DistanceTo(transform.position, target)) <= unit.AttackRange;
 
+        /// <summary>
+        /// Ground weapons fire straight, so they cannot shoot through a wall, fence, or closed gate.
+        /// Aircraft fire down over them, and artillery lobs its shells over them.
+        /// </summary>
+        bool NeedsLineOfSight => !unit.IsAircraft && unit.Kind != WV_UnitKind.Artillery;
+
+        /// <summary>In range, and - for a ground weapon - with a clear line to the target.</summary>
+        bool CanEngage(IEntity target) {
+            if (!InAttackRange(target))
+                return false;
+            if (!NeedsLineOfSight)
+                return true;
+
+            float now = NetworkHelper.ServerTime;
+            if (target != sightTarget || now >= nextSightTime) {
+                sightTarget = target;
+                nextSightTime = now + LineOfSightInterval;
+                hasSight = WV_Combat.HasLineOfSight(unit.WeaponMuzzle.position, target, transform);
+            }
+            return hasSight;
+        }
+
         void TryFire() {
-            if (currentTarget == null || !InAttackRange(currentTarget))
+            if (currentTarget == null || !CanEngage(currentTarget))
                 return;
 
             float now = NetworkHelper.ServerTime;

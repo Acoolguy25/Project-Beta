@@ -8,15 +8,17 @@ namespace Universes.UniverseData.war_valley.Shared {
     public enum WV_ForceCategory : byte {
         /// <summary>Not counted: walls and fences, and anything that is not a commander's force.</summary>
         None = 0,
-        /// <summary>Foot soldiers and ground vehicles.</summary>
+        /// <summary>Foot soldiers.</summary>
         Soldier = 1,
         Aircraft = 2,
-        Building = 3
+        Building = 3,
+        /// <summary>Ground vehicles: tanks, APCs, and artillery.</summary>
+        Vehicle = 4
     }
 
     /// <summary>
-    /// The per-commander force limits: how many soldiers, aircraft, and buildings each player may
-    /// have at once.
+    /// The per-commander force limits: how many soldiers, ground vehicles, aircraft, and buildings
+    /// each player may have at once. Walls and fences are never limited.
     /// <para>
     /// A limit counts what a commander already fields plus what they have paid for and is still in
     /// a queue, so an order that would break the limit is refused at the button, before any money
@@ -30,14 +32,17 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// </para>
     /// </summary>
     public static class WV_Limits {
-        /// <summary>Foot soldiers and ground vehicles one commander may field.</summary>
+        /// <summary>Foot soldiers one commander may field.</summary>
         public const int MaxSoldiers = 20;
+        /// <summary>Tanks, APCs, and artillery one commander may field.</summary>
+        public const int MaxVehicles = 10;
         public const int MaxAircraft = 10;
         /// <summary>Buildings one commander may own. Walls and fences are not counted.</summary>
         public const int MaxBuildings = 50;
 
         public static int GetLimit(WV_ForceCategory category) => category switch {
             WV_ForceCategory.Soldier => MaxSoldiers,
+            WV_ForceCategory.Vehicle => MaxVehicles,
             WV_ForceCategory.Aircraft => MaxAircraft,
             WV_ForceCategory.Building => MaxBuildings,
             _ => int.MaxValue
@@ -45,14 +50,25 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         public static string GetDisplayName(WV_ForceCategory category) => category switch {
             WV_ForceCategory.Soldier => "Soldiers",
+            WV_ForceCategory.Vehicle => "Vehicles",
             WV_ForceCategory.Aircraft => "Aircraft",
             WV_ForceCategory.Building => "Buildings",
+            _ => "Forces"
+        };
+
+        /// <summary>A compact label for the HUD line that shows every limit at once.</summary>
+        public static string GetShortName(WV_ForceCategory category) => category switch {
+            WV_ForceCategory.Soldier => "Troops",
+            WV_ForceCategory.Vehicle => "Vehicles",
+            WV_ForceCategory.Aircraft => "Air",
+            WV_ForceCategory.Building => "Bldgs",
             _ => "Forces"
         };
 
         /// <summary>What the HUD says when an order is refused for this category's limit.</summary>
         public static string GetLimitMessage(WV_ForceCategory category) => category switch {
             WV_ForceCategory.Soldier => $"Soldier limit reached ({MaxSoldiers} per player)",
+            WV_ForceCategory.Vehicle => $"Vehicle limit reached ({MaxVehicles} per player)",
             WV_ForceCategory.Aircraft => $"Aircraft limit reached ({MaxAircraft} per player)",
             WV_ForceCategory.Building => $"Building limit reached ({MaxBuildings} per player)",
             _ => "Limit reached"
@@ -63,13 +79,21 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return WV_ForceCategory.None;
             if (item.IsTroop)
                 return WV_ForceCategory.Soldier;
-            return WV_Rules.IsAircraft(item.UnitKind) ? WV_ForceCategory.Aircraft : WV_ForceCategory.Soldier;
+            return GetCategory(item.UnitKind);
         }
 
         public static WV_ForceCategory GetCategory(WV_Unit unit) =>
-            unit == null ? WV_ForceCategory.None
-            : unit.IsAircraft ? WV_ForceCategory.Aircraft
-            : WV_ForceCategory.Soldier;
+            unit == null ? WV_ForceCategory.None : GetCategory(unit.Kind);
+
+        /// <summary>
+        /// Aircraft fly under their own limit and every other vehicle drives under the vehicle one.
+        /// Infantry is the one unit kind that is a soldier: it is a foot soldier with a unit's body.
+        /// </summary>
+        public static WV_ForceCategory GetCategory(WV_UnitKind kind) => kind switch {
+            WV_UnitKind.None => WV_ForceCategory.None,
+            WV_UnitKind.Infantry => WV_ForceCategory.Soldier,
+            _ => WV_Rules.IsAircraft(kind) ? WV_ForceCategory.Aircraft : WV_ForceCategory.Vehicle
+        };
 
         /// <summary>
         /// A structure counts as a building unless it is a wall or fence segment: a perimeter is

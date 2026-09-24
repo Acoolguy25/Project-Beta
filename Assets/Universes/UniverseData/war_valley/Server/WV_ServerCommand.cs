@@ -42,6 +42,7 @@ namespace Universes.UniverseData.war_valley.Server {
             InstanceFinder.ServerManager.RegisterBroadcast<WV_ResearchRequest>(OnResearch, true);
             InstanceFinder.ServerManager.RegisterBroadcast<WV_SellRequest>(OnSell, true);
             InstanceFinder.ServerManager.RegisterBroadcast<WV_DonateRequest>(OnDonate, true);
+            InstanceFinder.ServerManager.RegisterBroadcast<WV_GateModeRequest>(OnGateMode, true);
             registered = true;
         }
 
@@ -59,6 +60,7 @@ namespace Universes.UniverseData.war_valley.Server {
             InstanceFinder.ServerManager.UnregisterBroadcast<WV_ResearchRequest>(OnResearch);
             InstanceFinder.ServerManager.UnregisterBroadcast<WV_SellRequest>(OnSell);
             InstanceFinder.ServerManager.UnregisterBroadcast<WV_DonateRequest>(OnDonate);
+            InstanceFinder.ServerManager.UnregisterBroadcast<WV_GateModeRequest>(OnGateMode);
             registered = false;
         }
 
@@ -279,6 +281,27 @@ namespace Universes.UniverseData.war_valley.Server {
             Notify(sender, refund > 0
                 ? $"{structure.DisplayName} demolished - {refund:N0} refunded"
                 : $"{structure.DisplayName} demolished");
+        }
+
+        // --- Gates --------------------------------------------------------------
+
+        /// <summary>
+        /// Opens, holds, or locks a gate. Like demolishing, only the gate's owner may: a gate held
+        /// open lets the waves in, and a locked one strands an ally's army outside.
+        /// </summary>
+        static void OnGateMode(NetworkConnection sender, WV_GateModeRequest request, Channel channel) {
+            if (sender == null || !sender.IsValid)
+                return;
+            var mode = (WV_GateMode)request.mode;
+            if (mode is not (WV_GateMode.Auto or WV_GateMode.HeldOpen or WV_GateMode.Locked))
+                return;
+            if (!TryGetUsable(sender, request.gateObjectId, out WV_Gate gate))
+                return;
+            if (!WV_Permissions.CanManage(sender.ClientId, gate.Owned)) {
+                Notify(sender, "Only the gate's owner can open or lock it");
+                return;
+            }
+            gate.SetMode(mode);
         }
 
         // --- Selling ------------------------------------------------------------

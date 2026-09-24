@@ -44,13 +44,18 @@ namespace Universes.UniverseData.war_valley.Editor {
         const string SmokeVfxPath = EffectsRoot + "/vfx_Smoke_01.prefab";
         const string MuzzleFlashVfxPath = EffectsRoot + "/vfx_MuzzleFlash_01.prefab";
         const string GunShotAudioPath = "Assets/RyanAssets/Tools/Audio/pistol-gun-shot.mp3";
+        const string ShieldVfxPath = EffectsRoot + "/vfx_Shield_01.prefab";
+        /// <summary>Radius the shield effect is authored at: its largest billboard is ten units across.</summary>
+        const float ShieldVfxRadius = 5f;
+        const string GatePostPath = PackRoot + "/Building_Prefebs/Fence_02_Cornor_Prefeb.prefab";
 
         static readonly int StructureLayer = LayerMask.NameToLayer("Structure");
         static readonly int CharacterLayer = LayerMask.NameToLayer("Character");
+        static readonly int IgnoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
 
         // --- Definitions -----------------------------------------------------
 
-        enum StructureRole { Plain, Income, Production, Turret, Wall, Research }
+        enum StructureRole { Plain, Income, Production, Turret, Wall, Research, Gate, ShieldGenerator }
 
         sealed class StructureDef {
             public string Id, DisplayName, Description, Category, ModelPath;
@@ -68,6 +73,11 @@ namespace Universes.UniverseData.war_valley.Editor {
             public bool AntiAir;
             /// <summary>Research throughput a research station adds to its side.</summary>
             public float ResearchRate = 1f;
+            /// <summary>Turn applied to the model before it is fitted, for art that runs along the wrong axis.</summary>
+            public float ModelYaw;
+            public float ShieldRadius = 18f;
+            public long ShieldHealth = 1500;
+            public float ShieldRegenerationSeconds = 30f;
         }
 
         sealed class UnitDef {
@@ -176,6 +186,28 @@ namespace Universes.UniverseData.war_valley.Editor {
                 ModelPath = PackRoot + "/Building_Prefebs/Fence_01_Cornor_Prefeb.prefab",
                 FootprintCells = 1, Cost = 60, BuildSeconds = 4f, MaxHealth = 300,
                 Role = StructureRole.Wall
+            },
+            new() {
+                // The pack has no gate, so one is assembled from its heavier fence: a Fence_02
+                // section is the door that sinks into the ground, between two of its corner posts.
+                // The section runs along its own Z axis, so it is turned to lie across the passage.
+                Id = WV_Rules.GateId, DisplayName = "Gate", Category = "Defense",
+                Description = "A wall section that opens for your side. Allies walk up and it opens; " +
+                              "your troops and vehicles use it when their route needs it. Its owner can " +
+                              "hold it open or lock it. Enemies must break it down.",
+                ModelPath = PackRoot + "/Building_Prefebs/Fence_02_Prefeb.prefab",
+                FootprintCells = 1, Cost = 150, BuildSeconds = 8f, MaxHealth = 500,
+                Role = StructureRole.Gate, ModelYaw = 90f
+            },
+            new() {
+                Id = WV_Rules.ShieldGeneratorId, DisplayName = "Shield Generator", Category = "Defense",
+                Description = "Raises a circular shield. Allies pass through; enemies cannot enter or hurt " +
+                              "anything inside until they break it, and it recharges 30s later while the " +
+                              "generator stands. Each new generator must overlap one of your shields.",
+                ModelPath = PackRoot + "/Building_Prefebs/SpeakerTower_Prefeb.prefab",
+                FootprintCells = 2, Cost = 1200, BuildSeconds = 35f, MaxHealth = 900,
+                Role = StructureRole.ShieldGenerator,
+                ShieldRadius = 18f, ShieldHealth = 1500, ShieldRegenerationSeconds = 30f
             }
         };
 
@@ -448,7 +480,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 SetLayerRecursive(buildingRoot, StructureLayer);
 
                 GameObject model = PlaceFitted(
-                    Load<GameObject>(def.ModelPath), buildingRoot.transform, Vector3.zero, 0f, span, "Model");
+                    Load<GameObject>(def.ModelPath), buildingRoot.transform, Vector3.zero, def.ModelYaw, span, "Model");
                 SetLayerRecursive(model, StructureLayer);
                 // The pack models ship without colliders; the structure's own box is the collision.
                 foreach (Collider collider in model.GetComponentsInChildren<Collider>(true))
@@ -665,12 +697,88 @@ namespace Universes.UniverseData.war_valley.Editor {
                     Ensure<WV_DestructibleObstacle>(root);
                     break;
                 }
+                case StructureRole.Gate:
+                    BuildGate(root, span, modelHeight);
+                    break;
+                case StructureRole.ShieldGenerator:
+                    BuildShield(root, def);
+                    break;
                 case StructureRole.Research: {
                     var station = Ensure<WV_ResearchBuilding>(root);
                     SetPrivateField(station, "researchRate", def.ResearchRate);
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        /// A gate is a wall - carved, breachable, with the breach link only the waves use - plus a
+        /// door and a second link its own side paths through. The fitted model is the door; posts
+        /// from the same fence set stand at either end and do not move.
+        /// </summary>
+        static void BuildGate(GameObject root, float span, float modelHeight) {
+            Ensure<NavMeshLink>(root);
+            Ensure<WV_DestructibleObstacle>(root);
+
+            Transform buildingRoot = root.transform.Find("Building");
+            Transform door = buildingRoot.Find("Model");
+            GameObject postSource = Load<GameObject>(GatePostPath);
+            foreach (float side in new[] { -1f, 1f }) {
+                GameObject post = PlaceFitted(
+                    postSource, buildingRoot, new Vector3(side * span * 0.5f, 0f, 0f), 0f, span * 0.18f,
+                    side < 0f ? "PostLeft" : "PostRight");
+                SetLayerRecursive(post, StructureLayer);
+                foreach (Collider collider in post.GetComponentsInChildren<Collider>(true))
+                    UnityEngine.Object.DestroyImmediate(collider);
+            }
+
+            var passage = new GameObject("Passage");
+            passage.transform.SetParent(root.transform, false);
+            var passageLink = passage.AddComponent<NavMeshLink>();
+
+            var gate = Ensure<WV_Gate>(root);
+            SetPrivateField(gate, "door", door);
+            SetPrivateField(gate, "passageLink", passageLink);
+            // Sinks the door fully into the ground, so the opening is clear top to bottom.
+            SetPrivateField(gate, "doorOpenOffset", new Vector3(0f, -modelHeight * 1.05f, 0f));
+        }
+
+        /// <summary>
+        /// The generator's shield sits on a child of its own: an entity with its own health, sharing
+        /// the building's NetworkObject. Its hit volume is a trigger on Ignore Raycast, so it is
+        /// measured and aimed at but never stops a body or a bullet, and the shared shield effect is
+        /// scaled up to the shield's radius with its renderers authored off until the shield rises.
+        /// </summary>
+        static void BuildShield(GameObject root, StructureDef def) {
+            var shield = new GameObject("Shield");
+            shield.transform.SetParent(root.transform, false);
+            shield.layer = IgnoreRaycastLayer;
+
+            var effects = Ensure<EffectsComponent>(shield);
+            var health = Ensure<HealthComponent>(shield);
+            var hitVolume = shield.AddComponent<SphereCollider>();
+            hitVolume.isTrigger = true;
+            hitVolume.radius = def.ShieldRadius;
+            hitVolume.enabled = false;
+
+            GameObject dome = (GameObject)PrefabUtility.InstantiatePrefab(Load<GameObject>(ShieldVfxPath), shield.transform);
+            dome.name = "Dome";
+            dome.transform.localPosition = Vector3.zero;
+            dome.transform.localScale = Vector3.one * (def.ShieldRadius / ShieldVfxRadius);
+            SetLayerRecursive(dome, IgnoreRaycastLayer);
+            Renderer[] domeRenderers = dome.GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer renderer in domeRenderers)
+                renderer.enabled = false;
+
+            var barrier = shield.AddComponent<WV_ShieldBarrier>();
+            SetPrivateField(barrier, "radius", def.ShieldRadius);
+            SetPrivateField(barrier, "maxHealth", def.ShieldHealth);
+            SetPrivateField(barrier, "regenerationSeconds", def.ShieldRegenerationSeconds);
+            SetPrivateField(barrier, "generator", root.GetComponent<StructureComponent>());
+            SetPrivateField(barrier, "domeRenderers", domeRenderers);
+            SetPrivateField(barrier, "hitVolume", hitVolume);
+            SetPrivateField(barrier, "effectsComponent", effects);
+            SetPrivateField(barrier, "healthComponent", health);
         }
 
         // --- Units -----------------------------------------------------------
@@ -893,6 +1001,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 case ulong ul: property.ulongValue = ul; break;
                 case float f: property.floatValue = f; break;
                 case bool b: property.boolValue = b; break;
+                case Vector3 v: property.vector3Value = v; break;
                 case string s: property.stringValue = s; break;
                 case UnityEngine.Object o: property.objectReferenceValue = o; break;
                 case TeamConfig team:

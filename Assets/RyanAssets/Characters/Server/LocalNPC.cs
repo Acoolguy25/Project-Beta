@@ -687,7 +687,20 @@ namespace RyanAssets.Characters.Server {
         // is just the target's actual current position.
         private Vector3 GetPredictedTargetPosition() {
             if (_currentAttackTarget == null) return transform.position;
-            return _currentAttackTarget.transform.position + _targetVelocity * AttackPredictionLeadTime;
+            return GetTargetAnchor(_currentAttackTarget) + _targetVelocity * AttackPredictionLeadTime;
+        }
+
+        // The point the NPC closes on and measures its standoff from. A structure can be far larger
+        // than its pivot suggests - a hangar, a wall, a shield dome many metres across - so it is
+        // approached at the nearest point of its surface, the same point GetAttackDistance measures
+        // to. Standing off from a dome's centre would put a ranged NPC inside the dome.
+        private Vector3 GetTargetAnchor(HealthComponent target) {
+            if (target.GetComponent<GameCharacter>() == null) {
+                Collider targetCollider = target.GetComponentInChildren<Collider>();
+                if (targetCollider != null && targetCollider.enabled)
+                    return targetCollider.ClosestPoint(transform.position);
+            }
+            return target.transform.position;
         }
 
         // Decides how the NPC should move this frame. Destinations are gated by

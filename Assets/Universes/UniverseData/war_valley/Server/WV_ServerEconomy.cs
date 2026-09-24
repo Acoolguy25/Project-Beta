@@ -128,6 +128,18 @@ namespace Universes.UniverseData.war_valley.Server {
             WV_Economy economy = WV_Economy.Instance;
             int clientId = sender != null && sender.IsValid ? sender.ClientId : WV_Owned.NoOwner;
 
+            // A commander's shields form one connected wall: after the first, every generator has
+            // to stand close enough that its circle overlaps one they already have. Checked here
+            // rather than in the placement gate because it depends on where the building went.
+            WV_ShieldBarrier shield = structure.GetComponentInChildren<WV_ShieldBarrier>(true);
+            if (shield != null
+                && !WV_ShieldBarrier.ConnectsToOwnShields(clientId, structure.transform.position, shield.Radius, shield)) {
+                WV_ServerCommand.Notify(sender,
+                    "A shield generator must be placed so its shield overlaps one of your existing shields");
+                structure.Despawn();
+                return;
+            }
+
             if (economy != null && !economy.TryDebit(clientId, (long)structure.Cost)) {
                 // The balance moved between the gate and here (a second placement in the same frame,
                 // or a queued unit charged in between). Refuse rather than hand out a free building.

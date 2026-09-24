@@ -109,6 +109,13 @@ namespace Universes.UniverseData.war_valley.Shared {
         public int[] objectIds;
     }
 
+    /// <summary>Sets a gate the sender owns to open by itself, stay open, or stay locked.</summary>
+    public struct WV_GateModeRequest : IBroadcast {
+        public int gateObjectId;
+        /// <summary>A <see cref="WV_GateMode"/> value.</summary>
+        public byte mode;
+    }
+
     /// <summary>Gives some of the sender's funds to an allied commander.</summary>
     public struct WV_DonateRequest : IBroadcast {
         public int recipientClientId;

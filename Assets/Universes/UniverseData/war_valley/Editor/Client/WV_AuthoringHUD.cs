@@ -250,6 +250,10 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             Hover(donate, "Give some of your funds to an ally.");
             forces = Label(panel.transform, "ForcesLabel", string.Empty, 13f, Muted);
             forces.richText = true;
+            // Four limits share one line; the text shrinks rather than truncating a count.
+            forces.enableAutoSizing = true;
+            forces.fontSizeMin = 9f;
+            forces.fontSizeMax = 13f;
             TopBand(forces, 76f, 18f, 14f, 14f);
             research = Label(panel.transform, "ResearchLabel", string.Empty, 13f, Warning);
             TopBand(research, 96f, 18f, 14f, 14f);
