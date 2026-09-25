@@ -10,6 +10,7 @@ using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.UI.Hover;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -57,6 +58,19 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>Pixels of travel before a click becomes a box drag.</summary>
         const float DragThresholdPixels = 8f;
 
+        /// <summary>
+        /// How far outside a drag box a unit, troop, or building may be drawn and still be picked up,
+        /// as a fraction of the screen's height. The box is tested against each one's whole
+        /// on-screen outline plus this margin, not against the single point at its feet, so a box
+        /// drawn roughly around a squad takes the squad.
+        /// </summary>
+        const float BoxSelectPaddingScreenFraction = 0.03f;
+
+        /// <summary>The standing controls reminder on the hint line. It is game help, and the player can turn it off.</summary>
+        const string ControlsHint =
+            "Click a building to open its menu • Shift-click to add • Drag to select units, or buildings\n"
+            + "M move • V attack-move • T attack • X stop • H hold • Del sell • Ctrl+F1-F4 set group • F1-F4 recall";
+
         /// <summary>Seconds within which a second click on the same unit means "select all of these".</summary>
         const float DoubleClickSeconds = 0.3f;
 
@@ -88,6 +102,9 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly List<int> orderScratch = new();
         readonly List<StructureComponent> structureScratch = new();
         readonly List<TransferRecipient> donationRecipients = new();
+        readonly List<Renderer> rendererScratch = new();
+        readonly List<Collider> colliderScratch = new();
+        readonly List<RaycastResult> uiHits = new();
         /// <summary>Technologies the local commander already had, so only new completions are announced.</summary>
         readonly HashSet<WV_Tech> knownResearched = new();
         readonly StringBuilder researchSummary = new();
@@ -107,6 +124,8 @@ namespace Universes.UniverseData.war_valley.Client {
 
         WV_HUD hud;
         WV_StructureInspector inspector;
+        PointerEventData uiPointer;
+        EventSystem uiPointerSystem;
         /// <summary>The research ledger <see cref="knownResearched"/> was taken from; a new round brings a new one.</summary>
         WV_Research trackedResearch;
         float nextResearchSummaryTime;
@@ -155,10 +174,20 @@ namespace Universes.UniverseData.war_valley.Client {
             BindCommandMenu();
             inspector = new WV_StructureInspector(hud, () => LocalClientId, CountOwnTroops, ArmRallyPoint);
             BindDonations();
-            hud.SetHint(
-                "Click a building to open its menu • Shift-click to add • Drag to select units, or buildings\n"
-                + "M move • V attack-move • T attack • X stop • H hold • Del sell • Ctrl+F1-F4 set group • F1-F4 recall");
+            hud.SellClicked += RequestSell;
+            hud.ResearchClicked += ToggleResearch;
+            GameHelp.Changed += HandleGameHelpChanged;
+            hud.SetHint(GameHelp.Enabled ? ControlsHint : string.Empty);
         }
+
+        /// <summary>The controls reminder comes and goes with the player's Game Help setting.</summary>
+        void HandleGameHelpChanged(bool enabled) => hud.SetHint(enabled ? ControlsHint : string.Empty);
+
+        /// <summary>
+        /// The HUD's Research button: research has a menu of its own, reachable without first finding
+        /// and selecting a research station. The menu says so when the commander has none.
+        /// </summary>
+        void ToggleResearch() => inspector.ToggleResearchMenu();
 
         /// <summary>
         /// Points the command card at this controller. Every button goes through the same methods
@@ -177,7 +206,6 @@ namespace Universes.UniverseData.war_valley.Client {
             menu.SelectRequested += SelectAllOwned;
             menu.GroupRecalled += RecallControlGroup;
             menu.GroupBound += BindControlGroup;
-            menu.SellRequested += RequestSell;
             menu.SetHasSelection(false);
         }
 
@@ -189,7 +217,6 @@ namespace Universes.UniverseData.war_valley.Client {
             menu.SelectRequested -= SelectAllOwned;
             menu.GroupRecalled -= RecallControlGroup;
             menu.GroupBound -= BindControlGroup;
-            menu.SellRequested -= RequestSell;
         }
 
         /// <summary>
@@ -296,6 +323,11 @@ namespace Universes.UniverseData.war_valley.Client {
         void OnDestroy() {
             UnbindCommandMenu();
             UnbindDonations();
+            GameHelp.Changed -= HandleGameHelpChanged;
+            if (hud != null) {
+                hud.SellClicked -= RequestSell;
+                hud.ResearchClicked -= ToggleResearch;
+            }
             inspector?.Dispose();
             if (hud != null)
                 Destroy(hud.gameObject);
@@ -430,8 +462,11 @@ namespace Universes.UniverseData.war_valley.Client {
             if (!inspector.Tick() && armedOrder.HasValue && SelectionCount == 0)
                 DisarmOrder(null);
 
-            HandlePointer();
+            // Keys first: an order armed by a key in the same frame as the click that places it must
+            // already be in hand when the click is read, or the click starts a selection instead and
+            // the order is lost.
             HandleCommandKeys();
+            HandlePointer();
         }
 
         // --- Pointer ----------------------------------------------------------
@@ -447,10 +482,10 @@ namespace Universes.UniverseData.war_valley.Client {
             // While the structure menu is placing a building, left click belongs to placement. A
             // click that lands on the HUD belongs to the HUD: without this, buying a unit or a troop
             // also cleared the selection behind the panel and re-ran a world raycast through it.
+            Vector2 screenPosition = mouse.position.ReadValue();
             bool inputBlocked = TopbarControls.IsMenuOpen
                 || !ToolControls.IsCursorFree()
-                || IsPointerOverHud();
-            Vector2 screenPosition = mouse.position.ReadValue();
+                || (mouse.leftButton.wasPressedThisFrame && IsPointerOverHud(screenPosition));
 
             if (mouse.leftButton.wasPressedThisFrame && !inputBlocked) {
                 // An armed order spends the click on itself rather than starting a selection, so a
@@ -608,8 +643,27 @@ namespace Universes.UniverseData.war_valley.Client {
                 && field.isFocused;
         }
 
-        static bool IsPointerOverHud() =>
-            EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+        /// <summary>
+        /// True when HUD - any UI that takes pointer input - is under <paramref name="screenPosition"/>
+        /// this frame. Asked of the event system directly rather than through
+        /// IsPointerOverGameObject, which answers for wherever the pointer was when the UI last
+        /// processed input: an order placed just after the cursor left a HUD button - arm, then
+        /// click the ground straight away - read as a click on the button and was dropped.
+        /// </summary>
+        bool IsPointerOverHud(Vector2 screenPosition) {
+            EventSystem system = EventSystem.current;
+            if (system == null)
+                return false;
+            if (uiPointer == null || uiPointerSystem != system) {
+                uiPointerSystem = system;
+                uiPointer = new PointerEventData(system);
+            }
+            uiPointer.Reset();
+            uiPointer.position = screenPosition;
+            uiHits.Clear();
+            system.RaycastAll(uiPointer, uiHits);
+            return uiHits.Count > 0;
+        }
 
         static bool AdditiveHeld() =>
             Keyboard.current != null
@@ -634,19 +688,20 @@ namespace Universes.UniverseData.war_valley.Client {
 
             Vector2 min = Vector2.Min(start, end);
             Vector2 max = Vector2.Max(start, end);
+            Rect box = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
 
             WV_Unit.CollectOwnedBy(LocalClientId, ownedScratch);
             foreach (WV_Unit unit in ownedScratch) {
                 if (SelectionCount >= maxSelection)
                     break;
-                if (IsInsideBox(camera, unit.transform.position, min, max))
+                if (TouchesBox(camera, unit, box))
                     AddToSelection(unit);
             }
 
             foreach (GameCharacter character in characters) {
                 if (SelectionCount >= maxSelection)
                     break;
-                if (IsCommandableTroop(character) && IsInsideBox(camera, character.transform.position, min, max))
+                if (IsCommandableTroop(character) && TouchesBox(camera, character, box))
                     AddToSelection(character);
             }
 
@@ -658,7 +713,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
             // A box around no units is a box around buildings: the way to take a row of barracks at
             // once. Units win when both are inside, since that is what a drag usually means.
-            CollectUsableStructures(structureScratch, structure => IsInsideBox(camera, structure.transform.position, min, max));
+            CollectUsableStructures(structureScratch, structure => TouchesBox(camera, structure, box));
             if (structureScratch.Count > 0) {
                 if (additive)
                     inspector.Add(structureScratch);
@@ -685,6 +740,84 @@ namespace Universes.UniverseData.war_valley.Client {
                     continue;
                 results.Add(structure);
             }
+        }
+
+        /// <summary>
+        /// Whether any part of <paramref name="target"/> as drawn - or near enough to it, by
+        /// <see cref="BoxSelectPaddingScreenFraction"/> - falls inside the drag box. Testing only the
+        /// point at a unit's feet missed a soldier whose body was plainly inside the box, and a tank
+        /// whose pivot sat just outside it.
+        /// </summary>
+        bool TouchesBox(Camera camera, Component target, Rect box) {
+            if (target == null)
+                return false;
+            if (!TryGetScreenOutline(camera, target, out Rect outline))
+                return false;
+            float padding = Screen.height * BoxSelectPaddingScreenFraction;
+            outline = Rect.MinMaxRect(
+                outline.xMin - padding, outline.yMin - padding, outline.xMax + padding, outline.yMax + padding);
+            return outline.Overlaps(box);
+        }
+
+        /// <summary>
+        /// The screen rectangle <paramref name="target"/>'s visible body covers, from its renderers or,
+        /// failing those, its colliders. False when it has neither or is wholly behind the camera.
+        /// </summary>
+        bool TryGetScreenOutline(Camera camera, Component target, out Rect outline) {
+            outline = default;
+            if (!TryGetWorldBounds(target, out Bounds bounds))
+                return false;
+
+            Vector3 centre = bounds.center;
+            Vector3 extents = bounds.extents;
+            Vector2 min = new(float.PositiveInfinity, float.PositiveInfinity);
+            Vector2 max = new(float.NegativeInfinity, float.NegativeInfinity);
+            for (int x = -1; x <= 1; x += 2)
+            for (int y = -1; y <= 1; y += 2)
+            for (int z = -1; z <= 1; z += 2) {
+                Vector3 screen = camera.WorldToScreenPoint(centre + Vector3.Scale(extents, new Vector3(x, y, z)));
+                // Behind the camera a point projects mirrored in front of it, so it is left out.
+                if (screen.z <= 0f)
+                    continue;
+                min = Vector2.Min(min, screen);
+                max = Vector2.Max(max, screen);
+            }
+
+            if (float.IsInfinity(min.x))
+                return false;
+            outline = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+            return true;
+        }
+
+        bool TryGetWorldBounds(Component target, out Bounds bounds) {
+            bounds = default;
+            bool found = false;
+            target.GetComponentsInChildren(false, rendererScratch);
+            foreach (Renderer renderer in rendererScratch) {
+                if (renderer == null || !renderer.enabled || renderer is ParticleSystemRenderer)
+                    continue;
+                if (!found) {
+                    bounds = renderer.bounds;
+                    found = true;
+                } else {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+            if (found)
+                return true;
+
+            target.GetComponentsInChildren(false, colliderScratch);
+            foreach (Collider collider in colliderScratch) {
+                if (collider == null || !collider.enabled)
+                    continue;
+                if (!found) {
+                    bounds = collider.bounds;
+                    found = true;
+                } else {
+                    bounds.Encapsulate(collider.bounds);
+                }
+            }
+            return found;
         }
 
         static bool IsInsideBox(Camera camera, Vector3 worldPosition, Vector2 min, Vector2 max) {
@@ -962,8 +1095,7 @@ namespace Universes.UniverseData.war_valley.Client {
             if (sellConfirmUntil <= 0f || SelectionSignature() != sellConfirmSelection) {
                 sellConfirmUntil = Time.unscaledTime + SellConfirmSeconds;
                 sellConfirmSelection = SelectionSignature();
-                if (hud.CommandMenu != null)
-                    hud.CommandMenu.SetSellConfirming(true, refund);
+                hud.SetSellConfirming(true, refund);
                 hud.SetHint($"Sell {SelectionCount} for {refund:N0}? Click Sell or press Delete again to confirm");
                 return;
             }
@@ -987,8 +1119,7 @@ namespace Universes.UniverseData.war_valley.Client {
             if (sellConfirmUntil <= 0f)
                 return;
             sellConfirmUntil = 0f;
-            if (hud.CommandMenu != null)
-                hud.CommandMenu.SetSellConfirming(false, 0);
+            hud.SetSellConfirming(false, 0);
         }
 
         /// <summary>

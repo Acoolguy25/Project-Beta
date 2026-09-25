@@ -82,10 +82,17 @@ namespace Universes.UniverseData.war_valley.Shared {
         public Sprite Icon => icon;
         public bool IsAircraft => WV_Rules.IsAircraft(kind);
 
+        /// <summary>
+        /// "Player0's Tank": the unit's kind, named for the commander who owns it, the way their
+        /// troops are. Read from replicated ownership, so every machine names it the same.
+        /// </summary>
         public override string DisplayName {
-            get => displayName;
+            get => owned != null ? WV_Rules.GetOwnedName(owned.OwnerClientId, displayName) : displayName;
             set => displayName = value;
         }
+
+        /// <summary>A vehicle carries its name overhead all the time, as a player does, not only once damaged.</summary>
+        public override bool AlwaysShowNameTag => true;
 
         public override TeamConfig Team => teamSync.Value ?? team;
 
@@ -114,11 +121,13 @@ namespace Universes.UniverseData.war_valley.Shared {
             base.OnStartNetwork();
             all.Add(this);
             teamSync.OnChange += HandleTeamChanged;
+            owned.OwnerChanged += HandleOwnerChanged;
             RosterChanged?.Invoke();
         }
 
         public override void OnStopNetwork() {
             teamSync.OnChange -= HandleTeamChanged;
+            owned.OwnerChanged -= HandleOwnerChanged;
             all.Remove(this);
             SelectedLocally = false;
             RosterChanged?.Invoke();
@@ -126,6 +135,9 @@ namespace Universes.UniverseData.war_valley.Shared {
         }
 
         void HandleTeamChanged(TeamConfig previous, TeamConfig next, bool asServer) => RaiseTeamChanged();
+
+        /// <summary>Ownership is assigned a frame after the unit spawns; its name follows it.</summary>
+        void HandleOwnerChanged(int clientId) => RaiseDisplayNameChanged();
 
         /// <summary>Units this client commands, used to seed box selection and control groups.</summary>
         public static void CollectOwnedBy(int clientId, List<WV_Unit> results) {

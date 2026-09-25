@@ -69,6 +69,19 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             && AssetDatabase.LoadAssetAtPath<GameObject>(RecipientRowPath) != null
             && AssetDatabase.LoadAssetAtPath<GameObject>(TransferPanelPath) != null;
 
+        /// <summary>
+        /// True when the existing prefabs carry every part the current code binds, so a dependent HUD
+        /// can tell a stale copy - one generated before the selection panel had its X - from a
+        /// current one and rebuild it rather than nest it.
+        /// </summary>
+        public static bool PrefabsCurrent() {
+            if (!PrefabsExist())
+                return false;
+            var panel = AssetDatabase.LoadAssetAtPath<SelectionInfoPanel>(SelectionPanelPath);
+            return panel != null
+                && new SerializedObject(panel).FindProperty("closeButton").objectReferenceValue != null;
+        }
+
         static T Load<T>(string path) where T : Component {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             T component = prefab != null ? prefab.GetComponent<T>() : null;
@@ -172,7 +185,7 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
 
             Button close = Button(root.transform, "CloseButton", "X", new Color(0.2f, 0.22f, 0.26f, 1f), 14f, out _);
             Anchor(close, Vector2.one, Vector2.one, Vector2.one, new Vector2(-10f, -10f), new Vector2(28f, 28f));
-            Hover(close, "Close");
+            Hover(close, "Close", gameHelp: true);
 
             Image divider = Panel(root.transform, "Divider", PanelBorder, rounded: false);
             divider.raycastTarget = false;
@@ -253,7 +266,7 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
 
             Button cancel = Button(root.transform, "CancelButton", "X", Danger, 11f, out _);
             Anchor(cancel, Vector2.one, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(-4f, -4f), new Vector2(20f, 20f));
-            Hover(cancel, "Cancel and refund");
+            Hover(cancel, "Cancel and refund", gameHelp: true);
 
             var hover = Hover(background, string.Empty);
             var slot = Ensure<CommandQueueSlot>(root);
@@ -364,11 +377,12 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             icon.preserveAspect = true;
             icon.raycastTarget = false;
             Stretch(icon, 4f);
+            // Both lines stop short of the corner the X sits in.
             TextMeshProUGUI title = Label(header.transform, "Title", "Selection", 22f, Header, bold: true);
-            Stretch(title, 72f, 0f, 2f, 30f);
+            Stretch(title, 72f, 30f, 2f, 30f);
             TextMeshProUGUI subtitle = Label(header.transform, "Subtitle", string.Empty, 14f, Muted);
             subtitle.richText = true;
-            Stretch(subtitle, 72f, 0f, 32f, 4f);
+            Stretch(subtitle, 72f, 30f, 32f, 4f);
 
             // Health bar with its figure written across it.
             Image healthTrack = Panel(root.transform, "Health", Track);
@@ -401,6 +415,13 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             HorizontalLayoutGroup actionRow = Row(actions.transform, 0, 6f);
             actionRow.childForceExpandHeight = true;
 
+            // The X closes whatever the panel describes. It sits in the top-right corner, outside
+            // the column, so it stays put however tall the panel grows.
+            Button close = Button(root.transform, "CloseButton", "X", new Color(0.2f, 0.22f, 0.26f, 1f), 14f, out _);
+            Layout(close).ignoreLayout = true;
+            Anchor(close, Vector2.one, Vector2.one, Vector2.one, new Vector2(-10f, -10f), new Vector2(28f, 28f));
+            Hover(close, "Close [Esc]", gameHelp: true);
+
             var panel = Ensure<SelectionInfoPanel>(root);
             Wire(panel,
                 ("titleLabel", title), ("subtitleLabel", subtitle), ("icon", icon), ("ownerAccent", owner),
@@ -409,7 +430,7 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
                 ("statusBar", statusTrack.gameObject),
                 ("statRowPrefab", Load<CommandStatRow>(StatRowPath)), ("statRoot", Rect(stats.transform)),
                 ("actionButtonPrefab", Load<CommandActionButton>(ActionButtonPath)), ("actionRoot", Rect(actions.transform)),
-                ("queue", queue));
+                ("queue", queue), ("closeButton", close));
         });
 
         // --- Funds transfer -----------------------------------------------------
@@ -464,7 +485,7 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
 
             Button close = Button(root.transform, "CloseButton", "X", new Color(0.2f, 0.22f, 0.26f, 1f), 14f, out _);
             Anchor(close, Vector2.one, Vector2.one, Vector2.one, new Vector2(-10f, -10f), new Vector2(28f, 28f));
-            Hover(close, "Close");
+            Hover(close, "Close", gameHelp: true);
 
             // Recipients: a scrolling list, since a full server has more allies than fit.
             TextMeshProUGUI toCaption = Label(root.transform, "ToCaption", "TO", 13f, Header, bold: true);
@@ -512,7 +533,7 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             TopBand(amount, 306f, 34f, PanelPadding, PanelPadding + 76f);
             Button max = Button(root.transform, "MaxButton", "Max", CardFill, 14f, out _);
             Anchor(max, Vector2.one, Vector2.one, Vector2.one, new Vector2(-PanelPadding, -306f), new Vector2(70f, 34f));
-            Hover(max, "Everything you have");
+            Hover(max, "Everything you have", gameHelp: true);
 
             Button send = Button(root.transform, "SendButton", "Send", Accent, 16f, out TextMeshProUGUI sendLabel);
             BottomBand(send, 30f, 38f, PanelPadding, PanelPadding);

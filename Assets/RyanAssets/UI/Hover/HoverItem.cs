@@ -10,7 +10,15 @@ namespace RyanAssets.UI.Hover
         [Tooltip("Text displayed after the cursor rests over this object.")]
         string hoverText;
 
+        [SerializeField]
+        [Tooltip("This text teaches a game mode's controls. It is hidden when the player turns " +
+                 "Game Help off; plain information - a price, a unit's stats - should leave this off.")]
+        bool isGameHelp;
+
         public string HoverText => hoverText;
+
+        /// <summary>True for text that explains a game mode's controls. See <see cref="GameHelp"/>.</summary>
+        public bool IsGameHelp => isGameHelp;
 
         /// <summary>
         /// Replaces the text at runtime, for items whose detail is live data - a price that becomes

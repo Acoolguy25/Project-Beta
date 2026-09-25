@@ -272,6 +272,23 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static string GetTroopDisplayName(WV_TroopKind kind) => WV_TroopCatalog.Get(kind).DisplayName;
 
         /// <summary>
+        /// "Player0's Skinny Legend": the name a commander's troop or vehicle carries over its head,
+        /// so on a shared field everyone can tell whose army is whose.
+        /// </summary>
+        public static string FormatOwnedName(string ownerName, string baseName) =>
+            string.IsNullOrWhiteSpace(ownerName) ? baseName : $"{ownerName.Trim()}'s {baseName}";
+
+        /// <summary>
+        /// <see cref="FormatOwnedName"/> for a commander by client id, or the bare name when the
+        /// commander is unknown or has left.
+        /// </summary>
+        public static string GetOwnedName(int ownerClientId, string baseName) =>
+            ownerClientId != WV_Owned.NoOwner
+            && RyanAssets.DataService.PlayerData.TryGetPlayerData(ownerClientId, out RyanAssets.DataService.PlayerData player)
+                ? FormatOwnedName(player.GetPlayerName(), baseName)
+                : baseName;
+
+        /// <summary>
         /// Seconds a barracks spends training one troop. Foot soldiers are the cheapest and fastest
         /// thing on the field, so these sit well under any vehicle's build time - but they are no
         /// longer instant, because a queue is what makes them cost tempo as well as funds.
@@ -281,13 +298,17 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// <summary>
         /// The loadout a troop carries, recovered from its display name. A troop's kind is not
         /// replicated as a field; the server names the character from it, so a client reads it back
-        /// this way - to price a sale, for instance.
+        /// this way - to price a sale, for instance. Accepts both a wave enemy's bare name and a
+        /// commander's troop named by <see cref="FormatOwnedName"/>.
         /// </summary>
         public static bool TryGetTroopKind(string displayName, out WV_TroopKind kind) {
-            foreach (WV_TroopProfile profile in WV_TroopCatalog.All) {
-                if (profile.DisplayName == displayName) {
-                    kind = profile.Kind;
-                    return true;
+            if (!string.IsNullOrEmpty(displayName)) {
+                foreach (WV_TroopProfile profile in WV_TroopCatalog.All) {
+                    if (displayName == profile.DisplayName
+                        || displayName.EndsWith("'s " + profile.DisplayName, System.StringComparison.Ordinal)) {
+                        kind = profile.Kind;
+                        return true;
+                    }
                 }
             }
             kind = WV_TroopKind.Knife;

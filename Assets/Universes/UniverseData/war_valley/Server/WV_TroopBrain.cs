@@ -3,6 +3,7 @@ using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Shared.Declarations;
 using UnityEngine;
+using UnityEngine.AI;
 using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Server {
@@ -30,6 +31,22 @@ namespace Universes.UniverseData.war_valley.Server {
         /// <summary>How far an idle troop may be dragged from where it was left before it walks back.</summary>
         const float DefendLeash = 10f;
 
+        /// <summary>
+        /// Radii searched, nearest first, for walkable ground around an ordered point. A formation
+        /// slot fanned out around a click can land inside a building, on a wall, or just off the
+        /// mesh; the troop takes the nearest point it can reach there instead of ignoring the order.
+        /// </summary>
+        static readonly float[] DestinationSearchRadii = { 4f, 10f, 24f };
+
+        /// <summary>Seconds a troop waits before retrying a route that could not be planned.</summary>
+        const float RetryPathSeconds = 0.25f;
+
+        /// <summary>Failed attempts after which the destination itself is looked for again from where the troop now is.</summary>
+        const int ResolveAgainAfterFailures = 4;
+
+        static NavMeshPath scratchPath;
+        static readonly Vector3[] CornerBuffer = new Vector3[64];
+
         static readonly List<WV_TroopBrain> all = new();
 
         public static IReadOnlyList<WV_TroopBrain> All => all;
@@ -42,6 +59,10 @@ namespace Universes.UniverseData.war_valley.Server {
         Vector3 orderPosition;
         IEntity orderTarget;
         Vector3 holdOrigin;
+        /// <summary>Where the player actually clicked, kept so an unreachable slot can be looked for again.</summary>
+        Vector3 requestedPosition;
+        float nextPathAttempt;
+        int pathFailures;
 
         public int OwnerClientId { get; private set; } = WV_Owned.NoOwner;
         public GameCharacter Character => gameCharacter;
@@ -84,8 +105,12 @@ namespace Universes.UniverseData.war_valley.Server {
 
         public void OrderMove(Vector3 destination) {
             order = WV_OrderType.Move;
-            orderPosition = destination;
+            requestedPosition = destination;
+            orderPosition = ResolveReachable(destination);
             orderTarget = null;
+            // A new order is acted on at once, never after a wait left over from the last one.
+            nextPathAttempt = 0f;
+            pathFailures = 0;
         }
 
         public void OrderAttackMove(Vector3 destination) {
@@ -159,7 +184,57 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
             }
 
-            localNPC.MoveTo(orderPosition, MoveSpeed);
+            if (Time.time < nextPathAttempt)
+                return;
+            if (localNPC.MoveTo(orderPosition, MoveSpeed)) {
+                pathFailures = 0;
+                return;
+            }
+
+            // No route from here yet - the troop may be mid-way over a gate or breach link. It must
+            // not carry on along the route of the order it was given before: that is the order being
+            // silently ignored. It waits a moment and tries again, and after a few misses looks for
+            // the nearest reachable point again from where it now stands.
+            NavMeshAgent agent = localNPC.agent;
+            if (agent != null && agent.isOnNavMesh && agent.hasPath && !agent.isOnOffMeshLink)
+                agent.ResetPath();
+            nextPathAttempt = Time.time + RetryPathSeconds;
+            if (++pathFailures >= ResolveAgainAfterFailures) {
+                pathFailures = 0;
+                orderPosition = ResolveReachable(requestedPosition);
+            }
+        }
+
+        /// <summary>
+        /// The nearest point to <paramref name="destination"/> this troop can walk to: the point
+        /// itself when a complete route reaches it, otherwise walkable ground near it, otherwise as
+        /// far along the way as a route gets. Falls back to the point unchanged when the troop is not
+        /// on the mesh to ask from.
+        /// </summary>
+        Vector3 ResolveReachable(Vector3 destination) {
+            NavMeshAgent agent = localNPC != null ? localNPC.agent : null;
+            if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+                return destination;
+
+            scratchPath ??= new NavMeshPath();
+            var filter = new NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
+            Vector3 best = destination;
+            bool haveFallback = false;
+            foreach (float radius in DestinationSearchRadii) {
+                if (!NavMesh.SamplePosition(destination, out NavMeshHit hit, radius, filter)
+                    || !agent.CalculatePath(hit.position, scratchPath))
+                    continue;
+                if (scratchPath.status == NavMeshPathStatus.PathComplete)
+                    return hit.position;
+                if (!haveFallback && scratchPath.status == NavMeshPathStatus.PathPartial) {
+                    int corners = scratchPath.GetCornersNonAlloc(CornerBuffer);
+                    if (corners > 0) {
+                        best = CornerBuffer[corners - 1];
+                        haveFallback = true;
+                    }
+                }
+            }
+            return best;
         }
 
         void TickAttack() {

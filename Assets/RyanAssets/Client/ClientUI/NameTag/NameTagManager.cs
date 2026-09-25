@@ -1,21 +1,33 @@
 using RyanAssets.Characters.Shared;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.UIElements;
-using RyanAssets.DataService;
 using RyanAssets.Shared.Component;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Cameras;
 
 namespace RyanAssets.Client.ClientUI.NameTag {
+    /// <summary>
+    /// Draws the overhead name and health tag for every character, and for world entities -
+    /// structures, objectives, vehicles - that need one.
+    /// <para>
+    /// Tags are kept under this manager rather than inside the thing they label, and are moved to
+    /// it every frame. A tag parented into a character inherited the character's scale: a build that
+    /// made a soldier short, tall, or wide stretched its tag the same way, and because the tag turns
+    /// to face the camera, a non-uniformly scaled parent also sheared it - which no counter-scale on
+    /// the tag can undo. Held outside, every tag is the one authored size; only its height follows
+    /// the body, so it still clears a tall soldier's head and sits low over a short one.
+    /// </para>
+    /// </summary>
     public class NameTagManager : MonoBehaviour {
         [SerializeField]
         GameObject nameTagPrefab;
         [SerializeField]
         Vector2 nameTagSize;
+        [Tooltip("Offset from a character's root to its tag, for a body at its authored size. The " +
+                 "offset follows the character's build, so a taller body carries its tag higher.")]
         [SerializeField]
         Vector3 nameTagOffset;
 
@@ -28,11 +40,28 @@ namespace RyanAssets.Client.ClientUI.NameTag {
         [SerializeField]
         float entityNameTagPadding = 2f;
 
-        List<(Canvas, GameCharacter)> nameTags = new();
-        // World entities - structures, objectives, vehicles - carry a tag that only appears once
-        // they have actually taken damage, so an untouched base stays clean while a building being
-        // chewed on reads as such from across the map.
-        List<(Canvas, EntityBase)> entityNameTags = new();
+        /// <summary>One character's tag and the subscriptions that keep it current.</summary>
+        sealed class CharacterTag {
+            public Canvas Canvas;
+            public GameCharacter Character;
+            public Action Unbind;
+        }
+
+        /// <summary>One world entity's tag, and how far above the entity's root it floats.</summary>
+        sealed class EntityTag {
+            public Canvas Canvas;
+            public EntityBase Entity;
+            public GameObject HealthBar;
+            public float Height;
+            public Action Unbind;
+        }
+
+        readonly List<CharacterTag> nameTags = new();
+        // World entities - structures, objectives - carry a tag that only appears once they have
+        // actually taken damage, so an untouched base stays clean while a building being chewed on
+        // reads as such from across the map. Entities that ask for it, such as vehicles, keep theirs
+        // up the way a player does.
+        readonly List<EntityTag> entityNameTags = new();
 
         void Start() {
             GameCharacter.GameCharacterAdded += GameCharacterAdded;
@@ -44,14 +73,6 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             // whatever is on the field rather than waiting for the next spawn.
             foreach (EntityBase entity in EntityBase.All.ToArray())
                 EntityAdded(entity);
-        }
-        Transform GetHead(Transform root) {
-            foreach (Transform t in root.GetComponentsInChildren<Transform>(true)) {
-                if (t.name == "Head")
-                    return root;
-            }
-            Debug.LogError($"No head found in {root.name}");
-            return null;
         }
 
         /// <summary>
@@ -72,11 +93,29 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             healthLabelText = healthBarBacking.GetChild(1).GetComponent<TextMeshProUGUI>();
         }
 
+        /// <summary>
+        /// Creates a tag under this manager at the authored size. The manager is expected to be
+        /// unscaled; should it ever sit under a scaled parent, that scale is divided back out once
+        /// here so every tag still comes out at <paramref name="size"/> world units.
+        /// </summary>
+        Canvas CreateTag(Vector2 size) {
+            GameObject nameTag = Instantiate(nameTagPrefab, transform, false);
+            Vector3 managerScale = transform.lossyScale;
+            nameTag.transform.localScale = new Vector3(
+                Mathf.Approximately(managerScale.x, 0f) ? 1f : 1f / managerScale.x,
+                Mathf.Approximately(managerScale.y, 0f) ? 1f : 1f / managerScale.y,
+                Mathf.Approximately(managerScale.z, 0f) ? 1f : 1f / managerScale.z);
+            nameTag.GetComponent<RectTransform>().sizeDelta = size;
+            return nameTag.GetComponent<Canvas>();
+        }
+
+        // --- Characters -------------------------------------------------------
+
         void GameCharacterAdded(GameCharacter gameCharater) {
             if (!gameCharater.ShowNameTag) return;
-            Transform head = GetHead(gameCharater.transform);
-            GameObject nameTag = Instantiate(nameTagPrefab, head, true);
-            Canvas nameTagCanvas = nameTag.GetComponent<Canvas>();
+            Canvas nameTagCanvas = CreateTag(nameTagSize);
+            GameObject nameTag = nameTagCanvas.gameObject;
+            var tag = new CharacterTag { Canvas = nameTagCanvas, Character = gameCharater };
 
             GetNameTagParts(
                 nameTag,
@@ -115,9 +154,9 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                 GameCharacterAdded(gameCharater);
             }
             void OnCharacterDied(DamageType damageType, IEntity ownerObj) {
-                UnsubscribeNameTag();
+                // Removed first: removal unbinds the revival hook, which is only then armed.
+                RemoveCharacterTag(tag);
                 gameCharater.OnRevive += OnCharacterRevived;
-                Destroy(nameTag);
             }
             gameCharater.DisplayNameSync.OnChange += OnPlayerNameChanged;
 
@@ -131,55 +170,87 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             OnPlayerHealthChanged(default, default, false);
             OnPlayerTeamChanged(default, gameCharater.Team, false);
 
-            UpdateNameTagPositioning(nameTagCanvas);
+            // A character leaving the game drops its tag without dying first; a revival waiting to
+            // re-add one must not outlive it either.
+            tag.Unbind = () => {
+                UnsubscribeNameTag();
+                gameCharater.OnRevive -= OnCharacterRevived;
+            };
 
-            nameTags.Add((nameTagCanvas, gameCharater));
+            PlaceCharacterTag(tag, Camera.main);
+            nameTags.Add(tag);
         }
+
         void GameCharacterRemoved(GameCharacter gameCharater) {
-            int index = nameTags.FindIndex(t => t.Item2 == gameCharater);
-            if (index != -1) {
-                Destroy(nameTags[index].Item1.gameObject);
-                nameTags.RemoveAt(index);
-            }
+            int index = nameTags.FindIndex(t => t.Character == gameCharater);
+            if (index != -1)
+                RemoveCharacterTag(nameTags[index]);
+        }
+
+        void RemoveCharacterTag(CharacterTag tag) {
+            nameTags.Remove(tag);
+            tag.Unbind?.Invoke();
+            tag.Unbind = null;
+            if (tag.Canvas != null)
+                Destroy(tag.Canvas.gameObject);
+        }
+
+        /// <summary>
+        /// Seats a character's tag over its head. The offset is authored for the body at its
+        /// authored size and is scaled by the character's build, so the tag clears a tall soldier's
+        /// head and does not float over a short one; the tag itself keeps its one size.
+        /// </summary>
+        void PlaceCharacterTag(CharacterTag tag, Camera mainCamera) {
+            Transform body = tag.Character.transform;
+            Vector3 offset = Vector3.Scale(nameTagOffset, tag.Character.BodyScale);
+            Transform tagTransform = tag.Canvas.transform;
+            tagTransform.position = body.position + body.rotation * offset;
+            if (mainCamera != null)
+                tagTransform.forward = mainCamera.transform.forward;
         }
 
         // --- World entities ---------------------------------------------------
 
         /// <summary>
-        /// Gives a structure, objective, or vehicle the same overhead tag characters carry. The tag
-        /// stays hidden until the entity is actually hurt: a player needs to see which of their
-        /// buildings is being taken apart, not a label over every wall they own.
+        /// Gives a structure, objective, or vehicle the same overhead tag characters carry. By
+        /// default the tag stays hidden until the entity is actually hurt: a player needs to see
+        /// which of their buildings is being taken apart, not a label over every wall they own.
+        /// Entities that ask to be labelled all the time get a player-style tag instead.
         /// </summary>
         void EntityAdded(EntityBase entity) {
             // Characters run through GameCharacterAdded, which also handles death, revival, and the
             // spectated-character case. Never give one two tags.
             if (entity == null || entity is GameCharacter || entity.HealthComponent == null)
                 return;
-            if (entityNameTags.FindIndex(t => t.Item2 == entity) != -1)
+            if (entityNameTags.FindIndex(t => t.Entity == entity) != -1)
                 return;
 
-            GameObject nameTag = Instantiate(nameTagPrefab, entity.transform, true);
-            Canvas nameTagCanvas = nameTag.GetComponent<Canvas>();
+            Canvas nameTagCanvas = CreateTag(entityNameTagSize);
 
             GetNameTagParts(
-                nameTag,
+                nameTagCanvas.gameObject,
                 out Transform healthBarBacking,
                 out TextMeshProUGUI displayNameText,
                 out RectTransform healthBar,
                 out TextMeshProUGUI healthLabelText);
 
-            healthBarBacking.gameObject.SetActive(true);
-            displayNameText.text = entity.DisplayName;
+            var tag = new EntityTag {
+                Canvas = nameTagCanvas,
+                Entity = entity,
+                HealthBar = healthBarBacking.gameObject
+            };
 
-            // A game mode can hand a placed structure to its builder a frame after it spawns, so the
-            // tag follows the team rather than keeping whatever the prefab was authored with.
+            // A game mode can hand a placed structure or a built vehicle to its commander a frame
+            // after it spawns, so the tag follows the team and the name rather than keeping
+            // whatever the prefab was authored with.
             void OnEntityTeamChanged(EntityBase changed) {
                 if (displayNameText != null)
                     displayNameText.color = changed.Team != null ? changed.Team.displayTeamColor : Color.white;
             }
-            entity.TeamChanged += OnEntityTeamChanged;
-            OnEntityTeamChanged(entity);
-
+            void OnEntityNameChanged(EntityBase changed) {
+                if (displayNameText != null)
+                    displayNameText.text = changed.DisplayName;
+            }
             void OnEntityHealthChanged(long _1, long _2, bool asServer) {
                 long max = entity.MaxHealth.Value;
                 float healthPercent = max <= 0 ? 1f : Mathf.Clamp01(entity.Health.Value / (float)max);
@@ -187,56 +258,64 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                 healthLabelText.text = $"{entity.Health.Value}/{max}";
             }
 
+            entity.TeamChanged += OnEntityTeamChanged;
+            entity.DisplayNameChanged += OnEntityNameChanged;
             entity.Health.OnChange += OnEntityHealthChanged;
             entity.MaxHealth.OnChange += OnEntityHealthChanged;
+            tag.Unbind = () => {
+                entity.TeamChanged -= OnEntityTeamChanged;
+                entity.DisplayNameChanged -= OnEntityNameChanged;
+                if (entity.HealthComponent != null) {
+                    entity.Health.OnChange -= OnEntityHealthChanged;
+                    entity.MaxHealth.OnChange -= OnEntityHealthChanged;
+                }
+            };
+
+            OnEntityTeamChanged(entity);
+            OnEntityNameChanged(entity);
             OnEntityHealthChanged(default, default, false);
 
-            UpdateEntityNameTagPositioning(nameTagCanvas, entity);
+            tag.Height = MeasureTagHeight(entity);
             nameTagCanvas.gameObject.SetActive(false);
 
-            entityNameTags.Add((nameTagCanvas, entity));
+            entityNameTags.Add(tag);
         }
 
         void EntityRemoved(EntityBase entity) {
-            int index = entityNameTags.FindIndex(t => t.Item2 == entity);
-            if (index == -1)
-                return;
-
-            Canvas canvas = entityNameTags[index].Item1;
-            entityNameTags.RemoveAt(index);
-            if (canvas != null)
-                Destroy(canvas.gameObject);
+            int index = entityNameTags.FindIndex(t => t.Entity == entity);
+            if (index != -1)
+                RemoveEntityTag(index);
         }
 
-        /// <summary>A damaged, living entity shows its tag; everything else hides it.</summary>
-        static bool ShouldShowEntityTag(EntityBase entity) {
+        void RemoveEntityTag(int index) {
+            EntityTag tag = entityNameTags[index];
+            entityNameTags.RemoveAt(index);
+            if (tag.Entity != null)
+                tag.Unbind?.Invoke();
+            tag.Unbind = null;
+            if (tag.Canvas != null)
+                Destroy(tag.Canvas.gameObject);
+        }
+
+        static bool IsDamaged(EntityBase entity) {
             long max = entity.MaxHealth.Value;
-            return max > 0 && entity.Health.Value < max && !entity.IsDead;
+            return max > 0 && entity.Health.Value < max;
         }
 
         /// <summary>
-        /// Sits the tag just above the entity's own bounds rather than at a fixed character-sized
-        /// offset, because a refinery and a fence post are nothing like the same height.
+        /// A living entity shows its tag once damaged, or always when it asks to be labelled like a
+        /// player. Dead ones never do.
         /// </summary>
-        void UpdateEntityNameTagPositioning(Canvas nameTag, EntityBase entity) {
-            Transform root = entity.transform;
-            Vector3 scale = root.lossyScale;
-            // A degenerate axis would divide the tag's size out to infinity.
-            scale = new Vector3(
-                Mathf.Approximately(scale.x, 0f) ? 1f : scale.x,
-                Mathf.Approximately(scale.y, 0f) ? 1f : scale.y,
-                Mathf.Approximately(scale.z, 0f) ? 1f : scale.z);
+        static bool ShouldShowEntityTag(EntityBase entity) =>
+            !entity.IsDead && (entity.AlwaysShowNameTag || IsDamaged(entity));
 
-            RectTransform nameTagRect = nameTag.GetComponent<RectTransform>();
-            nameTagRect.sizeDelta = new Vector2(
-                entityNameTagSize.x / scale.x,
-                entityNameTagSize.y / scale.y
-            );
-
-            float worldTop = GetWorldTop(root);
-            float localHeight = (worldTop + entityNameTagPadding - root.position.y) / scale.y;
-            nameTagRect.localPosition = new Vector3(0f, localHeight, 0f);
-        }
+        /// <summary>
+        /// How far above the entity's root its tag floats: just clear of its own bounds rather than
+        /// at a fixed character-sized offset, because a refinery and a fence post are nothing like
+        /// the same height.
+        /// </summary>
+        float MeasureTagHeight(EntityBase entity) =>
+            GetWorldTop(entity.transform) + entityNameTagPadding - entity.transform.position.y;
 
         /// <summary>
         /// Highest point of an entity's visible body. Renderers are preferred over colliders because a
@@ -246,8 +325,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             bool found = false;
             Bounds bounds = default;
             foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true)) {
-                // The tag itself is a child by the time this is recomputed, and a canvas renderer
-                // would drag the measured top upward every frame it ran.
+                // Canvases a game mode hangs on the entity - a build timer - are not its body.
                 if (renderer.GetComponentInParent<Canvas>() != null)
                     continue;
                 if (!found) {
@@ -272,72 +350,72 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             return found ? bounds.max.y : root.position.y + 2f;
         }
 
-        void UpdateNameTagPositioning(Canvas nameTag) {
-            Transform head = nameTag.transform.parent;
-
-            Vector3 scale = head.lossyScale;
-
-            RectTransform nameTagRect = nameTag.GetComponent<RectTransform>();
-            nameTagRect.sizeDelta = new Vector2(
-                nameTagSize.x / scale.x,
-                nameTagSize.y / scale.y
-            );
-
-            nameTagRect.localPosition = new Vector3(
-                nameTagOffset.x / scale.x,
-                nameTagOffset.y / scale.y,
-                nameTagOffset.z / scale.z
-            );
-        }
-        void Update() {
+        void LateUpdate() {
             // Camera switches briefly leave no active MainCamera. Nametags
             // can wait a frame rather than throwing during that transition.
             Camera mainCamera = Camera.main;
 
             for (int i = nameTags.Count - 1; i >= 0; i--) {
-                (Canvas, GameCharacter) nameTagTuple = nameTags.ElementAt(i);
-                Canvas nameTag = nameTagTuple.Item1;
-                GameCharacter gameCharacter = nameTagTuple.Item2;
-
-                if (nameTag != null) {
-                    if (mainCamera != null)
-                        nameTag.transform.forward = mainCamera.transform.forward;
-                    nameTag.gameObject.SetActive(CameraController.targetCharacter != gameCharacter && !gameCharacter.IsDead);
-#if UNITY_EDITOR
-                    //UpdateNameTagPositioning(nameTag);
-#endif
-                }
-                else{
-                    nameTags.RemoveAt(i);
-                }
-            }
-
-            for (int i = entityNameTags.Count - 1; i >= 0; i--) {
-                (Canvas nameTag, EntityBase entity) = entityNameTags[i];
-                if (nameTag == null || entity == null) {
-                    if (nameTag != null)
-                        Destroy(nameTag.gameObject);
-                    entityNameTags.RemoveAt(i);
+                CharacterTag tag = nameTags[i];
+                if (tag.Canvas == null || tag.Character == null) {
+                    // The character went without a removal event; its tag lives here, not under it.
+                    RemoveCharacterTag(tag);
                     continue;
                 }
 
+                bool show = CameraController.targetCharacter != tag.Character && !tag.Character.IsDead;
+                if (tag.Canvas.gameObject.activeSelf != show)
+                    tag.Canvas.gameObject.SetActive(show);
+                if (show)
+                    PlaceCharacterTag(tag, mainCamera);
+            }
+
+            for (int i = entityNameTags.Count - 1; i >= 0; i--) {
+                EntityTag tag = entityNameTags[i];
+                if (tag.Canvas == null || tag.Entity == null) {
+                    RemoveEntityTag(i);
+                    continue;
+                }
+
+                EntityBase entity = tag.Entity;
                 bool show = ShouldShowEntityTag(entity);
-                if (show != nameTag.gameObject.activeSelf) {
-                    nameTag.gameObject.SetActive(show);
+                if (show != tag.Canvas.gameObject.activeSelf) {
+                    tag.Canvas.gameObject.SetActive(show);
                     // A structure finishes construction, and a vehicle is built, at its full size only
                     // after it spawns, so the tag is re-seated the moment it is first needed.
                     if (show)
-                        UpdateEntityNameTagPositioning(nameTag, entity);
+                        tag.Height = MeasureTagHeight(entity);
                 }
-                if (show && mainCamera != null)
-                    nameTag.transform.forward = mainCamera.transform.forward;
+                if (!show)
+                    continue;
+
+                // A player-style tag shows health only once there is damage to show, as a
+                // character's does; a damage-only tag is up precisely because there is.
+                bool showHealth = !entity.AlwaysShowNameTag || IsDamaged(entity);
+                if (tag.HealthBar.activeSelf != showHealth)
+                    tag.HealthBar.SetActive(showHealth);
+
+                Transform tagTransform = tag.Canvas.transform;
+                tagTransform.position = entity.transform.position + Vector3.up * tag.Height;
+                if (mainCamera != null)
+                    tagTransform.forward = mainCamera.transform.forward;
             }
         }
+
         void OnDestroy() {
             GameCharacter.GameCharacterAdded -= GameCharacterAdded;
             GameCharacter.GameCharacterRemoved -= GameCharacterRemoved;
             EntityBase.EntityAdded -= EntityAdded;
             EntityBase.EntityRemoved -= EntityRemoved;
+
+            foreach (CharacterTag tag in nameTags)
+                tag.Unbind?.Invoke();
+            nameTags.Clear();
+            foreach (EntityTag tag in entityNameTags) {
+                if (tag.Entity != null)
+                    tag.Unbind?.Invoke();
+            }
+            entityNameTags.Clear();
         }
     }
 }

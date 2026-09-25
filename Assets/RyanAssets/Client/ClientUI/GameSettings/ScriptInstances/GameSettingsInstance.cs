@@ -9,7 +9,8 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
     public enum GameSettingCategory {
         Controls,
         Camera,
-        Audio
+        Audio,
+        Interface
     };
     public abstract class GameSettingsInstance {
         // just for polymorphism

@@ -24,9 +24,11 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// </para>
     /// </summary>
     [RequireComponent(typeof(StructureComponent))]
-    public sealed class WV_Constructable : NetworkBehaviour {
+    public sealed class WV_Constructable : NetworkBehaviour, IGridFootprint {
         [Header("Structure")]
-        [Tooltip("Grid cells this structure occupies on each horizontal axis.")]
+        [Tooltip("Grid cells this structure spans on its longer side. Placement snaps by this rather " +
+                 "than by the model's measured size, so a fence post can sit on the grid point two " +
+                 "fence runs meet at.")]
         [SerializeField, Min(1)] int footprintCells = 1;
         [Tooltip("Health of the finished structure. The site starts at a fraction of this.")]
         [SerializeField, Min(1)] long maxHealth = 500;

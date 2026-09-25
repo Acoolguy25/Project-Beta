@@ -25,9 +25,23 @@ namespace Universes.UniverseData.war_valley.Editor {
     /// flows through. Re-running a rebuild is safe: existing prefabs are replaced in place, which keeps
     /// their GUIDs and therefore every scene and FishNet spawnable-prefab reference to them.
     /// </para>
+    /// <para>
+    /// Every generated prefab is stamped with <see cref="AuthoringVersion"/>. When the Editor loads
+    /// with a structure or unit prefab missing or stamped older than this script - the code changed
+    /// what it builds, or added a structure such as the gate - the prefabs are rebuilt once that
+    /// session, the way the commander HUD already is, so pulling new authoring code never leaves
+    /// stale or missing prefabs behind.
+    /// </para>
     /// </summary>
     public static class WV_Authoring {
         public const string Root = "Assets/Universes/UniverseData/war_valley";
+
+        /// <summary>
+        /// Stamp written into each generated prefab's import settings. Change it whenever the
+        /// prefabs this script builds change, and every copy older than it is rebuilt on next load.
+        /// </summary>
+        const string AuthoringVersion = "war-valley-authoring-2";
+        const string AutoRebuildSessionKey = "WV_Authoring.AutoRebuildAttempted";
         const string PackRoot = "Assets/CartoonMilitaryModelPack/Prefebs";
         const string StructuresFolder = Root + "/Structures";
         const string UnitsFolder = Root + "/Units";
@@ -49,6 +63,12 @@ namespace Universes.UniverseData.war_valley.Editor {
         const float ShieldVfxRadius = 5f;
         const string GatePostPath = PackRoot + "/Building_Prefebs/Fence_02_Cornor_Prefeb.prefab";
 
+        /// <summary>Thinnest a wall's collision box is allowed to be, so it reliably stops a body or a shot.</summary>
+        const float MinWallDepth = 0.6f;
+
+        /// <summary>Metres of construction site left around a thin structure's strip on each axis.</summary>
+        const float SitePadding = 1.5f;
+
         static readonly int StructureLayer = LayerMask.NameToLayer("Structure");
         static readonly int CharacterLayer = LayerMask.NameToLayer("Character");
         static readonly int IgnoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
@@ -57,8 +77,30 @@ namespace Universes.UniverseData.war_valley.Editor {
 
         enum StructureRole { Plain, Income, Production, Turret, Wall, Research, Gate, ShieldGenerator }
 
+        /// <summary>How a structure's model is laid out on the build grid.</summary>
+        enum StructureShape {
+            /// <summary>A building: its widest side fills the footprint and it stands in a square box.</summary>
+            Block,
+            /// <summary>
+            /// A wall run: as long as the footprint along X, as thin as its art, as tall as the art
+            /// is at that length. An even run lies on a grid line, so runs turned through ninety
+            /// degrees meet exactly at a grid point and close a perimeter without a gap.
+            /// </summary>
+            Run,
+            /// <summary>
+            /// A post as tall as a matching run, standing on the grid point the footprint centres it
+            /// on, to cap the joint where runs meet.
+            /// </summary>
+            Post
+        }
+
         sealed class StructureDef {
             public string Id, DisplayName, Description, Category, ModelPath;
+            /// <summary>Prefab file name when it is not the display name, to rebuild a legacy asset in place.</summary>
+            public string AssetName;
+            public StructureShape Shape = StructureShape.Block;
+            /// <summary>For a post: the run it is sized to stand as tall as.</summary>
+            public string MatchHeightOf;
             public int FootprintCells = 1;
             public ulong Cost;
             public float BuildSeconds;
@@ -177,30 +219,46 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Role = StructureRole.Turret, TurretRange = 20f, TurretDamage = 16, TurretCooldown = 1.1f
             },
             new() {
+                // A two-cell run: long and thin, and taller than a soldier. The pack's fence section
+                // runs along its own Z axis, so it is turned to lie along X like every wall here. Turn
+                // it with R to run the other way; runs meet at grid points, so they close a perimeter.
                 Id = "wv_fence", DisplayName = "Perimeter Fence", Category = "Defense",
-                Description = "Slows an advance. Attackers must breach it to pass.",
+                Description = "An 8m fence run. Slows an advance: attackers must breach it to pass. " +
+                              "Press R to turn it; runs join end to end and at corners.",
                 ModelPath = PackRoot + "/Building_Prefebs/Fence_01_Prefeb.prefab",
-                FootprintCells = 1, Cost = 60, BuildSeconds = 4f, MaxHealth = 300,
-                Role = StructureRole.Wall
+                FootprintCells = 2, Cost = 60, BuildSeconds = 4f, MaxHealth = 300,
+                Role = StructureRole.Wall, Shape = StructureShape.Run, ModelYaw = 90f
             },
             new() {
+                // Declares a two-cell footprint so it snaps to a grid point - the corner two fence
+                // runs meet at - rather than to the middle of a cell, which is off every run.
                 Id = "wv_fence_corner", DisplayName = "Fence Corner", Category = "Defense",
-                Description = "Turns a perimeter line through ninety degrees.",
+                Description = "A fence post for the joint where two fence runs meet at a corner.",
                 ModelPath = PackRoot + "/Building_Prefebs/Fence_01_Cornor_Prefeb.prefab",
-                FootprintCells = 1, Cost = 60, BuildSeconds = 4f, MaxHealth = 300,
-                Role = StructureRole.Wall
+                FootprintCells = 2, Cost = 60, BuildSeconds = 4f, MaxHealth = 300,
+                Role = StructureRole.Wall, Shape = StructureShape.Post, MatchHeightOf = "wv_fence"
+            },
+            new() {
+                // Rebuilds the old debug wall - a plain cube between two cylinders, with no owner,
+                // so it could be neither selected nor demolished - as a real War Valley wall in its
+                // place, from the pack's heavier fence. Same asset, so existing references keep it.
+                Id = "basic_wall", DisplayName = "Basic Wall", Category = "Defense", AssetName = "BasicWall",
+                Description = "An 8m heavy wall run. Tougher than a fence; attackers must break it down to pass.",
+                ModelPath = PackRoot + "/Building_Prefebs/Fence_02_Prefeb.prefab",
+                FootprintCells = 2, Cost = 100, BuildSeconds = 6f, MaxHealth = 600,
+                Role = StructureRole.Wall, Shape = StructureShape.Run, ModelYaw = 90f
             },
             new() {
                 // The pack has no gate, so one is assembled from its heavier fence: a Fence_02
                 // section is the door that sinks into the ground, between two of its corner posts.
-                // The section runs along its own Z axis, so it is turned to lie across the passage.
+                // A two-cell run like the walls it is set into, wide enough for a tank to pass.
                 Id = WV_Rules.GateId, DisplayName = "Gate", Category = "Defense",
-                Description = "A wall section that opens for your side. Allies walk up and it opens; " +
+                Description = "An 8m wall section that opens for your side. Allies walk up and it opens; " +
                               "your troops and vehicles use it when their route needs it. Its owner can " +
                               "hold it open or lock it. Enemies must break it down.",
                 ModelPath = PackRoot + "/Building_Prefebs/Fence_02_Prefeb.prefab",
-                FootprintCells = 1, Cost = 150, BuildSeconds = 8f, MaxHealth = 500,
-                Role = StructureRole.Gate, ModelYaw = 90f
+                FootprintCells = 2, Cost = 150, BuildSeconds = 8f, MaxHealth = 500,
+                Role = StructureRole.Gate, Shape = StructureShape.Run, ModelYaw = 90f
             },
             new() {
                 Id = WV_Rules.ShieldGeneratorId, DisplayName = "Shield Generator", Category = "Defense",
@@ -304,6 +362,47 @@ namespace Universes.UniverseData.war_valley.Editor {
             BuildUnits();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+        }
+
+        /// <summary>
+        /// Rebuilds every structure and unit once per Editor session when any of them is missing or
+        /// predates <see cref="AuthoringVersion"/>. Skipped in batch mode, in play mode, and in a
+        /// ParrelSync clone - a clone shares this project's assets, and two Editors rebuilding the
+        /// same prefabs at once would fight over them.
+        /// </summary>
+        internal static void RebuildIfStale() {
+            if (Application.isBatchMode
+                || EditorApplication.isPlayingOrWillChangePlaymode
+                || IsProjectClone()
+                || SessionState.GetBool(AutoRebuildSessionKey, false))
+                return;
+
+            List<string> stale = FindStalePrefabs();
+            if (stale.Count == 0)
+                return;
+
+            SessionState.SetBool(AutoRebuildSessionKey, true);
+            Debug.Log(
+                $"War Valley: {stale.Count} generated prefab(s) are missing or predate the authoring code " +
+                $"({string.Join(", ", stale)}); rebuilding structures and units.");
+            RebuildAll();
+        }
+
+        static bool IsProjectClone() => Application.dataPath.Replace('\\', '/').Contains("_clone_");
+
+        static List<string> FindStalePrefabs() {
+            var stale = new List<string>();
+            foreach (StructureDef def in Structures)
+                AddIfStale(StructurePath(def), stale);
+            foreach (UnitDef def in Units)
+                AddIfStale(UnitPath(def), stale);
+            return stale;
+        }
+
+        static void AddIfStale(string path, List<string> stale) {
+            AssetImporter importer = AssetImporter.GetAtPath(path);
+            if (importer == null || importer.userData != AuthoringVersion)
+                stale.Add(System.IO.Path.GetFileNameWithoutExtension(path));
         }
 
         static void EnsureFolders() {
@@ -460,6 +559,27 @@ namespace Universes.UniverseData.war_valley.Editor {
                 BuildStructure(def, scaffoldPrefab, siteBoxPrefab, unitPrefabs);
         }
 
+        static string StructurePath(StructureDef def) =>
+            $"{StructuresFolder}/{def.AssetName ?? PrefabName(def.DisplayName)}.prefab";
+
+        static StructureDef FindStructure(string id) => Structures.First(def => def.Id == id);
+
+        /// <summary>
+        /// Height a run's model stands at once fitted to its run, measured on a throwaway copy, so a
+        /// post can be sized to match it exactly.
+        /// </summary>
+        static float MeasureRunHeight(StructureDef run) {
+            var probe = new GameObject("HeightProbe");
+            try {
+                GameObject model = PlaceFitted(
+                    Load<GameObject>(run.ModelPath), probe.transform, Vector3.zero, run.ModelYaw,
+                    run.FootprintCells * WV_Rules.GridSize, "Model");
+                return WorldBounds(model).size.y;
+            } finally {
+                UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+
         static void BuildStructure(
             StructureDef def,
             GameObject scaffoldPrefab,
@@ -467,7 +587,7 @@ namespace Universes.UniverseData.war_valley.Editor {
             Dictionary<WV_UnitKind, WV_Unit> unitPrefabs) {
             // Baked before the prefab root exists, because the baker stages the model in its own
             // scene and there is no reason to have a half-built structure alive while it does.
-            Sprite icon = WV_IconBaker.Bake(Load<GameObject>(def.ModelPath), PrefabName(def.DisplayName));
+            Sprite icon = WV_IconBaker.Bake(Load<GameObject>(def.ModelPath), def.AssetName ?? PrefabName(def.DisplayName));
 
             var root = new GameObject(def.DisplayName);
             try {
@@ -482,33 +602,52 @@ namespace Universes.UniverseData.war_valley.Editor {
                 buildingRoot.transform.SetParent(root.transform, false);
                 SetLayerRecursive(buildingRoot, StructureLayer);
 
-                GameObject model = PlaceFitted(
-                    Load<GameObject>(def.ModelPath), buildingRoot.transform, Vector3.zero, def.ModelYaw, span, "Model");
+                // A post stands as tall as the run it caps; everything else is fitted to its footprint.
+                GameObject model = def.Shape == StructureShape.Post
+                    ? PlaceFittedToHeight(
+                        Load<GameObject>(def.ModelPath), buildingRoot.transform, def.ModelYaw,
+                        MeasureRunHeight(FindStructure(def.MatchHeightOf)), "Model")
+                    : PlaceFitted(
+                        Load<GameObject>(def.ModelPath), buildingRoot.transform, Vector3.zero, def.ModelYaw, span, "Model");
                 SetLayerRecursive(model, StructureLayer);
                 // The pack models ship without colliders; the structure's own box is the collision.
                 foreach (Collider collider in model.GetComponentsInChildren<Collider>(true))
                     UnityEngine.Object.DestroyImmediate(collider);
 
-                float modelHeight = Mathf.Max(1f, WorldBounds(model).size.y);
+                Bounds modelBounds = WorldBounds(model);
+                float modelHeight = Mathf.Max(1f, modelBounds.size.y);
+                // A wall or post is as thin as its art, not a square block: its box, its carve in the
+                // NavMesh, and its construction site all follow the model. The depth is floored so a
+                // wire-thin fence still stops a body and a bullet.
+                bool thin = def.Shape != StructureShape.Block;
+                Vector3 footprintSize = thin
+                    ? new Vector3(modelBounds.size.x, modelHeight, Mathf.Max(modelBounds.size.z, MinWallDepth))
+                    : new Vector3(span * 0.9f, modelHeight, span * 0.9f);
 
                 // Hoarding and site box share one parent so WV_Constructable can hide the whole site
                 // with a single reference the moment the build finishes.
                 var site = new GameObject("ConstructionSite");
                 site.transform.SetParent(root.transform, false);
 
+                // The hoarding is authored one cell square; a thin structure's site is fenced off
+                // around the strip it stands on rather than around a whole square of cells.
+                Vector2 siteSize = thin
+                    ? new Vector2(footprintSize.x + SitePadding, footprintSize.z + SitePadding)
+                    : new Vector2(span, span);
                 GameObject scaffold = (GameObject)PrefabUtility.InstantiatePrefab(scaffoldPrefab, site.transform);
                 scaffold.name = "ConstructionScaffold";
-                scaffold.transform.localScale = new Vector3(def.FootprintCells, 1f, def.FootprintCells);
+                scaffold.transform.localScale =
+                    new Vector3(siteSize.x / WV_Rules.GridSize, 1f, siteSize.y / WV_Rules.GridSize);
 
                 GameObject siteBox = (GameObject)PrefabUtility.InstantiatePrefab(siteBoxPrefab, site.transform);
                 siteBox.name = "ConstructionSiteBox";
-                siteBox.transform.localScale =
-                    new Vector3(span, WV_Rules.GetScaffoldHeight(def.FootprintCells), span);
+                siteBox.transform.localScale = new Vector3(
+                    siteSize.x, thin ? modelHeight : WV_Rules.GetScaffoldHeight(def.FootprintCells), siteSize.y);
 
                 SetLayerRecursive(site, StructureLayer);
 
                 BoxCollider box = root.AddComponent<BoxCollider>();
-                box.size = new Vector3(span * 0.9f, modelHeight, span * 0.9f);
+                box.size = footprintSize;
                 box.center = new Vector3(0f, modelHeight * 0.5f, 0f);
 
                 root.AddComponent<NetworkObject>();
@@ -564,7 +703,7 @@ namespace Universes.UniverseData.war_valley.Editor {
 
                 ApplyRole(def, root, span, modelHeight, unitPrefabs);
 
-                SavePrefab(root, $"{StructuresFolder}/{PrefabName(def.DisplayName)}.prefab");
+                SavePrefab(root, StructurePath(def));
             } finally {
                 UnityEngine.Object.DestroyImmediate(root);
             }
@@ -588,8 +727,11 @@ namespace Universes.UniverseData.war_valley.Editor {
 
             SetPrivateField(explosion, "explosionVfxPrefab", Load<GameObject>(ExplosionVfxPath));
             SetPrivateField(explosion, "smokeVfxPrefab", Load<GameObject>(SmokeVfxPath));
-            // One authored effect serves a fence and a hangar by scaling with the slot.
-            SetPrivateField(explosion, "vfxScale", (float)def.FootprintCells);
+            // One authored effect serves a fence and a hangar: the blast fits itself to the wreck at
+            // detonation, standing up the way the effect pack authors it, so no per-slot multiplier.
+            SetPrivateField(explosion, "vfxScale", 1f);
+            SetPrivateField(explosion, "vfxEulerAngles", new Vector3(-90f, 0f, 0f));
+            SetPrivateField(explosion, "fitVfxToDebris", true);
             // No explosion audio exists in the project yet. The hook is authored and left empty so
             // the clip can be dropped in without another rebuild.
             SetPrivateField(explosion, "explosionAudio", null);
@@ -726,10 +868,12 @@ namespace Universes.UniverseData.war_valley.Editor {
             Transform buildingRoot = root.transform.Find("Building");
             Transform door = buildingRoot.Find("Model");
             GameObject postSource = Load<GameObject>(GatePostPath);
+            // The posts stand as tall as the door at either end of the run, where the next wall or
+            // fence run meets the gate.
             foreach (float side in new[] { -1f, 1f }) {
-                GameObject post = PlaceFitted(
-                    postSource, buildingRoot, new Vector3(side * span * 0.5f, 0f, 0f), 0f, span * 0.18f,
-                    side < 0f ? "PostLeft" : "PostRight");
+                GameObject post = PlaceFittedToHeight(
+                    postSource, buildingRoot, 0f, modelHeight, side < 0f ? "PostLeft" : "PostRight");
+                post.transform.localPosition += new Vector3(side * span * 0.5f, 0f, 0f);
                 SetLayerRecursive(post, StructureLayer);
                 foreach (Collider collider in post.GetComponentsInChildren<Collider>(true))
                     UnityEngine.Object.DestroyImmediate(collider);
@@ -869,6 +1013,14 @@ namespace Universes.UniverseData.war_valley.Editor {
 
                 Ensure<WV_Owned>(root);
 
+                // A vehicle carries its commander's colour on its main body the way their buildings
+                // do - the same component picks the body out of the pack's single-atlas model - so
+                // whose tank it is reads at a glance. The robot rig is skinned and keeps its colours.
+                if (!def.UsesRobotRig) {
+                    var ownerColor = Ensure<WV_OwnerColor>(root);
+                    SetPrivateField(ownerColor, "tintedRenderers", model.GetComponentsInChildren<Renderer>(true));
+                }
+
                 var animation = root.AddComponent<WV_UnitAnimation>();
                 if (def.UsesRobotRig) {
                     SetPrivateField(animation, "animator", root.GetComponentInChildren<Animator>());
@@ -954,6 +1106,23 @@ namespace Universes.UniverseData.war_valley.Editor {
             instance.transform.localPosition =
                 localPosition + new Vector3(pivotOffset.x, pivotOffset.y + bounds.extents.y, pivotOffset.z);
 
+            return instance;
+        }
+
+        /// <summary>
+        /// <see cref="PlaceFitted"/> by height: scales the art uniformly until it stands
+        /// <paramref name="targetHeight"/> tall, seated on the floor and centred on the slot.
+        /// </summary>
+        static GameObject PlaceFittedToHeight(
+            GameObject source, Transform parent, float yaw, float targetHeight, string name) {
+            GameObject instance = PlaceFitted(source, parent, Vector3.zero, yaw, 1f, name);
+            float height = WorldBounds(instance).size.y;
+            if (height > 0.0001f)
+                instance.transform.localScale *= targetHeight / height;
+
+            Bounds bounds = WorldBounds(instance);
+            Vector3 pivotOffset = instance.transform.position - bounds.center;
+            instance.transform.localPosition = new Vector3(pivotOffset.x, pivotOffset.y + bounds.extents.y, pivotOffset.z);
             return instance;
         }
 
@@ -1043,7 +1212,32 @@ namespace Universes.UniverseData.war_valley.Editor {
         /// Saves over any existing prefab at this path so the asset keeps its GUID, and with it every
         /// scene reference and FishNet spawnable-prefab registration already pointing at it.
         /// </summary>
-        static GameObject SavePrefab(GameObject root, string path) =>
-            PrefabUtility.SaveAsPrefabAsset(root, path);
+        static GameObject SavePrefab(GameObject root, string path) {
+            GameObject saved = PrefabUtility.SaveAsPrefabAsset(root, path);
+            Stamp(path);
+            return saved;
+        }
+
+        /// <summary>Records which version of this script generated the asset, in its import settings.</summary>
+        static void Stamp(string path) {
+            AssetImporter importer = AssetImporter.GetAtPath(path);
+            if (importer == null || importer.userData == AuthoringVersion)
+                return;
+            importer.userData = AuthoringVersion;
+            EditorUtility.SetDirty(importer);
+            AssetDatabase.WriteImportSettingsIfDirty(path);
+        }
+    }
+
+    /// <summary>
+    /// Schedules <see cref="WV_Authoring.RebuildIfStale"/> for after the domain has loaded. Kept apart
+    /// from the authoring class so loading the domain does not also initialise its definitions.
+    /// </summary>
+    [InitializeOnLoad]
+    static class WV_AuthoringAutoRebuild {
+        static WV_AuthoringAutoRebuild() {
+            // Deferred: asset operations are not allowed while the domain is still loading.
+            EditorApplication.delayCall += WV_Authoring.RebuildIfStale;
+        }
     }
 }

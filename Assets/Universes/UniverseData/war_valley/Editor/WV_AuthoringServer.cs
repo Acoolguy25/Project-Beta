@@ -150,8 +150,9 @@ namespace Universes.UniverseData.war_valley.Editor {
             foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { Root + "/Structures" })) {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                // Only the generated War Valley structures carry a constructable; this deliberately
-                // leaves the older debug wall out of the build menu.
+                // Only the generated War Valley structures carry a constructable. The runner also
+                // offers these on its own at startup (WV_ServerRunner.OfferGeneratedStructures), so
+                // wiring them here is for the Inspector's record rather than required.
                 if (prefab != null
                     && prefab.GetComponent<WV_Constructable>() != null
                     && prefab.TryGetComponent(out RyanAssets.Shared.Declarations.StructureComponent structure))

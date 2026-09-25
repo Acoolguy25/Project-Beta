@@ -190,9 +190,16 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             return field;
         }
 
-        public static HoverItem Hover(Component target, string text) {
+        /// <param name="gameHelp">
+        /// True when the text teaches a game mode's controls rather than stating a fact, so the
+        /// player's Game Help setting (<see cref="GameHelp"/>) can hide it.
+        /// </param>
+        public static HoverItem Hover(Component target, string text, bool gameHelp = false) {
             var hover = Ensure<HoverItem>(target.gameObject);
             hover.SetText(text);
+            var serialized = new SerializedObject(hover);
+            serialized.FindProperty("isGameHelp").boolValue = gameHelp;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
             return hover;
         }
 
