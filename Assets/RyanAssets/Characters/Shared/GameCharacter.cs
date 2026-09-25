@@ -66,8 +66,34 @@ namespace RyanAssets.Characters.Shared {
             TeamToCharacter.Clear();
         }
 
+        /// <summary>
+        /// The root scale this character's prefab was authored at, before any build or game mode
+        /// resized it. A <see cref="CharacterBuild"/> is proportions relative to this body.
+        /// </summary>
+        public Vector3 AuthoredScale { get; private set; } = Vector3.one;
+
+        /// <summary>
+        /// How this character's body is currently sized against its authored one: (1, 1, 1) is the
+        /// prefab as authored, (0.5, 1.2, 0.5) a thin, tall build. Presentation that must follow the
+        /// body - an overhead tag clearing a taller head - reads this rather than the raw transform
+        /// scale, which also carries whatever scale the prefab was authored at.
+        /// </summary>
+        public Vector3 BodyScale {
+            get {
+                Vector3 current = transform.localScale;
+                Vector3 authored = AuthoredScale;
+                return new Vector3(
+                    Mathf.Approximately(authored.x, 0f) ? 1f : current.x / authored.x,
+                    Mathf.Approximately(authored.y, 0f) ? 1f : current.y / authored.y,
+                    Mathf.Approximately(authored.z, 0f) ? 1f : current.z / authored.z);
+            }
+        }
+
         protected override void Awake() {
             base.Awake();
+            // Recorded before any replicated scale is applied: Awake runs before FishNet raises the
+            // character's SyncVar callbacks, so this is the prefab's own root scale on every machine.
+            AuthoredScale = transform.localScale;
             OnDied += SharedDied;
             OnRevive += SharedRevived;
             CharacterScale.OnChange += OnCharacterScaleChanged;
@@ -153,12 +179,18 @@ namespace RyanAssets.Characters.Shared {
         /// Gives this character a body: its proportions are applied on every machine, and its health
         /// is set to <paramref name="baseHealth"/> scaled by the build. Speed and damage follow from
         /// <see cref="Build"/> wherever they are applied.
+        /// <para>
+        /// The proportions are relative to the authored body, as <see cref="CharacterBuild"/>
+        /// defines them. Writing them as the absolute scale shrank every body authored above unit
+        /// scale - the robot soldiers are authored at three - to a third of its size, so a standard
+        /// soldier stood a third as tall as the players it fought beside.
+        /// </para>
         /// </summary>
         [Server]
         public void ApplyBuild(CharacterBuild build, long baseHealth) {
             build = build.OrStandard;
             BuildSync.Value = build;
-            SetScale(build.Proportions);
+            SetScale(Vector3.Scale(AuthoredScale, build.Proportions));
             Init(build.ScaleHealth(baseHealth));
         }
 #endif

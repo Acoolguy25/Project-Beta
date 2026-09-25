@@ -127,5 +127,30 @@ namespace Universes.UniverseData.war_valley.Tests {
                     $"{kind} falls through to the generic label.");
             }
         }
+
+        [Test]
+        public void OwnedName_NamesTheCommanderFirst() {
+            Assert.That(WV_Rules.FormatOwnedName("Player0", "Skinny Legend"), Is.EqualTo("Player0's Skinny Legend"));
+            // A commander with no name to show leaves the kind on its own rather than "'s Tank".
+            Assert.That(WV_Rules.FormatOwnedName("  ", "Tank"), Is.EqualTo("Tank"));
+            Assert.That(WV_Rules.FormatOwnedName(null, "Tank"), Is.EqualTo("Tank"));
+        }
+
+        [Test]
+        public void TroopKind_IsReadBackFromOwnedAndBareNames() {
+            // Selling prices a troop, and the selection summary counts it, by the kind read back from
+            // its name - which is bare on a wave enemy and carries its commander on a player's troop.
+            foreach (WV_TroopProfile profile in WV_TroopCatalog.All) {
+                Assert.That(WV_Rules.TryGetTroopKind(profile.DisplayName, out WV_TroopKind bare), Is.True, profile.DisplayName);
+                Assert.That(bare, Is.EqualTo(profile.Kind));
+
+                string owned = WV_Rules.FormatOwnedName("Player0", profile.DisplayName);
+                Assert.That(WV_Rules.TryGetTroopKind(owned, out WV_TroopKind fromOwned), Is.True, owned);
+                Assert.That(fromOwned, Is.EqualTo(profile.Kind));
+            }
+
+            Assert.That(WV_Rules.TryGetTroopKind("Player0's Tank", out _), Is.False);
+            Assert.That(WV_Rules.TryGetTroopKind(null, out _), Is.False);
+        }
     }
 }

@@ -44,6 +44,23 @@ namespace Universes.UniverseData.war_valley.Tests {
         }
 
         [Test]
+        public void DeclaredFootprint_OverridesTheMeasuredOne() {
+            // A fence post is narrower than a cell but declares two, so it snaps to the grid point
+            // where two fence runs meet instead of to the middle of a cell.
+            var post = new GameObject("Post");
+            try {
+                post.AddComponent<WV_TestFootprint>().Cells = 2;
+                Assert.That(StructurePlacement.GetFootprintCells(post), Is.EqualTo(2));
+
+                // Declaring nothing falls back to measuring - here, nothing to measure.
+                post.GetComponent<WV_TestFootprint>().Cells = 0;
+                Assert.That(StructurePlacement.GetFootprintCells(post), Is.EqualTo(1));
+            } finally {
+                Object.DestroyImmediate(post);
+            }
+        }
+
+        [Test]
         public void WarValleyGrid_MatchesTheSharedPlacementGrid() {
             Assert.That(WV_Rules.GridSize, Is.EqualTo(StructurePlacement.GridSize));
         }

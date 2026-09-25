@@ -84,6 +84,12 @@ namespace Universes.UniverseData.war_valley.Client {
         WV_ShieldBarrier shield;
 
         MenuKind menu;
+        /// <summary>
+        /// True while the research menu was opened from the HUD rather than from a selected station.
+        /// It then stays up as the selection changes, the way the build menu of a selected barracks
+        /// would not, because nothing about the selection opened it.
+        /// </summary>
+        bool standaloneResearch;
         float nextRefreshTime;
 
         public WV_StructureInspector(WV_HUD hud, Func<int> localClientId, Func<int> localTroopCount, Action armRallyPoint) {
@@ -94,6 +100,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
             if (hud.StructurePanel != null) {
                 hud.StructurePanel.ActionRequested += HandleAction;
+                hud.StructurePanel.CloseRequested += Clear;
                 if (hud.StructurePanel.Queue != null)
                     hud.StructurePanel.Queue.CancelRequested += HandleQueueCancel;
             } else {
@@ -117,6 +124,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             if (hud.StructurePanel != null) {
                 hud.StructurePanel.ActionRequested -= HandleAction;
+                hud.StructurePanel.CloseRequested -= Clear;
                 if (hud.StructurePanel.Queue != null)
                     hud.StructurePanel.Queue.CancelRequested -= HandleQueueCancel;
             }
@@ -139,6 +147,9 @@ namespace Universes.UniverseData.war_valley.Client {
         public IReadOnlyList<WV_ProductionBuilding> RallyTargets => productionGroup;
 
         public bool IsMenuOpen => menu != MenuKind.None && hud.OptionMenu != null && hud.OptionMenu.IsOpen;
+
+        /// <summary>True while the research menu is up, however it was opened.</summary>
+        public bool IsResearchMenuOpen => menu == MenuKind.Research && IsMenuOpen;
 
         /// <summary>Whether the local commander may select and use this structure at all.</summary>
         public bool CanUse(StructureComponent candidate) =>
@@ -198,7 +209,10 @@ namespace Universes.UniverseData.war_valley.Client {
             BindPrimary(selection.Count > 0 ? selection[0] : null);
 
             if (structure == null) {
-                CloseMenu();
+                // Research opened from the HUD belongs to no building, so losing the building
+                // selection leaves it where it is.
+                if (!standaloneResearch)
+                    CloseMenu();
                 if (hud.StructurePanel != null)
                     hud.StructurePanel.Hide();
                 return;
@@ -206,9 +220,13 @@ namespace Universes.UniverseData.war_valley.Client {
 
             // The menu opens with a newly selected building, and a new primary of a different kind
             // swaps it rather than leaving the old one up. An open menu is re-titled for the new
-            // group; one the player closed stays closed while the selection merely changes size.
-            if (previousPrimary != structure || reopenMenu || IsMenuOpen)
+            // group; one the player closed stays closed while the selection merely changes size. A
+            // building with no menu of its own - a wall - leaves research opened from the HUD up.
+            bool hasOwnMenu = production != null || researchStation != null;
+            if (hasOwnMenu && (previousPrimary != structure || reopenMenu || IsMenuOpen))
                 OpenMenu();
+            else if (!hasOwnMenu && !standaloneResearch)
+                CloseMenu();
             MarkDirty();
             Refresh();
         }
@@ -239,32 +257,92 @@ namespace Universes.UniverseData.war_valley.Client {
             if (structure == null || hud.OptionMenu == null)
                 return false;
 
-            if (production != null)
+            if (production != null) {
                 menu = MenuKind.Production;
-            else if (researchStation != null)
+                standaloneResearch = false;
+                hud.OptionMenu.Open(
+                    $"{(production.TrainsTroops ? "Train" : "Build")} at {GroupName()}",
+                    productionGroup.Count > 1
+                        ? "Each order goes to the building with the shortest queue"
+                        : "Click to queue - units belong to whoever pays");
+            } else if (researchStation != null) {
                 menu = MenuKind.Research;
-            else {
+                standaloneResearch = false;
+                hud.OptionMenu.Open("Research", ResearchSubtitle());
+            } else {
                 CloseMenu();
                 return false;
             }
-
-            string title = menu == MenuKind.Research
-                ? "Research"
-                : $"{(production.TrainsTroops ? "Train" : "Build")} at {GroupName()}";
-            string subtitle = menu == MenuKind.Research
-                ? "Your own research - every station you own speeds it up"
-                : productionGroup.Count > 1
-                    ? "Each order goes to the building with the shortest queue"
-                    : "Click to queue - units belong to whoever pays";
-            hud.OptionMenu.Open(title, subtitle);
             MarkDirty();
             return true;
         }
 
+        /// <summary>
+        /// Opens the research menu from the HUD, with or without a research station selected. Research
+        /// belongs to the commander rather than to a building, so it has a menu of its own; without a
+        /// finished station of their own the menu still opens and says that one is needed.
+        /// </summary>
+        public void OpenResearchMenu() {
+            if (hud.OptionMenu == null)
+                return;
+            menu = MenuKind.Research;
+            standaloneResearch = true;
+            hud.OptionMenu.Open("Research", ResearchSubtitle());
+            MarkDirty();
+            RefreshMenu();
+        }
+
+        /// <summary>Opens the research menu, or closes it when it is already up.</summary>
+        public void ToggleResearchMenu() {
+            if (IsResearchMenuOpen)
+                CloseMenu();
+            else
+                OpenResearchMenu();
+        }
+
         public void CloseMenu() {
             menu = MenuKind.None;
+            standaloneResearch = false;
             if (hud.OptionMenu != null)
                 hud.OptionMenu.Close();
+        }
+
+        /// <summary>
+        /// The research menu's second line: what research needs when the commander cannot yet run
+        /// any, otherwise how it runs.
+        /// </summary>
+        string ResearchSubtitle() {
+            int clientId = LocalClientId;
+            if (WV_ResearchBuilding.CountOperational(clientId) > 0)
+                return "Your own research - every Research Station you own speeds it up";
+            return OwnsResearchStation(clientId)
+                ? "Requires a Research Station - yours is still being built"
+                : "Requires a Research Station - build one (Support tab) to research";
+        }
+
+        /// <summary>Whether the commander owns a research station at all, finished or still going up.</summary>
+        static bool OwnsResearchStation(int clientId) {
+            foreach (WV_ResearchBuilding station in WV_ResearchBuilding.All) {
+                if (station != null && station.Owned != null && station.Owned.IsOwnedBy(clientId))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The station a research order is sent through: the selected one when it can run it,
+        /// otherwise any finished station the commander owns. Research runs on the commander's own
+        /// stations whichever one carries the order, so which one is picked changes nothing else.
+        /// </summary>
+        WV_ResearchBuilding ResolveResearchStation() {
+            int clientId = LocalClientId;
+            if (researchStation != null && researchStation.IsOperational && CanUse(structure))
+                return researchStation;
+            foreach (WV_ResearchBuilding station in WV_ResearchBuilding.All) {
+                if (station != null && station.IsOperational && station.Owned != null && station.Owned.IsOwnedBy(clientId))
+                    return station;
+            }
+            return null;
         }
 
         /// <summary>
@@ -272,8 +350,12 @@ namespace Universes.UniverseData.war_valley.Client {
         /// longer usable, and redraws on the throttle. Returns false when nothing is selected.
         /// </summary>
         public bool Tick() {
-            if (selection.Count == 0)
+            if (selection.Count == 0) {
+                // The research menu can be up with nothing selected; its progress still has to tick.
+                if (IsMenuOpen && Time.unscaledTime >= nextRefreshTime)
+                    Refresh();
                 return false;
+            }
 
             string lostName = null;
             for (int i = selection.Count - 1; i >= 0; i--) {
@@ -298,12 +380,10 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void Refresh() {
-            if (structure == null)
-                return;
             nextRefreshTime = Time.unscaledTime + RefreshInterval;
 
             SelectionInfoPanel panel = hud.StructurePanel;
-            if (panel != null) {
+            if (structure != null && panel != null) {
                 panel.Show(selection.Count == 1 ? BuildHeader() : BuildGroupHeader());
                 if (selection.Count == 1)
                     BuildStats();
@@ -315,15 +395,27 @@ namespace Universes.UniverseData.war_valley.Client {
                 RefreshQueue(panel.Queue);
             }
 
-            if (IsMenuOpen) {
-                if (menu == MenuKind.Production)
-                    BuildProductionOptions();
-                else
-                    BuildResearchOptions();
-                hud.OptionMenu.SetOptions(options, menu == MenuKind.Production
-                    ? "This building has nothing to build"
-                    : "Nothing left to research");
+            RefreshMenu();
+        }
+
+        void RefreshMenu() {
+            if (!IsMenuOpen)
+                return;
+
+            if (menu == MenuKind.Production) {
+                if (production == null) {
+                    CloseMenu();
+                    return;
+                }
+                BuildProductionOptions();
+                hud.OptionMenu.SetOptions(options, "This building has nothing to build");
+                return;
             }
+
+            // Re-titled every redraw: a station finishing or falling changes what research needs.
+            hud.OptionMenu.Open("Research", ResearchSubtitle());
+            BuildResearchOptions();
+            hud.OptionMenu.SetOptions(options, "Nothing left to research");
         }
 
         string GroupName() =>
@@ -841,7 +933,9 @@ namespace Universes.UniverseData.war_valley.Client {
                     option.StateText = "Needs earlier research";
                 } else if (rate <= 0f) {
                     option.State = CommandOptionState.Locked;
-                    option.StateText = "Needs a finished research station of your own";
+                    option.StateText = OwnsResearchStation(clientId)
+                        ? "Requires a Research Station - yours is still being built"
+                        : "Requires a Research Station";
                 } else if (economy != null && !economy.CanAfford(clientId, definition.Cost)) {
                     option.State = CommandOptionState.Unaffordable;
                     option.StateText = null;
@@ -863,10 +957,10 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void HandleOptionClicked(int id) {
-            if (structure == null || InstanceFinder.ClientManager == null)
+            if (InstanceFinder.ClientManager == null)
                 return;
 
-            if (menu == MenuKind.Production && productionGroup.Count > 0) {
+            if (menu == MenuKind.Production && structure != null && productionGroup.Count > 0) {
                 // The server re-checks funds, research, queue length, and the squad cap, and answers
                 // either way; the card only greys out what is certain to be refused.
                 InstanceFinder.ClientManager.Broadcast(new WV_ProductionRequest {
@@ -874,9 +968,18 @@ namespace Universes.UniverseData.war_valley.Client {
                     unitKind = (byte)id,
                     cancel = false
                 });
-            } else if (menu == MenuKind.Research && researchStation != null) {
+            } else if (menu == MenuKind.Research) {
+                // Sent through any of the commander's finished stations, so research can be started
+                // from its own menu without first finding and selecting one.
+                WV_ResearchBuilding station = ResolveResearchStation();
+                if (station == null) {
+                    hud.SetHint(OwnsResearchStation(LocalClientId)
+                        ? "Your Research Station is still being built - research starts once it is finished"
+                        : "Build a Research Station first - research needs a finished station of your own");
+                    return;
+                }
                 InstanceFinder.ClientManager.Broadcast(new WV_ResearchRequest {
-                    stationObjectId = structure.NetworkObject.ObjectId,
+                    stationObjectId = station.NetworkObject.ObjectId,
                     tech = (byte)id,
                     cancel = false
                 });

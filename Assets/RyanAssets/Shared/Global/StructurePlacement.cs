@@ -1,3 +1,4 @@
+using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
 namespace RyanAssets.Shared.Globals {
@@ -37,9 +38,18 @@ namespace RyanAssets.Shared.Globals {
         public static int GetFootprintCells(Bounds bounds) =>
             Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(bounds.size.x, bounds.size.z) / GridSize));
 
-        /// <summary>The footprint of an instantiated structure, or one cell when it has no bounds.</summary>
-        public static int GetFootprintCells(GameObject instance) =>
-            TryGetBounds(instance, out Bounds bounds) ? GetFootprintCells(bounds) : 1;
+        /// <summary>
+        /// The footprint of an instantiated structure: the span it declares through
+        /// <see cref="IGridFootprint"/> when it does, otherwise measured from its bounds, or one cell
+        /// when it has none.
+        /// </summary>
+        public static int GetFootprintCells(GameObject instance) {
+            if (instance != null
+                && instance.TryGetComponent(out IGridFootprint declared)
+                && declared.FootprintCells > 0)
+                return declared.FootprintCells;
+            return TryGetBounds(instance, out Bounds bounds) ? GetFootprintCells(bounds) : 1;
+        }
 
         public static float SnapRotation(float yRotation) => Mathf.Round(yRotation / GridRotationSnap) * GridRotationSnap;
 

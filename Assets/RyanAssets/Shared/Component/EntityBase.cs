@@ -54,6 +54,23 @@ namespace RyanAssets.Shared.Component {
         /// <summary>For subclasses whose team is replicated: call from the team's change callback.</summary>
         protected void RaiseTeamChanged() => TeamChanged?.Invoke(this);
 
+        /// <summary>
+        /// Raised on every build when <see cref="DisplayName"/> changes after spawn, for entities whose
+        /// name is derived from replicated state - a vehicle named after the commander who owns it.
+        /// </summary>
+        public event Action<EntityBase> DisplayNameChanged;
+
+        /// <summary>For subclasses whose name follows replicated state: call when that state changes.</summary>
+        protected void RaiseDisplayNameChanged() => DisplayNameChanged?.Invoke(this);
+
+        /// <summary>
+        /// Whether the shared overhead tag stays up for this entity the way a player's does. Most
+        /// world entities - a wall, a refinery - only show theirs once damaged, so an untouched base
+        /// stays clean; something a player commands and needs to pick out, such as a vehicle, shows
+        /// its name all the time.
+        /// </summary>
+        public virtual bool AlwaysShowNameTag => false;
+
         public bool IsEffectActive(CharacterEffect effect) => EffectsComponent.IsEffectActive(effect);
 
         static readonly List<EntityBase> all = new();

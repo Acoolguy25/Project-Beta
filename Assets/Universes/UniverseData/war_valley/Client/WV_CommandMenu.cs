@@ -1,4 +1,5 @@
 using System;
+using RyanAssets.UI.Hover;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,7 +17,8 @@ namespace Universes.UniverseData.war_valley.Client {
     /// <para>
     /// This component raises events and draws state. It deliberately holds no selection and sends no
     /// broadcast of its own; <see cref="WV_ClientController"/> owns both, so there is exactly one
-    /// place that decides what an order means.
+    /// place that decides what an order means. Selling is not here: it belongs to what is selected,
+    /// so it sits on the selection panel (<see cref="WV_HUD"/>) and appears only with a selection.
     /// </para>
     /// </summary>
     public sealed class WV_CommandMenu : MonoBehaviour {
@@ -26,13 +28,6 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] Button attackButton;
         [SerializeField] Button stopButton;
         [SerializeField] Button holdButton;
-
-        [Header("Selling")]
-        [Tooltip("Sells the selected units and troops. Asks for a second click before it sells.")]
-        [SerializeField] Button sellButton;
-        [SerializeField] TextMeshProUGUI sellLabel;
-        [SerializeField] Color sellTint = new(0.66f, 0.2f, 0.18f, 1f);
-        [SerializeField] Color sellConfirmTint = new(0.9f, 0.35f, 0.1f, 1f);
 
         [Header("Selection Buttons")]
         [SerializeField] Button selectUnitsButton;
@@ -60,11 +55,9 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>Binds the current selection to the control group at this index.</summary>
         public event Action<int> GroupBound;
 
-        /// <summary>The Sell button was clicked. The controller decides whether this click confirms.</summary>
-        public event Action SellRequested;
-
         Color[] orderButtonBaseColors;
         Button[] orderButtons;
+        WV_OrderType? armedOrder;
 
         void Awake() {
             orderButtons = new[] { moveButton, attackMoveButton, attackButton, stopButton, holdButton };
@@ -87,8 +80,6 @@ namespace Universes.UniverseData.war_valley.Client {
                 selectTroopsButton.onClick.AddListener(() => SelectRequested?.Invoke(false, true));
             if (selectAllButton != null)
                 selectAllButton.onClick.AddListener(() => SelectRequested?.Invoke(true, true));
-            if (sellButton != null)
-                sellButton.onClick.AddListener(() => SellRequested?.Invoke());
 
             for (int i = 0; i < groupButtons.Length; i++) {
                 if (groupButtons[i] == null)
@@ -104,8 +95,11 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             SetArmed(null);
-            SetSellConfirming(false, 0);
+            GameHelp.Changed += HandleGameHelpChanged;
         }
+
+        /// <summary>The key reminder is help; the armed order's prompt is not, and stays.</summary>
+        void HandleGameHelpChanged(bool enabled) => SetArmed(armedOrder);
 
         void Bind(Button button, WV_OrderType orderType) {
             if (button != null)
@@ -113,6 +107,7 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void OnDestroy() {
+            GameHelp.Changed -= HandleGameHelpChanged;
             foreach (Button button in orderButtons) {
                 if (button != null)
                     button.onClick.RemoveAllListeners();
@@ -120,7 +115,6 @@ namespace Universes.UniverseData.war_valley.Client {
             if (selectUnitsButton != null) selectUnitsButton.onClick.RemoveAllListeners();
             if (selectTroopsButton != null) selectTroopsButton.onClick.RemoveAllListeners();
             if (selectAllButton != null) selectAllButton.onClick.RemoveAllListeners();
-            if (sellButton != null) sellButton.onClick.RemoveAllListeners();
             foreach (Button button in groupButtons) {
                 if (button != null)
                     button.onClick.RemoveAllListeners();
@@ -137,6 +131,7 @@ namespace Universes.UniverseData.war_valley.Client {
         /// since the cursor itself does not change.
         /// </summary>
         public void SetArmed(WV_OrderType? armed) {
+            armedOrder = armed;
             for (int i = 0; i < orderButtons.Length; i++) {
                 Button button = orderButtons[i];
                 if (button == null || button.targetGraphic == null)
@@ -151,7 +146,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 WV_OrderType.Move => "Click a destination",
                 WV_OrderType.AttackMove => "Click where to advance",
                 WV_OrderType.Attack => "Click an enemy",
-                _ => "M move · V attack-move · T attack · X stop · H hold"
+                _ => GameHelp.Enabled ? "M move · V attack-move · T attack · X stop · H hold" : string.Empty
             };
         }
 
@@ -173,19 +168,6 @@ namespace Universes.UniverseData.war_valley.Client {
                 if (button != null)
                     button.interactable = hasSelection;
             }
-            if (sellButton != null)
-                sellButton.interactable = hasSelection;
-        }
-
-        /// <summary>
-        /// Shows whether a sale is waiting for its confirming click, and what it would refund. A sale
-        /// cannot be undone, so the first click only names the price.
-        /// </summary>
-        public void SetSellConfirming(bool confirming, long refund) {
-            if (sellLabel != null)
-                sellLabel.text = confirming ? $"Sell for {refund:N0}?" : "Sell [Del]";
-            if (sellButton != null && sellButton.targetGraphic != null)
-                sellButton.targetGraphic.color = confirming ? sellConfirmTint : sellTint;
         }
     }
 }

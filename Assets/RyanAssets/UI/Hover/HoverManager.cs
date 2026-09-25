@@ -17,7 +17,9 @@ namespace RyanAssets.UI.Hover
         static HoverManager instance;
 
         [Header("Timing")]
-        [SerializeField, Min(0f)] float hoverDelay = 1.25f;
+        [Tooltip("Seconds the cursor must rest on something before its tooltip appears. Kept short: " +
+                 "a tooltip that takes over a second reads as one that is not there.")]
+        [SerializeField, Min(0f)] float hoverDelay = 0.35f;
         [SerializeField, Min(0f)] float cursorMovementTolerance = 3f;
 
         [Header("Layout")]
@@ -103,12 +105,15 @@ namespace RyanAssets.UI.Hover
                 hoverStartedAt = Time.unscaledTime;
             }
 
+            // The cursor has to settle before a tooltip appears, but one already showing stays up
+            // while the cursor moves within the same item: hiding it on every small movement and
+            // making the player rest again made tooltips feel slow to appear.
             float movementToleranceSquared = cursorMovementTolerance * cursorMovementTolerance;
             if ((cursorPosition - stationaryCursorPosition).sqrMagnitude > movementToleranceSquared)
             {
                 stationaryCursorPosition = cursorPosition;
-                hoverStartedAt = Time.unscaledTime;
-                Hide();
+                if (!boxRect.gameObject.activeSelf)
+                    hoverStartedAt = Time.unscaledTime;
             }
 
             HoverItem item = FindItemUnderCursor(cursorPosition);
@@ -122,7 +127,11 @@ namespace RyanAssets.UI.Hover
                     TryGetItemScreenRect(currentItem, out lastItemScreenRect);
             }
 
-            if (currentItem == null || string.IsNullOrWhiteSpace(currentItem.HoverText))
+            // Help that teaches a game mode's controls is the player's to turn off; plain
+            // information tooltips are not.
+            if (currentItem == null
+                || string.IsNullOrWhiteSpace(currentItem.HoverText)
+                || (currentItem.IsGameHelp && !GameHelp.Enabled))
             {
                 Hide();
                 return;

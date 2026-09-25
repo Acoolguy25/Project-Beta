@@ -129,7 +129,9 @@ namespace Universes.UniverseData.war_valley.Server {
             character.SetTeam(team ?? WV_Permissions.GetCommanderTeam(clientId));
             // A commander's troops walk through their side's gates, never through its walls.
             WV_NavAreas.Apply(npc.agent, character.GetTeam());
-            character.DisplayName = WV_Rules.GetTroopDisplayName(kind);
+            // Named for its commander - "Player0's Skinny Legend" - so on a field shared with allies
+            // everyone can tell whose soldier it is. The kind stays readable from the name's tail.
+            character.DisplayName = WV_Rules.GetOwnedName(clientId, WV_Rules.GetTroopDisplayName(kind));
             // The kind's body - thin, big, short, or quick - and the health, speed, and damage that
             // come with it, applied through the character's own build setting.
             character.ApplyBuild(WV_TroopCatalog.Get(kind).Build, WV_TroopCatalog.BaseHealth);

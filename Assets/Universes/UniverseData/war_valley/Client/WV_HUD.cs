@@ -32,11 +32,19 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] Button donateButton;
         [Tooltip("The shared funds transfer panel, used to donate to allies.")]
         [SerializeField] FundsTransferPanel donatePanel;
+        [Tooltip("Opens the research menu, whether or not a research station is selected.")]
+        [SerializeField] Button researchButton;
 
         [Header("Selection")]
         [SerializeField] RectTransform selectionBox;
         [SerializeField] TextMeshProUGUI selectionLabel;
         [SerializeField] GameObject selectionPanel;
+        [Tooltip("Sells the selected units and troops. Lives on the selection panel, so it is there " +
+                 "exactly when something to sell is selected. Asks for a second click before it sells.")]
+        [SerializeField] Button sellButton;
+        [SerializeField] TextMeshProUGUI sellLabel;
+        [SerializeField] Color sellTint = new(0.66f, 0.2f, 0.18f, 1f);
+        [SerializeField] Color sellConfirmTint = new(0.9f, 0.35f, 0.1f, 1f);
 
         [Header("Structures")]
         [Tooltip("Details, queue, and actions for the selected building.")]
@@ -73,6 +81,12 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>The funds card's Donate button was clicked.</summary>
         public event Action DonateClicked;
 
+        /// <summary>The Research button was clicked.</summary>
+        public event Action ResearchClicked;
+
+        /// <summary>The selection panel's Sell button was clicked. The controller decides whether this click confirms.</summary>
+        public event Action SellClicked;
+
         void Awake() {
             if (structurePanel != null)
                 structureRect = (RectTransform)structurePanel.transform;
@@ -94,14 +108,38 @@ namespace Universes.UniverseData.war_valley.Client {
                 donatePanel.Close();
             if (donateButton != null)
                 donateButton.onClick.AddListener(HandleDonateClicked);
+            if (researchButton != null)
+                researchButton.onClick.AddListener(HandleResearchClicked);
+            if (sellButton != null)
+                sellButton.onClick.AddListener(HandleSellClicked);
+            SetSellConfirming(false, 0);
         }
 
         void OnDestroy() {
             if (donateButton != null)
                 donateButton.onClick.RemoveListener(HandleDonateClicked);
+            if (researchButton != null)
+                researchButton.onClick.RemoveListener(HandleResearchClicked);
+            if (sellButton != null)
+                sellButton.onClick.RemoveListener(HandleSellClicked);
         }
 
         void HandleDonateClicked() => DonateClicked?.Invoke();
+
+        void HandleResearchClicked() => ResearchClicked?.Invoke();
+
+        void HandleSellClicked() => SellClicked?.Invoke();
+
+        /// <summary>
+        /// Shows whether a sale is waiting for its confirming click, and what it would refund. A sale
+        /// cannot be undone, so the first click only names the price.
+        /// </summary>
+        public void SetSellConfirming(bool confirming, long refund) {
+            if (sellLabel != null)
+                sellLabel.text = confirming ? $"Sell for {refund:N0}? [Del]" : "Sell [Del]";
+            if (sellButton != null && sellButton.targetGraphic != null)
+                sellButton.targetGraphic.color = confirming ? sellConfirmTint : sellTint;
+        }
 
         /// <summary>
         /// Keeps the build menu docked on top of the building panel. Both are authored on the same
@@ -229,14 +267,18 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             // A troop's loadout is not replicated as a field of its own. The server names the
-            // character after it, which is the same string its name tag already shows.
+            // character after its commander and its kind - "Player0's Skinny Legend" - so the kind
+            // is read back from that name and the summary counts kinds, not owners.
             troopCounts.Clear();
             for (int i = 0; i < troopCount; i++) {
                 GameCharacter troop = troops[i];
                 if (troop == null)
                     continue;
-                troopCounts.TryGetValue(troop.DisplayName, out int existing);
-                troopCounts[troop.DisplayName] = existing + 1;
+                string kindName = WV_Rules.TryGetTroopKind(troop.DisplayName, out WV_TroopKind kind)
+                    ? WV_Rules.GetTroopDisplayName(kind)
+                    : troop.DisplayName;
+                troopCounts.TryGetValue(kindName, out int existing);
+                troopCounts[kindName] = existing + 1;
                 health += troop.Health.Value;
                 maxHealth += troop.MaxHealth.Value;
             }

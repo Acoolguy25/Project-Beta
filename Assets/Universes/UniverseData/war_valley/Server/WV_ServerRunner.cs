@@ -1,6 +1,8 @@
 using Cysharp.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
+using FishNet.Managing.Object;
+using FishNet.Object;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
@@ -122,10 +124,9 @@ namespace Universes.UniverseData.war_valley.Server
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
             ServerPlayerCharacter.SpawnLocationFunction = SpawnLocationFunction;
 
-            foreach (StructureComponent structure in _buildableStructures) {
-                if (structure != null && structure.NetworkObject != null)
-                    SharedGlobalEvents.Instance.Builds.Add(structure.NetworkObject.PrefabId);
-            }
+            foreach (StructureComponent structure in _buildableStructures)
+                OfferStructure(structure);
+            OfferGeneratedStructures();
 
             // The build economy and the unit roster are server-only behaviours, so they are attached
             // here rather than serialized on the runner prefab, which a client build also loads.
@@ -139,6 +140,43 @@ namespace Universes.UniverseData.war_valley.Server
             // and research ledgers are respawned every round and pick their switches up as they open.
             ApplyDebugSettings();
             WV_ServerCommand.Register();
+        }
+
+        /// <summary>Adds one structure to the build menu every player sees, once.</summary>
+        private static void OfferStructure(StructureComponent structure) {
+            if (structure == null || structure.NetworkObject == null)
+                return;
+            ushort prefabId = structure.NetworkObject.PrefabId;
+            if (!SharedGlobalEvents.Instance.Builds.Contains(prefabId))
+                SharedGlobalEvents.Instance.Builds.Add(prefabId);
+        }
+
+        /// <summary>
+        /// Offers every generated War Valley structure - any spawnable prefab carrying a construction
+        /// phase - alongside the authored list.
+        /// <para>
+        /// The list on the scene's runner has to be re-wired by hand from the dedicated-server Editor
+        /// whenever a structure is added, and the gate and shield generator were added without that
+        /// step: they were fully built on the server side and never reachable from the build menu.
+        /// FishNet already registers every generated prefab as spawnable, so reading that
+        /// registration here makes a new structure buildable the moment its prefab exists.
+        /// </para>
+        /// </summary>
+        private static void OfferGeneratedStructures() {
+            PrefabObjects prefabs = InstanceFinder.NetworkManager != null
+                ? InstanceFinder.NetworkManager.SpawnablePrefabs
+                : null;
+            if (prefabs == null)
+                return;
+
+            int count = prefabs.GetObjectCount();
+            for (int id = 0; id < count; id++) {
+                NetworkObject prefab = prefabs.GetObject(asServer: true, id);
+                if (prefab != null
+                    && prefab.GetComponent<WV_Constructable>() != null
+                    && prefab.TryGetComponent(out StructureComponent structure))
+                    OfferStructure(structure);
+            }
         }
 
         /// <summary>

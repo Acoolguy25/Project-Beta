@@ -51,6 +51,11 @@ namespace RyanAssets.Client.ClientUI.Command {
         [Tooltip("Optional work queue shown for selections that have one.")]
         [SerializeField] CommandQueueStrip queue;
 
+        [Header("Closing")]
+        [Tooltip("The panel's X. Raises CloseRequested; the game mode decides what closing means, " +
+                 "such as dropping the selection the panel describes.")]
+        [SerializeField] Button closeButton;
+
         UIPool<CommandStatRow> statRows;
         UIPool<CommandActionButton> actionButtons;
         readonly List<CommandAction> actions = new();
@@ -64,6 +69,21 @@ namespace RyanAssets.Client.ClientUI.Command {
 
         /// <summary>Raised with an action's id once it has been clicked, and confirmed if it needs confirming.</summary>
         public event Action<int> ActionRequested;
+
+        /// <summary>Raised when the player closes the panel with its own X.</summary>
+        public event Action CloseRequested;
+
+        void Awake() {
+            if (closeButton != null)
+                closeButton.onClick.AddListener(HandleClose);
+        }
+
+        void OnDestroy() {
+            if (closeButton != null)
+                closeButton.onClick.RemoveListener(HandleClose);
+        }
+
+        void HandleClose() => CloseRequested?.Invoke();
 
         public CommandQueueStrip Queue => queue;
 

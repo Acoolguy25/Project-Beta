@@ -36,8 +36,19 @@ namespace RyanAssets.Shared.Combat {
         [Header("Presentation")]
         [Tooltip("Authored explosion VFX prefab, instantiated at the blast for every observer.")]
         [SerializeField] GameObject explosionVfxPrefab;
-        [Tooltip("Uniform scale applied to the VFX, so one effect serves a fence and a hangar.")]
+        [Tooltip("Uniform scale applied to the VFX. With Fit Vfx To Debris on, this multiplies the " +
+                 "fitted size; otherwise it is the whole scale.")]
         [SerializeField, Min(0.01f)] float vfxScale = 1f;
+        [Tooltip("Orientation the effects are spawned with. The project's effect packs author their " +
+                 "plumes along +Z, as their own demo scenes show by placing them at -90 on X; spawned " +
+                 "unrotated, the fire and smoke of a blast shot out sideways along the ground.")]
+        [SerializeField] Vector3 vfxEulerAngles = new(-90f, 0f, 0f);
+        [Tooltip("Draw the effects at the middle of the debris and sized to it, so one effect engulfs " +
+                 "a fence and a hangar alike instead of flickering at the foot of either.")]
+        [SerializeField] bool fitVfxToDebris = true;
+        [Tooltip("Metres across the effects are authored at. A wreck this size plays them at Vfx Scale; " +
+                 "a larger one scales them up to match.")]
+        [SerializeField, Min(0.1f)] float vfxAuthoredSpan = 4f;
         [Tooltip("Optional. Lingering smoke left behind after the blast.")]
         [SerializeField] GameObject smokeVfxPrefab;
         [Tooltip("Optional. Report of the blast. Played at the blast position on every client.")]
@@ -160,18 +171,31 @@ namespace RyanAssets.Shared.Combat {
         void PlayExplosion(Vector3 position) {
             detonated = true;
 #if !UNITY_SERVER
-            SpawnVfx(explosionVfxPrefab, position);
-            SpawnVfx(smokeVfxPrefab, position);
+            // Where and how big to draw the blast is read from the model every machine already has,
+            // so it needs nothing more on the wire. Measured before the debris hides the original.
+            Vector3 centre = position;
+            float scale = vfxScale;
+            if (fitVfxToDebris && ExplosionDebris.TryGetVisualBounds(debrisSource, out Bounds bounds)) {
+                centre = bounds.center;
+                // Tall, thin things - a watchtower - count some of their height, or a forty-metre
+                // tower would go up in a fireball sized for its four-metre footprint.
+                float span = Mathf.Max(bounds.size.x, bounds.size.z, bounds.size.y * 0.6f);
+                scale *= Mathf.Max(1f, span / vfxAuthoredSpan);
+            }
+
+            Quaternion rotation = Quaternion.Euler(vfxEulerAngles);
+            SpawnVfx(explosionVfxPrefab, centre, rotation, scale);
+            SpawnVfx(smokeVfxPrefab, centre, rotation, scale);
 
             if (explosionAudio != null) {
                 if (audioSource != null && audioSource.isActiveAndEnabled)
                     RyanAssets.Client.ClientAudio.MusicService.CreateOneShot(audioSource, explosionAudio);
                 else
-                    RyanAssets.Client.ClientAudio.MusicService.CreateOneShot(explosionAudio, position);
+                    RyanAssets.Client.ClientAudio.MusicService.CreateOneShot(explosionAudio, centre);
             }
 
             ExplosionDebris.Launch(
-                debrisSource, position, debrisUpwardForce, debrisOutwardForce, debrisSpin, debrisBurnSeconds);
+                debrisSource, centre, debrisUpwardForce, debrisOutwardForce, debrisSpin, debrisBurnSeconds);
 #endif
         }
 
@@ -182,14 +206,15 @@ namespace RyanAssets.Shared.Combat {
         /// Play is called explicitly rather than relying on the effect's Play On Awake setting, so a
         /// prefab authored for manual triggering still fires. Play reaches the whole hierarchy, which
         /// matters because these effects are built from a root system with several child systems.
+        /// The effect's own authored root scale is kept and multiplied, not replaced.
         /// </para>
         /// </summary>
-        void SpawnVfx(GameObject prefab, Vector3 position) {
+        void SpawnVfx(GameObject prefab, Vector3 position, Quaternion rotation, float scale) {
             if (prefab == null)
                 return;
 
-            GameObject instance = Instantiate(prefab, position, Quaternion.identity);
-            instance.transform.localScale = Vector3.one * vfxScale;
+            GameObject instance = Instantiate(prefab, position, rotation);
+            instance.transform.localScale = prefab.transform.localScale * scale;
             if (instance.TryGetComponent(out ParticleSystem particles))
                 particles.Play(true);
             Destroy(instance, debrisBurnSeconds + 2f);

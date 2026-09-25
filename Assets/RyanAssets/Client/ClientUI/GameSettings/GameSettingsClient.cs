@@ -1,6 +1,7 @@
 using UnityEngine;
 using RyanAssets.UI.ListGrid;
 using RyanAssets.UI;
+using RyanAssets.UI.Hover;
 using RyanAssets.PromptService;
 using RyanAssets.Input;
 using FishNet;
@@ -67,6 +68,14 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
                 category = GameSettingCategory.Audio,
                 min = 0, max = 200, start = 50
             },
+            [ShowGameHelpSetting] = new BoolGameSetting(){
+                // Named here as well as in Awake: it is loaded at startup, before the settings
+                // screen has ever been opened to assign the names.
+                name = ShowGameHelpSetting,
+                title = "Game Help (control tips and tooltips)",
+                category = GameSettingCategory.Interface,
+                start = true
+            },
             // new IntGameSetting(){
             //     name = "VerticalZoomSensitivity",
             //     title = "Vertical Zoom Sensitivity",
@@ -83,6 +92,30 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             //     start = false
             // }
         };
+        /// <summary>
+        /// Whether game modes explain their controls: the tooltips and instruction lines published
+        /// through <see cref="GameHelp"/>. Experienced players can turn it off.
+        /// </summary>
+        public const string ShowGameHelpSetting = "ShowGameHelp";
+
+        /// <summary>
+        /// Publishes the saved Game Help choice at startup and every change after it. Game modes read
+        /// <see cref="GameHelp"/> rather than this screen, which may never be opened in a session.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void BindGameHelp() {
+            BoolGameSetting setting = GetSetting<BoolGameSetting>(ShowGameHelpSetting);
+            if (setting == null)
+                return;
+            setting.Load();
+            // Removed first so a play session entered without a domain reload does not bind twice.
+            setting.on_update -= PublishGameHelp;
+            setting.on_update += PublishGameHelp;
+            PublishGameHelp(setting.value);
+        }
+
+        static void PublishGameHelp(bool enabled) => GameHelp.Enabled = enabled;
+
         public static T GetSetting<T>(string name) where T : GameSettingsInstance {
             if (gameSettingsConfigUI.TryGetValue(name, out GameSettingsInstance setting)){
                 Debug.Assert(setting is T, $"Setting '{name}' is not of type {typeof(T).Name}");
