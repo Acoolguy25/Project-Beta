@@ -60,6 +60,8 @@ namespace Universes.UniverseData.war_valley.Server {
 
         public WV_TroopKind Kind => kind;
 
+        bool IsGunner => WV_TroopCatalog.Get(kind).UsesGun;
+
         /// <summary>The far edge of this soldier's engagement band, in metres.</summary>
         public float EngageRange => localNPC != null ? localNPC.AttackMaxRange : 0f;
 
@@ -91,7 +93,8 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         void EquipLoadout() {
-            ToolEnum tool = kind == WV_TroopKind.Gunner ? ToolEnum.Pistol : ToolEnum.Dagger;
+            bool gunner = WV_TroopCatalog.Get(kind).UsesGun;
+            ToolEnum tool = gunner ? ToolEnum.Pistol : ToolEnum.Dagger;
             weapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, tool);
             if (weapon == null) {
                 Debug.LogError($"{name} could not be issued a {tool} and will not be able to fight.", this);
@@ -99,7 +102,10 @@ namespace Universes.UniverseData.war_valley.Server {
             }
 
             localNPC.AttackDamageType = weapon.defaultDamageType;
-            if (kind != WV_TroopKind.Gunner)
+            // The build's damage multiplier is carried by the weapon itself, so every way it hits -
+            // a knife swing, a bullet, a shot at a shield - hits for the same scaled amount.
+            weapon.hitDamageSync.Value = gameCharacter.Build.ScaleDamage(weapon.hitDamageInit);
+            if (!gunner)
                 return;
 
             gunClient = weapon.GetComponent<ToolGunClient>();
@@ -149,7 +155,7 @@ namespace Universes.UniverseData.war_valley.Server {
             if (weapon == null)
                 return;
 
-            if (kind == WV_TroopKind.Gunner) {
+            if (IsGunner) {
                 if (gunFireUntil > 0f && Time.time >= gunFireUntil)
                     SetFiring(false);
 
@@ -176,7 +182,7 @@ namespace Universes.UniverseData.war_valley.Server {
             if (weapon == null || target == null || gameCharacter.IsDead)
                 return;
 
-            if (kind == WV_TroopKind.Gunner)
+            if (IsGunner)
                 FireGun(target);
             else
                 SwingKnife(target);

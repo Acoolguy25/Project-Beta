@@ -60,14 +60,17 @@ namespace RyanAssets.Server.ServerFeatures {
             if (CanPlaceFunction != null && !CanPlaceFunction(sender, prefabStructure))
                 return;
 
-            Vector3 snappedPosition = StructurePlacement.SnapToGrid(request.position);
-            if (!IsFinite(snappedPosition) ||
-                !StructurePlacement.TryFindGround(snappedPosition, out Vector3 groundPoint) ||
-                Mathf.Abs(groundPoint.y - request.position.y) > StructurePlacement.GroundProbeHeight)
+            if (!IsFinite(request.position))
                 return;
 
+            // Instantiated first: the snap depends on the structure's footprint, which is measured
+            // from the same bounds the client's preview measured, so both land on the same cells.
             GameObject clone = Object.Instantiate(structurePrefab.gameObject);
-            if (!StructurePlacement.TryPositionOnGround(clone, groundPoint, request.yRotation, out Bounds bounds)) {
+            Vector3 snappedPosition = StructurePlacement.SnapToGrid(
+                request.position, StructurePlacement.GetFootprintCells(clone));
+            if (!StructurePlacement.TryFindGround(snappedPosition, out Vector3 groundPoint) ||
+                Mathf.Abs(groundPoint.y - request.position.y) > StructurePlacement.GroundProbeHeight ||
+                !StructurePlacement.TryPositionOnGround(clone, groundPoint, request.yRotation, out Bounds bounds)) {
                 Object.Destroy(clone);
                 return;
             }

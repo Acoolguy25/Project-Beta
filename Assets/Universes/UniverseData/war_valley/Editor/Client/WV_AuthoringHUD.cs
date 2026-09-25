@@ -1,3 +1,4 @@
+using System.Linq;
 using RyanAssets.Client.ClientUI.Command;
 using RyanAssets.Client.ClientUI.Command.Editor;
 using TMPro;
@@ -200,7 +201,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
 
             var serialized = new SerializedObject(hud);
             SerializedProperty icons = serialized.FindProperty("troopIcons");
-            var kinds = new[] { WV_TroopKind.Knife, WV_TroopKind.Gunner };
+            WV_TroopKind[] kinds = WV_TroopCatalog.All.Select(profile => profile.Kind).ToArray();
             icons.arraySize = kinds.Length;
             for (int i = 0; i < kinds.Length; i++) {
                 SerializedProperty entry = icons.GetArrayElementAtIndex(i);

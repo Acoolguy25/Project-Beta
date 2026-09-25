@@ -17,12 +17,17 @@ namespace Universes.UniverseData.war_valley.Shared {
     }
 
     /// <summary>
-    /// The weapon a War Valley foot soldier carries. Wave troops and the troops a commander trains
-    /// are the same character with a different tool in their hands, so one enum describes both.
+    /// A kind of War Valley foot soldier. Wave troops and the troops a commander trains are the same
+    /// character with a different weapon and build (see <see cref="WV_TroopCatalog"/>), so one enum
+    /// describes both. Travels on the wire inside a production item: append, never renumber.
     /// </summary>
     public enum WV_TroopKind : byte {
         Knife = 0,
-        Gunner = 1
+        Gunner = 1,
+        SkinnyLegend = 2,
+        Punk = 3,
+        Shrimp = 4,
+        Speedy = 5
     }
 
     /// <summary>
@@ -262,25 +267,16 @@ namespace Universes.UniverseData.war_valley.Shared {
         public const float GunnerAttackInterval = 0.35f;
 
         /// <summary>Funds a commander is charged to field one troop.</summary>
-        public static int GetTroopCost(WV_TroopKind kind) => kind switch {
-            WV_TroopKind.Gunner => 150,
-            _ => 80
-        };
+        public static int GetTroopCost(WV_TroopKind kind) => WV_TroopCatalog.Get(kind).Cost;
 
-        public static string GetTroopDisplayName(WV_TroopKind kind) => kind switch {
-            WV_TroopKind.Gunner => "Gunner",
-            _ => "Knifeman"
-        };
+        public static string GetTroopDisplayName(WV_TroopKind kind) => WV_TroopCatalog.Get(kind).DisplayName;
 
         /// <summary>
         /// Seconds a barracks spends training one troop. Foot soldiers are the cheapest and fastest
         /// thing on the field, so these sit well under any vehicle's build time - but they are no
         /// longer instant, because a queue is what makes them cost tempo as well as funds.
         /// </summary>
-        public static float GetTroopBuildSeconds(WV_TroopKind kind) => kind switch {
-            WV_TroopKind.Gunner => 10f,
-            _ => 6f
-        };
+        public static float GetTroopBuildSeconds(WV_TroopKind kind) => WV_TroopCatalog.Get(kind).TrainSeconds;
 
         /// <summary>
         /// The loadout a troop carries, recovered from its display name. A troop's kind is not
@@ -288,9 +284,9 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// this way - to price a sale, for instance.
         /// </summary>
         public static bool TryGetTroopKind(string displayName, out WV_TroopKind kind) {
-            foreach (WV_TroopKind candidate in new[] { WV_TroopKind.Knife, WV_TroopKind.Gunner }) {
-                if (GetTroopDisplayName(candidate) == displayName) {
-                    kind = candidate;
+            foreach (WV_TroopProfile profile in WV_TroopCatalog.All) {
+                if (profile.DisplayName == displayName) {
+                    kind = profile.Kind;
                     return true;
                 }
             }
@@ -299,10 +295,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         }
 
         /// <summary>One line describing how this troop fights, for the production card.</summary>
-        public static string GetTroopDescription(WV_TroopKind kind) => kind switch {
-            WV_TroopKind.Gunner => "Rifleman. Holds range and shoots.",
-            _ => "Melee rusher. Cheap and fast."
-        };
+        public static string GetTroopDescription(WV_TroopKind kind) => WV_TroopCatalog.Get(kind).Description;
 
         /// <summary>What the HUD tells the commander when an order to build is refused.</summary>
         public static string GetProductionRefusalMessage(WV_TroopRefusal refusal, WV_ProductionItem item) =>

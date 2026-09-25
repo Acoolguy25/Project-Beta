@@ -126,12 +126,21 @@ namespace Universes.UniverseData.war_valley.Client {
                 hintLabel.text = text;
         }
 
+        /// <summary>
+        /// The icon authored for a troop kind. Every kind is the same robot body, so a kind added
+        /// after the HUD was last authored shows the first icon rather than an empty frame.
+        /// </summary>
         public Sprite GetTroopIcon(WV_TroopKind kind) {
+            Sprite fallback = null;
             foreach (WV_TroopIcon entry in troopIcons) {
-                if (entry != null && entry.kind == kind)
+                if (entry == null)
+                    continue;
+                if (entry.kind == kind)
                     return entry.icon;
+                if (fallback == null)
+                    fallback = entry.icon;
             }
-            return null;
+            return fallback;
         }
 
         public void RefreshEconomy(int clientId) {

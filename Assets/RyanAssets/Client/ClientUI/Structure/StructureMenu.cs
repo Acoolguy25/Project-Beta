@@ -99,6 +99,7 @@ namespace RyanAssets.Client.ClientUI.Build {
         private Renderer[] previewRenderers;
         private Vector3 placementPosition;
         private float placementRotation;
+        private int previewFootprintCells = 1;
         private bool placementValid;
         private bool menuCloseSubscribed;
 
@@ -366,6 +367,10 @@ namespace RyanAssets.Client.ClientUI.Build {
             foreach (Transform child in previewInstance.GetComponentsInChildren<Transform>(true))
                 child.gameObject.layer = LayerMask.NameToLayer("Ignore Raycast");
 
+            // Measured once: the footprint decides where the preview snaps, exactly as the server
+            // will measure it from the same prefab when the placement arrives.
+            previewFootprintCells = StructurePlacement.GetFootprintCells(previewInstance);
+
             previewRenderers = previewInstance.GetComponentsInChildren<Renderer>(true);
             foreach (Renderer renderer in previewRenderers)
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -392,7 +397,7 @@ namespace RyanAssets.Client.ClientUI.Build {
         }
 
         private void UpdatePlacementPreview(Vector3 worldPosition) {
-            Vector3 snappedPosition = StructurePlacement.SnapToGrid(worldPosition);
+            Vector3 snappedPosition = StructurePlacement.SnapToGrid(worldPosition, previewFootprintCells);
             previewInstance.SetActive(true);
             if (!StructurePlacement.TryFindGround(snappedPosition, out Vector3 groundPoint) ||
                 !StructurePlacement.TryPositionOnGround(previewInstance, groundPoint, placementRotation, out Bounds bounds)) {

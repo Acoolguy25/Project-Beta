@@ -113,11 +113,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 // Foot soldiers only: the Infantry vehicle duplicated the Knifeman and Gunner the
                 // barracks already trains, so it is no longer offered here.
                 Id = "wv_barracks", DisplayName = "Barracks", Category = "Military",
-                Description = "Trains Knifemen and Gunners. Click it to train.",
+                Description = "Trains Knifemen, Gunners, Shrimp, Speedies, Skinny Legends and Punks. Click it to train.",
                 ModelPath = PackRoot + "/Building_Prefebs/PersonLivePlace_Prefeb.prefab",
                 FootprintCells = 2, Cost = 500, BuildSeconds = 25f, MaxHealth = 800,
                 Role = StructureRole.Production,
-                Trains = new[] { WV_TroopKind.Knife, WV_TroopKind.Gunner }
+                Trains = new[] {
+                    WV_TroopKind.Knife, WV_TroopKind.Gunner, WV_TroopKind.Shrimp,
+                    WV_TroopKind.Speedy, WV_TroopKind.SkinnyLegend, WV_TroopKind.Punk
+                }
             },
             new() {
                 Id = "wv_vehicle_hangar", DisplayName = "Vehicle Hangar", Category = "Military",

@@ -40,6 +40,12 @@ namespace RyanAssets.Characters.Shared {
         public readonly SyncVar<ToolBaseShared> ActiveTool = new(null, new(WritePermission.ClientUnsynchronized));
         public readonly SyncVar<string> DisplayNameSync = new(AnonymousDisplayName);
         public readonly SyncVar<Vector3> CharacterScale = new(Vector3.one);
+        /// <summary>
+        /// The body this character has: proportions, and the health, speed, and damage that go with
+        /// them. See <see cref="CharacterBuild"/>. The proportions reach every machine through
+        /// <see cref="CharacterScale"/>; the multipliers are read by whoever owns each stat.
+        /// </summary>
+        public readonly SyncVar<CharacterBuild> BuildSync = new(CharacterBuild.Standard);
         public readonly SyncVar<bool> CanSpectate = new(true);
 
         public override TeamConfig Team => TeamSync.Value;
@@ -138,6 +144,24 @@ namespace RyanAssets.Characters.Shared {
         }
 
         public bool Equipped(ToolBaseShared tool) => ActiveTool.Value == tool;
+
+        /// <summary>This character's build, or the standard one when none was assigned.</summary>
+        public CharacterBuild Build => BuildSync.Value.OrStandard;
+
+#if UNITY_SERVER
+        /// <summary>
+        /// Gives this character a body: its proportions are applied on every machine, and its health
+        /// is set to <paramref name="baseHealth"/> scaled by the build. Speed and damage follow from
+        /// <see cref="Build"/> wherever they are applied.
+        /// </summary>
+        [Server]
+        public void ApplyBuild(CharacterBuild build, long baseHealth) {
+            build = build.OrStandard;
+            BuildSync.Value = build;
+            SetScale(build.Proportions);
+            Init(build.ScaleHealth(baseHealth));
+        }
+#endif
 
 #if UNITY_EDITOR
         [SerializeField] private TeamConfig teamEditor;

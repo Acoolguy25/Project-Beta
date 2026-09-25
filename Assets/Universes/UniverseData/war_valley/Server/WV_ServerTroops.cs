@@ -130,6 +130,9 @@ namespace Universes.UniverseData.war_valley.Server {
             // A commander's troops walk through their side's gates, never through its walls.
             WV_NavAreas.Apply(npc.agent, character.GetTeam());
             character.DisplayName = WV_Rules.GetTroopDisplayName(kind);
+            // The kind's body - thin, big, short, or quick - and the health, speed, and damage that
+            // come with it, applied through the character's own build setting.
+            character.ApplyBuild(WV_TroopCatalog.Get(kind).Build, WV_TroopCatalog.BaseHealth);
 
             // The robot body ships with a material variant per team colour, replicated by the
             // character itself, so a commander's squad is literally painted in their colour rather

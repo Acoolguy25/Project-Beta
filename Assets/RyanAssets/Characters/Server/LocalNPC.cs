@@ -173,6 +173,20 @@ namespace RyanAssets.Characters.Server {
                 MaxAttackRange = MinAttackRange + 0.1f;
         }
 
+        void Start() {
+            // A build that changes pace is applied as soon as it arrives rather than waiting for the
+            // next change of behaviour to re-read speeds.
+            if (gameCharacter != null)
+                gameCharacter.BuildSync.OnChange += HandleBuildChanged;
+        }
+
+        void OnDestroy() {
+            if (gameCharacter != null)
+                gameCharacter.BuildSync.OnChange -= HandleBuildChanged;
+        }
+
+        void HandleBuildChanged(CharacterBuild previous, CharacterBuild next, bool asServer) => UpdateSpeed();
+
         void OnEnable() {
             agent.enabled = true;
             if (agent.isOnNavMesh) agent.isStopped = TargetingType == NPCTargetingType.None;
@@ -185,15 +199,17 @@ namespace RyanAssets.Characters.Server {
         }
 
         public void UpdateSpeed() {
+            // The character's build scales every pace alike: a sprinter walks, flees, and charges faster.
+            float build = gameCharacter != null ? gameCharacter.Build.Speed : 1f;
             switch (TargetingType) {
                 case NPCTargetingType.Flee:
-                    agent.speed = FleeSpeed * FleeSpeedMultiplier;
+                    agent.speed = FleeSpeed * FleeSpeedMultiplier * build;
                     break;
                 case NPCTargetingType.Attack:
-                    agent.speed = AttackSpeed * AttackSpeedMultiplier;
+                    agent.speed = AttackSpeed * AttackSpeedMultiplier * build;
                     break;
                 default:
-                    agent.speed = WalkSpeed * WalkSpeedMultiplier;
+                    agent.speed = WalkSpeed * WalkSpeedMultiplier * build;
                     break;
             }
         }
@@ -280,7 +296,7 @@ namespace RyanAssets.Characters.Server {
         public bool MoveTo(Vector3 destination, float speed) {
             if (!CanNavigate()) return false;
             SetTargetingType(NPCTargetingType.External);
-            agent.speed = Mathf.Max(0, speed);
+            agent.speed = Mathf.Max(0, speed) * (gameCharacter != null ? gameCharacter.Build.Speed : 1f);
             if (Time.time < nextExternalPath && (destination - externalDestination).sqrMagnitude < 1f
                 && agent.hasPath && !agent.isPathStale && agent.pathStatus == NavMeshPathStatus.PathComplete) {
                 agent.isStopped = false;
