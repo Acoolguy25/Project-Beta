@@ -173,6 +173,20 @@ namespace RyanAssets.Characters.Server {
                 MaxAttackRange = MinAttackRange + 0.1f;
         }
 
+        void Start() {
+            // A build that changes pace is applied as soon as it arrives rather than waiting for the
+            // next change of behaviour to re-read speeds.
+            if (gameCharacter != null)
+                gameCharacter.BuildSync.OnChange += HandleBuildChanged;
+        }
+
+        void OnDestroy() {
+            if (gameCharacter != null)
+                gameCharacter.BuildSync.OnChange -= HandleBuildChanged;
+        }
+
+        void HandleBuildChanged(CharacterBuild previous, CharacterBuild next, bool asServer) => UpdateSpeed();
+
         void OnEnable() {
             agent.enabled = true;
             if (agent.isOnNavMesh) agent.isStopped = TargetingType == NPCTargetingType.None;
@@ -185,15 +199,17 @@ namespace RyanAssets.Characters.Server {
         }
 
         public void UpdateSpeed() {
+            // The character's build scales every pace alike: a sprinter walks, flees, and charges faster.
+            float build = gameCharacter != null ? gameCharacter.Build.Speed : 1f;
             switch (TargetingType) {
                 case NPCTargetingType.Flee:
-                    agent.speed = FleeSpeed * FleeSpeedMultiplier;
+                    agent.speed = FleeSpeed * FleeSpeedMultiplier * build;
                     break;
                 case NPCTargetingType.Attack:
-                    agent.speed = AttackSpeed * AttackSpeedMultiplier;
+                    agent.speed = AttackSpeed * AttackSpeedMultiplier * build;
                     break;
                 default:
-                    agent.speed = WalkSpeed * WalkSpeedMultiplier;
+                    agent.speed = WalkSpeed * WalkSpeedMultiplier * build;
                     break;
             }
         }
@@ -280,7 +296,7 @@ namespace RyanAssets.Characters.Server {
         public bool MoveTo(Vector3 destination, float speed) {
             if (!CanNavigate()) return false;
             SetTargetingType(NPCTargetingType.External);
-            agent.speed = Mathf.Max(0, speed);
+            agent.speed = Mathf.Max(0, speed) * (gameCharacter != null ? gameCharacter.Build.Speed : 1f);
             if (Time.time < nextExternalPath && (destination - externalDestination).sqrMagnitude < 1f
                 && agent.hasPath && !agent.isPathStale && agent.pathStatus == NavMeshPathStatus.PathComplete) {
                 agent.isStopped = false;
@@ -687,7 +703,20 @@ namespace RyanAssets.Characters.Server {
         // is just the target's actual current position.
         private Vector3 GetPredictedTargetPosition() {
             if (_currentAttackTarget == null) return transform.position;
-            return _currentAttackTarget.transform.position + _targetVelocity * AttackPredictionLeadTime;
+            return GetTargetAnchor(_currentAttackTarget) + _targetVelocity * AttackPredictionLeadTime;
+        }
+
+        // The point the NPC closes on and measures its standoff from. A structure can be far larger
+        // than its pivot suggests - a hangar, a wall, a shield dome many metres across - so it is
+        // approached at the nearest point of its surface, the same point GetAttackDistance measures
+        // to. Standing off from a dome's centre would put a ranged NPC inside the dome.
+        private Vector3 GetTargetAnchor(HealthComponent target) {
+            if (target.GetComponent<GameCharacter>() == null) {
+                Collider targetCollider = target.GetComponentInChildren<Collider>();
+                if (targetCollider != null && targetCollider.enabled)
+                    return targetCollider.ClosestPoint(transform.position);
+            }
+            return target.transform.position;
         }
 
         // Decides how the NPC should move this frame. Destinations are gated by

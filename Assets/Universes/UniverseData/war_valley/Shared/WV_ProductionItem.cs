@@ -53,7 +53,7 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return Unit((WV_UnitKind)encoded);
 
             var kind = (WV_TroopKind)(encoded & ~TroopFlag);
-            return kind is WV_TroopKind.Knife or WV_TroopKind.Gunner
+            return WV_TroopCatalog.IsDefined(kind)
                 ? Troop(kind)
                 : Unit(WV_UnitKind.None);
         }

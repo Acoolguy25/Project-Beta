@@ -11,6 +11,11 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// Gives a structure replicated health and a costly NavMesh breach link. Agents prefer
     /// an ordinary route when one is reasonably short, but can stop at the link, destroy the
     /// wall, and continue through the cleared opening.
+    /// <para>
+    /// The link is in the <see cref="WV_NavAreas.Breach"/> area, which only the waves path over:
+    /// the commanders' own troops never plan a route through their own wall. A gate built on this
+    /// component adds its own passage for them.
+    /// </para>
     /// </summary>
     [RequireComponent(typeof(StructureComponent), typeof(EffectsComponent), typeof(HealthComponent))]
     [RequireComponent(typeof(NavMeshObstacle), typeof(NavMeshLink))]
@@ -109,10 +114,19 @@ namespace Universes.UniverseData.war_valley.Shared {
                 * (linkCenter + transform.forward * endpointDistance - transform.position);
             breachLink.width = Mathf.Max(0f, worldWidth - linkClearance * 2f);
             breachLink.agentTypeID = WV_Rules.NavMeshAgentTypeId;
-            breachLink.area = NavMesh.GetAreaFromName("Walkable");
+            breachLink.area = WV_NavAreas.Breach;
             breachLink.costModifier = breachCost;
             breachLink.bidirectional = true;
             breachLink.autoUpdate = true;
+        }
+
+        /// <summary>
+        /// Stops or resumes carving the footprint out of the NavMesh. A gate standing open lets
+        /// every agent walk straight through; closed, it is a wall again.
+        /// </summary>
+        public void SetPassable(bool passable) {
+            if (obstacle != null && !destroyed)
+                obstacle.enabled = !passable;
         }
 
         private void HandleDied(DamageType source, IEntity attacker) {

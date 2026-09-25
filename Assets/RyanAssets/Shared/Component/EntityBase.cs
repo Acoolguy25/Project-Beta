@@ -44,6 +44,16 @@ namespace RyanAssets.Shared.Component {
             remove => HealthComponent.OnRevive -= value;
         }
 
+        /// <summary>
+        /// Raised on every build when <see cref="Team"/> changes after spawn. Presentation that
+        /// colours an entity by its team - the overhead tag, for one - binds to this rather than
+        /// reading the team once and going stale when a game mode assigns it a frame later.
+        /// </summary>
+        public event Action<EntityBase> TeamChanged;
+
+        /// <summary>For subclasses whose team is replicated: call from the team's change callback.</summary>
+        protected void RaiseTeamChanged() => TeamChanged?.Invoke(this);
+
         public bool IsEffectActive(CharacterEffect effect) => EffectsComponent.IsEffectActive(effect);
 
         static readonly List<EntityBase> all = new();

@@ -180,10 +180,19 @@ namespace Universes.UniverseData.war_valley.Server {
             return null;
         }
 
+        /// <summary>
+        /// Heads for the flag. When a shield stands over it the flag cannot be hurt from outside, so
+        /// the wave goes for the shield covering it instead and returns to the flag once it is down.
+        /// </summary>
         private void TargetFlag() {
             WV_Flag flag = WV_Flag.Instance;
-            if (flag != null && !flag.IsDead)
-                localNPC.TargetEntity(flag);
+            if (flag == null || flag.IsDead || localNPC.TargetEntity(flag))
+                return;
+
+            WV_ShieldBarrier shield = WV_ShieldBarrier.FindHostileShieldCovering(
+                flag.transform.position, transform.position, gameCharacter.GetTeam());
+            if (shield != null && localNPC.CurrentAttackEntityTarget != (IEntity)shield)
+                localNPC.TargetEntity(shield);
         }
 
         private Vector3 GetFlagPosition() {

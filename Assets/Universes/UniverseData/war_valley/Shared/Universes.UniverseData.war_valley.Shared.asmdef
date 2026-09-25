@@ -4,6 +4,7 @@
     "references": [
         "FishNet.Runtime",
         "RyanAssets.Core",
+        "RyanAssets.DataService",
         "RyanAssets.Shared.Component",
         "RyanAssets.Shared.Declarations",
         "RyanAssets.Shared.Global",

@@ -170,7 +170,15 @@ namespace RyanAssets.Client.ClientUI.NameTag {
 
             healthBarBacking.gameObject.SetActive(true);
             displayNameText.text = entity.DisplayName;
-            displayNameText.color = entity.Team != null ? entity.Team.displayTeamColor : Color.white;
+
+            // A game mode can hand a placed structure to its builder a frame after it spawns, so the
+            // tag follows the team rather than keeping whatever the prefab was authored with.
+            void OnEntityTeamChanged(EntityBase changed) {
+                if (displayNameText != null)
+                    displayNameText.color = changed.Team != null ? changed.Team.displayTeamColor : Color.white;
+            }
+            entity.TeamChanged += OnEntityTeamChanged;
+            OnEntityTeamChanged(entity);
 
             void OnEntityHealthChanged(long _1, long _2, bool asServer) {
                 long max = entity.MaxHealth.Value;

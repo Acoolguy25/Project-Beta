@@ -1,7 +1,13 @@
 using System.Collections.Generic;
+using System.Text;
 using FishNet;
+using FishNet.Connection;
 using FishNet.Object;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Client.ClientUI.Build;
+using RyanAssets.Client.ClientUI.Command;
+using RyanAssets.Core;
+using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
 using FishNet.Transporting;
@@ -38,6 +44,14 @@ namespace Universes.UniverseData.war_valley.Client {
     /// colour the server already replicates on every troop's team - the same colour their buildings
     /// and their name tags carry.
     /// </para>
+    /// <para>
+    /// Everything is selected with the left button alone; the right button belongs to the camera.
+    /// Clicking a building selects it and opens its menu - the build menu of a barracks, airfield, or
+    /// helipad, the research menu of a research station. Shift-click adds or removes buildings, a
+    /// double click takes every building of that kind on screen, and a drag box picks up units and
+    /// troops, or buildings when it holds no units. Everything about the selected buildings is
+    /// delegated to <see cref="WV_StructureInspector"/>.
+    /// </para>
     /// </summary>
     public sealed class WV_ClientController : MonoBehaviour {
         /// <summary>Pixels of travel before a click becomes a box drag.</summary>
@@ -63,9 +77,21 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("Maximum units a single box selection can pick up.")]
         [SerializeField, Min(1)] int maxSelection = 120;
 
+        /// <summary>How often the economy card's research line is rewritten while research runs.</summary>
+        const float ResearchSummaryInterval = 0.25f;
+
+        /// <summary>How long a first click on Sell waits for the confirming second one.</summary>
+        const float SellConfirmSeconds = 3f;
+
         readonly List<WV_Unit> selection = new();
         readonly List<WV_Unit> ownedScratch = new();
         readonly List<int> orderScratch = new();
+        readonly List<StructureComponent> structureScratch = new();
+        readonly List<TransferRecipient> donationRecipients = new();
+        /// <summary>Technologies the local commander already had, so only new completions are announced.</summary>
+        readonly HashSet<WV_Tech> knownResearched = new();
+        readonly StringBuilder researchSummary = new();
+        readonly StringBuilder forcesSummary = new();
 
         // Every character this client can see. Troops have no client-visible roster of their own, so
         // the shared character events are the cheapest source of one that stays correct.
@@ -80,7 +106,14 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly ControlGroup[] controlGroups = new ControlGroup[ControlGroupCount];
 
         WV_HUD hud;
-        WV_ProductionBuilding selectedBuilding;
+        WV_StructureInspector inspector;
+        /// <summary>The research ledger <see cref="knownResearched"/> was taken from; a new round brings a new one.</summary>
+        WV_Research trackedResearch;
+        float nextResearchSummaryTime;
+        /// <summary>Until when a Sell click is waiting for its confirming second click; 0 when none is.</summary>
+        float sellConfirmUntil;
+        /// <summary>The selection a pending sale was priced for, so a changed selection is never sold by mistake.</summary>
+        int sellConfirmSelection;
         /// <summary>
         /// The order waiting for a click to tell it where to land, or null while the left button
         /// still means selection. Move, AttackMove and Attack need a point or a target; Stop and
@@ -93,7 +126,8 @@ namespace Universes.UniverseData.war_valley.Client {
         bool dragging;
         bool pointerDown;
         bool economyDirty = true;
-        bool productionResultsRegistered;
+        bool researchDirty = true;
+        bool broadcastsRegistered;
 
         /// <summary>One parked selection. Kept as a class so an empty slot is simply null.</summary>
         sealed class ControlGroup {
@@ -119,9 +153,11 @@ namespace Universes.UniverseData.war_valley.Client {
             hud.name = "War Valley HUD";
             hud.ShowCommands();
             BindCommandMenu();
+            inspector = new WV_StructureInspector(hud, () => LocalClientId, CountOwnTroops, ArmRallyPoint);
+            BindDonations();
             hud.SetHint(
-                "Drag to select • Right click to move or attack • Ctrl+right click to attack-move\n"
-                + "X stop • H hold • Ctrl+F1-F4 set group • F1-F4 recall • Double click selects all of a kind");
+                "Click a building to open its menu • Shift-click to add • Drag to select units, or buildings\n"
+                + "M move • V attack-move • T attack • X stop • H hold • Del sell • Ctrl+F1-F4 set group • F1-F4 recall");
         }
 
         /// <summary>
@@ -141,6 +177,7 @@ namespace Universes.UniverseData.war_valley.Client {
             menu.SelectRequested += SelectAllOwned;
             menu.GroupRecalled += RecallControlGroup;
             menu.GroupBound += BindControlGroup;
+            menu.SellRequested += RequestSell;
             menu.SetHasSelection(false);
         }
 
@@ -152,6 +189,7 @@ namespace Universes.UniverseData.war_valley.Client {
             menu.SelectRequested -= SelectAllOwned;
             menu.GroupRecalled -= RecallControlGroup;
             menu.GroupBound -= BindControlGroup;
+            menu.SellRequested -= RequestSell;
         }
 
         /// <summary>
@@ -187,22 +225,47 @@ namespace Universes.UniverseData.war_valley.Client {
 
         void OnEnable() {
             WV_Economy.LedgerChanged += MarkEconomyDirty;
+            WV_Research.Changed += MarkResearchDirty;
             WV_Unit.RosterChanged += HandleRosterChanged;
             WV_ProductionBuilding.QueueChanged += HandleQueueChanged;
             GameCharacter.GameCharacterAdded += HandleCharacterAdded;
             GameCharacter.GameCharacterRemoved += HandleCharacterRemoved;
+
+            // The shared build menu knows nothing about research or funds; War Valley answers for it.
+            StructureMenu.AvailabilityProvider = GetStructureAvailability;
+            StructureMenu.AffordabilityProvider = CanAffordStructure;
+            StructureMenu.NotifyAvailabilityChanged();
         }
 
         void OnDisable() {
             WV_Economy.LedgerChanged -= MarkEconomyDirty;
+            WV_Research.Changed -= MarkResearchDirty;
             WV_Unit.RosterChanged -= HandleRosterChanged;
             WV_ProductionBuilding.QueueChanged -= HandleQueueChanged;
             GameCharacter.GameCharacterAdded -= HandleCharacterAdded;
             GameCharacter.GameCharacterRemoved -= HandleCharacterRemoved;
-            if (productionResultsRegistered && InstanceFinder.ClientManager != null) {
+
+            if (StructureMenu.AvailabilityProvider == GetStructureAvailability)
+                StructureMenu.AvailabilityProvider = null;
+            if (StructureMenu.AffordabilityProvider == CanAffordStructure)
+                StructureMenu.AffordabilityProvider = null;
+            StructureMenu.NotifyAvailabilityChanged();
+
+            if (broadcastsRegistered && InstanceFinder.ClientManager != null) {
                 InstanceFinder.ClientManager.UnregisterBroadcast<WV_ProductionResult>(HandleProductionResult);
-                productionResultsRegistered = false;
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_ResearchResult>(HandleResearchResult);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_Notice>(HandleNotice);
             }
+            broadcastsRegistered = false;
+        }
+
+        void RegisterBroadcasts() {
+            if (broadcastsRegistered || InstanceFinder.ClientManager == null || !InstanceFinder.ClientManager.Started)
+                return;
+            broadcastsRegistered = true;
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_ProductionResult>(HandleProductionResult);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_ResearchResult>(HandleResearchResult);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_Notice>(HandleNotice);
         }
 
         /// <summary>
@@ -217,23 +280,108 @@ namespace Universes.UniverseData.war_valley.Client {
                 : WV_Rules.GetProductionRefusalMessage((WV_TroopRefusal)result.refusal, item));
         }
 
+        void HandleResearchResult(WV_ResearchResult result, Channel channel) {
+            var tech = (WV_Tech)result.tech;
+            var refusal = (WV_ResearchRefusal)result.refusal;
+            string name = WV_TechTree.GetDisplayName(tech);
+            if (refusal != WV_ResearchRefusal.None)
+                hud.SetHint(WV_Rules.GetResearchRefusalMessage(refusal, tech));
+            else
+                hud.SetHint(result.cancel ? $"{name} research cancelled and refunded" : $"Researching {name}");
+        }
+
+        /// <summary>Server-side outcomes the player would otherwise never see: refusals, refunds, penalties.</summary>
+        void HandleNotice(WV_Notice notice, Channel channel) => hud.SetHint(notice.message);
+
         void OnDestroy() {
             UnbindCommandMenu();
+            UnbindDonations();
+            inspector?.Dispose();
             if (hud != null)
                 Destroy(hud.gameObject);
         }
 
         void MarkEconomyDirty() => economyDirty = true;
 
+        void MarkResearchDirty() => researchDirty = true;
+
+        // --- Build menu gates -------------------------------------------------
+
+        StructureAvailability GetStructureAvailability(StructureComponent structure) {
+            if (WV_Limits.GetCategory(structure) == WV_ForceCategory.Building
+                && WV_Limits.CountBuildings(LocalClientId) >= WV_Limits.MaxBuildings)
+                return StructureAvailability.Locked(WV_Limits.GetLimitMessage(WV_ForceCategory.Building));
+
+            WV_Tech required = WV_TechTree.GetRequirement(structure.StructureID);
+            if (required == WV_Tech.None)
+                return StructureAvailability.Available;
+
+            WV_Research research = WV_Research.Instance;
+            return research != null && research.IsResearched(LocalClientId, required)
+                ? StructureAvailability.Available
+                : StructureAvailability.Locked($"Research {WV_TechTree.GetDisplayName(required)} at a research station");
+        }
+
+        bool CanAffordStructure(StructureComponent structure) {
+            WV_Economy economy = WV_Economy.Instance;
+            return economy == null || economy.CanAfford(LocalClientId, (long)structure.Cost);
+        }
+
+        // --- Research ---------------------------------------------------------
+
+        /// <summary>
+        /// Announces research the local commander has just finished and re-evaluates every lock that
+        /// depends on it. The first reading of each round's ledger is taken silently, so joining a
+        /// round - or the debug switch that starts it fully researched - does not flood the hint line.
+        /// </summary>
+        void RefreshResearch() {
+            researchDirty = false;
+            StructureMenu.NotifyAvailabilityChanged();
+            inspector.MarkDirty();
+
+            WV_Research research = WV_Research.Instance;
+            bool baseline = research != trackedResearch;
+            trackedResearch = research;
+            if (baseline)
+                knownResearched.Clear();
+            if (research == null)
+                return;
+
+            int clientId = LocalClientId;
+            foreach (WV_TechDefinition definition in WV_TechTree.All) {
+                if (!research.IsResearched(clientId, definition.Tech) || !knownResearched.Add(definition.Tech) || baseline)
+                    continue;
+                hud.SetHint($"Research complete: {definition.DisplayName} - {definition.Description}");
+            }
+        }
+
+        /// <summary>The economy card's one-line view of what the local commander is researching.</summary>
+        void RefreshResearchSummary() {
+            nextResearchSummaryTime = Time.unscaledTime + ResearchSummaryInterval;
+            WV_Research research = WV_Research.Instance;
+            if (research == null) {
+                hud.SetResearchSummary(null);
+                return;
+            }
+
+            int clientId = LocalClientId;
+            researchSummary.Clear();
+            foreach (WV_TechDefinition definition in WV_TechTree.All) {
+                if (research.GetPhase(clientId, definition.Tech) != WV_ResearchPhase.Researching)
+                    continue;
+                researchSummary.Append(researchSummary.Length == 0 ? "Researching " : ", ")
+                    .Append(definition.DisplayName).Append(' ')
+                    .Append(Mathf.FloorToInt(research.GetProgress(clientId, definition.Tech) * 100f)).Append('%');
+            }
+            hud.SetResearchSummary(researchSummary.Length > 0 ? researchSummary.ToString() : null);
+        }
+
         void HandleRosterChanged() {
             PruneSelection();
             RefreshSelectionUI();
         }
 
-        void HandleQueueChanged() {
-            if (selectedBuilding != null)
-                hud.RefreshProductionQueue(selectedBuilding);
-        }
+        void HandleQueueChanged() => inspector.MarkDirty();
 
         void HandleCharacterAdded(GameCharacter character) {
             if (character != null && !characters.Contains(character))
@@ -246,12 +394,7 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void Update() {
-            if (!productionResultsRegistered
-                && InstanceFinder.ClientManager != null
-                && InstanceFinder.ClientManager.Started) {
-                productionResultsRegistered = true;
-                InstanceFinder.ClientManager.RegisterBroadcast<WV_ProductionResult>(HandleProductionResult);
-            }
+            RegisterBroadcasts();
 
             // A troop dies where it stands rather than despawning, so death - not removal - is what
             // has to drop it from the selection and take its ring away.
@@ -265,11 +408,27 @@ namespace Universes.UniverseData.war_valley.Client {
             if (economyDirty) {
                 economyDirty = false;
                 hud.RefreshEconomy(LocalClientId);
-                hud.ProductionMenu?.RefreshAffordability();
+                inspector.MarkDirty();
+                if (hud.DonatePanel != null && hud.DonatePanel.IsOpen)
+                    RefreshDonations();
+                StructureMenu.NotifyAvailabilityChanged();
             }
 
-            if (selectedBuilding != null)
-                hud.RefreshProductionQueue(selectedBuilding);
+            if (researchDirty)
+                RefreshResearch();
+            if (Time.unscaledTime >= nextResearchSummaryTime) {
+                RefreshResearchSummary();
+                RefreshForces();
+                if (hud.DonatePanel != null && hud.DonatePanel.IsOpen)
+                    RefreshDonations();
+            }
+
+            if (sellConfirmUntil > 0f && Time.unscaledTime >= sellConfirmUntil)
+                CancelSellConfirm();
+
+            // A building that was destroyed, despawned, or handed out of reach drops its panel here.
+            if (!inspector.Tick() && armedOrder.HasValue && SelectionCount == 0)
+                DisarmOrder(null);
 
             HandlePointer();
             HandleCommandKeys();
@@ -292,8 +451,6 @@ namespace Universes.UniverseData.war_valley.Client {
                 || !ToolControls.IsCursorFree()
                 || IsPointerOverHud();
             Vector2 screenPosition = mouse.position.ReadValue();
-
-            // The right button is the camera's (LookPC), so nothing here may consume it.
 
             if (mouse.leftButton.wasPressedThisFrame && !inputBlocked) {
                 // An armed order spends the click on itself rather than starting a selection, so a
@@ -337,8 +494,12 @@ namespace Universes.UniverseData.war_valley.Client {
         /// </summary>
         void HandleCommandKeys() {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || !Application.isFocused || TopbarControls.IsMenuOpen || !ToolControls.IsCursorFree())
+            if (keyboard == null || !Application.isFocused || TopbarControls.IsMenuOpen || !ToolControls.IsCursorFree()
+                || IsTyping())
                 return;
+
+            if (keyboard.deleteKey.wasPressedThisFrame)
+                RequestSell();
 
             // Arming keys. M/V/T rather than the conventional A, which is the character's strafe.
             if (keyboard.mKey.wasPressedThisFrame)
@@ -354,9 +515,20 @@ namespace Universes.UniverseData.war_valley.Client {
             if (keyboard.hKey.wasPressedThisFrame)
                 IssueImmediateOrder(WV_OrderType.HoldPosition);
 
-            // Escape backs out of an armed order without issuing it.
-            if (keyboard.escapeKey.wasPressedThisFrame && armedOrder.HasValue)
-                DisarmOrder("Order cancelled");
+            // Escape backs out one step at a time: an armed order, then an open menu, then the
+            // selected building.
+            if (keyboard.escapeKey.wasPressedThisFrame) {
+                if (armedOrder.HasValue)
+                    DisarmOrder("Order cancelled");
+                else if (sellConfirmUntil > 0f)
+                    CancelSellConfirm();
+                else if (hud.DonatePanel != null && hud.DonatePanel.IsOpen)
+                    hud.DonatePanel.Close();
+                else if (inspector.IsMenuOpen)
+                    inspector.CloseMenu();
+                else if (inspector.HasSelection)
+                    SelectBuilding(null);
+            }
 
             for (int i = 0; i < ControlGroupCount; i++) {
                 if (!GroupKey(keyboard, i).wasPressedThisFrame)
@@ -425,6 +597,17 @@ namespace Universes.UniverseData.war_valley.Client {
             hud.SetHint($"Group F{index + 1} - {SelectionCount} selected");
         }
 
+        /// <summary>
+        /// True while a text field - the donation amount, chat - has the keyboard, so typing a
+        /// number never also fires a hotkey.
+        /// </summary>
+        static bool IsTyping() {
+            GameObject focused = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            return focused != null
+                && focused.TryGetComponent(out TMPro.TMP_InputField field)
+                && field.isFocused;
+        }
+
         static bool IsPointerOverHud() =>
             EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
 
@@ -467,9 +650,41 @@ namespace Universes.UniverseData.war_valley.Client {
                     AddToSelection(character);
             }
 
-            if (SelectionCount > 0)
+            if (SelectionCount > 0) {
                 SelectBuilding(null);
+                RefreshSelectionUI();
+                return;
+            }
+
+            // A box around no units is a box around buildings: the way to take a row of barracks at
+            // once. Units win when both are inside, since that is what a drag usually means.
+            CollectUsableStructures(structureScratch, structure => IsInsideBox(camera, structure.transform.position, min, max));
+            if (structureScratch.Count > 0) {
+                if (additive)
+                    inspector.Add(structureScratch);
+                else
+                    inspector.SetSelection(structureScratch);
+                if (inspector.Count > 1)
+                    hud.SetHint($"{inspector.Count} buildings selected");
+            } else if (!additive) {
+                SelectBuilding(null);
+            }
             RefreshSelectionUI();
+        }
+
+        /// <summary>Every live building the local commander may use that passes <paramref name="filter"/>.</summary>
+        void CollectUsableStructures(List<StructureComponent> results, System.Predicate<StructureComponent> filter) {
+            results.Clear();
+            foreach (WV_Owned owned in WV_Owned.All) {
+                if (results.Count >= maxSelection)
+                    break;
+                if (owned == null
+                    || !owned.TryGetComponent(out StructureComponent structure)
+                    || !inspector.CanUse(structure)
+                    || !filter(structure))
+                    continue;
+                results.Add(structure);
+            }
         }
 
         static bool IsInsideBox(Camera camera, Vector3 worldPosition, Vector2 min, Vector2 max) {
@@ -485,8 +700,10 @@ namespace Universes.UniverseData.war_valley.Client {
 
         void SelectAtPoint(Camera camera, Vector2 screenPosition, bool additive) {
             Ray ray = camera.ScreenPointToRay(screenPosition);
+            // Triggers count: a gate standing open turns its collider into one so players can walk
+            // through, and its owner still has to be able to click it to close it again.
             bool hitSomething = Physics.Raycast(
-                ray, out RaycastHit hit, float.MaxValue, WV_Combat.TargetMask, QueryTriggerInteraction.Ignore);
+                ray, out RaycastHit hit, float.MaxValue, WV_Combat.TargetMask, QueryTriggerInteraction.Collide);
 
             if (!hitSomething) {
                 if (!additive) {
@@ -525,11 +742,25 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
-            WV_ProductionBuilding building = hit.collider.GetComponentInParent<WV_ProductionBuilding>();
-            if (building != null && building.Owned != null && building.Owned.IsOwnedBy(LocalClientId)) {
+            // Any building the commander may use - their own or an ally's - can be selected, which
+            // also opens its menu. Shift adds or removes it; a double click takes every building of
+            // that kind on screen.
+            StructureComponent structure = hit.collider.GetComponentInParent<StructureComponent>();
+            if (inspector.CanUse(structure)) {
+                bool selectAll = ConsumeDoubleClick(structure);
                 ClearSelection();
+                if (selectAll)
+                    SelectAllStructuresLike(camera, structure);
+                else if (additive)
+                    inspector.Toggle(structure);
+                else
+                    SelectBuilding(structure);
                 RefreshSelectionUI();
-                SelectBuilding(building);
+                return;
+            }
+
+            if (structure != null) {
+                hud.SetHint($"You cannot use that {structure.DisplayName}");
                 return;
             }
 
@@ -565,6 +796,21 @@ namespace Universes.UniverseData.war_valley.Client {
                 if (candidate != null && candidate.Kind == kind)
                     AddToSelection(candidate);
             }
+        }
+
+        /// <summary>
+        /// Selects every usable building of the clicked one's kind that is on screen, keeping the
+        /// clicked one first so the panel describes it. Unlike units, off-screen buildings stay out:
+        /// they are not going anywhere, and the gesture means "these ones here".
+        /// </summary>
+        void SelectAllStructuresLike(Camera camera, StructureComponent clicked) {
+            CollectUsableStructures(structureScratch, candidate =>
+                candidate != clicked
+                && candidate.StructureID == clicked.StructureID
+                && IsInsideBox(camera, candidate.transform.position, Vector2.zero, new Vector2(Screen.width, Screen.height)));
+            structureScratch.Insert(0, clicked);
+            inspector.SetSelection(structureScratch);
+            hud.SetHint($"{inspector.Count} x {clicked.DisplayName} selected");
         }
 
         /// <summary>
@@ -656,9 +902,12 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void RefreshSelectionUI() {
+            // A pending sale named a price for the old selection; it must not sell a new one.
+            if (sellConfirmUntil > 0f && SelectionSignature() != sellConfirmSelection)
+                CancelSellConfirm();
             // An order in hand with nothing left to give it to would sit primed forever and then
             // swallow the click that was meant to start a new selection.
-            if (armedOrder.HasValue && SelectionCount == 0 && selectedBuilding == null)
+            if (armedOrder.HasValue && SelectionCount == 0 && inspector.RallyTargets.Count == 0)
                 DisarmOrder("Selection lost - order cancelled");
             hud.RefreshSelection(selection, troopSelection);
         }
@@ -679,22 +928,227 @@ namespace Universes.UniverseData.war_valley.Client {
                     troopSelection.RemoveAt(i);
                 }
             }
-
-            if (selectedBuilding != null
-                && (!selectedBuilding.IsSpawned
-                    || selectedBuilding.Owned == null
-                    || !selectedBuilding.Owned.IsOwnedBy(LocalClientId)
-                    || IsDeadBuilding(selectedBuilding)))
-                SelectBuilding(null);
         }
 
-        /// <summary>A destroyed building keeps its panel open until this notices it is rubble.</summary>
-        static bool IsDeadBuilding(WV_ProductionBuilding building) =>
-            building.TryGetComponent(out StructureComponent structure) && structure.IsDead;
+        /// <summary>Selects one building and opens its menu, or clears the building selection when passed null.</summary>
+        void SelectBuilding(StructureComponent structure) {
+            if (structure == null)
+                inspector.Clear();
+            else
+                inspector.Select(structure);
+        }
 
-        void SelectBuilding(WV_ProductionBuilding building) {
-            selectedBuilding = building;
-            hud.ShowProduction(building, LocalClientId);
+        /// <summary>The panel's Set Rally button: the next ground click moves the selected buildings' gather point.</summary>
+        void ArmRallyPoint() {
+            if (inspector.RallyTargets.Count == 0)
+                return;
+            ArmOrder(WV_OrderType.Move);
+        }
+
+        // --- Selling ----------------------------------------------------------
+
+        /// <summary>
+        /// The Sell button and the Delete key. The first press names the refund and waits; a second
+        /// press within <see cref="SellConfirmSeconds"/>, on the same selection, sells. A sale cannot
+        /// be undone, so it is never one click.
+        /// </summary>
+        void RequestSell() {
+            if (SelectionCount == 0) {
+                hud.SetHint("Select units or troops to sell");
+                return;
+            }
+
+            long refund = EstimateSellRefund();
+            if (sellConfirmUntil <= 0f || SelectionSignature() != sellConfirmSelection) {
+                sellConfirmUntil = Time.unscaledTime + SellConfirmSeconds;
+                sellConfirmSelection = SelectionSignature();
+                if (hud.CommandMenu != null)
+                    hud.CommandMenu.SetSellConfirming(true, refund);
+                hud.SetHint($"Sell {SelectionCount} for {refund:N0}? Click Sell or press Delete again to confirm");
+                return;
+            }
+
+            CancelSellConfirm();
+            orderScratch.Clear();
+            foreach (WV_Unit unit in selection) {
+                if (unit != null && unit.IsSpawned && !unit.IsDead)
+                    orderScratch.Add(unit.NetworkObject.ObjectId);
+            }
+            foreach (GameCharacter troop in troopSelection) {
+                if (troop != null && troop.IsSpawned && !troop.IsDead)
+                    orderScratch.Add(troop.NetworkObject.ObjectId);
+            }
+            if (orderScratch.Count == 0 || InstanceFinder.ClientManager == null)
+                return;
+            InstanceFinder.ClientManager.Broadcast(new WV_SellRequest { objectIds = orderScratch.ToArray() });
+        }
+
+        void CancelSellConfirm() {
+            if (sellConfirmUntil <= 0f)
+                return;
+            sellConfirmUntil = 0f;
+            if (hud.CommandMenu != null)
+                hud.CommandMenu.SetSellConfirming(false, 0);
+        }
+
+        /// <summary>
+        /// The refund the server will pay for the current selection, by the same rule: part of what
+        /// each unit or troop cost, less for a damaged one.
+        /// </summary>
+        long EstimateSellRefund() {
+            long refund = 0;
+            foreach (WV_Unit unit in selection) {
+                if (unit != null && !unit.IsDead)
+                    refund += WV_Rules.GetSellRefund(unit.Cost, GetCondition(unit));
+            }
+            foreach (GameCharacter troop in troopSelection) {
+                if (troop != null && !troop.IsDead && WV_Rules.TryGetTroopKind(troop.DisplayName, out WV_TroopKind kind))
+                    refund += WV_Rules.GetSellRefund(WV_Rules.GetTroopCost(kind), GetCondition(troop));
+            }
+            return refund;
+        }
+
+        static float GetCondition(IEntity entity) {
+            long max = entity.MaxHealth.Value;
+            return max > 0 ? Mathf.Clamp01(entity.Health.Value / (float)max) : 1f;
+        }
+
+        /// <summary>Identifies exactly what is selected, cheaply enough to compare on every change.</summary>
+        int SelectionSignature() {
+            unchecked {
+                int hash = 17;
+                foreach (WV_Unit unit in selection)
+                    hash = hash * 31 + (unit != null ? unit.GetInstanceID() : 0);
+                foreach (GameCharacter troop in troopSelection)
+                    hash = hash * 31 + (troop != null ? troop.GetInstanceID() : 0);
+                return hash;
+            }
+        }
+
+        // --- Limits -----------------------------------------------------------
+
+        /// <summary>
+        /// Living troops this client commands. Troop ownership is recorded only on the server, so
+        /// this counts the troops the client recognises as its own, the same ones it can select.
+        /// </summary>
+        int CountOwnTroops() {
+            int count = 0;
+            foreach (GameCharacter character in characters) {
+                if (IsCommandableTroop(character))
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>The funds card's line showing how much of each per-player limit is in use.</summary>
+        void RefreshForces() {
+            int clientId = LocalClientId;
+            if (clientId == WV_Owned.NoOwner) {
+                hud.SetForces(null);
+                return;
+            }
+
+            int troops = CountOwnTroops();
+            forcesSummary.Clear();
+            AppendForce(WV_ForceCategory.Soldier, WV_Limits.CountUsed(clientId, WV_ForceCategory.Soldier, troops));
+            forcesSummary.Append("  ");
+            AppendForce(WV_ForceCategory.Vehicle, WV_Limits.CountUsed(clientId, WV_ForceCategory.Vehicle, troops));
+            forcesSummary.Append("  ");
+            AppendForce(WV_ForceCategory.Aircraft, WV_Limits.CountUsed(clientId, WV_ForceCategory.Aircraft, troops));
+            forcesSummary.Append("  ");
+            AppendForce(WV_ForceCategory.Building, WV_Limits.CountUsed(clientId, WV_ForceCategory.Building, troops));
+            hud.SetForces(forcesSummary.ToString());
+        }
+
+        /// <summary>One "Troops 5/20" entry, drawn in the warning colour once the limit is reached.</summary>
+        void AppendForce(WV_ForceCategory category, int used) {
+            int limit = WV_Limits.GetLimit(category);
+            bool full = used >= limit;
+            if (full)
+                forcesSummary.Append("<color=#FFB85A>");
+            forcesSummary.Append(WV_Limits.GetShortName(category)).Append(' ').Append(used).Append('/').Append(limit);
+            if (full)
+                forcesSummary.Append("</color>");
+        }
+
+        // --- Donations --------------------------------------------------------
+
+        void BindDonations() {
+            hud.DonateClicked += ToggleDonations;
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null) {
+                Debug.LogWarning(
+                    $"{nameof(WV_ClientController)}: the HUD prefab has no donation panel. Re-run " +
+                    "Ryan/War Valley/Rebuild HUD to author it.", this);
+                return;
+            }
+            panel.TransferRequested += SendDonation;
+            panel.CloseRequested += panel.Close;
+        }
+
+        void UnbindDonations() {
+            if (hud == null)
+                return;
+            hud.DonateClicked -= ToggleDonations;
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null)
+                return;
+            panel.TransferRequested -= SendDonation;
+            panel.CloseRequested -= panel.Close;
+        }
+
+        void ToggleDonations() {
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null)
+                return;
+            if (panel.IsOpen) {
+                panel.Close();
+                return;
+            }
+            panel.Open("Donate to an ally");
+            RefreshDonations();
+        }
+
+        /// <summary>
+        /// Lists every other commander the local one is allied with - in Survival, everyone - and
+        /// the balance the local one can give from.
+        /// </summary>
+        void RefreshDonations() {
+            FundsTransferPanel panel = hud.DonatePanel;
+            if (panel == null)
+                return;
+
+            int clientId = LocalClientId;
+            WV_Economy economy = WV_Economy.Instance;
+            donationRecipients.Clear();
+            if (PlayerData.Players != null) {
+                foreach (KeyValuePair<NetworkConnection, PlayerData> entry in PlayerData.Players) {
+                    if (entry.Key == null || entry.Value == null)
+                        continue;
+                    int recipientId = entry.Key.ClientId;
+                    if (recipientId == clientId || !WV_Alliances.AreAllied(clientId, recipientId))
+                        continue;
+                    donationRecipients.Add(new TransferRecipient {
+                        Id = recipientId,
+                        Name = entry.Value.GetPlayerName(),
+                        Accent = WV_Rules.GetCommanderUIColor(recipientId),
+                        Detail = economy != null ? MathHelper.AddCommas((ulong)System.Math.Max(0, economy.GetFunds(recipientId))) : null
+                    });
+                }
+            }
+
+            panel.SetRecipients(donationRecipients);
+            panel.SetBalance(economy != null ? economy.GetFunds(clientId) : 0, economy != null && economy.HasInfiniteFunds);
+        }
+
+        void SendDonation(int recipientClientId, long amount) {
+            if (InstanceFinder.ClientManager == null)
+                return;
+            // The server answers with a notice either way, so the hint line reports the outcome.
+            InstanceFinder.ClientManager.Broadcast(new WV_DonateRequest {
+                recipientClientId = recipientClientId,
+                amount = amount
+            });
         }
 
         // --- Orders -----------------------------------------------------------
@@ -710,7 +1164,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
-            if (SelectionCount == 0 && selectedBuilding == null) {
+            if (SelectionCount == 0 && inspector.RallyTargets.Count == 0) {
                 hud.SetHint("Select something first");
                 return;
             }
@@ -759,7 +1213,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
                 IEntity target = entityHit.collider.GetComponentInParent<IEntity>();
                 if (target == null || !IsHostileToLocalPlayer(target)) {
-                    hud.SetHint("Not an enemy - click a hostile target");
+                    hud.SetHint("Not a valid target - click a living, hostile enemy");
                     return;
                 }
 
@@ -774,15 +1228,18 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
-            // With a building selected and nothing else, a placed Move sets its gather point. That
-            // is the only thing a move could sensibly mean for a structure that cannot walk.
-            if (selectedBuilding != null && SelectionCount == 0) {
+            // With buildings selected and nothing else, a placed Move sets their gather point. That
+            // is the only thing a move could sensibly mean for structures that cannot walk.
+            IReadOnlyList<WV_ProductionBuilding> rallyBuildings = inspector.RallyTargets;
+            if (rallyBuildings.Count > 0 && SelectionCount == 0) {
                 DisarmOrder(null);
-                InstanceFinder.ClientManager.Broadcast(new WV_RallyPointRequest {
-                    buildingObjectId = selectedBuilding.NetworkObject.ObjectId,
-                    position = groundHit.point
-                });
-                hud.SetHint("Rally point set");
+                foreach (WV_ProductionBuilding building in rallyBuildings) {
+                    InstanceFinder.ClientManager.Broadcast(new WV_RallyPointRequest {
+                        buildingObjectId = building.NetworkObject.ObjectId,
+                        position = groundHit.point
+                    });
+                }
+                hud.SetHint(rallyBuildings.Count > 1 ? $"Rally point set for {rallyBuildings.Count} buildings" : "Rally point set");
                 return;
             }
 
@@ -790,16 +1247,21 @@ namespace Universes.UniverseData.war_valley.Client {
             SendOrder(orderType, groundHit.point, null);
         }
 
+        /// <summary>
+        /// Whether the selection may be ordered to attack <paramref name="target"/>: the same rule the
+        /// server's brains apply, so a living, hurtable enemy is accepted and a dead or invulnerable
+        /// one is refused here rather than silently dropped there.
+        /// </summary>
         bool IsHostileToLocalPlayer(IEntity target) {
             // Compare against something the player actually commands rather than against the player's
             // own character, so the answer matches what the ordered units will do on the server.
             foreach (WV_Unit unit in selection) {
                 if (unit != null)
-                    return WV_Combat.AreEnemies(unit.Team, target.Team);
+                    return WV_Combat.IsValidTarget(target, unit.Team);
             }
             foreach (GameCharacter troop in troopSelection) {
                 if (troop != null)
-                    return WV_Combat.AreEnemies(troop.Team, target.Team);
+                    return WV_Combat.IsValidTarget(target, troop.Team);
             }
             return false;
         }

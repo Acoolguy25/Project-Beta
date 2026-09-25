@@ -13,7 +13,12 @@ using System.Linq;
 using UnityEngine;
 
 namespace RyanAssets.Shared.Global {
-    
+    /// <summary>One "attacker may hurt target" entry of <see cref="SharedGlobalEvents.TeamEnemies"/>, as replicated.</summary>
+    public struct TeamEnemyPair {
+        public TeamColor attacker;
+        public TeamColor target;
+    }
+
     public class SharedGlobalEvents : NetworkBehaviour {
         public static SharedGlobalEvents Instance;
         public static Action OnInstanceReady, OnInstanceReadyPersistent, OnInstanceRemoved;
@@ -22,7 +27,23 @@ namespace RyanAssets.Shared.Global {
         public readonly SyncList<string> LeaderboardHeaders = new();
         public readonly SyncVar<MusicSelection> MusicTrack = new(initialValue: MusicSelection.GameMusic);
         readonly SyncVar<string> _topMessage = new();
-        public static Dictionary<TeamColor, HashSet<TeamColor>> TeamEnemies;
+
+        /// <summary>
+        /// Which real teams may attack which. Game modes assign it on the server; it is replicated
+        /// through <see cref="teamEnemyPairs"/> so clients answer "is that an enemy?" the same way.
+        /// It used to be a plain static that only server runners filled, so on every client of a
+        /// dedicated server it stayed null and nothing ever counted as hostile.
+        /// </summary>
+        public static Dictionary<TeamColor, HashSet<TeamColor>> TeamEnemies {
+            get => teamEnemies;
+            set {
+                teamEnemies = value;
+                if (Instance != null && Instance.IsServerInitialized)
+                    Instance.PublishTeamEnemies();
+            }
+        }
+        static Dictionary<TeamColor, HashSet<TeamColor>> teamEnemies;
+        readonly SyncList<TeamEnemyPair> teamEnemyPairs = new();
 
         // Voting
         public readonly SyncVar<SharedVoteHeader> SharedVoteHeader = new(new());
@@ -63,6 +84,46 @@ namespace RyanAssets.Shared.Global {
         public override void OnStartServer() {
             base.OnStartServer();
             Instance = this;
+            // A runner usually assigns the table in Awake, before this object has spawned.
+            PublishTeamEnemies();
+        }
+
+        public override void OnStartClient() {
+            base.OnStartClient();
+            teamEnemyPairs.OnChange += OnTeamEnemyPairsChanged;
+            if (!IsServerInitialized)
+                RebuildTeamEnemies();
+        }
+
+        public override void OnStopClient() {
+            teamEnemyPairs.OnChange -= OnTeamEnemyPairsChanged;
+            base.OnStopClient();
+        }
+
+        void PublishTeamEnemies() {
+            teamEnemyPairs.Clear();
+            if (teamEnemies == null)
+                return;
+            foreach (KeyValuePair<TeamColor, HashSet<TeamColor>> entry in teamEnemies) {
+                foreach (TeamColor target in entry.Value)
+                    teamEnemyPairs.Add(new TeamEnemyPair { attacker = entry.Key, target = target });
+            }
+        }
+
+        void OnTeamEnemyPairsChanged(SyncListOperation op, int index, TeamEnemyPair oldItem, TeamEnemyPair newItem, bool asServer) {
+            // A host already holds the authoritative table; only a remote client mirrors it.
+            if (!asServer && !IsServerInitialized)
+                RebuildTeamEnemies();
+        }
+
+        void RebuildTeamEnemies() {
+            var rebuilt = new Dictionary<TeamColor, HashSet<TeamColor>>();
+            foreach (TeamEnemyPair pair in teamEnemyPairs) {
+                if (!rebuilt.TryGetValue(pair.attacker, out HashSet<TeamColor> targets))
+                    rebuilt[pair.attacker] = targets = new HashSet<TeamColor>();
+                targets.Add(pair.target);
+            }
+            teamEnemies = rebuilt;
         }
 #if !UNITY_SERVER
         

@@ -1,0 +1,22 @@
+{
+    "name": "RyanAssets.Client.ClientUI.Command",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Command",
+    "references": [
+        "RyanAssets.Core",
+        "RyanAssets.Shared.WorldUI",
+        "RyanAssets.UI",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

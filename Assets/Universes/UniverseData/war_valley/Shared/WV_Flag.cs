@@ -9,7 +9,7 @@ namespace Universes.UniverseData.war_valley.Shared {
     [RequireComponent(typeof(EffectsComponent), typeof(HealthComponent))]
     public sealed class WV_Flag : EntityBase, ITeam {
         [SerializeField] private string displayName = "War Valley Flag";
-        [SerializeField] private TeamConfig team = new(TeamColor.Blue);
+        [SerializeField] private TeamConfig team = new(WV_Alliances.Defenders);
         [SerializeField, Min(1)] private long maxHealth = 1000;
 
         private long InitialMaxHealth => maxHealth;
@@ -44,7 +44,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         [Server]
         public void SetTeam(TeamConfig teamConfig) {
-            team = teamConfig ?? new TeamConfig(TeamColor.Blue);
+            team = teamConfig ?? new TeamConfig(WV_Alliances.Defenders);
         }
 #endif
 

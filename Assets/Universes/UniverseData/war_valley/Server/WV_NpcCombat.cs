@@ -39,6 +39,9 @@ namespace Universes.UniverseData.war_valley.Server {
         /// </summary>
         const float GunFireAnimationSeconds = 0.2f;
 
+        /// <summary>Height above a soldier's feet its shots leave from, for the line-of-sight check.</summary>
+        const float EyeHeight = 1.4f;
+
         LocalNPC localNPC;
         GameCharacter gameCharacter;
         CharacterAnimator characterAnimator;
@@ -52,8 +55,12 @@ namespace Universes.UniverseData.war_valley.Server {
         float lastAttack = float.MinValue;
         float gunFireUntil;
         bool loadoutEquipped;
+        /// <summary>True while a wall blocks the shot and the gunner is closing in to get a clear one.</summary>
+        bool advancingForSight;
 
         public WV_TroopKind Kind => kind;
+
+        bool IsGunner => WV_TroopCatalog.Get(kind).UsesGun;
 
         /// <summary>The far edge of this soldier's engagement band, in metres.</summary>
         public float EngageRange => localNPC != null ? localNPC.AttackMaxRange : 0f;
@@ -86,7 +93,8 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         void EquipLoadout() {
-            ToolEnum tool = kind == WV_TroopKind.Gunner ? ToolEnum.Pistol : ToolEnum.Dagger;
+            bool gunner = WV_TroopCatalog.Get(kind).UsesGun;
+            ToolEnum tool = gunner ? ToolEnum.Pistol : ToolEnum.Dagger;
             weapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, tool);
             if (weapon == null) {
                 Debug.LogError($"{name} could not be issued a {tool} and will not be able to fight.", this);
@@ -94,7 +102,10 @@ namespace Universes.UniverseData.war_valley.Server {
             }
 
             localNPC.AttackDamageType = weapon.defaultDamageType;
-            if (kind != WV_TroopKind.Gunner)
+            // The build's damage multiplier is carried by the weapon itself, so every way it hits -
+            // a knife swing, a bullet, a shot at a shield - hits for the same scaled amount.
+            weapon.hitDamageSync.Value = gameCharacter.Build.ScaleDamage(weapon.hitDamageInit);
+            if (!gunner)
                 return;
 
             gunClient = weapon.GetComponent<ToolGunClient>();
@@ -109,9 +120,15 @@ namespace Universes.UniverseData.war_valley.Server {
             // wherever the current target actually is rather than to a captured point.
             gunClient.GetTargetPosition = () => aimPoint;
 
-            // A pistol out-ranges a knife by an order of magnitude, so the whole movement band moves
-            // with it: stand off at GunnerStandoffRange, open fire from GunnerEngageRange, and give
-            // ground rather than let anything walk inside the standoff.
+            ConfigureGunnerRange();
+        }
+
+        /// <summary>
+        /// A pistol out-ranges a knife by an order of magnitude, so the whole movement band moves
+        /// with it: stand off at GunnerStandoffRange, open fire from GunnerEngageRange, and give
+        /// ground rather than let anything walk inside the standoff.
+        /// </summary>
+        void ConfigureGunnerRange() {
             localNPC.ConfigureAttackRange(
                 WV_Rules.GunnerStandoffRange,
                 WV_Rules.GunnerEngageRange,
@@ -119,11 +136,26 @@ namespace Universes.UniverseData.war_valley.Server {
                 WV_Rules.GunnerAttackInterval);
         }
 
+        /// <summary>
+        /// A gun cannot fire through a wall, fence, or closed gate. While one is in the way the
+        /// gunner stops holding its distance and keeps closing on the target along its NavMesh
+        /// route - around the wall, or up to it - until the line clears, then settles back at range.
+        /// </summary>
+        void SetAdvancingForSight(bool advancing) {
+            if (advancingForSight == advancing)
+                return;
+            advancingForSight = advancing;
+            if (advancing)
+                localNPC.ConfigureAttackRange(0f, WV_Rules.GunnerEngageRange, holdDistance: false, WV_Rules.GunnerAttackInterval);
+            else
+                ConfigureGunnerRange();
+        }
+
         void Update() {
             if (weapon == null)
                 return;
 
-            if (kind == WV_TroopKind.Gunner) {
+            if (IsGunner) {
                 if (gunFireUntil > 0f && Time.time >= gunFireUntil)
                     SetFiring(false);
 
@@ -150,7 +182,7 @@ namespace Universes.UniverseData.war_valley.Server {
             if (weapon == null || target == null || gameCharacter.IsDead)
                 return;
 
-            if (kind == WV_TroopKind.Gunner)
+            if (IsGunner)
                 FireGun(target);
             else
                 SwingKnife(target);
@@ -165,7 +197,22 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         void FireGun(IEntity target) {
-            if (gunClient == null || !WV_Combat.TryGetAimPoint(target, out aimPoint))
+            if (gunClient == null)
+                return;
+
+            Vector3 eye = transform.position + Vector3.up * EyeHeight;
+            if (!WV_Combat.HasLineOfSight(eye, target, transform)) {
+                SetAdvancingForSight(true);
+                return;
+            }
+            SetAdvancingForSight(false);
+
+            // A shield is shot at its near edge. Its dome does not stop bullets, so the hit is
+            // applied to it directly rather than left to whatever the round goes on to strike.
+            WV_ShieldBarrier shield = target as WV_ShieldBarrier;
+            if (shield != null)
+                aimPoint = shield.GetEdgePoint(eye);
+            else if (!WV_Combat.TryGetAimPoint(target, out aimPoint))
                 return;
 
             lastAttack = Time.time;
@@ -185,6 +232,8 @@ namespace Universes.UniverseData.war_valley.Server {
             bool fired = weapon.currentAmmo < 0 || weapon.currentAmmo != ammoBefore;
             if (fired)
                 SetFiring(true);
+            if (fired && shield != null)
+                WV_Combat.DealDamage(shield, weapon.hitDamage, weapon.defaultDamageType, gameCharacter);
         }
 
         /// <summary>

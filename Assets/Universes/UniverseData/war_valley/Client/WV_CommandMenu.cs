@@ -27,6 +27,13 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] Button stopButton;
         [SerializeField] Button holdButton;
 
+        [Header("Selling")]
+        [Tooltip("Sells the selected units and troops. Asks for a second click before it sells.")]
+        [SerializeField] Button sellButton;
+        [SerializeField] TextMeshProUGUI sellLabel;
+        [SerializeField] Color sellTint = new(0.66f, 0.2f, 0.18f, 1f);
+        [SerializeField] Color sellConfirmTint = new(0.9f, 0.35f, 0.1f, 1f);
+
         [Header("Selection Buttons")]
         [SerializeField] Button selectUnitsButton;
         [SerializeField] Button selectTroopsButton;
@@ -53,6 +60,9 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>Binds the current selection to the control group at this index.</summary>
         public event Action<int> GroupBound;
 
+        /// <summary>The Sell button was clicked. The controller decides whether this click confirms.</summary>
+        public event Action SellRequested;
+
         Color[] orderButtonBaseColors;
         Button[] orderButtons;
 
@@ -77,6 +87,8 @@ namespace Universes.UniverseData.war_valley.Client {
                 selectTroopsButton.onClick.AddListener(() => SelectRequested?.Invoke(false, true));
             if (selectAllButton != null)
                 selectAllButton.onClick.AddListener(() => SelectRequested?.Invoke(true, true));
+            if (sellButton != null)
+                sellButton.onClick.AddListener(() => SellRequested?.Invoke());
 
             for (int i = 0; i < groupButtons.Length; i++) {
                 if (groupButtons[i] == null)
@@ -92,6 +104,7 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             SetArmed(null);
+            SetSellConfirming(false, 0);
         }
 
         void Bind(Button button, WV_OrderType orderType) {
@@ -107,6 +120,7 @@ namespace Universes.UniverseData.war_valley.Client {
             if (selectUnitsButton != null) selectUnitsButton.onClick.RemoveAllListeners();
             if (selectTroopsButton != null) selectTroopsButton.onClick.RemoveAllListeners();
             if (selectAllButton != null) selectAllButton.onClick.RemoveAllListeners();
+            if (sellButton != null) sellButton.onClick.RemoveAllListeners();
             foreach (Button button in groupButtons) {
                 if (button != null)
                     button.onClick.RemoveAllListeners();
@@ -159,6 +173,19 @@ namespace Universes.UniverseData.war_valley.Client {
                 if (button != null)
                     button.interactable = hasSelection;
             }
+            if (sellButton != null)
+                sellButton.interactable = hasSelection;
+        }
+
+        /// <summary>
+        /// Shows whether a sale is waiting for its confirming click, and what it would refund. A sale
+        /// cannot be undone, so the first click only names the price.
+        /// </summary>
+        public void SetSellConfirming(bool confirming, long refund) {
+            if (sellLabel != null)
+                sellLabel.text = confirming ? $"Sell for {refund:N0}?" : "Sell [Del]";
+            if (sellButton != null && sellButton.targetGraphic != null)
+                sellButton.targetGraphic.color = confirming ? sellConfirmTint : sellTint;
         }
     }
 }

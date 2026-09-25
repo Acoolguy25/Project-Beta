@@ -1,9 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Client.ClientUI.Command;
 using RyanAssets.Core;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Client {
@@ -12,23 +15,38 @@ namespace Universes.UniverseData.war_valley.Client {
     /// <para>
     /// Every label, panel, and the selection rectangle itself are authored in the prefab and wired in
     /// the Inspector; this component only writes text and toggles what the prefab already contains.
+    /// The building panel and the build/research menu are the shared command UI from RyanAssets,
+    /// nested into the prefab: this HUD hands them to <see cref="WV_StructureInspector"/>, which fills
+    /// them from War Valley's rules.
     /// </para>
     /// </summary>
     public sealed class WV_HUD : MonoBehaviour {
         [Header("Economy")]
         [SerializeField] TextMeshProUGUI fundsLabel;
         [SerializeField] TextMeshProUGUI incomeLabel;
+        [Tooltip("One line summarising the commander's research in progress.")]
+        [SerializeField] TextMeshProUGUI researchLabel;
+        [Tooltip("How much of each per-player limit the commander is using.")]
+        [SerializeField] TextMeshProUGUI forcesLabel;
+        [Tooltip("Opens the donation panel.")]
+        [SerializeField] Button donateButton;
+        [Tooltip("The shared funds transfer panel, used to donate to allies.")]
+        [SerializeField] FundsTransferPanel donatePanel;
 
         [Header("Selection")]
         [SerializeField] RectTransform selectionBox;
         [SerializeField] TextMeshProUGUI selectionLabel;
         [SerializeField] GameObject selectionPanel;
 
-        [Header("Production")]
-        [SerializeField] GameObject productionPanel;
-        [SerializeField] TextMeshProUGUI productionTitle;
-        [SerializeField] TextMeshProUGUI productionQueueLabel;
-        [SerializeField] WV_ProductionMenu productionMenu;
+        [Header("Structures")]
+        [Tooltip("Details, queue, and actions for the selected building.")]
+        [SerializeField] SelectionInfoPanel structurePanel;
+        [Tooltip("The build and research menu opened by selecting a building.")]
+        [SerializeField] CommandOptionGrid optionMenu;
+        [Tooltip("Icons for foot soldiers, which have no prefab of their own to carry one.")]
+        [SerializeField] WV_TroopIcon[] troopIcons = Array.Empty<WV_TroopIcon>();
+        [Tooltip("Gap kept between the building panel and the build menu stacked above it.")]
+        [SerializeField, Min(0f)] float dockSpacing = 12f;
 
         [Header("Commands")]
         [Tooltip("The command card: order and selection buttons. Stays open so every order is " +
@@ -41,21 +59,88 @@ namespace Universes.UniverseData.war_valley.Client {
 
         readonly StringBuilder builder = new();
         readonly Dictionary<string, int> troopCounts = new();
+        readonly Dictionary<WV_UnitKind, int> unitCounts = new();
 
-        public WV_ProductionMenu ProductionMenu => productionMenu;
+        RectTransform structureRect;
+        RectTransform optionRect;
+        float optionRestingY;
+
         public WV_CommandMenu CommandMenu => commandMenu;
+        public SelectionInfoPanel StructurePanel => structurePanel;
+        public CommandOptionGrid OptionMenu => optionMenu;
+        public FundsTransferPanel DonatePanel => donatePanel;
+
+        /// <summary>The funds card's Donate button was clicked.</summary>
+        public event Action DonateClicked;
 
         void Awake() {
+            if (structurePanel != null)
+                structureRect = (RectTransform)structurePanel.transform;
+            if (optionMenu != null) {
+                optionRect = (RectTransform)optionMenu.transform;
+                optionRestingY = optionRect.anchoredPosition.y;
+            }
+
             SetSelectionBoxVisible(false);
             if (selectionPanel != null)
                 selectionPanel.SetActive(false);
-            if (productionPanel != null)
-                productionPanel.SetActive(false);
+            if (structurePanel != null)
+                structurePanel.Hide();
+            if (optionMenu != null)
+                optionMenu.Close();
+            if (researchLabel != null)
+                researchLabel.gameObject.SetActive(false);
+            if (donatePanel != null)
+                donatePanel.Close();
+            if (donateButton != null)
+                donateButton.onClick.AddListener(HandleDonateClicked);
+        }
+
+        void OnDestroy() {
+            if (donateButton != null)
+                donateButton.onClick.RemoveListener(HandleDonateClicked);
+        }
+
+        void HandleDonateClicked() => DonateClicked?.Invoke();
+
+        /// <summary>
+        /// Keeps the build menu docked on top of the building panel. Both are authored on the same
+        /// bottom-right corner; the panel grows with its contents, so the menu is lifted clear of
+        /// whatever height the panel has this frame rather than by a fixed offset that one day
+        /// overlaps it.
+        /// </summary>
+        void LateUpdate() {
+            if (optionRect == null || !optionMenu.IsOpen)
+                return;
+
+            float y = structureRect != null && structurePanel.IsOpen
+                ? structureRect.anchoredPosition.y + structureRect.rect.height + dockSpacing
+                : optionRestingY;
+            Vector2 position = optionRect.anchoredPosition;
+            if (!Mathf.Approximately(position.y, y))
+                optionRect.anchoredPosition = new Vector2(position.x, y);
         }
 
         public void SetHint(string text) {
             if (hintLabel != null)
                 hintLabel.text = text;
+        }
+
+        /// <summary>
+        /// The icon authored for a troop kind. Every kind is the same robot body, so a kind added
+        /// after the HUD was last authored shows the first icon rather than an empty frame.
+        /// </summary>
+        public Sprite GetTroopIcon(WV_TroopKind kind) {
+            Sprite fallback = null;
+            foreach (WV_TroopIcon entry in troopIcons) {
+                if (entry == null)
+                    continue;
+                if (entry.kind == kind)
+                    return entry.icon;
+                if (fallback == null)
+                    fallback = entry.icon;
+            }
+            return fallback;
         }
 
         public void RefreshEconomy(int clientId) {
@@ -64,9 +149,28 @@ namespace Universes.UniverseData.war_valley.Client {
             int income = economy != null ? economy.GetIncomePerMinute(clientId) : 0;
 
             if (fundsLabel != null)
-                fundsLabel.text = MathHelper.AddCommas((ulong)Mathf.Max(0, funds));
+                fundsLabel.text = economy != null && economy.HasInfiniteFunds
+                    ? "Unlimited"
+                    : MathHelper.AddCommas((ulong)Mathf.Max(0, funds));
             if (incomeLabel != null)
                 incomeLabel.text = income > 0 ? $"+{income}/min" : "No income";
+        }
+
+        /// <summary>Shows the research line, or hides it when nothing is being researched.</summary>
+        public void SetResearchSummary(string summary) {
+            if (researchLabel == null)
+                return;
+            bool show = !string.IsNullOrEmpty(summary);
+            if (researchLabel.gameObject.activeSelf != show)
+                researchLabel.gameObject.SetActive(show);
+            if (show)
+                researchLabel.text = summary;
+        }
+
+        /// <summary>Writes how much of each per-player limit is in use.</summary>
+        public void SetForces(string summary) {
+            if (forcesLabel != null)
+                forcesLabel.text = summary ?? string.Empty;
         }
 
         // --- Selection rectangle ---------------------------------------------
@@ -111,15 +215,15 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
 
             // Counted by kind rather than listed, so a thirty-unit push stays readable.
-            var counts = new Dictionary<WV_UnitKind, int>();
+            unitCounts.Clear();
             long health = 0;
             long maxHealth = 0;
             for (int i = 0; i < unitCount; i++) {
                 WV_Unit unit = selection[i];
                 if (unit == null)
                     continue;
-                counts.TryGetValue(unit.Kind, out int existing);
-                counts[unit.Kind] = existing + 1;
+                unitCounts.TryGetValue(unit.Kind, out int existing);
+                unitCounts[unit.Kind] = existing + 1;
                 health += unit.Health.Value;
                 maxHealth += unit.MaxHealth.Value;
             }
@@ -138,8 +242,8 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             builder.Clear();
-            builder.Append(total).Append(" selected");
-            foreach (KeyValuePair<WV_UnitKind, int> entry in counts)
+            builder.Append("<b>").Append(total).Append(" selected</b>");
+            foreach (KeyValuePair<WV_UnitKind, int> entry in unitCounts)
                 builder.Append("\n").Append(entry.Value).Append("x ").Append(WV_Rules.GetUnitDisplayName(entry.Key));
             foreach (KeyValuePair<string, int> entry in troopCounts)
                 builder.Append("\n").Append(entry.Value).Append("x ").Append(entry.Key);
@@ -160,44 +264,6 @@ namespace Universes.UniverseData.war_valley.Client {
         public void SetArmedOrder(WV_OrderType? armed) {
             if (commandMenu != null)
                 commandMenu.SetArmed(armed);
-        }
-
-        // --- Production panel -------------------------------------------------
-
-        public void ShowProduction(WV_ProductionBuilding building, int clientId) {
-            if (productionPanel == null)
-                return;
-
-            bool show = building != null;
-            productionPanel.SetActive(show);
-            if (!show) {
-                productionMenu?.Bind(null, clientId);
-                return;
-            }
-
-            if (productionTitle != null)
-                productionTitle.text = building.name;
-            productionMenu?.Bind(building, clientId);
-            RefreshProductionQueue(building);
-        }
-
-        public void RefreshProductionQueue(WV_ProductionBuilding building) {
-            if (productionQueueLabel == null || building == null)
-                return;
-
-            if (building.QueueLength == 0) {
-                productionQueueLabel.text = "Queue empty";
-                return;
-            }
-
-            builder.Clear();
-            builder.Append("Building ")
-                .Append(building.GetQueuedItem(0).DisplayName)
-                .Append(" - ")
-                .Append(WV_Rules.FormatCountdown(building.CurrentItemSecondsRemaining));
-            if (building.QueueLength > 1)
-                builder.Append("\n+").Append(building.QueueLength - 1).Append(" queued");
-            productionQueueLabel.text = builder.ToString();
         }
     }
 }

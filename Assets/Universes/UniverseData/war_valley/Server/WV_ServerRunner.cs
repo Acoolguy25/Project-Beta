@@ -10,7 +10,6 @@ using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Global;
 using System;
 using System.Threading;
-using Unity.VisualScripting.Antlr3.Runtime;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Universes.UniverseData.war_valley.Shared;
@@ -18,28 +17,12 @@ using Universes.UniverseData.war_valley.Shared;
 namespace Universes.UniverseData.war_valley.Server
 {
     [Serializable]
-    public enum WV_NpcType {
-        Normal,
-        /// <summary>The same soldier carrying a pistol: engages from a distance and gives ground.</summary>
-        Gunner
-    };
-    [Serializable]
     public enum WV_ActiveGameState {
         Wave,
         AdvanceWave,
         FinishEnemiesOff,
         /// <summary>The flag is down. The round is over and only the epilogue is left to play.</summary>
         GameOver
-    }
-    [Serializable]
-    public struct WV_NpcSpawnData {
-        public WV_NpcType npcType;
-        public int spawnCount;
-    }
-    [Serializable]
-    public class WV_WaveData {
-        public WV_NpcSpawnData[] spawnData;
-        public int waveIntermission = 40;
     }
     public class WV_ServerRunner : ServerRunner
     {
@@ -65,9 +48,21 @@ namespace Universes.UniverseData.war_valley.Server
         };
 
         [SerializeField]
+        [Tooltip("The soldier body every troop and wave enemy is built from. Only the first entry is " +
+                 "used: each kind of troop is this body with its own weapon and build.")]
         private GameObject[] RobotNPC_Prefab;
+
+        [Header("Waves")]
         [SerializeField]
-        private WV_WaveData[] WaveSpawnData;
+        [Tooltip("How the waves grow. Each wave is built from its number, so the round gets harder " +
+                 "every wave and new kinds of troop join as it goes.")]
+        private WV_WaveTuning WaveTuning = new();
+
+        /// <summary>Seconds between one enemy of a wave arriving and the next, so a wave streams in.</summary>
+        private const float WaveSpawnSpacingSeconds = 0.2f;
+
+        /// <summary>The wave currently being fought, for the top bar.</summary>
+        private WV_Wave currentWave;
 
         /// <summary>
         /// Debug multiplier on how long every barracks, hangar, helipad, and airfield takes to turn
@@ -79,7 +74,28 @@ namespace Universes.UniverseData.war_valley.Server
                  "time, 0.1 builds ten times faster, 3 makes a tank a real commitment.")]
         private DebugFloat DebugBuildDuration = new();
 
-        private Vector3 WaveSpawnLocation;
+        // --- Debug shortcuts for testing a base without playing a round up to it. Each one is honoured
+        // in the Editor only, so a shipped server always plays the tuned game whatever is left ticked.
+        [Header("Debug (Editor only)")]
+        [SerializeField]
+        [Tooltip("Editor only. Every purchase - structures, units, troops, research - is free, and " +
+                 "dying costs nothing.")]
+        private DebugBool DebugInfiniteMoney = new(false);
+
+        [SerializeField]
+        [Tooltip("Editor only. Structures finish construction and production queues finish each " +
+                 "item almost immediately. Overrides DebugBuildDuration.")]
+        private DebugBool DebugInstantBuild = new(false);
+
+        [SerializeField]
+        [Tooltip("Editor only. Research completes the moment it is started.")]
+        private DebugBool DebugInstantResearch = new(false);
+
+        [SerializeField]
+        [Tooltip("Editor only. Every technology starts each round already researched, so locked " +
+                 "structures and units are available from the opening whistle.")]
+        private DebugBool DebugAllResearched = new(false);
+
         private WV_Flag spawnedFlag;
         private WV_Economy spawnedEconomy;
         private WV_ServerEconomy serverEconomy;
@@ -90,14 +106,19 @@ namespace Universes.UniverseData.war_valley.Server
         /// <summary>How long the defeat message is held before the next round begins.</summary>
         private const int GameOverSeconds = 8;
 
+        [Header("Mode")]
+        [SerializeField]
+        [Tooltip("The rules alliances are decided by. Survival - every player allied against the " +
+                 "waves - is the only mode.")]
+        private WV_GameMode GameMode = WV_GameMode.Survival;
+
         public WV_ActiveGameState GameState;
         protected override void Awake() {
             base.Awake();
-            SharedGlobalEvents.TeamEnemies = new()
-            {
-                [TeamColor.Red] = new() { TeamColor.Blue },
-                [TeamColor.Blue] = new() { TeamColor.Red }
-            };
+            // Alliances come from the mode: which side commanders and waves are on, and who may hurt
+            // whom. Published before anything spawns so no entity starts life on an unknown side.
+            WV_Alliances.Mode = GameMode;
+            SharedGlobalEvents.TeamEnemies = WV_Alliances.BuildEnemyTable();
             ServerPlayerCharacter.CanSpawnFunction = CanSpawnFunction;
             ServerPlayerCharacter.SpawnLocationFunction = SpawnLocationFunction;
 
@@ -111,12 +132,32 @@ namespace Universes.UniverseData.war_valley.Server
             serverEconomy = gameObject.AddComponent<WV_ServerEconomy>();
             serverArmy = gameObject.AddComponent<WV_ServerArmy>();
             serverTroops = gameObject.AddComponent<WV_ServerTroops>();
-            serverTroops.Initialize(GetNpcPrefab(WV_NpcType.Normal));
+            serverTroops.Initialize(GetTroopPrefab());
 
             // Applied here rather than read per timer so that a building which starts its queue
-            // mid-round uses the same pace as one that started at the opening whistle.
-            WV_ProductionBuilding.BuildDurationMultiplier = DebugBuildDuration.Value;
+            // mid-round uses the same pace as one that started at the opening whistle. The economy
+            // and research ledgers are respawned every round and pick their switches up as they open.
+            ApplyDebugSettings();
             WV_ServerCommand.Register();
+        }
+
+        /// <summary>
+        /// Pushes the runner's debug switches into the systems that honour them. Each system holds
+        /// its switch statically, the way <see cref="WV_ProductionBuilding.BuildDurationMultiplier"/>
+        /// already did, so this runner stays the single place a tester flips them.
+        /// </summary>
+        private void ApplyDebugSettings() {
+            bool instantBuild = DebugInstantBuild.Value;
+            WV_ProductionBuilding.BuildDurationMultiplier = instantBuild ? 0f : DebugBuildDuration.Value;
+            WV_Constructable.ConstructionDurationMultiplier = instantBuild ? 0f : 1f;
+            WV_Economy.DebugInfiniteFunds = DebugInfiniteMoney.Value;
+            WV_Research.InstantResearch = DebugInstantResearch.Value;
+            WV_Research.StartFullyResearched = DebugAllResearched.Value;
+
+            if (instantBuild || DebugInfiniteMoney.Value || DebugInstantResearch.Value || DebugAllResearched.Value)
+                Debug.LogWarning(
+                    $"War Valley debug: infinite money={DebugInfiniteMoney.Value}, instant build={instantBuild}, " +
+                    $"instant research={DebugInstantResearch.Value}, all researched={DebugAllResearched.Value}.", this);
         }
         bool CanSpawnFunction(NetworkConnection conn) {
             //PlayerData.GetPlayerData(conn)
@@ -129,13 +170,17 @@ namespace Universes.UniverseData.war_valley.Server
             // Account for wave index being zero-based
             switch (GameState) {
                 case WV_ActiveGameState.Wave:
-                    SetTopMessage($"Wave {WaveNumber + 1}");
+                    SetTopMessage(currentWave == null
+                        ? $"Wave {WaveNumber + 1}"
+                        : $"{(currentWave.IsSurge ? "SURGE - " : string.Empty)}Wave {currentWave.Number}/{WaveTuning.WaveCount}: {currentWave.TotalCount} enemies");
                     break;
                 case WV_ActiveGameState.AdvanceWave:
-                    SetTopMessage($"Wave {WaveNumber + 2} will start in {durationLeft} seconds");
+                    SetTopMessage(WaveNumber + 2 > WaveTuning.WaveCount
+                        ? $"Final wave - hold for {durationLeft} seconds"
+                        : $"Wave {WaveNumber + 2}/{WaveTuning.WaveCount} will start in {durationLeft} seconds");
                     break;
                 case WV_ActiveGameState.FinishEnemiesOff:
-                    int npcs = GameCharacter.TeamCount(TeamColor.Red);
+                    int npcs = GameCharacter.TeamCount(WV_Alliances.GetWaveSide());
                     SetTopMessage($"Finish off remaining enemies ({npcs} left)");
                     return npcs > 0;
                 case WV_ActiveGameState.GameOver:
@@ -148,19 +193,34 @@ namespace Universes.UniverseData.war_valley.Server
         }
         protected override void OnPlayerAdded(PlayerData playerData) {
             base.OnPlayerAdded(playerData);
-            // Every commander fights on the same real team, so ownership is carried by the display
+            // The mode decides the side a commander fights for; ownership is carried by the display
             // half of the existing team setting rather than by a second parallel colour field. The
             // player list already tints names by display team, so a base and its owner's name match.
             int clientId = playerData.Owner != null && playerData.Owner.IsValid
                 ? playerData.Owner.ClientId
                 : WV_Owned.NoOwner;
             playerData.SetPlayerTeam(
-                new TeamConfig(TeamColor.Blue, WV_Rules.GetCommanderColor(clientId)));
+                new TeamConfig(WV_Alliances.GetCommanderSide(clientId), WV_Rules.GetCommanderColor(clientId)));
             playerData.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
         }
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
             //character.SetScale(UnityEngine.Random.Range(1f, 3f) * 5 * Vector3.one);
+
+            // A commander who dies pays for it out of their war chest. Each respawn is a new
+            // character, so this subscription lives and dies with the one it was made for.
+            int clientId = character.Owner != null && character.Owner.IsValid
+                ? character.Owner.ClientId
+                : WV_Owned.NoOwner;
+            void HandleCommanderDied(DamageType source, IEntity attacker) {
+                character.OnDied -= HandleCommanderDied;
+                // Being cleared away by a round reset or a despawn is housekeeping, not a death
+                // the commander could have avoided.
+                if (source is DamageType.Reset or DamageType.Despawn)
+                    return;
+                serverEconomy.ApplyDeathPenalty(clientId);
+            }
+            character.OnDied += HandleCommanderDied;
         }
         protected async UniTask<bool> StartTimerCountdown(int duration, CancellationToken token) {
             return await GameTimerCountdown(duration, token);
@@ -170,39 +230,42 @@ namespace Universes.UniverseData.war_valley.Server
             return pos;
         }
         /// <summary>
-        /// The body a wave NPC is built from. A gunner is the same soldier holding a different tool,
-        /// so a type with no prefab of its own falls back to the first authored one rather than
-        /// requiring a parallel prefab per loadout.
+        /// The body every troop and wave enemy is built from. Each kind of troop is this soldier with
+        /// a different weapon and build, so one authored prefab serves them all.
         /// </summary>
-        protected GameObject GetNpcPrefab(WV_NpcType npcType) {
-            if (RobotNPC_Prefab == null || RobotNPC_Prefab.Length == 0) {
-                Debug.LogError($"{nameof(WV_ServerRunner)} has no NPC prefabs; no wave can spawn.", this);
-                return null;
-            }
-
-            int index = (int)npcType;
-            GameObject prefab = index >= 0 && index < RobotNPC_Prefab.Length ? RobotNPC_Prefab[index] : null;
-            return prefab != null ? prefab : RobotNPC_Prefab[0];
+        protected GameObject GetTroopPrefab() {
+            GameObject prefab = RobotNPC_Prefab != null && RobotNPC_Prefab.Length > 0 ? RobotNPC_Prefab[0] : null;
+            if (prefab == null)
+                Debug.LogError($"{nameof(WV_ServerRunner)} has no NPC prefab; no wave can spawn.", this);
+            return prefab;
         }
 
-        /// <summary>The weapon each wave type fights with.</summary>
-        protected static WV_TroopKind GetNpcLoadout(WV_NpcType npcType) => npcType switch {
-            WV_NpcType.Gunner => WV_TroopKind.Gunner,
-            _ => WV_TroopKind.Knife
-        };
-
-        protected void SpawnNpc(WV_NpcType npcType) {
-            GameObject prefab = GetNpcPrefab(npcType);
+        /// <summary>
+        /// Spawns one enemy of <paramref name="kind"/> near <paramref name="center"/>, with the
+        /// kind's weapon and build and health raised by <paramref name="healthMultiplier"/> for how
+        /// far into the round the wave is.
+        /// </summary>
+        protected void SpawnNpc(WV_TroopKind kind, Vector3 center, float healthMultiplier) {
+            GameObject prefab = GetTroopPrefab();
             if (prefab == null)
                 return;
 
-            Vector3 spawnLocation = ServerPathfinding.GetRandomPositionOnCircle(WaveSpawnLocation, SpawnRadius);
+            WV_TroopProfile profile = WV_TroopCatalog.Get(kind);
+            Vector3 spawnLocation = ServerPathfinding.GetRandomPositionOnCircle(center, SpawnRadius);
             LocalNPC npc = ServerNPC.SpawnNPC(prefab, location: spawnLocation);
             GameCharacter character = npc.GetComponent<GameCharacter>();
-            character.SetTeam(new TeamConfig(TeamColor.Red));
+            character.SetTeam(new TeamConfig(WV_Alliances.GetWaveSide()));
+            character.DisplayName = profile.DisplayName;
+            // The body - proportions, health, speed, damage - comes from the kind's build, and the
+            // wave's own health growth scales the base it is applied to.
+            character.ApplyBuild(
+                profile.Build,
+                (long)Mathf.Round(WV_TroopCatalog.BaseHealth * Mathf.Max(0.1f, healthMultiplier)));
+            // Waves may break through walls and gates but never use a gate's own passage.
+            WV_NavAreas.Apply(npc.agent, character.GetTeam());
             // The weapon half is attached before the brain so the loadout is settled before either
             // component's first frame.
-            WV_NpcCombat.Attach(npc.gameObject, GetNpcLoadout(npcType));
+            WV_NpcCombat.Attach(npc.gameObject, kind);
             npc.gameObject.AddComponent<WV_NPC>();
             // A body that never leaves keeps counting toward the wave that is supposed to be over.
             WV_Corpses.DespawnWhenDead(this, character);
@@ -213,16 +276,28 @@ namespace Universes.UniverseData.war_valley.Server
                 }
             };
         }
-        protected void SpawnNpcs(WV_NpcType npcType, int count) {
-            for (int i = 0; i < count; i++) {
-                SpawnNpc(npcType);
+
+        /// <summary>
+        /// Streams a wave onto the field. Each group of one kind comes from one of the valley's
+        /// approaches, so a big wave presses from several sides at once, and enemies arrive a few a
+        /// second rather than all in one frame.
+        /// </summary>
+        protected async UniTask SpawnWaveAsync(WV_Wave wave, CancellationToken token) {
+            foreach (WV_WaveGroup group in wave.Groups) {
+                Vector3 center = GetSpawnLocation();
+                for (int i = 0; i < group.Count; i++) {
+                    if (flagDown || token.IsCancellationRequested)
+                        return;
+                    SpawnNpc(group.Kind, center, wave.HealthMultiplier);
+                    bool cancelled = await UniTask.Delay(
+                        TimeSpan.FromSeconds(WaveSpawnSpacingSeconds), cancellationToken: token)
+                        .SuppressCancellationThrow();
+                    if (cancelled)
+                        return;
+                }
             }
         }
-        protected void SpawnWave(WV_NpcSpawnData[] spawnData) {
-            foreach (WV_NpcSpawnData npcData in spawnData) {
-                SpawnNpcs(npcData.npcType, npcData.spawnCount);
-            }
-        }
+
         protected override async UniTask StartAsync(CancellationToken token) {
             await base.StartAsync(token);
 
@@ -236,16 +311,17 @@ namespace Universes.UniverseData.war_valley.Server
             SharedGlobalEvents.Instance.CanBuild.Value = true;
             await Intermission(10, token);
             SetGlobalInvul(false);
-            for (WaveNumber = 0; WaveNumber < WaveSpawnData.Length && !flagDown; WaveNumber++) {
-                // Current Wave Logic
-                WV_WaveData WaveData = WaveSpawnData[WaveNumber];
-                WaveSpawnLocation = GetSpawnLocation();
-                SpawnWave(WaveData.spawnData);
+            for (WaveNumber = 0; WaveNumber < WaveTuning.WaveCount && !flagDown; WaveNumber++) {
+                // Each wave is built from its number, so the round hardens as it goes.
+                currentWave = WV_WavePlan.Build(WaveNumber + 1, WaveTuning);
+                GameState = WV_ActiveGameState.Wave;
+                RefreshInGameBar();
+                // Streamed in the background: the countdown below runs while the wave arrives.
+                SpawnWaveAsync(currentWave, token).Forget(Debug.LogException);
 
                 // Wave Advance Logic
-                GameState = WV_ActiveGameState.Wave;
                 await StartTimerCountdown(10, token);
-                int waveAdvanceSec = Math.Max(0, WaveData.waveIntermission - 10);
+                int waveAdvanceSec = Math.Max(0, currentWave.IntermissionSeconds - 10);
                 if (waveAdvanceSec > 0 && !flagDown) {
                     GameState = WV_ActiveGameState.AdvanceWave;
                     await StartTimerCountdown(waveAdvanceSec, token);
@@ -294,6 +370,7 @@ namespace Universes.UniverseData.war_valley.Server
             // its first countdown can publish with the prior loop's wave number, then
             // this assignment changes it for the following one-second update.
             WaveNumber = -1;
+            currentWave = null;
             flagDown = false;
             base.Restart();
         }

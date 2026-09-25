@@ -9,6 +9,21 @@ using UnityEngine;
 
 namespace Universes.UniverseData.war_valley.Shared {
     /// <summary>
+    /// One entry in a production queue: what is being built and which commander paid for it.
+    /// <para>
+    /// Allies may queue at each other's buildings, so the building's owner is not necessarily who
+    /// the finished unit belongs to or who a cancel refunds. Recording the payer on the entry is
+    /// what lets a barracks train one commander's gunner and another's knifeman back to back.
+    /// </para>
+    /// </summary>
+    public struct WV_QueueEntry {
+        /// <summary>A <see cref="WV_ProductionItem.Encoded"/> byte.</summary>
+        public byte item;
+        /// <summary>Client id of the commander who paid, and who receives the finished unit.</summary>
+        public int payerClientId;
+    }
+
+    /// <summary>
     /// A structure that trains units: barracks, vehicle hangar, helipad, or airfield.
     /// <para>
     /// The producible list is authored on the prefab as references to unit prefabs, and each unit
@@ -40,9 +55,10 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>
         /// Items waiting to be built, oldest first. Index 0 is the item currently in progress. Each
-        /// entry is a <see cref="WV_ProductionItem.Encoded"/> byte, so vehicles and troops share it.
+        /// entry carries a <see cref="WV_ProductionItem.Encoded"/> byte, so vehicles and troops
+        /// share it, and the commander who paid for it.
         /// </summary>
-        readonly SyncList<byte> queue = new();
+        readonly SyncList<WV_QueueEntry> queue = new();
         readonly SyncVar<float> currentItemCompletionTime = new();
         readonly SyncVar<float> currentItemDuration = new();
         readonly SyncVar<Vector3> rallyPoint = new();
@@ -61,12 +77,12 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static event Action<WV_ProductionBuilding, WV_Unit> UnitProduced;
 
         /// <summary>
-        /// Raised on the server when a troop finishes training. Unlike a vehicle, a troop cannot be
-        /// spawned from here at all - it is a server-side character assembled by
-        /// <c>WV_ServerTroops</c> - so this hands the finished order to the server assembly rather
-        /// than reporting something already built.
+        /// Raised on the server when a troop finishes training, with the commander it belongs to.
+        /// Unlike a vehicle, a troop cannot be spawned from here at all - it is a server-side
+        /// character assembled by <c>WV_ServerTroops</c> - so this hands the finished order to the
+        /// server assembly rather than reporting something already built.
         /// </summary>
-        public static event Action<WV_ProductionBuilding, WV_TroopKind> TroopProduced;
+        public static event Action<WV_ProductionBuilding, WV_TroopKind, int> TroopProduced;
 
         WV_Constructable constructable;
         WV_Owned owned;
@@ -101,8 +117,23 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// <summary>What sits at this queue position, or a none-item when the index is past the end.</summary>
         public WV_ProductionItem GetQueuedItem(int index) =>
             index >= 0 && index < queue.Count
-                ? WV_ProductionItem.Decode(queue[index])
+                ? WV_ProductionItem.Decode(queue[index].item)
                 : WV_ProductionItem.Unit(WV_UnitKind.None);
+
+        /// <summary>Who paid for the entry at this queue position, or <see cref="WV_Owned.NoOwner"/>.</summary>
+        public int GetQueuedPayer(int index) =>
+            index >= 0 && index < queue.Count ? queue[index].payerClientId : WV_Owned.NoOwner;
+
+        /// <summary>How many copies of <paramref name="item"/> are waiting or in progress.</summary>
+        public int CountQueued(WV_ProductionItem item) {
+            byte encoded = item.Encoded;
+            int count = 0;
+            foreach (WV_QueueEntry entry in queue) {
+                if (entry.item == encoded)
+                    count++;
+            }
+            return count;
+        }
 
         public bool CanProduce(WV_ProductionItem item) {
             if (item.IsNone)
@@ -160,7 +191,8 @@ namespace Universes.UniverseData.war_valley.Shared {
             base.OnStopNetwork();
         }
 
-        void HandleQueueChanged(SyncListOperation op, int index, byte oldItem, byte newItem, bool asServer) {
+        void HandleQueueChanged(
+            SyncListOperation op, int index, WV_QueueEntry oldItem, WV_QueueEntry newItem, bool asServer) {
             if (!asServer)
                 QueueChanged?.Invoke();
         }
@@ -190,50 +222,79 @@ namespace Universes.UniverseData.war_valley.Shared {
         }
 
         /// <summary>
-        /// Adds an item to the queue. The caller has already taken payment, so a false return means
-        /// the funds must be given back.
+        /// Adds an item to the queue on behalf of the commander who paid for it. The caller has
+        /// already taken payment, so a false return means the funds must be given back.
         /// </summary>
         [Server]
-        public bool TryEnqueue(WV_ProductionItem item) {
+        public bool TryEnqueue(WV_ProductionItem item, int payerClientId) {
             if (!IsOperational || queue.Count >= maxQueueLength || !CanProduce(item))
                 return false;
 
-            queue.Add(item.Encoded);
+            queue.Add(new WV_QueueEntry { item = item.Encoded, payerClientId = payerClientId });
             if (queue.Count == 1)
                 StartFrontItem();
             return true;
         }
 
         /// <summary>
-        /// Removes the most recently queued copy of this item and reports its cost for refunding.
-        /// The item currently training is only cancellable when it is the sole entry.
+        /// Removes the most recently queued copy of this item and reports the refund and who is owed
+        /// it. Callers decide who may cancel before reaching this.
         /// </summary>
         [Server]
-        public bool TryCancel(WV_ProductionItem item, out int refund) {
-            refund = 0;
+        public bool TryCancel(WV_ProductionItem item, out int refund, out int payerClientId) {
             byte encoded = item.Encoded;
             for (int i = queue.Count - 1; i >= 0; i--) {
-                if (queue[i] != encoded)
-                    continue;
-
-                refund = Mathf.RoundToInt(GetCost(item) * WV_Rules.ProductionRefundFraction);
-                queue.RemoveAt(i);
-                if (i == 0 && queue.Count > 0)
-                    StartFrontItem();
-                return true;
+                if (queue[i].item == encoded)
+                    return TryCancelAt(i, item, out refund, out payerClientId);
             }
+            refund = 0;
+            payerClientId = WV_Owned.NoOwner;
             return false;
         }
 
-        /// <summary>Clears the queue when the building dies, reporting what each survivor is owed.</summary>
+        /// <summary>
+        /// Removes the entry at <paramref name="index"/>, provided it still holds
+        /// <paramref name="expected"/>. The check matters because the queue moves on under a click:
+        /// an entry finishing between the player's click and the server's handling would otherwise
+        /// shift a different unit into the slot the player meant to cancel.
+        /// </summary>
         [Server]
-        public int DrainQueueRefund() {
-            int refund = 0;
-            foreach (byte queued in queue)
-                refund += Mathf.RoundToInt(
-                    GetCost(WV_ProductionItem.Decode(queued)) * WV_Rules.ProductionRefundFraction);
+        public bool TryCancelAt(int index, WV_ProductionItem expected, out int refund, out int payerClientId) {
+            refund = 0;
+            payerClientId = WV_Owned.NoOwner;
+            if (index < 0 || index >= queue.Count || queue[index].item != expected.Encoded)
+                return false;
+
+            payerClientId = queue[index].payerClientId;
+            refund = Mathf.RoundToInt(GetCost(expected) * WV_Rules.ProductionRefundFraction);
+            queue.RemoveAt(index);
+            if (index == 0) {
+                if (queue.Count > 0)
+                    StartFrontItem();
+                else
+                    ClearFrontTimer();
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Clears the queue when the building dies or is demolished, reporting each refund to the
+        /// commander who paid for it.
+        /// </summary>
+        [Server]
+        public void DrainQueue(Action<int, int> refundPayer) {
+            foreach (WV_QueueEntry entry in queue) {
+                int refund = Mathf.RoundToInt(
+                    GetCost(WV_ProductionItem.Decode(entry.item)) * WV_Rules.ProductionRefundFraction);
+                refundPayer?.Invoke(entry.payerClientId, refund);
+            }
             queue.Clear();
-            return refund;
+            ClearFrontTimer();
+        }
+
+        void ClearFrontTimer() {
+            currentItemCompletionTime.Value = 0f;
+            currentItemDuration.Value = 0f;
         }
 
         void StartFrontItem() {
@@ -259,23 +320,22 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return;
 
             WV_ProductionItem item = GetQueuedItem(0);
+            int payerClientId = GetQueuedPayer(0);
             queue.RemoveAt(0);
             if (queue.Count > 0)
                 StartFrontItem();
-            else {
-                currentItemCompletionTime.Value = 0f;
-                currentItemDuration.Value = 0f;
-            }
+            else
+                ClearFrontTimer();
 
             if (item.IsTroop)
                 // Troops are assembled in the server assembly, which owns both the character prefab
                 // and the squad roster this one has to join.
-                TroopProduced?.Invoke(this, item.TroopKind);
+                TroopProduced?.Invoke(this, item.TroopKind, payerClientId);
             else
-                SpawnProducedUnit(item.UnitKind);
+                SpawnProducedUnit(item.UnitKind, payerClientId);
         }
 
-        void SpawnProducedUnit(WV_UnitKind kind) {
+        void SpawnProducedUnit(WV_UnitKind kind, int payerClientId) {
             WV_Unit prefab = FindPrefab(kind);
             if (prefab == null) {
                 Debug.LogError($"{name} finished {kind} but has no prefab for it; the unit was lost.");
@@ -289,10 +349,12 @@ namespace Universes.UniverseData.war_valley.Shared {
             GameObject clone = Instantiate(prefab.gameObject, position, SpawnPoint.rotation);
             InstanceFinder.ServerManager.Spawn(clone, null, gameObject.scene);
 
+            // The unit belongs to whoever paid for it, which is not always the building's owner:
+            // an ally queueing at this hangar gets their own tank, in their own colour.
             WV_Unit unit = clone.GetComponent<WV_Unit>();
             unit.Init(unit.UnitMaxHealth);
-            unit.SetTeam(structure.Team);
-            clone.GetComponent<WV_Owned>().SetOwnerClientId(owned.OwnerClientId);
+            unit.SetTeam(WV_Permissions.GetCommanderTeam(payerClientId));
+            clone.GetComponent<WV_Owned>().SetOwnerClientId(payerClientId);
 
             // The brain lives in the server assembly and finishes setup, including walking the new
             // unit to this building's rally point.

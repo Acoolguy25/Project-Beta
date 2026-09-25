@@ -21,7 +21,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         [Header("Identity")]
         [SerializeField] WV_UnitKind kind = WV_UnitKind.Infantry;
         [SerializeField] string displayName = "Unit";
-        [SerializeField] TeamConfig team = new(TeamColor.Blue);
+        [SerializeField] TeamConfig team = new(WV_Alliances.Defenders);
 
         [Header("Cost")]
         [Tooltip("Funds charged when this unit is queued at its production building.")]
@@ -53,7 +53,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         [Tooltip("Icon drawn for this unit in the production menu. Baked from the unit's own model.")]
         [SerializeField] Sprite icon;
 
-        readonly SyncVar<TeamConfig> teamSync = new(new TeamConfig(TeamColor.Blue));
+        readonly SyncVar<TeamConfig> teamSync = new(new TeamConfig(WV_Alliances.Defenders));
 
         static readonly List<WV_Unit> all = new();
 
@@ -113,15 +113,19 @@ namespace Universes.UniverseData.war_valley.Shared {
         public override void OnStartNetwork() {
             base.OnStartNetwork();
             all.Add(this);
+            teamSync.OnChange += HandleTeamChanged;
             RosterChanged?.Invoke();
         }
 
         public override void OnStopNetwork() {
+            teamSync.OnChange -= HandleTeamChanged;
             all.Remove(this);
             SelectedLocally = false;
             RosterChanged?.Invoke();
             base.OnStopNetwork();
         }
+
+        void HandleTeamChanged(TeamConfig previous, TeamConfig next, bool asServer) => RaiseTeamChanged();
 
         /// <summary>Units this client commands, used to seed box selection and control groups.</summary>
         public static void CollectOwnedBy(int clientId, List<WV_Unit> results) {
@@ -135,7 +139,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 #if UNITY_SERVER
         [Server]
         public void SetTeam(TeamConfig teamConfig) {
-            teamSync.Value = teamConfig ?? new TeamConfig(TeamColor.Blue);
+            teamSync.Value = teamConfig ?? new TeamConfig(WV_Alliances.Defenders);
         }
 #endif
     }

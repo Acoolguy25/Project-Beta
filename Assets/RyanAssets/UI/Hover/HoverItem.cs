@@ -11,5 +11,12 @@ namespace RyanAssets.UI.Hover
         string hoverText;
 
         public string HoverText => hoverText;
+
+        /// <summary>
+        /// Replaces the text at runtime, for items whose detail is live data - a price that becomes
+        /// unaffordable, a requirement that gets researched. The manager re-reads the text every
+        /// frame, so an open tooltip updates in place.
+        /// </summary>
+        public void SetText(string text) => hoverText = text;
     }
 }

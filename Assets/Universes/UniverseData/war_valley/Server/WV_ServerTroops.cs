@@ -10,8 +10,8 @@ using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Server {
     /// <summary>
-    /// The server half of a commander's personal squad: how many troops they may field, and how a
-    /// finished one is assembled and enrolled.
+    /// The server half of a commander's personal squad: which troops they field, and how a
+    /// finished one is assembled and enrolled. How many they may field is <see cref="WV_Limits"/>.
     /// <para>
     /// Troops are trained at a barracks, through the same queue a hangar builds tanks with, so this
     /// no longer takes requests from clients at all - <see cref="WV_ServerCommand"/> charges and
@@ -65,32 +65,31 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         /// <summary>
-        /// True when this commander is already fielding as many troops as the rules allow. Checked
-        /// before the order is charged and queued, so a commander at their cap is told no at the
-        /// button rather than paying for a soldier who cannot be delivered.
+        /// True while the commander's soldier limit has room for one more. The order was counted
+        /// against the limit while it waited in the queue; by delivery it has left the queue, so the
+        /// same check asks whether it may now take its place in the field.
         /// </summary>
-        public bool IsSquadFull(int clientId) => CountAlive(clientId) >= WV_Rules.MaxTroopsPerCommander;
+        public bool HasRoomForTroop(int clientId) =>
+            WV_Limits.HasRoom(clientId, WV_ForceCategory.Soldier, CountAlive(clientId));
 
         /// <summary>
-        /// Delivers a troop a barracks has finished training. The order was paid for when it was
-        /// queued, so the only question left is whether the squad still has room: a commander whose
-        /// troops all survived while this one was in the oven has legitimately hit the cap, and the
-        /// funds go back rather than the cap being quietly exceeded.
+        /// Delivers a troop a barracks has finished training to the commander who paid for it -
+        /// the barracks' owner, or an ally who queued there. The order was paid for when it was
+        /// queued, so the only question left is whether that commander still has room under their
+        /// soldier limit; if not, the funds go back rather than the limit being quietly exceeded.
         /// </summary>
-        public void TrainFromBuilding(WV_ProductionBuilding building, WV_TroopKind kind) {
-            if (building == null || building.Owned == null)
+        public void TrainFromBuilding(WV_ProductionBuilding building, WV_TroopKind kind, int clientId) {
+            if (building == null)
                 return;
 
-            int clientId = building.Owned.OwnerClientId;
-            if (troopPrefab == null || IsSquadFull(clientId)) {
+            if (troopPrefab == null || !HasRoomForTroop(clientId)) {
                 Refund(clientId, kind);
                 return;
             }
 
-            StructureComponent structure = building.GetComponent<StructureComponent>();
-            TeamConfig team = structure != null && structure.Team != null
-                ? structure.Team
-                : new TeamConfig(TeamColor.Blue, WV_Rules.GetCommanderColor(clientId));
+            // The troop fights under its commander's own team, in their colour - which is also how
+            // that commander's client recognises it as one of theirs to select.
+            TeamConfig team = WV_Permissions.GetCommanderTeam(clientId);
 
             WV_TroopBrain brain = SpawnTroop(building.SpawnPoint.position, team, kind, clientId);
             if (brain == null) {
@@ -127,8 +126,13 @@ namespace Universes.UniverseData.war_valley.Server {
 
             // The troop fights on its commander's team and, through the display half of that team,
             // carries their colour - the same colour their buildings and their own name already use.
-            character.SetTeam(team ?? new TeamConfig(TeamColor.Blue, WV_Rules.GetCommanderColor(clientId)));
+            character.SetTeam(team ?? WV_Permissions.GetCommanderTeam(clientId));
+            // A commander's troops walk through their side's gates, never through its walls.
+            WV_NavAreas.Apply(npc.agent, character.GetTeam());
             character.DisplayName = WV_Rules.GetTroopDisplayName(kind);
+            // The kind's body - thin, big, short, or quick - and the health, speed, and damage that
+            // come with it, applied through the character's own build setting.
+            character.ApplyBuild(WV_TroopCatalog.Get(kind).Build, WV_TroopCatalog.BaseHealth);
 
             // The robot body ships with a material variant per team colour, replicated by the
             // character itself, so a commander's squad is literally painted in their colour rather

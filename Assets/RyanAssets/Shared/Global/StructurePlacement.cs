@@ -14,11 +14,32 @@ namespace RyanAssets.Shared.Globals {
         // does not register against it, while still covering the whole cell it sits in.
         public const float OverlapGroundClearance = 0.05f;
 
-        public static Vector3 SnapToGrid(Vector3 position) {
-            position.x = Mathf.Round(position.x / GridSize) * GridSize;
-            position.z = Mathf.Round(position.z / GridSize) * GridSize;
+        /// <summary>
+        /// Snaps a structure's centre so its footprint covers whole grid cells.
+        /// <para>
+        /// A structure an even number of cells wide is centred on a grid line and one an odd number
+        /// wide is centred in the middle of a cell. Snapping every centre to a grid line instead put
+        /// one- and three-cell structures half a cell out of step with two-cell ones, so buildings of
+        /// different sizes never lined up and read as overlapping their neighbours' cells.
+        /// </para>
+        /// </summary>
+        public static Vector3 SnapToGrid(Vector3 position, int footprintCells) {
+            float offset = Mathf.Max(1, footprintCells) % 2 == 1 ? GridSize * 0.5f : 0f;
+            position.x = Mathf.Round((position.x - offset) / GridSize) * GridSize + offset;
+            position.z = Mathf.Round((position.z - offset) / GridSize) * GridSize + offset;
             return position;
         }
+
+        /// <summary>
+        /// How many grid cells a structure spans on its wider horizontal side, read from its bounds.
+        /// Structures are authored to span whole cells, so rounding absorbs small decorative overhang.
+        /// </summary>
+        public static int GetFootprintCells(Bounds bounds) =>
+            Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(bounds.size.x, bounds.size.z) / GridSize));
+
+        /// <summary>The footprint of an instantiated structure, or one cell when it has no bounds.</summary>
+        public static int GetFootprintCells(GameObject instance) =>
+            TryGetBounds(instance, out Bounds bounds) ? GetFootprintCells(bounds) : 1;
 
         public static float SnapRotation(float yRotation) => Mathf.Round(yRotation / GridRotationSnap) * GridRotationSnap;
 

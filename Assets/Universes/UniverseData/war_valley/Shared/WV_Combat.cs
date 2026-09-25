@@ -17,6 +17,10 @@ namespace Universes.UniverseData.war_valley.Shared {
         // acquisition never allocates, which matters because this runs on a retarget cadence for
         // every unit and turret on the field.
         static readonly Collider[] OverlapBuffer = new Collider[128];
+        static readonly RaycastHit[] SightBuffer = new RaycastHit[16];
+        static int structureMask = -1;
+
+        static int StructureMask => structureMask >= 0 ? structureMask : structureMask = LayerMask.GetMask("Structure");
 
         /// <summary>Layers that can hold a damageable entity.</summary>
         public static int TargetMask => LayerMask.GetMask("Character", "LocalCharacter", "Structure");
@@ -28,10 +32,15 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static bool AreEnemies(TeamConfig attacker, TeamConfig target) =>
             CombatTeams.AreEnemies(attacker, target);
 
+        /// <summary>
+        /// A living, hostile entity that can currently be hurt. Something invulnerable is not worth
+        /// a shot or an order: it is skipped exactly like something already dead.
+        /// </summary>
         public static bool IsValidTarget(IEntity target, TeamConfig attackerTeam) =>
             target is Component component
             && component != null
             && !target.IsDead
+            && !target.IsEffectActive(CharacterEffect.Invul)
             && AreEnemies(attackerTeam, target.Team);
 
         /// <summary>
@@ -77,7 +86,10 @@ namespace Universes.UniverseData.war_valley.Shared {
 
                 // Colliders usually hang off a child of the networked root, so resolve upward.
                 IEntity candidate = collider.GetComponentInParent<IEntity>();
-                if (!IsValidTarget(candidate, attackerTeam))
+                // Anything behind an enemy shield cannot be hurt from here, so it is not a target;
+                // the shield is, and is offered below.
+                if (!IsValidTarget(candidate, attackerTeam)
+                    || WV_ShieldBarrier.Protects(candidate, origin, attackerTeam))
                     continue;
 
                 Transform candidateTransform = ((Component)candidate).transform;
@@ -101,14 +113,62 @@ namespace Universes.UniverseData.war_valley.Shared {
                 best = candidate;
             }
 
+            // A shield's hit volume is a trigger that physics queries skip, and its centre is far
+            // inside it, so shields are measured to their edge instead: the part an attacker can reach.
+            foreach (WV_ShieldBarrier shield in WV_ShieldBarrier.All) {
+                if (!shield.IsUp || !AreEnemies(attackerTeam, shield.Team))
+                    continue;
+                float distance = Mathf.Max(0f, shield.DistanceToEdge(origin));
+                if (distance > radius)
+                    continue;
+                float score = preferCharacters ? distance + radius : distance;
+                if (score >= bestScore)
+                    continue;
+                bestScore = score;
+                best = shield;
+            }
+
             return best;
+        }
+
+        /// <summary>
+        /// Whether a shot from <paramref name="origin"/> reaches <paramref name="target"/> without a
+        /// wall, fence, or closed gate in the way. Only those block: a ground weapon cannot fire
+        /// through a wall, but it can fire past a building's corner, and an aircraft ignores this
+        /// entirely because it shoots down over walls.
+        /// </summary>
+        /// <param name="ignoreRoot">The shooter, whose own colliders never block its shot.</param>
+        public static bool HasLineOfSight(Vector3 origin, IEntity target, Transform ignoreRoot = null) {
+            // A shield is shot at its surface, which is on this side of anything it protects.
+            if (target is WV_ShieldBarrier || !TryGetAimPoint(target, out Vector3 aimPoint))
+                return true;
+
+            Vector3 toTarget = aimPoint - origin;
+            float distance = toTarget.magnitude;
+            if (distance < 0.01f)
+                return true;
+
+            int count = Physics.RaycastNonAlloc(
+                origin, toTarget / distance, SightBuffer, distance, StructureMask,
+                QueryTriggerInteraction.Ignore);
+            Transform targetRoot = ((Component)target).transform;
+            for (int i = 0; i < count; i++) {
+                Transform hit = SightBuffer[i].transform;
+                if (hit == null || hit.IsChildOf(targetRoot) || (ignoreRoot != null && hit.IsChildOf(ignoreRoot)))
+                    continue;
+                if (hit.GetComponentInParent<WV_DestructibleObstacle>() != null)
+                    return false;
+            }
+            return true;
         }
 
         /// <summary>Straight-line distance between two entity roots, ignoring collider shape.</summary>
         public static float DistanceTo(Vector3 origin, IEntity target) =>
-            target is Component component && component != null
-                ? Vector3.Distance(origin, component.transform.position)
-                : float.MaxValue;
+            target is WV_ShieldBarrier shield && shield != null
+                ? Mathf.Max(0f, shield.DistanceToEdge(origin))
+                : target is Component component && component != null
+                    ? Vector3.Distance(origin, component.transform.position)
+                    : float.MaxValue;
 
         /// <summary>
         /// Distance across the ground, ignoring height.
@@ -120,9 +180,11 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// </para>
         /// </summary>
         public static float FlatDistanceTo(Vector3 origin, IEntity target) =>
-            target is Component component && component != null
-                ? FlatDistance(origin, component.transform.position)
-                : float.MaxValue;
+            target is WV_ShieldBarrier shield && shield != null
+                ? Mathf.Max(0f, shield.DistanceToEdge(origin))
+                : target is Component component && component != null
+                    ? FlatDistance(origin, component.transform.position)
+                    : float.MaxValue;
 
         static float FlatDistance(Vector3 a, Vector3 b) {
             a.y = 0f;

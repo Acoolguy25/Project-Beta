@@ -79,7 +79,9 @@ namespace RyanAssets.Editor {
                 Stretch(fillObject, 2f);
                 var fill = fillObject.GetComponent<Image>();
                 // Filled rather than a stretched rect, so the component sets one float per frame
-                // instead of rewriting anchors and forcing a layout rebuild.
+                // instead of rewriting anchors and forcing a layout rebuild. Unity ignores fillAmount
+                // on an Image with no sprite and draws it full, so the built-in UI sprite is assigned.
+                fill.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
                 fill.type = Image.Type.Filled;
                 fill.fillMethod = Image.FillMethod.Horizontal;
                 fill.fillOrigin = (int)Image.OriginHorizontal.Left;

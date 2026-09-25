@@ -1,0 +1,24 @@
+{
+    "name": "RyanAssets.Client.ClientUI.Command.Editor",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Command.Editor",
+    "references": [
+        "RyanAssets.Client.ClientUI.Command",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Textbox",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

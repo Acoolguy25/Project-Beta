@@ -27,6 +27,12 @@ namespace Universes.UniverseData.war_valley.Server {
             void HandleDied(RyanAssets.Shared.Declarations.DamageType source,
                 RyanAssets.Shared.Declarations.IEntity attacker) {
                 character.OnDied -= HandleDied;
+                // A troop that was sold leaves at once; there is no fall to watch.
+                if (source == RyanAssets.Shared.Declarations.DamageType.Despawn) {
+                    if (character.IsSpawned)
+                        character.Despawn();
+                    return;
+                }
                 if (host != null && host.isActiveAndEnabled)
                     host.StartCoroutine(DespawnAfterLinger(character));
             }

@@ -51,6 +51,8 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         public float Range => range;
         public bool IsAntiAir => antiAir;
+        public long Damage => damage;
+        public float Cooldown => cooldown;
 
         void Awake() {
             constructable = GetComponent<WV_Constructable>();
