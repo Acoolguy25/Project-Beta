@@ -1,6 +1,6 @@
-{
+﻿{
     "name": "Universes.UniverseData.war_valley.Tests",
-    "references": ["Universes.UniverseData.war_valley.Shared", "RyanAssets.Shared.Declarations", "RyanAssets.Shared.Global"],
+    "references": ["Universes.UniverseData.war_valley.Shared", "RyanAssets.Shared.Declarations", "RyanAssets.Shared.Global", "RyanAssets.Shared.Component", "FishNet.Runtime"],
     "includePlatforms": ["Editor"],
     "optionalUnityReferences": ["TestAssemblies"],
     "defineConstraints": ["UNITY_INCLUDE_TESTS"]

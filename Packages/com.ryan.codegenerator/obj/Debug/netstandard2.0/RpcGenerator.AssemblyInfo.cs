@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RpcGenerator")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c752d32be04d27e04a07b6bb837b0db109b6ffc2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a12381c8b830b44abfb85840d0865ec5afe321c9")]
 [assembly: System.Reflection.AssemblyProductAttribute("RpcGenerator")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RpcGenerator")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

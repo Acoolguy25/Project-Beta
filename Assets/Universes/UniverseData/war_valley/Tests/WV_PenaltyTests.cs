@@ -67,7 +67,7 @@ namespace Universes.UniverseData.war_valley.Tests {
             var enemies = WV_Alliances.BuildEnemyTable();
             Assert.That(enemies[WV_Alliances.Invaders], Does.Contain(WV_Alliances.Defenders));
             Assert.That(enemies[WV_Alliances.Defenders], Does.Contain(WV_Alliances.Invaders));
-            Assert.That(enemies[WV_Alliances.Defenders], Does.Not.Contain(WV_Alliances.Defenders));
+            Assert.That(enemies[WV_Alliances.Defenders], Has.No.Member(WV_Alliances.Defenders));
         }
 
         [Test]

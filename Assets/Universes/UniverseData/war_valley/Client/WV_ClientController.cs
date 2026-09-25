@@ -1018,9 +1018,9 @@ namespace Universes.UniverseData.war_valley.Client {
             unchecked {
                 int hash = 17;
                 foreach (WV_Unit unit in selection)
-                    hash = hash * 31 + (unit != null ? unit.GetInstanceID() : 0);
+                    hash = hash * 31 + (unit != null ? unit.GetEntityId().GetHashCode() : 0);
                 foreach (GameCharacter troop in troopSelection)
-                    hash = hash * 31 + (troop != null ? troop.GetInstanceID() : 0);
+                    hash = hash * 31 + (troop != null ? troop.GetEntityId().GetHashCode() : 0);
                 return hash;
             }
         }

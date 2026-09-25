@@ -180,6 +180,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 6865002775998532502, guid: 464ffb59118c58248a4e3c9bc1c665f9, type: 3}
     - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
+      propertyPath: DebugInstantBuild._editor_value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
       propertyPath: DebugTimerSpeedUp._editor_value
       value: 0
       objectReference: {fileID: 0}
@@ -188,7 +192,15 @@ PrefabInstance:
       value: 13
       objectReference: {fileID: 0}
     - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
+      propertyPath: DebugInfiniteMoney._editor_value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
       propertyPath: DebugTimerInfinite._editor_value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
+      propertyPath: DebugInstantResearch._editor_value
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
