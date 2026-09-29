@@ -12,6 +12,8 @@ namespace RyanAssets.Server.ServerCore {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Init() {
+            if (NetworkSettings.EditorDirectConnection)
+                return;
             //Debug.Log("ServerHeartbeat Init");
 
             heartbeatCts = new CancellationTokenSource();

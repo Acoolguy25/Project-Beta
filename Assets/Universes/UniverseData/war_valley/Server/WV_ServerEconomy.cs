@@ -24,6 +24,7 @@ namespace Universes.UniverseData.war_valley.Server {
 
         readonly List<int> activeClientIds = new();
         float nextIncomePublishTime;
+        float nextCommanderIncomeTime;
 
         void OnEnable() {
             ServerStructure.CanPlaceFunction = CanPlaceStructure;
@@ -65,6 +66,7 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
 
             activeClientIds.Clear();
+            nextCommanderIncomeTime = NetworkHelper.ServerTime + WV_Rules.IncomeTickSeconds;
             foreach (KeyValuePair<NetworkConnection, PlayerData> entry in PlayerData.Players) {
                 if (entry.Key == null || !entry.Key.IsValid)
                     continue;
@@ -205,12 +207,18 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
 
             float now = NetworkHelper.ServerTime;
+            if (now >= nextCommanderIncomeTime) {
+                nextCommanderIncomeTime = now + WV_Rules.IncomeTickSeconds;
+                foreach (int clientId in activeClientIds)
+                    economy.Credit(clientId, WV_Rules.CommanderIncomePerTick);
+            }
             if (now < nextIncomePublishTime)
                 return;
 
             nextIncomePublishTime = now + IncomePublishInterval;
             foreach (int clientId in activeClientIds)
-                economy.SetIncomePerMinute(clientId, WV_IncomeBuilding.GetIncomePerMinute(clientId));
+                economy.SetIncomePerMinute(clientId, WV_IncomeBuilding.GetIncomePerMinute(clientId)
+                    + Mathf.RoundToInt(WV_Rules.CommanderIncomePerTick * 60f / WV_Rules.IncomeTickSeconds));
             PublishBalances(economy);
         }
 

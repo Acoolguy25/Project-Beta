@@ -118,6 +118,11 @@ namespace Universes.UniverseData.war_valley.Server {
             order = WV_OrderType.HoldPosition;
         }
 
+        public void OrderFreeze() {
+            OrderStop();
+            order = WV_OrderType.Freeze;
+        }
+
         // --- Tick ------------------------------------------------------------
 
         void Update() {
@@ -126,11 +131,16 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
             }
 
+            if (order == WV_OrderType.Freeze) {
+                motor.Stop();
+                return;
+            }
+
             UpdateTargeting();
 
             switch (order) {
                 case WV_OrderType.Move:
-                    TickMove(engageOnTheWay: false);
+                    TickMove(engageOnTheWay: true);
                     break;
                 case WV_OrderType.AttackMove:
                     TickMove(engageOnTheWay: true);
@@ -162,11 +172,6 @@ namespace Universes.UniverseData.war_valley.Server {
                 holdOrigin = transform.position;
             }
 
-            if (order == WV_OrderType.Move) {
-                currentTarget = null;
-                return;
-            }
-
             if (WV_Combat.IsValidTarget(currentTarget, unit.Team) && !HasBrokenLeash(currentTarget))
                 return;
 
@@ -184,7 +189,7 @@ namespace Universes.UniverseData.war_valley.Server {
 
         /// <summary>Keeps an idle unit from being walked across the map by a fleeing enemy.</summary>
         bool HasBrokenLeash(IEntity target) {
-            if (order is WV_OrderType.Attack or WV_OrderType.AttackMove)
+            if (order is WV_OrderType.Attack or WV_OrderType.AttackMove or WV_OrderType.Move)
                 return false;
             // Measured the same way acquisition is. Straight-line here would let an aircraft pick up
             // a target at the edge of its reach and then immediately drop it for being out of leash,

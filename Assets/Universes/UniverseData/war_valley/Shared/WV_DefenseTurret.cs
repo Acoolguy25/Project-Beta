@@ -113,20 +113,18 @@ namespace Universes.UniverseData.war_valley.Shared {
 
             if (now < nextFireTime || WV_Combat.DistanceTo(transform.position, target) > range)
                 return;
+            if (!antiAir && !WV_Combat.HasLineOfSight(
+                    weaponFire != null ? weaponFire.MuzzlePosition : transform.position + Vector3.up,
+                    target, transform))
+                return;
 
             nextFireTime = now + cooldown;
             Fire(targetPosition);
         }
 
         /// <summary>
-        /// Applies the hit and replicates the shot.
-        /// <para>
-        /// The damage is deliberately not conditioned on what the trace struck. A turret in range has
-        /// always hit what it was aiming at, and making cover block it would be a balance change
-        /// rather than the presentation fix this is. The trace decides only where the tracer stops,
-        /// so a shot that clips a wall on the way out terminates at the wall instead of passing
-        /// visibly through it.
-        /// </para>
+        /// Applies the authoritative hit after range and cover checks, then replicates the shot.
+        /// The presentation trace decides where the visible tracer stops.
         /// </summary>
         void Fire(Vector3 targetPosition) {
             WV_Combat.DealDamage(target, damage, damageType, structure);
@@ -158,7 +156,8 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         IEntity AcquireTarget() {
             IEntity candidate = WV_Combat.FindNearestEnemy(
-                transform.position, range, structure.Team, preferCharacters: true, ignoreRoot: transform);
+                transform.position, range, structure.Team, preferCharacters: true, ignoreRoot: transform,
+                aircraftOnly: antiAir);
 
             // A battery built for one altitude band should not waste its cooldown on the other.
             if (candidate is Component component && component != null) {

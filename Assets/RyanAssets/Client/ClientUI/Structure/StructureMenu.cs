@@ -388,12 +388,17 @@ namespace RyanAssets.Client.ClientUI.Build {
             if (selectedStructure == null)
                 return;
 
+            UpdatePlacementPreviewFromCursor();
+        }
+
+        private bool UpdatePlacementPreviewFromCursor() {
             if (!ToolControls.TryGetCursorWorldPosition(out Vector3 worldPosition, StructurePlacement.GroundMask)) {
                 SetPreviewValid(false, "Point at the ground to place");
-                return;
+                return false;
             }
 
             UpdatePlacementPreview(worldPosition);
+            return placementValid;
         }
 
         private void UpdatePlacementPreview(Vector3 worldPosition) {
@@ -406,14 +411,7 @@ namespace RyanAssets.Client.ClientUI.Build {
             }
 
             placementPosition = groundPoint;
-            StructurePlacement.GetOverlapVolume(
-                bounds, groundPoint, out Vector3 overlapCenter, out Vector3 overlapHalfExtents);
-            placementValid = !Physics.CheckBox(
-                overlapCenter,
-                overlapHalfExtents,
-                Quaternion.identity,
-                LayerMask.GetMask("Structure"),
-                QueryTriggerInteraction.Ignore);
+            placementValid = !StructurePlacement.HasStructureOverlap(previewInstance, bounds, groundPoint);
             SetPreviewValid(
                 placementValid,
                 placementValid
@@ -421,12 +419,13 @@ namespace RyanAssets.Client.ClientUI.Build {
                     : "That grid space is occupied");
         }
 
-        private void OnPlaceStructure(Vector3 worldPosition) {
+        private void OnPlaceStructure(Vector3 _) {
             if (selectedStructure == null)
                 return;
 
-            UpdatePlacementPreview(worldPosition);
-            if (!placementValid)
+            // Tool activation hits every world layer, including walls and roofs. Placement must
+            // refresh from the same ground-only ray as its preview, rather than that tool hit.
+            if (!UpdatePlacementPreviewFromCursor())
                 return;
 
             InstanceFinder.ClientManager.Broadcast(new StructurePlacementRequest {

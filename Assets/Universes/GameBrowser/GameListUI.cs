@@ -28,6 +28,10 @@ namespace Universes.GameBrowser {
             LoginManager.Instance.loginScreen.SetLoginScreenVisible(true);
         }
         async UniTask<(string, JObject)> LoadUniverseList() {
+            if (NetworkSettings.EditorDirectConnection)
+                return (null, new JObject { ["universes"] = new JArray(new JObject {
+                    ["universe_id"] = NetworkSettings.EditorUniverseId, ["active_players"] = 0
+                }) });
             return await BackendNetwork.GetRequest("/api/universes/v1/list");
         }
         [Serializable]
@@ -65,7 +69,9 @@ namespace Universes.GameBrowser {
                 selectedGameUI.OpenUniversePage(data, JSONuniverse.active_players);
             };
 #if UNITY_EDITOR
-            RefreshPrefabs(UniverseCfg.ActiveUniverses);
+            RefreshPrefabs(NetworkSettings.EditorDirectConnection
+                ? UniverseCfg.ActiveUniverses.Where(u => u.id == NetworkSettings.EditorUniverseId).ToArray()
+                : UniverseCfg.ActiveUniverses);
 #else
             RefreshPrefabs(UniverseCfg.ActiveUniverses.Where(u => u.access == UniverseAccess.Public).ToArray());
 #endif

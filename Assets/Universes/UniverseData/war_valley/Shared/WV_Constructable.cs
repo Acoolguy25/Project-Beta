@@ -23,8 +23,8 @@ namespace Universes.UniverseData.war_valley.Shared {
     /// <see cref="buildDuration"/>, which is why the bar and the building rise in step.
     /// </para>
     /// </summary>
-    [RequireComponent(typeof(StructureComponent))]
-    public sealed class WV_Constructable : NetworkBehaviour, IGridFootprint {
+    [RequireComponent(typeof(StructureComponent), typeof(BoxCollider))]
+    public sealed class WV_Constructable : NetworkBehaviour, IGridFootprint, IPlacementBounds {
         [Header("Structure")]
         [Tooltip("Grid cells this structure spans on its longer side. Placement snaps by this rather " +
                  "than by the model's measured size, so a fence post can sit on the grid point two " +
@@ -55,8 +55,21 @@ namespace Universes.UniverseData.war_valley.Shared {
         WV_Owned owned;
         Vector3 finishedLocalPosition;
         float buildingHeight;
+        BoxCollider placementCollider;
+#if UNITY_SERVER
+        long constructionHealthGranted;
+#endif
 
         public int FootprintCells => footprintCells;
+        // The root collider reserves the finished structure's space throughout construction and
+        // while a gate is open. Animated art and construction hoarding never move that footprint.
+        public Bounds LocalPlacementBounds {
+            get {
+                if (placementCollider == null)
+                    placementCollider = GetComponent<BoxCollider>();
+                return new Bounds(placementCollider.center, placementCollider.size);
+            }
+        }
         public long MaxHealth => maxHealth;
 
         /// <summary>True once the build timer has elapsed. Every gameplay behaviour checks this first.</summary>
@@ -244,6 +257,7 @@ namespace Universes.UniverseData.war_valley.Shared {
             // A site under construction is deliberately fragile: it is worth attacking before it
             // finishes. Health scales back up to the authored maximum as the build completes.
             long startingHealth = System.Math.Max(1L, (long)(maxHealth * WV_Rules.UnderConstructionHealthFraction));
+            constructionHealthGranted = startingHealth;
             structure.Init(startingHealth, maxHealth);
             ApplyPresentation();
         }
@@ -252,18 +266,18 @@ namespace Universes.UniverseData.war_valley.Shared {
             if (!IsServerStarted || completionTime.Value <= 0f || structure.IsDead)
                 return;
 
-            // Grow toward full health alongside the build so a nearly finished structure is not still
-            // one-shot, without ever healing battle damage past the current progress ceiling.
+            // Grant only newly built health. Filling back up to the progress ceiling every frame
+            // erased damage and made a construction site regenerate through incoming fire.
             long floor = (long)(maxHealth * Mathf.Lerp(WV_Rules.UnderConstructionHealthFraction, 1f, Progress));
-            if (structure.Health.Value < floor)
-                structure.HealHealth(floor - structure.Health.Value);
+            long growth = System.Math.Max(0L, floor - constructionHealthGranted);
+            constructionHealthGranted = floor;
+            if (growth > 0)
+                structure.HealHealth(growth);
 
             if (NetworkHelper.ServerTime < completionTime.Value)
                 return;
 
             complete.Value = true;
-            if (structure.Health.Value < maxHealth)
-                structure.HealHealth(maxHealth - structure.Health.Value);
             ApplyPresentation();
         }
 #endif

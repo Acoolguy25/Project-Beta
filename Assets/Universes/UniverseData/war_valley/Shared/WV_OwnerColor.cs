@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Universes.UniverseData.war_valley.Shared {
     /// <summary>
-    /// The single authority over a structure's colours: whose it is, and what shape it is in.
+    /// Applies ownership colours to units and structures, together with structure damage tint.
     /// <para>
     /// The building keeps the Cartoon Military art's own colour scheme. Only its primary part - the
     /// surface that reads as its main body, found by <see cref="MeshPrimaryRegion"/> - is painted in
@@ -37,6 +37,9 @@ namespace Universes.UniverseData.war_valley.Shared {
                  "construction hoarding keep their own colours. The primary part is chosen among these.")]
         [SerializeField] Renderer[] tintedRenderers = System.Array.Empty<Renderer>();
 
+        [Tooltip("Optional explicit body parts using Team Color Lit materials. Their full authored textures receive the commander's tint; tracks, wheels and rotors keep their original materials.")]
+        [SerializeField] Renderer[] bodyRenderers = System.Array.Empty<Renderer>();
+
         [Tooltip("Entity whose health drives the corrosion. Optional: leave unset for a structure " +
                  "that should never rust.")]
         [SerializeField] StructureComponent damageSource;
@@ -46,8 +49,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         WV_Constructable constructable;
 
         bool prepared;
-        Renderer primaryRenderer;
-        int primarySubmesh = -1;
+        readonly System.Collections.Generic.Dictionary<Renderer, int> paintedSubmeshes = new();
         /// <summary>Each renderer's authored material colours, which rust multiplies from.</summary>
         Color[][] authoredColors;
 
@@ -108,11 +110,13 @@ namespace Universes.UniverseData.war_valley.Shared {
                 Color[] colors = authoredColors[r];
                 for (int slot = 0; slot < colors.Length; slot++) {
                     properties.Clear();
-                    if (renderer == primaryRenderer && slot == primarySubmesh) {
-                        // The body is painted flat in the commander's colour: the atlas swatch it
-                        // replaces was one flat colour too, so the model's shading is unchanged.
-                        properties.SetTexture(BaseMapId, Texture2D.whiteTexture);
-                        properties.SetTexture(MainTexId, Texture2D.whiteTexture);
+                    if (paintedSubmeshes.TryGetValue(renderer, out int paintedSlot) && (paintedSlot < 0 || slot == paintedSlot)) {
+                        // A split structure atlas region uses flat paint. Explicit unit bodies
+                        // retain their authored textures through the Team Color Lit shader.
+                        if (paintedSlot >= 0) {
+                            properties.SetTexture(BaseMapId, Texture2D.whiteTexture);
+                            properties.SetTexture(MainTexId, Texture2D.whiteTexture);
+                        }
                         SetColor(paint);
                     } else {
                         SetColor(Color.Lerp(colors[slot], WV_Rules.CorrodedTint, corrosion));
@@ -137,33 +141,31 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// </summary>
         void Prepare() {
             prepared = true;
-            float bestArea = 0f;
-            MeshFilter bestFilter = null;
-            MeshPrimaryRegion.Result best = default;
-
-            foreach (Renderer renderer in tintedRenderers) {
-                if (renderer == null
-                    || !renderer.TryGetComponent(out MeshFilter filter)
-                    || !MeshPrimaryRegion.TryGetPrimary(filter.sharedMesh, out MeshPrimaryRegion.Result result))
-                    continue;
-
-                Vector3 scale = renderer.transform.lossyScale;
-                float area = result.Area * Mathf.Pow(Mathf.Abs(scale.x * scale.y * scale.z), 2f / 3f);
-                if (area <= bestArea)
-                    continue;
-                bestArea = area;
-                bestFilter = filter;
-                best = result;
-                primaryRenderer = renderer;
-            }
-
-            if (primaryRenderer != null) {
-                primarySubmesh = best.Submesh;
-                if (best.IsSplit) {
-                    Material material = primaryRenderer.sharedMaterial;
-                    bestFilter.sharedMesh = best.Mesh;
-                    primaryRenderer.sharedMaterials = new[] { material, material };
+            if (bodyRenderers.Length > 0) {
+                foreach (Renderer body in bodyRenderers) {
+                    if (body != null)
+                        paintedSubmeshes[body] = -1; // All slots: the authored shader preserves texture detail.
                 }
+            } else {
+                float bestArea = 0f;
+                Renderer primaryRenderer = null;
+                MeshFilter bestFilter = null;
+                MeshPrimaryRegion.Result best = default;
+                foreach (Renderer renderer in tintedRenderers) {
+                    if (renderer == null || !renderer.TryGetComponent(out MeshFilter filter)
+                        || !MeshPrimaryRegion.TryGetPrimary(filter.sharedMesh, out var result))
+                        continue;
+                    Vector3 scale = renderer.transform.lossyScale;
+                    float area = result.Area * Mathf.Pow(Mathf.Abs(scale.x * scale.y * scale.z), 2f / 3f);
+                    if (area <= bestArea)
+                        continue;
+                    bestArea = area;
+                    bestFilter = filter;
+                    best = result;
+                    primaryRenderer = renderer;
+                }
+                if (primaryRenderer != null)
+                    PrepareBody(primaryRenderer, bestFilter, best);
             }
 
             authoredColors = new Color[tintedRenderers.Length][];
@@ -175,6 +177,15 @@ namespace Universes.UniverseData.war_valley.Shared {
                 for (int slot = 0; slot < materials.Length; slot++)
                     authoredColors[r][slot] = AuthoredColor(materials[slot]);
             }
+        }
+
+        void PrepareBody(Renderer renderer, MeshFilter filter, MeshPrimaryRegion.Result region) {
+            paintedSubmeshes[renderer] = region.Submesh;
+            if (!region.IsSplit)
+                return;
+            Material material = renderer.sharedMaterial;
+            filter.sharedMesh = region.Mesh;
+            renderer.sharedMaterials = new[] { material, material };
         }
 
         static Color AuthoredColor(Material material) {

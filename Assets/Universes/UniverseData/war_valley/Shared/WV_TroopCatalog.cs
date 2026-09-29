@@ -60,27 +60,27 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         static readonly WV_TroopProfile[] profiles = {
             new(WV_TroopKind.Knife, "Knifeman", "Melee rusher. Cheap and fast.",
-                WV_TroopWeapon.Knife, cost: 80, trainSeconds: 6f,
+                WV_TroopWeapon.Knife, cost: 65, trainSeconds: 5f,
                 CharacterBuild.Standard, threat: 1f, firstWave: 1),
             new(WV_TroopKind.Gunner, "Gunner", "Rifleman. Holds range and shoots.",
-                WV_TroopWeapon.Gun, cost: 150, trainSeconds: 10f,
-                CharacterBuild.Standard, threat: 1.8f, firstWave: 2),
+                WV_TroopWeapon.Gun, cost: 110, trainSeconds: 7f,
+                CharacterBuild.Standard, threat: 1.8f, firstWave: 3),
             new(WV_TroopKind.Shrimp, "Shrimp", "Short, cheap, and fragile. Best in numbers.",
-                WV_TroopWeapon.Knife, cost: 45, trainSeconds: 4f,
+                WV_TroopWeapon.Knife, cost: 40, trainSeconds: 3f,
                 new CharacterBuild(new Vector3(0.9f, 0.6f, 0.9f), health: 0.6f, speed: 1.05f, damage: 0.7f),
                 threat: 0.6f, firstWave: 3),
             new(WV_TroopKind.Speedy, "Speedy", "Very fast, but light on health and damage.",
-                WV_TroopWeapon.Knife, cost: 110, trainSeconds: 6f,
+                WV_TroopWeapon.Knife, cost: 95, trainSeconds: 5f,
                 new CharacterBuild(new Vector3(0.85f, 0.95f, 0.85f), health: 0.6f, speed: 1.6f, damage: 0.6f),
-                threat: 1.2f, firstWave: 4),
+                threat: 1.2f, firstWave: 5),
             new(WV_TroopKind.SkinnyLegend, "Skinny Legend", "Thin sharpshooter. Hard-hitting gunner, lighter frame.",
-                WV_TroopWeapon.Gun, cost: 190, trainSeconds: 11f,
+                WV_TroopWeapon.Gun, cost: 160, trainSeconds: 9f,
                 new CharacterBuild(new Vector3(0.55f, 1.15f, 0.55f), health: 0.8f, speed: 1.1f, damage: 1.35f),
-                threat: 2.2f, firstWave: 6),
+                threat: 2.2f, firstWave: 8),
             new(WV_TroopKind.Punk, "Punk", "Big, slow bruiser with a lot of health and a heavy blade.",
-                WV_TroopWeapon.Knife, cost: 220, trainSeconds: 12f,
+                WV_TroopWeapon.Knife, cost: 190, trainSeconds: 10f,
                 new CharacterBuild(new Vector3(1.35f, 1.3f, 1.35f), health: 2.2f, speed: 0.85f, damage: 1.5f),
-                threat: 3f, firstWave: 8)
+                threat: 3f, firstWave: 11)
         };
 
         public static IReadOnlyList<WV_TroopProfile> All => profiles;

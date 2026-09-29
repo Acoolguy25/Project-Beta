@@ -1,6 +1,9 @@
 using RyanAssets.Shared.Combat;
 using UnityEngine;
 using RpcGen;
+using FishNet.Object.Synchronizing;
+using RyanAssets.Shared.Declarations;
+using System;
 
 namespace RyanAssets.Tools.Shared {
     public partial class ToolGunShared : ToolBaseShared {
@@ -24,6 +27,40 @@ namespace RyanAssets.Tools.Shared {
 
         public ParticleSystem FireParticleSystem;
 
+        /// <summary>Opt-in troop policy, replicated so observer tracers use the same collision rules.</summary>
+        public readonly SyncVar<bool> passThroughAlliedTroopsSync = new(false);
+        Func<Collider, bool> alliedTroopFilter;
+        static int characterLayers;
+
+        Func<Collider, bool> ShotFilter => passThroughAlliedTroopsSync.Value
+            ? alliedTroopFilter ??= IsAlliedTroop
+            : null;
+
+        bool IsAlliedTroop(Collider collider) {
+            if (connectedCharacter == null || collider == null)
+                return false;
+            if (characterLayers == 0)
+                characterLayers = LayerMask.GetMask("Character", "LocalCharacter");
+            IEntity entity = collider.GetComponentInParent<IEntity>();
+            return entity is Component component
+                && (characterLayers & (1 << component.gameObject.layer)) != 0
+                && CombatTeams.AreAllies(connectedCharacter.GetComponent<IEntity>()?.Team, entity.Team);
+        }
+
+        /// <summary>Checks the exact firing line and muzzle volume before spending ammunition.</summary>
+        public bool HasClearShot(Vector3 targetLocation, Transform targetRoot) {
+            Vector3 origin = weaponRoot.transform.position;
+            float distance = Vector3.Distance(origin, targetLocation);
+            if (distance < 0.01f || distance > MaxRange)
+                return false;
+            RaycastHit? hit = HitscanShot.Fire(origin, targetLocation, distance, 1f,
+                connectedCharacter != null ? connectedCharacter.transform : null,
+                MuzzleCollisionRadius, transform, ShotFilter);
+            return hit.HasValue && (hit.Value.collider != null
+                ? targetRoot != null && hit.Value.transform.IsChildOf(targetRoot)
+                : hit.Value.distance >= distance);
+        }
+
         /// <summary>
         /// Traces one shot toward <paramref name="targetLocation"/>.
         /// <para>
@@ -42,7 +79,8 @@ namespace RyanAssets.Tools.Shared {
                 MuzzleCollisionRadius,
                 // The whole tool, not just its weapon root: the muzzle check must not treat the
                 // gun's own casing as something it is buried inside.
-                transform);
+                transform,
+                ShotFilter);
         }
 
         public void VisualizeBulletLocally(RaycastHit? hit) {

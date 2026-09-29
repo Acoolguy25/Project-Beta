@@ -105,7 +105,19 @@ namespace RyanAssets.Authentication {
                 Fail(conn, $"Client version mismatch. Server is running {Application.version}, but client is running {clientVersion}");
                 return;
             }
-            var (res, json) = await BackendNetwork.PostRequest("/api/internal/v1/user/add", accessToken: token);
+            string res;
+            JObject json;
+            if (NetworkSettings.EditorDirectConnection) {
+                if (!System.Net.IPAddress.TryParse(conn.GetAddress(), out var address) || !System.Net.IPAddress.IsLoopback(address)
+                    || !token.StartsWith("editor-", StringComparison.Ordinal) || !Guid.TryParseExact(token.Substring(7), "N", out _)) {
+                    Fail(conn, "Local Editor testing requires a loopback Editor client.");
+                    return;
+                }
+                res = null;
+                json = new JObject { ["player_id"] = token, ["data"] = NetworkSettings.CreateEditorPlayerProfile(token) };
+            } else {
+                (res, json) = await BackendNetwork.PostRequest("/api/internal/v1/user/add", accessToken: token);
+            }
 
             // The connection can disconnect or be pooled and reused while the
             // backend request is in flight. Never authenticate that later session.

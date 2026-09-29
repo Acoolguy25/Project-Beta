@@ -23,6 +23,8 @@ namespace RyanAssets.Login {
         [SerializeField]
         InputField usernameInputField;
         async UniTask<(string, JObject)> LoadPlayerStats() {
+            if (NetworkSettings.EditorDirectConnection)
+                return (null, NetworkSettings.CreateEditorPlayerProfile(NetworkSettings.EditorPlayerId));
             return await BackendNetwork.PostRequest("/api/players/v1/me");
         }
         async void SignedIn() {

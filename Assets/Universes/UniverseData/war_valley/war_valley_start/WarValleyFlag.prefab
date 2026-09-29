@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6883474482320582868}
   - component: {fileID: 6525284684735670632}
   - component: {fileID: 5479583423692573898}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Flag Pole
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -125,7 +125,7 @@ GameObject:
   - component: {fileID: 2221704444250556340}
   - component: {fileID: 242210646086327698}
   - component: {fileID: 1624448908278353262}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Flag Base
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -216,7 +216,7 @@ GameObject:
   - component: {fileID: 4011971582813838883}
   - component: {fileID: 1442803560763927437}
   - component: {fileID: 7234553561174352651}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Pole Finial
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -328,7 +328,7 @@ GameObject:
   - component: {fileID: 3864264388700569957}
   - component: {fileID: 4977903028890883604}
   - component: {fileID: 8219068199651435126}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: Flag
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -441,7 +441,7 @@ GameObject:
   - component: {fileID: 6544936072031695574}
   - component: {fileID: 4512645840099361508}
   - component: {fileID: 8119421105460553467}
-  m_Layer: 0
+  m_Layer: 14
   m_Name: WarValleyFlag
   m_TagString: Untagged
   m_Icon: {fileID: 0}

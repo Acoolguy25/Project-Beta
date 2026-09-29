@@ -71,7 +71,9 @@ namespace Universes.UniverseData.war_valley.Shared {
         Move = 1,
         AttackMove = 2,
         Attack = 3,
-        HoldPosition = 4
+        HoldPosition = 4,
+        /// <summary>Stops movement and weapons until another order is issued.</summary>
+        Freeze = 5
     }
 
     /// <summary>
@@ -87,8 +89,8 @@ namespace Universes.UniverseData.war_valley.Shared {
         public const string ShieldGeneratorId = "wv_shield_generator";
         public const string GateId = "wv_gate";
 
-        /// <summary>Funds every player starts a round with, enough for one mineshaft plus a barracks.</summary>
-        public const long StartingFunds = 900;
+        /// <summary>Funds for a mine, barracks, watchtower and a starting squad.</summary>
+        public const long StartingFunds = 1400;
 
         /// <summary>
         /// Leaderboard column the player list shows a commander's balance in. The shared leaderboard
@@ -98,6 +100,9 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>Income buildings pay out on this cadence so the HUD can show a stable per-minute rate.</summary>
         public const float IncomeTickSeconds = 5f;
+
+        /// <summary>Recovery income, even when a commander has lost every income building.</summary>
+        public const int CommanderIncomePerTick = 10;
 
         /// <summary>A queued unit is refunded in full if its building dies before the unit pops.</summary>
         public const float ProductionRefundFraction = 1f;
@@ -252,13 +257,13 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// 60m trace: a rifleman that opened fire the moment a target crossed the horizon would
         /// never close on an objective, and the shot would spend most of its life blocked by terrain.
         /// </summary>
-        public const float GunnerEngageRange = 24f;
+        public const float GunnerEngageRange = 14f;
 
         /// <summary>
         /// The distance a gunner tries to hold. Anything that closes inside this is too near to
         /// shoot comfortably, so the troop gives ground instead of standing there being stabbed.
         /// </summary>
-        public const float GunnerStandoffRange = 11f;
+        public const float GunnerStandoffRange = 5f;
 
         /// <summary>
         /// How often a gunner offers to pull the trigger. The weapon's own fire rate, clip, and
@@ -346,13 +351,13 @@ namespace Universes.UniverseData.war_valley.Shared {
         // --- Penalties and refunds ---------------------------------------------
 
         /// <summary>Share of a commander's funds lost each time their own character dies.</summary>
-        public const float DeathPenaltyFraction = 0.15f;
+        public const float DeathPenaltyFraction = 0.08f;
 
         /// <summary>
         /// The least a death costs, so a commander sitting on a small balance still feels it. Never
         /// more than they actually hold: a penalty cannot push a balance negative.
         /// </summary>
-        public const long DeathPenaltyMinimum = 50;
+        public const long DeathPenaltyMinimum = 25;
 
         /// <summary>Funds taken from a commander holding <paramref name="funds"/> when they die.</summary>
         public static long GetDeathPenalty(long funds) {
@@ -398,10 +403,10 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>Aircraft ignore the NavMesh and hold this altitude above their ground target.</summary>
         public static float GetCruiseAltitude(WV_UnitKind kind) => kind switch {
-            WV_UnitKind.Chopper => 14f,
-            WV_UnitKind.UAV => 26f,
-            WV_UnitKind.Jet => 34f,
-            WV_UnitKind.Bomber => 30f,
+            WV_UnitKind.Chopper => 6f,
+            WV_UnitKind.UAV => 8f,
+            WV_UnitKind.Jet => 10f,
+            WV_UnitKind.Bomber => 9f,
             _ => 0f
         };
 

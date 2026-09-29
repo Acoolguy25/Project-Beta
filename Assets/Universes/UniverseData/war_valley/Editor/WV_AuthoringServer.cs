@@ -19,6 +19,52 @@ namespace Universes.UniverseData.war_valley.Editor {
         const string RunnerPath = Root + "/Server/WV_ServerRunner.prefab";
         const string ServerScenePath = Root + "/war_valley_server.unity";
 
+        [MenuItem("Ryan/War Valley/Apply Wave Balance")]
+        public static void ApplyWaveBalance() {
+            if (Application.isPlaying)
+                throw new System.InvalidOperationException("Leave Play Mode before saving wave balance.");
+            GameObject prefab = PrefabUtility.LoadPrefabContents(RunnerPath);
+            try {
+                MonoBehaviour runner = System.Array.Find(prefab.GetComponents<MonoBehaviour>(),
+                    component => component != null && component.GetType().Name == "WV_ServerRunner");
+                ApplyWaveDefaults(runner);
+                PrefabUtility.SaveAsPrefabAsset(prefab, RunnerPath);
+            } finally {
+                PrefabUtility.UnloadPrefabContents(prefab);
+            }
+            var scene = UnityEngine.SceneManagement.SceneManager.GetSceneByPath(ServerScenePath);
+            bool opened = !scene.IsValid() || !scene.isLoaded;
+            if (opened)
+                scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+                    ServerScenePath, UnityEditor.SceneManagement.OpenSceneMode.Additive);
+            try {
+                if (!opened && scene.isDirty)
+                    throw new System.InvalidOperationException("The server scene has unsaved edits; save them before applying wave balance.");
+                ApplyWaveDefaults(FindRunnerInScene(scene));
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
+                UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene);
+            } finally {
+                if (opened)
+                    UnityEditor.SceneManagement.EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        static void ApplyWaveDefaults(MonoBehaviour runner) {
+            if (runner == null)
+                throw new System.InvalidOperationException("Apply wave balance in the dedicated-server Editor, where WV_ServerRunner is compiled.");
+            var serialized = new SerializedObject(runner);
+            SerializedProperty tuning = serialized.FindProperty("WaveTuning");
+            var defaults = new WV_WaveTuning();
+            foreach (System.Reflection.FieldInfo field in typeof(WV_WaveTuning).GetFields()) {
+                SerializedProperty property = tuning.FindPropertyRelative(field.Name);
+                if (field.FieldType == typeof(int))
+                    property.intValue = (int)field.GetValue(defaults);
+                else if (field.FieldType == typeof(float))
+                    property.floatValue = (float)field.GetValue(defaults);
+            }
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
 
         [MenuItem("Ryan/War Valley/Rebuild Economy Prefab")]
         public static void RebuildEconomyPrefab() {

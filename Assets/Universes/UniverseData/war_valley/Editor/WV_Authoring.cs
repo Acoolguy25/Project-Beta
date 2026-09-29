@@ -33,14 +33,14 @@ namespace Universes.UniverseData.war_valley.Editor {
     /// stale or missing prefabs behind.
     /// </para>
     /// </summary>
-    public static class WV_Authoring {
+    public static partial class WV_Authoring {
         public const string Root = "Assets/Universes/UniverseData/war_valley";
 
         /// <summary>
         /// Stamp written into each generated prefab's import settings. Change it whenever the
         /// prefabs this script builds change, and every copy older than it is rebuilt on next load.
         /// </summary>
-        const string AuthoringVersion = "war-valley-authoring-2";
+        const string AuthoringVersion = "war-valley-authoring-3";
         const string AutoRebuildSessionKey = "WV_Authoring.AutoRebuildAttempted";
         const string PackRoot = "Assets/CartoonMilitaryModelPack/Prefebs";
         const string StructuresFolder = Root + "/Structures";
@@ -102,6 +102,7 @@ namespace Universes.UniverseData.war_valley.Editor {
             /// <summary>For a post: the run it is sized to stand as tall as.</summary>
             public string MatchHeightOf;
             public int FootprintCells = 1;
+            public float HeightLimit = 6f;
             public ulong Cost;
             public float BuildSeconds;
             public long MaxHealth;
@@ -141,15 +142,15 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_mineshaft", DisplayName = "Mineshaft", Category = "Economy",
                 Description = "Extracts ore. The backbone of any War Valley war chest.",
                 ModelPath = PackRoot + "/Building_Prefebs/OilTank_Prefeb.prefab",
-                FootprintCells = 2, Cost = 400, BuildSeconds = 20f, MaxHealth = 600,
-                Role = StructureRole.Income, IncomePerTick = 25
+                FootprintCells = 2, Cost = 350, BuildSeconds = 12f, MaxHealth = 650,
+                Role = StructureRole.Income, IncomePerTick = 35
             },
             new() {
                 Id = "wv_refinery", DisplayName = "Refinery", Category = "Economy",
                 Description = "Processes ore at scale. Expensive, slow to raise, and worth it.",
                 ModelPath = PackRoot + "/Building_Prefebs/MilitaryBase_Prefeb.prefab",
-                FootprintCells = 3, Cost = 1100, BuildSeconds = 40f, MaxHealth = 1200,
-                Role = StructureRole.Income, IncomePerTick = 60
+                FootprintCells = 3, Cost = 900, BuildSeconds = 28f, MaxHealth = 1200,
+                Role = StructureRole.Income, IncomePerTick = 90
             },
             new() {
                 // Foot soldiers only: the Infantry vehicle duplicated the Knifeman and Gunner the
@@ -157,7 +158,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_barracks", DisplayName = "Barracks", Category = "Military",
                 Description = "Trains Knifemen, Gunners, Shrimp, Speedies, Skinny Legends and Punks. Click it to train.",
                 ModelPath = PackRoot + "/Building_Prefebs/PersonLivePlace_Prefeb.prefab",
-                FootprintCells = 2, Cost = 500, BuildSeconds = 25f, MaxHealth = 800,
+                FootprintCells = 2, Cost = 350, BuildSeconds = 15f, MaxHealth = 850,
                 Role = StructureRole.Production,
                 Trains = new[] {
                     WV_TroopKind.Knife, WV_TroopKind.Gunner, WV_TroopKind.Shrimp,
@@ -168,7 +169,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_vehicle_hangar", DisplayName = "Vehicle Hangar", Category = "Military",
                 Description = "Builds tanks, APCs and artillery.",
                 ModelPath = PackRoot + "/Building_Prefebs/VehicleHangar_01_Prefeb.prefab",
-                FootprintCells = 3, Cost = 1000, BuildSeconds = 40f, MaxHealth = 1400,
+                FootprintCells = 3, Cost = 700, BuildSeconds = 28f, MaxHealth = 1400,
                 Role = StructureRole.Production,
                 Produces = new[] { WV_UnitKind.APC, WV_UnitKind.Tank, WV_UnitKind.Artillery }
             },
@@ -176,14 +177,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_helipad", DisplayName = "Helipad", Category = "Air",
                 Description = "Launches attack choppers.",
                 ModelPath = PackRoot + "/Building_Prefebs/HeliPad_Prefeb.prefab",
-                FootprintCells = 2, Cost = 800, BuildSeconds = 30f, MaxHealth = 700,
+                FootprintCells = 2, Cost = 650, BuildSeconds = 22f, MaxHealth = 700,
                 Role = StructureRole.Production, Produces = new[] { WV_UnitKind.Chopper }
             },
             new() {
                 Id = "wv_airfield", DisplayName = "Airfield", Category = "Air",
                 Description = "Directs jets, bombers and reconnaissance drones.",
                 ModelPath = PackRoot + "/Building_Prefebs/ControlTower_Prefeb.prefab",
-                FootprintCells = 3, Cost = 1400, BuildSeconds = 50f, MaxHealth = 1100,
+                FootprintCells = 3, Cost = 1000, BuildSeconds = 32f, MaxHealth = 1100, HeightLimit = 8f,
                 Role = StructureRole.Production,
                 Produces = new[] { WV_UnitKind.UAV, WV_UnitKind.Jet, WV_UnitKind.Bomber }
             },
@@ -193,30 +194,30 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_radar", DisplayName = "Research Station", Category = "Support",
                 Description = "Runs research for your side. Every extra station adds research speed.",
                 ModelPath = PackRoot + "/Building_Prefebs/Radar_Prefeb.prefab",
-                FootprintCells = 2, Cost = 600, BuildSeconds = 25f, MaxHealth = 600,
+                FootprintCells = 2, Cost = 450, BuildSeconds = 18f, MaxHealth = 650, HeightLimit = 5f,
                 Role = StructureRole.Research, ResearchRate = 1f
             },
             new() {
                 Id = "wv_missile_battery", DisplayName = "Missile Battery", Category = "Defense",
                 Description = "Surface-to-air battery. Engages aircraft only.",
                 ModelPath = PackRoot + "/Building_Prefebs/MissilePort_Prefeb.prefab",
-                FootprintCells = 2, Cost = 750, BuildSeconds = 30f, MaxHealth = 900,
-                Role = StructureRole.Turret, TurretRange = 40f, TurretDamage = 55, TurretCooldown = 2f,
+                FootprintCells = 2, Cost = 600, BuildSeconds = 22f, MaxHealth = 900,
+                Role = StructureRole.Turret, TurretRange = 44f, TurretDamage = 65, TurretCooldown = 2f,
                 AntiAir = true
             },
             new() {
                 Id = "wv_guard_post", DisplayName = "Guard Post", Category = "Defense",
                 Description = "Manned emplacement covering a ground approach.",
                 ModelPath = PackRoot + "/Building_Prefebs/GuardPoint_01_Prefeb.prefab",
-                FootprintCells = 1, Cost = 300, BuildSeconds = 12f, MaxHealth = 500,
-                Role = StructureRole.Turret, TurretRange = 26f, TurretDamage = 28, TurretCooldown = 1.3f
+                FootprintCells = 1, Cost = 275, BuildSeconds = 10f, MaxHealth = 600, HeightLimit = 4f,
+                Role = StructureRole.Turret, TurretRange = 28f, TurretDamage = 32, TurretCooldown = 1.2f
             },
             new() {
                 Id = "wv_watchtower", DisplayName = "Watchtower", Category = "Defense",
                 Description = "Cheap picket that shoots back.",
                 ModelPath = PackRoot + "/Building_Prefebs/LightTower_Prefeb.prefab",
-                FootprintCells = 1, Cost = 200, BuildSeconds = 10f, MaxHealth = 400,
-                Role = StructureRole.Turret, TurretRange = 20f, TurretDamage = 16, TurretCooldown = 1.1f
+                FootprintCells = 1, Cost = 200, BuildSeconds = 8f, MaxHealth = 450,
+                Role = StructureRole.Turret, TurretRange = 22f, TurretDamage = 22, TurretCooldown = 1.1f
             },
             new() {
                 // A two-cell run: long and thin, and taller than a soldier. The pack's fence section
@@ -227,7 +228,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                               "Press R to turn it; runs join end to end and at corners.",
                 ModelPath = PackRoot + "/Building_Prefebs/Fence_01_Prefeb.prefab",
                 FootprintCells = 2, Cost = 60, BuildSeconds = 4f, MaxHealth = 300,
-                Role = StructureRole.Wall, Shape = StructureShape.Run, ModelYaw = 90f
+                Role = StructureRole.Wall, Shape = StructureShape.Run, ModelYaw = 90f, MatchHeightOf = "basic_wall"
             },
             new() {
                 // Declares a two-cell footprint so it snaps to a grid point - the corner two fence
@@ -266,7 +267,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                               "anything inside until they break it, and it recharges 30s later while the " +
                               "generator stands. Each new generator must overlap one of your shields.",
                 ModelPath = PackRoot + "/Building_Prefebs/SpeakerTower_Prefeb.prefab",
-                FootprintCells = 2, Cost = 1200, BuildSeconds = 35f, MaxHealth = 900,
+                FootprintCells = 2, Cost = 1000, BuildSeconds = 28f, MaxHealth = 900,
                 Role = StructureRole.ShieldGenerator,
                 ShieldRadius = 18f, ShieldHealth = 1500, ShieldRegenerationSeconds = 30f
             }
@@ -276,21 +277,21 @@ namespace Universes.UniverseData.war_valley.Editor {
             new() {
                 Kind = WV_UnitKind.Infantry, DisplayName = "Infantry", UsesRobotRig = true,
                 Cost = 120, BuildSeconds = 8f, MaxHealth = 150, MoveSpeed = 14f, TurnSpeed = 420f,
-                AttackRange = 12f, DetectionRadius = 22f, AttackDamage = 18, AttackCooldown = 1.2f,
+                AttackRange = 16f, DetectionRadius = 22f, AttackDamage = 18, AttackCooldown = 1.2f,
                 Radius = 0.6f, Height = 2.2f, ModelSpan = 1.8f
             },
             new() {
                 Kind = WV_UnitKind.APC, DisplayName = "APC",
                 ModelPath = PackRoot + "/APC_Prefebs/APC_01_Prefeb.prefab",
-                Cost = 300, BuildSeconds = 12f, MaxHealth = 450, MoveSpeed = 16f, TurnSpeed = 200f,
-                AttackRange = 16f, DetectionRadius = 26f, AttackDamage = 28, AttackCooldown = 1f,
+                Cost = 280, BuildSeconds = 12f, MaxHealth = 450, MoveSpeed = 14f, TurnSpeed = 200f,
+                AttackRange = 20f, DetectionRadius = 26f, AttackDamage = 30, AttackCooldown = 1f,
                 Radius = 1.6f, Height = 2.6f, ModelSpan = 5f
             },
             new() {
                 Kind = WV_UnitKind.Tank, DisplayName = "Tank",
                 ModelPath = PackRoot + "/Tank_Prefebs/Tank_01_Prefeb.prefab",
                 Cost = 450, BuildSeconds = 18f, MaxHealth = 700, MoveSpeed = 11f, TurnSpeed = 140f,
-                AttackRange = 22f, DetectionRadius = 30f, AttackDamage = 60, AttackCooldown = 2.2f,
+                AttackRange = 28f, DetectionRadius = 34f, AttackDamage = 70, AttackCooldown = 2.2f,
                 Radius = 1.8f, Height = 2.6f, ModelSpan = 6f
             },
             new() {
@@ -304,28 +305,28 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Kind = WV_UnitKind.Chopper, DisplayName = "Chopper",
                 ModelPath = PackRoot + "/Chopper_Prefebs/Chopper_01_Prefeb.prefab",
                 Cost = 550, BuildSeconds = 20f, MaxHealth = 380, MoveSpeed = 22f, TurnSpeed = 150f,
-                AttackRange = 24f, DetectionRadius = 32f, AttackDamage = 45, AttackCooldown = 1.4f,
+                AttackRange = 26f, DetectionRadius = 34f, AttackDamage = 45, AttackCooldown = 1.4f,
                 Radius = 2f, Height = 3f, ModelSpan = 7f
             },
             new() {
                 Kind = WV_UnitKind.UAV, DisplayName = "UAV",
                 ModelPath = PackRoot + "/UAV_Prefebs/UAV_01_Prefeb.prefab",
                 Cost = 350, BuildSeconds = 14f, MaxHealth = 180, MoveSpeed = 26f, TurnSpeed = 170f,
-                AttackRange = 18f, DetectionRadius = 45f, AttackDamage = 22, AttackCooldown = 1.6f,
+                AttackRange = 18f, DetectionRadius = 40f, AttackDamage = 22, AttackCooldown = 1.6f,
                 Radius = 1.5f, Height = 2f, ModelSpan = 5f
             },
             new() {
                 Kind = WV_UnitKind.Jet, DisplayName = "Jet",
                 ModelPath = PackRoot + "/Jet_Prefebs/Jet_01_Prefeb.prefab",
-                Cost = 800, BuildSeconds = 26f, MaxHealth = 320, MoveSpeed = 46f, TurnSpeed = 110f,
-                AttackRange = 28f, DetectionRadius = 40f, AttackDamage = 70, AttackCooldown = 2f,
+                Cost = 750, BuildSeconds = 24f, MaxHealth = 320, MoveSpeed = 34f, TurnSpeed = 150f,
+                AttackRange = 30f, DetectionRadius = 40f, AttackDamage = 70, AttackCooldown = 2f,
                 Radius = 2f, Height = 2.4f, ModelSpan = 8f
             },
             new() {
                 Kind = WV_UnitKind.Bomber, DisplayName = "Bomber",
                 ModelPath = PackRoot + "/Bomber_Prefebs/Bomber_01_Prefeb.prefab",
                 Cost = 950, BuildSeconds = 32f, MaxHealth = 500, MoveSpeed = 30f, TurnSpeed = 80f,
-                AttackRange = 20f, DetectionRadius = 34f, AttackDamage = 140, AttackCooldown = 5f,
+                AttackRange = 24f, DetectionRadius = 34f, AttackDamage = 140, AttackCooldown = 5f,
                 Radius = 2.6f, Height = 3f, ModelSpan = 10f
             }
         };
@@ -338,6 +339,7 @@ namespace Universes.UniverseData.war_valley.Editor {
             BuildScaffold();
             BuildSiteBox();
             BuildSelectionIndicator();
+            BuildRangeIndicator();
             BuildUnits();
             BuildStructures();
             AssetDatabase.SaveAssets();
@@ -348,6 +350,7 @@ namespace Universes.UniverseData.war_valley.Editor {
         [MenuItem("Ryan/War Valley/Rebuild Structure Prefabs")]
         public static void RebuildStructures() {
             EnsureFolders();
+            BuildRangeIndicator();
             BuildScaffold();
             BuildSiteBox();
             BuildStructures();
@@ -359,6 +362,7 @@ namespace Universes.UniverseData.war_valley.Editor {
         public static void RebuildUnits() {
             EnsureFolders();
             BuildSelectionIndicator();
+            BuildRangeIndicator();
             BuildUnits();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -385,7 +389,11 @@ namespace Universes.UniverseData.war_valley.Editor {
             Debug.Log(
                 $"War Valley: {stale.Count} generated prefab(s) are missing or predate the authoring code " +
                 $"({string.Join(", ", stale)}); rebuilding structures and units.");
-            RebuildAll();
+            if (Structures.All(def => AssetDatabase.LoadAssetAtPath<GameObject>(StructurePath(def)) != null)
+                && Units.All(def => AssetDatabase.LoadAssetAtPath<GameObject>(UnitPath(def)) != null))
+                UpgradeGameplayPrefabs();
+            else
+                RebuildAll();
         }
 
         static bool IsProjectClone() => Application.dataPath.Replace('\\', '/').Contains("_clone_");
@@ -568,13 +576,16 @@ namespace Universes.UniverseData.war_valley.Editor {
         /// Height a run's model stands at once fitted to its run, measured on a throwaway copy, so a
         /// post can be sized to match it exactly.
         /// </summary>
-        static float MeasureRunHeight(StructureDef run) {
+        static float MeasureRunHeight(StructureDef run) => MeasureRunBounds(run).size.y;
+
+        static Bounds MeasureRunBounds(StructureDef run) {
             var probe = new GameObject("HeightProbe");
             try {
                 GameObject model = PlaceFitted(
                     Load<GameObject>(run.ModelPath), probe.transform, Vector3.zero, run.ModelYaw,
                     run.FootprintCells * WV_Rules.GridSize, "Model");
-                return WorldBounds(model).size.y;
+                MatchModelHeight(model, 3f);
+                return WorldBounds(model);
             } finally {
                 UnityEngine.Object.DestroyImmediate(probe);
             }
@@ -603,16 +614,22 @@ namespace Universes.UniverseData.war_valley.Editor {
                 SetLayerRecursive(buildingRoot, StructureLayer);
 
                 // A post stands as tall as the run it caps; everything else is fitted to its footprint.
-                GameObject model = def.Shape == StructureShape.Post
-                    ? PlaceFittedToHeight(
-                        Load<GameObject>(def.ModelPath), buildingRoot.transform, def.ModelYaw,
-                        MeasureRunHeight(FindStructure(def.MatchHeightOf)), "Model")
-                    : PlaceFitted(
-                        Load<GameObject>(def.ModelPath), buildingRoot.transform, Vector3.zero, def.ModelYaw, span, "Model");
+                GameObject model = PlaceFitted(
+                    Load<GameObject>(def.ModelPath), buildingRoot.transform, Vector3.zero, def.ModelYaw, span, "Model");
+                if (!string.IsNullOrEmpty(def.MatchHeightOf)) {
+                    StructureDef reference = FindStructure(def.MatchHeightOf);
+                    if (def.Shape == StructureShape.Post)
+                        FitPostFootprint(model, Mathf.Max(MinWallDepth, MeasureRunBounds(reference).size.z));
+                    if (!string.IsNullOrEmpty(reference.MatchHeightOf))
+                        reference = FindStructure(reference.MatchHeightOf);
+                    MatchModelHeight(model, MeasureRunHeight(reference));
+                }
                 SetLayerRecursive(model, StructureLayer);
                 // The pack models ship without colliders; the structure's own box is the collision.
                 foreach (Collider collider in model.GetComponentsInChildren<Collider>(true))
                     UnityEngine.Object.DestroyImmediate(collider);
+
+                FitStructureHeight(def, model);
 
                 Bounds modelBounds = WorldBounds(model);
                 float modelHeight = Mathf.Max(1f, modelBounds.size.y);
@@ -622,7 +639,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 bool thin = def.Shape != StructureShape.Block;
                 Vector3 footprintSize = thin
                     ? new Vector3(modelBounds.size.x, modelHeight, Mathf.Max(modelBounds.size.z, MinWallDepth))
-                    : new Vector3(span * 0.9f, modelHeight, span * 0.9f);
+                    : modelBounds.size;
 
                 // Hoarding and site box share one parent so WV_Constructable can hide the whole site
                 // with a single reference the moment the build finishes.
@@ -649,6 +666,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 BoxCollider box = root.AddComponent<BoxCollider>();
                 box.size = footprintSize;
                 box.center = new Vector3(0f, modelHeight * 0.5f, 0f);
+                ConfigureStructureCollision(def, model, box);
 
                 root.AddComponent<NetworkObject>();
                 var effects = Ensure<EffectsComponent>(root);
@@ -702,6 +720,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 obstacle.carveOnlyStationary = true;
 
                 ApplyRole(def, root, span, modelHeight, unitPrefabs);
+                ConfigureRangeIndicator(root);
 
                 SavePrefab(root, StructurePath(def));
             } finally {
@@ -765,6 +784,11 @@ namespace Universes.UniverseData.war_valley.Editor {
             flash.name = "MuzzleFlash";
             flash.transform.localPosition = Vector3.zero;
             flash.transform.localRotation = Quaternion.identity;
+            // Every child must wait for the replicated shot, including nested flash particles.
+            foreach (ParticleSystem particle in flash.GetComponentsInChildren<ParticleSystem>(true)) {
+                var main = particle.main;
+                main.playOnAwake = false;
+            }
 
             var audioSource = muzzle.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
@@ -873,6 +897,7 @@ namespace Universes.UniverseData.war_valley.Editor {
             foreach (float side in new[] { -1f, 1f }) {
                 GameObject post = PlaceFittedToHeight(
                     postSource, buildingRoot, 0f, modelHeight, side < 0f ? "PostLeft" : "PostRight");
+                FitPostFootprint(post, root.GetComponent<BoxCollider>().size.z);
                 post.transform.localPosition += new Vector3(side * span * 0.5f, 0f, 0f);
                 SetLayerRecursive(post, StructureLayer);
                 foreach (Collider collider in post.GetComponentsInChildren<Collider>(true))
@@ -1013,12 +1038,12 @@ namespace Universes.UniverseData.war_valley.Editor {
 
                 Ensure<WV_Owned>(root);
 
-                // A vehicle carries its commander's colour on its main body the way their buildings
-                // do - the same component picks the body out of the pack's single-atlas model - so
-                // whose tank it is reads at a glance. The robot rig is skinned and keeps its colours.
+                // Authored body materials carry the commander's colour while wheels, tracks and
+                // rotors retain their original art. The robot rig keeps its existing colour path.
                 if (!def.UsesRobotRig) {
                     var ownerColor = Ensure<WV_OwnerColor>(root);
                     SetPrivateField(ownerColor, "tintedRenderers", model.GetComponentsInChildren<Renderer>(true));
+                    ConfigureUnitBodyColors(model, ownerColor);
                 }
 
                 var animation = root.AddComponent<WV_UnitAnimation>();
@@ -1041,6 +1066,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                     agent.stoppingDistance = def.Radius;
                 }
 
+                ConfigureRangeIndicator(root);
                 SavePrefab(root, UnitPath(def));
             } finally {
                 UnityEngine.Object.DestroyImmediate(root);
@@ -1074,6 +1100,40 @@ namespace Universes.UniverseData.war_valley.Editor {
         }
 
         // --- Helpers ---------------------------------------------------------
+
+        /// <summary>
+        /// Authors explicit unit body references and reusable materials that retain texture detail
+        /// while accepting the commander's colour.
+        /// </summary>
+        public static void ConfigureUnitBodyColors(GameObject model, WV_OwnerColor ownerColor) {
+            Renderer[] bodies = model.GetComponentsInChildren<Renderer>(true)
+                .Where(renderer => renderer.name.IndexOf("Body", StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
+            if (bodies.Length == 0)
+                throw new InvalidOperationException($"War Valley unit '{model.name}' has no authored body renderer.");
+            Shader shader = Shader.Find("RyanAssets/Team Color Lit");
+            if (shader == null)
+                throw new InvalidOperationException("War Valley team-color shader is missing.");
+            const string folder = PresentationFolder + "/Materials";
+            if (!AssetDatabase.IsValidFolder(folder))
+                AssetDatabase.CreateFolder(PresentationFolder, "Materials");
+            foreach (Renderer body in bodies) {
+                Material[] materials = body.sharedMaterials;
+                for (int slot = 0; slot < materials.Length; slot++) {
+                    Material source = materials[slot];
+                    if (source == null || source.shader == shader)
+                        continue;
+                    string path = $"{folder}/{source.name}_TeamColor.mat";
+                    var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                    if (material == null) {
+                        material = new Material(source) { shader = shader, name = source.name + " Team Color" };
+                        AssetDatabase.CreateAsset(material, path);
+                    }
+                    materials[slot] = material;
+                }
+                body.sharedMaterials = materials;
+            }
+            SetPrivateField(ownerColor, "bodyRenderers", bodies);
+        }
 
         /// <summary>
         /// Instantiates authored art as a connected nested prefab, scales it so its widest horizontal
@@ -1124,6 +1184,36 @@ namespace Universes.UniverseData.war_valley.Editor {
             Vector3 pivotOffset = instance.transform.position - bounds.center;
             instance.transform.localPosition = new Vector3(pivotOffset.x, pivotOffset.y + bounds.extents.y, pivotOffset.z);
             return instance;
+        }
+
+        /// <summary>Fits a joint post to the adjoining run's depth, keeping its height and centering its base.</summary>
+        public static void FitPostFootprint(GameObject post, float depth) {
+            Bounds bounds = WorldBounds(post);
+            float scale = depth / Mathf.Max(bounds.size.x, bounds.size.z);
+            Vector3 localScale = post.transform.localScale;
+            localScale.x *= scale;
+            localScale.z *= scale;
+            post.transform.localScale = localScale;
+            bounds = WorldBounds(post);
+            Vector3 localCenter = post.transform.parent.InverseTransformPoint(bounds.center);
+            Vector3 position = post.transform.localPosition;
+            position.x -= localCenter.x;
+            position.z -= localCenter.z;
+            post.transform.localPosition = position;
+            bounds = WorldBounds(post);
+            post.transform.position -= Vector3.up * bounds.min.y;
+        }
+
+        // Keep the grid span and depth while matching the adjoining wall's height.
+        static void MatchModelHeight(GameObject model, float targetHeight) {
+            Bounds bounds = WorldBounds(model);
+            if (bounds.size.y <= 0.0001f)
+                throw new InvalidOperationException("War Valley fence model has no measurable height.");
+            Vector3 scale = model.transform.localScale;
+            scale.y *= targetHeight / bounds.size.y;
+            model.transform.localScale = scale;
+            bounds = WorldBounds(model);
+            model.transform.position -= Vector3.up * bounds.min.y;
         }
 
         static Bounds WorldBounds(GameObject instance) {

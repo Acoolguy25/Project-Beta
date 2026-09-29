@@ -61,7 +61,8 @@ namespace Universes.UniverseData.war_valley.Shared {
             TeamConfig attackerTeam,
             bool preferCharacters = true,
             Transform ignoreRoot = null,
-            float verticalReach = 0f) {
+            float verticalReach = 0f,
+            bool? aircraftOnly = null) {
             if (radius <= 0f)
                 return null;
 
@@ -92,6 +93,12 @@ namespace Universes.UniverseData.war_valley.Shared {
                     || WV_ShieldBarrier.Protects(candidate, origin, attackerTeam))
                     continue;
 
+                if (aircraftOnly.HasValue) {
+                    WV_Unit candidateUnit = ((Component)candidate).GetComponent<WV_Unit>();
+                    if ((candidateUnit != null && candidateUnit.IsAircraft) != aircraftOnly.Value)
+                        continue;
+                }
+
                 Transform candidateTransform = ((Component)candidate).transform;
                 float distance;
                 if (verticalReach > 0f) {
@@ -116,6 +123,8 @@ namespace Universes.UniverseData.war_valley.Shared {
             // A shield's hit volume is a trigger that physics queries skip, and its centre is far
             // inside it, so shields are measured to their edge instead: the part an attacker can reach.
             foreach (WV_ShieldBarrier shield in WV_ShieldBarrier.All) {
+                if (aircraftOnly == true)
+                    continue;
                 if (!shield.IsUp || !AreEnemies(attackerTeam, shield.Team))
                     continue;
                 float distance = Mathf.Max(0f, shield.DistanceToEdge(origin));

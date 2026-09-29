@@ -48,6 +48,8 @@ MonoBehaviour:
     _editor_value: 1
   DebugTimerInfinite:
     _editor_value: 1
+  DebugTimerSpeed:
+    _editor_value: 10
   _buildableStructures:
   - {fileID: 6833282079580836474, guid: 53a0525c09a3ef446a2b214054881b98, type: 3}
   - {fileID: 816667712998810890, guid: 88381a80ab9a1bc4cb0b2a639a5915f1, type: 3}
@@ -65,5 +67,29 @@ MonoBehaviour:
   _economyPrefab: {fileID: 3705710000442935751, guid: ab8e3a233105dd549a1e7b6cc8f99f70, type: 3}
   WaveNumber: -1
   RobotNPC_Prefab: []
-  WaveSpawnData: []
+  WaveTuning:
+    WaveCount: 20
+    BaseStrength: 4
+    StrengthPerWave: 1.5
+    StrengthAcceleration: 0.06
+    SurgeEvery: 5
+    SurgeMultiplier: 1.3
+    HealthGrowthPerWave: 0.03
+    MaxEnemiesPerWave: 40
+    MaxActiveEnemies: 60
+    PreparationSeconds: 55
+    FirstIntermissionSeconds: 95
+    MinimumIntermissionSeconds: 65
+    IntermissionShrinkPerWave: 1.5
+  DebugBuildDuration:
+    _editor_value: 1
+  DebugInfiniteMoney:
+    _editor_value: 0
+  DebugInstantBuild:
+    _editor_value: 0
+  DebugInstantResearch:
+    _editor_value: 0
+  DebugAllResearched:
+    _editor_value: 0
+  GameMode: 0
   GameState: 0

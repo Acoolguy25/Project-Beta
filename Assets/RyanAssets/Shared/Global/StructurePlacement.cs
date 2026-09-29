@@ -14,6 +14,7 @@ namespace RyanAssets.Shared.Globals {
         // The occupancy test starts just above the ground so a structure standing on the terrain
         // does not register against it, while still covering the whole cell it sits in.
         public const float OverlapGroundClearance = 0.05f;
+        static readonly Collider[] OverlapBuffer = new Collider[64];
 
         /// <summary>
         /// Snaps a structure's centre so its footprint covers whole grid cells.
@@ -113,6 +114,20 @@ namespace RyanAssets.Shared.Globals {
         }
 
         public static bool TryGetBounds(GameObject instance, out Bounds bounds) {
+            if (instance.TryGetComponent(out IPlacementBounds authored)) {
+                Bounds local = authored.LocalPlacementBounds;
+                Transform root = instance.transform;
+                Vector3 x = root.TransformVector(Vector3.right * local.extents.x);
+                Vector3 y = root.TransformVector(Vector3.up * local.extents.y);
+                Vector3 z = root.TransformVector(Vector3.forward * local.extents.z);
+                Vector3 extents = new(
+                    Mathf.Abs(x.x) + Mathf.Abs(y.x) + Mathf.Abs(z.x),
+                    Mathf.Abs(x.y) + Mathf.Abs(y.y) + Mathf.Abs(z.y),
+                    Mathf.Abs(x.z) + Mathf.Abs(y.z) + Mathf.Abs(z.z));
+                bounds = new Bounds(root.TransformPoint(local.center), extents * 2f);
+                return true;
+            }
+
             Renderer[] renderers = instance.GetComponentsInChildren<Renderer>(true);
             bool hasBounds = false;
             bounds = default;
@@ -145,6 +160,33 @@ namespace RyanAssets.Shared.Globals {
             }
 
             return hasBounds;
+        }
+
+        /// <summary>Shared preview/server occupancy check. Open gates still reserve their space.</summary>
+        public static bool HasStructureOverlap(GameObject instance, Bounds bounds, Vector3 groundPoint) {
+            GetOverlapVolume(bounds, groundPoint, out Vector3 center, out Vector3 halfExtents);
+            int count = Physics.OverlapBoxNonAlloc(center, halfExtents, OverlapBuffer,
+                Quaternion.identity, LayerMask.GetMask("Structure"), QueryTriggerInteraction.Collide);
+            // An incomplete query must not authorize an overlapping placement.
+            if (count == OverlapBuffer.Length)
+                return true;
+            Bounds volume = new(center, halfExtents * 2f);
+            for (int i = 0; i < count; i++) {
+                Collider hit = OverlapBuffer[i];
+                if (hit.transform.IsChildOf(instance.transform))
+                    continue;
+                // Apply seam tolerance to both footprints so a post can join a run in either
+                // placement order. Decorative colliders do not enlarge a declared footprint.
+                if (hit.GetComponentInParent<IPlacementBounds>() is Component owner
+                    && TryGetBounds(owner.gameObject, out Bounds occupied)) {
+                    GetOverlapVolume(occupied, owner.transform.position, out Vector3 occupiedCenter,
+                        out Vector3 occupiedHalfExtents);
+                    if (!volume.Intersects(new Bounds(occupiedCenter, occupiedHalfExtents * 2f)))
+                        continue;
+                }
+                return true;
+            }
+            return false;
         }
     }
 }

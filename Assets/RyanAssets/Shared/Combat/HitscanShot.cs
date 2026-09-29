@@ -16,6 +16,8 @@ namespace RyanAssets.Shared.Combat {
         /// <summary>Everything a bullet can stop on. Cached because it is read on every shot.</summary>
         static int hitLayers = ~0;
         static bool hitLayersResolved;
+        static RaycastHit[] rayBuffer = new RaycastHit[32];
+        static Collider[] muzzleBuffer = new Collider[16];
 
         public static int HitLayers {
             get {
@@ -52,24 +54,32 @@ namespace RyanAssets.Shared.Combat {
             float accuracy,
             Transform ignoreRoot,
             float muzzleRadius,
-            Transform selfRoot = null) {
+            Transform selfRoot = null,
+            Func<Collider, bool> ignoreCollider = null) {
             if (targetPosition == origin)
                 return null;
 
             Vector3 toTarget = (targetPosition - origin).normalized;
-            if (TryGetMuzzleObstruction(origin, muzzleRadius, ignoreRoot, selfRoot, -toTarget, out RaycastHit muzzleHit))
+            if (TryGetMuzzleObstruction(origin, muzzleRadius, ignoreRoot, selfRoot, -toTarget, out RaycastHit muzzleHit, ignoreCollider))
                 return muzzleHit; // The muzzle is inside a solid object; never raycast past it.
 
             Vector3 direction = GetSpreadDirection(origin, targetPosition, accuracy);
-            RaycastHit[] hits = Physics.RaycastAll(origin, direction, maxRange, HitLayers);
-            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-            foreach (RaycastHit hit in hits) {
+            int count;
+            while ((count = Physics.RaycastNonAlloc(origin, direction, rayBuffer, maxRange, HitLayers)) == rayBuffer.Length)
+                Array.Resize(ref rayBuffer, rayBuffer.Length * 2);
+            RaycastHit? nearest = null;
+            for (int i = 0; i < count; i++) {
+                RaycastHit hit = rayBuffer[i];
                 if (hit.transform == null || hit.transform.root == null)
                     continue;
-                if (ignoreRoot != null && hit.transform.IsChildOf(ignoreRoot))
+                if (IsIgnored(hit.transform, ignoreRoot, selfRoot) || (ignoreCollider != null && ignoreCollider(hit.collider)))
                     continue;
-                return hit;
+                if (!nearest.HasValue || hit.distance < nearest.Value.distance)
+                    nearest = hit;
             }
+
+            if (nearest.HasValue)
+                return nearest;
 
             return new RaycastHit {
                 point = origin + direction * maxRange,
@@ -92,16 +102,21 @@ namespace RyanAssets.Shared.Combat {
             Transform ignoreRoot,
             Transform selfRoot,
             Vector3 fallbackNormal,
-            out RaycastHit hit) {
+            out RaycastHit hit,
+            Func<Collider, bool> ignoreCollider = null) {
             hit = default;
             if (muzzleRadius <= 0f)
                 return false;
 
-            Collider[] overlaps = Physics.OverlapSphere(
-                origin, muzzleRadius, HitLayers, QueryTriggerInteraction.Ignore);
+            int count;
+            while ((count = Physics.OverlapSphereNonAlloc(origin, muzzleRadius, muzzleBuffer,
+                HitLayers, QueryTriggerInteraction.Ignore)) == muzzleBuffer.Length)
+                Array.Resize(ref muzzleBuffer, muzzleBuffer.Length * 2);
 
-            foreach (Collider overlap in overlaps) {
-                if (overlap == null || IsIgnored(overlap.transform, ignoreRoot, selfRoot))
+            for (int i = 0; i < count; i++) {
+                Collider overlap = muzzleBuffer[i];
+                if (overlap == null || IsIgnored(overlap.transform, ignoreRoot, selfRoot)
+                    || (ignoreCollider != null && ignoreCollider(overlap)))
                     continue;
 
                 Vector3 closestPoint = overlap.ClosestPoint(origin);

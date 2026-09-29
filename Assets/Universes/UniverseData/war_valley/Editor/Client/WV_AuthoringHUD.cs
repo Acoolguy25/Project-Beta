@@ -32,7 +32,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
     /// </para>
     /// </summary>
     [InitializeOnLoad]
-    public static class WV_AuthoringHUD {
+    public static partial class WV_AuthoringHUD {
         const string Root = "Assets/Universes/UniverseData/war_valley";
         const string HudPath = Root + "/Client/WV_HUD.prefab";
         const string StartScenePath = Root + "/war_valley_start.unity";
@@ -45,10 +45,10 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static readonly Color ButtonFill = new(0.16f, 0.2f, 0.25f, 1f);
 
         /// <summary>Command card size. The option menu and building panel dock to the right of it.</summary>
-        static readonly Vector2 CommandCardSize = new(720f, 124f);
+        static readonly Vector2 CommandCardSize = new(720f, 148f);
         const float Margin = 16f;
         /// <summary>Height of the funds card in the bottom-left corner; the selection summary stacks above it.</summary>
-        const float EconomyCardHeight = 158f;
+        const float EconomyCardHeight = 190f;
         /// <summary>Height of the unit and troop selection summary, including its Sell button.</summary>
         const float SelectionPanelHeight = 210f;
 
@@ -85,14 +85,14 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 return;
 
             SessionState.SetBool(AutoRebuildSessionKey, true);
-            Debug.Log("War Valley: the commander HUD prefab predates the current HUD code; rebuilding it.");
-            RebuildHud();
+            Debug.Log("War Valley: the commander HUD prefab predates the current HUD code; upgrading it.");
+            UpgradeHud();
         }
 
         /// <summary>True when every panel the current <see cref="WV_HUD"/> binds is present in the prefab.</summary>
         static bool IsCurrent(WV_HUD hud) =>
             HasReferences(hud, "structurePanel", "optionMenu", "commandMenu", "researchLabel",
-                "forcesLabel", "donateButton", "donatePanel", "researchButton", "sellButton", "sellLabel");
+                "forcesLabel", "donateButton", "donatePanel", "researchButton", "sellButton", "sellLabel", "troopRangeIndicator");
 
         static bool HasReferences(Object target, params string[] fields) {
             var serialized = new SerializedObject(target);
@@ -102,6 +102,96 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                     return false;
             }
             return true;
+        }
+
+        /// <summary>Updates an existing HUD in place, preserving its objects and nested prefab references.</summary>
+        [MenuItem("Ryan/War Valley/Upgrade HUD Layout")]
+        public static void UpgradeHud() {
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(HudPath) == null) {
+                RebuildHud();
+                return;
+            }
+            if (!CommandUIAuthoring.PrefabsCurrent())
+                CommandUIAuthoring.RebuildAll();
+            GameObject root = PrefabUtility.LoadPrefabContents(HudPath);
+            try {
+                ConfigureHudLayout(root, root.GetComponent<WV_HUD>());
+                PrefabUtility.SaveAsPrefabAsset(root, HudPath);
+            } finally {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        static void ConfigureHudLayout(GameObject root, WV_HUD hud) {
+            Transform economy = root.transform.Find("EconomyPanel");
+            Anchor(economy, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin),
+                new Vector2(320f, EconomyCardHeight));
+            var caption = economy.Find("Caption").GetComponent<TextMeshProUGUI>();
+            caption.text = "COMMAND FUNDS";
+            caption.color = Header;
+            TopBand(caption, 12f, 18f, 16f, 140f);
+            TopBand(economy.Find("IncomeLabel"), 12f, 18f, 155f, 16f);
+            var funds = economy.Find("FundsLabel").GetComponent<TextMeshProUGUI>();
+            funds.fontSize = 38f;
+            TopBand(funds, 34f, 44f, 16f, 16f);
+            var forces = economy.Find("ForcesLabel").GetComponent<TextMeshProUGUI>();
+            forces.enableAutoSizing = false;
+            forces.fontSize = 14f;
+            forces.textWrappingMode = TextWrappingModes.Normal;
+            TopBand(forces, 80f, 36f, 16f, 16f);
+            TopBand(economy.Find("ResearchLabel"), 120f, 20f, 16f, 16f);
+
+            Button donate = economy.Find("DonateButton").GetComponent<Button>();
+            BottomBand(donate, 12f, 32f, 16f, 166f);
+            Button research = economy.Find("ResearchButton")?.GetComponent<Button>();
+            if (research == null)
+                research = Button(economy, "ResearchButton", "Research", Accent, 15f, out _);
+            BottomBand(research, 12f, 32f, 166f, 16f);
+            research.gameObject.SetActive(true);
+            Hover(research, "Open your research menu. Build a Research Station to start projects.", gameHelp: true);
+
+            Transform selection = root.transform.Find("SelectionPanel");
+            Anchor(selection, Vector2.zero, Vector2.zero, Vector2.zero,
+                new Vector2(Margin, Margin + EconomyCardHeight + 12f), new Vector2(320f, SelectionPanelHeight));
+            var selectionLabel = selection.Find("SelectionLabel").GetComponent<TextMeshProUGUI>();
+            Stretch(selectionLabel, 16f, 16f, 14f, 56f);
+            Transform command = root.transform.Find("CommandPanel");
+            Button sell = selection.Find("Sell")?.GetComponent<Button>() ?? command.Find("Sell")?.GetComponent<Button>();
+            if (sell == null)
+                sell = Button(selection, "Sell", "Sell [Del]", Danger, 15f, out _);
+            sell.transform.SetParent(selection, false);
+            sell.targetGraphic.color = Danger;
+            BottomBand(sell, 12f, 34f, 16f, 16f);
+            Hover(sell, "Sell the selected army. Click twice to confirm the refund.", gameHelp: true);
+            Wire(hud, ("researchButton", research), ("sellButton", sell),
+                ("sellLabel", sell.GetComponentInChildren<TextMeshProUGUI>(true)));
+
+            Anchor(command, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0f, Margin), CommandCardSize);
+            var title = command.Find("CommandCaption")?.GetComponent<TextMeshProUGUI>();
+            if (title == null)
+                title = Label(command, "CommandCaption", "ARMY ORDERS", 12f, Header, bold: true);
+            PlaceTopLeft(title, 12f, 8f, 300f, 18f);
+            for (int i = 0; i < 5; i++) {
+                Button order = command.GetComponentsInChildren<Button>(true).First(button => button.name == $"Order{i}");
+                PlaceTopLeft(order, 12f + i * 140.4f, 32f, 134.4f, 38f);
+                order.targetGraphic.color = ButtonFill;
+            }
+            for (int i = 0; i < 3; i++)
+                PlaceTopLeft(command.GetComponentsInChildren<Transform>(true).First(child => child.name == $"Select{i}"),
+                    12f + i * 118f, 76f, 112f, 28f);
+            for (int i = 0; i < 4; i++) {
+                PlaceTopLeft(command.GetComponentsInChildren<Transform>(true).First(child => child.name == $"Group{i + 1}"), 482f + i * 58f, 76f, 52f, 28f);
+                PlaceTopLeft(command.GetComponentsInChildren<Transform>(true).First(child => child.name == $"SetGroup{i + 1}"), 482f + i * 58f, 110f, 52f, 24f);
+            }
+            PlaceTopLeft(command.Find("Status"), 12f, 110f, 464f, 24f);
+            var hint = root.transform.Find("HintLabel");
+            Anchor(hint, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0f, Margin + CommandCardSize.y + 10f), new Vector2(CommandCardSize.x + 120f, 52f));
+            ConfigureSimplifiedCommands(root, hud);
+            Transform donatePanel = root.transform.Find("DonatePanel");
+            if (donatePanel != null)
+                Rect(donatePanel).anchoredPosition = new Vector2(Margin + 320f + 12f, Margin);
         }
 
         /// <summary>Adds the commander HUD controller to the start scene if it is not already there.</summary>
@@ -192,6 +282,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 ("structurePanel", structurePanel), ("optionMenu", optionMenu),
                 ("commandPanel", commandPanel), ("commandMenu", commandMenu), ("hintLabel", hint));
             WireTroopIcons(hud);
+            ConfigureHudLayout(root, hud);
         });
 
         static void WireTroopIcons(WV_HUD hud) {

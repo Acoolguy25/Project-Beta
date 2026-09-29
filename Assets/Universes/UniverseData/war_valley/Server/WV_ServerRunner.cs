@@ -61,7 +61,7 @@ namespace Universes.UniverseData.war_valley.Server
         private WV_WaveTuning WaveTuning = new();
 
         /// <summary>Seconds between one enemy of a wave arriving and the next, so a wave streams in.</summary>
-        private const float WaveSpawnSpacingSeconds = 0.2f;
+        private const float WaveSpawnSpacingSeconds = 0.6f;
 
         /// <summary>The wave currently being fought, for the top bar.</summary>
         private WV_Wave currentWave;
@@ -324,6 +324,14 @@ namespace Universes.UniverseData.war_valley.Server
             foreach (WV_WaveGroup group in wave.Groups) {
                 Vector3 center = GetSpawnLocation();
                 for (int i = 0; i < group.Count; i++) {
+                    // Backpressure prevents fast countdowns from accumulating an unwinnable army.
+                    while (!flagDown && !token.IsCancellationRequested
+                        && GameCharacter.TeamCount(WV_Alliances.GetWaveSide()) >= Math.Max(1, WaveTuning.MaxActiveEnemies)) {
+                        bool waitCancelled = await UniTask.Delay(500, cancellationToken: token)
+                            .SuppressCancellationThrow();
+                        if (waitCancelled)
+                            return;
+                    }
                     if (flagDown || token.IsCancellationRequested)
                         return;
                     SpawnNpc(group.Kind, center, wave.HealthMultiplier);
@@ -347,25 +355,31 @@ namespace Universes.UniverseData.war_valley.Server
             SpawnFlag();
 
             SharedGlobalEvents.Instance.CanBuild.Value = true;
-            await Intermission(10, token);
+            await Intermission(Math.Max(5, WaveTuning.PreparationSeconds), token);
+            if (token.IsCancellationRequested)
+                return;
             SetGlobalInvul(false);
-            for (WaveNumber = 0; WaveNumber < WaveTuning.WaveCount && !flagDown; WaveNumber++) {
+            for (WaveNumber = 0; WaveNumber < WaveTuning.WaveCount && !flagDown && !token.IsCancellationRequested; WaveNumber++) {
                 // Each wave is built from its number, so the round hardens as it goes.
                 currentWave = WV_WavePlan.Build(WaveNumber + 1, WaveTuning);
                 GameState = WV_ActiveGameState.Wave;
                 RefreshInGameBar();
-                // Streamed in the background: the countdown below runs while the wave arrives.
-                SpawnWaveAsync(currentWave, token).Forget(Debug.LogException);
-
-                // Wave Advance Logic
-                await StartTimerCountdown(10, token);
-                int waveAdvanceSec = Math.Max(0, currentWave.IntermissionSeconds - 10);
+                // Await the stream so a capped wave can finish spawning before another starts,
+                // and the final cleanup never sees an empty field while spawns are still pending.
+                float startedAt = Time.time;
+                await SpawnWaveAsync(currentWave, token);
+                if (token.IsCancellationRequested)
+                    return;
+                int waveAdvanceSec = Math.Max(0,
+                    currentWave.IntermissionSeconds - Mathf.CeilToInt(Time.time - startedAt));
                 if (waveAdvanceSec > 0 && !flagDown) {
                     GameState = WV_ActiveGameState.AdvanceWave;
                     await StartTimerCountdown(waveAdvanceSec, token);
                 }
             }
 
+            if (token.IsCancellationRequested)
+                return;
             if (!flagDown) {
                 GameState = WV_ActiveGameState.FinishEnemiesOff;
                 await StartTimerCountdown(-1, token);

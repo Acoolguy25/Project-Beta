@@ -19,13 +19,28 @@ namespace RyanAssets.Client.ClientCore {
         GameObject[] gameOnlyObjects;
         public static bool wasAuthenticated, isConnecting, hasCanceled;
         public static string joinServerId, joinUniverseId;
+        FishNet.Managing.Client.ClientManager clientManager;
+        FishNet.Managing.Scened.SceneManager networkSceneManager;
+        void Start() {
+            if (NetworkSettings.EditorDirectConnection)
+                JoinLocalEditorServer();
+        }
+
+        public void JoinLocalEditorServer() {
+            if (!NetworkSettings.EditorDirectConnection || isConnecting || IsConnected)
+                return;
+            joinServerId = "local-editor";
+            ConnectToServer(NetworkSettings.EditorUniverseId, "127.0.0.1", NetworkSettings.EditorGamePort);
+        }
         void OnEnable() {
             Instance = this;
-            InstanceFinder.ClientManager.OnClientConnectionState += OnClientState;
-            InstanceFinder.ClientManager.OnClientTimeOut += OnClientTimeOut;
-            InstanceFinder.ClientManager.OnAuthenticated += OnClientAuthenticated;
-            InstanceFinder.SceneManager.OnLoadStart += OnSceneLoadStart;
-            InstanceFinder.SceneManager.OnLoadEnd += OnSceneLoadEnd;
+            clientManager = InstanceFinder.ClientManager;
+            networkSceneManager = InstanceFinder.SceneManager;
+            clientManager.OnClientConnectionState += OnClientState;
+            clientManager.OnClientTimeOut += OnClientTimeOut;
+            clientManager.OnAuthenticated += OnClientAuthenticated;
+            networkSceneManager.OnLoadStart += OnSceneLoadStart;
+            networkSceneManager.OnLoadEnd += OnSceneLoadEnd;
             SetGameActive(false);
         }
         void SetGameActive(bool active) {
@@ -67,19 +82,23 @@ namespace RyanAssets.Client.ClientCore {
                 SetJoinResult($"Unknown Join Status: {status}");
                 return;
             }
+            ConnectToServer(universe_id, (string)json["data"]["server_ip"], (ushort)json["data"]["server_port"]);
+        }
+        void ConnectToServer(string universe_id, string address, ushort port) {
             SetJoiningMessage("Initializing...");
             joinUniverseId = universe_id;
             Transport transport = InstanceFinder.TransportManager.Transport;
-            transport.SetClientAddress((string)json["data"]["server_ip"]);
-            transport.SetPort((ushort)json["data"]["server_port"]);
-            Debug.Log($"Connecting To {transport.GetClientAddress()}:{transport.GetPort()}");
-            bool connectionStatus = InstanceFinder.ClientManager.StartConnection();
-            if (!connectionStatus)
-                SetJoinResult("Initialization Failed");
-            else
-                SetJoiningMessage("Connecting To Game Server...");
+            transport.SetClientAddress(address);
+            transport.SetPort(port);
             isConnecting = true;
             hasCanceled = false;
+            Debug.Log($"Connecting To {transport.GetClientAddress()}:{transport.GetPort()}");
+            bool connectionStatus = InstanceFinder.ClientManager.StartConnection();
+            if (!connectionStatus) {
+                isConnecting = false;
+                SetJoinResult("Initialization Failed");
+            } else
+                SetJoiningMessage("Connecting To Game Server...");
         }
         public void CancelJoinGameServer() {
             if (isConnecting) {
@@ -147,6 +166,23 @@ namespace RyanAssets.Client.ClientCore {
             OnDisconnected = null;
             IsConnected = false;
             IsLoadingScenes = false;
+            wasAuthenticated = isConnecting = hasCanceled = false;
+            joinServerId = joinUniverseId = null;
+            Instance = null;
+        }
+        void OnDisable() {
+            // FishNet may already have removed its singleton while the persistent scene tears down.
+            if (clientManager != null) {
+                clientManager.OnClientConnectionState -= OnClientState;
+                clientManager.OnClientTimeOut -= OnClientTimeOut;
+                clientManager.OnAuthenticated -= OnClientAuthenticated;
+            }
+            if (networkSceneManager != null) {
+                networkSceneManager.OnLoadStart -= OnSceneLoadStart;
+                networkSceneManager.OnLoadEnd -= OnSceneLoadEnd;
+            }
+            if (Instance == this)
+                Instance = null;
         }
     }
 }

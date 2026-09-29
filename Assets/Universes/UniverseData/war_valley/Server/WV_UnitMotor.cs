@@ -143,36 +143,67 @@ namespace Universes.UniverseData.war_valley.Server {
     public sealed class WV_AircraftMotor : WV_UnitMotor {
         const float GroundProbeHeight = 400f;
         const float GroundProbeDistance = 900f;
+        const float LookAheadSeconds = 2f;
 
         float cruiseAltitude;
+        float clearanceRadius;
+        int flightSurfaceMask;
 
         public override float ArrivalTolerance => 6f;
 
         public override void Initialize(WV_Unit unit) {
             base.Initialize(unit);
             cruiseAltitude = WV_Rules.GetCruiseAltitude(unit.Kind);
+            flightSurfaceMask = LayerMask.GetMask("Default", "Ground", "Structure");
+            // The footprint comes from the authored chassis, not a point ray that can miss a roof
+            // under the edge of the aircraft. Characters and other aircraft never affect altitude.
+            CapsuleCollider body = GetComponent<CapsuleCollider>();
+            clearanceRadius = body != null
+                ? body.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z))
+                : 1f;
             // Lift onto the cruise band immediately; a jet must never start its life on the dirt.
-            transform.position = ApplyCruiseAltitude(transform.position);
+            Vector3 position = transform.position;
+            position.y = GetFlightAltitude(position, transform.forward, 0f);
+            transform.position = position;
         }
 
         public override void MoveTo(Vector3 destination) {
-            Vector3 goal = ApplyCruiseAltitude(destination);
-            Vector3 toGoal = goal - transform.position;
-            if (toGoal.sqrMagnitude <= 0.0001f)
+            Vector3 position = transform.position;
+            Vector3 toGoal = destination - position;
+            toGoal.y = 0f;
+            if (toGoal.sqrMagnitude <= 0.0001f) {
+                Stop();
                 return;
+            }
 
-            FaceTowards(goal);
+            FaceTowards(destination);
 
             // Fly along the nose rather than straight at the goal, so aircraft arc into a turn
             // instead of sliding sideways across the valley.
-            Vector3 heading = Vector3.Slerp(transform.forward, toGoal.normalized, 0.5f).normalized;
-            transform.position += heading * Mathf.Min(Unit.MoveSpeed * Time.deltaTime, toGoal.magnitude);
+            Vector3 forward = transform.forward;
+            forward.y = 0f;
+            Vector3 heading = Vector3.Slerp(forward.normalized, toGoal.normalized, 0.5f).normalized;
+            float distance = toGoal.magnitude;
+            float lookAhead = Mathf.Min(Unit.MoveSpeed * LookAheadSeconds, distance);
+            float altitude = GetFlightAltitude(position, heading, lookAhead);
+            Vector3 next = position + heading * Mathf.Min(Unit.MoveSpeed * Time.deltaTime, distance);
+            next.y = MoveAltitude(position.y, altitude);
+
+            // A sudden tall obstacle or a large frame must not let horizontal travel outrun the
+            // climb. Pause at its edge until the aircraft has gained the required clearance.
+            if (next.y < GetFlightAltitude(next, heading, 0f)) {
+                next.x = position.x;
+                next.z = position.z;
+            }
+            transform.position = next;
         }
 
         public override void Stop() {
             // Fixed-wing aircraft cannot truly hover, but holding station at altitude keeps orders
             // readable without simulating a landing pattern the rest of the mode has no use for.
-            transform.position = ApplyCruiseAltitude(transform.position);
+            Vector3 position = transform.position;
+            position.y = MoveAltitude(position.y, GetFlightAltitude(position, transform.forward, 0f));
+            transform.position = position;
         }
 
         public override bool HasArrived(Vector3 destination) {
@@ -182,34 +213,40 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         public override void FaceTowards(Vector3 worldPoint) {
-            Vector3 toPoint = worldPoint - transform.position;
-            if (toPoint.sqrMagnitude <= 0.01f)
-                return;
-
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                Quaternion.LookRotation(toPoint.normalized, Vector3.up),
-                Unit.TurnSpeed * Time.deltaTime);
+            // A ground target changes heading, not flight pitch. Pitching at an enemy used to
+            // pull the next movement step downward, then Stop snapped the aircraft upward again.
+            base.FaceTowards(worldPoint);
         }
 
         public override bool TryResolveDestination(Vector3 requested, out Vector3 resolved) {
-            resolved = ApplyCruiseAltitude(requested);
+            // Orders specify a map position. Altitude is determined along the actual route rather
+            // than from distant terrain beneath the destination.
+            resolved = requested;
             return true;
         }
 
-        /// <summary>Holds the aircraft a fixed height above whatever it is currently flying over.</summary>
-        Vector3 ApplyCruiseAltitude(Vector3 position) {
-            Vector3 origin = position + Vector3.up * GroundProbeHeight;
-            position.y = Physics.Raycast(
+        float MoveAltitude(float current, float desired) => Mathf.MoveTowards(
+            current, desired, Unit.MoveSpeed * (desired > current ? 1f : 0.5f) * Time.deltaTime);
+
+        /// <summary>Finds clearance over the full footprint and the continuous corridor ahead.</summary>
+        float GetFlightAltitude(Vector3 position, Vector3 heading, float lookAhead) {
+            heading.y = 0f;
+            Quaternion orientation = heading.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(heading, Vector3.up)
+                : Quaternion.identity;
+            Vector3 origin = position + heading.normalized * (lookAhead * 0.5f)
+                + Vector3.up * GroundProbeHeight;
+            return Physics.BoxCast(
                 origin,
+                new Vector3(clearanceRadius, 0.05f, clearanceRadius + lookAhead * 0.5f),
                 Vector3.down,
                 out RaycastHit hit,
+                orientation,
                 GroundProbeDistance,
-                WV_Rules.OrderGroundMask,
+                flightSurfaceMask,
                 QueryTriggerInteraction.Ignore)
                 ? hit.point.y + cruiseAltitude
                 : position.y;
-            return position;
         }
     }
 }

@@ -7,6 +7,8 @@ namespace RyanAssets.Server.ServerCore {
     public static class ServerWebSocket {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
+            if (NetworkSettings.EditorDirectConnection)
+                return;
             BackendSocket.Instance.StartSocket("/api/internal/v1/ws", onMessage: OnMessage);
         }
         static void OnMessage((string res, JObject j) res) {

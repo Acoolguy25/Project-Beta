@@ -28,6 +28,11 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] Button attackButton;
         [SerializeField] Button stopButton;
         [SerializeField] Button holdButton;
+        [SerializeField] Button freezeButton;
+        [SerializeField] Button moreButton;
+        [SerializeField] GameObject advancedControls;
+        [SerializeField] Button clearButton;
+        [SerializeField] GameObject controlsHint;
 
         [Header("Selection Buttons")]
         [SerializeField] Button selectUnitsButton;
@@ -48,6 +53,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
         /// <summary>Selects every unit, every troop, or both.</summary>
         public event Action<bool, bool> SelectRequested;
+        public event Action ClearRequested;
 
         /// <summary>Recalls the control group at this index.</summary>
         public event Action<int> GroupRecalled;
@@ -60,7 +66,7 @@ namespace Universes.UniverseData.war_valley.Client {
         WV_OrderType? armedOrder;
 
         void Awake() {
-            orderButtons = new[] { moveButton, attackMoveButton, attackButton, stopButton, holdButton };
+            orderButtons = new[] { moveButton, attackMoveButton, attackButton, stopButton, holdButton, freezeButton };
             orderButtonBaseColors = new Color[orderButtons.Length];
             for (int i = 0; i < orderButtons.Length; i++) {
                 orderButtonBaseColors[i] = orderButtons[i] != null && orderButtons[i].targetGraphic != null
@@ -68,11 +74,18 @@ namespace Universes.UniverseData.war_valley.Client {
                     : Color.white;
             }
 
-            Bind(moveButton, WV_OrderType.Move);
+            Bind(moveButton, WV_OrderType.AttackMove);
             Bind(attackMoveButton, WV_OrderType.AttackMove);
             Bind(attackButton, WV_OrderType.Attack);
             Bind(stopButton, WV_OrderType.Stop);
             Bind(holdButton, WV_OrderType.HoldPosition);
+            Bind(freezeButton, WV_OrderType.Freeze);
+            if (moreButton != null)
+                moreButton.onClick.AddListener(ToggleAdvanced);
+            if (advancedControls != null)
+                advancedControls.SetActive(false);
+            if (clearButton != null)
+                clearButton.onClick.AddListener(() => ClearRequested?.Invoke());
 
             if (selectUnitsButton != null)
                 selectUnitsButton.onClick.AddListener(() => SelectRequested?.Invoke(true, false));
@@ -108,6 +121,10 @@ namespace Universes.UniverseData.war_valley.Client {
 
         void OnDestroy() {
             GameHelp.Changed -= HandleGameHelpChanged;
+            if (moreButton != null)
+                moreButton.onClick.RemoveListener(ToggleAdvanced);
+            if (clearButton != null)
+                clearButton.onClick.RemoveAllListeners();
             foreach (Button button in orderButtons) {
                 if (button != null)
                     button.onClick.RemoveAllListeners();
@@ -122,6 +139,14 @@ namespace Universes.UniverseData.war_valley.Client {
             foreach (Button button in setGroupButtons) {
                 if (button != null)
                     button.onClick.RemoveAllListeners();
+            }
+        }
+
+        void ToggleAdvanced() {
+            if (advancedControls != null) {
+                advancedControls.SetActive(!advancedControls.activeSelf);
+                if (controlsHint != null)
+                    controlsHint.SetActive(!advancedControls.activeSelf);
             }
         }
 
@@ -146,16 +171,17 @@ namespace Universes.UniverseData.war_valley.Client {
                 WV_OrderType.Move => "Click a destination",
                 WV_OrderType.AttackMove => "Click where to advance",
                 WV_OrderType.Attack => "Click an enemy",
-                _ => GameHelp.Enabled ? "M move · V attack-move · T attack · X stop · H hold" : string.Empty
+                _ => GameHelp.Enabled ? "Click ground to advance. Click an enemy to attack." : string.Empty
             };
         }
 
         static WV_OrderType OrderOf(int index) => index switch {
-            0 => WV_OrderType.Move,
+            0 => WV_OrderType.AttackMove,
             1 => WV_OrderType.AttackMove,
             2 => WV_OrderType.Attack,
             3 => WV_OrderType.Stop,
-            _ => WV_OrderType.HoldPosition
+            4 => WV_OrderType.HoldPosition,
+            _ => WV_OrderType.Freeze
         };
 
         /// <summary>Greys the order buttons out while nothing is selected to give them to.</summary>

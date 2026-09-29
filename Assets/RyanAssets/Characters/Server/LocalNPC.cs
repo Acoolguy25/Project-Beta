@@ -38,6 +38,8 @@ namespace RyanAssets.Characters.Server {
         public NPCTargetingType TargetingType = NPCTargetingType.Random;
         [Tooltip("Disable when a game-specific perception policy chooses targets.")]
         public bool AutomaticTargeting = true;
+        /// <summary>Keep acquiring and firing, while an external order holds this NPC's position.</summary>
+        public bool HoldCombatPosition { get; set; }
         private NPCTargetingType _previousTargetingType = NPCTargetingType.Random;
         [NonSerialized] public DamageType AttackDamageType; // set in runtime by game specific script
         public GameObject PreviousTarget;
@@ -237,10 +239,11 @@ namespace RyanAssets.Characters.Server {
         /// firing. False keeps the melee behaviour of walking into the target.
         /// </param>
         /// <param name="attackCooldown">Seconds between attacks, or a non-positive value to keep the authored one.</param>
-        public void ConfigureAttackRange(float minRange, float maxRange, bool holdDistance, float attackCooldown = 0f) {
+        /// <param name="advanceToTarget">Close to the near edge even while firing, for an obstructed ranged attack.</param>
+        public void ConfigureAttackRange(float minRange, float maxRange, bool holdDistance, float attackCooldown = 0f, bool advanceToTarget = false) {
             MinAttackRange = Mathf.Max(0f, minRange);
             MaxAttackRange = Mathf.Max(MinAttackRange + 0.1f, maxRange);
-            ApproachToMinRangeEdge = holdDistance;
+            ApproachToMinRangeEdge = holdDistance || advanceToTarget;
             AllowMovementWhileAttacking = !holdDistance;
             RetreatToMinRangeEdge = holdDistance;
             // Acquisition must reach at least as far as the weapon does, or a rifleman would walk
@@ -334,8 +337,8 @@ namespace RyanAssets.Characters.Server {
         void Update() {
             HandleRotation();
 
-            // Flee takes priority over everything, including attacking.
-            if (AutomaticTargeting && TargetingType != NPCTargetingType.Flee
+            // A hold order keeps combat active without letting avoidance move the troop.
+            if (AutomaticTargeting && !HoldCombatPosition && TargetingType != NPCTargetingType.Flee
                 && _fleeTeamSet.Count > 0
                 && AnyCharacterInRange(_fleeTeamSet, FleeEnterRadius)) {
                 SetTargetingType(NPCTargetingType.Flee);
@@ -669,9 +672,8 @@ namespace RyanAssets.Characters.Server {
 
             UpdateAttackMovement(dist);
 
-            // Only attack while sitting inside the [Min, Max] band - too close means we're
-            // backing off, too far means we're still closing the distance.
-            if (dist >= MinAttackRange && dist <= MaxAttackRange)
+            // A held troop also fires at close targets because its order prevents backing off.
+            if ((HoldCombatPosition || dist >= MinAttackRange) && dist <= MaxAttackRange)
                 TryAttack();
         }
 
@@ -724,6 +726,11 @@ namespace RyanAssets.Characters.Server {
         // walls, links, and agent avoidance are handled consistently.
         private void UpdateAttackMovement(float dist) {
             if (_currentAttackTarget == null) return;
+
+            if (HoldCombatPosition) {
+                StopMovement();
+                return;
+            }
 
             if (dist < MinAttackRange) {
                 CommitPathDestination(ComputeRetreatCandidate(dist));

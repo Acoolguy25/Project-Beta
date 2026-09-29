@@ -32,11 +32,11 @@
   <Project Path="RyanAssets.Shared.Combat.csproj" />
   <Project Path="RyanAssets.Tools.Client.csproj" />
   <Project Path="RyanAssets.Core.csproj" />
+  <Project Path="Universes.UniverseData.war_valley.Tests.csproj" />
   <Project Path="Universes.UniverseData.war_valley.Client.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Command.csproj" />
   <Project Path="RyanAssets.Input.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.PlayerList.csproj" />
-  <Project Path="Universes.UniverseData.war_valley.Tests.csproj" />
   <Project Path="RyanAssets.Items.Platform.csproj" />
   <Project Path="RyanAssets.UI.csproj" />
   <Project Path="RyanAssets.Client.ClientUI.Build.csproj" />

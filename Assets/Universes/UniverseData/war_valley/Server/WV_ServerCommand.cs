@@ -87,6 +87,8 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
 
             var orderType = (WV_OrderType)request.orderType;
+            if (orderType > WV_OrderType.Freeze)
+                return;
             if (!IsFinite(request.position) && orderType is WV_OrderType.Move or WV_OrderType.AttackMove)
                 return;
 
@@ -119,6 +121,9 @@ namespace Universes.UniverseData.war_valley.Server {
                         break;
                     case WV_OrderType.HoldPosition:
                         commandable.OrderHoldPosition();
+                        break;
+                    case WV_OrderType.Freeze:
+                        commandable.OrderFreeze();
                         break;
                     default:
                         commandable.OrderStop();

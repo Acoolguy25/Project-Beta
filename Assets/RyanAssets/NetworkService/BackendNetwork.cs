@@ -69,6 +69,8 @@ namespace RyanAssets.NetworkService {
 #if !SERVER_BUILD
         public static string FakePlayerId;
         public static string GetAuthorizationToken(){
+            if (NetworkSettings.EditorDirectConnection)
+                return NetworkSettings.EditorPlayerId;
             if (!NetworkSettings.noNetworkLogin) {
                 return AuthenticationService.Instance.AccessToken;
             } else {
@@ -81,6 +83,8 @@ namespace RyanAssets.NetworkService {
         }
 #endif
         public static async UniTask<(string, JObject)> GetRequest(string url) {
+            if (NetworkSettings.EditorDirectConnection)
+                return ("Backend requests are disabled during local Editor testing.", null);
             try {
                 using HttpRequestMessage request = new(HttpMethod.Get, url){
                 };
@@ -95,6 +99,8 @@ namespace RyanAssets.NetworkService {
             }
         }
         public static async UniTask<(string, JObject)> PostRequest(string url, JObject body = null, string accessToken = null) {
+            if (NetworkSettings.EditorDirectConnection)
+                return ("Backend requests are disabled during local Editor testing.", null);
             try {
                 StringContent content = new(
                     (body != null) ? body.ToString() : default_body,

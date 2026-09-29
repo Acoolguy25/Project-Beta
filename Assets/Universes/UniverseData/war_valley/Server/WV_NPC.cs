@@ -41,9 +41,9 @@ namespace Universes.UniverseData.war_valley.Server {
             combat = GetComponent<WV_NpcCombat>();
             agent = GetComponent<NavMeshAgent>();
 
-            localNPC.WalkSpeed = 18f;
-            localNPC.FleeSpeed = 21f;
-            localNPC.AttackSpeed = 21f;
+            localNPC.WalkSpeed = 12f;
+            localNPC.FleeSpeed = 15f;
+            localNPC.AttackSpeed = 14f;
             agent.autoTraverseOffMeshLink = false;
             lastProgressPosition = transform.position;
             lastProgressTime = Time.time;

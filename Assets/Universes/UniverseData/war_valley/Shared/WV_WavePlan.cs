@@ -13,34 +13,40 @@ namespace Universes.UniverseData.war_valley.Shared {
         [Min(1)] public int WaveCount = 20;
 
         [Tooltip("Strength of the first wave, in knifemen. Tougher troops are worth more.")]
-        [Min(1f)] public float BaseStrength = 5f;
+        [Min(1f)] public float BaseStrength = 4f;
 
         [Tooltip("Strength added every wave.")]
-        [Min(0f)] public float StrengthPerWave = 2.5f;
+        [Min(0f)] public float StrengthPerWave = 1.5f;
 
         [Tooltip("Extra strength that compounds: later waves grow faster than early ones.")]
-        [Min(0f)] public float StrengthAcceleration = 0.18f;
+        [Min(0f)] public float StrengthAcceleration = 0.06f;
 
         [Tooltip("Every Nth wave is a surge: bigger, and announced. 0 turns surges off.")]
         [Min(0)] public int SurgeEvery = 5;
 
         [Tooltip("How much bigger a surge wave is.")]
-        [Min(1f)] public float SurgeMultiplier = 1.5f;
+        [Min(1f)] public float SurgeMultiplier = 1.3f;
 
         [Tooltip("Extra enemy health per wave, as a fraction: 0.06 is +6% a wave.")]
-        [Min(0f)] public float HealthGrowthPerWave = 0.06f;
+        [Min(0f)] public float HealthGrowthPerWave = 0.03f;
 
         [Tooltip("Most enemies one wave may field, so late waves stay playable.")]
-        [Min(1)] public int MaxEnemiesPerWave = 60;
+        [Min(1)] public int MaxEnemiesPerWave = 40;
+
+        [Tooltip("Maximum living wave enemies before spawning waits for the defenders to catch up.")]
+        [Min(1)] public int MaxActiveEnemies = 60;
+
+        [Tooltip("Preparation time before the first wave, enough to build and train a starter squad.")]
+        [Min(5)] public int PreparationSeconds = 55;
 
         [Tooltip("Seconds from the start of one wave to the next, early on.")]
-        [Min(5)] public int FirstIntermissionSeconds = 45;
+        [Min(5)] public int FirstIntermissionSeconds = 95;
 
         [Tooltip("Shortest gap between waves, reached as the round goes on.")]
-        [Min(5)] public int MinimumIntermissionSeconds = 25;
+        [Min(5)] public int MinimumIntermissionSeconds = 65;
 
         [Tooltip("Seconds taken off the gap each wave until it reaches the minimum.")]
-        [Min(0f)] public float IntermissionShrinkPerWave = 1f;
+        [Min(0f)] public float IntermissionShrinkPerWave = 1.5f;
     }
 
     /// <summary>One batch of a single troop kind within a wave.</summary>
@@ -104,11 +110,11 @@ namespace Universes.UniverseData.war_valley.Shared {
 
             float strength = GetStrength(waveNumber, tuning);
             List<WV_WaveGroup> groups = Compose(waveNumber, strength);
-            groups = CapCount(groups, tuning.MaxEnemiesPerWave);
+            groups = CapCount(groups, Mathf.Max(1, tuning.MaxEnemiesPerWave));
 
-            float health = 1f + tuning.HealthGrowthPerWave * step;
+            float health = 1f + Mathf.Max(0f, tuning.HealthGrowthPerWave) * step;
             int intermission = Mathf.Max(
-                tuning.MinimumIntermissionSeconds,
+                Mathf.Max(5, tuning.MinimumIntermissionSeconds),
                 Mathf.RoundToInt(tuning.FirstIntermissionSeconds - tuning.IntermissionShrinkPerWave * step));
             return new WV_Wave(waveNumber, groups, health, intermission, surge);
         }
@@ -166,8 +172,10 @@ namespace Universes.UniverseData.war_valley.Shared {
             float scale = maxEnemies / (float)total;
             var capped = new List<WV_WaveGroup>(groups.Count);
             int remaining = maxEnemies;
-            foreach (WV_WaveGroup group in groups) {
-                int count = Mathf.Clamp(Mathf.FloorToInt(group.Count * scale), 1, Mathf.Max(1, remaining));
+            for (int i = 0; i < groups.Count && remaining > 0; i++) {
+                WV_WaveGroup group = groups[i];
+                int reserved = Mathf.Min(groups.Count - i - 1, remaining - 1);
+                int count = Mathf.Clamp(Mathf.FloorToInt(group.Count * scale), 1, remaining - reserved);
                 remaining -= count;
                 capped.Add(new WV_WaveGroup(group.Kind, count));
             }

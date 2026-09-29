@@ -18,5 +18,6 @@ namespace Universes.UniverseData.war_valley.Server {
         void OrderAttack(IEntity target);
         void OrderStop();
         void OrderHoldPosition();
+        void OrderFreeze();
     }
 }

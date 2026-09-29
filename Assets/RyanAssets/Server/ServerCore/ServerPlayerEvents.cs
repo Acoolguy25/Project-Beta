@@ -58,6 +58,8 @@ namespace RyanAssets.Server.ServerCore {
             RemotePlayerEarlyConnection(conn, json["player_id"]?.ToString());
         }
         public static void RemotePlayerEarlyConnection(NetworkConnection conn, string player_id) {
+            if (NetworkSettings.EditorDirectConnection)
+                return;
             string remove_url = $"/api/internal/v1/user/remove?player_id={player_id}";
             BackendServer.RequestAsync(() => BackendNetwork.PostRequest(remove_url), "Player Disconnect").Forget();
         }

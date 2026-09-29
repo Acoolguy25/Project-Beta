@@ -66,9 +66,9 @@ namespace RyanAssets.Server.ServerCore {
             //Debug.Log("============ ServerBootStrap ============");
 #if UNITY_EDITOR
             serverInfo = new(){
-                universe_id = "war_valley",
+                universe_id = NetworkSettings.EditorDirectConnection ? NetworkSettings.EditorUniverseId : "war_valley",
                 server_id = "unity-test-server",
-                server_port = 20000
+                server_port = NetworkSettings.EditorDirectConnection ? NetworkSettings.EditorGamePort : (ushort)20000
             };
             serverSettings.MaxPlayers = 10;
             serverSettings.ServerIdleTimeoutSeconds = ushort.MaxValue;
@@ -161,8 +161,9 @@ namespace RyanAssets.Server.ServerCore {
 
             transport.SetMaximumClients(serverSettings.MaxPlayers);
             //#if DEVELOPMENT_BUILD
-            Debug.Log("Hosting at 0.0.0.0");
-            transport.SetServerBindAddress("0.0.0.0", IPAddressType.IPv4);
+            string bindAddress = NetworkSettings.EditorDirectConnection ? "127.0.0.1" : "0.0.0.0";
+            Debug.Log($"Hosting at {bindAddress}");
+            transport.SetServerBindAddress(bindAddress, IPAddressType.IPv4);
             //#else
             //            Debug.Log($"Hosting at {NetworkSettings.activeConfig.backend_server_ip}");
             //            transport.SetServerBindAddress(NetworkSettings.activeConfig.backend_server_ip.Replace($":{serverInfo.server_port}", ""), IPAddressType.IPv4);

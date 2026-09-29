@@ -6,7 +6,7 @@ namespace Universes.UniverseData.war_valley.Tests {
     public sealed class WV_PenaltyTests {
         [Test]
         public void DeathPenalty_IsAShareOfALargeBalance() {
-            Assert.That(WV_Rules.GetDeathPenalty(2000), Is.EqualTo(300));
+            Assert.That(WV_Rules.GetDeathPenalty(2000), Is.EqualTo(160));
         }
 
         [Test]

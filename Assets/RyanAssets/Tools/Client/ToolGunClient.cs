@@ -13,6 +13,8 @@ namespace RyanAssets.Tools.Client {
     public class ToolGunClient : ToolBaseClient {
         protected ToolGunShared toolGunShared;
         public Func<Vector3> GetTargetPosition;
+        /// <summary>Optional AI firing gate, re-evaluated for every round of a burst.</summary>
+        public Func<bool> CanFireShot;
         protected override void Awake() {
             base.Awake();
             toolGunShared = (ToolGunShared) toolBaseShared;
@@ -37,10 +39,12 @@ namespace RyanAssets.Tools.Client {
                     if (cancelled)
                         return;
                 }
-                if (!ConsumeAmmo(1))
+                if (CanFireShot != null && !CanFireShot())
                     break;
                 if (i != 0)
                     targetLocation = RefreshTargetPosition();
+                if (!ConsumeAmmo(1))
+                    break;
                 RaycastHit? hit = toolGunShared.Shoot(targetLocation);
                 toolGunShared.VisualizeBulletLocally(hit);
                 toolGunShared.VisualizeBullet(targetLocation);

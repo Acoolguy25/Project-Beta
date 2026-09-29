@@ -40,6 +40,10 @@ namespace Universes.GameBrowser {
             return await BackendNetwork.PostRequest($"/api/universes/v1/play?universe_id={joining_universe_id}");
         }
         public static async UniTask PlayGame(string universe_id) {
+            if (NetworkSettings.EditorDirectConnection) {
+                ClientConnector.Instance.JoinLocalEditorServer();
+                return;
+            }
             joining_universe_id = universe_id;
             (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel);
             if (res != null || json == null)

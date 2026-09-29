@@ -57,6 +57,7 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly Action armRallyPoint;
 
         readonly List<StructureComponent> selection = new();
+        readonly List<WV_RangeIndicator> selectedRanges = new();
         /// <summary>Selected production buildings of the primary's kind: the ones its menu and queue cover.</summary>
         readonly List<WV_ProductionBuilding> productionGroup = new();
 
@@ -120,6 +121,7 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         public void Dispose() {
+            ClearSelectedRanges();
             if (hud == null)
                 return;
             if (hud.StructurePanel != null) {
@@ -205,6 +207,14 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void OnSelectionChanged(bool reopenMenu) {
+            ClearSelectedRanges();
+            foreach (StructureComponent selected in selection) {
+                WV_RangeIndicator range = selected.GetComponentInChildren<WV_RangeIndicator>(true);
+                if (range == null)
+                    continue;
+                range.SetSelected(true);
+                selectedRanges.Add(range);
+            }
             StructureComponent previousPrimary = structure;
             BindPrimary(selection.Count > 0 ? selection[0] : null);
 
@@ -229,6 +239,14 @@ namespace Universes.UniverseData.war_valley.Client {
                 CloseMenu();
             MarkDirty();
             Refresh();
+        }
+
+        void ClearSelectedRanges() {
+            foreach (WV_RangeIndicator range in selectedRanges) {
+                if (range != null)
+                    range.SetSelected(false);
+            }
+            selectedRanges.Clear();
         }
 
         void BindPrimary(StructureComponent primary) {

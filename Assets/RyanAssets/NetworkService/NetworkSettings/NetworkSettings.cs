@@ -15,9 +15,36 @@ namespace RyanAssets.NetworkService {
 
         public static NetworkScriptableObject activeConfig;
         public static bool noNetworkLogin;
+        public static bool EditorDirectConnection { get; private set; }
+        public static string EditorUniverseId { get; private set; }
+        public static ushort EditorGamePort { get; private set; }
+        public static string EditorPlayerId { get; private set; }
+
+        // Local profiles are session data; they never enter the backend's player database.
+        public static Newtonsoft.Json.Linq.JObject CreateEditorPlayerProfile(string playerId) => new() {
+            ["player_id"] = playerId,
+            ["username"] = "Editor " + playerId.Substring("editor-".Length, 8),
+            ["xp"] = 0UL,
+            ["gold"] = 0UL
+        };
         // public static NetworkScriptableObject productionConfig;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Init() {
+            EditorDirectConnection = false;
+            EditorUniverseId = null;
+            EditorGamePort = 0;
+            EditorPlayerId = null;
+            noNetworkLogin = false;
+#if UNITY_EDITOR
+            var editorConfig = loadResource("LocalNetworkConfig");
+            EditorDirectConnection = editorConfig != null && editorConfig.editor_direct_connection;
+            if (EditorDirectConnection) {
+                EditorUniverseId = editorConfig.editor_universe_id;
+                EditorGamePort = (ushort)Mathf.Clamp(editorConfig.editor_game_port, 1, ushort.MaxValue);
+                EditorPlayerId = "editor-" + Hash128.Compute(Application.dataPath).ToString();
+                Debug.Log($"Local Editor connection: {EditorUniverseId} at 127.0.0.1:{EditorGamePort}; backend disabled.");
+            }
+#endif
 #if UNITY_SERVER
                 activeConfig = loadResource("ServerNetworkConfig");
 #else
@@ -35,6 +62,7 @@ namespace RyanAssets.NetworkService {
 #endif
 #endif
             InitConfig();
+            noNetworkLogin |= EditorDirectConnection;
             BackendNetwork.SetBackendURL(BackendAPIURL);
             BackendSocket.SetBaseAddress(BackendAPIURL);
         }

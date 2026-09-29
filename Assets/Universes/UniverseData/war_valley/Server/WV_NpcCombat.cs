@@ -39,8 +39,7 @@ namespace Universes.UniverseData.war_valley.Server {
         /// </summary>
         const float GunFireAnimationSeconds = 0.2f;
 
-        /// <summary>Height above a soldier's feet its shots leave from, for the line-of-sight check.</summary>
-        const float EyeHeight = 1.4f;
+        const float SightCheckInterval = 0.1f;
 
         LocalNPC localNPC;
         GameCharacter gameCharacter;
@@ -50,6 +49,9 @@ namespace Universes.UniverseData.war_valley.Server {
         WV_TroopKind kind = WV_TroopKind.Knife;
         ToolBaseShared weapon;
         ToolGunClient gunClient;
+        ToolGunShared gun;
+        IEntity gunTarget;
+        float nextSightCheck;
         IEntity pendingAttackTarget;
         Vector3 aimPoint;
         float lastAttack = float.MinValue;
@@ -57,8 +59,20 @@ namespace Universes.UniverseData.war_valley.Server {
         bool loadoutEquipped;
         /// <summary>True while a wall blocks the shot and the gunner is closing in to get a clear one.</summary>
         bool advancingForSight;
+        bool combatEnabled = true;
 
         public WV_TroopKind Kind => kind;
+
+        public void SetCombatEnabled(bool value) {
+            combatEnabled = value;
+            if (value)
+                return;
+            pendingAttackTarget = null;
+            if (animator != null) {
+                animator.SetBool("KnifeAttack", false);
+                SetFiring(false);
+            }
+        }
 
         bool IsGunner => WV_TroopCatalog.Get(kind).UsesGun;
 
@@ -119,6 +133,9 @@ namespace Universes.UniverseData.war_valley.Server {
             // The tool re-reads this every shot after the first of a burst, so it has to resolve to
             // wherever the current target actually is rather than to a captured point.
             gunClient.GetTargetPosition = () => aimPoint;
+            gun = (ToolGunShared)weapon;
+            gun.passThroughAlliedTroopsSync.Value = true;
+            gunClient.CanFireShot = CanFireAtTarget;
 
             ConfigureGunnerRange();
         }
@@ -146,7 +163,8 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
             advancingForSight = advancing;
             if (advancing)
-                localNPC.ConfigureAttackRange(0f, WV_Rules.GunnerEngageRange, holdDistance: false, WV_Rules.GunnerAttackInterval);
+                localNPC.ConfigureAttackRange(0f, WV_Rules.GunnerEngageRange, holdDistance: false,
+                    WV_Rules.GunnerAttackInterval, advanceToTarget: true);
             else
                 ConfigureGunnerRange();
         }
@@ -156,6 +174,13 @@ namespace Universes.UniverseData.war_valley.Server {
                 return;
 
             if (IsGunner) {
+                // Visibility also controls movement below the normal minimum firing range and
+                // between attack callbacks, so a blocked gunner never keeps retreating from cover.
+                if (gun != null && Time.time >= nextSightCheck) {
+                    nextSightCheck = Time.time + SightCheckInterval;
+                    gunTarget = localNPC.CurrentAttackEntityTarget;
+                    SetAdvancingForSight(gunTarget != null && !CanFireAtTarget());
+                }
                 if (gunFireUntil > 0f && Time.time >= gunFireUntil)
                     SetFiring(false);
 
@@ -179,7 +204,7 @@ namespace Universes.UniverseData.war_valley.Server {
 
         /// <summary>Invoked by <see cref="LocalNPC"/> on its own cooldown once a target is in band.</summary>
         void AttackEntity(IEntity target) {
-            if (weapon == null || target == null || gameCharacter.IsDead)
+            if (!combatEnabled || weapon == null || target == null || gameCharacter.IsDead)
                 return;
 
             if (IsGunner)
@@ -200,9 +225,10 @@ namespace Universes.UniverseData.war_valley.Server {
             if (gunClient == null)
                 return;
 
-            Vector3 eye = transform.position + Vector3.up * EyeHeight;
-            if (!WV_Combat.HasLineOfSight(eye, target, transform)) {
+            gunTarget = target;
+            if (!CanFireAtTarget()) {
                 SetAdvancingForSight(true);
+                SetFiring(false);
                 return;
             }
             SetAdvancingForSight(false);
@@ -210,10 +236,6 @@ namespace Universes.UniverseData.war_valley.Server {
             // A shield is shot at its near edge. Its dome does not stop bullets, so the hit is
             // applied to it directly rather than left to whatever the round goes on to strike.
             WV_ShieldBarrier shield = target as WV_ShieldBarrier;
-            if (shield != null)
-                aimPoint = shield.GetEdgePoint(eye);
-            else if (!WV_Combat.TryGetAimPoint(target, out aimPoint))
-                return;
 
             lastAttack = Time.time;
             loadoutEquipped = true;
@@ -236,6 +258,19 @@ namespace Universes.UniverseData.war_valley.Server {
                 WV_Combat.DealDamage(shield, weapon.hitDamage, weapon.defaultDamageType, gameCharacter);
         }
 
+        bool CanFireAtTarget() {
+            if (!combatEnabled || gameCharacter.IsDead || gun == null || gunTarget != localNPC.CurrentAttackEntityTarget
+                || !WV_Combat.IsValidTarget(gunTarget, gameCharacter.GetTeam()))
+                return false;
+            if (WV_Combat.DistanceTo(transform.position, gunTarget) > WV_Rules.GunnerEngageRange)
+                return false;
+            if (gunTarget is WV_ShieldBarrier shield)
+                aimPoint = shield.GetEdgePoint(gun.weaponRoot.transform.position);
+            else if (!WV_Combat.TryGetAimPoint(gunTarget, out aimPoint))
+                return false;
+            return gun.HasClearShot(aimPoint, ((Component)gunTarget).transform);
+        }
+
         /// <summary>
         /// Drives the authored firing pose. Set on the server, it reaches every client through the
         /// character's NetworkAnimator, the same way the knife swing does.
@@ -248,7 +283,7 @@ namespace Universes.UniverseData.war_valley.Server {
         void HandleLethalAttackStarted() {
             IEntity target = pendingAttackTarget;
             pendingAttackTarget = null;
-            if (weapon == null
+            if (!combatEnabled || weapon == null
                 || target is not Component targetComponent
                 || targetComponent == null
                 || gameCharacter.IsDead
@@ -272,8 +307,10 @@ namespace Universes.UniverseData.war_valley.Server {
             }
             if (localNPC != null && localNPC.AttackEntityFunction == AttackEntity)
                 localNPC.AttackEntityFunction = null;
-            if (gunClient != null)
+            if (gunClient != null) {
                 gunClient.GetTargetPosition = null;
+                gunClient.CanFireShot = null;
+            }
         }
     }
 }

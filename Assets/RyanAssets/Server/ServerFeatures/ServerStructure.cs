@@ -60,7 +60,7 @@ namespace RyanAssets.Server.ServerFeatures {
             if (CanPlaceFunction != null && !CanPlaceFunction(sender, prefabStructure))
                 return;
 
-            if (!IsFinite(request.position))
+            if (!IsFinite(request.position) || !float.IsFinite(request.yRotation))
                 return;
 
             // Instantiated first: the snap depends on the structure's footprint, which is measured
@@ -75,24 +75,7 @@ namespace RyanAssets.Server.ServerFeatures {
                 return;
             }
 
-            Collider[] cloneColliders = clone.GetComponentsInChildren<Collider>(true);
-            foreach (Collider collider in cloneColliders)
-                collider.enabled = false;
-            Physics.SyncTransforms();
-
-            StructurePlacement.GetOverlapVolume(
-                bounds, groundPoint, out Vector3 overlapCenter, out Vector3 overlapHalfExtents);
-            bool overlapsStructure = Physics.CheckBox(
-                overlapCenter,
-                overlapHalfExtents,
-                Quaternion.identity,
-                LayerMask.GetMask("Structure"),
-                QueryTriggerInteraction.Ignore);
-
-            foreach (Collider collider in cloneColliders)
-                collider.enabled = true;
-
-            if (overlapsStructure) {
+            if (StructurePlacement.HasStructureOverlap(clone, bounds, groundPoint)) {
                 Object.Destroy(clone);
                 return;
             }

@@ -39,6 +39,7 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] RectTransform selectionBox;
         [SerializeField] TextMeshProUGUI selectionLabel;
         [SerializeField] GameObject selectionPanel;
+        [SerializeField] WV_RangeIndicator troopRangeIndicator;
         [Tooltip("Sells the selected units and troops. Lives on the selection panel, so it is there " +
                  "exactly when something to sell is selected. Asks for a second click before it sells.")]
         [SerializeField] Button sellButton;
@@ -74,6 +75,7 @@ namespace Universes.UniverseData.war_valley.Client {
         float optionRestingY;
 
         public WV_CommandMenu CommandMenu => commandMenu;
+        public WV_RangeIndicator TroopRangeIndicator => troopRangeIndicator;
         public SelectionInfoPanel StructurePanel => structurePanel;
         public CommandOptionGrid OptionMenu => optionMenu;
         public FundsTransferPanel DonatePanel => donatePanel;

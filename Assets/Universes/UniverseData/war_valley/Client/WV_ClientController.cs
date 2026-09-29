@@ -10,6 +10,7 @@ using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Input;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Component;
 using RyanAssets.UI.Hover;
 using FishNet.Transporting;
 using UnityEngine;
@@ -68,8 +69,8 @@ namespace Universes.UniverseData.war_valley.Client {
 
         /// <summary>The standing controls reminder on the hint line. It is game help, and the player can turn it off.</summary>
         const string ControlsHint =
-            "Click a building to open its menu • Shift-click to add • Drag to select units, or buildings\n"
-            + "M move • V attack-move • T attack • X stop • H hold • Del sell • Ctrl+F1-F4 set group • F1-F4 recall";
+            "Select your army, then click ground to advance or an enemy to attack. Drag to select a squad.\n"
+            + "Hold & Fight keeps troops in place. Freeze stops movement and weapons. More shows extra controls.";
 
         /// <summary>Seconds within which a second click on the same unit means "select all of these".</summary>
         const float DoubleClickSeconds = 0.3f;
@@ -86,6 +87,7 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("Ring shown under a troop this client has selected. Leave unset to select troops " +
                  "without a ring rather than to disable troop selection.")]
         [SerializeField] GameObject troopSelectionIndicator;
+        WV_RangeIndicator TroopRangeIndicator => hud != null ? hud.TroopRangeIndicator : null;
 
         [Header("Selection")]
         [Tooltip("Maximum units a single box selection can pick up.")]
@@ -115,6 +117,7 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly List<GameCharacter> characters = new();
         readonly List<GameCharacter> troopSelection = new();
         readonly Dictionary<GameCharacter, GameObject> troopIndicators = new();
+        readonly Dictionary<GameCharacter, WV_RangeIndicator> troopRanges = new();
 
         /// <summary>
         /// Selections parked on F1-F4. A group holds the things themselves rather than their ids, so
@@ -203,6 +206,7 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             menu.OrderArmed += ArmOrder;
+            menu.ClearRequested += ClearArmySelection;
             menu.SelectRequested += SelectAllOwned;
             menu.GroupRecalled += RecallControlGroup;
             menu.GroupBound += BindControlGroup;
@@ -214,6 +218,7 @@ namespace Universes.UniverseData.war_valley.Client {
             if (menu == null)
                 return;
             menu.OrderArmed -= ArmOrder;
+            menu.ClearRequested -= ClearArmySelection;
             menu.SelectRequested -= SelectAllOwned;
             menu.GroupRecalled -= RecallControlGroup;
             menu.GroupBound -= BindControlGroup;
@@ -250,6 +255,14 @@ namespace Universes.UniverseData.war_valley.Client {
             hud.SetHint(SelectionCount > 0 ? $"{SelectionCount} selected" : "Nothing to select");
         }
 
+        void ClearArmySelection() {
+            CancelDrag();
+            ClearSelection();
+            DisarmOrder(null);
+            RefreshSelectionUI();
+            hud.SetHint("Selection cleared");
+        }
+
         void OnEnable() {
             WV_Economy.LedgerChanged += MarkEconomyDirty;
             WV_Research.Changed += MarkResearchDirty;
@@ -257,6 +270,10 @@ namespace Universes.UniverseData.war_valley.Client {
             WV_ProductionBuilding.QueueChanged += HandleQueueChanged;
             GameCharacter.GameCharacterAdded += HandleCharacterAdded;
             GameCharacter.GameCharacterRemoved += HandleCharacterRemoved;
+            foreach (List<GameCharacter> team in GameCharacter.TeamToCharacter.Values) {
+                foreach (GameCharacter character in team)
+                    HandleCharacterAdded(character);
+            }
 
             // The shared build menu knows nothing about research or funds; War Valley answers for it.
             StructureMenu.AvailabilityProvider = GetStructureAvailability;
@@ -271,6 +288,18 @@ namespace Universes.UniverseData.war_valley.Client {
             WV_ProductionBuilding.QueueChanged -= HandleQueueChanged;
             GameCharacter.GameCharacterAdded -= HandleCharacterAdded;
             GameCharacter.GameCharacterRemoved -= HandleCharacterRemoved;
+            foreach (GameCharacter character in characters) {
+                if (character != null)
+                    character.DisplayNameChanged -= HandleTroopNameChanged;
+            }
+            foreach (WV_RangeIndicator range in troopRanges.Values) {
+                if (range != null)
+                    Destroy(range.gameObject);
+            }
+            troopRanges.Clear();
+            characters.Clear();
+            ClearSelection();
+            inspector?.Clear();
 
             if (StructureMenu.AvailabilityProvider == GetStructureAvailability)
                 StructureMenu.AvailabilityProvider = null;
@@ -321,6 +350,14 @@ namespace Universes.UniverseData.war_valley.Client {
         void HandleNotice(WV_Notice notice, Channel channel) => hud.SetHint(notice.message);
 
         void OnDestroy() {
+            foreach (GameCharacter character in characters) {
+                if (character != null)
+                    character.DisplayNameChanged -= HandleTroopNameChanged;
+            }
+            foreach (WV_RangeIndicator range in troopRanges.Values) {
+                if (range != null)
+                    Destroy(range.gameObject);
+            }
             UnbindCommandMenu();
             UnbindDonations();
             GameHelp.Changed -= HandleGameHelpChanged;
@@ -416,11 +453,38 @@ namespace Universes.UniverseData.war_valley.Client {
         void HandleQueueChanged() => inspector.MarkDirty();
 
         void HandleCharacterAdded(GameCharacter character) {
-            if (character != null && !characters.Contains(character))
-                characters.Add(character);
+            if (character == null || characters.Contains(character))
+                return;
+            characters.Add(character);
+            character.DisplayNameChanged += HandleTroopNameChanged;
+            RefreshTroopRange(character);
+        }
+
+        void HandleTroopNameChanged(EntityBase entity) => RefreshTroopRange((GameCharacter)entity);
+
+        void RefreshTroopRange(GameCharacter character) {
+            bool ranged = character is not LocalCharacter && !character.IsDead
+                && WV_Rules.TryGetTroopKind(character.DisplayName, out WV_TroopKind kind)
+                && WV_TroopCatalog.Get(kind).UsesGun;
+            if (!ranged) {
+                if (troopRanges.Remove(character, out WV_RangeIndicator old) && old != null)
+                    Destroy(old.gameObject);
+                return;
+            }
+            if (TroopRangeIndicator == null || troopRanges.ContainsKey(character))
+                return;
+            WV_RangeIndicator range = Instantiate(TroopRangeIndicator, character.transform);
+            range.transform.localPosition = Vector3.zero;
+            range.BindEntity(character);
+            range.SetRadius(WV_Rules.GunnerEngageRange);
+            range.SetSelected(troopSelection.Contains(character));
+            troopRanges.Add(character, range);
         }
 
         void HandleCharacterRemoved(GameCharacter character) {
+            character.DisplayNameChanged -= HandleTroopNameChanged;
+            if (troopRanges.Remove(character, out WV_RangeIndicator range) && range != null)
+                Destroy(range.gameObject);
             characters.Remove(character);
             RemoveFromSelection(character);
         }
@@ -529,8 +593,15 @@ namespace Universes.UniverseData.war_valley.Client {
         /// </summary>
         void HandleCommandKeys() {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || !Application.isFocused || TopbarControls.IsMenuOpen || !ToolControls.IsCursorFree()
-                || IsTyping())
+            if (keyboard == null || !Application.isFocused || TopbarControls.IsMenuOpen || IsTyping())
+                return;
+
+            if (keyboard.cKey.wasPressedThisFrame) {
+                ClearArmySelection();
+                return;
+            }
+
+            if (!ToolControls.IsCursorFree())
                 return;
 
             if (keyboard.deleteKey.wasPressedThisFrame)
@@ -549,6 +620,8 @@ namespace Universes.UniverseData.war_valley.Client {
                 IssueImmediateOrder(WV_OrderType.Stop);
             if (keyboard.hKey.wasPressedThisFrame)
                 IssueImmediateOrder(WV_OrderType.HoldPosition);
+            if (keyboard.fKey.wasPressedThisFrame)
+                IssueImmediateOrder(WV_OrderType.Freeze);
 
             // Escape backs out one step at a time: an armed order, then an open menu, then the
             // selected building.
@@ -563,6 +636,8 @@ namespace Universes.UniverseData.war_valley.Client {
                     inspector.CloseMenu();
                 else if (inspector.HasSelection)
                     SelectBuilding(null);
+                else if (SelectionCount > 0)
+                    ClearArmySelection();
             }
 
             for (int i = 0; i < ControlGroupCount; i++) {
@@ -840,6 +915,8 @@ namespace Universes.UniverseData.war_valley.Client {
 
             if (!hitSomething) {
                 if (!additive) {
+                    if (SelectionCount > 0 && AdvanceAtPoint(camera, screenPosition))
+                        return;
                     ClearSelection();
                     SelectBuilding(null);
                     RefreshSelectionUI();
@@ -875,6 +952,12 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             }
 
+            IEntity enemy = hit.collider.GetComponentInParent<IEntity>();
+            if (SelectionCount > 0 && !additive && IsHostileToLocalPlayer(enemy)) {
+                SendOrder(WV_OrderType.Attack, Vector3.zero, ((Component)enemy).GetComponent<NetworkObject>());
+                return;
+            }
+
             // Any building the commander may use - their own or an ally's - can be selected, which
             // also opens its menu. Shift adds or removes it; a double click takes every building of
             // that kind on screen.
@@ -898,10 +981,21 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             if (!additive) {
+                if (SelectionCount > 0 && AdvanceAtPoint(camera, screenPosition))
+                    return;
                 ClearSelection();
                 SelectBuilding(null);
                 RefreshSelectionUI();
             }
+        }
+
+        bool AdvanceAtPoint(Camera camera, Vector2 screenPosition) {
+            Ray ray = camera.ScreenPointToRay(screenPosition);
+            if (!Physics.Raycast(ray, out RaycastHit hit, float.MaxValue, WV_Rules.OrderGroundMask,
+                    QueryTriggerInteraction.Ignore))
+                return false;
+            SendOrder(WV_OrderType.AttackMove, hit.point, null);
+            return true;
         }
 
         /// <summary>
@@ -995,6 +1089,8 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
 
             troopSelection.Add(troop);
+            if (troopRanges.TryGetValue(troop, out WV_RangeIndicator range))
+                range.SetSelected(true);
             if (troopSelectionIndicator == null || troopIndicators.ContainsKey(troop))
                 return;
 
@@ -1013,6 +1109,8 @@ namespace Universes.UniverseData.war_valley.Client {
         }
 
         void ClearTroopIndicator(GameCharacter troop) {
+            if (troopRanges.TryGetValue(troop, out WV_RangeIndicator range))
+                range.SetSelected(false);
             if (!troopIndicators.TryGetValue(troop, out GameObject indicator))
                 return;
             troopIndicators.Remove(troop);
@@ -1184,7 +1282,7 @@ namespace Universes.UniverseData.war_valley.Client {
             AppendForce(WV_ForceCategory.Soldier, WV_Limits.CountUsed(clientId, WV_ForceCategory.Soldier, troops));
             forcesSummary.Append("  ");
             AppendForce(WV_ForceCategory.Vehicle, WV_Limits.CountUsed(clientId, WV_ForceCategory.Vehicle, troops));
-            forcesSummary.Append("  ");
+            forcesSummary.AppendLine();
             AppendForce(WV_ForceCategory.Aircraft, WV_Limits.CountUsed(clientId, WV_ForceCategory.Aircraft, troops));
             forcesSummary.Append("  ");
             AppendForce(WV_ForceCategory.Building, WV_Limits.CountUsed(clientId, WV_ForceCategory.Building, troops));
@@ -1290,7 +1388,7 @@ namespace Universes.UniverseData.war_valley.Client {
         /// primed cursor that will turn out to do nothing.
         /// </summary>
         public void ArmOrder(WV_OrderType orderType) {
-            if (orderType is WV_OrderType.Stop or WV_OrderType.HoldPosition) {
+            if (orderType is WV_OrderType.Stop or WV_OrderType.HoldPosition or WV_OrderType.Freeze) {
                 IssueImmediateOrder(orderType);
                 return;
             }
@@ -1425,6 +1523,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 WV_OrderType.AttackMove => "Advancing under fire",
                 WV_OrderType.Stop => "Holding here",
                 WV_OrderType.HoldPosition => "Holding position",
+                WV_OrderType.Freeze => "Frozen - choose Advance or Hold & Fight to resume",
                 _ => "Moving out"
             });
         }

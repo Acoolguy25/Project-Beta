@@ -176,6 +176,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
+      propertyPath: DebugTimerSpeed._editor_value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
       propertyPath: 'RobotNPC_Prefab.Array.data[0]'
       value: 
       objectReference: {fileID: 6865002775998532502, guid: 464ffb59118c58248a4e3c9bc1c665f9, type: 3}
@@ -197,11 +201,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
       propertyPath: DebugTimerInfinite._editor_value
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
       propertyPath: DebugInstantResearch._editor_value
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2719202492611129782, guid: bafebb4cc258be4488e5bb53ced09214, type: 3}
       propertyPath: '_buildableStructures.Array.data[0]'

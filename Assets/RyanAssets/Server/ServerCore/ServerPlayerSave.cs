@@ -21,6 +21,8 @@ namespace RyanAssets.Server.ServerCore {
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Init() {
+            if (NetworkSettings.EditorDirectConnection)
+                return;
             ServerBootStrap.StartServerEvent += OnStartServer;
             ServerBootStrap.StopServerEvent += OnStopServer;
             ServerBootStrap.StopServerAsyncEvent += SaveDirty;
@@ -49,6 +51,8 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         public static void MarkDirty(NetworkConnection conn) {
+            if (NetworkSettings.EditorDirectConnection)
+                return;
             dirtyConnections[conn] = true;
         }
 
@@ -87,6 +91,8 @@ namespace RyanAssets.Server.ServerCore {
         }
 
         static async UniTask SavePlayers(List<PlayerData> players) {
+            if (NetworkSettings.EditorDirectConnection)
+                return;
             JObject payload = new() {
                 ["players"] = new JObject()
             };

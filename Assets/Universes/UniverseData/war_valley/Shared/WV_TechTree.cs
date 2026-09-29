@@ -67,13 +67,13 @@ namespace Universes.UniverseData.war_valley.Shared {
         static readonly WV_TechDefinition[] definitions = {
             new(WV_Tech.RotaryAviation, "Rotary Aviation", "Aviation",
                 "Helicopter flight. Unlocks the Helipad and the attack Chopper it launches.",
-                cost: 500, researchSeconds: 60f,
+                cost: 400, researchSeconds: 40f,
                 unlockedStructureIds: new[] { "wv_helipad" },
                 unlockedUnits: new[] { WV_UnitKind.Chopper }),
             new(WV_Tech.ShieldTechnology, "Shield Technology", "Defense",
                 "Energy shields. Unlocks the Shield Generator, which raises a shield enemies must " +
                 "break before they can hurt anything inside it.",
-                cost: 900, researchSeconds: 75f,
+                cost: 700, researchSeconds: 55f,
                 unlockedStructureIds: new[] { WV_Rules.ShieldGeneratorId })
         };
 

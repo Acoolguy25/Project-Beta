@@ -104,6 +104,7 @@ namespace Universes.UniverseData.war_valley.Server {
         // --- Orders ----------------------------------------------------------
 
         public void OrderMove(Vector3 destination) {
+            ResumeCombat();
             order = WV_OrderType.Move;
             requestedPosition = destination;
             orderPosition = ResolveReachable(destination);
@@ -121,12 +122,14 @@ namespace Universes.UniverseData.war_valley.Server {
         public void OrderAttack(IEntity target) {
             if (!WV_Combat.IsValidTarget(target, gameCharacter.GetTeam()))
                 return;
+            ResumeCombat();
             order = WV_OrderType.Attack;
             orderTarget = target;
             localNPC.TargetEntity(target);
         }
 
         public void OrderStop() {
+            ResumeCombat();
             order = WV_OrderType.Stop;
             orderTarget = null;
             holdOrigin = transform.position;
@@ -137,6 +140,21 @@ namespace Universes.UniverseData.war_valley.Server {
         public void OrderHoldPosition() {
             OrderStop();
             order = WV_OrderType.HoldPosition;
+            localNPC.HoldCombatPosition = true;
+        }
+
+        public void OrderFreeze() {
+            OrderStop();
+            order = WV_OrderType.Freeze;
+            localNPC.AutomaticTargeting = false;
+            localNPC.HoldCombatPosition = true;
+            combat.SetCombatEnabled(false);
+        }
+
+        void ResumeCombat() {
+            localNPC.AutomaticTargeting = true;
+            localNPC.HoldCombatPosition = false;
+            combat.SetCombatEnabled(true);
         }
 
         // --- Tick ------------------------------------------------------------
@@ -155,7 +173,7 @@ namespace Universes.UniverseData.war_valley.Server {
 
             switch (order) {
                 case WV_OrderType.Move:
-                    TickMove(engageOnTheWay: false);
+                    TickMove(engageOnTheWay: true);
                     break;
                 case WV_OrderType.AttackMove:
                     TickMove(engageOnTheWay: true);
@@ -166,6 +184,10 @@ namespace Universes.UniverseData.war_valley.Server {
                 case WV_OrderType.HoldPosition:
                     TickDefend(leash: 0f);
                     break;
+                case WV_OrderType.Freeze:
+                    localNPC.AutomaticTargeting = false;
+                    localNPC.SetTargetingType(NPCTargetingType.None);
+                    break;
                 default:
                     TickDefend(DefendLeash);
                     break;
@@ -173,8 +195,7 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         void TickMove(bool engageOnTheWay) {
-            // A plain move order is a move order: the squad crossing open ground should not be
-            // pulled into every skirmish it passes. Ctrl-click (attack-move) is what opts in.
+            // Movement keeps its destination while combat interrupts it, then resumes after combat.
             localNPC.AutomaticTargeting = engageOnTheWay;
             if (engageOnTheWay && IsEngaged)
                 return;
