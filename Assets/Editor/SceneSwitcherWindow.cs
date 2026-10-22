@@ -40,7 +40,7 @@ public class SceneSwitcherWindow : EditorWindow {
         }
     }
 
-    [MenuItem("Window/Scene Switcher")]
+    [MenuItem("Tools/Scene Switcher")]
     private static void ShowWindow() {
         GetWindow<SceneSwitcherWindow>("Scene Switcher");
     }
@@ -192,7 +192,8 @@ public class SceneSwitcherWindow : EditorWindow {
             !UpdateUniverseIdSource(
                 ServerBootStrapSourcePath,
                 "universe_id",
-                universeId))
+                universeId) ||
+            !UpdateLocalNetworkConfigUniverseId(universeId))
             return;
 
 #if UNITY_SERVER
@@ -221,16 +222,51 @@ public class SceneSwitcherWindow : EditorWindow {
         }
 
         string source = File.ReadAllText(sourcePath);
-        string pattern = $@"(?<prefix>\b{Regex.Escape(fieldName)}\s*=\s*(?:EditorPrefs\.GetString\(\s*""[^""]+""\s*,\s*)?"")[^""]*(?<suffix>""\)?)";
-        string updatedSource = new Regex(pattern).Replace(
-            source,
-            match => match.Groups["prefix"].Value + universeId + match.Groups["suffix"].Value,
-            1);
+        // Matches `field = "id"` and the ternary form `field = cond ? x : "id"`.
+        string pattern = $@"(?<prefix>\b{Regex.Escape(fieldName)}\s*=\s*(?:[^;""\r\n]*?:\s*)?"")(?<id>[^""]*)(?<suffix>"")";
+        Match match = Regex.Match(source, pattern);
 
-        if (source == updatedSource)
-            return source.Contains($"{fieldName} = \"{universeId}\"");
+        if (!match.Success) {
+            EditorUtility.DisplayDialog(
+                "Update Universe",
+                $"Could not find a '{fieldName}' universe assignment in {sourcePath}.",
+                "OK");
+            return false;
+        }
+
+        if (match.Groups["id"].Value == universeId)
+            return true;
+
+        string updatedSource = source.Substring(0, match.Groups["id"].Index)
+                               + universeId
+                               + source.Substring(match.Groups["id"].Index + match.Groups["id"].Length);
 
         File.WriteAllText(sourcePath, updatedSource);
+        return true;
+    }
+
+    // In the Editor the server reads this asset when editor_direct_connection is on.
+    private static bool UpdateLocalNetworkConfigUniverseId(string universeId) {
+        const string configPath = "Assets/Resources/NetworkSettings/LocalNetworkConfig.asset";
+        Object config = AssetDatabase.LoadAssetAtPath<Object>(configPath);
+        var serialized = config != null ? new SerializedObject(config) : null;
+        SerializedProperty property = serialized?.FindProperty("editor_universe_id");
+
+        if (property == null) {
+            EditorUtility.DisplayDialog(
+                "Update Universe",
+                $"Could not find 'editor_universe_id' on {configPath}.",
+                "OK");
+            return false;
+        }
+
+        if (property.stringValue == universeId)
+            return true;
+
+        property.stringValue = universeId;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        EditorUtility.SetDirty(config);
+        AssetDatabase.SaveAssetIfDirty(config);
         return true;
     }
 

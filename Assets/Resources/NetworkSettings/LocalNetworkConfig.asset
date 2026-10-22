@@ -17,5 +17,5 @@ MonoBehaviour:
   use_in_debug: 1
   no_login: 1
   editor_direct_connection: 1
-  editor_universe_id: war_valley
+  editor_universe_id: dot_invaders
   editor_game_port: 20000

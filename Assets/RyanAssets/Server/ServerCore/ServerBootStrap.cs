@@ -66,7 +66,7 @@ namespace RyanAssets.Server.ServerCore {
             //Debug.Log("============ ServerBootStrap ============");
 #if UNITY_EDITOR
             serverInfo = new(){
-                universe_id = NetworkSettings.EditorDirectConnection ? NetworkSettings.EditorUniverseId : "war_valley",
+                universe_id = NetworkSettings.EditorDirectConnection ? NetworkSettings.EditorUniverseId : "dot_invaders",
                 server_id = "unity-test-server",
                 server_port = NetworkSettings.EditorDirectConnection ? NetworkSettings.EditorGamePort : (ushort)20000
             };
