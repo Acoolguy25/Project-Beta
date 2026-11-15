@@ -1,0 +1,11 @@
+{
+    "name": "Universes.UniverseData.hide_and_seek.Shared",
+    "rootNamespace": "Universes.UniverseData.hide_and_seek",
+    "references": [
+        "FishNet.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Rounds",
+        "Unity.TextMeshPro"
+    ],
+    "autoReferenced": true
+}

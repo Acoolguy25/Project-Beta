@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &4716384611169253985
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3482805218657539284}
+  - component: {fileID: 1832471972139274610}
+  m_Layer: 0
+  m_Name: HS_ServerRunner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3482805218657539284
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4716384611169253985}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1832471972139274610
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4716384611169253985}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60b183f03d5a0a593a45fa3b8796af16, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.hide_and_seek.Server::Universes.UniverseData.hide_and_seek.Server.HS_ServerRunner
+  DebugTimerSpeedUp:
+    _editor_value: 0
+  DebugTimerInfinite:
+    _editor_value: 0
+  DebugTimerSpeed:
+    _editor_value: 10
+  minPlayers: 2
+  intermissionSeconds: 10
+  hideSeconds: 30
+  seekSeconds: 150
+  resultsSeconds: 8
+  pingFrom: 60
+  pingEvery: 15
+  tagCooldown: 0.6
+  hiderWalk: 13
+  hiderSprint: 20
+  seekerWalk: 14.5
+  seekerSprint: 22
+  tagXP: 15
+  surviveXP: 40
+  surviveGold: 15
+  seekerWinXP: 20

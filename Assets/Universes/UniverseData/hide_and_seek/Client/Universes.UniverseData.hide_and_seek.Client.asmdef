@@ -1,0 +1,28 @@
+{
+    "name": "Universes.UniverseData.hide_and_seek.Client",
+    "rootNamespace": "Universes.UniverseData.hide_and_seek.Client",
+    "references": [
+        "Universes.UniverseData.hide_and_seek.Shared",
+        "RyanAssets.Rounds",
+        "RyanAssets.Core",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Characters.Client",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui",
+        "RyanAssets.Client.ClientUI.NameTag",
+        "RyanAssets.Input"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

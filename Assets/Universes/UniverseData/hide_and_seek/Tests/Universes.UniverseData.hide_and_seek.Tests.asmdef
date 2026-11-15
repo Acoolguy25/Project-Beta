@@ -1,0 +1,7 @@
+{
+  "name": "Universes.UniverseData.hide_and_seek.Tests",
+  "references": ["Universes.UniverseData.hide_and_seek.Shared", "RyanAssets.Rounds", "RyanAssets.Core"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

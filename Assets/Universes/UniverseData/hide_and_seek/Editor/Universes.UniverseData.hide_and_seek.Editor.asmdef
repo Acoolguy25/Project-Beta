@@ -1,0 +1,19 @@
+{
+    "name": "Universes.UniverseData.hide_and_seek.Editor",
+    "references": [
+        "Universes.UniverseData.hide_and_seek.Shared",
+        "Universes.UniverseData.hide_and_seek.Client",
+        "Universes.UniverseData.hide_and_seek.Server",
+        "RyanAssets.Authoring",
+        "RyanAssets.Rounds",
+        "RyanAssets.Platformer",
+        "RyanAssets.Server.ServerFeatures",
+        "RyanAssets.Core",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}
