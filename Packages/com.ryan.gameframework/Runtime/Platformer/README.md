@@ -14,6 +14,7 @@ game's server with `PlatformerQuery` against replicated positions.
 | `CrumbleBlock` | Shakes, drops away and returns after the local player stands on it | Solid collider |
 | `TimedToggleBlock` | Solid for part of a cycle on the shared network clock (beat blocks) | Solid collider |
 | `HazardVolume` | Marks lava/spikes; the server sends touching characters back | Any collider |
+| `KnockbackSurface` | Bumper / sweeper: a hit flings the character along the obstacle's motion (hard hits ragdoll it) | Solid collider on a moving object |
 | `CheckpointMarker` | Flag presentation for a reached checkpoint | Renderers |
 | `Spinner` | Visual spin/bob for collectibles | — |
 
@@ -40,3 +41,15 @@ ceiling and then walk and jump on it. Design notes for gravity rooms:
 - A character lying on a wall has much larger axis-aligned bounds than its real box. Server rules
   should test the oriented box (`PlatformerQuery.GetBox` plus the oriented `Overlap`), not
   `Collider.bounds`.
+
+## Parkour and ragdoll
+
+`CharacterParkour` (Characters.Client, add it next to the game's client controller) plugs into
+`CharacterMovement` as an `IMovementMode` and gives the local player ledge grabs (shimmy, climb, kick
+off, drop), mantling, sliding (Crouch while running, jump out of it for a boost), wall runs (Sprint
+along a wall in the air), landing rolls (Crouch just before a hard landing) and ragdolls (very hard
+landings, `KnockbackSurface` hits, or `Tumble` from game code such as a hazard). `CharacterStance` on
+the character prefab shares the stance with every client and draws it: a procedural pose over the
+animator, or the physics ragdoll falling in the character's own gravity. Every setting is on the two
+components in the Inspector.
+

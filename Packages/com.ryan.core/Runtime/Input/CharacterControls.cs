@@ -11,6 +11,8 @@ namespace RyanAssets.Input {
         public Vector2 look;
         public bool jump;
         public bool sprint;
+        /// <summary>Held to crouch: slides while running, rolls on landing, lets go of ledges.</summary>
+        public bool crouch;
         PlayerInput playerInput;
         InputActionAsset zoomActionsAsset;
         InputAction zoomInAction;
@@ -72,6 +74,9 @@ namespace RyanAssets.Input {
         public void OnSprint(InputValue value) {
             SprintInput(value.isPressed);
         }
+        public void OnCrouch(InputValue value) {
+            CrouchInput(value.isPressed);
+        }
         public bool IsPointerOverScrollRect() {
             if (EventSystem.current == null || Mouse.current == null)
                 return false;
@@ -100,6 +105,9 @@ namespace RyanAssets.Input {
         }
         public void SprintInput(bool newSprintState) {
             sprint = newSprintState;
+        }
+        public void CrouchInput(bool newCrouchState) {
+            crouch = newCrouchState;
         }
     }
 }

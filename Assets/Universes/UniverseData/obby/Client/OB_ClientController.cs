@@ -2,6 +2,7 @@ using System.Text;
 using FishNet;
 using FishNet.Managing.Client;
 using FishNet.Transporting;
+using RyanAssets.Characters.Client;
 using RyanAssets.Platformer;
 using TMPro;
 using UnityEngine;
@@ -45,6 +46,10 @@ namespace Universes.UniverseData.obby.Client {
         public OB_Fx fx;
         public OB_Backdrop backdrop;
         public OB_Atmosphere atmosphere;
+        [Tooltip("Parkour moves and ragdoll for the local player; hazards knock the character limp.")]
+        public CharacterParkour parkour;
+        [Tooltip("Velocity (m/s, along up) a hazard flings the character with before the respawn.")]
+        [Min(0f)] public float hazardFling = 11f;
         public AudioSource sfx;
         public AudioClip coinClip, checkpointClip, finishClip, fallClip;
         [Tooltip("Seconds the stage progress bar takes to catch up.")]
@@ -107,7 +112,7 @@ namespace Universes.UniverseData.obby.Client {
         };
 
         static string StageHint(OB_StageKind kind) => kind switch {
-            OB_StageKind.Hops => "Jump from platform to platform. Hold Shift to sprint.",
+            OB_StageKind.Hops => "Jump from platform to platform. Shift sprints, C slides; catch ledges and wall run to save a jump.",
             OB_StageKind.Springs => "Land on a spring to launch, then steer onto the ledge.",
             OB_StageKind.MoonLeap => "Low gravity! Your jumps go much higher and farther.",
             OB_StageKind.Conveyors => "Belts push you around. Walk against them.",
@@ -115,7 +120,7 @@ namespace Universes.UniverseData.obby.Client {
             OB_StageKind.Beat => "Pink and blue blocks swap on the beat. They blink before vanishing.",
             OB_StageKind.WallJump => "Jump into a striped wall, then press Jump again to kick off it.",
             OB_StageKind.Movers => "Ride the moving platforms across.",
-            OB_StageKind.Spinner => "Jump over the sweeping lava bar.",
+            OB_StageKind.Spinner => "Jump over the sweeper. If it hits you, you go flying!",
             OB_StageKind.LavaRun => "Hop across the stones. Lava sends you back.",
             OB_StageKind.Boost => "Run over the boost pad to fly across the gap.",
             OB_StageKind.WallWalk => "Step into the glowing field and gravity pulls you onto the wall. Run along it!",
@@ -244,6 +249,12 @@ namespace Universes.UniverseData.obby.Client {
                 case OB_ProgressReason.Hazard:
                     Toast("Ouch! Back to your checkpoint.", OB_Palette.Lava, fallClip, 1.5f);
                     if (fx != null) fx.RespawnAtPlayer();
+                    // Yelp off the lava limp; the server respawns the character a moment later.
+                    if (parkour != null && CharacterMovement.Local != null) {
+                        Vector3 up = CharacterMovement.Local.Up;
+                        Vector3 sideways = Vector3.ProjectOnPlane(Random.onUnitSphere, up) * 3f;
+                        parkour.Tumble(up * hazardFling + sideways);
+                    }
                     break;
                 case OB_ProgressReason.Fell:
                     Toast("Back to your checkpoint.", OB_Palette.InkSoft, fallClip, 1.5f);

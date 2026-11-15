@@ -58,7 +58,8 @@ namespace RyanAssets.Cameras {
             if (initialized)
                 return;
             initialized = true;
-            wallLayerMask = ~LayerMask.GetMask("Character", "UI");
+            // Characters never pull the camera in, including the player's own limbs while ragdolled.
+            wallLayerMask = ~LayerMask.GetMask("Character", "LocalCharacter", "UI");
             orbitalFollow = GetComponent<CinemachineOrbitalFollow>();
             cinemachineInputAxisController = GetComponent<CinemachineInputAxisController>();
             cinemachineCamera = GetComponent<CinemachineCamera>();

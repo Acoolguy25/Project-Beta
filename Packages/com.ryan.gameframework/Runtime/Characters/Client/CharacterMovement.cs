@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishNet;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientCore;
@@ -9,6 +10,15 @@ using UnityEngine.Serialization;
 
 namespace RyanAssets.Characters.Client {
     /// <summary>
+    /// A special way of moving, such as a parkour move. Modes get the first look at every physics step;
+    /// while one returns true it drives the body for that step instead of normal walking, jumping and
+    /// gravity. Register with <see cref="CharacterMovement.AddMode"/>.
+    /// </summary>
+    public interface IMovementMode {
+        bool Step(CharacterMovement movement, float dt);
+    }
+
+    /// <summary>
     /// Client-authoritative movement for the local player's character.
     /// <para>
     /// Every vector is measured in the character's gravity frame (<see cref="CharacterGravity"/>):
@@ -16,7 +26,10 @@ namespace RyanAssets.Characters.Client {
     /// is ordinary ground movement; inside a gravity volume the same code walks, jumps and steps on
     /// walls and ceilings, and the body turns smoothly to stand on the new surface.
     /// </para>
-    /// <para>Each physics step runs: resolve gravity → orient → jump → gravity → planar movement.</para>
+    /// <para>
+    /// Each physics step runs: resolve gravity → orient → movement modes (<see cref="IMovementMode"/>)
+    /// → jump → gravity → planar movement.
+    /// </para>
     /// </summary>
     public class CharacterMovement : MonoBehaviour {
         // ------------------------------------------------------------------ settings
@@ -90,6 +103,24 @@ namespace RyanAssets.Characters.Client {
         public Vector3 ExternalVelocity => _externalVelocity;
         public float WalkSpeed => walkSpeed;
         public float SprintSpeed => sprintSpeed;
+        /// <summary>The input this controller reads.</summary>
+        public CharacterControls Controls => _input;
+        /// <summary>True on the physics step jump was pressed (not held from before).</summary>
+        public bool JumpPressed { get; private set; }
+        /// <summary>Planar direction the body faces.</summary>
+        public Vector3 Facing => _facing;
+        /// <summary>Current steering speed along the move direction (m/s), excluding external momentum.</summary>
+        public float MoveSpeed => _speed;
+        /// <summary>Speed a jump leaves the ground with (m/s).</summary>
+        public float JumpSpeed => Mathf.Sqrt(2f * JumpHeight * GravityStrength);
+        /// <summary>Current gravity acceleration (m/s²), after volumes' strength scale.</summary>
+        public float GravityAcceleration => GravityStrength * (_gravity != null ? _gravity.Scale : 1f);
+        /// <summary>The character's box collider (null before a character exists).</summary>
+        public BoxCollider BodyCollider => _boxCollider;
+        /// <summary>Layers that count as world geometry for probes (everything but characters).</summary>
+        public int WorldMask => _stepMask;
+        /// <summary>Raised when the character touches a surface that knocks it back, with the knockback velocity.</summary>
+        public event System.Action<Vector3> KnockedBack;
 
         private float JumpHeight => PlayerData.localData.jumpHeight.Value;
         /// <summary>Gravity strength in m/s² (PlayerData stores it as a negative number).</summary>
@@ -106,6 +137,7 @@ namespace RyanAssets.Characters.Client {
         private CharacterControls _input;
         private PlayerData _playerData;
         private int _stepMask;
+        private readonly List<IMovementMode> _modes = new();
 
         // ------------------------------------------------------------------ runtime state
         private Vector3 _facing = Vector3.forward;        // planar, where the body looks
@@ -244,6 +276,41 @@ namespace RyanAssets.Characters.Client {
                 _characterAnimator.Jump();
         }
 
+        /// <summary>Gives <paramref name="mode"/> the first look at every physics step (see <see cref="IMovementMode"/>).</summary>
+        public void AddMode(IMovementMode mode) {
+            if (mode != null && !_modes.Contains(mode))
+                _modes.Add(mode);
+        }
+
+        public void RemoveMode(IMovementMode mode) => _modes.Remove(mode);
+
+        /// <summary>The camera-relative move direction on the gravity plane, if there is move input.</summary>
+        public bool TryGetMoveDirection(out Vector3 direction) {
+            Vector2 input = GetAdaptedMoveVector(_input);
+            if (_body == null || input.sqrMagnitude <= 0f) {
+                direction = _facing;
+                return false;
+            }
+            direction = CameraRelativeDirection(input, Up);
+            return true;
+        }
+
+        /// <summary>Turns the body to face <paramref name="direction"/> (flattened onto the gravity plane) and carries on at <paramref name="speed"/>.</summary>
+        public void Face(Vector3 direction, float speed) {
+            _facing = _moveDirection = PlanarOrFallback(direction, Up, _facing);
+            _turnVelocity = 0f;
+            _speed = Mathf.Max(0f, speed);
+        }
+
+        /// <summary>Eases the facing toward <paramref name="direction"/> with the normal turn smoothing.</summary>
+        public void SteerToward(Vector3 direction) => TurnToward(PlanarOrFallback(direction, Up, _facing), Up);
+
+        /// <summary>Accelerates the body along gravity for one step, scaled by <paramref name="scale"/>.</summary>
+        public void ApplyGravityStep(float dt, float scale = 1f) => ApplyGravity(dt * scale);
+
+        /// <summary>Records contact with a knockback surface. Called by the character's collision relay.</summary>
+        internal void ReportKnockback(Vector3 velocity) => KnockedBack?.Invoke(velocity);
+
         /// <summary>Records contact with a wall-jump surface. Called by the character's collision relay.</summary>
         internal void ReportWallContact(Vector3 normal, IWallJumpSurface surface) {
             normal = Vector3.ProjectOnPlane(normal, Up);
@@ -277,6 +344,14 @@ namespace RyanAssets.Characters.Client {
             _gravity.Resolve();
             UpdateGravityFrame(dt);
             UpdateGroundState();
+            JumpPressed = _input.jump && !_jumpHeldLastStep;
+            for (int i = 0; i < _modes.Count; i++) {
+                if (!_modes[i].Step(this, dt))
+                    continue;
+                ApplyBodyRotation();
+                _jumpHeldLastStep = _input.jump;
+                return;
+            }
             HandleJump();
             ApplyGravity(dt);
             Move(dt);

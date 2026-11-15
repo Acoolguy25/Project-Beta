@@ -8,6 +8,7 @@
         "RyanAssets.Server.ServerFeatures",
         "RyanAssets.Platformer",
         "RyanAssets.Items.Platform",
+        "RyanAssets.Characters.Client",
         "RyanAssets.Characters.Shared",
         "RyanAssets.Core",
         "FishNet.Runtime",

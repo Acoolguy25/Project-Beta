@@ -15,6 +15,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UI;
 #if !UNITY_SERVER
+using RyanAssets.Characters.Client;
 using Universes.UniverseData.obby.Client;
 #endif
 
@@ -817,8 +818,10 @@ namespace Universes.UniverseData.obby.Editor {
                 go.AddComponent<GroundMotionTransfer>().transferRotation = false;
                 p.mover = Save(go, "Mover");
             }
-            p.spinnerBar = Spinner("SpinnerBar", lavaMat, pole, false);
-            p.spinnerCross = Spinner("SpinnerCross", lavaMat, pole, true);
+            // Sweeper bars are bumpers, not lava: a hit knocks the player flying (KnockbackSurface).
+            var sweeper = BlockMat("Sweeper", OB_Palette.Hex(0xFF4F6D), 0.08f, 0.35f, bevel: 0.4f);
+            p.spinnerBar = Spinner("SpinnerBar", sweeper, pole, false);
+            p.spinnerCross = Spinner("SpinnerCross", sweeper, pole, true);
             p.coin = BuildCoin(gold);
             {
                 var go = Cube("Gate", null, Vector3.zero, Vector3.one, gateMat);
@@ -853,16 +856,16 @@ namespace Universes.UniverseData.obby.Editor {
             return p;
         }
 
-        static GameObject Spinner(string name, Material hazard, Material hub, bool cross) {
+        static GameObject Spinner(string name, Material bumper, Material hub, bool cross) {
             var root = new GameObject(name);
             var body = root.AddComponent<Rigidbody>();
             body.isKinematic = true;
             body.useGravity = false;
             root.AddComponent<NetworkPlatform>();
             for (int i = 0; i < (cross ? 2 : 1); i++) {
-                var bar = Cube($"Bar{i}", root.transform, Vector3.zero, new Vector3(11.4f, 0.5f, 0.5f), hazard);
+                var bar = Cube($"Bar{i}", root.transform, Vector3.zero, new Vector3(11.4f, 0.5f, 0.5f), bumper);
                 bar.transform.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
-                bar.AddComponent<HazardVolume>().glowRenderer = bar.GetComponent<Renderer>();
+                bar.AddComponent<KnockbackSurface>();
             }
             Primitive(PrimitiveType.Cylinder, "Hub", root.transform, new Vector3(0f, 0f, 0f), new Vector3(0.9f, 0.4f, 0.9f), hub, false);
             return Save(root, name);
@@ -1080,6 +1083,8 @@ namespace Universes.UniverseData.obby.Editor {
             skyRoot.transform.SetParent(root.transform, false);
             client.backdrop = skyRoot.AddComponent<OB_Backdrop>();
             BuildBackdrop(client.backdrop);
+            // Parkour and ragdoll physics for the local player while in the obby.
+            client.parkour = root.AddComponent<CharacterParkour>();
             client.atmosphere = skyRoot.AddComponent<OB_Atmosphere>();
             client.atmosphere.moods = Enumerable.Range(0, OB_Tiers.Count)
                 .Select(t => OB_Atmosphere.Mood.From(OB_Themes.Get((OB_Tier)t).mood)).ToArray();

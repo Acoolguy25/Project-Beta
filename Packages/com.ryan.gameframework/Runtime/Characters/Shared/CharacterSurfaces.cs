@@ -16,4 +16,13 @@ namespace RyanAssets.Characters.Shared {
         /// <summary>Horizontal speed away from the wall a wall jump starts with.</summary>
         float AwaySpeed { get; }
     }
+
+    /// <summary>A moving obstacle that knocks characters flying when it hits them, such as a spinner bar.</summary>
+    public interface IKnockbackSurface {
+        /// <summary>
+        /// Velocity to give a character hit at <paramref name="point"/> (<paramref name="up"/> is the
+        /// character's gravity up), or zero when the hit is too soft to count.
+        /// </summary>
+        Vector3 GetKnockback(Vector3 point, Vector3 up);
+    }
 }

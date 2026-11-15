@@ -6,7 +6,7 @@ namespace RyanAssets.Characters.Client {
     /// Receives collision callbacks on the character Rigidbody for <see cref="CharacterMovement"/>,
     /// which lives on the client object and cannot receive them directly. It
     /// <list type="bullet">
-    /// <item>reports touched wall-jump surfaces, and</item>
+    /// <item>reports touched wall-jump surfaces and knockback surfaces, and</item>
     /// <item>removes the upward velocity the solver creates when the character runs into a wall.</item>
     /// </list>
     /// "Up" and "wall" are measured against the character's gravity, so both work on any surface.
@@ -21,6 +21,8 @@ namespace RyanAssets.Characters.Client {
         private CharacterMovement _movement;
         private Collider _lastWallCollider;
         private IWallJumpSurface _lastWallSurface;
+        private Collider _lastKnockbackCollider;
+        private IKnockbackSurface _lastKnockbackSurface;
 
         public void Initialize(Rigidbody body, CharacterMovement movement) {
             _rigidbody = body;
@@ -34,6 +36,7 @@ namespace RyanAssets.Characters.Client {
             if (_movement == null || _rigidbody == null)
                 return;
             Vector3 up = _movement.Up;
+            ReportKnockback(collision, up);
             if (!ReportWallJumpSurface(collision, up))
                 StabilizeWallCollision(collision, up);
         }
@@ -57,6 +60,18 @@ namespace RyanAssets.Characters.Client {
                 }
             }
             return true;
+        }
+
+        private void ReportKnockback(Collision collision, Vector3 up) {
+            if (collision.collider != _lastKnockbackCollider) {
+                _lastKnockbackCollider = collision.collider;
+                _lastKnockbackSurface = collision.collider != null ? collision.collider.GetComponentInParent<IKnockbackSurface>() : null;
+            }
+            if (_lastKnockbackSurface == null || collision.contactCount == 0)
+                return;
+            Vector3 knockback = _lastKnockbackSurface.GetKnockback(collision.GetContact(0).point, up);
+            if (knockback != Vector3.zero)
+                _movement.ReportKnockback(knockback);
         }
 
         private void StabilizeWallCollision(Collision collision, Vector3 up) {

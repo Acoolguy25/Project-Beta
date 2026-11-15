@@ -36,6 +36,8 @@ namespace Universes.UniverseData.obby.Server {
         [SerializeField, Min(0.1f)] float respawnSeconds = 1.5f;
         [Tooltip("Hazard and fall checks are skipped this long after a teleport, while the new position arrives.")]
         [SerializeField, Min(0f)] float teleportGrace = 0.6f;
+        [Tooltip("Seconds between touching a hazard and the respawn, while the client shows the character knocked limp.")]
+        [SerializeField, Min(0f)] float hazardRespawnDelay = 1.2f;
         [Header("Rewards")]
         [SerializeField] ulong checkpointXP = 5;
         [SerializeField] ulong coinGold = 3;
@@ -56,6 +58,8 @@ namespace Universes.UniverseData.obby.Server {
             public float finishTime;
             public int place;
             public float graceUntil;
+            /// <summary>When a pending hazard respawn happens (0 when none is pending).</summary>
+            public float respawnAt;
         }
 
         readonly Dictionary<NetworkConnection, Runner> runners = new();
@@ -213,7 +217,12 @@ namespace Universes.UniverseData.obby.Server {
             foreach (var pair in LocalCharacter.Characters) {
                 LocalCharacter character = pair.Value;
                 if (character == null || character.IsDead || !character.IsSpawned) continue;
-                if (!runners.TryGetValue(pair.Key, out Runner runner) || Time.time < runner.graceUntil) continue;
+                if (!runners.TryGetValue(pair.Key, out Runner runner)) continue;
+                if (runner.respawnAt > 0f) {
+                    if (Time.time >= runner.respawnAt) Respawn(character, runner);
+                    continue;
+                }
+                if (Time.time < runner.graceUntil) continue;
                 if (!character.TryGetComponent(out Collider body)) continue;
                 Bounds bounds = body.bounds;
                 Vector3 centre = bounds.center;
@@ -273,10 +282,20 @@ namespace Universes.UniverseData.obby.Server {
             BroadcastRound();
         }
 
+        /// <summary>
+        /// Returns a player to their checkpoint. Falls teleport at once; after a hazard the client first
+        /// shows the character knocked limp, so the teleport waits <see cref="hazardRespawnDelay"/>.
+        /// </summary>
         void SendBack(LocalCharacter character, Runner runner, OB_ProgressReason reason) {
+            if (reason == OB_ProgressReason.Hazard && hazardRespawnDelay > 0f) runner.respawnAt = Time.time + hazardRespawnDelay;
+            else Respawn(character, runner);
+            SendProgress(character.Owner, reason);
+        }
+
+        void Respawn(LocalCharacter character, Runner runner) {
+            runner.respawnAt = 0f;
             runner.graceUntil = Time.time + teleportGrace;
             character.TeleportTo(SpawnPosition(character.Owner));
-            SendProgress(character.Owner, reason);
         }
 
         // ---------------------------------------------------------------- messages

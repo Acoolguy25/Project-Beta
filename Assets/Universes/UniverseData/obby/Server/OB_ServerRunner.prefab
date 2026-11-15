@@ -58,6 +58,7 @@ MonoBehaviour:
   fixedSeed: 0
   respawnSeconds: 1.5
   teleportGrace: 0.6
+  hazardRespawnDelay: 1.2
   checkpointXP: 5
   coinGold: 3
   finishXP: 60

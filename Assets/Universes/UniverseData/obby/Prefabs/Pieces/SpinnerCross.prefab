@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 1713518591145132487}
   - component: {fileID: 3420926227462965627}
   - component: {fileID: 4932188971710309132}
-  - component: {fileID: 318697968180677498}
+  - component: {fileID: 5947126850599321820}
   m_Layer: 0
   m_Name: Bar1
   m_TagString: Untagged
@@ -89,7 +89,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 21471c2e827d35b3d853ecaeb96de22f, type: 2}
+  - {fileID: 2100000, guid: 061b75b9572b02d74884fddcd16e886e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -113,7 +113,7 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!114 &318697968180677498
+--- !u!114 &5947126850599321820
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -122,12 +122,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 1155125182190854618}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c74296d0510734eae98602ed670fd0fc, type: 3}
+  m_Script: {fileID: 11500000, guid: 6e98d1e3facaee94f8d1de94c16de6d8, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Platformer::RyanAssets.Platformer.HazardVolume
-  glowRenderer: {fileID: 4932188971710309132}
-  glowColor: {r: 1, g: 0.35, b: 0.05, a: 1}
-  pulseSpeed: 2.5
+  m_EditorClassIdentifier: RyanAssets.Platformer::RyanAssets.Platformer.KnockbackSurface
+  strength: 1.15
+  lift: 7
+  minimumSpeed: 1.5
+  maximumSpeed: 26
 --- !u!1 &2614071531501944502
 GameObject:
   m_ObjectHideFlags: 0
@@ -222,7 +223,7 @@ GameObject:
   - component: {fileID: 370109711800890169}
   - component: {fileID: 8901197593758847940}
   - component: {fileID: 1844402253943362466}
-  - component: {fileID: 3548425874415251352}
+  - component: {fileID: 882644415655790807}
   m_Layer: 0
   m_Name: Bar0
   m_TagString: Untagged
@@ -299,7 +300,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 21471c2e827d35b3d853ecaeb96de22f, type: 2}
+  - {fileID: 2100000, guid: 061b75b9572b02d74884fddcd16e886e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -323,7 +324,7 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!114 &3548425874415251352
+--- !u!114 &882644415655790807
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -332,12 +333,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 4372814606344006468}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c74296d0510734eae98602ed670fd0fc, type: 3}
+  m_Script: {fileID: 11500000, guid: 6e98d1e3facaee94f8d1de94c16de6d8, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Platformer::RyanAssets.Platformer.HazardVolume
-  glowRenderer: {fileID: 1844402253943362466}
-  glowColor: {r: 1, g: 0.35, b: 0.05, a: 1}
-  pulseSpeed: 2.5
+  m_EditorClassIdentifier: RyanAssets.Platformer::RyanAssets.Platformer.KnockbackSurface
+  strength: 1.15
+  lift: 7
+  minimumSpeed: 1.5
+  maximumSpeed: 26
 --- !u!1 &4724910977171760829
 GameObject:
   m_ObjectHideFlags: 0

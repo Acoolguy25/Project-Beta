@@ -48,6 +48,7 @@ namespace RyanAssets.Characters.Shared {
         }
 #endif
         void RagdollInit() {
+            mainCollider ??= GetComponent<Collider>();
             rigidBodies = transform.GetComponentsInChildren<Rigidbody>(true).Where(rb => rb.transform != transform).ToArray();
             colliders = transform.GetChild(1).GetComponentsInChildren<Collider>(true);
             joints = GetComponentsInChildren<Joint>(true);
@@ -85,7 +86,48 @@ namespace RyanAssets.Characters.Shared {
                     ragdoll.enabled = disabled;
             }
         }
+        public bool IsRagdoll => RagdollEnabled;
+
+        /// <summary>
+        /// Gravity (m/s², direction included) the limp body falls with, instead of the world's
+        /// <see cref="Physics.gravity"/>: a character on a wall, or with heavier gravity, stays in its own frame.
+        /// </summary>
+        public Vector3? Gravity { get; set; }
+
+        void FixedUpdate() {
+            if (!RagdollEnabled || Gravity is not Vector3 gravity || rigidBodies == null)
+                return;
+            Vector3 extra = gravity - Physics.gravity;
+            foreach (Rigidbody body in rigidBodies)
+                if (!body.isKinematic)
+                    body.AddForce(extra, ForceMode.Acceleration);
+        }
+
+        /// <summary>
+        /// Adds <paramref name="velocity"/> to every ragdoll body, for a shove or a fling, and sets the
+        /// whole body spinning at <paramref name="angularVelocity"/> (rad/s) about its centre of mass.
+        /// </summary>
+        public void AddVelocity(Vector3 velocity, Vector3 angularVelocity = default) {
+            if (rigidBodies == null)
+                return;
+            Vector3 centre = Vector3.zero;
+            float mass = 0f;
+            foreach (Rigidbody body in rigidBodies) {
+                centre += body.worldCenterOfMass * body.mass;
+                mass += body.mass;
+            }
+            if (mass > 0f) centre /= mass;
+            foreach (Rigidbody body in rigidBodies) {
+                if (body.isKinematic)
+                    continue;
+                body.linearVelocity += velocity + Vector3.Cross(angularVelocity, body.worldCenterOfMass - centre);
+                body.angularVelocity += angularVelocity;
+            }
+        }
+
         public void SetRagdoll(bool enabled) {
+            if (rigidBodies == null)
+                RagdollInit();
             RagdollEnabled = enabled;
             mainCollider.enabled = !enabled;
 
