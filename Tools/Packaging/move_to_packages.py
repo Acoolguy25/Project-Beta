@@ -150,6 +150,8 @@ def add_to_manifest():
     path.write_text(json.dumps(data, indent=2) + "\n")
 
 
+KEEP_OLD_PATHS = {"AGENTS.md"}
+
 PATH_RE = re.compile(r"Assets/RyanAssets/([A-Za-z0-9_\-./ ]*?)(?=[\"'`\s)]|$)")
 
 
@@ -158,7 +160,9 @@ def rewrite_strings():
                            cwd=ROOT, capture_output=True, text=True).stdout.split()
     changed = []
     for f in files:
-        if f.startswith("Tools/Packaging/"):
+        # The packaging tools and AGENTS.md quote old paths on purpose (AGENTS.md has an
+        # "old path is now new path" example), so a re-run must not rewrite them.
+        if f.startswith("Tools/Packaging/") or f in KEEP_OLD_PATHS:
             continue
         p = ROOT / f
         text = p.read_text(encoding="utf-8")
