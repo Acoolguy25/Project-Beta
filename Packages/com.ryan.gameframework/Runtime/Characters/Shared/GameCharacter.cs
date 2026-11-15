@@ -54,7 +54,12 @@ namespace RyanAssets.Characters.Shared {
             set => DisplayNameSync.Value = NormalizeDisplayName(value);
         }
         public bool FallHeightEnabled => fallHeightEnabled;
-        public float FallenPartsDestroyHeight => fallenPartsDestroyHeight;
+        /// <summary>
+        /// Lets a game mode move the kill plane for every character (the prefab default is y = 0,
+        /// which kills anyone standing on ground built at or just below 0). Null uses the prefab value.
+        /// </summary>
+        public static float? FallHeightOverride;
+        public float FallenPartsDestroyHeight => FallHeightOverride ?? fallenPartsDestroyHeight;
         public ToolBaseShared[] Tools => gameObject.GetComponentsInChildren<ToolBaseShared>(false);
         public static string NormalizeDisplayName(string value) =>
             string.IsNullOrWhiteSpace(value) ? AnonymousDisplayName : value.Trim();
@@ -63,6 +68,7 @@ namespace RyanAssets.Characters.Shared {
         static void Init() {
             GameCharacterAdded = null;
             GameCharacterRemoved = null;
+            FallHeightOverride = null;
             TeamToCharacter.Clear();
         }
 

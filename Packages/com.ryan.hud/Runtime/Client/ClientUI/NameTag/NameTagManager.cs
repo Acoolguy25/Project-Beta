@@ -22,6 +22,14 @@ namespace RyanAssets.Client.ClientUI.NameTag {
     /// </para>
     /// </summary>
     public class NameTagManager : MonoBehaviour {
+        /// <summary>
+        /// Optional per-game rule for which character tags this client may see (hide and seek hides the
+        /// other side's tags, since tags draw through walls). Null shows every living character's tag.
+        /// </summary>
+        public static Func<GameCharacter, bool> CharacterTagFilter;
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetFilter() => CharacterTagFilter = null;
+
         [SerializeField]
         GameObject nameTagPrefab;
         [SerializeField]
@@ -363,7 +371,8 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                     continue;
                 }
 
-                bool show = CameraController.targetCharacter != tag.Character && !tag.Character.IsDead;
+                bool show = CameraController.targetCharacter != tag.Character && !tag.Character.IsDead
+                    && (CharacterTagFilter == null || CharacterTagFilter(tag.Character));
                 if (tag.Canvas.gameObject.activeSelf != show)
                     tag.Canvas.gameObject.SetActive(show);
                 if (show)

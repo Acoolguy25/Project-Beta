@@ -24,9 +24,9 @@
     "com.ryan.gameframework": {
       "layer": 3,
       "displayName": "Ryan Game Framework",
-      "description": "Server runner and features, characters, tools, items, combat, cameras, platformer mechanics, network manager prefabs and authoring tools that every universe builds on.",
+      "description": "Server runner and features, characters, tools, items, combat, cameras, platformer mechanics, round helpers, network manager prefabs and authoring tools that every universe builds on.",
       "dependencies": ["com.ryan.core", "com.ryan.ui", "com.ryan.networking"],
-      "paths": ["Server/ServerCore", "Server/ServerFeatures", "Shared/Server", "Shared/Combat", "Shared/ClientNetworkManager.prefab", "Shared/ServerNetworkManager.prefab", "Shared/GlobalNetworkHelper.prefab", "Characters", "Tools", "Items", "Levels/Server", "Cameras", "Client/CharacterEffects", "Platformer", "Editor"]
+      "paths": ["Server/ServerCore", "Server/ServerFeatures", "Shared/Server", "Shared/Combat", "Shared/ClientNetworkManager.prefab", "Shared/ServerNetworkManager.prefab", "Shared/GlobalNetworkHelper.prefab", "Characters", "Tools", "Items", "Levels/Server", "Cameras", "Client/CharacterEffects", "Platformer", "Rounds", "Editor"]
     },
     "com.ryan.hud": {
       "layer": 4,

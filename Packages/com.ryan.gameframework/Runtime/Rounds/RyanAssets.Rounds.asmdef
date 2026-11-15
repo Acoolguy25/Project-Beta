@@ -1,0 +1,22 @@
+{
+    "name": "RyanAssets.Rounds",
+    "rootNamespace": "RyanAssets.Rounds",
+    "references": [
+        "RyanAssets.Core",
+        "RyanAssets.DataService",
+        "RyanAssets.Shared.Global",
+        "RyanAssets.Shared.Declarations",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Characters.Shared",
+        "FishNet.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
