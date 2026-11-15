@@ -355,7 +355,7 @@ namespace RyanAssets.UI.Hover
             label.color = Color.white;
             label.fontSize = fontSize;
             label.alignment = TextAlignmentOptions.TopLeft;
-            label.enableWordWrapping = true;
+            label.textWrappingMode = TextWrappingModes.Normal;
             label.overflowMode = TextOverflowModes.Ellipsis;
             label.raycastTarget = false;
 

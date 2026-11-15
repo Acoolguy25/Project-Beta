@@ -1029,6 +1029,10 @@ namespace RyanAssets.UI.Textbox {
 
         public virtual float flexibleHeight => -1f;
 
+        public virtual float maxWidth => LayoutUtility.DefaultMaxSize;
+
+        public virtual float maxHeight => LayoutUtility.DefaultMaxSize;
+
         public virtual int layoutPriority => 1;
 
         protected CustomInputField() {
