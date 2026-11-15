@@ -1,0 +1,27 @@
+{
+    "name": "Universes.UniverseData.tower_defense.Client",
+    "rootNamespace": "Universes.UniverseData.tower_defense.Client",
+    "references": [
+        "Universes.UniverseData.tower_defense.Shared",
+        "RyanAssets.Rounds",
+        "RyanAssets.Core",
+        "RyanAssets.Input",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Characters.Client",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

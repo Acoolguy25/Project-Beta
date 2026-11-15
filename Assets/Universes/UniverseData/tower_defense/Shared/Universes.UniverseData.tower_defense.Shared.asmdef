@@ -1,0 +1,11 @@
+{
+    "name": "Universes.UniverseData.tower_defense.Shared",
+    "rootNamespace": "Universes.UniverseData.tower_defense",
+    "references": [
+        "FishNet.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Rounds",
+        "Unity.TextMeshPro"
+    ],
+    "autoReferenced": true
+}

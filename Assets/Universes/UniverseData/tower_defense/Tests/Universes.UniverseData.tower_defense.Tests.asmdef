@@ -1,0 +1,7 @@
+{
+  "name": "Universes.UniverseData.tower_defense.Tests",
+  "references": ["Universes.UniverseData.tower_defense.Shared", "RyanAssets.Rounds", "RyanAssets.Core"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}

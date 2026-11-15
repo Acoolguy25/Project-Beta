@@ -1,0 +1,19 @@
+{
+    "name": "Universes.UniverseData.tower_defense.Editor",
+    "references": [
+        "Universes.UniverseData.tower_defense.Shared",
+        "Universes.UniverseData.tower_defense.Client",
+        "Universes.UniverseData.tower_defense.Server",
+        "RyanAssets.Authoring",
+        "RyanAssets.Rounds",
+        "RyanAssets.Platformer",
+        "RyanAssets.Server.ServerFeatures",
+        "RyanAssets.Core",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}
