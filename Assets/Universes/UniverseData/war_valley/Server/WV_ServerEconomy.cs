@@ -182,6 +182,22 @@ namespace Universes.UniverseData.war_valley.Server {
                 WV_Economy.Instance?.Credit(payerClientId, refund);
         }
 
+        // --- Bounties --------------------------------------------------------
+
+        /// <summary>
+        /// Credits every live commander the same amount and tells each of them why: a wave held, the
+        /// round won. Skipped while funds are infinite, where it would only be noise.
+        /// </summary>
+        public void PayEveryone(long amount, string notice) {
+            WV_Economy economy = WV_Economy.Instance;
+            if (economy == null || amount <= 0 || economy.HasInfiniteFunds)
+                return;
+            foreach (int clientId in activeClientIds) {
+                economy.Credit(clientId, amount);
+                WV_ServerCommand.Notify(clientId, notice);
+            }
+        }
+
         // --- Penalties -------------------------------------------------------
 
         /// <summary>

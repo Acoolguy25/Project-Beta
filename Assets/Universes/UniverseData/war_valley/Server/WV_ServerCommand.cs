@@ -72,6 +72,12 @@ namespace Universes.UniverseData.war_valley.Server {
                 connection.Broadcast(new WV_Notice { message = message });
         }
 
+        /// <summary>Puts one line on every connected commander's HUD: wave announcements and round results.</summary>
+        public static void NotifyAll(string message) {
+            if (!string.IsNullOrEmpty(message) && InstanceFinder.ServerManager != null && InstanceFinder.ServerManager.Started)
+                InstanceFinder.ServerManager.Broadcast(new WV_Notice { message = message });
+        }
+
         /// <summary>Puts one line on a commander's HUD, if they are still connected.</summary>
         public static void Notify(int clientId, string message) {
             if (clientId != WV_Owned.NoOwner
