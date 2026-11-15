@@ -27,8 +27,8 @@ namespace Universes.UniverseData.obby {
         public GameObject crumble, beat, wallJumpWall, mover, spinnerBar, spinnerCross, coin;
 
         [Header("Presentation")]
-        [Tooltip("Platform colours, cycled per stage.")]
-        public Material[] platformPalette;
+        [Tooltip("Platform materials per difficulty tier (indexed by OB_Tier), cycled per stage inside the tier.")]
+        public TierMaterials[] tierPlatforms;
         [Tooltip("Beat block materials per group: solid then ghost.")]
         public Material beatSolidA, beatGhostA, beatSolidB, beatGhostB;
         [Min(0.1f)] public float tileMetres = 2f;
@@ -36,6 +36,11 @@ namespace Universes.UniverseData.obby {
         public Color directionalFieldTint = new(0.3f, 0.85f, 1f, 0.09f);
         [Tooltip("Client-only HUD and course presentation.")]
         public GameObject clientPrefab;
+
+        [Serializable]
+        public struct TierMaterials {
+            public Material[] materials;
+        }
 
         readonly List<GameObject> instances = new();
         Transform root;
@@ -122,12 +127,14 @@ namespace Universes.UniverseData.obby {
             go.name = $"{piece.stage:00} {piece.kind}";
             if (IsScaledBox(piece.kind)) go.transform.localScale = size;
             switch (piece.kind) {
-                case OB_PieceKind.Platform:
-                    if (platformPalette != null && platformPalette.Length > 0)
+                case OB_PieceKind.Platform: {
+                    Material material = PlatformMaterial(piece.stage);
+                    if (material != null)
                         foreach (var r in go.GetComponentsInChildren<Renderer>())
-                            r.sharedMaterial = platformPalette[Mathf.Abs(piece.stage) % platformPalette.Length];
+                            if (r is not ParticleSystemRenderer) r.sharedMaterial = material;
                     Tile(go, size);
                     break;
+                }
                 case OB_PieceKind.Lava:
                     Tile(go, piece.size);
                     Ambient(go, Vector3.up * 2.2f, piece.size.x * piece.size.z * 0.12f);
@@ -178,6 +185,17 @@ namespace Universes.UniverseData.obby {
             if (piece.kind == OB_PieceKind.Crumble)
                 go.GetComponentInChildren<CrumbleBlock>().Configure(piece.speed, piece.period);
             return go;
+        }
+
+        /// <summary>The themed material for a platform on <paramref name="stage"/>, or null to keep the prefab's.</summary>
+        Material PlatformMaterial(int stage) {
+            if (tierPlatforms == null || tierPlatforms.Length == 0 || Layout == null) return null;
+            int clamped = Mathf.Clamp(stage, 0, Layout.StageCount - 1);
+            OB_Tier tier = Layout.stages[clamped].tier;
+            var set = tierPlatforms[Mathf.Min((int)tier, tierPlatforms.Length - 1)].materials;
+            if (set == null || set.Length == 0) return null;
+            // Alternate styles stage by stage inside a tier.
+            return set[(clamped - OB_Tiers.FirstStage((int)tier, Layout.StageCount)) % set.Length];
         }
 
         /// <summary>

@@ -50,8 +50,8 @@ MonoBehaviour:
     _editor_value: 0
   DebugTimerSpeed:
     _editor_value: 10
-  stageCount: 14
-  raceSeconds: 600
+  stageCount: 30
+  raceSeconds: 1500
   closingSeconds: 45
   countdownSeconds: 5
   resultsSeconds: 10

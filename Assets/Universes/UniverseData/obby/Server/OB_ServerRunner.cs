@@ -24,8 +24,8 @@ namespace Universes.UniverseData.obby.Server {
     /// </summary>
     public sealed class OB_ServerRunner : ServerRunner {
         [Header("Race")]
-        [SerializeField, Range(1, OB_CourseGenerator.MaxStages)] int stageCount = 14;
-        [SerializeField, Min(30)] int raceSeconds = 600;
+        [SerializeField, Range(1, OB_CourseGenerator.MaxStages)] int stageCount = 30;
+        [SerializeField, Min(30)] int raceSeconds = 1500;
         [Tooltip("Once the first player finishes, everyone else has this long to finish too.")]
         [SerializeField, Min(5)] int closingSeconds = 45;
         [SerializeField, Min(1)] int countdownSeconds = 5;

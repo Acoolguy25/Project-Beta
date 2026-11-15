@@ -27,6 +27,12 @@ Shader "Universes/Obby/Cloud"
             half _RimStrength;
             half _RimPower;
         CBUFFER_END
+
+        // Atmosphere override set by OB_Atmosphere per difficulty tier (alpha = how much it applies).
+        half4 _ObbyCloudTop;
+        half4 _ObbyCloudShade;
+        half3 CloudTop() { return lerp(_TopColor.rgb, _ObbyCloudTop.rgb, _ObbyCloudTop.a); }
+        half3 CloudShade() { return lerp(_ShadeColor.rgb, _ObbyCloudShade.rgb, _ObbyCloudShade.a); }
         ENDHLSL
 
         Pass
@@ -74,7 +80,7 @@ Shader "Universes/Obby/Cloud"
                 half skyLit = saturate(n.y * 0.5 + 0.5);
                 half lit = saturate(sunLit * 0.65 + skyLit * 0.45);
                 lit = smoothstep(0.05, 0.95, lit);
-                half3 color = lerp(_ShadeColor.rgb, _TopColor.rgb * lerp(1.0h, sun.color, 0.25h), lit);
+                half3 color = lerp(CloudShade(), CloudTop() * lerp(1.0h, sun.color, 0.25h), lit);
 
                 half3 view = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 half rim = pow(1.0 - saturate(dot(n, view)), _RimPower);

@@ -44,13 +44,18 @@ Material:
     m_Floats:
     - _BevelLight: 0.35
     - _BevelWidth: 0.14
+    - _CapDepth: 0
     - _DetailStrength: 0
     - _EmissionStrength: 0
+    - _GlowSeams: 0
+    - _GlowWidth: 0.09
     - _GridSize: 2
     - _GridStrength: 0.1
     - _SideShade: 0.82
     - _Smoothness: 0.42
     m_Colors:
     - _BaseColor: {r: 0.3529412, g: 0.72156864, b: 1, a: 1}
+    - _GlowColor: {r: 0, g: 0, b: 0, a: 1}
+    - _SideColor: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

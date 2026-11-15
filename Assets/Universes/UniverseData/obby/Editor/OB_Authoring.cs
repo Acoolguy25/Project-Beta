@@ -52,7 +52,12 @@ namespace Universes.UniverseData.obby.Editor {
             BuildStartScene(prefabs, client);
             RegisterScenes();
             // Assets from the earlier look that nothing references any more.
-            foreach (string retired in new[] { Root + "/Prefabs/ObbyHUD.prefab", Root + "/Textures/Tile.png" })
+            foreach (string retired in new[] {
+                Root + "/Prefabs/ObbyHUD.prefab", Root + "/Textures/Tile.png",
+                Backdrop + "/Island0.prefab", Backdrop + "/Island1.prefab",
+                Root + "/Materials/IslandGrass.mat", Root + "/Materials/IslandEarth.mat", Root + "/Materials/IslandTrunk.mat",
+                Root + "/Materials/IslandLeaves.mat", Root + "/Materials/IslandLeavesWarm.mat"
+            })
                 if (AssetDatabase.LoadMainAssetAtPath(retired) != null) AssetDatabase.DeleteAsset(retired);
             AssetDatabase.SaveAssets();
             Debug.Log("[Obby] Client assets built.");
@@ -290,7 +295,22 @@ namespace Universes.UniverseData.obby.Editor {
             mat.SetFloat("_BevelLight", bevel);
             mat.SetTexture("_DetailMap", detail);
             mat.SetFloat("_DetailStrength", detail != null ? detailStrength : 0f);
+            mat.SetColor("_SideColor", Color.clear);
+            mat.SetFloat("_CapDepth", 0f);
+            mat.SetColor("_GlowColor", Color.black);
+            mat.SetFloat("_GlowSeams", 0f);
             mat.enableInstancing = true;
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        /// <summary>A toy-block material painted in a tier's style: own side colour, top cap, glowing edges and seams.</summary>
+        static Material ThemeMat(string name, in OB_BlockStyle style, float bevel = 0.3f) {
+            var mat = BlockMat(name, style.top, style.grid, smoothness: style.smoothness, bevel: bevel);
+            mat.SetColor("_SideColor", style.side.WithAlpha(1f));
+            mat.SetFloat("_CapDepth", style.cap);
+            mat.SetColor("_GlowColor", (style.glow * style.glowStrength).WithAlpha(1f));
+            mat.SetFloat("_GlowSeams", style.glowSeams);
             EditorUtility.SetDirty(mat);
             return mat;
         }
@@ -647,6 +667,7 @@ namespace Universes.UniverseData.obby.Editor {
             public GameObject platform, checkpointPad, finishPad, lava, spring, boost, gravityZone, conveyor;
             public GameObject crumble, beat, wallJumpWall, mover, spinnerBar, spinnerCross, coin, lobby, gate;
             public Material[] palette;
+            public OB_Course.TierMaterials[] tierPlatforms;
             public Material beatSolidA, beatGhostA, beatSolidB, beatGhostB;
         }
 
@@ -655,6 +676,12 @@ namespace Universes.UniverseData.obby.Editor {
             Color pink = OB_Palette.Blocks[6], blue = OB_Palette.Blocks[0];
             var p = new PiecePrefabs {
                 palette = OB_Palette.Blocks.Select((c, i) => BlockMat($"Platform{i}", c)).ToArray(),
+                tierPlatforms = Enumerable.Range(0, OB_Tiers.Count).Select(t => {
+                    var theme = OB_Themes.Get((OB_Tier)t);
+                    return new OB_Course.TierMaterials {
+                        materials = theme.blocks.Select((style, i) => ThemeMat($"Tier{theme.tier}{i}", style)).ToArray()
+                    };
+                }).ToArray(),
                 beatSolidA = BlockMat("BeatPink", pink, 0.06f, 0.35f),
                 beatGhostA = Mat("BeatPinkGhost", pink, emission: 0.2f, alpha: 0.22f),
                 beatSolidB = BlockMat("BeatBlue", blue, 0.06f, 0.35f),
@@ -980,21 +1007,22 @@ namespace Universes.UniverseData.obby.Editor {
         }
 
         /// <summary>A soft drop shadow behind <paramref name="panel"/> (added as its first child, drawn first).</summary>
-        static void Shadow(RectTransform panel, float radius = 30f) {
+        static void Shadow(RectTransform panel, float radius = 30f, float strength = 0.45f) {
             var rect = Stretch("Shadow", panel, Vector2.zero, Vector2.one, new Vector2(-16f, -24f), new Vector2(16f, 10f));
             rect.SetAsFirstSibling();
             var image = rect.gameObject.AddComponent<Image>();
             image.sprite = SpriteAt(Root + "/Textures/PanelShadow.png");
             image.type = Image.Type.Sliced;
             image.pixelsPerUnitMultiplier = 30f / radius;
-            image.color = OB_Palette.Ink.WithAlpha(0.45f);
+            image.color = OB_Palette.Ink.WithAlpha(strength);
             image.raycastTarget = false;
         }
 
         /// <summary>A panel with a soft shadow: returns the panel body that content goes in.</summary>
-        static RectTransform Card(string name, Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position, Vector2 size, Color color, float radius = 30f) {
+        static RectTransform Card(string name, Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position, Vector2 size, Color color,
+            float radius = 30f, float shadow = 0.45f) {
             var root = Box(name, parent, anchor, pivot, position, size);
-            Shadow(root, radius);
+            Shadow(root, radius, shadow);
             var body = Stretch("Body", root, Vector2.zero, Vector2.one);
             Panel(body, color, radius);
             return root;
@@ -1052,6 +1080,9 @@ namespace Universes.UniverseData.obby.Editor {
             skyRoot.transform.SetParent(root.transform, false);
             client.backdrop = skyRoot.AddComponent<OB_Backdrop>();
             BuildBackdrop(client.backdrop);
+            client.atmosphere = skyRoot.AddComponent<OB_Atmosphere>();
+            client.atmosphere.moods = Enumerable.Range(0, OB_Tiers.Count)
+                .Select(t => OB_Atmosphere.Mood.From(OB_Themes.Get((OB_Tier)t).mood)).ToArray();
 
             var canvasGo = new GameObject("HUD", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
             canvasGo.transform.SetParent(root.transform, false);
@@ -1063,61 +1094,72 @@ namespace Universes.UniverseData.obby.Editor {
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.matchWidthOrHeight = 0.5f;
             var hud = canvasGo.transform;
-            Color panel = OB_Palette.Ink.WithAlpha(0.86f), muted = OB_Palette.Hex(0xC3CEEE);
-            Vector2 topLeft = new(0f, 1f), top = new(0.5f, 1f), bottomLeft = Vector2.zero, centre = new(0.5f, 0.5f);
+            // Slim and out of the way: translucent panels, small type, and nothing near the middle of the
+            // screen except brief toasts and the countdown.
+            Color panel = OB_Palette.Ink.WithAlpha(0.58f), muted = OB_Palette.Hex(0xC3CEEE);
+            Vector2 topLeft = new(0f, 1f), topRight = Vector2.one, top = new(0.5f, 1f), bottomLeft = Vector2.zero, centre = new(0.5f, 0.5f);
+            const float shadow = 0.22f;
             // The shared HUD owns the top corners (chat, player list) and the top strip (round topbar),
             // so the race clock sits under the topbar and the stage card in the bottom-left corner.
-            const float clockTop = -140f;
+            const float clockTop = -132f;
 
-            {   // Stage card, bottom left: stage number, name, hint and course progress.
-                var card = Card("StageCard", hud, bottomLeft, bottomLeft, new Vector2(32f, 32f), new Vector2(540f, 214f), panel);
+            {   // Stage card, bottom left: stage number, tier chip, stage name and course progress.
+                var card = Card("StageCard", hud, bottomLeft, bottomLeft, new Vector2(24f, 24f), new Vector2(380f, 112f), panel, 24f, shadow);
                 client.stageCard = card;
                 var body = card.Find("Body");
-                client.stageLabel = Label(Box("Stage", body, topLeft, topLeft, new Vector2(30f, -22f), new Vector2(480f, 38f)), bold, bold.shadow, 28, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
-                client.stageLabel.characterSpacing = 4f;
-                client.stageNameLabel = Label(Box("StageName", body, topLeft, topLeft, new Vector2(30f, -60f), new Vector2(480f, 58f)), bold, bold.shadow, 48, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
-                client.hintLabel = Label(Box("Hint", body, topLeft, topLeft, new Vector2(30f, -120f), new Vector2(480f, 56f)), semi, semi.asset.material, 21, muted, TextAlignmentOptions.TopLeft);
-                client.hintLabel.lineSpacing = -8f;
-                var track = Box("Progress", body, topLeft, topLeft, new Vector2(30f, -186f), new Vector2(480f, 12f));
-                Panel(track, OB_Palette.InkSoft, 6f);
+                client.stageLabel = Label(Box("Stage", body, topLeft, topLeft, new Vector2(20f, -12f), new Vector2(220f, 30f)), bold, bold.shadow, 20, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
+                client.stageLabel.characterSpacing = 3f;
+                var chip = Box("TierChip", body, topRight, topRight, new Vector2(-16f, -13f), new Vector2(124f, 28f));
+                client.tierChip = Panel(chip, OB_Palette.Paper, 14f);
+                client.tierLabel = Label(Stretch("Tier", chip, Vector2.zero, Vector2.one), bold, bold.asset.material, 16, OB_Palette.Ink, TextAlignmentOptions.Center);
+                client.tierLabel.characterSpacing = 2f;
+                client.tierLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                client.stageNameLabel = Label(Box("StageName", body, topLeft, topLeft, new Vector2(20f, -42f), new Vector2(340f, 44f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
+                client.stageNameLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                var track = Box("Progress", body, topLeft, topLeft, new Vector2(20f, -94f), new Vector2(340f, 6f));
+                Panel(track, OB_Palette.InkSoft, 3f);
                 var fill = Stretch("Fill", track, Vector2.zero, new Vector2(0.3f, 1f));
-                Panel(fill, OB_Palette.Gold, 6f);
+                Panel(fill, OB_Palette.Gold, 3f);
                 client.progressFill = fill;
             }
+            {   // Stage hint: plain outlined text above the card that fades out once read.
+                client.hintLabel = Label(Box("Hint", hud, bottomLeft, bottomLeft, new Vector2(30f, 146f), new Vector2(560f, 60f)), semi, semi.outline, 20, muted, TextAlignmentOptions.BottomLeft);
+                client.hintLabel.lineSpacing = -6f;
+            }
             {   // Race clock, top centre, with its status underneath.
-                var pill = Card("TimerPill", hud, top, top, new Vector2(-120f, clockTop), new Vector2(330f, 88f), panel, 44f);
+                var pill = Card("TimerPill", hud, top, top, new Vector2(-85f, clockTop), new Vector2(210f, 56f), panel, 28f, shadow);
                 var body = pill.Find("Body");
-                Icon("Clock", body, "icon_schedule", new Vector2(0f, 0.5f), new Vector2(50f, 0f), 46f, OB_Palette.Gold);
-                client.timerLabel = Label(Stretch("Timer", body, Vector2.zero, Vector2.one, new Vector2(86f, 0f), new Vector2(-24f, 0f)), bold, bold.shadow, 52, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
+                Icon("Clock", body, "icon_schedule", new Vector2(0f, 0.5f), new Vector2(32f, 0f), 30f, OB_Palette.Gold);
+                client.timerLabel = Label(Stretch("Timer", body, Vector2.zero, Vector2.one, new Vector2(56f, 0f), new Vector2(-14f, 0f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
                 client.timerLabel.textWrappingMode = TextWrappingModes.NoWrap;
-                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-120f, clockTop - 96f), new Vector2(330f, 32f)), semi, semi.outline, 24, OB_Palette.Paper, TextAlignmentOptions.Center);
-                client.leaderLabel = Label(Box("Leader", hud, top, top, new Vector2(0f, clockTop - 132f), new Vector2(900f, 40f)), bold, bold.outline, 28, OB_Palette.Paper, TextAlignmentOptions.Center);
+                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-85f, clockTop - 60f), new Vector2(210f, 24f)), semi, semi.outline, 17, OB_Palette.Paper, TextAlignmentOptions.Center);
+                client.leaderLabel = Label(Box("Leader", hud, top, top, new Vector2(0f, clockTop - 86f), new Vector2(900f, 30f)), bold, bold.outline, 20, OB_Palette.Paper, TextAlignmentOptions.Center);
             }
             {   // Coins, beside the clock.
-                var pill = Card("CoinPill", hud, top, top, new Vector2(175f, clockTop), new Vector2(220f, 88f), panel, 44f);
+                var pill = Card("CoinPill", hud, top, top, new Vector2(105f, clockTop), new Vector2(150f, 56f), panel, 28f, shadow);
                 client.coinPill = pill;
                 var body = pill.Find("Body");
-                Icon("Coin", body, "icon_paid", new Vector2(0f, 0.5f), new Vector2(52f, 0f), 54f, OB_Palette.Gold);
-                client.coinsLabel = Label(Stretch("Coins", body, Vector2.zero, Vector2.one, new Vector2(92f, 0f), new Vector2(-24f, 0f)), bold, bold.shadow, 48, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
+                Icon("Coin", body, "icon_paid", new Vector2(0f, 0.5f), new Vector2(32f, 0f), 34f, OB_Palette.Gold);
+                client.coinsLabel = Label(Stretch("Coins", body, Vector2.zero, Vector2.one, new Vector2(56f, 0f), new Vector2(-12f, 0f)), bold, bold.shadow, 30, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
                 client.coinsLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
-            {   // Toast: a coloured pill that pops in above the player.
-                var toast = Box("Toast", hud, new Vector2(0.5f, 0.62f), centre, Vector2.zero, new Vector2(820f, 96f));
+            {   // Toast: a small coloured pill, high above the player so it never hides the next jump.
+                var toast = Box("Toast", hud, new Vector2(0.5f, 0.68f), centre, Vector2.zero, new Vector2(560f, 60f));
                 client.toast = toast;
                 client.toastGroup = toast.gameObject.AddComponent<CanvasGroup>();
                 client.toastGroup.interactable = client.toastGroup.blocksRaycasts = false;
-                Shadow(toast, 48f);
+                Shadow(toast, 30f, shadow);
                 var body = Stretch("Body", toast, Vector2.zero, Vector2.one);
-                client.toastBackground = Panel(body, OB_Palette.Gold, 48f);
-                client.toastLabel = Label(Stretch("Label", body, Vector2.zero, Vector2.one, new Vector2(30f, 0f), new Vector2(-30f, 0f)), bold, bold.asset.material, 42, OB_Palette.Ink, TextAlignmentOptions.Center);
+                client.toastBackground = Panel(body, OB_Palette.Gold, 30f);
+                client.toastLabel = Label(Stretch("Label", body, Vector2.zero, Vector2.one, new Vector2(22f, 0f), new Vector2(-22f, 0f)), bold, bold.asset.material, 28, OB_Palette.Ink, TextAlignmentOptions.Center);
                 client.toastLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
             {   // Countdown and GO!
-                client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.45f), centre, Vector2.zero, new Vector2(900f, 320f)), bold, bold.outline, 230, OB_Palette.Paper, TextAlignmentOptions.Center);
+                client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.55f), centre, Vector2.zero, new Vector2(700f, 220f)), bold, bold.outline, 150, OB_Palette.Paper, TextAlignmentOptions.Center);
                 client.centerLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
             {   // Results board.
-                var results = Card("Results", hud, centre, centre, new Vector2(0f, -40f), new Vector2(980f, 600f), OB_Palette.Ink.WithAlpha(0.97f), 36f);
+                var results = Card("Results", hud, centre, centre, new Vector2(0f, -40f), new Vector2(980f, 600f), OB_Palette.Ink.WithAlpha(0.92f), 36f);
                 client.resultsPanel = results.gameObject;
                 var body = results.Find("Body");
                 var header = Stretch("Header", body, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -104f), Vector2.zero);
@@ -1186,10 +1228,6 @@ namespace Universes.UniverseData.obby.Editor {
 #if !UNITY_SERVER
         static void BuildBackdrop(OB_Backdrop backdrop) {
             var cloud = CloudMat();
-            var grass = BlockMat("IslandGrass", OB_Palette.Grass, 0f, bevel: 0.25f);
-            var earth = BlockMat("IslandEarth", OB_Palette.Earth, 0f, bevel: 0.15f, smoothness: 0.2f);
-            var trunk = BlockMat("IslandTrunk", OB_Palette.Hex(0x8A5A3C), 0f, bevel: 0.1f, smoothness: 0.2f);
-            var leaves = new[] { BlockMat("IslandLeaves", OB_Palette.Blocks[1], 0f, bevel: 0.3f), BlockMat("IslandLeavesWarm", OB_Palette.Hex(0xA7E06A), 0f, bevel: 0.3f) };
             var sea = SimpleMat("CloudSea", "Universes/Obby/Cloud Sea", m => {
                 m.SetColor("_TopColor", OB_Palette.Cloud);
                 m.SetColor("_ShadeColor", OB_Palette.CloudShade);
@@ -1214,31 +1252,12 @@ namespace Universes.UniverseData.obby.Editor {
                 clouds.Add(SaveAt(root, Backdrop + $"/Cloud{v}.prefab"));
             }
 
-            var islands = new List<GameObject>();
-            for (int v = 0; v < 2; v++) {
-                // A floating grass island: a bevelled grass slab on stepped earth, with toy-block trees.
-                var root = new GameObject($"Island{v}");
-                float w = v == 0 ? 26f : 38f, d = v == 0 ? 20f : 28f;
-                Cube("Grass", root.transform, new Vector3(0f, 0f, 0f), new Vector3(w, 2.5f, d), grass, false);
-                float y = -2.75f;
-                for (int step = 0; step < 3; step++) {
-                    float shrink = 0.82f - step * 0.2f, h = 3.5f - step * 0.5f;
-                    var block = Cube($"Earth{step}", root.transform, new Vector3(Range(-1f, 1f), y - h * 0.5f + 1.5f, Range(-1f, 1f)), new Vector3(w * shrink, h, d * shrink), earth, false);
-                    block.transform.localRotation = Quaternion.Euler(0f, Range(-6f, 6f), 0f);
-                    y -= h;
-                }
-                int trees = v == 0 ? 2 : 4;
-                for (int i = 0; i < trees; i++) {
-                    var at = new Vector3(Range(-w * 0.35f, w * 0.35f), 1.25f, Range(-d * 0.3f, d * 0.3f));
-                    float height = Range(4f, 7f);
-                    Cube($"Trunk{i}", root.transform, at + Vector3.up * height * 0.5f, new Vector3(1.2f, height, 1.2f), trunk, false);
-                    float crown = Range(4.5f, 6.5f);
-                    var top = Cube($"Leaves{i}", root.transform, at + Vector3.up * (height + crown * 0.35f), Vector3.one * crown, leaves[i % 2], false);
-                    top.transform.localRotation = Quaternion.Euler(0f, Range(0f, 90f), 0f);
-                }
-                Puff(root.transform, new Vector3(w * 0.4f, -3f, 0f), new Vector3(10f, 6f, 9f), cloud);
-                Puff(root.transform, new Vector3(-w * 0.45f, -5f, d * 0.2f), new Vector3(8f, 5f, 8f), cloud);
-                islands.Add(SaveAt(root, Backdrop + $"/Island{v}.prefab"));
+            var tierIslands = new OB_Backdrop.TierPrefabs[OB_Tiers.Count];
+            for (int t = 0; t < OB_Tiers.Count; t++) {
+                var theme = OB_Themes.Get((OB_Tier)t);
+                var set = new GameObject[2];
+                for (int v = 0; v < set.Length; v++) set[v] = BuildIsland(theme, v, random, cloud);
+                tierIslands[t].prefabs = set;
             }
 
             var seaGo = Primitive(PrimitiveType.Plane, "CloudSea", null, Vector3.zero, new Vector3(260f, 1f, 260f), sea, false);
@@ -1248,8 +1267,106 @@ namespace Universes.UniverseData.obby.Editor {
             var seaPrefab = SaveAt(seaGo, Backdrop + "/CloudSea.prefab");
 
             backdrop.cloudPrefabs = clouds.ToArray();
-            backdrop.islandPrefabs = islands.ToArray();
+            backdrop.tierIslands = tierIslands;
             backdrop.cloudSea = ((GameObject)PrefabUtility.InstantiatePrefab(seaPrefab, backdrop.transform)).transform;
+        }
+
+        /// <summary>
+        /// A floating island in a tier's style: a capped slab on stepped rock, dressed with the tier's
+        /// props, with a couple of cloud puffs clinging underneath.
+        /// </summary>
+        static GameObject BuildIsland(OB_Theme theme, int variant, System.Random random, Material cloud) {
+            float Range(float a, float b) => Mathf.Lerp(a, b, (float)random.NextDouble());
+            string tier = theme.tier.ToString();
+            var top = ThemeMat($"Island{tier}Top", theme.islandTop, 0.25f);
+            var rock = ThemeMat($"Island{tier}Base", theme.islandBase, 0.15f);
+            bool glowing = theme.prop is OB_IslandProp.LavaVents or OB_IslandProp.Crystals;
+            var prop = BlockMat($"Island{tier}Prop", theme.propColor, 0f, emission: theme.prop == OB_IslandProp.Crystals ? 1.6f : 0f,
+                smoothness: theme.prop is OB_IslandProp.IceSpikes or OB_IslandProp.Crystals ? 0.85f : 0.25f, bevel: 0.25f);
+            var accent = BlockMat($"Island{tier}Accent", theme.propAccent, 0f, emission: glowing ? 2.4f : 0f, bevel: 0.3f);
+
+            var root = new GameObject($"Island{tier}{variant}").transform;
+            float w = variant == 0 ? 26f : 38f, d = variant == 0 ? 20f : 28f;
+            Cube("Top", root, Vector3.zero, new Vector3(w, 2.5f, d), top, false);
+            float y = -2.75f;
+            for (int step = 0; step < 3; step++) {
+                float shrink = 0.82f - step * 0.2f, h = 3.5f - step * 0.5f;
+                var block = Cube($"Rock{step}", root, new Vector3(Range(-1f, 1f), y - h * 0.5f + 1.5f, Range(-1f, 1f)), new Vector3(w * shrink, h, d * shrink), rock, false);
+                block.transform.localRotation = Quaternion.Euler(0f, Range(-6f, 6f), 0f);
+                y -= h;
+            }
+
+            Vector3 Spot(float margin = 0.35f) => new(Range(-w * margin, w * margin), 1.25f, Range(-d * margin, d * margin));
+            GameObject Piece(string name, Vector3 at, Vector3 size, Material material, float tilt = 0f) {
+                var piece = Cube(name, root, at + Vector3.up * size.y * 0.5f, size, material, false);
+                piece.transform.localRotation = Quaternion.Euler(Range(-tilt, tilt), Range(0f, 90f), Range(-tilt, tilt));
+                return piece;
+            }
+            int count = variant == 0 ? 3 : 5;
+            switch (theme.prop) {
+                case OB_IslandProp.Columns:
+                    // Ruined white columns with coloured capitals, and a few fallen blocks.
+                    for (int i = 0; i < count; i++) {
+                        var at = Spot();
+                        float h = Range(3f, 9f);
+                        Cube($"Column{i}", root, at + Vector3.up * h * 0.5f, new Vector3(1.6f, h, 1.6f), prop, false);
+                        if (h > 5f) Cube($"Capital{i}", root, at + Vector3.up * (h + 0.4f), new Vector3(2.4f, 0.8f, 2.4f), accent, false);
+                    }
+                    for (int i = 0; i < count; i++) Piece($"Block{i}", Spot(0.4f), Vector3.one * Range(1f, 2.2f), prop, 10f);
+                    break;
+                case OB_IslandProp.Trees:
+                    for (int i = 0; i < count - 1; i++) {
+                        var at = Spot();
+                        float height = Range(4f, 7f);
+                        Cube($"Trunk{i}", root, at + Vector3.up * height * 0.5f, new Vector3(1.2f, height, 1.2f), prop, false);
+                        float crown = Range(4.5f, 6.5f);
+                        var leaves = Cube($"Leaves{i}", root, at + Vector3.up * (height + crown * 0.35f), Vector3.one * crown, accent, false);
+                        leaves.transform.localRotation = Quaternion.Euler(0f, Range(0f, 90f), 0f);
+                    }
+                    break;
+                case OB_IslandProp.Cacti:
+                    // A raised mesa and block cacti with arms and a flower.
+                    Cube("Mesa", root, new Vector3(Range(-w * 0.2f, w * 0.2f), 2.5f, Range(-d * 0.15f, d * 0.15f)), new Vector3(w * 0.4f, 3f, d * 0.4f), top, false);
+                    for (int i = 0; i < count - 1; i++) {
+                        var at = Spot(0.4f);
+                        float h = Range(4f, 7f);
+                        Cube($"Cactus{i}", root, at + Vector3.up * h * 0.5f, new Vector3(1.3f, h, 1.3f), prop, false);
+                        float side = i % 2 == 0 ? 1f : -1f, armY = h * Range(0.45f, 0.65f);
+                        Cube($"ArmOut{i}", root, at + new Vector3(side * 1.2f, armY, 0f), new Vector3(1.4f, 0.9f, 0.9f), prop, false);
+                        Cube($"ArmUp{i}", root, at + new Vector3(side * 1.6f, armY + 1.1f, 0f), new Vector3(0.9f, 2.2f, 0.9f), prop, false);
+                        Cube($"Flower{i}", root, at + Vector3.up * (h + 0.3f), new Vector3(0.8f, 0.6f, 0.8f), accent, false);
+                    }
+                    break;
+                case OB_IslandProp.IceSpikes:
+                    for (int i = 0; i < count + 2; i++) {
+                        float h = Range(4f, 12f), thick = Range(1f, 1.8f);
+                        Piece($"Spike{i}", Spot(0.4f), new Vector3(thick, h, thick), prop, 14f);
+                    }
+                    for (int i = 0; i < count; i++) Piece($"Drift{i}", Spot(0.42f) - Vector3.up * 0.4f, new Vector3(Range(2f, 4f), 1.2f, Range(2f, 4f)), accent, 4f);
+                    break;
+                case OB_IslandProp.LavaVents:
+                    // Basalt vents with glowing magma cores, and a lava pool set into the slab.
+                    for (int i = 0; i < count - 1; i++) {
+                        var at = Spot();
+                        float h = Range(2f, 4.5f), size = Range(3f, 4.5f);
+                        Cube($"Vent{i}", root, at + Vector3.up * h * 0.5f, new Vector3(size, h, size), prop, false);
+                        Cube($"Magma{i}", root, at + Vector3.up * (h + 0.05f), new Vector3(size * 0.55f, 0.3f, size * 0.55f), accent, false);
+                    }
+                    Cube("Pool", root, new Vector3(Range(-w * 0.2f, w * 0.2f), 1.2f, Range(-d * 0.2f, d * 0.2f)), new Vector3(w * 0.28f, 0.2f, d * 0.22f), accent, false);
+                    break;
+                case OB_IslandProp.Crystals:
+                    // Neon crystal clusters, with shards floating above.
+                    for (int i = 0; i < count + 2; i++) {
+                        float h = Range(3f, 10f), thick = Range(0.8f, 1.6f);
+                        Piece($"Crystal{i}", Spot(0.4f), new Vector3(thick, h, thick), i % 2 == 0 ? prop : accent, 22f);
+                    }
+                    for (int i = 0; i < count; i++)
+                        Piece($"Shard{i}", Spot(0.45f) + Vector3.up * Range(8f, 16f), Vector3.one * Range(0.8f, 1.8f), accent, 45f);
+                    break;
+            }
+            Puff(root, new Vector3(w * 0.4f, -3f, 0f), new Vector3(10f, 6f, 9f), cloud);
+            Puff(root, new Vector3(-w * 0.45f, -5f, d * 0.2f), new Vector3(8f, 5f, 8f), cloud);
+            return SaveAt(root.gameObject, Backdrop + $"/{root.name}.prefab");
         }
 
         static void Puff(Transform parent, Vector3 position, Vector3 scale, Material cloud) {
@@ -1272,33 +1389,35 @@ namespace Universes.UniverseData.obby.Editor {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             {
                 // Warm late-morning key light at 42 degrees, cool periwinkle bounce from the clouds below.
+                // This is the Basic tier's mood; OB_Atmosphere shifts it as players climb the tiers.
+                var mood = OB_Themes.Get(OB_Tier.Basic).mood;
                 var sun = new GameObject("Sun", typeof(Light));
                 var light = sun.GetComponent<Light>();
                 light.type = LightType.Directional;
-                light.intensity = 1.2f;
-                light.color = OB_Palette.Sun;
+                light.intensity = mood.sunIntensity;
+                light.color = mood.sun;
                 light.shadows = LightShadows.Soft;
                 light.shadowStrength = 0.75f;
                 sun.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
                 RenderSettings.sun = light;
 
                 var sky = SimpleMat("Sky", "Universes/Obby/Sky", m => {
-                    m.SetColor("_ZenithColor", OB_Palette.SkyZenith);
-                    m.SetColor("_HorizonColor", OB_Palette.SkyHorizon);
-                    m.SetColor("_BelowColor", OB_Palette.SkyBelow);
-                    m.SetColor("_SunColor", OB_Palette.Sun);
+                    m.SetColor("_ZenithColor", mood.zenith);
+                    m.SetColor("_HorizonColor", mood.horizon);
+                    m.SetColor("_BelowColor", mood.below);
+                    m.SetColor("_SunColor", mood.sun);
                     m.SetVector("_SunDirection", -sun.transform.forward);
                 });
                 RenderSettings.skybox = sky;
                 RenderSettings.ambientMode = AmbientMode.Trilight;
-                RenderSettings.ambientSkyColor = OB_Palette.Hex(0x8FB0E6);
-                RenderSettings.ambientEquatorColor = OB_Palette.Hex(0xB5C2E6);
-                RenderSettings.ambientGroundColor = OB_Palette.Hex(0x8F9AC7);
+                RenderSettings.ambientSkyColor = mood.ambientSky;
+                RenderSettings.ambientEquatorColor = mood.ambientEquator;
+                RenderSettings.ambientGroundColor = mood.ambientGround;
                 RenderSettings.fog = true;
                 RenderSettings.fogMode = FogMode.Linear;
-                RenderSettings.fogColor = OB_Palette.Fog;
-                RenderSettings.fogStartDistance = 160f;
-                RenderSettings.fogEndDistance = 950f;
+                RenderSettings.fogColor = mood.fog;
+                RenderSettings.fogStartDistance = mood.fogStart;
+                RenderSettings.fogEndDistance = mood.fogEnd;
                 Lightmapping.bakeOnSceneLoad = Lightmapping.BakeOnSceneLoadMode.Never;
 
                 var courseGo = new GameObject("Course");
@@ -1323,7 +1442,7 @@ namespace Universes.UniverseData.obby.Editor {
                 course.lava = p.lava; course.spring = p.spring; course.boost = p.boost; course.gravityZone = p.gravityZone;
                 course.conveyor = p.conveyor; course.crumble = p.crumble; course.beat = p.beat; course.wallJumpWall = p.wallJumpWall;
                 course.mover = p.mover; course.spinnerBar = p.spinnerBar; course.spinnerCross = p.spinnerCross; course.coin = p.coin;
-                course.platformPalette = p.palette;
+                course.tierPlatforms = p.tierPlatforms;
                 course.beatSolidA = p.beatSolidA; course.beatGhostA = p.beatGhostA; course.beatSolidB = p.beatSolidB; course.beatGhostB = p.beatGhostB;
                 course.clientPrefab = client;
                 EditorUtility.SetDirty(course);

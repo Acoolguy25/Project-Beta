@@ -59,6 +59,9 @@ namespace Universes.UniverseData.obby {
     public sealed class OB_Stage {
         public int index;
         public OB_StageKind kind;
+        /// <summary>Difficulty tier (and theme) of this stage; see <see cref="OB_Tiers"/>.</summary>
+        public OB_Tier tier;
+        /// <summary>0..1 intensity used to size the stage. Rises through each tier, easing off at the next.</summary>
         public float difficulty;
         /// <summary>Top centre of the checkpoint a player respawns on while this stage is next.</summary>
         public Vector3 spawn;
@@ -82,7 +85,9 @@ namespace Universes.UniverseData.obby {
 
     /// <summary>
     /// Deterministic course generator. The same seed, stage count, movement and start always give the
-    /// same pieces on every peer, so the server sends only the seed. Stages get harder from first to last.
+    /// same pieces on every peer, so the server sends only the seed. The course is split into
+    /// <see cref="OB_Tiers"/> (Basic to Extreme); stages get harder through each tier, with a short
+    /// breather at the start of the next, and the hardest tiers mix extra hazards into their stages.
     /// <para>
     /// Piece fields by kind: Spring/Boost <c>vector</c> = pad-space launch velocity; GravityZone
     /// <c>speed</c> = gravity scale, <c>vector</c> = world gravity direction (zero keeps it; strength
@@ -208,7 +213,8 @@ namespace Universes.UniverseData.obby {
                 rotation = Quaternion.Euler(0f, yaw, 0f);
                 var info = new OB_Stage {
                     index = stage, kind = kinds[stage],
-                    difficulty = stageCount > 1 ? stage / (float)(stageCount - 1) : 0f
+                    tier = OB_Tiers.TierOf(stage, stageCount),
+                    difficulty = OB_Tiers.Difficulty(stage, stageCount)
                 };
                 minTop = float.PositiveInfinity;
                 if (stage == 0) {
@@ -273,21 +279,39 @@ namespace Universes.UniverseData.obby {
         };
 
         // ---------------------------------------------------------------- stages
+        // Every size below lerps from a gentle Basic value (d = 0) to an Extreme one (d = 1). Plain
+        // jumps stay inside CheckJump's limits (70% of a flat running jump across, 75% of the jump
+        // height up), so the hardest stages demand precision, never luck. From Hard onward, stages also
+        // mix in a second hazard (crumbling hops, crumbling stepping stones, double spinners).
+
+        /// <summary>Probability that an optional extra hazard appears, ramping in above <paramref name="from"/>.</summary>
+        float MixChance(float d, float from) => Mathf.Clamp01((d - from) / (1f - from)) * 0.75f;
+
+        /// <summary>Turns the piece at <paramref name="index"/> into a block that crumbles shortly after it is touched.</summary>
+        void MakeCrumble(int index, float d) {
+            var piece = layout.pieces[index];
+            piece.kind = OB_PieceKind.Crumble;
+            piece.speed = Lerp(0.8f, 0.3f, d);
+            piece.period = 3f;
+            layout.pieces[index] = piece;
+        }
+
         Vector3 Hops(float d) {
-            int count = 4 + rng.Next(3) + Mathf.RoundToInt(d * 2f);
+            int count = 4 + rng.Next(3) + Mathf.RoundToInt(d * 6f);
             float z = 0f, x = 0f, y = 0f;
             for (int i = 0; i < count; i++) {
-                float w = Lerp(3.4f, 1.7f, d) * Range(0.9f, 1.1f);
-                z += Lerp(2f, 4f, d) * Range(0.85f, 1f);
-                x = Mathf.Clamp(x + Range(-1f, 1f) * Lerp(0.6f, 2f, d), -4f, 4f);
-                y += Range(-0.6f, Lerp(0.5f, 1.2f, d));
+                float w = Lerp(3.4f, 1.5f, d) * Range(0.9f, 1.1f);
+                z += Lerp(2f, 4.6f, d) * Range(0.85f, 1f);
+                x = Mathf.Clamp(x + Range(-1f, 1f) * Lerp(0.6f, 2.4f, d), -4f, 4f);
+                y += Range(-0.6f, Lerp(0.5f, 1.6f, d));
                 var top = new Vector3(x, y, z + w * 0.5f);
-                Platform(top, new Vector3(w, 1f, w));
+                int index = Platform(top, new Vector3(w, 1f, w));
+                if (i > 0 && Chance(MixChance(d, 0.55f))) MakeCrumble(index, d);
                 Step(top, new Vector2(w, w));
-                if (i == count / 2) coin = top + Vector3.up * 1.6f;
+                if (i == count / 2) coin = top + Vector3.up * CoinLift;
                 z += w;
             }
-            return Exit(Lerp(2f, 3.2f, d));
+            return Exit(Lerp(2f, 4f, d));
         }
 
         float SpringSpeed(float rise) => Mathf.Sqrt(2f * m.gravity * (rise + 2.5f));
@@ -296,31 +320,31 @@ namespace Universes.UniverseData.obby {
             var baseTop = new Vector3(0f, 0f, 1.5f + 3.5f);
             Platform(baseTop, new Vector3(6f, 1f, 7f));
             Step(baseTop, new Vector2(6f, 7f));
-            float rise = Lerp(5f, 7.5f, d);
+            float rise = Lerp(5f, 9f, d);
             Add(new OB_Piece { kind = OB_PieceKind.Spring, position = World(0f, 0f, 5f), yaw = yaw, vector = new Vector3(0f, SpringSpeed(rise), 0f) });
             coin = new Vector3(0f, rise * 0.8f, 5f);
-            bool second = d > 0.45f;
-            float ledgeDepth = second ? 7f : 5f;
-            var ledge = new Vector3(Range(-1.5f, 1.5f), rise, 9.5f + ledgeDepth * 0.5f);
-            Platform(ledge, new Vector3(5f, 1f, ledgeDepth));
-            Land(ledge, new Vector2(5f, ledgeDepth));
+            bool second = d > 0.35f;
+            float ledgeDepth = second ? 7f : 5f, ledgeWidth = Lerp(5f, 3.2f, d);
+            var ledge = new Vector3(Range(-1.5f, 1.5f) * (1f + d), rise, 9.5f + ledgeDepth * 0.5f);
+            Platform(ledge, new Vector3(ledgeWidth, 1f, ledgeDepth));
+            Land(ledge, new Vector2(ledgeWidth, ledgeDepth));
             if (second) {
-                float rise2 = Lerp(4f, 6.5f, d);
+                float rise2 = Lerp(4f, 8f, d), size = Lerp(5f, 3f, d);
                 Add(new OB_Piece { kind = OB_PieceKind.Spring, position = World(ledge.x, rise, 12f), yaw = yaw, vector = new Vector3(0f, SpringSpeed(rise2), 0f) });
                 var top = new Vector3(Mathf.Clamp(ledge.x + Range(-2f, 2f), -3f, 3f), rise + rise2, 18f + 2.5f);
-                Platform(top, new Vector3(5f, 1f, 5f));
-                Land(top, new Vector2(5f, 5f));
+                Platform(top, new Vector3(size, 1f, size));
+                Land(top, new Vector2(size, size));
             }
-            return Exit(Lerp(2f, 3f, d));
+            return Exit(Lerp(2f, 4f, d));
         }
 
         Vector3 MoonLeap(float d) {
-            float scale = Lerp(0.42f, 0.32f, d);
-            int count = 3 + Mathf.RoundToInt(d);
+            float scale = Lerp(0.42f, 0.28f, d);
+            int count = 3 + Mathf.RoundToInt(d * 2f);
             float z = 0f, y = 0f, highest = 0f;
             for (int i = 0; i < count; i++) {
-                float w = Lerp(4f, 2.6f, d);
-                z += m.FlatJumpReach(scale) * Lerp(0.33f, 0.5f, d);
+                float w = Lerp(4f, 2.2f, d);
+                z += m.FlatJumpReach(scale) * Lerp(0.33f, 0.6f, d);
                 y += Range(-1f, 2.5f);
                 highest = Mathf.Max(highest, y);
                 var top = new Vector3(Range(-2f, 2f), y, z + w * 0.5f);
@@ -335,14 +359,14 @@ namespace Universes.UniverseData.obby {
         }
 
         Vector3 Conveyors(float d) {
-            int count = 3 + Mathf.RoundToInt(d * 2f);
-            float width = Lerp(4.6f, 2.8f, d), length = 5f, z = 1.5f;
+            int count = 3 + Mathf.RoundToInt(d * 3f);
+            float width = Lerp(4.6f, 2.2f, d), length = 5f, z = 1.5f;
             Vector3 previous = Vector3.zero;
             for (int i = 0; i < count; i++) {
                 Vector3 direction = i == 0 ? Vector3.back : rng.Next(3) switch { 0 => Vector3.back, 1 => Vector3.left, _ => Vector3.right };
                 if (direction != Vector3.back && direction == previous) direction = -direction;
                 previous = direction;
-                float speed = direction == Vector3.back ? Lerp(3f, 6f, d) : Lerp(1.8f, 3.8f, d);
+                float speed = direction == Vector3.back ? Lerp(3f, 8f, d) : Lerp(1.8f, 5f, d);
                 var top = new Vector3(0f, 0f, z + length * 0.5f);
                 int index = Box(OB_PieceKind.Conveyor, top, new Vector3(width, 0.6f, length));
                 var piece = layout.pieces[index];
@@ -353,41 +377,41 @@ namespace Universes.UniverseData.obby {
                 if (i == count / 2) coin = top + new Vector3(width * 0.5f - 0.5f, 1.2f, 0f);
                 z += length;
             }
-            return Exit(2f);
+            return Exit(Lerp(2f, 3.5f, d));
         }
 
         Vector3 Crumble(float d) {
-            int count = 5 + Mathf.RoundToInt(d * 4f);
-            const float size = 2.2f;
+            int count = 5 + Mathf.RoundToInt(d * 7f);
+            float size = Lerp(2.2f, 1.7f, d);
             float z = 0f, x = 0f, y = 0f;
             for (int i = 0; i < count; i++) {
-                z += Lerp(0.5f, 1.9f, d);
-                x = Mathf.Clamp(x + Range(-1f, 1f) * Lerp(0f, 1.4f, d), -3f, 3f);
-                y += Range(0f, 0.35f);
+                z += Lerp(0.5f, 3.2f, d);
+                x = Mathf.Clamp(x + Range(-1f, 1f) * Lerp(0f, 2f, d), -3f, 3f);
+                y += Range(0f, Lerp(0.35f, 0.9f, d));
                 var top = new Vector3(x, y, z + size * 0.5f);
                 int index = Box(OB_PieceKind.Crumble, top, new Vector3(size, 0.6f, size));
                 var piece = layout.pieces[index];
-                piece.speed = Lerp(0.9f, 0.4f, d);
+                piece.speed = Lerp(0.9f, 0.25f, d);
                 piece.period = 3f;
                 layout.pieces[index] = piece;
                 Step(top, new Vector2(size, size));
-                if (i == count / 2) coin = top + Vector3.up * 1.6f;
+                if (i == count / 2) coin = top + Vector3.up * CoinLift;
                 z += size;
             }
-            return Exit(Lerp(1.5f, 2.5f, d));
+            return Exit(Lerp(1.5f, 3.5f, d));
         }
 
         Vector3 Beat(float d) {
-            int count = 6 + Mathf.RoundToInt(d * 3f);
-            const float size = 2.6f;
-            float period = Lerp(4.6f, 3.4f, d);
+            int count = 6 + Mathf.RoundToInt(d * 6f);
+            float size = Lerp(2.6f, 2f, d);
+            float period = Lerp(4.6f, 2.2f, d);
             float z = 0f, y = 0f;
             int group = 0;
             for (int i = 0; i < count; i++) {
-                z += Lerp(0.8f, 2.2f, d);
-                y += Range(-0.2f, 0.4f);
+                z += Lerp(0.8f, 3.4f, d);
+                y += Range(-0.2f, Lerp(0.4f, 0.9f, d));
                 var top = new Vector3(Range(-1.5f, 1.5f), y, z + size * 0.5f);
-                bool rest = d < 0.5f && i % 3 == 2;
+                bool rest = d < 0.35f && i % 3 == 2;
                 if (rest) {
                     Platform(top, new Vector3(size, 0.8f, size));
                 } else {
@@ -400,14 +424,14 @@ namespace Universes.UniverseData.obby {
                     group = 1 - group;
                 }
                 Step(top, new Vector2(size, size));
-                if (i == count / 2) coin = top + Vector3.up * 1.6f;
+                if (i == count / 2) coin = top + Vector3.up * CoinLift;
                 z += size;
             }
-            return Exit(2f);
+            return Exit(Lerp(2f, 3f, d));
         }
 
         Vector3 WallJump(float d) {
-            float gapBetween = Lerp(4.2f, 3.4f, d), height = Lerp(6f, 9f, d), length = 5f;
+            float gapBetween = Lerp(4.2f, 3.2f, d), height = Lerp(6f, 14f, d), length = 5f;
             float floorStart = 1.5f, floorLength = length + 2f;
             var floor = new Vector3(0f, 0f, floorStart + floorLength * 0.5f);
             Platform(floor, new Vector3(gapBetween + 1.6f, 1f, floorLength));
@@ -422,81 +446,88 @@ namespace Universes.UniverseData.obby {
                 layout.pieces[index] = piece;
             }
             coin = new Vector3(0f, height * 0.6f, wallZ);
-            var ledge = new Vector3(0f, height, floorStart + 1f + length + 0.6f + 2.5f);
-            Platform(ledge, new Vector3(5f, 1f, 5f));
-            Land(ledge, new Vector2(5f, 5f));
-            return Exit(2.5f);
+            float ledgeSize = Lerp(5f, 3.5f, d);
+            var ledge = new Vector3(0f, height, floorStart + 1f + length + 0.6f + ledgeSize * 0.5f);
+            Platform(ledge, new Vector3(ledgeSize, 1f, ledgeSize));
+            Land(ledge, new Vector2(ledgeSize, ledgeSize));
+            return Exit(Lerp(2.5f, 3.5f, d));
         }
 
         Vector3 Movers(float d) {
             if (Chance(0.5f)) {
                 // Ferry: one platform shuttles across a wide gap.
-                float gap = Lerp(9f, 15f, d);
-                const float size = 3.2f;
+                float gap = Lerp(9f, 20f, d), size = Lerp(3.2f, 2.4f, d), landingWidth = Lerp(6f, 4f, d);
                 var start = new Vector3(0f, 0f, size * 0.5f + 0.3f);
                 Add(new OB_Piece {
                     kind = OB_PieceKind.Mover, position = World(start - Vector3.up * 0.3f), yaw = yaw,
                     size = new Vector3(size, 0.6f, size), vector = rotation * new Vector3(0f, 0f, gap - size - 0.6f),
-                    speed = Lerp(2.6f, 4.2f, d), phase = Range(0f, 10f)
+                    speed = Lerp(2.6f, 5.5f, d), phase = Range(0f, 10f)
                 });
-                coin = new Vector3(0f, 1.6f, gap * 0.5f);
+                coin = new Vector3(0f, CoinLift, gap * 0.5f);
                 var landing = new Vector3(0f, 0f, gap + 2.5f);
-                Platform(landing, new Vector3(6f, 1f, 5f));
-                Land(landing, new Vector2(6f, 5f));
+                Platform(landing, new Vector3(landingWidth, 1f, 5f));
+                Land(landing, new Vector2(landingWidth, 5f));
             } else {
                 // Shuttles: platforms slide side to side across the path.
-                int count = 2 + Mathf.RoundToInt(d);
-                const float size = 3f;
+                int count = 2 + Mathf.RoundToInt(d * 3f);
+                float size = Lerp(3f, 2.2f, d);
                 float z = 0f;
                 for (int i = 0; i < count; i++) {
-                    z += Lerp(2.2f, 3.2f, d);
-                    float amplitude = Lerp(2.5f, 4.5f, d);
+                    z += Lerp(2.2f, 4f, d);
+                    float amplitude = Lerp(2.5f, 5.5f, d);
                     var top = new Vector3(-amplitude, 0f, z + size * 0.5f);
                     Add(new OB_Piece {
                         kind = OB_PieceKind.Mover, position = World(top - Vector3.up * 0.3f), yaw = yaw,
                         size = new Vector3(size, 0.6f, size), vector = rotation * new Vector3(amplitude * 2f, 0f, 0f),
-                        speed = Lerp(2.2f, 4f, d), phase = Range(0f, 10f)
+                        speed = Lerp(2.2f, 5.5f, d), phase = Range(0f, 10f)
                     });
                     minTop = Mathf.Min(minTop, World(top).y);
                     // A rider can wait for the platform to pass the centre line.
                     Step(new Vector3(0f, 0f, top.z), new Vector2(size, size));
-                    if (i == 0) coin = new Vector3(0f, 1.6f, top.z);
+                    if (i == 0) coin = new Vector3(0f, CoinLift, top.z);
                     z += size;
                 }
             }
-            return Exit(2.5f);
+            return Exit(Lerp(2.5f, 3.5f, d));
         }
 
         Vector3 Spinner(float d) {
-            var arena = new Vector3(0f, 0f, 1.5f + 6f);
-            Platform(arena, new Vector3(12f, 1f, 12f));
-            Step(arena, new Vector2(12f, 12f));
-            float speed = Lerp(70f, 140f, d) * (Chance(0.5f) ? 1f : -1f);
-            Add(new OB_Piece {
-                kind = d > 0.55f ? OB_PieceKind.SpinnerCross : OB_PieceKind.SpinnerBar,
-                position = World(0f, 0.55f, arena.z), yaw = yaw, size = new Vector3(11.4f, 0.5f, 0.5f),
-                speed = speed, phase = Range(0f, 10f)
-            });
-            coin = new Vector3(0f, 2.4f, arena.z);
-            return Exit(2.5f);
+            // From Insane onward a second, counter-rotating arena follows the first.
+            int arenas = d > 0.75f ? 2 : 1;
+            float z = 1.5f, direction = Chance(0.5f) ? 1f : -1f;
+            for (int i = 0; i < arenas; i++) {
+                var arena = new Vector3(0f, 0f, z + 6f);
+                Platform(arena, new Vector3(12f, 1f, 12f));
+                Step(arena, new Vector2(12f, 12f));
+                Add(new OB_Piece {
+                    kind = d > 0.45f ? OB_PieceKind.SpinnerCross : OB_PieceKind.SpinnerBar,
+                    position = World(0f, 0.55f, arena.z), yaw = yaw, size = new Vector3(11.4f, 0.5f, 0.5f),
+                    speed = Lerp(70f, 220f, d) * direction, phase = Range(0f, 10f)
+                });
+                if (i == 0) coin = new Vector3(0f, 2.4f, arena.z);
+                direction = -direction;
+                z += 12f + Lerp(2f, 3.5f, d);
+            }
+            return Exit(Lerp(2.5f, 3.5f, d));
         }
 
         Vector3 LavaRun(float d) {
-            const float stone = 1.8f;
-            int count = 6 + Mathf.RoundToInt(d * 3f);
+            float stone = Lerp(1.8f, 1.3f, d);
+            int count = 6 + Mathf.RoundToInt(d * 8f);
             float z = 0f, x = 0f;
             for (int i = 0; i < count; i++) {
-                z += Lerp(1.4f, 3f, d) * Range(0.85f, 1f);
+                z += Lerp(1.4f, 4.2f, d) * Range(0.85f, 1f);
                 x = (i % 2 == 0 ? 1f : -1f) * Range(0.5f, 2.2f);
                 var top = new Vector3(x, 0.2f, z + stone * 0.5f);
-                Platform(top, new Vector3(stone, 1.2f, stone));
+                int index = Platform(top, new Vector3(stone, 1.2f, stone));
+                if (Chance(MixChance(d, 0.65f))) MakeCrumble(index, d);
                 Step(top, new Vector2(stone, stone));
-                if (i == count / 2) coin = top + Vector3.up * 1.6f;
+                if (i == count / 2) coin = top + Vector3.up * CoinLift;
                 z += stone;
             }
             float lavaLength = z + 1.5f;
             Box(OB_PieceKind.Lava, new Vector3(0f, -0.6f, lavaLength * 0.5f), new Vector3(8f, 0.4f, lavaLength), standable: false);
-            return Exit(Lerp(1.5f, 2.5f, d));
+            return Exit(Lerp(1.5f, 3.5f, d));
         }
 
         Vector3 Boost(float d) {
@@ -511,13 +542,15 @@ namespace Universes.UniverseData.obby {
             float carry = forward * (1f - Mathf.Exp(-k * flight)) / k;
             float gap = Mathf.Min(Lerp(6.5f, 9f, d), carry - (9.5f - padZ) - 1f);
             float length = Mathf.Max(14f, carry + m.walkSpeed * flight - (9.5f - padZ) - gap + 2f);
+            float width = Lerp(8f, 4f, d);
             coin = new Vector3(0f, 2.5f, 9.5f + gap * 0.5f);
-            var landing = new Vector3(Range(-1f, 1f), -drop, 9.5f + gap + length * 0.5f);
-            Platform(landing, new Vector3(8f, 1f, length));
-            Land(landing, new Vector2(8f, length));
-            return Exit(2.5f);
+            var landing = new Vector3(Range(-1f, 1f) * (1f + d), -drop, 9.5f + gap + length * 0.5f);
+            Platform(landing, new Vector3(width, 1f, length));
+            Land(landing, new Vector2(width, length));
+            return Exit(Lerp(2.5f, 3.5f, d));
         }
-            // Gravity-direction stages. A field turns "down" toward a surface beside or above the path.
+
+        // Gravity-direction stages. A field turns "down" toward a surface beside or above the path.
         // Each field ends flush with that surface so a player standing on it stays inside, and its far
         // end opens over a landing, so walking out of it drops the player back to normal gravity on
         // solid ground. Sizes allow for the character turning over about its middle
@@ -553,7 +586,7 @@ namespace Universes.UniverseData.obby {
             // apart, so clearing one never lands the player on the next.
             float settle = m.walkSpeed * Mathf.Sqrt(2f * (halfWidth * 2f + wallGap) / m.gravity);
             float spacing = m.FlatJumpReach() + 3f;
-            int obstacles = 1 + Mathf.RoundToInt(d * 2f);
+            int obstacles = 1 + Mathf.RoundToInt(d * 3f);
             float first = GravityFieldStart + settle + 3f;
             float wallEnd = first + (obstacles - 1) * spacing + Lerp(7f, 6f, d) + overrun;
             float wallX = face + side * thickness * 0.5f;
@@ -561,12 +594,12 @@ namespace Universes.UniverseData.obby {
             for (int i = 0; i < obstacles; i++) {
                 float centre = first + i * spacing;
                 if (Chance(0.5f)) {
-                    float gap = Lerp(2.2f, 3.2f, d);
+                    float gap = Lerp(2.2f, 4.5f, d);
                     WallSegment(wallX, top, height, thickness, z, centre - gap * 0.5f);
                     z = centre + gap * 0.5f;
                     CheckJump(gap, 0f);
                 } else {
-                    float strip = Lerp(1.4f, 2.4f, d);
+                    float strip = Lerp(1.4f, 3.5f, d);
                     Box(OB_PieceKind.Lava, new Vector3(face - side * 0.2f, top, centre), new Vector3(0.4f, height, strip), standable: false);
                     CheckJump(strip, 0f);
                 }
@@ -593,15 +626,15 @@ namespace Universes.UniverseData.obby {
         /// <summary>Ceiling Run: gravity flips upward and players run upside down along a ceiling.</summary>
         Vector3 CeilingRun(float d) {
             const float thickness = 1f, overrun = 1.5f;
-            float halfWidth = Lerp(GravityPathHalfWidth, 1.75f, d);
+            float halfWidth = Lerp(GravityPathHalfWidth, 1.6f, d);
             // High enough to walk under upright, low enough that the flip is a short fall.
             float height = m.bodyHeight + Lerp(2f, 3.5f, d);
             GravityApproach(halfWidth);
 
             // Lava hanging under the ceiling. Patches sit a full running jump apart, so a jump over one
             // never comes down on the next.
-            int patches = 1 + Mathf.RoundToInt(d * 1.4f);
-            float patch = Lerp(1.4f, 2.6f, d);
+            int patches = 1 + Mathf.RoundToInt(d * 2f);
+            float patch = Lerp(1.4f, 3.5f, d);
             float spacing = m.FlatJumpReach() + patch + 3f;
             float first = GravityFieldStart + 7f;
             for (int i = 0; i < patches; i++) {

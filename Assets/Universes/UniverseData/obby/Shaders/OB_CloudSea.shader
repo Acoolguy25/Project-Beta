@@ -45,6 +45,12 @@ Shader "Universes/Obby/Cloud Sea"
                 float _FadeEnd;
             CBUFFER_END
 
+            // Atmosphere override set by OB_Atmosphere per difficulty tier (alpha = how much it applies).
+            half4 _ObbyCloudTop;
+            half4 _ObbyCloudShade;
+            half3 CloudTop() { return lerp(_TopColor.rgb, _ObbyCloudTop.rgb, _ObbyCloudTop.a); }
+            half3 CloudShade() { return lerp(_ShadeColor.rgb, _ObbyCloudShade.rgb, _ObbyCloudShade.a); }
+
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; half fogFactor : TEXCOORD1; };
 
@@ -82,7 +88,7 @@ Shader "Universes/Obby/Cloud Sea"
                 float2 toSun = normalize(sun.direction.xz + 1e-4);
                 float slope = n - Billows(uv - toSun * 0.04);
                 half lit = saturate(0.55 + slope * 9.0 + (n - 0.5));
-                half3 color = lerp(_ShadeColor.rgb, _TopColor.rgb, lit);
+                half3 color = lerp(CloudShade(), CloudTop(), lit);
 
                 half alpha = smoothstep(1.0 - _Coverage - _Softness, 1.0 - _Coverage + _Softness, n);
                 alpha = lerp(0.35h, 1.0h, alpha);   // a thin haze between billows keeps it a "sea"

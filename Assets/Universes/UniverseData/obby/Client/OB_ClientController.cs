@@ -16,6 +16,11 @@ namespace Universes.UniverseData.obby.Client {
         [Header("Stage card")]
         public TMP_Text stageLabel;
         public TMP_Text stageNameLabel, hintLabel;
+        [Tooltip("Chip naming the current difficulty tier, coloured with the tier's accent.")]
+        public TMP_Text tierLabel;
+        public Image tierChip;
+        [Tooltip("Seconds a stage hint stays up before fading out.")]
+        [Min(0f)] public float hintSeconds = 7f;
         [Tooltip("Course progress bar fill; its anchor max x is set to the fraction of checkpoints reached.")]
         public RectTransform progressFill;
         public RectTransform stageCard;
@@ -39,6 +44,7 @@ namespace Universes.UniverseData.obby.Client {
         [Header("Presentation")]
         public OB_Fx fx;
         public OB_Backdrop backdrop;
+        public OB_Atmosphere atmosphere;
         public AudioSource sfx;
         public AudioClip coinClip, checkpointClip, finishClip, fallClip;
         [Tooltip("Seconds the stage progress bar takes to catch up.")]
@@ -51,7 +57,8 @@ namespace Universes.UniverseData.obby.Client {
         bool hasProgress;
         OB_RoundBroadcast round;
         float roundReceivedAt, toastShownAt, toastUntil, resultsUntil, nextRequest;
-        float progressShown, progressTarget, progressVelocity;
+        float progressShown, progressTarget, progressVelocity, hintShownAt;
+        int hintStage = -1;
         Pop stagePop, coinPop, toastPop, centerPop;
 
         /// <summary>A scale "pop" with overshoot, for HUD elements that change.</summary>
@@ -125,6 +132,8 @@ namespace Universes.UniverseData.obby.Client {
             stageLabel.text = "SKY OBBY";
             stageNameLabel.text = "Connecting...";
             hintLabel.text = "";
+            tierLabel.text = "";
+            tierChip.enabled = false;
             coinsLabel.text = "0";
             timerLabel.text = "0:00.0";
             statusLabel.text = "";
@@ -168,6 +177,8 @@ namespace Universes.UniverseData.obby.Client {
             float fadeOut = Mathf.Clamp01((toastUntil - Time.unscaledTime) / 0.25f);
             float fadeIn = Mathf.Clamp01((Time.unscaledTime - toastShownAt) / 0.08f);
             toastGroup.alpha = Mathf.Min(fadeIn, fadeOut);
+            // Hint: shown when a stage starts, then fades so it stays out of the way.
+            hintLabel.alpha = 1f - Mathf.Clamp01((Time.unscaledTime - hintShownAt - hintSeconds) / 0.8f);
             progressShown = Mathf.SmoothDamp(progressShown, progressTarget, ref progressVelocity, progressSmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
             SetProgress(progressShown, false);
             stagePop.Tick();
@@ -203,17 +214,24 @@ namespace Universes.UniverseData.obby.Client {
                 if (message.seed != builtSeed) return;
             }
             int previous = hasProgress ? progress.checkpoint : 0;
+            OB_Tier tierBefore = TierAt(previous);
             progress = message;
             hasProgress = true;
             ApplyMarkers(message.reason == OB_ProgressReason.Checkpoint, message.reason == OB_ProgressReason.Coin);
             RefreshStage();
             int total = course.Layout.StageCount;
             switch (message.reason) {
-                case OB_ProgressReason.Checkpoint:
-                    Toast($"CHECKPOINT {message.checkpoint}/{total - 1}" + (message.checkpoint - previous > 1 ? "  <size=70%>skipped ahead!</size>" : ""),
-                        OB_Palette.Go, checkpointClip);
+                case OB_ProgressReason.Checkpoint: {
+                    OB_Tier tier = TierAt(message.checkpoint);
+                    if (tier > tierBefore)
+                        Toast($"{OB_Tiers.Name(tier).ToUpperInvariant()}  <size=75%><alpha=#CC>{OB_Tiers.Theme(tier)}</size>",
+                            OB_Themes.Get(tier).accent, checkpointClip, 3f);
+                    else
+                        Toast($"CHECKPOINT {message.checkpoint}/{total - 1}" + (message.checkpoint - previous > 1 ? "  <size=70%>skipped ahead!</size>" : ""),
+                            OB_Palette.Go, checkpointClip);
                     stagePop.Play();
                     break;
+                }
                 case OB_ProgressReason.Coin:
                     Toast("+1 COIN", OB_Palette.Gold, coinClip);
                     coinPop.Play();
@@ -300,10 +318,27 @@ namespace Universes.UniverseData.obby.Client {
             }
         }
 
+        OB_Tier TierAt(int checkpoint) {
+            var layout = course != null ? course.Layout : null;
+            return layout == null || layout.StageCount == 0 ? OB_Tier.Basic : layout.stages[Mathf.Clamp(checkpoint, 0, layout.StageCount - 1)].tier;
+        }
+
         void RefreshStage() {
             if (course == null || course.Layout == null) return;
             var layout = course.Layout;
             int checkpoint = hasProgress ? progress.checkpoint : 0;
+            int hintFor = hasProgress && progress.finished ? -2 : checkpoint;
+            if (hintFor != hintStage) {
+                hintStage = hintFor;
+                hintShownAt = Time.unscaledTime;
+            }
+            OB_Tier tier = hasProgress && progress.finished ? OB_Tier.Extreme : TierAt(checkpoint);
+            Color accent = OB_Themes.Get(tier).accent;
+            tierChip.enabled = true;
+            tierChip.color = accent;
+            tierLabel.text = OB_Tiers.Name(tier).ToUpperInvariant();
+            tierLabel.color = accent.grayscale > 0.55f ? OB_Palette.Ink : OB_Palette.Paper;
+            if (atmosphere != null) atmosphere.SetTier(tier);
             if (hasProgress && progress.finished) {
                 stageLabel.text = "FINISHED";
                 stageNameLabel.text = $"{Ordinal(progress.place)} place!";
@@ -311,7 +346,7 @@ namespace Universes.UniverseData.obby.Client {
                 progressTarget = 1f;
             } else {
                 var stage = layout.stages[Mathf.Clamp(checkpoint, 0, layout.StageCount - 1)];
-                stageLabel.text = $"STAGE {checkpoint + 1} <alpha=#88>/ {layout.StageCount}";
+                stageLabel.text = $"STAGE {checkpoint + 1}<alpha=#88> / {layout.StageCount}";
                 stageNameLabel.text = StageName(stage.kind);
                 hintLabel.text = StageHint(stage.kind);
                 progressTarget = layout.StageCount > 0 ? (float)checkpoint / layout.StageCount : 0f;
@@ -338,7 +373,7 @@ namespace Universes.UniverseData.obby.Client {
 
         void Toast(string message, Color accent, AudioClip clip, float seconds = 2.2f) {
             toastLabel.text = message;
-            toastBackground.color = accent;
+            toastBackground.color = accent.WithAlpha(0.9f);
             toastLabel.color = accent.grayscale > 0.55f ? OB_Palette.Ink : OB_Palette.Paper;
             toastShownAt = Time.unscaledTime;
             toastUntil = Time.unscaledTime + seconds;

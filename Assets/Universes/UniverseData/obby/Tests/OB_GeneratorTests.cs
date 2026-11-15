@@ -7,7 +7,9 @@ namespace Universes.UniverseData.obby.Tests {
     public sealed class OB_GeneratorTests {
         static readonly Vector3 Start = new(0f, 100f, 9f), Lobby = new(0f, 100f, -3f);
 
-        static OB_CourseLayout Make(int seed, int stages = 14) =>
+        const int Stages = 30;
+
+        static OB_CourseLayout Make(int seed, int stages = Stages) =>
             OB_CourseGenerator.Generate(seed, stages, OB_Movement.Default, Start, 0f, Lobby);
 
         [Test] public void SameSeedBuildsIdenticalCourse() {
@@ -29,7 +31,7 @@ namespace Universes.UniverseData.obby.Tests {
         }
 
         [Test] public void StageCountIsHonouredAndClamped() {
-            Assert.AreEqual(14, Make(7).StageCount);
+            Assert.AreEqual(Stages, Make(7).StageCount);
             Assert.AreEqual(3, Make(7, 3).StageCount);
             Assert.AreEqual(OB_CourseGenerator.MaxStages, Make(7, 500).StageCount);
             Assert.GreaterOrEqual(Make(7, 0).StageCount, 1);
@@ -128,6 +130,56 @@ namespace Universes.UniverseData.obby.Tests {
                     Assert.IsTrue(new Bounds(Vector3.zero, zone.size).Contains(local), $"seed {seed} stage {stage.index}: coin outside the field");
                 }
             }
+        }
+
+        [Test] public void TiersRunFromBasicToExtremeInOrder() {
+            foreach (int n in new[] { 6, 14, 30, 37, OB_CourseGenerator.MaxStages }) {
+                var c = Make(11, n);
+                Assert.AreEqual(OB_Tier.Basic, c.stages[0].tier, $"{n} stages");
+                Assert.AreEqual(OB_Tier.Extreme, c.stages[n - 1].tier, $"{n} stages");
+                for (int i = 1; i < n; i++) {
+                    int step = c.stages[i].tier - c.stages[i - 1].tier;
+                    Assert.IsTrue(step is 0 or 1, $"{n} stages: tier jumps at stage {i}");
+                }
+                for (int t = 0; t < OB_Tiers.Count; t++)
+                    Assert.AreEqual(t, (int)c.stages[OB_Tiers.FirstStage(t, n)].tier, $"{n} stages: first stage of tier {t}");
+            }
+        }
+
+        [Test] public void DifficultyClimbsThroughEachTierAndEasesOffAtTheNext() {
+            var c = Make(5);
+            Assert.AreEqual(0f, c.stages[0].difficulty, 1e-4f);
+            Assert.Greater(c.stages[Stages - 1].difficulty, 0.95f);
+            int breathers = 0;
+            for (int i = 1; i < Stages; i++) {
+                float previous = c.stages[i - 1].difficulty, current = c.stages[i].difficulty;
+                if (c.stages[i].tier == c.stages[i - 1].tier) Assert.Greater(current, previous, $"stage {i}");
+                else {
+                    breathers++;
+                    Assert.Less(current, previous, $"stage {i}: a new tier should start with a breather");
+                    Assert.Greater(current, c.stages[OB_Tiers.FirstStage((int)c.stages[i - 1].tier, Stages)].difficulty,
+                        $"stage {i}: each tier starts harder than the one before");
+                }
+            }
+            Assert.AreEqual(OB_Tiers.Count - 1, breathers);
+        }
+
+        [Test] public void ExtremeStagesAreMuchHarderThanBasicOnes() {
+            // Hops is the baseline stage: compare its jumps at the bottom and top of the curve.
+            float basicGap = 0f, extremeGap = 0f;
+            int basic = 0, extreme = 0;
+            for (int seed = 1; seed <= 200; seed++) {
+                var c = Make(seed);
+                foreach (var j in c.jumpChecks) {
+                    var s = c.stages[Mathf.Min(j.stage, Stages - 1)];
+                    if (s.kind != OB_StageKind.Hops) continue;
+                    if (s.tier == OB_Tier.Basic) { basicGap += j.gap; basic++; }
+                    else if (s.tier == OB_Tier.Extreme) { extremeGap += j.gap; extreme++; }
+                }
+            }
+            Assert.Greater(basic, 0);
+            Assert.Greater(extreme, 0);
+            Assert.Greater(extremeGap / extreme, 1.6f * basicGap / basic);
         }
     }
 }

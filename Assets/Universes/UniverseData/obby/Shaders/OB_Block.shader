@@ -3,13 +3,20 @@
 // and a 30 m wall:
 //  * a bevel band along every edge, lighter on top, which makes a plain cube read as a moulded block;
 //  * a world-scaled stud grid on faces, instead of a texture stretched by the object's scale;
-//  * side faces a little darker and more saturated than tops, so walkable surfaces pop.
+//  * side faces a little darker and more saturated than tops, so walkable surfaces pop, or an
+//    explicit side colour with the top colour capping the sides (grass over earth, snow over ice);
+//  * optional glowing edges and seams (lava cracks in basalt, neon in the void).
 Shader "Universes/Obby/Block"
 {
     Properties
     {
         [MainColor] _BaseColor("Color", Color) = (1,0.5,0.35,1)
         _SideShade("Side Shade", Range(0.4,1)) = 0.82
+        _SideColor("Side Colour (alpha = use it)", Color) = (0,0,0,0)
+        _CapDepth("Top Cap Depth (m)", Range(0,2)) = 0
+        [HDR] _GlowColor("Edge Glow", Color) = (0,0,0,0)
+        _GlowWidth("Edge Glow Width (m)", Range(0.01,0.5)) = 0.09
+        _GlowSeams("Seam Glow", Range(0,1)) = 0
         _BevelWidth("Bevel Width (m)", Range(0,0.5)) = 0.14
         _BevelLight("Bevel Highlight", Range(0,1)) = 0.35
         _GridSize("Grid Cell (m)", Range(0.25,8)) = 2
@@ -29,6 +36,11 @@ Shader "Universes/Obby/Block"
         CBUFFER_START(UnityPerMaterial)
             half4 _BaseColor;
             half _SideShade;
+            half4 _SideColor;
+            half _CapDepth;
+            half4 _GlowColor;
+            half _GlowWidth;
+            half _GlowSeams;
             half _BevelWidth;
             half _BevelLight;
             half _GridSize;
@@ -119,16 +131,26 @@ Shader "Universes/Obby/Block"
                 half isTop = saturate(normalWS.y * 2.0 - 1.0);
 
                 half3 albedo = _BaseColor.rgb;
-                // Sides: darker and slightly richer.
+                // Sides: darker and slightly richer, unless the material names its own side colour.
                 half3 side = albedo * _SideShade;
                 side = lerp(dot(side, half3(0.3, 0.59, 0.11)).xxx, side, 1.12);
-                albedo = lerp(saturate(side), albedo, isTop);
+                side = lerp(saturate(side), _SideColor.rgb, _SideColor.a);
 
-                // World-scaled grid on the face plane.
                 float3 n = abs(input.normalOS);
                 float3 local = input.positionOS * size;
                 float2 faceUV = n.x > 0.5 ? local.zy : (n.y > 0.5 ? local.xz : local.xy);
-                albedo *= 1.0 - Grid(faceUV) * _GridStrength;
+
+                // Top cap: the top colour runs a little way down the sides with a wavy, drippy edge.
+                float fromTop = (0.5 - input.positionOS.y) * size.y;
+                float along = faceUV.x;
+                float wave = _CapDepth * (0.22 * sin(along * 2.1) + 0.12 * sin(along * 5.3 + 1.7));
+                half cap = (n.y < 0.5 && _CapDepth > 0.0) ? 1.0 - smoothstep(-0.02, 0.02, fromTop - (_CapDepth + wave)) : 0.0;
+                half3 capColor = albedo * 0.93;
+                albedo = lerp(lerp(side, capColor, cap), albedo, isTop);
+
+                // World-scaled grid on the face plane.
+                half grid = Grid(faceUV);
+                albedo *= 1.0 - grid * _GridStrength;
                 half3 detail = SAMPLE_TEXTURE2D(_DetailMap, sampler_DetailMap, faceUV / _GridSize).rgb;
                 albedo *= lerp(1.0h, detail, _DetailStrength);
 
@@ -153,7 +175,9 @@ Shader "Universes/Obby/Block"
                 surface.albedo = albedo;
                 surface.smoothness = _Smoothness * lerp(0.7h, 1.0h, bevel);
                 surface.occlusion = 1;
-                surface.emission = _BaseColor.rgb * _EmissionStrength;
+                half edgeGlow = 1.0 - smoothstep(0.0, _GlowWidth, edge);
+                half glow = max(edgeGlow, grid * _GlowSeams);
+                surface.emission = _BaseColor.rgb * _EmissionStrength + _GlowColor.rgb * glow;
                 surface.alpha = 1;
 
                 half4 color = UniversalFragmentPBR(inputData, surface);
