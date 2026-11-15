@@ -55,9 +55,7 @@ namespace Universes.UniverseData.chatbot_service.Server {
         List<PlayerData> passedPlayers = new();
 
         void SetSystemPrompt(string gameContext) {
-            chatbot.SystemPrompt = gameContext != null ? baseSystemPrompt + "
-
-" + gameContext : baseSystemPrompt;
+            chatbot.SystemPrompt = gameContext != null ? baseSystemPrompt + "\n\n" + gameContext : baseSystemPrompt;
         }
         void SetMode(CS_Mode newMode) {
             mode = newMode;

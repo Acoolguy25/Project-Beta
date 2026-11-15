@@ -82,7 +82,7 @@ PKGS=(
   xvfb xauth x11-utils x11-apps imagemagick
   libgtk-3-0t64 libglu1-mesa libgl1-mesa-dri libegl1 libvulkan1 mesa-vulkan-drivers
   libnss3 libasound2t64 libgbm1 libxss1 libxtst6 libxrandr2 libxcursor1 libxi6
-  libsecret-1-0 libcap2 libxkbcommon0 libdbus-1-3 cpio
+  libsecret-1-0 libcap2 libxkbcommon0 libdbus-1-3 cpio libarchive-tools xdotool
 )
 missing=()
 for p in "${PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
@@ -100,36 +100,68 @@ ini_get() { # section key
   awk -v s="[$1]" -v k="$2" '$0==s{f=1;next} /^\[/{f=0} f && index($0,k"=")==1{print substr($0,length(k)+2)}' <<<"$INI"
 }
 
-install_component() { # section label
-  local section="$1" url md5 got tmpd
+install_component() { # section [dest-for-.pkg]
+  local section="$1" dest="${2:-}" url md5 got tmpd
   url="$(ini_get "$section" url)"; md5="$(ini_get "$section" md5)"
   [[ -n "$url" && -n "$md5" ]] || die "section [$section] missing from $INI_URL"
   url="$UNITY_CDN/$UNITY_CHANGESET/$url"
   log "Downloading [$section] $url ($(ini_get "$section" size) bytes)"
   tmpd="$(mktemp -d)"
   mkdir -p "$EDITOR_ROOT"
-  # Stream: download once, hash and extract at the same time (no 4 GB archive on disk).
-  curl -fsSL --retry 5 --retry-delay 5 "$url" \
-    | tee >(md5sum | cut -d' ' -f1 >"$tmpd/md5") \
-    | tar -xJ -C "$EDITOR_ROOT"
-  sleep 1
-  got="$(cat "$tmpd/md5")"; rm -rf "$tmpd"
-  [[ "$got" == "$md5" ]] || die "[$section] md5 mismatch: expected $md5 got $got"
+  if [[ "$url" == *.tar.xz ]]; then
+    # Stream: download once, hash and extract at the same time (no 4 GB archive on disk).
+    curl -fsSL --retry 5 --retry-delay 5 "$url" \
+      | tee >(md5sum | cut -d' ' -f1 >"$tmpd/md5") \
+      | tar -xJ -C "$EDITOR_ROOT"
+    sleep 1
+    got="$(cat "$tmpd/md5")"
+  else
+    # Unity's Linux manifest serves Windows modules as macOS .pkg files (xar archive holding a
+    # gzip'd cpio Payload), the same files Unity Hub on Linux installs. Unpack the Payload into
+    # the PlaybackEngines folder that the pkg's install-location names.
+    curl -fsSL --retry 5 --retry-delay 5 "$url" -o "$tmpd/m.pkg"
+    got="$(md5sum "$tmpd/m.pkg" | cut -d' ' -f1)"
+  fi
+  [[ "$got" == "$md5" ]] || { rm -rf "$tmpd"; die "[$section] md5 mismatch: expected $md5 got $got"; }
   log "[$section] md5 OK ($md5)"
+  if [[ "$url" == *.pkg ]]; then
+    mkdir -p "$tmpd/x" "$dest"
+    bsdtar -xf "$tmpd/m.pkg" -C "$tmpd/x"
+    payload="$(find "$tmpd/x" -type f -name '*Payload' | head -n1)"
+    [[ -n "$payload" ]] || die "[$section] no Payload in pkg"
+    (cd "$dest" && gzip -dc "$payload" | cpio -idm --quiet)
+  fi
+  rm -rf "$tmpd"
 }
 
+PE="$EDITOR_ROOT/Editor/Data/PlaybackEngines"
 if [[ -x "$UNITY_BIN" ]]; then
   log "Editor already installed at $UNITY_BIN"
 else
   install_component Unity
 fi
-if [[ -d "$EDITOR_ROOT/Editor/Data/PlaybackEngines/LinuxStandaloneSupport/Variations/linux64_server_development_mono" ]] \
-   || [[ -f "$EDITOR_ROOT/.linux-server-installed" ]]; then
+if [[ -f "$EDITOR_ROOT/.linux-server-installed" ]]; then
   log "Linux Dedicated Server module already installed"
 else
   install_component Linux-Server
   touch "$EDITOR_ROOT/.linux-server-installed"
 fi
+# Windows modules, unpacked into PlaybackEngines/WindowsStandaloneSupport:
+#  - Windows-Server: some asmdefs exclude "WindowsStandalone64Server", and the Editor rejects
+#    that platform name (and refuses to compile) unless this module is installed.
+#  - Windows-Mono: the client Editor uses the project's "Windows" build profile, like on the
+#    Windows dev machine. Its bundleVersion is what the server compares against at login.
+for mod in Windows-Server Windows-Mono; do
+  var="$(tr 'a-z-' 'A-Z_' <<<"$mod")_MODULE"   # WINDOWS_SERVER_MODULE / WINDOWS_MONO_MODULE
+  [[ "${!var:-1}" == 1 ]] || continue
+  marker="$EDITOR_ROOT/.$(tr 'A-Z' 'a-z' <<<"$mod")-installed"
+  if [[ -f "$marker" ]]; then
+    log "$mod module already installed"
+  else
+    install_component "$mod" "$PE/WindowsStandaloneSupport"
+    touch "$marker"
+  fi
+done
 ln -sfn "$EDITOR_ROOT" "$UNITY_INSTALL_ROOT/current"
 
 # ---------------------------------------------------------------- Unity CLI
@@ -149,6 +181,29 @@ if [[ "${SKIP_UNITY_CLI:-0}" != 1 ]]; then
     UNITY_NO_CONSENT_PROMPT=1 unity editors add "$UNITY_BIN" --non-interactive --no-banner >/dev/null 2>&1 || true
     # Stage the licensing client while we still have the network (exit 4 = no license yet: expected).
     UNITY_NO_CONSENT_PROMPT=1 unity license status --non-interactive --no-banner >/dev/null 2>&1 || true
+  fi
+fi
+
+# ---------------------------------------------------------------- Git LFS assets
+# ~1,100 assets (models, textures, audio) are LFS pointers until pulled; Unity can't import pointers.
+# The pull keeps a second copy of every object in .git/lfs/objects (~6.5 GB). On a fresh cloud
+# container nothing there is unpushed, so LFS_TRIM_CACHE=1 (default) deletes that cache once every
+# file is checked out. Set LFS_TRIM_CACHE=0 on a machine where you commit new LFS files offline.
+if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.git" && "${SKIP_LFS:-0}" != 1 ]]; then
+  # Pull only files still checked out as pointers ("-" in ls-files), so a trimmed cache isn't
+  # re-downloaded in full on the next run.
+  mapfile -t lfs_missing < <(git -C "$PROJECT_DIR" lfs ls-files | sed -nE 's/^[0-9a-f]+ - (.*)$/\1/p')
+  if ((${#lfs_missing[@]})); then
+    log "Pulling ${#lfs_missing[@]} Git LFS files"
+    if ((${#lfs_missing[@]} > 200)); then
+      git -C "$PROJECT_DIR" lfs pull
+    else
+      git -C "$PROJECT_DIR" lfs pull --include="$(IFS=,; echo "${lfs_missing[*]}")" --exclude=""
+    fi
+  fi
+  if [[ "${LFS_TRIM_CACHE:-1}" == 1 ]] && ! git -C "$PROJECT_DIR" lfs ls-files | grep -qE '^[0-9a-f]+ - '; then
+    lfs_dir="$(git -C "$PROJECT_DIR" rev-parse --path-format=absolute --git-common-dir)/lfs/objects"
+    [[ -d "$lfs_dir" ]] && { log "Trimming LFS object cache ($(du -sh "$lfs_dir" | cut -f1))"; rm -rf "$lfs_dir"; }
   fi
 fi
 
