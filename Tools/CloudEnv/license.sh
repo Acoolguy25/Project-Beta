@@ -11,14 +11,22 @@
 #
 # UNITY_ACCEPT_PERSONAL_EULA=1 means the account owner accepted the Unity Personal terms
 # (https://unity.com/legal/terms-of-service). Never set it on someone else's behalf.
+# UNITY_ACCEPT_EDITOR_TERMS=1 means the account owner accepted the Unity Editor Software Terms
+# (https://unity.com/legal/editor-terms-of-service/software) that Unity 6.6+ asks for once per
+# Editor version; without it a graphical Editor stops on a terms dialog.
 set -euo pipefail
 export UNITY_NO_CONSENT_PROMPT=1 UNITY_NO_AGENT_HINTS=1
 U=(unity --no-banner --non-interactive)
 
 log() { printf '[license] %s\n' "$*"; }
 
+[[ -f /etc/profile.d/project-beta-unity.sh ]] && source /etc/profile.d/project-beta-unity.sh
 if "${U[@]}" license status >/dev/null 2>&1; then
-  log "A license is already active."; "${U[@]}" license status; exit 0
+  log "A license is already active."
+  if [[ -n "${UNITY_VERSION:-}" && "${UNITY_ACCEPT_EDITOR_TERMS:-0}" == 1 ]]; then
+    "${U[@]}" terms accept "$UNITY_VERSION" --yes
+  fi
+  exit 0
 fi
 
 if [[ -n "${UNITY_LICENSE_SERIAL:-}" ]]; then
@@ -47,3 +55,8 @@ else
   fi
 fi
 "${U[@]}" license status
+
+if [[ -n "${UNITY_VERSION:-}" && "${UNITY_ACCEPT_EDITOR_TERMS:-0}" == 1 ]]; then
+  log "Accepting Unity Editor Software Terms for $UNITY_VERSION"
+  "${U[@]}" terms accept "$UNITY_VERSION" --yes
+fi

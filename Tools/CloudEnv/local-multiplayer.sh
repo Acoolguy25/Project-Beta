@@ -46,8 +46,9 @@ batch() { # project logname args...
 }
 
 cmd_import() {
-  [[ -d "$PROJECT_DIR/Library/PackageCache" ]] && { log "main project already imported"; return; }
+  [[ -f "$PROJECT_DIR/Library/.cloudenv-imported" ]] && { log "main project already imported"; return; }
   batch "$PROJECT_DIR" import
+  touch "$PROJECT_DIR/Library/.cloudenv-imported"
 }
 
 cmd_clone() {
@@ -75,12 +76,35 @@ start_display() { # display
   fi
 }
 
+check_terms() {
+  # Unity 6.6+ shows a blocking "Unity Editor Software Terms" dialog until they're accepted for
+  # this Editor version. Accepting is the account owner's decision, never this script's.
+  if U terms status --format tsv --no-header 2>/dev/null | awk -F"\t" -v v="$UNITY_VERSION" '$1==v && $3=="not-accepted"{f=1} END{exit !f}'; then
+    die "Unity Editor Software Terms not accepted for $UNITY_VERSION. The account owner runs: unity terms accept $UNITY_VERSION --yes"
+  fi
+}
+
+dismiss_root_warning() { # display
+  # Graphical Editors started as root (as in cloud containers) first show a "You appear to be
+  # running Unity as root" dialog. Click its "Continue anyway" button when it appears.
+  local d="$1" w
+  for _ in $(seq 120); do
+    w="$(DISPLAY="$d" xdotool search --name '^Warning$' 2>/dev/null | head -n1 || true)"
+    if [[ -n "$w" ]]; then
+      DISPLAY="$d" xdotool mousemove --window "$w" 280 100 click 1
+      log "dismissed root warning on $d"; return
+    fi
+    sleep 1
+  done
+}
+
 start_editor() { # display project logname extra-args...
   local d="$1" proj="$2" name="$3"; shift 3
   if U status --project-path "$proj" >/dev/null 2>&1; then log "$name Editor already running"; return; fi
   log "starting $name Editor on $d ($proj)"
   DISPLAY="$d" nohup "$UNITY_EDITOR" -projectPath "$proj" -logFile "$OUT_DIR/$name-editor.log" "$@" \
     >/dev/null 2>&1 </dev/null &
+  [[ $EUID -eq 0 ]] && dismiss_root_warning "$d" &
 }
 
 wait_ready() { # project name
@@ -90,6 +114,7 @@ wait_ready() { # project name
 }
 
 cmd_start() {
+  check_terms
   [[ -f "$CLONE_DIR/.clone" ]] || cmd_clone
   start_display "$SERVER_DISPLAY"; start_display "$CLIENT_DISPLAY"
   start_editor "$SERVER_DISPLAY" "$CLONE_DIR" server -activeBuildProfile "$SERVER_PROFILE"

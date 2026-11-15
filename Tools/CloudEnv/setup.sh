@@ -82,7 +82,7 @@ PKGS=(
   xvfb xauth x11-utils x11-apps imagemagick
   libgtk-3-0t64 libglu1-mesa libgl1-mesa-dri libegl1 libvulkan1 mesa-vulkan-drivers
   libnss3 libasound2t64 libgbm1 libxss1 libxtst6 libxrandr2 libxcursor1 libxi6
-  libsecret-1-0 libcap2 libxkbcommon0 libdbus-1-3 cpio libarchive-tools
+  libsecret-1-0 libcap2 libxkbcommon0 libdbus-1-3 cpio libarchive-tools xdotool
 )
 missing=()
 for p in "${PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
