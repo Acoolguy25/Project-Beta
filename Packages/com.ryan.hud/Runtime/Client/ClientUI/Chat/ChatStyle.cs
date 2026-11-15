@@ -1,50 +1,38 @@
+using RyanAssets.Shared.Declarations;
+using RyanAssets.UI;
 using UnityEngine;
+
 namespace RyanAssets.Client.ClientUI.Chat {
+    /// <summary>Formats chat lines as TextMeshPro rich text, using the active <see cref="UITheme"/>.</summary>
     public static class ClientChatHelper {
-        static readonly Color32[] Colors =
-        {
-            new(253,  41,  67, 255),
-            new(  1, 162, 255, 255),
-            new(  2, 184,  87, 255),
-            new(107,  50, 124, 255),
-            new(218, 133,  65, 255),
-            new(245, 205,  48, 255),
-            new(232, 186, 200, 255),
-            new(215, 197, 154, 255),
-        };
-
-        public static Color32 GetColor(string name) {
-            int value = 0;
-            int len = name.Length;
-
-            for (int i = 0; i < len; i++) {
-                int cValue = name[i];
-                int reverseIndex = len - i;
-
-                if (len % 2 == 1)
-                    reverseIndex--;
-
-                if (reverseIndex % 4 >= 2)
-                    cValue = -cValue;
-
-                value += cValue;
-            }
-
-            int index = ((value % Colors.Length) + Colors.Length) % Colors.Length;
-            return Colors[index];
+        /// <summary>A player's line: bold, name-coloured username followed by the escaped message.</summary>
+        public static string FormatPlayerMessage(string username, string message) {
+            Color nameColor = UITheme.Active.NameColor(username);
+            return $"<b><color=#{UITheme.ToRichTextHex(nameColor)}>{EscapeRichText(username)}</color></b>  {EscapeRichText(message)}";
         }
 
-        public static string ColorNameRichText(string name) {
-            Color32 c = GetColor(name);
-            string hex = $"{c.r:X2}{c.g:X2}{c.b:X2}";
-            return $"<color=#{hex}>{EscapeRichText(name)}</color>";
+        /// <summary>
+        /// A line from the game rather than a player. Server text may carry its own rich text, except
+        /// chatbot replies, which repeat what players typed and are escaped.
+        /// </summary>
+        public static string FormatSystemMessage(string message, SystemMessageSource source) {
+            UITheme theme = UITheme.Active;
+            (Color color, bool escape) = source switch {
+                SystemMessageSource.PlayerAdd or SystemMessageSource.PlayerRemove => (theme.textSecondary, false),
+                SystemMessageSource.LocalPlayerJoinMessage => (theme.textMuted, false),
+                SystemMessageSource.ChatbotResponse => (theme.warning, true),
+                SystemMessageSource.CommandError => (theme.danger, false),
+                _ => (theme.systemText, false),
+            };
+            string body = escape ? EscapeRichText(message) : message;
+            return $"<color=#{UITheme.ToRichTextHex(color)}>{body}</color>";
         }
 
-        public static string EscapeRichText(string s) {
-            return s
-                .Replace("&", "&amp;")
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;");
+        public static string EscapeRichText(string text) {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+            // <noparse> keeps tags literal; closing tags typed by the player are neutralised first.
+            return "<noparse>" + text.Replace("</noparse>", "</ noparse>") + "</noparse>";
         }
     }
 }

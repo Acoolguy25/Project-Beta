@@ -1,66 +1,62 @@
-using UnityEngine;
-using RyanAssets.UI;
-using UnityEngine.UI;
-using RyanAssets.PromptService;
-using RyanAssets.NetworkService;
-using RyanAssets.Client.ClientModules;
-using RyanAssets.Client.ClientCore;
-using Newtonsoft.Json.Linq;
-using Cysharp.Threading.Tasks;
 using System;
-
-
+using Cysharp.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using RyanAssets.Client.ClientCore;
+using RyanAssets.Client.ClientModules;
+using RyanAssets.NetworkService;
+using RyanAssets.PromptService;
+using RyanAssets.UI;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace Universes.GameBrowser {
-    [RequireComponent(typeof(CanvasGroupController))]
+    /// <summary>The page of one game: big thumbnail, description, player count and the Play button.</summary>
     public class SelectedGameUI : MonoBehaviour {
         [NonSerialized]
         public UniverseStruct activeUniverse;
 
-        [SerializeField]
-        CanvasGroupController selectedGameCanvasUI;
-        [SerializeField]
-        Image thumbnailImage;
-        [SerializeField]
-        Text title, description, active_players;
-        static string joining_universe_id;
+        [SerializeField] CanvasGroupController page;
+        [SerializeField] Image thumbnailImage;
+        [SerializeField] TMP_Text title;
+        [SerializeField] TMP_Text description;
+        [SerializeField] TMP_Text activePlayers;
+        [SerializeField, Min(0f)] float fadeDuration = 0.2f;
 
-        public void OpenUniversePage(UniverseStruct universe, ulong player_count) {
+        static string joiningUniverseId;
+
+        public void OpenUniversePage(UniverseStruct universe, ulong playerCount) {
             activeUniverse = universe;
-            selectedGameCanvasUI.SetVisible(true, 0.5f);
             title.text = universe.title;
             description.text = universe.description;
             thumbnailImage.sprite = universe.LoadSprite();
-            active_players.text = $"{player_count}";
+            activePlayers.text = GameCardView.FormatPlaying(playerCount);
+            page.SetVisible(true, fadeDuration);
         }
-        public void CloseUniversePage() {
-            selectedGameCanvasUI.SetVisible(false, 0.5f);
-        }
-        static async UniTask<(string, JObject)> GetMyServer() {
-            return await BackendNetwork.PostRequest($"/api/universes/v1/play?universe_id={joining_universe_id}");
-        }
-        public static async UniTask PlayGame(string universe_id) {
+
+        public void CloseUniversePage() => page.SetVisible(false, fadeDuration);
+
+        static async UniTask<(string, JObject)> GetMyServer() =>
+            await BackendNetwork.PostRequest($"/api/universes/v1/play?universe_id={joiningUniverseId}");
+
+        public static async UniTask PlayGame(string universeId) {
             if (NetworkSettings.EditorDirectConnection) {
                 ClientConnector.Instance.JoinLocalEditorServer();
                 return;
             }
-            joining_universe_id = universe_id;
-            (string res, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel);
-            if (res != null || json == null)
+            joiningUniverseId = universeId;
+            (string error, JObject json) = await BackendClient.RequestAsync(GetMyServer, "Getting Server", promptWaiting: PromptId.PlayGameAwait, promptResult: PromptId.PlayGameConfirm, retryPolicy: RetryPolicy.RetryOrCancel);
+            if (error != null || json == null)
                 return;
-            // Debug.Log(json);
-            ClientConnector.Instance.JoinGameServer(joining_universe_id, json);
+            ClientConnector.Instance.JoinGameServer(joiningUniverseId, json);
         }
 
-        // Button Clicks
-        public void ReportGame_ButtonClicked() {
-            PromptManager.PromptOk("Report Sent", "A *VERY REAL* report was sent to the owner!\nUwU OwO QwQ TwT >w< ^w^ ;w; T~T Q~Q @w@ x3 :3 o_o O_O XwX");
-        }
-        public async void PlayGame_ButtonClicked() {
-            await PlayGame(activeUniverse.id);
-        }
-        public void CloseGame_ButtonClicked() {
-            CloseUniversePage();
-        }
+        // Buttons (wired in the prefab)
+        public void ReportGame_ButtonClicked() =>
+            PromptManager.PromptOk("Report Game", "Reporting isn't available yet.");
+
+        public async void PlayGame_ButtonClicked() => await PlayGame(activeUniverse.id);
+
+        public void CloseGame_ButtonClicked() => CloseUniversePage();
     }
 }

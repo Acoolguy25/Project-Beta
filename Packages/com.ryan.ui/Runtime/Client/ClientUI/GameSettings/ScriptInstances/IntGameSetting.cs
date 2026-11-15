@@ -9,13 +9,14 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         }
         public override bool TrySet(object new_value){
             value = Math.Clamp((int) new_value, min, max);
-            numberSlider.SetValue(value);
+            if (numberSlider != null) // null until the settings screen builds its row
+                numberSlider.SetValue(value);
             on_update?.Invoke(value);
             Save();
             return true;
         }
         public override void Init(GameObject obj){
-            numberSlider = obj.GetComponent<GameSettingsNumberSlider>();
+            numberSlider = obj.GetComponentInChildren<GameSettingsNumberSlider>(true);
             numberSlider.SetRange(min, max, true);
             numberSlider.slider.onValueChanged.AddListener((val) => {
                 value = (int) val;

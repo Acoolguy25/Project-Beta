@@ -1,0 +1,24 @@
+{
+    "name": "RyanAssets.UI.Editor",
+    "rootNamespace": "RyanAssets.UI.Editor",
+    "references": [
+        "RyanAssets.UI",
+        "RyanAssets.UI.Textbox",
+        "RyanAssets.Client.ClientUI.GameSettings",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

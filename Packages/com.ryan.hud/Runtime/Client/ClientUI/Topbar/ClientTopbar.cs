@@ -1,110 +1,124 @@
-using UnityEngine;
-using RyanAssets.UI;
-using RyanAssets.Input;
-using UnityEngine.UI;
+using System.Globalization;
 using RyanAssets.Client.ClientCore;
 using RyanAssets.DataService;
+using RyanAssets.Input;
 using RyanAssets.Shared.Global;
+using RyanAssets.UI;
+using TMPro;
+using UnityEngine;
 
 namespace RyanAssets.Client.ClientUI.Topbar {
+    /// <summary>
+    /// The strip of floating controls along the top of the screen: menu, chat and player list
+    /// buttons (<see cref="TopbarPanelButton"/>), the local player's coins, the game's status line
+    /// and the player count. It also maps the keyboard shortcuts for those panels.
+    /// </summary>
     public class ClientTopbar : MonoBehaviour {
-        public static ClientTopbar Instance;
-        [SerializeField]
-        CanvasGroupController chatCanvas, gameSettingsCanvas, playerListCanvas;
-        CanvasGroupController topbarCanvas;
-        [SerializeField]
-        Button chatButton, gameSettingsButton, playerListButton;
-        [SerializeField]
-        Text experienceText;
-        [SerializeField]
-        Text coinsText;
+        [Header("Status")]
+        [Tooltip("Pill in the middle of the bar; hidden while there is nothing to say.")]
+        [SerializeField] GameObject statusPill;
+        [SerializeField] TMP_Text statusText;
+        [Tooltip("Show the game's name while the server has no status message.")]
+        [SerializeField] bool showGameNameWhenIdle = true;
+
+        [Header("Coins")]
+        [SerializeField] GameObject coinPill;
+        [SerializeField] TMP_Text coinsText;
+
+        [Header("Players")]
+        [SerializeField] TMP_Text playerCountText;
+
         PlayerData observedPlayerData;
-        void Awake() {
-            Instance = this;
-            topbarCanvas = GetComponent<CanvasGroupController>();
-        }
+
         void OnEnable() {
-            TopbarControls.menuToggledEvent += ToggleGameSettingsCanvas_ButtonPressed;
-            TopbarControls.playerListEvent += TogglePlayerListCanvas_ButtonPressed;
-            SetCanvasVisibility(chatCanvas, chatButton, true, 0f);
-            SetCanvasVisibility(gameSettingsCanvas, gameSettingsButton, false, 0f);
-            SetCanvasVisibility(playerListCanvas, playerListButton, true, 0f);
-            SetCanvasVisibility(topbarCanvas, null, true, 0f);
+            TopbarControls.menuToggledEvent += OnMenuShortcut;
+            TopbarControls.playerListEvent += OnPlayerListShortcut;
             SharedGlobalEvents.TopMessageChanged += OnTopMessageChanged;
-            OnTopMessageChanged(SharedGlobalEvents.Instance?.TopMessage);
             PlayerData.OnMyPlayerAdded.Subscribe(OnMyPlayerAdded);
             PlayerData.OnMyPlayerRemoved += OnMyPlayerRemoved;
+            PlayerData.OnPlayerAdded += OnPlayerCountChanged;
+            PlayerData.OnPlayerRemoved += OnPlayerCountChanged;
+
+            OnTopMessageChanged(SharedGlobalEvents.Instance != null ? SharedGlobalEvents.Instance.TopMessage : null);
+            RefreshCoins(PlayerData.localData != null ? PlayerData.localData.gold.Value : 0);
+            RefreshPlayerCount();
         }
+
         void OnDisable() {
-            TopbarControls.menuToggledEvent -= ToggleGameSettingsCanvas_ButtonPressed;
-            TopbarControls.playerListEvent -= TogglePlayerListCanvas_ButtonPressed;
+            TopbarControls.menuToggledEvent -= OnMenuShortcut;
+            TopbarControls.playerListEvent -= OnPlayerListShortcut;
             SharedGlobalEvents.TopMessageChanged -= OnTopMessageChanged;
             PlayerData.OnMyPlayerAdded.Unsubscribe(OnMyPlayerAdded);
             PlayerData.OnMyPlayerRemoved -= OnMyPlayerRemoved;
+            PlayerData.OnPlayerAdded -= OnPlayerCountChanged;
+            PlayerData.OnPlayerRemoved -= OnPlayerCountChanged;
             StopObservingCoins();
         }
-        public Button GetButton(CanvasGroupController canvas){
-            Button button;
-            button = canvas switch {
-                var c when c == chatCanvas => chatButton,
-                var c when c == gameSettingsCanvas => gameSettingsButton,
-                var c when c == playerListCanvas => playerListButton,
-                _ => null
-            };
-            return button;
-        }
-        public void EnsureCanvasVisibility(CanvasGroupController canvas, bool visibility = true, bool instant = true) {
-            SetCanvasVisibility(canvas, GetButton(canvas), visibility, instant? 0f: 1/3f);
-        }
-        public void CloseCanvasVisibility(CanvasGroupController canvas){
-            SetCanvasVisibility(canvas, GetButton(canvas), false, 1/3f);
-        }
-        public void SetCanvasVisibility(CanvasGroupController canvas, Button button, bool newVisible, float duration) {
-            if (canvas == gameSettingsCanvas)
-                InputService.SetInputScreenActive(InputScreen.GameSettings, newVisible);
 
-            canvas.SetVisible(newVisible, duration);
-            if (button)
-                button.GetComponent<Image>().color = newVisible ? new Color32(0x14, 0x7D, 0xC5, 0x73) : new Color32(0x14, 0x14, 0x14, 0x73);
+        // --- Shortcuts ----------------------------------------------------------
+
+        void OnMenuShortcut() => HudPanel.Toggle(HudPanelId.GameMenu);
+
+        void OnPlayerListShortcut() => HudPanel.Toggle(HudPanelId.PlayerList);
+
+        // --- Status ---------------------------------------------------------------
+
+        void OnTopMessageChanged(string message) {
+            string text = string.IsNullOrEmpty(message) && showGameNameWhenIdle
+                ? FormatGameName(ClientConnector.joinUniverseId)
+                : message;
+            if (statusText != null)
+                statusText.text = text ?? string.Empty;
+            if (statusPill != null)
+                statusPill.SetActive(!string.IsNullOrEmpty(text));
         }
-        public void ToggleCanvasVisibility(CanvasGroupController canvas, Button button, float duration = 1 / 3f) {
-            bool newVisible = canvas.targetAlpha == 0f;
-            SetCanvasVisibility(canvas, button, newVisible, duration);
+
+        /// <summary>"war_valley" -> "War Valley".</summary>
+        static string FormatGameName(string universeId) {
+            if (string.IsNullOrEmpty(universeId))
+                return string.Empty;
+            string spaced = universeId.Replace('_', ' ').Replace('-', ' ');
+            return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(spaced);
         }
-        public void ToggleChatCanvas_ButtonPressed() {
-            ToggleCanvasVisibility(chatCanvas, chatButton);
-        }
-        public void ToggleGameSettingsCanvas_ButtonPressed() {
-            ToggleCanvasVisibility(gameSettingsCanvas, gameSettingsButton);
-        }
-        public void TogglePlayerListCanvas_ButtonPressed() {
-            ToggleCanvasVisibility(playerListCanvas, playerListButton);
-        }
-        void OnTopMessageChanged(string str) {
-            experienceText.text = str != string.Empty? str: ClientConnector.joinUniverseId;
-        }
+
+        // --- Coins ----------------------------------------------------------------
+
         void OnMyPlayerAdded(PlayerData playerData) {
             StopObservingCoins();
             observedPlayerData = playerData;
             playerData.gold.OnChange += OnGoldChanged;
             RefreshCoins(playerData.gold.Value);
         }
+
         void OnMyPlayerRemoved(PlayerData playerData) {
             if (observedPlayerData == playerData)
                 StopObservingCoins();
             RefreshCoins(0);
         }
+
         void StopObservingCoins() {
             if (observedPlayerData == null)
                 return;
             observedPlayerData.gold.OnChange -= OnGoldChanged;
             observedPlayerData = null;
         }
-        void OnGoldChanged(ulong oldValue, ulong newValue, bool asServer) {
-            RefreshCoins(newValue);
-        }
+
+        void OnGoldChanged(ulong oldValue, ulong newValue, bool asServer) => RefreshCoins(newValue);
+
         void RefreshCoins(ulong coins) {
-            coinsText.text = coins.ToString("N0");
+            if (coinsText != null)
+                coinsText.text = coins.ToString("N0", CultureInfo.InvariantCulture);
+        }
+
+        // --- Player count ---------------------------------------------------------
+
+        void OnPlayerCountChanged(PlayerData _) => RefreshPlayerCount();
+
+        void RefreshPlayerCount() {
+            if (playerCountText == null)
+                return;
+            int count = PlayerData.Players?.Count ?? 0;
+            playerCountText.text = count.ToString(CultureInfo.InvariantCulture);
         }
     }
 }

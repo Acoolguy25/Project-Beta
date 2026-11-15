@@ -1,62 +1,87 @@
-using UnityEngine;
-using UnityEngine.UI;
-using RyanAssets.Shared.Declarations;
-using RyanAssets.Shared.Global;
-using RyanAssets.DataService;
-using FishNet;
-using FishNet.Transporting;
 using FishNet.Connection;
-using RyanAssets.UI.ListGrid;
-using System.Collections.Generic;
 using RyanAssets.Client.ClientCore;
+using RyanAssets.DataService;
+using RyanAssets.UI;
+using RyanAssets.UI.ListGrid;
+using TMPro;
+using UnityEngine;
 
 namespace RyanAssets.Client.ClientUI.PlayerList {
+    /// <summary>
+    /// The shared player list: one <see cref="PlayerListRow"/> per connected player, the local player
+    /// first, with the game's leaderboard stats.
+    /// </summary>
     public class ClientPlayerList : ListGridUI<(NetworkConnection conn, PlayerData data)> {
+        [Tooltip("Optional label showing how many players are in the server.")]
+        [SerializeField] TMP_Text countText;
+
         protected override string GetItemName((NetworkConnection conn, PlayerData data) player) =>
             player.data != null ? player.data.player_id.Value : "Disconnected player";
+
         protected override void Start() {
             base.Start();
+            OnCreatePrefab += OnRowCreated;
             PlayerData.OnPlayerAdded += OnPlayerAdded;
             PlayerData.OnPlayerRemoved += OnPlayerRemoved;
             ClientConnector.OnDisconnected += OnDisconnected;
-            OnCreatePrefab += OnAddPrefab;
+            HudPanel.VisibilityChanged += OnPanelVisibilityChanged;
             PlayerData.RunEach(OnPlayerAdded);
+            RefreshCount();
         }
+
         protected override void OnDestroy() {
             base.OnDestroy();
             PlayerData.OnPlayerAdded -= OnPlayerAdded;
             PlayerData.OnPlayerRemoved -= OnPlayerRemoved;
             ClientConnector.OnDisconnected -= OnDisconnected;
+            HudPanel.VisibilityChanged -= OnPanelVisibilityChanged;
         }
-        private void OnAddPrefab(GameObject prefab, (NetworkConnection conn, PlayerData data) player) {
-            if (!PlayerData.Players.ContainsValue(player.data)) { // incase bro left while loading
-                RemovePrefab(prefab.transform);
+
+        void OnRowCreated(GameObject row, (NetworkConnection conn, PlayerData data) player) {
+            // The player may have left while their row was being instantiated.
+            if (player.data == null || !PlayerData.Players.ContainsValue(player.data)) {
+                RemovePrefab(row.transform);
                 return;
             }
-            string username = player.data.username.Value;
-            prefab.name = player.data.player_id.Value;
-            prefab.GetComponent<ClientLeaderboardPlayer>().Init(player.data);
-            //prefab.transform.GetChild(1).GetComponent<Text>().text = username;
+            row.name = player.data.player_id.Value;
+            row.GetComponent<PlayerListRow>().Init(player.data);
         }
-        private void OnPlayerAdded(PlayerData data) {
-            if (data.IsOwner) {
-                AddPrefab((data.Owner, data), -10); // Guarentee you are the top player!
-            } else {
+
+        void OnPlayerAdded(PlayerData data) {
+            // The local player always sits at the top.
+            if (data.IsOwner)
+                AddPrefab((data.Owner, data), -10);
+            else
                 AddPrefab((data.Owner, data));
+            RefreshCount();
+        }
+
+        void OnPlayerRemoved(PlayerData data) {
+            RefreshCount();
+            string playerId = data.player_id.Value;
+            if (playerId == null) // null while disconnecting
+                return;
+            Transform row = contentTarget.Find(playerId);
+            if (row != null) { // may not be instantiated yet
+                RemovePrefab(row);
+                UpdateLayout();
             }
         }
-        private void OnPlayerRemoved(PlayerData data) {
-            string player_id = data.player_id.Value;
-            if (player_id != null) { // player_id can be null when disconnecting
-                Transform item = contentTarget.Find(data.player_id.Value);
-                if (item) { // item might not be inserted yet!
-                    RemovePrefab(item);
-                    UpdateLayout();
-                }
-            }
-        }
-        private void OnDisconnected(){
+
+        void OnDisconnected() {
             ClearPrefabs();
+            RefreshCount();
+        }
+
+        // Rows measured while the panel was hidden have no size; measure again when it opens.
+        void OnPanelVisibilityChanged(HudPanelId panel, bool visible) {
+            if (panel == HudPanelId.PlayerList && visible)
+                RefreshFilter();
+        }
+
+        void RefreshCount() {
+            if (countText != null)
+                countText.text = (PlayerData.Players?.Count ?? 0).ToString();
         }
     }
 }

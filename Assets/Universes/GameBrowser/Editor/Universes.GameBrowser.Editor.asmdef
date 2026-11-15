@@ -1,0 +1,26 @@
+{
+    "name": "Universes.GameBrowser.Editor",
+    "rootNamespace": "Universes.GameBrowser.Editor",
+    "references": [
+        "Universes.GameBrowser",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "RyanAssets.UI.ListGrid",
+        "RyanAssets.UI.ButtonGrid"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

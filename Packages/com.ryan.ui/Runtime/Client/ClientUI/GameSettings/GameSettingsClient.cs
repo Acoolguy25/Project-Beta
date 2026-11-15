@@ -1,5 +1,4 @@
 using UnityEngine;
-using RyanAssets.UI.ListGrid;
 using RyanAssets.UI;
 using RyanAssets.UI.Hover;
 using RyanAssets.PromptService;
@@ -9,11 +8,18 @@ using FishNet.Managing;
 using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
+using TMPro;
 using RyanAssets.Shared.Requests;
 using RyanAssets.Shared.Declarations;
 
 namespace RyanAssets.Client.ClientUI.GameSettings {
-    public class GameSettingsClient: ListGridUI<GameSettingsInstance> {
+    /// <summary>
+    /// The game menu: resume / reset / leave actions over a list of player settings, built from
+    /// <see cref="gameSettingsConfigUI"/>. In the main menu (<see cref="hideGameActionButtons"/>)
+    /// it is a plain settings screen. Shown and hidden through the <see cref="HudPanel"/> beside it.
+    /// </summary>
+    [RequireComponent(typeof(HudPanel))]
+    public class GameSettingsClient : MonoBehaviour {
         public static readonly Dictionary<string, GameSettingsInstance> gameSettingsConfigUI = new(){
             ["InvertedMovementControls"] = new BoolGameSetting(){
                 title = "Inverted Movement Controls",
@@ -132,100 +138,115 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
             return default;
         }
 
-        [SerializeField]
-        List<GameObject> settingToAdditionalPrefab;
-        [SerializeField]
-        GameObject categoryHeaderPrefab;
-        [SerializeField]
-        GameObject gameActionButtonsContainer;
-        [SerializeField]
-        bool hideGameActionButtons;
-        [SerializeField]
-        Button resumeButton;
+        [Header("Settings list")]
+        [SerializeField] RectTransform listContent;
+        [SerializeField] GameSettingRow sliderRowPrefab;
+        [SerializeField] GameSettingRow toggleRowPrefab;
+        [SerializeField] TMP_Text categoryHeaderPrefab;
 
-        readonly HashSet<GameSettingCategory> createdCategories = new();
-        protected void Awake(){
-            base.Start();
-            foreach (var keyVal in gameSettingsConfigUI) {
-                keyVal.Value.name = keyVal.Key; // Assign the names!
-            }
-            SetGameActionButtonsVisible(!hideGameActionButtons);
-            AddSettingsPrefabs();
+        [Header("Header")]
+        [SerializeField] TMP_Text titleText;
+        [SerializeField] string inGameTitle = "Menu";
+        [SerializeField] string settingsOnlyTitle = "Settings";
+        [SerializeField] Button closeButton;
+        [Tooltip("Clicking here (the dimmed backdrop) closes the menu.")]
+        [SerializeField] Button dismissArea;
+
+        [Header("Game actions")]
+        [Tooltip("Resume / reset / leave row. Hidden outside a game (main menu).")]
+        [SerializeField] GameObject gameActions;
+        [SerializeField] bool hideGameActionButtons;
+        [SerializeField] Button resumeButton;
+        [SerializeField] Button resetButton;
+        [SerializeField] Button leaveButton;
+
+        HudPanel panel;
+
+        void Awake() {
+            foreach (var keyVal in gameSettingsConfigUI)
+                keyVal.Value.name = keyVal.Key;
+
+            panel = GetComponent<HudPanel>();
+            panel.Toggled += OnMenuToggled;
+            if (titleText != null)
+                titleText.text = hideGameActionButtons ? settingsOnlyTitle : inGameTitle;
+            if (gameActions != null)
+                gameActions.SetActive(!hideGameActionButtons);
+
+            Listen(closeButton, Close);
+            Listen(dismissArea, Close);
+            Listen(resumeButton, Close);
+            Listen(resetButton, OnReset_ButtonPressed);
+            Listen(leaveButton, OnLeaveGame_ButtonPressed);
+
+            BuildSettingsList();
         }
-        protected override void Start(){
-            // disabled
+
+        static void Listen(Button button, UnityEngine.Events.UnityAction action) {
+            if (button != null)
+                button.onClick.AddListener(action);
         }
-        void AddSettingsPrefabs(){
+
+        void BuildSettingsList() {
+            var createdCategories = new HashSet<GameSettingCategory>();
             foreach (GameSettingsInstance setting in gameSettingsConfigUI.Values) {
-                if (createdCategories.Add(setting.category))
-                    CreateCategoryHeader(setting.category);
-
-                GameObject placeholder = Instantiate(modelPrefab, contentTarget, false);
-                OnPrefabAdded(placeholder, setting);
+                if (createdCategories.Add(setting.category)) {
+                    TMP_Text header = Instantiate(categoryHeaderPrefab, listContent, false);
+                    header.name = setting.category.ToString();
+                    header.text = setting.category.ToString().ToUpperInvariant();
+                }
+                GameSettingRow prefab = setting.type switch {
+                    GameSettingType.IntGameSetting => sliderRowPrefab,
+                    GameSettingType.BoolGameSetting => toggleRowPrefab,
+                    _ => null,
+                };
+                if (prefab == null) {
+                    Debug.LogError($"No settings row prefab for {setting.type} ('{setting.name}').", this);
+                    continue;
+                }
+                Instantiate(prefab, listContent, false).Bind(setting);
             }
-            UpdateLayout();
-        }
-        void CreateCategoryHeader(GameSettingCategory category) {
-            GameObject header = Instantiate(categoryHeaderPrefab, contentTarget, false);
-            header.name = category.ToString();
-
-            Text text = header.GetComponentInChildren<Text>(true);
-            if (text != null)
-                text.text = category.ToString();
-        }
-        void OnPrefabAdded(GameObject prefab, GameSettingsInstance setting){
-            GameObject additionalObj = Instantiate(settingToAdditionalPrefab[(int) setting.type]);
-            additionalObj.transform.SetParent(prefab.transform.parent, false);
-            additionalObj.name = prefab.name;
-            additionalObj.transform.GetChild(0).GetComponent<Text>().text = setting.title;
-            additionalObj.name = setting.name;
-            switch (setting) {
-                case IntGameSetting intSetting:
-                    // additionalObj.transform.GetChild(1)
-                    var numberSlider = additionalObj.GetComponent<GameSettingsNumberSlider>();
-                    intSetting.Init(numberSlider.gameObject);
-                    break;
-
-                case BoolGameSetting boolSetting:
-                    var toggle = additionalObj.transform.GetChild(1).GetComponent<GameSettingsToggle>();
-                    boolSetting.Init(toggle.gameObject);
-                    break;
-            }
-            setting.Load();
-            setting.InitDone();
-            Destroy(prefab);
-        }
-        void SetGameActionButtonsVisible(bool visible) {
-            if (gameActionButtonsContainer != null)
-                gameActionButtonsContainer.SetActive(visible);
         }
 
-        public async void OnLeaveGame_ButtonPressed(){
+        /// <summary>Closes the menu (Resume, the close button, or Escape via the top bar).</summary>
+        public void Close() {
+            if (panel != null)
+                panel.Hide();
+        }
+
+        public async void OnLeaveGame_ButtonPressed() {
             PromptButton res = await PromptManager.Instance.PromptLocalUser("Leave Game?", "Are you sure you want to leave this game?", PromptId.LeaveGameConfirm, PromptManager.ButtonPreset_YesNo);
             if (res != PromptButton.Yes)
                 return;
             PromptManager.PromptWait("Disconnecting", "Disconnecting\nThis should only take a second", PromptId.LeaveGameAwait);
             InstanceFinder.ClientManager.StopConnection();
         }
-        public async void OnReset_ButtonPressed(){
+
+        public async void OnReset_ButtonPressed() {
             PromptButton res = await PromptManager.Instance.PromptLocalUser("Reset Character?", "Are you sure you want to reset your character?", PromptId.ResetCharacterConfirm, PromptManager.ButtonPreset_YesNo);
             if (res != PromptButton.Yes)
                 return;
-            resumeButton.onClick.Invoke();
-            InstanceFinder.ClientManager.Broadcast<MenuActionRequest>(new() {
+            Close();
+            InstanceFinder.ClientManager.Broadcast(new MenuActionRequest {
                 type = MenuActionType.ResetCharacter
             });
         }
-        //public void CloseSettingsCanvas_ButtonPressed(){
-        //    GetComponent<CanvasGroupController>().SetVisible(false, 1 / 3f);
-        //}
-        private void OnEnable(){
-            InputService.SetInputScreenActive(InputScreen.GameSettings, true);
-            GameSettingsControls.leaveToggledEvent += OnLeaveGame_ButtonPressed;
-            GameSettingsControls.resetToggledEvent += OnReset_ButtonPressed;
+
+        void OnMenuToggled(bool open) {
+            InputService.SetInputScreenActive(InputScreen.GameSettings, open);
+            GameSettingsControls.leaveToggledEvent -= OnLeaveGame_ButtonPressed;
+            GameSettingsControls.resetToggledEvent -= OnReset_ButtonPressed;
+            if (open && !hideGameActionButtons) {
+                GameSettingsControls.leaveToggledEvent += OnLeaveGame_ButtonPressed;
+                GameSettingsControls.resetToggledEvent += OnReset_ButtonPressed;
+            }
         }
-        private void OnDisable(){
-            InputService.SetInputScreenActive(InputScreen.GameSettings, false);
+
+        void OnDestroy() {
+            if (panel != null)
+                panel.Toggled -= OnMenuToggled;
+            if (panel != null && panel.Visible)
+                InputService.SetInputScreenActive(InputScreen.GameSettings, false);
             GameSettingsControls.leaveToggledEvent -= OnLeaveGame_ButtonPressed;
             GameSettingsControls.resetToggledEvent -= OnReset_ButtonPressed;
         }

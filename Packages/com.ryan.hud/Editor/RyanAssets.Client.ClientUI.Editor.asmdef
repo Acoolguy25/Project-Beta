@@ -1,0 +1,29 @@
+{
+    "name": "RyanAssets.Client.ClientUI.Editor",
+    "rootNamespace": "RyanAssets.Client.ClientUI.Editor",
+    "references": [
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "RyanAssets.UI.Textbox",
+        "RyanAssets.Client.ClientUI.GameSettings",
+        "RyanAssets.Client.ClientUI.Chat",
+        "RyanAssets.Client.ClientUI.PlayerList",
+        "RyanAssets.Client.ClientUI.Topbar",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "RyanAssets.UI.ListGrid"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

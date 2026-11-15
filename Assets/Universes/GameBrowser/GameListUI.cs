@@ -1,91 +1,100 @@
-using UnityEngine;
-using RyanAssets.DataService;
-using RyanAssets.Login;
-using RyanAssets.UI.ButtonGrid;
-using RyanAssets.NetworkService;
-using RyanAssets.PromptService;
-using RyanAssets.Client.ClientModules;
-using UnityEngine.UI;
+using System;
+using System.Linq;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using System;
+using RyanAssets.Client.ClientModules;
+using RyanAssets.DataService;
+using RyanAssets.Login;
+using RyanAssets.NetworkService;
+using RyanAssets.PromptService;
 using RyanAssets.TweenService.TweenComponents;
-using System.Linq;
+using RyanAssets.UI.ButtonGrid;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace Universes.GameBrowser {
+    /// <summary>
+    /// The main menu's game browser: a grid of <see cref="GameCardView"/>s with live player counts
+    /// from the backend. Clicking a card opens its <see cref="SelectedGameUI"/> page.
+    /// </summary>
     public class GameListUI : ButtonGridUI<UniverseStruct> {
-        [SerializeField]
-        Text UsernameTextUI;
-        [SerializeField]
-        SelectedGameUI selectedGameUI;
-        [SerializeField]
-        Image refreshImage;
+        [SerializeField] TMP_Text usernameText;
+        [SerializeField] SelectedGameUI selectedGameUI;
+        [Tooltip("Icon spun while the list refreshes.")]
+        [SerializeField] Image refreshIcon;
 
-        void UsernameRefresh(string username) {
-            UsernameTextUI.text = username;
-        }
-        public void NavigateToLoginPage_ButtonClicked() {
-            LoginManager.Instance.loginScreen.SetLoginScreenVisible(true);
-        }
-        async UniTask<(string, JObject)> LoadUniverseList() {
-            if (NetworkSettings.EditorDirectConnection)
-                return (null, new JObject { ["universes"] = new JArray(new JObject {
-                    ["universe_id"] = NetworkSettings.EditorUniverseId, ["active_players"] = 0
-                }) });
-            return await BackendNetwork.GetRequest("/api/universes/v1/list");
-        }
         [Serializable]
-        public struct JSONUniverseResponse {
-            public JSONUniverseData[] universes;
+        struct UniverseListResponse {
+            public UniverseCount[] universes;
         }
+
         [Serializable]
-        public struct JSONUniverseData {
+        struct UniverseCount {
             public string universe_id;
             public ulong active_players;
         }
-        private JSONUniverseData GetUniverseFromJSONResponse(JSONUniverseResponse response, string universe_id) {
-            foreach (JSONUniverseData universe in response.universes) {
-                if (universe.universe_id == universe_id)
-                    return universe;
-            }
-            return default;
-        }
-        override protected async void Start() {
-            base.Start();
-            (string msg, JObject json) = await BackendClient.RequestAsync(LoadUniverseList, "Player Count", promptWaiting: PromptId.GamePageAwait, promptResult: PromptId.GamePageConfirm);
-            if (msg != null || json == null)
-                return;
-            JSONUniverseResponse universeResponse = json.ToObject<JSONUniverseResponse>();
 
-            OnCreatePrefab += (GameObject obj, UniverseStruct data) => {
-                JSONUniverseData JSONuniverse = GetUniverseFromJSONResponse(universeResponse, data.id);
-                obj.transform.GetChild(0).GetComponent<Image>().sprite = data.LoadSprite();
-                obj.transform.GetChild(1).GetComponent<Text>().text = data.title;
-                obj.transform.GetChild(2).GetComponent<Text>().text = $"{JSONuniverse.active_players} active";
-                obj.name = data.id;
-            };
-            OnClickPrefab += (GameObject obj, UniverseStruct data) => {
-                JSONUniverseData JSONuniverse = GetUniverseFromJSONResponse(universeResponse, data.id);
-                selectedGameUI.OpenUniversePage(data, JSONuniverse.active_players);
-            };
+        UniverseListResponse counts;
+
+        protected override void Awake() {
+            base.Awake();
+            OnCreatePrefab += (card, universe) => card.GetComponent<GameCardView>().Bind(universe, ActivePlayers(universe.id));
+            OnClickPrefab += (_, universe) => selectedGameUI.OpenUniversePage(universe, ActivePlayers(universe.id));
+        }
+
+        protected override void Start() {
+            base.Start();
+            Load().Forget();
+        }
+
+        void OnEnable() {
+            LocalPlayerDataHandler.username_changed_event += OnUsernameChanged;
+            OnUsernameChanged(LocalPlayerDataHandler.localData.username);
+        }
+
+        void OnDisable() {
+            LocalPlayerDataHandler.username_changed_event -= OnUsernameChanged;
+        }
+
+        void OnUsernameChanged(string username) => usernameText.text = username;
+
+        async UniTaskVoid Load() {
+            (string error, JObject json) = await BackendClient.RequestAsync(RequestCounts, "Player Count", promptWaiting: PromptId.GamePageAwait, promptResult: PromptId.GamePageConfirm);
+            if (this == null || error != null || json == null)
+                return;
+            counts = json.ToObject<UniverseListResponse>();
+            RefreshPrefabs(ListedUniverses());
+        }
+
+        static async UniTask<(string, JObject)> RequestCounts() {
+            if (NetworkSettings.EditorDirectConnection)
+                return (null, new JObject {
+                    ["universes"] = new JArray(new JObject { ["universe_id"] = NetworkSettings.EditorUniverseId, ["active_players"] = 0 })
+                });
+            return await BackendNetwork.GetRequest("/api/universes/v1/list");
+        }
+
+        static UniverseStruct[] ListedUniverses() {
 #if UNITY_EDITOR
-            RefreshPrefabs(NetworkSettings.EditorDirectConnection
+            return NetworkSettings.EditorDirectConnection
                 ? UniverseCfg.ActiveUniverses.Where(u => u.id == NetworkSettings.EditorUniverseId).ToArray()
-                : UniverseCfg.ActiveUniverses);
+                : UniverseCfg.ActiveUniverses;
 #else
-            RefreshPrefabs(UniverseCfg.ActiveUniverses.Where(u => u.access == UniverseAccess.Public).ToArray());
+            return UniverseCfg.ActiveUniverses.Where(u => u.access == UniverseAccess.Public).ToArray();
 #endif
         }
-        private void OnEnable() {
-            LocalPlayerDataHandler.username_changed_event += UsernameRefresh;
-            UsernameRefresh(LocalPlayerDataHandler.localData.username);
-        }
-        private void OnDisable() {
-            LocalPlayerDataHandler.username_changed_event -= UsernameRefresh;
-        }
+
+        ulong ActivePlayers(string universeId) =>
+            counts.universes?.FirstOrDefault(u => u.universe_id == universeId).active_players ?? 0;
+
+        // Buttons (wired in the prefab)
+        public void NavigateToLoginPage_ButtonClicked() => LoginManager.Instance.loginScreen.SetLoginScreenVisible(true);
+
         public void Refresh_ButtonClicked() {
-            TweenImage.SpinImage(refreshImage, 1 / 3f, 180);
-            Start();
+            if (refreshIcon != null)
+                TweenImage.SpinImage(refreshIcon, 0.5f, 360f);
+            Load().Forget();
         }
     }
 }

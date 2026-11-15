@@ -1,54 +1,80 @@
-using UnityEngine;
-using TMPro;
-using UnityEngine.UI;
-using RyanAssets.UI;
-using RyanAssets.Characters.Client;
-using RyanAssets.Characters.Shared;
 using RyanAssets.Cameras;
+using RyanAssets.Characters.Shared;
+using RyanAssets.UI;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace RyanAssets.Client.ClientUI.Topbar {
-    public class ClientHealthbar : MonoBehaviour{
-        [SerializeField]
-        TextMeshProUGUI healthText;
-        [SerializeField]
-        Image healthPanel;
+    /// <summary>
+    /// Compact health bar for the character the camera follows. It stays hidden at full health,
+    /// so it only takes screen space while it matters.
+    /// </summary>
+    [RequireComponent(typeof(CanvasGroupController))]
+    public class ClientHealthbar : MonoBehaviour {
+        [SerializeField] TMP_Text healthText;
+        [Tooltip("Fill image; its right anchor follows the health fraction.")]
+        [SerializeField] Image fill;
+        [Tooltip("Below this fraction the bar uses the theme's warning colour, and below half of it the danger colour.")]
+        [SerializeField, Range(0f, 1f)] float lowHealthFraction = 0.5f;
 
-        CanvasGroupController canvasGroupController;
+        CanvasGroupController visibility;
+        GameCharacter observed;
+
+        void Awake() => visibility = GetComponent<CanvasGroupController>();
+
         void Start() {
-            canvasGroupController = GetComponent<CanvasGroupController>();
-            CameraController.OnCameraTargetAdded += OnCameraTargetAdded;
-            CameraController.OnCameraTargetRemoved += OnCameraTargetRemoved;
+            CameraController.OnCameraTargetAdded += Observe;
+            CameraController.OnCameraTargetRemoved += StopObserving;
+            if (CameraController.targetCharacter != null)
+                Observe(CameraController.targetCharacter);
             Refresh();
         }
+
         void OnDestroy() {
-            CameraController.OnCameraTargetAdded -= OnCameraTargetAdded;
-            CameraController.OnCameraTargetRemoved -= OnCameraTargetRemoved;
+            CameraController.OnCameraTargetAdded -= Observe;
+            CameraController.OnCameraTargetRemoved -= StopObserving;
+            StopObserving(observed);
         }
-        void OnCameraTargetAdded(GameCharacter targetCharacter) {
-            //targetCharacter.OnDied += OnCharacterDied;
-            targetCharacter.Health.OnChange += OnHealthChanged;
-            targetCharacter.MaxHealth.OnChange += OnHealthChanged;
+
+        void Observe(GameCharacter character) {
+            StopObserving(observed);
+            observed = character;
+            character.Health.OnChange += OnHealthChanged;
+            character.MaxHealth.OnChange += OnHealthChanged;
             Refresh();
         }
-        void OnCameraTargetRemoved(GameCharacter oldCharacter) {
-            oldCharacter.Health.OnChange -= OnHealthChanged;
-            oldCharacter.MaxHealth.OnChange -= OnHealthChanged;
+
+        void StopObserving(GameCharacter character) {
+            if (character == null || character != observed)
+                return;
+            character.Health.OnChange -= OnHealthChanged;
+            character.MaxHealth.OnChange -= OnHealthChanged;
+            observed = null;
             Refresh();
         }
-        void OnHealthChanged(long oldValue, long newValue, bool asServer) {
-            Refresh();
-        }
+
+        void OnHealthChanged(long oldValue, long newValue, bool asServer) => Refresh();
+
         void Refresh() {
-            if (CameraController.targetCharacter != null) {
-                long Health = CameraController.targetCharacter.Health.Value;
-                long MaxHealth = CameraController.targetCharacter.MaxHealth.Value;
-                float HealthPercent = CameraController.targetCharacter.IsFullHealth ? 1f : Mathf.Min(1f, (float) Health / MaxHealth);
-                healthText.text = $"{Health}/{MaxHealth}";
-                healthPanel.color = Color.LerpUnclamped(Color.red, Color.green, HealthPercent);
-                healthPanel.GetComponent<RectTransform>().anchorMax = new Vector2(HealthPercent, 1);
-                canvasGroupController.SetVisible(!CameraController.targetCharacter.IsFullHealth && Health != 0);
-            } else
-                canvasGroupController.SetVisible(false);
+            if (observed == null) {
+                visibility.SetVisible(false);
+                return;
+            }
+            long health = observed.Health.Value;
+            long maxHealth = observed.MaxHealth.Value;
+            float fraction = observed.IsFullHealth || maxHealth <= 0 ? 1f : Mathf.Clamp01((float)health / maxHealth);
+
+            UITheme theme = UITheme.Active;
+            if (healthText != null)
+                healthText.text = $"{health}<color=#{UITheme.ToRichTextHex(theme.textMuted)}>/{maxHealth}</color>";
+            if (fill != null) {
+                fill.color = fraction > lowHealthFraction ? theme.success
+                    : fraction > lowHealthFraction * 0.5f ? theme.warning
+                    : theme.danger;
+                fill.rectTransform.anchorMax = new Vector2(fraction, 1f);
+            }
+            visibility.SetVisible(!observed.IsFullHealth && health > 0, theme.fadeDuration);
         }
     }
 }

@@ -9,8 +9,9 @@ namespace RyanAssets.Login {
         GameObject signin, logout;
         [SerializeField]
         CanvasGroupController continueCanvas;
+        [Tooltip("The login screen's own settings screen (a private copy of the game menu).")]
         [SerializeField]
-        CanvasGroupController settingsCanvas;
+        HudPanel settingsPanel;
         CanvasGroupController loginCanvas;
         [SerializeField, Range(0f, 1f)]
         float AnimationTime;
@@ -32,17 +33,15 @@ namespace RyanAssets.Login {
             SetLoginScreenVisible(false);
         }
         public void ToggleSettings_ButtonPressed(){
-            if (settingsCanvas == null)
-                return;
-
-            settingsCanvas.SetVisible(settingsCanvas.targetAlpha == 0f);
+            if (settingsPanel != null)
+                settingsPanel.Toggle();
         }
         void Start(){
             loginCanvas = GetComponent<CanvasGroupController>();
             RefreshScreen();
             SetLoginScreenVisible(true, true);
-            if (settingsCanvas != null)
-                settingsCanvas.SetVisible(false);
+            if (settingsPanel != null)
+                settingsPanel.SetVisible(false, instant: true);
         }
     }
 }
