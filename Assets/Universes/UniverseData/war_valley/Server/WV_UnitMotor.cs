@@ -71,6 +71,8 @@ namespace Universes.UniverseData.war_valley.Server {
             agent.angularSpeed = unit.TurnSpeed;
             agent.acceleration = unit.MoveSpeed * 2f;
             agent.autoBraking = true;
+            // Keeps the commanders' vehicles out of the frontier and on their own side of walls.
+            WV_NavAreas.Apply(agent, unit.GetTeam());
 
             // A unit leaves its building on an apron that may sit just off the baked surface.
             if (!agent.isOnNavMesh && TrySampleNavMesh(transform.position, out Vector3 start))
@@ -124,10 +126,11 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         public override bool TryResolveDestination(Vector3 requested, out Vector3 resolved) =>
-            TrySampleNavMesh(requested, out resolved);
+            TrySampleNavMesh(WV_PlayArea.ClampDestination(requested, Unit.GetTeam().realTeam), out resolved);
 
-        static bool TrySampleNavMesh(Vector3 requested, out Vector3 resolved) {
-            if (NavMesh.SamplePosition(requested, out NavMeshHit hit, NavMeshSampleRadius, NavMesh.AllAreas)) {
+        bool TrySampleNavMesh(Vector3 requested, out Vector3 resolved) {
+            var filter = new NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
+            if (NavMesh.SamplePosition(requested, out NavMeshHit hit, NavMeshSampleRadius, filter)) {
                 resolved = hit.position;
                 return true;
             }
@@ -183,6 +186,8 @@ namespace Universes.UniverseData.war_valley.Server {
         }
 
         public override void MoveTo(Vector3 destination) {
+            // Also covers chasing a target out over the frontier, which never goes through an order.
+            destination = WV_PlayArea.ClampDestination(destination, Unit.GetTeam().realTeam);
             Vector3 position = transform.position;
             Vector3 toGoal = destination - position;
             toGoal.y = 0f;
@@ -266,8 +271,9 @@ namespace Universes.UniverseData.war_valley.Server {
 
         public override bool TryResolveDestination(Vector3 requested, out Vector3 resolved) {
             // Orders specify a map position. Altitude is determined along the actual route rather
-            // than from distant terrain beneath the destination.
-            resolved = requested;
+            // than from distant terrain beneath the destination. The commanders' aircraft are held
+            // over their own part of the map, like their ground units.
+            resolved = WV_PlayArea.ClampDestination(requested, Unit.GetTeam().realTeam);
             return true;
         }
 

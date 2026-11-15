@@ -416,6 +416,10 @@ namespace RyanAssets.Client.ClientUI.Build {
             }
 
             placementPosition = groundPoint;
+            if (!StructurePlacement.IsInBuildArea(groundPoint, out string outsideReason)) {
+                SetPreviewValid(false, outsideReason);
+                return;
+            }
             placementValid = !StructurePlacement.HasStructureOverlap(previewInstance, bounds, groundPoint);
             SetPreviewValid(
                 placementValid,

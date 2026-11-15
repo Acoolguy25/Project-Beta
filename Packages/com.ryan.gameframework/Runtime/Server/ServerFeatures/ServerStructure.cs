@@ -74,7 +74,8 @@ namespace RyanAssets.Server.ServerFeatures {
                 return;
             }
 
-            if (StructurePlacement.HasStructureOverlap(clone, bounds, groundPoint)) {
+            if (StructurePlacement.HasStructureOverlap(clone, bounds, groundPoint)
+                || !StructurePlacement.IsInBuildArea(groundPoint, out _)) {
                 Object.Destroy(clone);
                 return;
             }

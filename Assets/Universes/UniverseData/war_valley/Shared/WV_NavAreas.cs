@@ -3,7 +3,7 @@ using UnityEngine.AI;
 
 namespace Universes.UniverseData.war_valley.Shared {
     /// <summary>
-    /// The NavMesh areas War Valley's walls and gates use to decide who may path through them.
+    /// The NavMesh areas War Valley's walls, gates and map frontier use to decide who may path where.
     /// <para>
     /// A wall or gate carves its footprint out of the NavMesh and bridges it with a link. Which
     /// agents may use a link is decided by its area and each agent's area mask, so one wall offers
@@ -24,11 +24,18 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// <summary>Costly link area across a wall or gate that has to be destroyed first. Only the waves path over it.</summary>
         public const int Breach = 4;
 
+        /// <summary>
+        /// The outer band of the map between the enemy spawns and the commanders' ground, marked by
+        /// <see cref="WV_PlayArea"/>'s volumes. Only the waves path across it, so the commanders'
+        /// troops and vehicles never wander out to the map edge.
+        /// </summary>
+        public const int Frontier = 5;
+
         /// <summary>The areas an agent fighting for <paramref name="side"/> may path across.</summary>
         public static int GetAreaMask(TeamColor side) =>
             side == WV_Alliances.GetWaveSide()
                 ? NavMesh.AllAreas & ~(1 << GatePassage)
-                : NavMesh.AllAreas & ~(1 << Breach);
+                : NavMesh.AllAreas & ~(1 << Breach) & ~(1 << Frontier);
 
         /// <summary>
         /// Restricts an agent to its side's routes. Called once a spawned agent has been given its

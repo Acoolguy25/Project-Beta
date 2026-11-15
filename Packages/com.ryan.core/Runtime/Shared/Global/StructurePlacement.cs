@@ -1,3 +1,4 @@
+using System;
 using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
@@ -92,6 +93,20 @@ namespace RyanAssets.Shared.Globals {
 
             halfExtents = new Vector3(extents.x, Mathf.Max((top - bottom) * 0.5f, 0.05f), extents.z);
             center = new Vector3(bounds.center.x, bottom + halfExtents.y, bounds.center.z);
+        }
+
+        /// <summary>
+        /// Optional rule a game mode sets to keep building to part of its map. Given the ground point a
+        /// structure would stand on, it returns null when building there is allowed, otherwise the
+        /// reason it is not. The client preview and the server's placement check both apply it, so a
+        /// mode sets it on both sides and clears it when it ends.
+        /// </summary>
+        public static Func<Vector3, string> BuildAreaRule;
+
+        /// <summary>Whether <see cref="BuildAreaRule"/> allows building at <paramref name="groundPoint"/>.</summary>
+        public static bool IsInBuildArea(Vector3 groundPoint, out string reason) {
+            reason = BuildAreaRule?.Invoke(groundPoint);
+            return reason == null;
         }
 
         public static int GroundMask => ~LayerMask.GetMask("Character", "LocalCharacter", "Structure", "Ignore Raycast");

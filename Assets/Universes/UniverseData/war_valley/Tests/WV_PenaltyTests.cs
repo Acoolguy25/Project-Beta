@@ -85,5 +85,11 @@ namespace Universes.UniverseData.war_valley.Tests {
             Assert.That(invaders & (1 << WV_NavAreas.Breach), Is.Not.Zero);
             Assert.That(invaders & (1 << WV_NavAreas.GatePassage), Is.Zero);
         }
+
+        [Test]
+        public void NavAreas_KeepTheCommandersOutOfTheFrontier() {
+            Assert.That(WV_NavAreas.GetAreaMask(WV_Alliances.Defenders) & (1 << WV_NavAreas.Frontier), Is.Zero);
+            Assert.That(WV_NavAreas.GetAreaMask(WV_Alliances.Invaders) & (1 << WV_NavAreas.Frontier), Is.Not.Zero);
+        }
     }
 }

@@ -233,6 +233,8 @@ namespace Universes.UniverseData.war_valley.Server {
         /// on the mesh to ask from.
         /// </summary>
         Vector3 ResolveReachable(Vector3 destination) {
+            // An order out over the frontier stops at the edge of the commanders' ground.
+            destination = WV_PlayArea.ClampDestination(destination, gameCharacter.GetTeam().realTeam);
             NavMeshAgent agent = localNPC != null ? localNPC.agent : null;
             if (agent == null || !agent.enabled || !agent.isOnNavMesh)
                 return destination;
