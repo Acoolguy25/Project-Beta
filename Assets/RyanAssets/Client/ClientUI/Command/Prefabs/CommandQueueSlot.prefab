@@ -194,6 +194,8 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+  m_MaxWidth: -1
+  m_MaxHeight: -1
 --- !u!114 &5056600081343214703
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -207,6 +209,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.Hover.HoverItem
   hoverText: 
+  isGameHelp: 0
 --- !u!114 &6409853438270115650
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -436,6 +439,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.Hover.HoverItem
   hoverText: Cancel and refund
+  isGameHelp: 0
 --- !u!1 &3729761148558095627
 GameObject:
   m_ObjectHideFlags: 0
@@ -547,11 +551,11 @@ MonoBehaviour:
   m_charWidthMaxAdj: 0
   m_TextWrappingMode: 1
   m_wordWrappingRatios: 0.4
-  m_overflowMode: 1
+  m_overflowMode: 3
   m_linkedTextComponent: {fileID: 0}
   parentLinkedComponent: {fileID: 0}
   m_enableKerning: 0
-  m_ActiveFontFeatures: 6e72656b
+  m_ActiveFontFeatures: 6e72656bu
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
   m_isRichText: 1
@@ -684,11 +688,11 @@ MonoBehaviour:
   m_charWidthMaxAdj: 0
   m_TextWrappingMode: 1
   m_wordWrappingRatios: 0.4
-  m_overflowMode: 1
+  m_overflowMode: 3
   m_linkedTextComponent: {fileID: 0}
   parentLinkedComponent: {fileID: 0}
   m_enableKerning: 0
-  m_ActiveFontFeatures: 6e72656b
+  m_ActiveFontFeatures: 6e72656bu
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
   m_isRichText: 1

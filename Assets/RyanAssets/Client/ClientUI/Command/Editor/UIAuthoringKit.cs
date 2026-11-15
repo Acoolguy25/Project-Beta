@@ -119,8 +119,13 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             label.alignment = alignment;
             label.raycastTarget = false;
             label.overflowMode = TextOverflowModes.Ellipsis;
-            if (bold)
+            if (bold) {
                 label.fontStyle = FontStyles.Bold;
+                // The project font has no bold face, and TMP looks the ellipsis glyph up in the bold
+                // face for bold text, so it warns and falls back on every rebuild. Bold labels are
+                // short captions and figures, so they simply truncate.
+                label.overflowMode = TextOverflowModes.Truncate;
+            }
             if (Font != null)
                 label.font = Font;
             return label;
@@ -153,6 +158,60 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             return button;
         }
 
+        // --- Icons ------------------------------------------------------------
+
+        /// <summary>Shared Material icon set, imported white so an Image's colour tints it.</summary>
+        public const string IconFolder = "Assets/RyanAssets/UI/Icons/Material";
+
+        /// <summary>The icon named <paramref name="name"/> (e.g. "shield"), or null with a warning.</summary>
+        public static Sprite LoadIcon(string name) {
+            var sprite = AssetDatabase.LoadAssetAtPath<Sprite>($"{IconFolder}/icon_{name}.png");
+            if (sprite == null)
+                Debug.LogWarning($"UI authoring: no icon '{name}' in {IconFolder}.");
+            return sprite;
+        }
+
+        /// <summary>A tinted, aspect-preserving icon image that never blocks clicks.</summary>
+        public static Image Icon(Transform parent, string name, string icon, Color color) {
+            Image image = Node(parent, name).AddComponent<Image>();
+            image.sprite = LoadIcon(icon);
+            image.color = color;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        /// <summary>
+        /// A square-ish button with a centred icon, an optional caption under it, and an optional
+        /// keyboard-shortcut badge in its corner, so the key can be learned from the button itself.
+        /// </summary>
+        public static Button IconButton(
+            Transform parent, string name, string icon, string caption, string key, Color fill,
+            out TextMeshProUGUI label, Color? iconColor = null) {
+            Button button = Button(parent, name, caption ?? string.Empty, fill, 12f, out label);
+            label.fontStyle = FontStyles.Normal;
+            label.color = Muted;
+            bool hasCaption = !string.IsNullOrEmpty(caption);
+            if (hasCaption) {
+                label.alignment = TextAlignmentOptions.Bottom;
+                Stretch(label, 2f, 2f, 0f, 5f);
+            } else {
+                label.gameObject.SetActive(false);
+            }
+
+            Image glyph = Icon(button.transform, "Icon", icon, iconColor ?? Ink);
+            RectTransform rect = Rect(glyph);
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0.5f, hasCaption ? 0.62f : 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(24f, 24f);
+
+            if (!string.IsNullOrEmpty(key)) {
+                TextMeshProUGUI badge = Label(button.transform, "Key", key, 10f, Muted, TextAlignmentOptions.TopRight);
+                Stretch(badge, 0f, 5f, 3f, 0f);
+            }
+            return button;
+        }
+
         /// <summary>
         /// A single-line TextMeshPro input field with a placeholder. It carries the shared
         /// <see cref="TextboxHelper"/>, so while it has focus the keyboard types into it instead of
@@ -169,7 +228,8 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             viewport.AddComponent<RectMask2D>();
 
             TextMeshProUGUI hint = Label(viewport.transform, "Placeholder", placeholder, fontSize, Muted);
-            hint.fontStyle = FontStyles.Italic;
+            // Not italic: the project font has no italic face, so TMP cannot find its ellipsis
+            // glyph for italic text and warns on every rebuild. Muted colour marks it as a hint.
             Stretch(hint, 0f);
             TextMeshProUGUI text = Label(viewport.transform, "Text", string.Empty, fontSize, Ink);
             text.overflowMode = TextOverflowModes.Overflow;

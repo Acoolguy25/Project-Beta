@@ -26,8 +26,10 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] TextMeshProUGUI incomeLabel;
         [Tooltip("One line summarising the commander's research in progress.")]
         [SerializeField] TextMeshProUGUI researchLabel;
-        [Tooltip("How much of each per-player limit the commander is using.")]
-        [SerializeField] TextMeshProUGUI forcesLabel;
+        [Tooltip("How much of each per-player limit the commander is using, one count beside each " +
+                 "limit's icon, in WV_ForceCategory order: soldiers, vehicles, aircraft, buildings.")]
+        [SerializeField] TextMeshProUGUI[] forceCounts = Array.Empty<TextMeshProUGUI>();
+        [SerializeField] Color forceFullColor = new(1f, 0.72f, 0.35f, 1f);
         [Tooltip("Opens the donation panel.")]
         [SerializeField] Button donateButton;
         [Tooltip("The shared funds transfer panel, used to donate to allies.")]
@@ -38,6 +40,8 @@ namespace Universes.UniverseData.war_valley.Client {
         [Header("Selection")]
         [SerializeField] RectTransform selectionBox;
         [SerializeField] TextMeshProUGUI selectionLabel;
+        [Tooltip("Combined health of the selection, as a filled bar.")]
+        [SerializeField] Image selectionHealthFill;
         [SerializeField] GameObject selectionPanel;
         [SerializeField] WV_RangeIndicator troopRangeIndicator;
         [Tooltip("Sells the selected units and troops. Lives on the selection panel, so it is there " +
@@ -138,7 +142,7 @@ namespace Universes.UniverseData.war_valley.Client {
         /// </summary>
         public void SetSellConfirming(bool confirming, long refund) {
             if (sellLabel != null)
-                sellLabel.text = confirming ? $"Sell for {refund:N0}? [Del]" : "Sell [Del]";
+                sellLabel.text = confirming ? $"Confirm  +{refund:N0}" : "Sell";
             if (sellButton != null && sellButton.targetGraphic != null)
                 sellButton.targetGraphic.color = confirming ? sellConfirmTint : sellTint;
         }
@@ -207,10 +211,20 @@ namespace Universes.UniverseData.war_valley.Client {
                 researchLabel.text = summary;
         }
 
-        /// <summary>Writes how much of each per-player limit is in use.</summary>
-        public void SetForces(string summary) {
-            if (forcesLabel != null)
-                forcesLabel.text = summary ?? string.Empty;
+        /// <summary>Writes one limit's use beside its icon, in the warning colour once it is full.</summary>
+        public void SetForce(WV_ForceCategory category, int used, int limit) {
+            int index = category switch {
+                WV_ForceCategory.Soldier => 0,
+                WV_ForceCategory.Vehicle => 1,
+                WV_ForceCategory.Aircraft => 2,
+                WV_ForceCategory.Building => 3,
+                _ => -1
+            };
+            if (index < 0 || index >= forceCounts.Length || forceCounts[index] == null)
+                return;
+            TextMeshProUGUI label = forceCounts[index];
+            label.SetText("{0}/{1}", (float)used, (float)limit);
+            label.color = used >= limit ? forceFullColor : Color.white;
         }
 
         // --- Selection rectangle ---------------------------------------------
@@ -286,14 +300,15 @@ namespace Universes.UniverseData.war_valley.Client {
             }
 
             builder.Clear();
-            builder.Append("<b>").Append(total).Append(" selected</b>");
+            builder.Append("<b>").Append(total).Append(" selected</b><color=#9AA4B2>");
             foreach (KeyValuePair<WV_UnitKind, int> entry in unitCounts)
-                builder.Append("\n").Append(entry.Value).Append("x ").Append(WV_Rules.GetUnitDisplayName(entry.Key));
+                builder.Append("\n").Append(entry.Value).Append(" × ").Append(WV_Rules.GetUnitDisplayName(entry.Key));
             foreach (KeyValuePair<string, int> entry in troopCounts)
-                builder.Append("\n").Append(entry.Value).Append("x ").Append(entry.Key);
-            if (maxHealth > 0)
-                builder.Append("\nHealth ").Append(health).Append(" / ").Append(maxHealth);
+                builder.Append("\n").Append(entry.Value).Append(" × ").Append(entry.Key);
+            builder.Append("</color>");
             selectionLabel.text = builder.ToString();
+            if (selectionHealthFill != null)
+                selectionHealthFill.fillAmount = maxHealth > 0 ? Mathf.Clamp01(health / (float)maxHealth) : 1f;
         }
 
         // --- Command card -----------------------------------------------------

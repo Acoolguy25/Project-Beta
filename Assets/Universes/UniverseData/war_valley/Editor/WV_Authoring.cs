@@ -102,6 +102,8 @@ namespace Universes.UniverseData.war_valley.Editor {
             /// <summary>For a post: the run it is sized to stand as tall as.</summary>
             public string MatchHeightOf;
             public int FootprintCells = 1;
+            /// <summary>Placed anywhere it fits rather than on whole cells: it does not join up with walls.</summary>
+            public bool FreePlacement;
             public float HeightLimit = 6f;
             public ulong Cost;
             public float BuildSeconds;
@@ -177,14 +179,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_helipad", DisplayName = "Helipad", Category = "Air",
                 Description = "Launches attack choppers.",
                 ModelPath = PackRoot + "/Building_Prefebs/HeliPad_Prefeb.prefab",
-                FootprintCells = 2, Cost = 650, BuildSeconds = 22f, MaxHealth = 700,
+                FreePlacement = true, FootprintCells = 2, Cost = 650, BuildSeconds = 22f, MaxHealth = 700,
                 Role = StructureRole.Production, Produces = new[] { WV_UnitKind.Chopper }
             },
             new() {
                 Id = "wv_airfield", DisplayName = "Airfield", Category = "Air",
                 Description = "Directs jets, bombers and reconnaissance drones.",
                 ModelPath = PackRoot + "/Building_Prefebs/ControlTower_Prefeb.prefab",
-                FootprintCells = 3, Cost = 1000, BuildSeconds = 32f, MaxHealth = 1100, HeightLimit = 8f,
+                FreePlacement = true, FootprintCells = 3, Cost = 1000, BuildSeconds = 32f, MaxHealth = 1100, HeightLimit = 8f,
                 Role = StructureRole.Production,
                 Produces = new[] { WV_UnitKind.UAV, WV_UnitKind.Jet, WV_UnitKind.Bomber }
             },
@@ -194,14 +196,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_radar", DisplayName = "Research Station", Category = "Support",
                 Description = "Runs research for your side. Every extra station adds research speed.",
                 ModelPath = PackRoot + "/Building_Prefebs/Radar_Prefeb.prefab",
-                FootprintCells = 2, Cost = 450, BuildSeconds = 18f, MaxHealth = 650, HeightLimit = 5f,
+                FreePlacement = true, FootprintCells = 2, Cost = 450, BuildSeconds = 18f, MaxHealth = 650, HeightLimit = 5f,
                 Role = StructureRole.Research, ResearchRate = 1f
             },
             new() {
                 Id = "wv_missile_battery", DisplayName = "Missile Battery", Category = "Defense",
                 Description = "Surface-to-air battery. Engages aircraft only.",
                 ModelPath = PackRoot + "/Building_Prefebs/MissilePort_Prefeb.prefab",
-                FootprintCells = 2, Cost = 600, BuildSeconds = 22f, MaxHealth = 900,
+                FreePlacement = true, FootprintCells = 2, Cost = 600, BuildSeconds = 22f, MaxHealth = 900,
                 Role = StructureRole.Turret, TurretRange = 44f, TurretDamage = 65, TurretCooldown = 2f,
                 AntiAir = true
             },
@@ -209,14 +211,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_guard_post", DisplayName = "Guard Post", Category = "Defense",
                 Description = "Manned emplacement covering a ground approach.",
                 ModelPath = PackRoot + "/Building_Prefebs/GuardPoint_01_Prefeb.prefab",
-                FootprintCells = 1, Cost = 275, BuildSeconds = 10f, MaxHealth = 600, HeightLimit = 4f,
+                FreePlacement = true, FootprintCells = 1, Cost = 275, BuildSeconds = 10f, MaxHealth = 600, HeightLimit = 4f,
                 Role = StructureRole.Turret, TurretRange = 28f, TurretDamage = 32, TurretCooldown = 1.2f
             },
             new() {
                 Id = "wv_watchtower", DisplayName = "Watchtower", Category = "Defense",
                 Description = "Cheap picket that shoots back.",
                 ModelPath = PackRoot + "/Building_Prefebs/LightTower_Prefeb.prefab",
-                FootprintCells = 1, Cost = 200, BuildSeconds = 8f, MaxHealth = 450,
+                FreePlacement = true, FootprintCells = 1, Cost = 200, BuildSeconds = 8f, MaxHealth = 450,
                 Role = StructureRole.Turret, TurretRange = 22f, TurretDamage = 22, TurretCooldown = 1.1f
             },
             new() {
@@ -267,7 +269,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                               "anything inside until they break it, and it recharges 30s later while the " +
                               "generator stands. Each new generator must overlap one of your shields.",
                 ModelPath = PackRoot + "/Building_Prefebs/SpeakerTower_Prefeb.prefab",
-                FootprintCells = 2, Cost = 1000, BuildSeconds = 28f, MaxHealth = 900,
+                FreePlacement = true, FootprintCells = 2, Cost = 1000, BuildSeconds = 28f, MaxHealth = 900,
                 Role = StructureRole.ShieldGenerator,
                 ShieldRadius = 18f, ShieldHealth = 1500, ShieldRegenerationSeconds = 30f
             }
@@ -705,6 +707,7 @@ namespace Universes.UniverseData.war_valley.Editor {
 
                 var constructable = root.AddComponent<WV_Constructable>();
                 SetPrivateField(constructable, "footprintCells", def.FootprintCells);
+                SetPrivateField(constructable, "snapToGrid", !def.FreePlacement);
                 SetPrivateField(constructable, "maxHealth", def.MaxHealth);
                 SetPrivateField(constructable, "buildingRoot", buildingRoot.transform);
                 SetPrivateField(constructable, "constructionScaffold", site);
@@ -1012,7 +1015,15 @@ namespace Universes.UniverseData.war_valley.Editor {
                 muzzle.transform.localPosition = new Vector3(0f, def.Height * 0.6f, def.Radius);
 
                 root.AddComponent<NetworkObject>();
-                root.AddComponent<NetworkTransform>();
+                var networkTransform = root.AddComponent<NetworkTransform>();
+                // The server moves every unit. Aircraft turn constantly, so extrapolating them made
+                // clients overshoot each turn and snap back; they buffer one more tick instead.
+                bool airborne = WV_Rules.IsAircraft(def.Kind);
+                var transformSettings = new SerializedObject(networkTransform);
+                transformSettings.FindProperty("_clientAuthoritative").boolValue = false;
+                transformSettings.FindProperty("_extrapolation").intValue = airborne ? 0 : 1;
+                transformSettings.FindProperty("_interpolation").intValue = airborne ? 3 : 2;
+                transformSettings.ApplyModifiedPropertiesWithoutUndo();
                 var effects = Ensure<EffectsComponent>(root);
                 var health = Ensure<HealthComponent>(root);
 

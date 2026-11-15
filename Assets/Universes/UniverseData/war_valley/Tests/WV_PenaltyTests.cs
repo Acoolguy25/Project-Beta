@@ -23,22 +23,22 @@ namespace Universes.UniverseData.war_valley.Tests {
 
         [Test]
         public void Selling_AtFullHealthRefundsAFixedShareOfTheCost() {
-            Assert.That(WV_Rules.GetSellRefund(1000L, 1f), Is.EqualTo(500));
-            Assert.That(WV_Rules.GetSellRefund(1000UL, 1f), Is.EqualTo(500));
+            Assert.That(WV_Rules.GetSellRefund(1000L, 1f), Is.EqualTo(700));
+            Assert.That(WV_Rules.GetSellRefund(1000UL, 1f), Is.EqualTo(700));
         }
 
         [Test]
         public void Selling_RefundFallsLinearlyWithDamageToAFloor() {
-            Assert.That(WV_Rules.GetSellRefund(1000L, 0.5f), Is.EqualTo(375));
-            Assert.That(WV_Rules.GetSellRefund(1000L, 0.1f), Is.EqualTo(275));
+            Assert.That(WV_Rules.GetSellRefund(1000L, 0.5f), Is.EqualTo(525));
+            Assert.That(WV_Rules.GetSellRefund(1000L, 0.1f), Is.EqualTo(385));
             // A building on its last hit point still works, so it keeps half its sale value.
-            Assert.That(WV_Rules.GetSellRefund(1000L, 0f), Is.EqualTo(250));
+            Assert.That(WV_Rules.GetSellRefund(1000L, 0f), Is.EqualTo(350));
         }
 
         [Test]
         public void Selling_ClampsOutOfRangeConditionAndIgnoresFreeItems() {
-            Assert.That(WV_Rules.GetSellRefund(1000L, 2f), Is.EqualTo(500));
-            Assert.That(WV_Rules.GetSellRefund(1000L, -1f), Is.EqualTo(250));
+            Assert.That(WV_Rules.GetSellRefund(1000L, 2f), Is.EqualTo(700));
+            Assert.That(WV_Rules.GetSellRefund(1000L, -1f), Is.EqualTo(350));
             Assert.That(WV_Rules.GetSellRefund(0L, 1f), Is.EqualTo(0));
         }
 

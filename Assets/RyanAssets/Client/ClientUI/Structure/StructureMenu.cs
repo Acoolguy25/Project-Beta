@@ -100,6 +100,7 @@ namespace RyanAssets.Client.ClientUI.Build {
         private Vector3 placementPosition;
         private float placementRotation;
         private int previewFootprintCells = 1;
+        private bool previewSnapsToGrid = true;
         private bool placementValid;
         private bool menuCloseSubscribed;
 
@@ -370,6 +371,7 @@ namespace RyanAssets.Client.ClientUI.Build {
             // Measured once: the footprint decides where the preview snaps, exactly as the server
             // will measure it from the same prefab when the placement arrives.
             previewFootprintCells = StructurePlacement.GetFootprintCells(previewInstance);
+            previewSnapsToGrid = StructurePlacement.SnapsToGrid(previewInstance);
 
             previewRenderers = previewInstance.GetComponentsInChildren<Renderer>(true);
             foreach (Renderer renderer in previewRenderers)
@@ -378,7 +380,7 @@ namespace RyanAssets.Client.ClientUI.Build {
             if (placementTitle != null)
                 placementTitle.text = $"PLACE {structure.DisplayName.ToUpperInvariant()}";
             if (placementStatus != null)
-                placementStatus.text = "Move the cursor over the ground • Left click to place • Esc to cancel";
+                placementStatus.text = "Move over the ground  ·  Click to place  ·  Esc cancel";
             if (placementPanel != null)
                 placementPanel.SetActive(true);
             SetVisible(false);
@@ -402,11 +404,14 @@ namespace RyanAssets.Client.ClientUI.Build {
         }
 
         private void UpdatePlacementPreview(Vector3 worldPosition) {
-            Vector3 snappedPosition = StructurePlacement.SnapToGrid(worldPosition, previewFootprintCells);
+            bool onGrid = previewSnapsToGrid;
+            Vector3 snappedPosition = onGrid
+                ? StructurePlacement.SnapToGrid(worldPosition, previewFootprintCells)
+                : worldPosition;
             previewInstance.SetActive(true);
             if (!StructurePlacement.TryFindGround(snappedPosition, out Vector3 groundPoint) ||
                 !StructurePlacement.TryPositionOnGround(previewInstance, groundPoint, placementRotation, out Bounds bounds)) {
-                SetPreviewValid(false, "No ground at this grid position");
+                SetPreviewValid(false, "No ground here");
                 return;
             }
 
@@ -415,8 +420,8 @@ namespace RyanAssets.Client.ClientUI.Build {
             SetPreviewValid(
                 placementValid,
                 placementValid
-                    ? $"Grid {StructurePlacement.GridSize:0}×{StructurePlacement.GridSize:0} • Left click place • R rotate • Esc cancel"
-                    : "That grid space is occupied");
+                    ? "Click to place  ·  R rotate  ·  Esc cancel"
+                    : "Blocked by another structure");
         }
 
         private void OnPlaceStructure(Vector3 _) {
@@ -434,7 +439,7 @@ namespace RyanAssets.Client.ClientUI.Build {
                 yRotation = placementRotation
             });
             if (placementStatus != null)
-                placementStatus.text = "Placement requested • Move the cursor to place another";
+                placementStatus.text = "Placed  ·  Click again to place another";
         }
 
         private void RotatePlacement() {

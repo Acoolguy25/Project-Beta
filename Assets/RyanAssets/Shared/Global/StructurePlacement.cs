@@ -52,6 +52,18 @@ namespace RyanAssets.Shared.Globals {
             return TryGetBounds(instance, out Bounds bounds) ? GetFootprintCells(bounds) : 1;
         }
 
+        /// <summary>Whether this structure lands on whole grid cells. Undeclared structures do.</summary>
+        public static bool SnapsToGrid(GameObject instance) =>
+            instance == null || !instance.TryGetComponent(out IGridFootprint declared) || declared.SnapsToGrid;
+
+        /// <summary>
+        /// Where a structure placed at <paramref name="position"/> actually goes: the grid cell for a
+        /// grid structure, the point itself for a free-placed one. Client preview and server spawn
+        /// both call this, so they always agree.
+        /// </summary>
+        public static Vector3 ResolvePlacement(Vector3 position, GameObject instance) =>
+            SnapsToGrid(instance) ? SnapToGrid(position, GetFootprintCells(instance)) : position;
+
         public static float SnapRotation(float yRotation) => Mathf.Round(yRotation / GridRotationSnap) * GridRotationSnap;
 
         public static Vector3 GetOverlapHalfExtents(Bounds bounds) =>

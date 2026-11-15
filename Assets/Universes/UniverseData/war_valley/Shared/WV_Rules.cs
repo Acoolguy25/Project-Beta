@@ -89,8 +89,11 @@ namespace Universes.UniverseData.war_valley.Shared {
         public const string ShieldGeneratorId = "wv_shield_generator";
         public const string GateId = "wv_gate";
 
-        /// <summary>Funds for a mine, barracks, watchtower and a starting squad.</summary>
-        public const long StartingFunds = 1400;
+        /// <summary>
+        /// Funds for a mine, barracks, watchtower and a starting squad, with room left for a second
+        /// income building or an early defence, so the opener is a choice rather than a scrape.
+        /// </summary>
+        public const long StartingFunds = 2400;
 
         /// <summary>
         /// Leaderboard column the player list shows a commander's balance in. The shared leaderboard
@@ -102,7 +105,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         public const float IncomeTickSeconds = 5f;
 
         /// <summary>Recovery income, even when a commander has lost every income building.</summary>
-        public const int CommanderIncomePerTick = 10;
+        public const int CommanderIncomePerTick = 20;
 
         /// <summary>A queued unit is refunded in full if its building dies before the unit pops.</summary>
         public const float ProductionRefundFraction = 1f;
@@ -183,24 +186,83 @@ namespace Universes.UniverseData.war_valley.Shared {
             TeamConfig.TeamToColor(GetCommanderColor(clientId));
 
         /// <summary>
-        /// The health fraction at which a structure starts visibly failing. Above this its colours - the
-        /// commander's paint and the original art - stay clean; below it they are progressively eaten
-        /// by corrosion, so a
-        /// building about to go up is readable as such from across the valley.
+        /// The health fraction at which a structure starts visibly corroding. Above this its colours
+        /// stay clean; below it they are progressively eaten by brown rust, so damage reads from the
+        /// first real hit and a building about to go up is unmistakable from across the valley.
         /// </summary>
-        public const float CorrosionHealthFraction = 0.3f;
+        public const float CorrosionHealthFraction = 0.9f;
 
         /// <summary>Rusted-through albedo a structure reaches at the instant it dies.</summary>
-        public static readonly Color CorrodedTint = new(0.29f, 0.17f, 0.09f);
+        public static readonly Color CorrodedTint = new(0.36f, 0.21f, 0.1f);
 
         /// <summary>
         /// 0 while a structure is above <see cref="CorrosionHealthFraction"/> of its health, rising
-        /// to 1 as it reaches zero: how far every colour on it has been pulled toward rust.
+        /// to 1 as it reaches zero: how far every colour on it has been pulled toward rust. Eased so
+        /// the first chunk of damage already shows, rather than the rust waiting for the last third.
         /// </summary>
-        public static float GetCorrosion(float healthFraction) =>
-            healthFraction >= CorrosionHealthFraction
-                ? 0f
-                : 1f - Mathf.Clamp01(healthFraction / CorrosionHealthFraction);
+        public static float GetCorrosion(float healthFraction) {
+            if (healthFraction >= CorrosionHealthFraction)
+                return 0f;
+            float damage = 1f - Mathf.Clamp01(healthFraction / CorrosionHealthFraction);
+            return Mathf.Pow(damage, 0.7f);
+        }
+
+        /// <summary>
+        /// How strongly a building's authored colours give way to its commander's colour scheme.
+        /// Buildings come from several art packs with clashing colours; pulling every colour onto
+        /// one ramp built from the commander's colour makes a base read as one player's kit.
+        /// </summary>
+        public const float StructurePaletteStrength = 0.6f;
+
+        /// <summary>
+        /// The same for walls, fences and gates, kept light. A wall is a long plain surface, and a
+        /// strong or flat team colour across it looks like a painted plank; a hint of the owner's
+        /// hue over the authored material reads as theirs without that.
+        /// </summary>
+        public const float WallPaletteStrength = 0.28f;
+
+        /// <summary>
+        /// <paramref name="authored"/> moved onto <paramref name="clientId"/>'s colour scheme: a ramp
+        /// from a deep shade of their colour through the colour itself to a pale tint of it. The
+        /// authored brightness picks the step, so dark trim stays dark, panels stay light, and the
+        /// model keeps its shape while taking the commander's hue.
+        /// </summary>
+        public static Color GetStructurePaletteColor(Color authored, int clientId, float strength) {
+            Color hue = GetCommanderUIColor(clientId);
+            Color.RGBToHSV(hue, out float h, out float s, out float v);
+            Color shade = Color.HSVToRGB(h, s * 0.55f, 0.22f);
+            Color mid = Color.HSVToRGB(h, s * 0.65f, Mathf.Max(0.55f, v * 0.8f));
+            Color tint = Color.HSVToRGB(h, s * 0.18f, 0.92f);
+
+            float luminance = Mathf.Clamp01(authored.r * 0.299f + authored.g * 0.587f + authored.b * 0.114f);
+            Color ramp = luminance < 0.5f
+                ? Color.Lerp(shade, mid, luminance * 2f)
+                : Color.Lerp(mid, tint, (luminance - 0.5f) * 2f);
+            Color result = Color.Lerp(authored, ramp, strength);
+            result.a = authored.a;
+            return result;
+        }
+
+        /// <summary>
+        /// The commander colour as painted onto a building's main body: their colour at full hue,
+        /// a touch less saturated and bright than the UI colour so it reads as paint, not neon.
+        /// </summary>
+        public static Color GetCommanderPaintColor(int clientId) {
+            Color.RGBToHSV(GetCommanderUIColor(clientId), out float h, out float s, out float v);
+            return Color.HSVToRGB(h, s * 0.85f, v * 0.88f);
+        }
+
+        /// <summary>A finished structure starts repairing itself once it has gone this long without a hit.</summary>
+        public const float StructureRepairDelaySeconds = 10f;
+
+        /// <summary>Share of its maximum health an undisturbed structure regains per second.</summary>
+        public const float StructureRepairPerSecondFraction = 0.015f;
+
+        /// <summary>How long the hit flash on a damaged structure lasts.</summary>
+        public const float HitFlashSeconds = 0.18f;
+
+        /// <summary>Colour a structure flashes toward the instant it takes a hit.</summary>
+        public static readonly Color HitFlashTint = new(1f, 0.55f, 0.35f);
 
         /// <summary>Spacing between units fanned out around a single group order.</summary>
         public const float GroupFormationSpacing = 3.2f;
@@ -371,7 +433,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// Share of the price a sale hands back for something in perfect condition - a building
         /// demolished, a unit or troop scrapped. The rest is the cost of changing one's mind.
         /// </summary>
-        public const float SellRefundFraction = 0.5f;
+        public const float SellRefundFraction = 0.7f;
 
         /// <summary>
         /// Share of that refund kept however badly damaged the thing is. Damage only trims the value

@@ -17,14 +17,12 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
     /// The HUD is generated as a prefab asset rather than assembled at runtime, so the canvas, its
     /// panels, and every label exist as authored, inspectable objects that <c>WV_HUD</c> only writes
     /// into. The building panel and the build/research menu are the shared command UI from
-    /// RyanAssets, nested as connected prefab instances, and everything else is drawn with the same
-    /// authoring kit and palette so the War Valley pieces read as one interface with them.
+    /// RyanAssets, nested as connected prefab instances.
     /// </para>
     /// <para>
-    /// The prefab is rebuilt in place, keeping its root and root components, so the start scene's
-    /// reference to its <c>WV_HUD</c> survives every rebuild. When the prefab is older than this
-    /// script - it lacks a panel the code now binds - it is rebuilt automatically the next time the
-    /// Editor loads, so pulling new HUD code does not leave a stale HUD behind.
+    /// The look is deliberately quiet: dark glass panels without outlines, one accent colour for
+    /// the order waiting for a click, red only for selling, and an icon on every control with its
+    /// shortcut printed in the corner, so the bar teaches its own keys without paragraphs of help.
     /// </para>
     /// <para>
     /// This half lives in its own client-only Editor assembly because it references the war_valley
@@ -32,7 +30,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
     /// </para>
     /// </summary>
     [InitializeOnLoad]
-    public static partial class WV_AuthoringHUD {
+    public static class WV_AuthoringHUD {
         const string Root = "Assets/Universes/UniverseData/war_valley";
         const string HudPath = Root + "/Client/WV_HUD.prefab";
         const string StartScenePath = Root + "/war_valley_start.unity";
@@ -40,17 +38,26 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         const string TroopIconPath = Root + "/Presentation/Icons/Infantry.png";
         const string AutoRebuildSessionKey = "WV_AuthoringHUD.AutoRebuildAttempted";
 
-        static readonly Color BoxFill = new(0.35f, 1f, 0.55f, 0.15f);
-        static readonly Color BoxEdge = new(0.35f, 1f, 0.55f, 0.85f);
-        static readonly Color ButtonFill = new(0.16f, 0.2f, 0.25f, 1f);
+        static readonly Color BoxFill = new(0.35f, 1f, 0.55f, 0.12f);
+        static readonly Color BoxEdge = new(0.35f, 1f, 0.55f, 0.8f);
+        static readonly Color Glass = new(0.055f, 0.065f, 0.08f, 0.86f);
+        static readonly Color ButtonFill = new(1f, 1f, 1f, 0.06f);
+        static readonly Color Divider = new(1f, 1f, 1f, 0.08f);
+        static readonly Color SellFill = new(0.42f, 0.13f, 0.12f, 1f);
+        static readonly Color SellConfirmFill = new(0.72f, 0.3f, 0.1f, 1f);
+        static readonly Color HealthFill = new(0.36f, 0.85f, 0.5f, 1f);
+        static readonly Color FreezeIcon = new(0.6f, 0.85f, 1f, 1f);
 
-        /// <summary>Command card size. The option menu and building panel dock to the right of it.</summary>
-        static readonly Vector2 CommandCardSize = new(720f, 148f);
         const float Margin = 16f;
-        /// <summary>Height of the funds card in the bottom-left corner; the selection summary stacks above it.</summary>
-        const float EconomyCardHeight = 190f;
-        /// <summary>Height of the unit and troop selection summary, including its Sell button.</summary>
-        const float SelectionPanelHeight = 210f;
+        const float CardWidth = 300f;
+        const float EconomyCardHeight = 124f;
+        const float SelectionPanelHeight = 124f;
+        const float BarHeight = 84f;
+        const float ButtonSize = 64f;
+        const float GroupWidth = 46f;
+        const float Gap = 6f;
+        const float Pad = 10f;
+        const float SectionGap = 17f;
 
         static WV_AuthoringHUD() {
             // Deferred: asset operations are not allowed while the domain is still loading.
@@ -71,8 +78,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         /// <summary>
         /// Rebuilds the HUD once per Editor session when the prefab predates the code that binds it.
         /// Skipped in batch mode and play mode, where assets must not change underneath a build or a
-        /// running game, and never retried in a session that already tried, so a failing rebuild
-        /// reports once rather than on every domain reload.
+        /// running game, and never retried in a session that already tried.
         /// </summary>
         static void RebuildIfStale() {
             if (Application.isBatchMode
@@ -85,14 +91,19 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 return;
 
             SessionState.SetBool(AutoRebuildSessionKey, true);
-            Debug.Log("War Valley: the commander HUD prefab predates the current HUD code; upgrading it.");
-            UpgradeHud();
+            Debug.Log("War Valley: the commander HUD prefab predates the current HUD code; rebuilding it.");
+            RebuildHud();
         }
 
         /// <summary>True when every panel the current <see cref="WV_HUD"/> binds is present in the prefab.</summary>
-        static bool IsCurrent(WV_HUD hud) =>
-            HasReferences(hud, "structurePanel", "optionMenu", "commandMenu", "researchLabel",
-                "forcesLabel", "donateButton", "donatePanel", "researchButton", "sellButton", "sellLabel", "troopRangeIndicator");
+        static bool IsCurrent(WV_HUD hud) {
+            if (!HasReferences(hud, "structurePanel", "optionMenu", "commandMenu", "researchLabel",
+                    "selectionHealthFill", "donateButton", "donatePanel", "researchButton", "sellButton",
+                    "sellLabel", "troopRangeIndicator"))
+                return false;
+            SerializedProperty forces = new SerializedObject(hud).FindProperty("forceCounts");
+            return forces != null && forces.arraySize == 4;
+        }
 
         static bool HasReferences(Object target, params string[] fields) {
             var serialized = new SerializedObject(target);
@@ -102,96 +113,6 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                     return false;
             }
             return true;
-        }
-
-        /// <summary>Updates an existing HUD in place, preserving its objects and nested prefab references.</summary>
-        [MenuItem("Ryan/War Valley/Upgrade HUD Layout")]
-        public static void UpgradeHud() {
-            if (AssetDatabase.LoadAssetAtPath<GameObject>(HudPath) == null) {
-                RebuildHud();
-                return;
-            }
-            if (!CommandUIAuthoring.PrefabsCurrent())
-                CommandUIAuthoring.RebuildAll();
-            GameObject root = PrefabUtility.LoadPrefabContents(HudPath);
-            try {
-                ConfigureHudLayout(root, root.GetComponent<WV_HUD>());
-                PrefabUtility.SaveAsPrefabAsset(root, HudPath);
-            } finally {
-                PrefabUtility.UnloadPrefabContents(root);
-            }
-        }
-
-        static void ConfigureHudLayout(GameObject root, WV_HUD hud) {
-            Transform economy = root.transform.Find("EconomyPanel");
-            Anchor(economy, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin),
-                new Vector2(320f, EconomyCardHeight));
-            var caption = economy.Find("Caption").GetComponent<TextMeshProUGUI>();
-            caption.text = "COMMAND FUNDS";
-            caption.color = Header;
-            TopBand(caption, 12f, 18f, 16f, 140f);
-            TopBand(economy.Find("IncomeLabel"), 12f, 18f, 155f, 16f);
-            var funds = economy.Find("FundsLabel").GetComponent<TextMeshProUGUI>();
-            funds.fontSize = 38f;
-            TopBand(funds, 34f, 44f, 16f, 16f);
-            var forces = economy.Find("ForcesLabel").GetComponent<TextMeshProUGUI>();
-            forces.enableAutoSizing = false;
-            forces.fontSize = 14f;
-            forces.textWrappingMode = TextWrappingModes.Normal;
-            TopBand(forces, 80f, 36f, 16f, 16f);
-            TopBand(economy.Find("ResearchLabel"), 120f, 20f, 16f, 16f);
-
-            Button donate = economy.Find("DonateButton").GetComponent<Button>();
-            BottomBand(donate, 12f, 32f, 16f, 166f);
-            Button research = economy.Find("ResearchButton")?.GetComponent<Button>();
-            if (research == null)
-                research = Button(economy, "ResearchButton", "Research", Accent, 15f, out _);
-            BottomBand(research, 12f, 32f, 166f, 16f);
-            research.gameObject.SetActive(true);
-            Hover(research, "Open your research menu. Build a Research Station to start projects.", gameHelp: true);
-
-            Transform selection = root.transform.Find("SelectionPanel");
-            Anchor(selection, Vector2.zero, Vector2.zero, Vector2.zero,
-                new Vector2(Margin, Margin + EconomyCardHeight + 12f), new Vector2(320f, SelectionPanelHeight));
-            var selectionLabel = selection.Find("SelectionLabel").GetComponent<TextMeshProUGUI>();
-            Stretch(selectionLabel, 16f, 16f, 14f, 56f);
-            Transform command = root.transform.Find("CommandPanel");
-            Button sell = selection.Find("Sell")?.GetComponent<Button>() ?? command.Find("Sell")?.GetComponent<Button>();
-            if (sell == null)
-                sell = Button(selection, "Sell", "Sell [Del]", Danger, 15f, out _);
-            sell.transform.SetParent(selection, false);
-            sell.targetGraphic.color = Danger;
-            BottomBand(sell, 12f, 34f, 16f, 16f);
-            Hover(sell, "Sell the selected army. Click twice to confirm the refund.", gameHelp: true);
-            Wire(hud, ("researchButton", research), ("sellButton", sell),
-                ("sellLabel", sell.GetComponentInChildren<TextMeshProUGUI>(true)));
-
-            Anchor(command, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, Margin), CommandCardSize);
-            var title = command.Find("CommandCaption")?.GetComponent<TextMeshProUGUI>();
-            if (title == null)
-                title = Label(command, "CommandCaption", "ARMY ORDERS", 12f, Header, bold: true);
-            PlaceTopLeft(title, 12f, 8f, 300f, 18f);
-            for (int i = 0; i < 5; i++) {
-                Button order = command.GetComponentsInChildren<Button>(true).First(button => button.name == $"Order{i}");
-                PlaceTopLeft(order, 12f + i * 140.4f, 32f, 134.4f, 38f);
-                order.targetGraphic.color = ButtonFill;
-            }
-            for (int i = 0; i < 3; i++)
-                PlaceTopLeft(command.GetComponentsInChildren<Transform>(true).First(child => child.name == $"Select{i}"),
-                    12f + i * 118f, 76f, 112f, 28f);
-            for (int i = 0; i < 4; i++) {
-                PlaceTopLeft(command.GetComponentsInChildren<Transform>(true).First(child => child.name == $"Group{i + 1}"), 482f + i * 58f, 76f, 52f, 28f);
-                PlaceTopLeft(command.GetComponentsInChildren<Transform>(true).First(child => child.name == $"SetGroup{i + 1}"), 482f + i * 58f, 110f, 52f, 24f);
-            }
-            PlaceTopLeft(command.Find("Status"), 12f, 110f, 464f, 24f);
-            var hint = root.transform.Find("HintLabel");
-            Anchor(hint, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, Margin + CommandCardSize.y + 10f), new Vector2(CommandCardSize.x + 120f, 52f));
-            ConfigureSimplifiedCommands(root, hud);
-            Transform donatePanel = root.transform.Find("DonatePanel");
-            if (donatePanel != null)
-                Rect(donatePanel).anchoredPosition = new Vector2(Margin + 320f + 12f, Margin);
         }
 
         /// <summary>Adds the commander HUD controller to the start scene if it is not already there.</summary>
@@ -238,11 +159,9 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             var hud = Ensure<WV_HUD>(root);
 
             RectTransform selectionBox = BuildSelectionBox(root.transform);
-            BuildEconomy(root.transform, out TextMeshProUGUI funds, out TextMeshProUGUI income, out TextMeshProUGUI research,
-                out TextMeshProUGUI forces, out Button donate, out Button researchButton);
-            GameObject selectionPanel = BuildSelectionSummary(
-                root.transform, out TextMeshProUGUI selectionLabel, out Button sell, out TextMeshProUGUI sellLabel);
-            GameObject commandPanel = BuildCommandCard(root.transform, out WV_CommandMenu commandMenu);
+            BuildEconomy(root.transform, hud);
+            BuildSelectionSummary(root.transform, hud);
+            BuildCommandBar(root.transform, hud);
 
             // The building panel docks bottom-right; the build/research menu stacks above it (the
             // HUD keeps the two from overlapping as the panel's height changes with its contents).
@@ -265,24 +184,23 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 AssetDatabase.LoadAssetAtPath<FundsTransferPanel>(CommandUIAuthoring.TransferPanelPath),
                 root.transform, "DonatePanel");
             Anchor(donatePanel, Vector2.zero, Vector2.zero, Vector2.zero,
-                new Vector2(Margin + 300f + 12f, Margin), CommandUIAuthoring.TransferPanelSize);
+                new Vector2(Margin + CardWidth + 12f, Margin), CommandUIAuthoring.TransferPanelSize);
             donatePanel.gameObject.SetActive(false);
 
-            TextMeshProUGUI hint = Label(root.transform, "HintLabel", string.Empty, 18f, Ink, TextAlignmentOptions.Bottom);
-            hint.textWrappingMode = TextWrappingModes.Normal;
+            // One line for alerts and notices, just above the order prompt. Long messages end in an
+            // ellipsis rather than wrapping over the battlefield.
+            TextMeshProUGUI hint = Label(root.transform, "HintLabel", string.Empty, 17f, Ink, TextAlignmentOptions.Bottom);
+            hint.richText = true;
+            hint.textWrappingMode = TextWrappingModes.NoWrap;
             Anchor(hint, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, Margin + CommandCardSize.y + 10f), new Vector2(CommandCardSize.x + 120f, 52f));
+                new Vector2(0f, Margin + BarHeight + 30f), new Vector2(1100f, 24f));
 
             Wire(hud,
-                ("fundsLabel", funds), ("incomeLabel", income), ("researchLabel", research),
-                ("forcesLabel", forces), ("donateButton", donate), ("donatePanel", donatePanel),
-                ("researchButton", researchButton),
-                ("selectionBox", selectionBox), ("selectionLabel", selectionLabel), ("selectionPanel", selectionPanel),
-                ("sellButton", sell), ("sellLabel", sellLabel),
-                ("structurePanel", structurePanel), ("optionMenu", optionMenu),
-                ("commandPanel", commandPanel), ("commandMenu", commandMenu), ("hintLabel", hint));
+                ("donatePanel", donatePanel), ("selectionBox", selectionBox),
+                ("structurePanel", structurePanel), ("optionMenu", optionMenu), ("hintLabel", hint),
+                ("troopRangeIndicator", AssetDatabase.LoadAssetAtPath<WV_RangeIndicator>(
+                    Root + "/Presentation/WV_AttackRange.prefab")));
             WireTroopIcons(hud);
-            ConfigureHudLayout(root, hud);
         });
 
         static void WireTroopIcons(WV_HUD hud) {
@@ -314,144 +232,196 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             RectTransform rect = Rect(box);
             rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.zero;
             rect.sizeDelta = Vector2.zero;
-            Border(box, BoxEdge, 2f);
+            Border(box, BoxEdge, 1.5f);
             box.gameObject.SetActive(false);
             return rect;
         }
 
         /// <summary>
-        /// Funds sit in the bottom-left corner, the one part of the screen no panel opens over, with
-        /// the Donate button beside them, the commander's use of their force limits beneath, their
-        /// research in progress on the next line, and the Research button that opens the research
-        /// menu - research belongs to the commander, not to whichever station happens to be selected.
+        /// Funds in the bottom-left corner: the balance beside a coin, income under it, the four force
+        /// limits as icon-and-count pairs, and Donate and Research as icon buttons in the corner.
         /// </summary>
-        static void BuildEconomy(Transform parent, out TextMeshProUGUI funds, out TextMeshProUGUI income,
-            out TextMeshProUGUI research, out TextMeshProUGUI forces, out Button donate, out Button researchButton) {
-            Image panel = Panel(parent, "EconomyPanel", PanelFill);
+        static void BuildEconomy(Transform parent, WV_HUD hud) {
+            Image panel = Panel(parent, "EconomyPanel", Glass);
             Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin),
-                new Vector2(300f, EconomyCardHeight));
-            Border(panel, PanelBorder);
+                new Vector2(CardWidth, EconomyCardHeight));
 
-            TextMeshProUGUI caption = Label(panel.transform, "Caption", "FUNDS", 14f, Header, bold: true);
-            TopBand(caption, 10f, 18f, 14f, 150f);
-            income = Label(panel.transform, "IncomeLabel", "No income", 14f, Muted, TextAlignmentOptions.MidlineRight);
-            TopBand(income, 10f, 18f, 140f, 14f);
-            funds = Label(panel.transform, "FundsLabel", "0", 34f, Gold, bold: true);
-            TopBand(funds, 30f, 42f, 14f, 110f);
-            donate = Button(panel.transform, "DonateButton", "Donate", Accent, 14f, out _);
-            Anchor(donate, Vector2.one, Vector2.one, Vector2.one, new Vector2(-14f, -36f), new Vector2(88f, 30f));
-            Hover(donate, "Give some of your funds to an ally.", gameHelp: true);
-            forces = Label(panel.transform, "ForcesLabel", string.Empty, 13f, Muted);
-            forces.richText = true;
-            // Four limits share one line; the text shrinks rather than truncating a count.
-            forces.enableAutoSizing = true;
-            forces.fontSizeMin = 9f;
-            forces.fontSizeMax = 13f;
-            TopBand(forces, 76f, 18f, 14f, 14f);
-            research = Label(panel.transform, "ResearchLabel", string.Empty, 13f, Warning);
-            TopBand(research, 96f, 18f, 14f, 14f);
-            researchButton = Button(panel.transform, "ResearchButton", "Research", Accent, 14f, out _);
-            BottomBand(researchButton, 10f, 28f, 14f, 154f);
-            Hover(researchButton,
-                "Open the research menu. Research needs a finished Research Station of your own; " +
-                "every extra station speeds it up.", gameHelp: true);
+            Image coin = Icon(panel.transform, "Coin", "paid", Gold);
+            PlaceTopLeft(coin, 14f, 14f, 26f, 26f);
+            TextMeshProUGUI funds = Label(panel.transform, "FundsLabel", "0", 28f, Gold, bold: true);
+            PlaceTopLeft(funds, 46f, 10f, 160f, 34f);
+
+            Image trend = Icon(panel.transform, "IncomeIcon", "trending_up", Muted);
+            PlaceTopLeft(trend, 16f, 50f, 16f, 16f);
+            TextMeshProUGUI income = Label(panel.transform, "IncomeLabel", "No income", 14f, Muted);
+            PlaceTopLeft(income, 38f, 48f, 160f, 20f);
+
+            Button donate = IconButton(panel.transform, "DonateButton", "volunteer_activism", null, null, ButtonFill, out _);
+            PlaceTopLeft(donate, CardWidth - 84f, 12f, 34f, 34f);
+            Hover(donate, "Donate funds to an ally");
+            Button research = IconButton(panel.transform, "ResearchButton", "science", null, null, ButtonFill, out _);
+            PlaceTopLeft(research, CardWidth - 46f, 12f, 34f, 34f);
+            Hover(research, "Research  ·  needs a Research Station");
+
+            Image divider = Panel(panel.transform, "Divider", Divider, rounded: false);
+            divider.raycastTarget = false;
+            PlaceTopLeft(divider, 14f, 76f, CardWidth - 28f, 1f);
+
+            string[] forceIcons = { "person", "local_shipping", "flight", "domain" };
+            string[] forceTips = { "Troops", "Vehicles", "Aircraft", "Buildings" };
+            var counts = new TextMeshProUGUI[forceIcons.Length];
+            float slot = (CardWidth - 28f) / forceIcons.Length;
+            for (int i = 0; i < forceIcons.Length; i++) {
+                float x = 14f + i * slot;
+                Image icon = Icon(panel.transform, $"Force{i}Icon", forceIcons[i], Muted);
+                PlaceTopLeft(icon, x, 88f, 16f, 16f);
+                counts[i] = Label(panel.transform, $"Force{i}Count", "0/0", 13f, Ink);
+                PlaceTopLeft(counts[i], x + 20f, 86f, slot - 22f, 20f);
+            }
+
+            // Research in progress sits just above the card, so the card itself never changes size.
+            TextMeshProUGUI researchLabel = Label(parent, "ResearchLabel", string.Empty, 13f, Warning);
+            Anchor(researchLabel, Vector2.zero, Vector2.zero, Vector2.zero,
+                new Vector2(Margin + 4f, Margin + EconomyCardHeight + 4f), new Vector2(CardWidth, 18f));
+
+            Wire(hud, ("fundsLabel", funds), ("incomeLabel", income), ("researchLabel", researchLabel),
+                ("donateButton", donate), ("researchButton", research));
+            WireArray(hud, "forceCounts", counts);
+            for (int i = 0; i < forceTips.Length; i++)
+                Hover(counts[i], forceTips[i]);
         }
 
         /// <summary>
-        /// The unit and troop selection summary, stacked above the funds card, with the Sell button
-        /// for what it summarises. The panel only shows while units or troops are selected, so Sell
-        /// appears exactly when there is something to sell instead of sitting greyed out on the
-        /// command card.
+        /// The unit and troop selection summary, stacked above the funds card: what is selected, its
+        /// combined health as a bar, and Sell. It only shows while something is selected.
         /// </summary>
-        static GameObject BuildSelectionSummary(
-            Transform parent, out TextMeshProUGUI label, out Button sell, out TextMeshProUGUI sellLabel) {
-            Image panel = Panel(parent, "SelectionPanel", PanelFill);
-            Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin + EconomyCardHeight + 12f),
-                new Vector2(300f, SelectionPanelHeight));
-            Border(panel, PanelBorder);
-            label = Label(panel.transform, "SelectionLabel", string.Empty, 17f, Ink, TextAlignmentOptions.TopLeft);
+        static void BuildSelectionSummary(Transform parent, WV_HUD hud) {
+            Image panel = Panel(parent, "SelectionPanel", Glass);
+            Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero,
+                new Vector2(Margin, Margin + EconomyCardHeight + 28f), new Vector2(CardWidth, SelectionPanelHeight));
+
+            TextMeshProUGUI label = Label(panel.transform, "SelectionLabel", string.Empty, 15f, Ink, TextAlignmentOptions.TopLeft);
             label.richText = true;
             label.textWrappingMode = TextWrappingModes.Normal;
-            Stretch(label, 14f, 14f, 14f, 56f);
-            sell = Button(panel.transform, "Sell", "Sell [Del]", Danger, 15f, out sellLabel);
-            BottomBand(sell, 12f, 34f, 14f, 14f);
-            Hover(sell, "Sell the selected units and troops for part of what they cost; less if damaged. " +
-                        "Click twice, or press Delete twice, to confirm.", gameHelp: true);
+            Stretch(label, 14f, 14f, 12f, 60f);
+
+            Image track = Panel(panel.transform, "HealthTrack", Track, rounded: false);
+            track.raycastTarget = false;
+            BottomBand(track, 50f, 4f, 14f, 14f);
+            Image health = Fill(track.transform, "HealthFill", HealthFill);
+            Stretch(health, 0f);
+
+            Button sell = Button(panel.transform, "Sell", "Sell", SellFill, 14f, out TextMeshProUGUI sellLabel);
+            BottomBand(sell, 12f, 30f, 14f, 14f);
+            Stretch(sellLabel, 30f, 8f, 0f, 0f);
+            Image sellIcon = Icon(sell.transform, "Icon", "sell", Ink);
+            Anchor(sellIcon, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(10f, 0f), new Vector2(16f, 16f));
+            Hover(sell, "Sell the selection  ·  Delete  ·  click twice to confirm");
+
             panel.gameObject.SetActive(false);
-            return panel.gameObject;
+            Wire(hud, ("selectionLabel", label), ("selectionHealthFill", health), ("selectionPanel", panel.gameObject),
+                ("sellButton", sell), ("sellLabel", sellLabel));
+            // The HUD repaints Sell from these at runtime, so they must match the authored fill.
+            var tints = new SerializedObject(hud);
+            tints.FindProperty("sellTint").colorValue = SellFill;
+            tints.FindProperty("sellConfirmTint").colorValue = SellConfirmFill;
+            tints.ApplyModifiedPropertiesWithoutUndo();
         }
 
         /// <summary>
-        /// The command card: every order and every way of selecting a squad, as buttons, with the
-        /// keyboard shortcut printed on each so the keys can be learned from the card.
+        /// One bar of icon buttons along the bottom: orders, then whole-army selection, then the four
+        /// control groups. Every button shows its key, and the order prompt sits just above the bar.
         /// </summary>
-        static GameObject BuildCommandCard(Transform parent, out WV_CommandMenu menu) {
-            Image panel = Panel(parent, "CommandPanel", PanelFill);
-            Anchor(panel, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, Margin), CommandCardSize);
-            Border(panel, PanelBorder);
-
-            const float pad = 12f;
-            const float gap = 6f;
-            float inner = CommandCardSize.x - pad * 2f;
-
-            // Row 1: the five orders. Selling lives on the selection panel, with what it sells.
-            string[] orderLabels = { "Move [M]", "Attack-move [V]", "Attack [T]", "Stop [X]", "Hold [H]" };
-            string[] orderTips = {
-                "Move the selection to a point. With a building selected, sets its rally point.",
-                "Advance to a point, engaging anything hostile met on the way.",
-                "Attack one target. Click an enemy after choosing this.",
-                "Stop where you are.",
-                "Hold this position and only fight what comes into range."
+        static void BuildCommandBar(Transform parent, WV_HUD hud) {
+            (string icon, string caption, string key, string tip)[] orders = {
+                ("near_me", "Advance", "V", "Advance  ·  move and fight on the way"),
+                ("gps_fixed", "Attack", "T", "Attack one target"),
+                ("shield", "Hold", "H", "Hold position and fight anything in range"),
+                ("block", "Stop", "X", "Stop where you are"),
+                ("ac_unit", "Freeze", "F", "Freeze  ·  stop moving and shooting")
             };
-            int slots = orderLabels.Length;
-            float orderWidth = (inner - gap * (slots - 1)) / slots;
-            var orders = new Button[orderLabels.Length];
-            for (int i = 0; i < orderLabels.Length; i++) {
-                orders[i] = Button(panel.transform, $"Order{i}", orderLabels[i], Accent, 14f, out _);
-                PlaceTopLeft(orders[i], pad + i * (orderWidth + gap), pad, orderWidth, 34f);
-                Hover(orders[i], orderTips[i], gameHelp: true);
+            (string icon, string caption, string key, string tip)[] selects = {
+                ("groups", "Army", "Z", "Select your whole army"),
+                ("local_shipping", "Vehicles", "U", "Select every vehicle and aircraft"),
+                ("person", "Troops", "I", "Select every foot soldier"),
+                ("deselect", "Clear", "C", "Clear the selection")
+            };
+            const int groupCount = 4;
+
+            float width = Pad * 2f
+                + orders.Length * ButtonSize + (orders.Length - 1) * Gap + SectionGap
+                + selects.Length * ButtonSize + (selects.Length - 1) * Gap + SectionGap
+                + groupCount * GroupWidth + (groupCount - 1) * Gap;
+
+            Image bar = Panel(parent, "CommandPanel", Glass);
+            Anchor(bar, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0f, Margin), new Vector2(width, BarHeight));
+
+            float x = Pad;
+            float y = (BarHeight - ButtonSize) * 0.5f;
+            var orderButtons = new Button[orders.Length];
+            for (int i = 0; i < orders.Length; i++) {
+                orderButtons[i] = IconButton(bar.transform, $"Order{i}", orders[i].icon, orders[i].caption,
+                    orders[i].key, ButtonFill, out _, i == 4 ? FreezeIcon : (Color?)null);
+                PlaceTopLeft(orderButtons[i], x, y, ButtonSize, ButtonSize);
+                Hover(orderButtons[i], orders[i].tip);
+                x += ButtonSize + Gap;
+            }
+            x = SectionDivider(bar.transform, "Divider0", x - Gap);
+
+            var selectButtons = new Button[selects.Length];
+            for (int i = 0; i < selects.Length; i++) {
+                selectButtons[i] = IconButton(bar.transform, $"Select{i}", selects[i].icon, selects[i].caption,
+                    selects[i].key, ButtonFill, out _);
+                PlaceTopLeft(selectButtons[i], x, y, ButtonSize, ButtonSize);
+                Hover(selectButtons[i], selects[i].tip);
+                x += ButtonSize + Gap;
+            }
+            x = SectionDivider(bar.transform, "Divider1", x - Gap);
+
+            // Each group is a recall tile with a thin Set strip under it.
+            var recalls = new Button[groupCount];
+            var sets = new Button[groupCount];
+            for (int i = 0; i < groupCount; i++) {
+                recalls[i] = Button(bar.transform, $"Group{i + 1}", (i + 1).ToString(), ButtonFill, 18f, out _);
+                PlaceTopLeft(recalls[i], x, y, GroupWidth, ButtonSize - 22f);
+                TextMeshProUGUI badge = Label(recalls[i].transform, "Key", $"F{i + 1}", 10f, Muted, TextAlignmentOptions.TopRight);
+                Stretch(badge, 0f, 4f, 2f, 0f);
+                Hover(recalls[i], $"Recall group {i + 1}  ·  F{i + 1}");
+                sets[i] = Button(bar.transform, $"SetGroup{i + 1}", "Set", ButtonFill, 10f, out TextMeshProUGUI setLabel);
+                setLabel.fontStyle = FontStyles.Normal;
+                setLabel.color = Muted;
+                Stretch(setLabel, 0f);
+                PlaceTopLeft(sets[i], x, y + ButtonSize - 18f, GroupWidth, 18f);
+                Hover(sets[i], $"Save the selection as group {i + 1}  ·  Ctrl+F{i + 1}  ·  Alt+F{i + 1} adds");
+                x += GroupWidth + Gap;
             }
 
-            // Row 2: whole-army selection on the left, control-group recall on the right.
-            const float selectWidth = 112f;
-            const float groupWidth = 52f;
-            string[] selectLabels = { "All Units", "All Troops", "Everything" };
-            var selects = new Button[selectLabels.Length];
-            for (int i = 0; i < selectLabels.Length; i++) {
-                selects[i] = Button(panel.transform, $"Select{i}", selectLabels[i], ButtonFill, 13f, out _);
-                PlaceTopLeft(selects[i], pad + i * (selectWidth + gap), pad + 40f, selectWidth, 28f);
-            }
-            Hover(selects[0], "Select every vehicle and aircraft you command.", gameHelp: true);
-            Hover(selects[1], "Select every foot soldier you command.", gameHelp: true);
-            Hover(selects[2], "Select your whole army.", gameHelp: true);
+            // What the armed order is waiting for, centred just above the bar.
+            TextMeshProUGUI status = Label(parent, "Status", string.Empty, 14f, Muted, TextAlignmentOptions.Bottom);
+            Anchor(status, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0f, Margin + BarHeight + 6f), new Vector2(width, 20f));
 
-            float groupsLeft = pad + inner - (4 * groupWidth + 3 * gap);
-            var recalls = new Button[4];
-            var sets = new Button[4];
-            for (int i = 0; i < 4; i++) {
-                float x = groupsLeft + i * (groupWidth + gap);
-                recalls[i] = Button(panel.transform, $"Group{i + 1}", $"F{i + 1}", ButtonFill, 13f, out _);
-                PlaceTopLeft(recalls[i], x, pad + 40f, groupWidth, 28f);
-                Hover(recalls[i], $"Recall control group {i + 1}.", gameHelp: true);
-                sets[i] = Button(panel.transform, $"SetGroup{i + 1}", "Set", new Color(0.12f, 0.15f, 0.19f, 1f), 11f, out _);
-                PlaceTopLeft(sets[i], x, pad + 74f, groupWidth, 22f);
-                Hover(sets[i], $"Store the current selection as group {i + 1} (Ctrl+F{i + 1}).", gameHelp: true);
-            }
-
-            // Row 3: what the armed order is waiting for, or the key reminder.
-            TextMeshProUGUI status = Label(panel.transform, "Status", string.Empty, 13f, Muted);
-            PlaceTopLeft(status, pad, pad + 74f, groupsLeft - pad - gap, 22f);
-
-            menu = Ensure<WV_CommandMenu>(panel.gameObject);
+            WV_CommandMenu menu = Ensure<WV_CommandMenu>(bar.gameObject);
             Wire(menu,
-                ("moveButton", orders[0]), ("attackMoveButton", orders[1]), ("attackButton", orders[2]),
-                ("stopButton", orders[3]), ("holdButton", orders[4]),
-                ("selectUnitsButton", selects[0]), ("selectTroopsButton", selects[1]), ("selectAllButton", selects[2]),
+                ("moveButton", orderButtons[0]), ("attackButton", orderButtons[1]),
+                ("holdButton", orderButtons[2]), ("stopButton", orderButtons[3]), ("freezeButton", orderButtons[4]),
+                ("selectAllButton", selectButtons[0]), ("selectUnitsButton", selectButtons[1]),
+                ("selectTroopsButton", selectButtons[2]), ("clearButton", selectButtons[3]),
                 ("statusText", status));
             WireArray(menu, "groupButtons", recalls);
             WireArray(menu, "setGroupButtons", sets);
-            return panel.gameObject;
+            Wire(hud, ("commandPanel", bar.gameObject), ("commandMenu", menu));
+        }
+
+        /// <summary>A hairline between two groups of buttons; returns where the next group starts.</summary>
+        static float SectionDivider(Transform bar, string name, float afterX) {
+            Image line = Panel(bar, name, Divider, rounded: false);
+            line.raycastTarget = false;
+            float lineX = afterX + (SectionGap - 1f) * 0.5f;
+            PlaceTopLeft(line, lineX, 16f, 1f, BarHeight - 32f);
+            return afterX + SectionGap;
         }
 
         /// <summary>Places a child by its top-left corner, in pixels from the parent's top-left.</summary>

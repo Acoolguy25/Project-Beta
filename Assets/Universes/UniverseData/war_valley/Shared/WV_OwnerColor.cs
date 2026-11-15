@@ -49,6 +49,11 @@ namespace Universes.UniverseData.war_valley.Shared {
         WV_Constructable constructable;
 
         bool prepared;
+        /// <summary>
+        /// A wall, fence or gate. These get only a light wash of the owner's colour and no flat
+        /// painted body: across a long plain run a solid team-colour slab looked like a painted plank.
+        /// </summary>
+        bool isWall;
         readonly System.Collections.Generic.Dictionary<Renderer, int> paintedSubmeshes = new();
         /// <summary>Each renderer's authored material colours, which rust multiplies from.</summary>
         Color[][] authoredColors;
@@ -56,6 +61,8 @@ namespace Universes.UniverseData.war_valley.Shared {
         void Awake() {
             owned = GetComponent<WV_Owned>();
             constructable = GetComponent<WV_Constructable>();
+            // Walls, fences and gates are the obstacles attackers must breach.
+            isWall = GetComponent<WV_DestructibleObstacle>() != null;
             properties = new MaterialPropertyBlock();
             if (damageSource == null)
                 damageSource = GetComponent<StructureComponent>();
@@ -80,7 +87,53 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         void HandleOwnerChanged(int clientId) => Apply();
 
-        void HandleHealthChanged(long previous, long next, bool asServer) => Apply();
+        /// <summary>Unscaled time at which the current hit flash ends; 0 when none is showing.</summary>
+        float flashUntil;
+
+        void HandleHealthChanged(long previous, long next, bool asServer) {
+            // A finished structure losing health has just been hit: flash it so the player sees
+            // which building is taking fire. Construction growth and repairs raise health and never flash.
+            if (next < previous && previous > 0 && (constructable == null || constructable.IsOperational))
+                flashUntil = Time.unscaledTime + WV_Rules.HitFlashSeconds;
+            Apply();
+        }
+
+        void Update() {
+            if (flashUntil <= 0f)
+                return;
+            if (Time.unscaledTime >= flashUntil)
+                flashUntil = 0f;
+            Apply();
+        }
+
+        /// <summary>1 at the instant of a hit, fading to 0 over <see cref="WV_Rules.HitFlashSeconds"/>.</summary>
+        float Flash => flashUntil <= 0f
+            ? 0f
+            : Mathf.Clamp01((flashUntil - Time.unscaledTime) / WV_Rules.HitFlashSeconds) * 0.6f;
+
+        /// <summary>
+        /// Structures - those without explicit Team Color body parts - are brought onto the shared
+        /// palette. Units keep their own art, which their team-colour shader already harmonises.
+        /// </summary>
+        bool UsesStructurePalette => bodyRenderers.Length == 0;
+
+        /// <summary>Rust pulls a colour toward brown and darkens it, as weathered steel does.</summary>
+        static Color Corrode(Color color, float corrosion) {
+            if (corrosion <= 0f)
+                return color;
+            Color rusted = Color.Lerp(color, WV_Rules.CorrodedTint, corrosion);
+            float darken = Mathf.Lerp(1f, 0.75f, corrosion);
+            rusted.r *= darken;
+            rusted.g *= darken;
+            rusted.b *= darken;
+            rusted.a = color.a;
+            return rusted;
+        }
+
+        Color Finish(Color color, float corrosion, float flash) {
+            color = Corrode(color, corrosion);
+            return flash > 0f ? Color.Lerp(color, WV_Rules.HitFlashTint, flash) : color;
+        }
 
         /// <summary>0 while the structure is healthy or still being built, rising to 1 as it dies.</summary>
         float Corrosion {
@@ -101,7 +154,11 @@ namespace Universes.UniverseData.war_valley.Shared {
                 Prepare();
 
             float corrosion = Corrosion;
-            Color paint = Color.Lerp(WV_Rules.GetCommanderUIColor(owned.OwnerClientId), WV_Rules.CorrodedTint, corrosion);
+            float flash = Flash;
+            bool palette = UsesStructurePalette;
+            Color paint = Finish(
+                palette ? WV_Rules.GetCommanderPaintColor(owned.OwnerClientId) : WV_Rules.GetCommanderUIColor(owned.OwnerClientId),
+                corrosion, flash);
 
             for (int r = 0; r < tintedRenderers.Length; r++) {
                 Renderer renderer = tintedRenderers[r];
@@ -119,7 +176,11 @@ namespace Universes.UniverseData.war_valley.Shared {
                         }
                         SetColor(paint);
                     } else {
-                        SetColor(Color.Lerp(colors[slot], WV_Rules.CorrodedTint, corrosion));
+                        Color authored = palette
+                            ? WV_Rules.GetStructurePaletteColor(colors[slot], owned.OwnerClientId,
+                                isWall ? WV_Rules.WallPaletteStrength : WV_Rules.StructurePaletteStrength)
+                            : colors[slot];
+                        SetColor(Finish(authored, corrosion, flash));
                     }
                     renderer.SetPropertyBlock(properties, slot);
                 }
@@ -146,7 +207,7 @@ namespace Universes.UniverseData.war_valley.Shared {
                     if (body != null)
                         paintedSubmeshes[body] = -1; // All slots: the authored shader preserves texture detail.
                 }
-            } else {
+            } else if (!isWall) {
                 float bestArea = 0f;
                 Renderer primaryRenderer = null;
                 MeshFilter bestFilter = null;

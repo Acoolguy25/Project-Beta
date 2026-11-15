@@ -173,9 +173,7 @@ MonoBehaviour:
   effectsComponent: {fileID: 8436470152463120549}
   healthComponent: {fileID: 1526473640180857948}
   StructureID: wv_shield_generator
-  Description: Raises a circular shield. Allies pass through; enemies cannot enter
-    or hurt anything inside until they break it, and it recharges 30s later while
-    the generator stands. Each new generator must overlap one of your shields.
+  Description: Raises a circular shield. Allies pass through; enemies cannot enter or hurt anything inside until they break it, and it recharges 30s later while the generator stands. Each new generator must overlap one of your shields.
   Cost: 1000
   Duration: 28
   Sprite: {fileID: 21300000, guid: faefd934b91cfe94c807d1894a4c5af3, type: 3}
@@ -231,6 +229,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 3588490788141125649}
   _networkObjectCache: {fileID: 0}
   footprintCells: 2
+  snapToGrid: 0
   maxHealth: 900
   buildingRoot: {fileID: 6832467132630510980}
   constructionScaffold: {fileID: 950944772641813216}
@@ -385,6 +384,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7850547788688603047}
+  - {fileID: 2756393398575921617}
   m_Father: {fileID: 5948607682740732322}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &8569496296794651821
@@ -466,6 +466,99 @@ MonoBehaviour:
   - {fileID: 6481615340305915817}
   - {fileID: 4358334506757106307}
   hitVolume: {fileID: 5415545775321740013}
+  domeSurface: {fileID: 3431196150678781291}
+  fadeSeconds: 0.6
+  particleOpacity: 0.4
+--- !u!1 &6143225329631470006
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2756393398575921617}
+  - component: {fileID: 8841355376345744174}
+  - component: {fileID: 3431196150678781291}
+  m_Layer: 2
+  m_Name: ShieldShell
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2756393398575921617
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6143225329631470006}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4580236928353111719}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!33 &8841355376345744174
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6143225329631470006}
+  m_Mesh: {fileID: 10200, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!23 &3431196150678781291
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6143225329631470006}
+  m_Enabled: 0
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 0
+  m_ReflectionProbeUsage: 0
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: 374be7841edbfc9419046b9c2a2db010, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
 --- !u!1001 &1845415079568172400
 PrefabInstance:
   m_ObjectHideFlags: 0

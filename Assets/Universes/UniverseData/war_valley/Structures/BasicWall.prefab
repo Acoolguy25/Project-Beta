@@ -163,7 +163,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584105428922203129
+  _initializedTimestamp: -8584068848775279434
 --- !u!114 &7408282882128479229
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -214,8 +214,7 @@ MonoBehaviour:
   effectsComponent: {fileID: 7408282882128479229}
   healthComponent: {fileID: 6750362122418874998}
   StructureID: basic_wall
-  Description: An 8m heavy wall run. Tougher than a fence; attackers must break it
-    down to pass.
+  Description: An 8m heavy wall run. Tougher than a fence; attackers must break it down to pass.
   Cost: 100
   Duration: 6
   Sprite: {fileID: 21300000, guid: 08a91a0dcc9b06045b8f30c8640f6417, type: 3}
@@ -271,6 +270,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 3098581370753645214}
   _networkObjectCache: {fileID: 3098581370753645214}
   footprintCells: 2
+  snapToGrid: 1
   maxHealth: 600
   buildingRoot: {fileID: 1233135144741846522}
   constructionScaffold: {fileID: 140496002566622685}

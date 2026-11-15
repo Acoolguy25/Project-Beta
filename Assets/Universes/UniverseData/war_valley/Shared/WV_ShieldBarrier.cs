@@ -56,6 +56,21 @@ namespace Universes.UniverseData.war_valley.Shared {
         [Tooltip("The shield's hit volume: a trigger on Ignore Raycast, so it is measured and aimed " +
                  "at without stopping bullets or bodies.")]
         [SerializeField] SphereCollider hitVolume;
+        [Tooltip("The 3D energy shell (WarValley/ShieldDome material). Sized to the shield's radius " +
+                 "at runtime, authored disabled like the particle renderers.")]
+        [SerializeField] Renderer domeSurface;
+        [Tooltip("Seconds the dome takes to fade in when the shield rises, and out when it falls.")]
+        [SerializeField, Min(0.01f)] float fadeSeconds = 0.6f;
+        [Tooltip("How opaque the swirl particles are at full strength, against their authored colour. " +
+                 "Kept low so the dome stays see-through.")]
+        [SerializeField, Range(0f, 1f)] float particleOpacity = 0.4f;
+
+        static readonly int FadeId = Shader.PropertyToID("_Fade");
+        static readonly int ParticleColorId = Shader.PropertyToID("_Color");
+        MaterialPropertyBlock domeProperties;
+        Color[] particleColors;
+        /// <summary>0 when the dome is invisible, 1 when it is fully shown.</summary>
+        float domeFade;
 
         /// <summary>Server time the shield comes back, or 0 while it is up.</summary>
         readonly SyncVar<float> restoreTime = new();
@@ -101,6 +116,36 @@ namespace Universes.UniverseData.war_valley.Shared {
             generatorConstructable = generator != null ? generator.GetComponent<WV_Constructable>() : null;
             if (hitVolume != null)
                 hitVolume.radius = radius / Mathf.Max(0.0001f, transform.lossyScale.x);
+            PrepareDome();
+        }
+
+        /// <summary>
+        /// Sizes the shell to the authoritative radius and records each particle renderer's authored
+        /// colour, which the fade scales from. The shell's mesh is measured rather than assumed, so
+        /// any sphere mesh can be authored on it.
+        /// </summary>
+        void PrepareDome() {
+            domeProperties = new MaterialPropertyBlock();
+            if (domeSurface != null) {
+                Transform shell = domeSurface.transform;
+                Vector3 parentScale = shell.parent != null ? shell.parent.lossyScale : Vector3.one;
+                float meshRadius = domeSurface.TryGetComponent(out MeshFilter filter) && filter.sharedMesh != null
+                    ? Mathf.Max(0.0001f, filter.sharedMesh.bounds.extents.x)
+                    : 0.5f;
+                float scale = radius / meshRadius;
+                shell.localScale = new Vector3(
+                    scale / Mathf.Max(0.0001f, parentScale.x),
+                    scale / Mathf.Max(0.0001f, parentScale.y),
+                    scale / Mathf.Max(0.0001f, parentScale.z));
+                domeSurface.enabled = false;
+            }
+            particleColors = new Color[domeRenderers.Length];
+            for (int i = 0; i < domeRenderers.Length; i++) {
+                Material material = domeRenderers[i] != null ? domeRenderers[i].sharedMaterial : null;
+                particleColors[i] = material != null && material.HasProperty(ParticleColorId)
+                    ? material.GetColor(ParticleColorId)
+                    : Color.white;
+            }
         }
 
         public override void OnStartNetwork() {
@@ -225,15 +270,44 @@ namespace Universes.UniverseData.war_valley.Shared {
                 UpdateServer();
 #endif
             bool up = IsUp;
-            if (domeShown == up)
-                return;
-            domeShown = up;
-            foreach (Renderer dome in domeRenderers) {
-                if (dome != null)
-                    dome.enabled = up;
+            if (domeShown != up) {
+                domeShown = up;
+                // Gameplay follows the shield's state at once; only the look fades.
+                if (hitVolume != null)
+                    hitVolume.enabled = up;
             }
-            if (hitVolume != null)
-                hitVolume.enabled = up;
+
+            float target = up ? 1f : 0f;
+            if (Mathf.Approximately(domeFade, target))
+                return;
+            domeFade = Mathf.MoveTowards(domeFade, target, Time.deltaTime / fadeSeconds);
+            ApplyDomeFade();
+        }
+
+        /// <summary>Draws the dome at <see cref="domeFade"/>, hiding its renderers entirely once it reaches zero.</summary>
+        void ApplyDomeFade() {
+            bool visible = domeFade > 0f;
+            // Eased so the shell swells into view rather than ramping linearly.
+            float strength = domeFade * domeFade * (3f - 2f * domeFade);
+
+            if (domeSurface != null) {
+                domeSurface.enabled = visible;
+                domeSurface.GetPropertyBlock(domeProperties);
+                domeProperties.SetFloat(FadeId, strength);
+                domeSurface.SetPropertyBlock(domeProperties);
+            }
+
+            for (int i = 0; i < domeRenderers.Length; i++) {
+                Renderer dome = domeRenderers[i];
+                if (dome == null)
+                    continue;
+                dome.enabled = visible;
+                Color color = particleColors[i];
+                color.a *= strength * particleOpacity;
+                domeProperties.Clear();
+                domeProperties.SetColor(ParticleColorId, color);
+                dome.SetPropertyBlock(domeProperties);
+            }
         }
 
 #if UNITY_SERVER

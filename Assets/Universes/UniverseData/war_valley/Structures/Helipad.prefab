@@ -263,6 +263,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 3718610536279056941}
   _networkObjectCache: {fileID: 0}
   footprintCells: 2
+  snapToGrid: 0
   maxHealth: 700
   buildingRoot: {fileID: 5616664100159307001}
   constructionScaffold: {fileID: 3745335320567477352}

@@ -257,7 +257,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584105428922203129
+  _initializedTimestamp: -8584068848775279434
 --- !u!114 &4901447036713499371
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -308,9 +308,7 @@ MonoBehaviour:
   effectsComponent: {fileID: 4901447036713499371}
   healthComponent: {fileID: 2977488936000772718}
   StructureID: wv_gate
-  Description: An 8m wall section that opens for your side. Allies walk up and it
-    opens; your troops and vehicles use it when their route needs it. Its owner can
-    hold it open or lock it. Enemies must break it down.
+  Description: An 8m wall section that opens for your side. Allies walk up and it opens; your troops and vehicles use it when their route needs it. Its owner can hold it open or lock it. Enemies must break it down.
   Cost: 150
   Duration: 8
   Sprite: {fileID: 21300000, guid: 81d1f1be9328b9e4f9268672c6c285a2, type: 3}
@@ -366,6 +364,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 6621093980158940472}
   _networkObjectCache: {fileID: 6621093980158940472}
   footprintCells: 2
+  snapToGrid: 1
   maxHealth: 500
   buildingRoot: {fileID: 8572841034464742971}
   constructionScaffold: {fileID: 6643640835340689970}

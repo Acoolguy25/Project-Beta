@@ -69,8 +69,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
         /// <summary>The standing controls reminder on the hint line. It is game help, and the player can turn it off.</summary>
         const string ControlsHint =
-            "Select your army, then click ground to advance or an enemy to attack. Drag to select a squad.\n"
-            + "Hold & Fight keeps troops in place. Freeze stops movement and weapons. More shows extra controls.";
+            "Drag to select  ·  Click ground to advance, an enemy to attack  ·  Hover a button for its key";
 
         /// <summary>Seconds within which a second click on the same unit means "select all of these".</summary>
         const float DoubleClickSeconds = 0.3f;
@@ -110,7 +109,6 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>Technologies the local commander already had, so only new completions are announced.</summary>
         readonly HashSet<WV_Tech> knownResearched = new();
         readonly StringBuilder researchSummary = new();
-        readonly StringBuilder forcesSummary = new();
 
         // Every character this client can see. Troops have no client-visible roster of their own, so
         // the shared character events are the cheapest source of one that stays correct.
@@ -127,6 +125,7 @@ namespace Universes.UniverseData.war_valley.Client {
 
         WV_HUD hud;
         WV_StructureInspector inspector;
+        WV_BaseAlerts alerts;
         PointerEventData uiPointer;
         EventSystem uiPointerSystem;
         /// <summary>The research ledger <see cref="knownResearched"/> was taken from; a new round brings a new one.</summary>
@@ -176,6 +175,7 @@ namespace Universes.UniverseData.war_valley.Client {
             hud.ShowCommands();
             BindCommandMenu();
             inspector = new WV_StructureInspector(hud, () => LocalClientId, CountOwnTroops, ArmRallyPoint);
+            alerts = new WV_BaseAlerts(hud.SetHint);
             BindDonations();
             hud.SellClicked += RequestSell;
             hud.ResearchClicked += ToggleResearch;
@@ -531,6 +531,7 @@ namespace Universes.UniverseData.war_valley.Client {
             // the order is lost.
             HandleCommandKeys();
             HandlePointer();
+            alerts.Tick(LocalClientId);
         }
 
         // --- Pointer ----------------------------------------------------------
@@ -623,6 +624,16 @@ namespace Universes.UniverseData.war_valley.Client {
             if (keyboard.fKey.wasPressedThisFrame)
                 IssueImmediateOrder(WV_OrderType.Freeze);
 
+            // Quick selection: grab the army, part of it, or every factory without hunting for them.
+            if (keyboard.zKey.wasPressedThisFrame)
+                SelectAllOwned(units: true, troops: true);
+            if (keyboard.uKey.wasPressedThisFrame)
+                SelectAllOwned(units: true, troops: false);
+            if (keyboard.iKey.wasPressedThisFrame)
+                SelectAllOwned(units: false, troops: true);
+            if (keyboard.gKey.wasPressedThisFrame)
+                SelectProductionBuildings();
+
             // Escape backs out one step at a time: an armed order, then an open menu, then the
             // selected building.
             if (keyboard.escapeKey.wasPressedThisFrame) {
@@ -645,6 +656,8 @@ namespace Universes.UniverseData.war_valley.Client {
                     continue;
                 if (GroupBindHeld())
                     BindControlGroup(i);
+                else if (GroupAddHeld())
+                    AddToControlGroup(i);
                 else
                     RecallControlGroup(i);
             }
@@ -656,6 +669,44 @@ namespace Universes.UniverseData.war_valley.Client {
             2 => keyboard.f3Key,
             _ => keyboard.f4Key
         };
+
+        /// <summary>Alt+F#: adds the current selection to a group, creating it if it was empty.</summary>
+        void AddToControlGroup(int index) {
+            if (SelectionCount == 0) {
+                hud.SetHint("Select something to add to the group");
+                return;
+            }
+            ControlGroup group = controlGroups[index] ??= new ControlGroup();
+            foreach (WV_Unit unit in selection) {
+                if (!group.Units.Contains(unit))
+                    group.Units.Add(unit);
+            }
+            foreach (GameCharacter troop in troopSelection) {
+                if (!group.Troops.Contains(troop))
+                    group.Troops.Add(troop);
+            }
+            hud.SetHint($"Added to group F{index + 1} - {group.Units.Count + group.Troops.Count} in group");
+        }
+
+        /// <summary>
+        /// G: every finished building this commander owns that trains something, so a whole row of
+        /// barracks and hangars can share one rally point or one queue click.
+        /// </summary>
+        void SelectProductionBuildings() {
+            int clientId = LocalClientId;
+            CollectUsableStructures(structureScratch, structure =>
+                structure.TryGetComponent(out WV_ProductionBuilding _)
+                && structure.TryGetComponent(out WV_Owned owned) && owned.IsOwnedBy(clientId)
+                && (!structure.TryGetComponent(out WV_Constructable site) || site.IsOperational));
+            if (structureScratch.Count == 0) {
+                hud.SetHint("You have no finished production buildings");
+                return;
+            }
+            ClearSelection();
+            inspector.SetSelection(structureScratch);
+            RefreshSelectionUI();
+            hud.SetHint($"{structureScratch.Count} production buildings selected");
+        }
 
         /// <summary>Parks the current selection on a group key, replacing whatever was there.</summary>
         void BindControlGroup(int index) {
@@ -748,6 +799,11 @@ namespace Universes.UniverseData.war_valley.Client {
         static bool GroupBindHeld() =>
             Keyboard.current != null
             && (Keyboard.current.leftCtrlKey.isPressed || Keyboard.current.rightCtrlKey.isPressed);
+
+        /// <summary>Alt held over a group key means "add to this group".</summary>
+        static bool GroupAddHeld() =>
+            Keyboard.current != null
+            && (Keyboard.current.leftAltKey.isPressed || Keyboard.current.rightAltKey.isPressed);
 
         void CancelDrag() {
             pointerDown = false;
@@ -1272,33 +1328,18 @@ namespace Universes.UniverseData.war_valley.Client {
         /// <summary>The funds card's line showing how much of each per-player limit is in use.</summary>
         void RefreshForces() {
             int clientId = LocalClientId;
-            if (clientId == WV_Owned.NoOwner) {
-                hud.SetForces(null);
+            if (clientId == WV_Owned.NoOwner)
                 return;
-            }
 
             int troops = CountOwnTroops();
-            forcesSummary.Clear();
-            AppendForce(WV_ForceCategory.Soldier, WV_Limits.CountUsed(clientId, WV_ForceCategory.Soldier, troops));
-            forcesSummary.Append("  ");
-            AppendForce(WV_ForceCategory.Vehicle, WV_Limits.CountUsed(clientId, WV_ForceCategory.Vehicle, troops));
-            forcesSummary.AppendLine();
-            AppendForce(WV_ForceCategory.Aircraft, WV_Limits.CountUsed(clientId, WV_ForceCategory.Aircraft, troops));
-            forcesSummary.Append("  ");
-            AppendForce(WV_ForceCategory.Building, WV_Limits.CountUsed(clientId, WV_ForceCategory.Building, troops));
-            hud.SetForces(forcesSummary.ToString());
+            RefreshForce(clientId, WV_ForceCategory.Soldier, troops);
+            RefreshForce(clientId, WV_ForceCategory.Vehicle, troops);
+            RefreshForce(clientId, WV_ForceCategory.Aircraft, troops);
+            RefreshForce(clientId, WV_ForceCategory.Building, troops);
         }
 
-        /// <summary>One "Troops 5/20" entry, drawn in the warning colour once the limit is reached.</summary>
-        void AppendForce(WV_ForceCategory category, int used) {
-            int limit = WV_Limits.GetLimit(category);
-            bool full = used >= limit;
-            if (full)
-                forcesSummary.Append("<color=#FFB85A>");
-            forcesSummary.Append(WV_Limits.GetShortName(category)).Append(' ').Append(used).Append('/').Append(limit);
-            if (full)
-                forcesSummary.Append("</color>");
-        }
+        void RefreshForce(int clientId, WV_ForceCategory category, int troops) =>
+            hud.SetForce(category, WV_Limits.CountUsed(clientId, category, troops), WV_Limits.GetLimit(category));
 
         // --- Donations --------------------------------------------------------
 

@@ -195,7 +195,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584105428922203129
+  _initializedTimestamp: -8584068848775279434
 --- !u!114 &5443946043717765537
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -302,6 +302,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 6845403056666785168}
   _networkObjectCache: {fileID: 6845403056666785168}
   footprintCells: 2
+  snapToGrid: 1
   maxHealth: 300
   buildingRoot: {fileID: 8315386929809974925}
   constructionScaffold: {fileID: 4755920308734770668}

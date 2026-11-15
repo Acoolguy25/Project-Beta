@@ -13,5 +13,11 @@ namespace RyanAssets.Shared.Declarations {
     public interface IGridFootprint {
         /// <summary>Cells spanned on the wider side. Zero or less means "measure it from the bounds".</summary>
         int FootprintCells { get; }
+
+        /// <summary>
+        /// False for a structure that may be placed anywhere rather than on whole grid cells - a
+        /// helipad or a turret that does not join up with walls. It still may not overlap anything.
+        /// </summary>
+        bool SnapsToGrid => true;
     }
 }

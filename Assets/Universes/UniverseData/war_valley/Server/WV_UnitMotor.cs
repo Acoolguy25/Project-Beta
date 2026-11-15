@@ -145,11 +145,26 @@ namespace Universes.UniverseData.war_valley.Server {
         const float GroundProbeDistance = 900f;
         const float LookAheadSeconds = 2f;
 
+        /// <summary>Seconds to reach full speed from a hover, and to brake back to one.</summary>
+        const float AccelerationSeconds = 1.6f;
+        /// <summary>Time constant of the altitude follow; larger is smoother but slower to climb.</summary>
+        const float AltitudeSmoothTime = 0.9f;
+        /// <summary>Minimum clearance kept over anything below, as a fraction of cruise altitude.</summary>
+        const float HardFloorFraction = 0.45f;
+
         float cruiseAltitude;
         float clearanceRadius;
         int flightSurfaceMask;
+        /// <summary>Current horizontal speed. Eased so the aircraft never starts or stops in one frame.</summary>
+        float speed;
+        float verticalVelocity;
+        /// <summary>The flight altitude target, itself eased so a roof passing below is a swell, not a step.</summary>
+        float altitudeTarget;
+        bool hasAltitudeTarget;
 
         public override float ArrivalTolerance => 6f;
+
+        float Acceleration => Unit.MoveSpeed / AccelerationSeconds;
 
         public override void Initialize(WV_Unit unit) {
             base.Initialize(unit);
@@ -184,26 +199,57 @@ namespace Universes.UniverseData.war_valley.Server {
             forward.y = 0f;
             Vector3 heading = Vector3.Slerp(forward.normalized, toGoal.normalized, 0.5f).normalized;
             float distance = toGoal.magnitude;
-            float lookAhead = Mathf.Min(Unit.MoveSpeed * LookAheadSeconds, distance);
-            float altitude = GetFlightAltitude(position, heading, lookAhead);
-            Vector3 next = position + heading * Mathf.Min(Unit.MoveSpeed * Time.deltaTime, distance);
-            next.y = MoveAltitude(position.y, altitude);
 
-            // A sudden tall obstacle or a large frame must not let horizontal travel outrun the
-            // climb. Pause at its edge until the aircraft has gained the required clearance.
-            if (next.y < GetFlightAltitude(next, heading, 0f)) {
-                next.x = position.x;
-                next.z = position.z;
-            }
+            // Ease off approaching the goal so the aircraft settles onto it instead of arriving
+            // at full speed and stopping dead, then ease in and out of every leg.
+            float brakingDistance = Unit.MoveSpeed * AccelerationSeconds * 0.5f;
+            float desiredSpeed = Unit.MoveSpeed * Mathf.Clamp01(distance / Mathf.Max(0.01f, brakingDistance));
+            desiredSpeed = Mathf.Max(desiredSpeed, Unit.MoveSpeed * 0.2f);
+            speed = Mathf.MoveTowards(speed, desiredSpeed, Acceleration * Time.deltaTime);
+
+            float lookAhead = Mathf.Min(Mathf.Max(speed, Unit.MoveSpeed * 0.5f) * LookAheadSeconds, distance);
+            Vector3 next = position + heading * Mathf.Min(speed * Time.deltaTime, distance);
+            next.y = FollowAltitude(position, heading, lookAhead);
             transform.position = next;
         }
 
         public override void Stop() {
-            // Fixed-wing aircraft cannot truly hover, but holding station at altitude keeps orders
-            // readable without simulating a landing pattern the rest of the mode has no use for.
+            // Holding station at altitude keeps orders readable. The aircraft coasts to a halt along
+            // its nose rather than freezing in place, which read as a glitch on every stop.
             Vector3 position = transform.position;
-            position.y = MoveAltitude(position.y, GetFlightAltitude(position, transform.forward, 0f));
+            speed = Mathf.MoveTowards(speed, 0f, Acceleration * Time.deltaTime);
+            Vector3 forward = transform.forward;
+            forward.y = 0f;
+            if (speed > 0.01f && forward.sqrMagnitude > 0.0001f)
+                position += forward.normalized * (speed * Time.deltaTime);
+            position.y = FollowAltitude(position, forward, 0f);
             transform.position = position;
+        }
+
+        /// <summary>
+        /// Eases toward the clearance the route ahead needs. The target itself is smoothed, and the
+        /// aircraft follows it with a damped spring, so altitude flows over terrain and roofs. A
+        /// hard floor still lifts it straight away if something tall appears right under it.
+        /// </summary>
+        float FollowAltitude(Vector3 position, Vector3 heading, float lookAhead) {
+            float wanted = GetFlightAltitude(position, heading, lookAhead);
+            if (!hasAltitudeTarget) {
+                altitudeTarget = wanted;
+                hasAltitudeTarget = true;
+            }
+            // Climb targets apply quickly, descents slowly, so the aircraft never dips into a gap.
+            float rate = wanted > altitudeTarget ? 4f : 0.8f;
+            altitudeTarget = Mathf.Lerp(altitudeTarget, wanted, 1f - Mathf.Exp(-rate * Time.deltaTime));
+
+            float y = Mathf.SmoothDamp(position.y, altitudeTarget, ref verticalVelocity,
+                AltitudeSmoothTime, Unit.MoveSpeed * 1.5f, Time.deltaTime);
+
+            float floor = wanted - cruiseAltitude * (1f - HardFloorFraction);
+            if (y < floor) {
+                y = floor;
+                verticalVelocity = Mathf.Max(0f, verticalVelocity);
+            }
+            return y;
         }
 
         public override bool HasArrived(Vector3 destination) {
@@ -224,9 +270,6 @@ namespace Universes.UniverseData.war_valley.Server {
             resolved = requested;
             return true;
         }
-
-        float MoveAltitude(float current, float desired) => Mathf.MoveTowards(
-            current, desired, Unit.MoveSpeed * (desired > current ? 1f : 0.5f) * Time.deltaTime);
 
         /// <summary>Finds clearance over the full footprint and the continuous corridor ahead.</summary>
         float GetFlightAltitude(Vector3 position, Vector3 heading, float lookAhead) {

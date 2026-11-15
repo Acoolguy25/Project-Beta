@@ -30,6 +30,9 @@ namespace Universes.UniverseData.war_valley.Shared {
                  "than by the model's measured size, so a fence post can sit on the grid point two " +
                  "fence runs meet at.")]
         [SerializeField, Min(1)] int footprintCells = 1;
+        [Tooltip("Off for a structure that need not line up with walls - a helipad, a turret - so it " +
+                 "can be placed anywhere it fits instead of only on whole grid cells.")]
+        [SerializeField] bool snapToGrid = true;
         [Tooltip("Health of the finished structure. The site starts at a fraction of this.")]
         [SerializeField, Min(1)] long maxHealth = 500;
 
@@ -58,9 +61,14 @@ namespace Universes.UniverseData.war_valley.Shared {
         BoxCollider placementCollider;
 #if UNITY_SERVER
         long constructionHealthGranted;
+        /// <summary>Server clock reading of the last hit; repair waits until this is far enough behind.</summary>
+        float lastDamagedTime;
+        /// <summary>Fractional health accumulated between whole-point repairs.</summary>
+        float repairCarry;
 #endif
 
         public int FootprintCells => footprintCells;
+        public bool SnapsToGrid => snapToGrid;
         // The root collider reserves the finished structure's space throughout construction and
         // while a gate is open. Animated art and construction hoarding never move that footprint.
         public Bounds LocalPlacementBounds {
@@ -155,10 +163,16 @@ namespace Universes.UniverseData.war_valley.Shared {
             completionTime.OnChange += HandleDeadlineChanged;
             if (owned != null)
                 owned.OwnerChanged += HandleOwnerChanged;
+#if UNITY_SERVER
+            structure.Health.OnChange += HandleHealthChanged;
+#endif
             ApplyPresentation();
         }
 
         public override void OnStopNetwork() {
+#if UNITY_SERVER
+            structure.Health.OnChange -= HandleHealthChanged;
+#endif
             complete.OnChange -= HandleCompleteChanged;
             completionTime.OnChange -= HandleDeadlineChanged;
             if (owned != null)
@@ -173,8 +187,12 @@ namespace Universes.UniverseData.war_valley.Shared {
         void HandleOwnerChanged(int clientId) => ApplyTimerOwnerColor();
 
         void Update() {
-            if (complete.Value)
+            if (complete.Value) {
+#if UNITY_SERVER
+                TickRepair();
+#endif
                 return;
+            }
 
 #if UNITY_SERVER
             TickConstruction();
@@ -260,6 +278,34 @@ namespace Universes.UniverseData.war_valley.Shared {
             constructionHealthGranted = startingHealth;
             structure.Init(startingHealth, maxHealth);
             ApplyPresentation();
+        }
+
+        void HandleHealthChanged(long previous, long next, bool asServer) {
+            if (asServer && next < previous) {
+                lastDamagedTime = NetworkHelper.ServerTime;
+                repairCarry = 0f;
+            }
+        }
+
+        /// <summary>
+        /// Field repair: a finished structure left alone for <see cref="WV_Rules.StructureRepairDelaySeconds"/>
+        /// slowly regains health, which also scrubs its corrosion back off. Any hit restarts the wait,
+        /// so a building under siege never out-heals the attack; it only recovers between waves.
+        /// </summary>
+        void TickRepair() {
+            if (!IsServerStarted || structure.IsDead)
+                return;
+            long max = structure.MaxHealth.Value;
+            if (structure.Health.Value >= max
+                || NetworkHelper.ServerTime - lastDamagedTime < WV_Rules.StructureRepairDelaySeconds)
+                return;
+
+            repairCarry += max * WV_Rules.StructureRepairPerSecondFraction * Time.deltaTime;
+            if (repairCarry < 1f)
+                return;
+            long heal = System.Math.Min((long)repairCarry, max - structure.Health.Value);
+            repairCarry -= heal;
+            structure.HealHealth(heal);
         }
 
         void TickConstruction() {

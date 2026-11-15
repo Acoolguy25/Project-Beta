@@ -66,8 +66,7 @@ namespace RyanAssets.Server.ServerFeatures {
             // Instantiated first: the snap depends on the structure's footprint, which is measured
             // from the same bounds the client's preview measured, so both land on the same cells.
             GameObject clone = Object.Instantiate(structurePrefab.gameObject);
-            Vector3 snappedPosition = StructurePlacement.SnapToGrid(
-                request.position, StructurePlacement.GetFootprintCells(clone));
+            Vector3 snappedPosition = StructurePlacement.ResolvePlacement(request.position, clone);
             if (!StructurePlacement.TryFindGround(snappedPosition, out Vector3 groundPoint) ||
                 Mathf.Abs(groundPoint.y - request.position.y) > StructurePlacement.GroundProbeHeight ||
                 !StructurePlacement.TryPositionOnGround(clone, groundPoint, request.yRotation, out Bounds bounds)) {
