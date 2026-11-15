@@ -8,9 +8,12 @@
     <SpawnableOnly>true</SpawnableOnly>
     <SaveChanges>true</SaveChanges>
     <DefaultPrefabObjectsPath>Assets\DefaultPrefabObjects.asset</DefaultPrefabObjectsPath>
-    <SearchScope>0</SearchScope>
+    <SearchScope>1</SearchScope>
     <ExcludedFolders />
-    <IncludedFolders />
+    <IncludedFolders>
+      <string>Assets*</string>
+      <string>Packages*</string>
+    </IncludedFolders>
   </PrefabGenerator>
   <CodeStripping>
     <IsBuilding>false</IsBuilding>

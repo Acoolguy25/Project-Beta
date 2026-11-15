@@ -109,3 +109,8 @@ InitTestScene*.unity*
 Releases/
 Builds/
 Assets/FishNet
+# Build output and downloaded native libraries never go in git
+/[Rr]eleases/
+/[Aa]ssets/StreamingAssets/LlamaLib-*
+Packages/*/bin/
+Packages/*/obj/
