@@ -25,7 +25,7 @@ Tools/CloudEnv/local-multiplayer.sh stop
 ### With UnityBackend
 
 ```bash
-sudo INSTALL_BACKEND=1 Tools/CloudEnv/setup.sh   # clones https://github.com/Acoolguy25/UnityBackend.git to ../UnityBackend if missing
+sudo INSTALL_BACKEND=1 Tools/CloudEnv/setup.sh   # clones https://github.com/Acoolguy25/UnityBackend.git to ../UnityBackend if missing, pip install -e .[dev]
 BACKEND=1 Tools/CloudEnv/local-multiplayer.sh    # backend + server + client; the client joins through the backend
 BACKEND=1 Tools/CloudEnv/local-multiplayer.sh stop
 ```
@@ -34,24 +34,17 @@ With `BACKEND=1` the Editors run with `PROJECT_BETA_DIRECT_CONNECTION=0`, which 
 `editor_direct_connection` in `LocalNetworkConfig.asset` for that process only (Editor-only code in
 `NetworkSettings.cs`; `1` forces direct connection, unset uses the asset). So:
 
-- `backend.sh` starts UnityBackend the same way its `run.sh` does (`python -m net`) but forces its
-  **debug** mode, which it normally only picks on a machine whose hostname contains "ryan". Prod
-  mode would demand real Unity player tokens and try to launch `LinuxServer` builds. In debug mode it
-  listens on `127.0.0.1:8212`, which `LocalNetworkConfig`/`ServerNetworkConfig` already point at,
-  and hands every player the server Editor as `unity-test-server` on port 20000.
-- It runs from `~/.cache/project-beta-backend` with a copy of `game.db`, so the UnityBackend checkout
-  stays clean (`BACKEND_RESET=1` re-copies the database). It writes
-  `LinuxServer/application.json` there from the Linux Server profile's `bundleVersion` unless the
-  checkout has one from a server build.
+- `backend.sh` runs `unitybackend serve` with `UNITYBACKEND_MODE=debug`: it listens on
+  `127.0.0.1:8212`, which `LocalNetworkConfig`/`ServerNetworkConfig` already point at, takes the
+  player id as the bearer token, skips the client version check, and hands every player the server
+  Editor as `unity-test-server` on port 20000.
+- Its database and config live in `~/.cache/project-beta-backend`, so the UnityBackend checkout
+  stays clean (`BACKEND_RESET=1` starts from an empty database). It adds `BACKEND_UNIVERSES`
+  (default `war_valley`) with `unitybackend universe add`.
 - The server Editor registers with the backend over its websocket. The client logs in (`no_login`),
   and the main menu's EasyDebug `DebugPlayGame` asks the backend to play `war_valley`; the backend
   hands back `unity-test-server` on `127.0.0.1:20000`, and the server adds the player through the
-  backend's internal API. The checkout's `game.db` has no `war_valley` row, so `backend.sh` adds
-  `BACKEND_UNIVERSES` (default `war_valley`) to its local copy.
-- UnityBackend's `requirements.txt` isn't pinned. FastAPI 0.145 removed the `**extra` arguments the
-  backend passes from `root.toml` (`docs = ""`), so a fresh install fails with "unexpected keyword
-  argument 'docs'". `setup.sh` installs with `backend-constraints.txt` (`fastapi<0.145`). A fresh
-  install on the VPS would hit the same error.
+  backend's internal API.
 
 To use it as the cloud environment's setup script, set the script to:
 
@@ -123,6 +116,9 @@ message instead of hanging on that dialog.
 - The **server** is the ParrelSync clone `../Project-Beta_clone_0` (created with ParrelSync's own
   `ClonesManager.CreateCloneFromCurrent`, argument `server`), switched to the
   `Linux Server` build profile (so `UNITY_SERVER` is defined) and playing `Assets/Scenes/ServerInit.unity`.
+- ParrelSync copies `Packages/` into a clone instead of linking it, so embedded packages added later
+  (the `com.ryan.*` ones) would be missing there. `local-multiplayer.sh` replaces the clone's copy
+  with a link to the main project's `Packages/`.
 - The **client** is the main project, in the `Windows` build profile, playing `Assets/Scenes/MainMenu.unity`.
 - Each Editor runs on its own Xvfb display (`:91` server, `:92` client) so screenshots are separate.
   Logs and screenshots go to `Logs/local-multiplayer/` (ignored by git).
@@ -158,7 +154,7 @@ before committing: `git checkout -- Packages ProjectSettings/Packages`.
   `Socket.OSSupportsIPv6 = true`. LiteNetLib crashed creating its IPv6 socket (`NetManager.Socket.cs`
   now falls back to IPv4), and every `HttpClient` request failed with "An address incompatible with
   the requested protocol was used" because `SocketsHttpHandler` always opens a dual-stack socket.
-  `Assets/RyanAssets/NetworkService/IPv6Support.cs` checks once at startup and, if an IPv6 socket
+  `Packages/com.ryan.core/Runtime/NetworkService/IPv6Support.cs` checks once at startup and, if an IPv6 socket
   can't be created, clears Mono's cached flag so requests go over IPv4. (Mono ignores the
   `DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER` switch, so there's no environment-only fix.)
 

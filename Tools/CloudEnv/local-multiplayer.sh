@@ -64,6 +64,16 @@ cmd_import() {
   touch "$PROJECT_DIR/Library/.cloudenv-imported"
 }
 
+link_clone_packages() {
+  # ParrelSync links Assets and ProjectSettings into the clone but copies Packages, so embedded
+  # packages added on main later (com.ryan.*) are missing from the clone and the server Editor
+  # fails to compile. Link Packages too, so the clone always matches the main project.
+  [[ -L "$CLONE_DIR/Packages" ]] && return
+  log "linking the clone's Packages to $PROJECT_DIR/Packages"
+  rm -rf "$CLONE_DIR/Packages"
+  ln -s "$PROJECT_DIR/Packages" "$CLONE_DIR/Packages"
+}
+
 cmd_clone() {
   if [[ -f "$CLONE_DIR/.clone" ]]; then
     log "ParrelSync clone exists: $CLONE_DIR"
@@ -78,6 +88,7 @@ cmd_clone() {
     rm -rf "$CLONE_DIR/Packages"
     ln -s "$PROJECT_DIR/Packages" "$CLONE_DIR/Packages"
   fi
+  link_clone_packages
   # ClonesManager.GetArgument() reads this; EditorPlayerIdSpoof uses it as the player id.
   printf 'server' >"$CLONE_DIR/.parrelsyncarg"
   # Switch the clone's own Library to the Linux Server profile once, in batchmode.
@@ -140,6 +151,7 @@ wait_ready() { # project name
 cmd_start() {
   check_terms
   [[ -f "$CLONE_DIR/.clone" ]] || cmd_clone
+  link_clone_packages
   [[ "$BACKEND" == 1 ]] && "$BACKEND_SH" start
   start_display "$SERVER_DISPLAY"; start_display "$CLIENT_DISPLAY"
   start_editor "$SERVER_DISPLAY" "$CLONE_DIR" server -activeBuildProfile "$SERVER_PROFILE"

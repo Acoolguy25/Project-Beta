@@ -226,19 +226,18 @@ if [[ "$INSTALL_BACKEND" == 1 ]]; then
   if [[ -z "${BACKEND_DIR:-}" ]]; then
     case "$PROJECT_DIR" in ""|/tmp/*) BACKEND_DIR=/home/user/UnityBackend ;; *) BACKEND_DIR="$(dirname "$PROJECT_DIR")/UnityBackend" ;; esac
   fi
-  if [[ ! -f "$BACKEND_DIR/requirements.txt" && ! -f "$BACKEND_DIR/pyproject.toml" ]]; then
+  if [[ -d "$BACKEND_DIR/.git" && ! -f "$BACKEND_DIR/pyproject.toml" ]]; then
+    log "Updating the old UnityBackend checkout in $BACKEND_DIR (needs the pyproject.toml layout)"
+    git -C "$BACKEND_DIR" pull -q --ff-only
+  elif [[ ! -d "$BACKEND_DIR" ]]; then
     log "Cloning UnityBackend into $BACKEND_DIR"
     git clone -q "$BACKEND_REPO" "$BACKEND_DIR"
   fi
+  [[ -f "$BACKEND_DIR/pyproject.toml" ]] || die "$BACKEND_DIR has no pyproject.toml"
   log "Setting up UnityBackend venv in $BACKEND_DIR/.venv"
   [[ -x "$BACKEND_DIR/.venv/bin/python" ]] || python3 -m venv "$BACKEND_DIR/.venv"
   "$BACKEND_DIR/.venv/bin/pip" install -q --upgrade pip
-  constraints="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/backend-constraints.txt"
-  if [[ -f "$BACKEND_DIR/pyproject.toml" ]]; then
-    "$BACKEND_DIR/.venv/bin/pip" install -q -e "$BACKEND_DIR[dev]" -c "$constraints"
-  else
-    "$BACKEND_DIR/.venv/bin/pip" install -q -r "$BACKEND_DIR/requirements.txt" -c "$constraints"
-  fi
+  "$BACKEND_DIR/.venv/bin/pip" install -q -e "$BACKEND_DIR[dev]"
   echo "export BACKEND_DIR=\"$BACKEND_DIR\"" >>/etc/profile.d/project-beta-unity.sh
 fi
 
