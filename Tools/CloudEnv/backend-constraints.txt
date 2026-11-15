@@ -1,0 +1,4 @@
+# Applied on top of UnityBackend's unpinned requirements.txt by setup.sh (INSTALL_BACKEND=1).
+# FastAPI 0.145.0 dropped FastAPI(**extra); UnityBackend passes keys like `docs` from root.toml,
+# so newer FastAPI fails at startup with "unexpected keyword argument 'docs'".
+fastapi<0.145

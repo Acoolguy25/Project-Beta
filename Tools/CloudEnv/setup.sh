@@ -9,7 +9,7 @@
 #   3. The Linux Dedicated Server build-support module (the server role uses the Linux Server
 #      build profile, which needs it).
 #   4. The Unity CLI (https://unity.com/install.sh), used for licensing and to drive Editors.
-#   5. Optionally (INSTALL_BACKEND=1) a Python venv for the UnityBackend repo.
+#   5. Optionally (INSTALL_BACKEND=1) the UnityBackend repo and its Python venv.
 #
 # ParrelSync itself is a UPM git dependency already in Packages/manifest.json
 # (https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync), so Unity's package manager
@@ -24,8 +24,9 @@
 #   UNITY_VERSION       override (default: m_EditorVersion from ProjectVersion.txt)
 #   UNITY_CHANGESET     override (default: revision from m_EditorVersionWithRevision)
 #   UNITY_INSTALL_ROOT  default /opt/unity/editors  -> $UNITY_INSTALL_ROOT/<version>/Editor/Unity
-#   INSTALL_BACKEND     1 to also set up UnityBackend's Python venv (default 0)
-#   BACKEND_DIR         UnityBackend checkout (default: auto-detect)
+#   INSTALL_BACKEND     1 to also clone UnityBackend (if missing) and set up its Python venv (default 0)
+#   BACKEND_DIR         UnityBackend checkout (default: next to the project, ../UnityBackend)
+#   BACKEND_REPO        git URL used when BACKEND_DIR has no checkout
 #   SKIP_UNITY_CLI      1 to skip installing the Unity CLI
 set -euo pipefail
 
@@ -37,6 +38,7 @@ die() { printf '[setup] ERROR: %s\n' "$*" >&2; exit 1; }
 UNITY_INSTALL_ROOT="${UNITY_INSTALL_ROOT:-/opt/unity/editors}"
 PROJECT_REPO="${PROJECT_REPO:-https://github.com/Acoolguy25/Project-Beta.git}"
 INSTALL_BACKEND="${INSTALL_BACKEND:-0}"
+BACKEND_REPO="${BACKEND_REPO:-https://github.com/Acoolguy25/UnityBackend.git}"
 UNITY_CDN="https://download.unity3d.com/download_unity"
 
 # ---------------------------------------------------------------- locate project + version
@@ -203,7 +205,7 @@ if [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.git" && "${SKIP_LFS:-0}" != 1 ]]; t
   fi
   if [[ "${LFS_TRIM_CACHE:-1}" == 1 ]] && ! git -C "$PROJECT_DIR" lfs ls-files | grep -qE '^[0-9a-f]+ - '; then
     lfs_dir="$(git -C "$PROJECT_DIR" rev-parse --path-format=absolute --git-common-dir)/lfs/objects"
-    [[ -d "$lfs_dir" ]] && { log "Trimming LFS object cache ($(du -sh "$lfs_dir" | cut -f1))"; rm -rf "$lfs_dir"; }
+    [[ -d "$lfs_dir" ]] && { log "Trimming LFS object cache ($(du -sh "$lfs_dir" | cut -f1))"; rm -rf "$lfs_dir" || log "warning: could not fully trim $lfs_dir (a git process may be using it)"; }
   fi
 fi
 
@@ -214,18 +216,30 @@ export UNITY_CHANGESET="$UNITY_CHANGESET"
 export UNITY_EDITOR="$UNITY_BIN"
 export UNITY_NO_CONSENT_PROMPT=1
 export UNITY_NO_AGENT_HINTS=1
+# Use the Editor's bundled licensing client, so the CLI doesn't need to download one from
+# public-stevedore.unity3d.com (blocked on some networks: "Can't reach the Unity licensing client").
+export UNITY_CLI_INTERNAL_LICENSING_CLIENT_PATH="$(dirname "$UNITY_BIN")/Data/Resources/Licensing/Client/Unity.Licensing.Client"
 EOF
 
 # ---------------------------------------------------------------- optional: UnityBackend
 if [[ "$INSTALL_BACKEND" == 1 ]]; then
-  for d in "${BACKEND_DIR:-}" "$(dirname "${PROJECT_DIR:-/home/user/x}")/UnityBackend" /home/user/UnityBackend; do
-    [[ -n "$d" && -f "$d/requirements.txt" ]] && { BACKEND_DIR="$d"; break; }
-  done
-  [[ -n "${BACKEND_DIR:-}" && -f "$BACKEND_DIR/requirements.txt" ]] || die "INSTALL_BACKEND=1 but no UnityBackend checkout found"
+  if [[ -z "${BACKEND_DIR:-}" ]]; then
+    case "$PROJECT_DIR" in ""|/tmp/*) BACKEND_DIR=/home/user/UnityBackend ;; *) BACKEND_DIR="$(dirname "$PROJECT_DIR")/UnityBackend" ;; esac
+  fi
+  if [[ ! -f "$BACKEND_DIR/requirements.txt" && ! -f "$BACKEND_DIR/pyproject.toml" ]]; then
+    log "Cloning UnityBackend into $BACKEND_DIR"
+    git clone -q "$BACKEND_REPO" "$BACKEND_DIR"
+  fi
   log "Setting up UnityBackend venv in $BACKEND_DIR/.venv"
-  python3 -m venv "$BACKEND_DIR/.venv"
+  [[ -x "$BACKEND_DIR/.venv/bin/python" ]] || python3 -m venv "$BACKEND_DIR/.venv"
   "$BACKEND_DIR/.venv/bin/pip" install -q --upgrade pip
-  "$BACKEND_DIR/.venv/bin/pip" install -q -r "$BACKEND_DIR/requirements.txt"
+  constraints="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/backend-constraints.txt"
+  if [[ -f "$BACKEND_DIR/pyproject.toml" ]]; then
+    "$BACKEND_DIR/.venv/bin/pip" install -q -e "$BACKEND_DIR[dev]" -c "$constraints"
+  else
+    "$BACKEND_DIR/.venv/bin/pip" install -q -r "$BACKEND_DIR/requirements.txt" -c "$constraints"
+  fi
+  echo "export BACKEND_DIR=\"$BACKEND_DIR\"" >>/etc/profile.d/project-beta-unity.sh
 fi
 
 log "Done. Editor: $UNITY_BIN"
