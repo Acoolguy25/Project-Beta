@@ -57,6 +57,8 @@ namespace Universes.UniverseData.dot_invaders {
         // intelligent team plans a route, so smart NPCs walk around turrets.
         const float NpcTurretAvoidance = 2.5f;
         // Speed base configuration
+        const string BasesColumn = "Bases";
+        const string TroopsColumn = "Troops";
         const int SpeedBaseCount = 4; // Number of speed bases on the map
 
         [SerializeField, Min(30)] int matchDurationSeconds = 300;
@@ -64,6 +66,8 @@ namespace Universes.UniverseData.dot_invaders {
         [SerializeField, Range(3, 8)] int nearbyPathsPerBase = 6;
         [SerializeField, Min(12f)] float maximumLocalPathLength = 65f;
         [SerializeField, Range(0.1f, 1f)] float npcSuperLaunchCapacityFraction = 0.85f;
+        // Pause after a match ends before the base class resets and starts the next round.
+        [SerializeField, Range(3, 60)] int intermissionSeconds = 8;
 
         sealed class BaseState {
             public Vector2 position;
@@ -157,6 +161,9 @@ namespace Universes.UniverseData.dot_invaders {
 
         protected override async UniTask StartAsync(System.Threading.CancellationToken token) {
             await base.StartAsync(token);
+            // Reset clears the leaderboard each round, so columns are re-enabled here.
+            SetLeaderboardEnabled(BasesColumn, true);
+            SetLeaderboardEnabled(TroopsColumn, true);
             InitializeMatch();
 
             while (matchInProgress && secondsRemaining > 0) {
@@ -170,8 +177,11 @@ namespace Universes.UniverseData.dot_invaders {
                 CompleteMatch(DetermineLeadingTeam());
 
             BroadcastState();
-            UpdateTopMessage();
-            await UniTask.Delay(TimeSpan.FromSeconds(8), cancellationToken: token);
+            // Intermission: the base class restarts the round (waiting for players) once this returns.
+            for (int remaining = intermissionSeconds; remaining > 0; remaining--) {
+                SetTopMessage($"{TopMessageText()} Next match in {remaining}s");
+                await UniTask.Delay(TimeSpan.FromSeconds(1), cancellationToken: token);
+            }
         }
 
         protected override void OnPlayerAdded(PlayerData playerData) {

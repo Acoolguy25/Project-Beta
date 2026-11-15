@@ -8,6 +8,7 @@ using RyanAssets.DataService;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Global;
 using RyanAssets.Shared.Requests;
 using UnityEngine;
 
@@ -134,26 +135,56 @@ namespace Universes.UniverseData.dot_invaders {
             return npc ? $"{name} NPC TEAM" : $"{name} TEAM";
         }
 
-        void UpdateTopMessage() {
+        void UpdateTopMessage() => SetTopMessage(TopMessageText());
+
+        string TopMessageText() {
             if (matchInProgress) {
                 int minutes = Mathf.Max(0, secondsRemaining) / 60;
                 int seconds = Mathf.Max(0, secondsRemaining) % 60;
-                SetTopMessage($"Dot Invaders - {minutes}:{seconds:00}");
-                return;
+                return $"Dot Invaders - {minutes}:{seconds:00}";
             }
 
             if (winningTeamId < 0)
-                SetTopMessage("Dot Invaders - Draw");
-            else if (winningTeamId >= NpcTeamIdStart)
-                SetTopMessage($"{GetDotInvadersTeamName(winningTeamId, true)} wins!");
-            else
-                SetTopMessage($"{GetDotInvadersTeamName(winningTeamId, false)} wins! +{WinnerXPReward} XP / +{WinnerGoldReward} gold");
+                return "Dot Invaders - Draw";
+            if (winningTeamId >= NpcTeamIdStart)
+                return $"{GetDotInvadersTeamName(winningTeamId, true)} wins!";
+            return $"{GetDotInvadersTeamName(winningTeamId, false)} wins! +{WinnerXPReward} XP / +{WinnerGoldReward} gold";
+        }
+
+        // Leaderboard hook: each player's team standing (bases held and troops stationed in them).
+        void UpdateLeaderboard() {
+            int basesIndex = SharedGlobalEvents.GetLeaderboardIndex(BasesColumn);
+            int troopsIndex = SharedGlobalEvents.GetLeaderboardIndex(TroopsColumn);
+            if (basesIndex < 0 && troopsIndex < 0)
+                return;
+
+            foreach (PlayerData player in PlayerData.Players.Values) {
+                int baseTotal = 0;
+                int troopTotal = 0;
+                if (player.Owner.IsValid && playerTeams.TryGetValue(player.Owner.ClientId, out int teamId)) {
+                    for (int i = 0; i < bases.Count; i++) {
+                        if (bases[i].teamId != teamId)
+                            continue;
+                        baseTotal++;
+                        troopTotal += bases[i].troops;
+                    }
+                }
+
+                SetLeaderboardValue(player, basesIndex, baseTotal);
+                SetLeaderboardValue(player, troopsIndex, troopTotal);
+            }
+        }
+
+        static void SetLeaderboardValue(PlayerData player, int index, int value) {
+            if (index >= 0 && index < player.leaderboard.Count && player.leaderboard[index] != value)
+                player.leaderboard[index] = value;
         }
 
         void BroadcastState() {
             if (!initialized || !InstanceFinder.IsServerStarted)
                 return;
 
+            UpdateLeaderboard();
             DI_StateBroadcast state = CreateState();
             foreach (NetworkConnection connection in InstanceFinder.ServerManager.Clients.Values) {
                 if (!connection.IsActive || !connection.IsAuthenticated)
