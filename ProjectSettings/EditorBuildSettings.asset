@@ -32,6 +32,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Universes/UniverseData/obby/obby_start.unity
     guid: 8721ca5aeabdf97d2a48338f39a9e09f
+  - enabled: 1
+    path: Assets/Universes/UniverseData/tycoon/tycoon_start.unity
+    guid: 1b5966836f8c24cddba9b4b5e00f4fdc
+  - enabled: 1
+    path: Assets/Universes/UniverseData/tower_defense/tower_defense_start.unity
+    guid: 1c9e474d029366b1b8be2c9a9a8761eb
+  - enabled: 1
+    path: Assets/Universes/UniverseData/hide_and_seek/hide_and_seek_start.unity
+    guid: 4c4742d780f1c74fda91c6c5ab9b9601
+  - enabled: 1
+    path: Assets/Universes/UniverseData/capture_the_flag/capture_the_flag_start.unity
+    guid: fd4be6c441125278d9097aaa1c380449
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings: {fileID: 11400000, guid: bee50ad3dad20d7419a6ba40ca5d2baf, type: 2}

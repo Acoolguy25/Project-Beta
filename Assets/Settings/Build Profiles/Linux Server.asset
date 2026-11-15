@@ -73,6 +73,30 @@ MonoBehaviour:
   - m_enabled: 1
     m_path: Assets/Universes/UniverseData/obby/obby_server.unity
     m_guid: a8b14846f3b19be1da973d2772b99cd5
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/tycoon/tycoon_start.unity
+    m_guid: 1b5966836f8c24cddba9b4b5e00f4fdc
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/tower_defense/tower_defense_start.unity
+    m_guid: 1c9e474d029366b1b8be2c9a9a8761eb
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/hide_and_seek/hide_and_seek_start.unity
+    m_guid: 4c4742d780f1c74fda91c6c5ab9b9601
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/capture_the_flag/capture_the_flag_start.unity
+    m_guid: fd4be6c441125278d9097aaa1c380449
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/tower_defense/tower_defense_server.unity
+    m_guid: c9f9a4e33b0a6daa59f80e501b1e0e7c
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/tycoon/tycoon_server.unity
+    m_guid: 50677cdaf1a3eb69398b610791851815
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/hide_and_seek/hide_and_seek_server.unity
+    m_guid: f569c2b2a9318b385b53c725f6ec572a
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/capture_the_flag/capture_the_flag_server.unity
+    m_guid: 2e0147b7db599793baf78df1394f5fd2
   m_HasScriptingDefines: 0
   m_ScriptingDefines: []
   m_PlayerSettingsYaml:

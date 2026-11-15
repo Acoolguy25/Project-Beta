@@ -74,6 +74,34 @@ namespace Universes {
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
             },
+            new(){
+                id = "tycoon",
+                title = "Brick Tycoon",
+                description = "Claim a plot, buy droppers and upgraders, collect your cash and rebirth for a permanent multiplier.",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
+            },
+            new(){
+                id = "tower_defense",
+                title = "Tower Defense",
+                description = "Team up and build gunners, cannons, frost and sniper towers to stop 20 waves of tanks and choppers.",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
+            },
+            new(){
+                id = "hide_and_seek",
+                title = "Hide and Seek",
+                description = "Hide in the facility before the seekers open their eyes. Get found and you join the hunt.",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
+            },
+            new(){
+                id = "capture_the_flag",
+                title = "Flag Wars",
+                description = "Red vs blue with pistols and daggers. Steal the enemy flag and bring it home. First to 3 wins.",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
+            },
         };
         public static UniverseStruct GetUniverseFromId(string id) => UniverseRegistry.GetUniverseFromId(id);
     }
