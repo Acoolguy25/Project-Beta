@@ -1,0 +1,33 @@
+{
+    "name": "Universes.UniverseData.capture_the_flag.Server",
+    "rootNamespace": "Universes.UniverseData.capture_the_flag.Server",
+    "references": [
+        "Universes.UniverseData.capture_the_flag.Shared",
+        "RyanAssets.Rounds",
+        "RyanAssets.Shared.Global",
+        "RyanAssets.Shared.Component",
+        "FishNet.Runtime",
+        "RyanAssets.Levels.Server",
+        "RyanAssets.Server.ServerCore",
+        "RyanAssets.Server.ServerFeatures",
+        "RyanAssets.Characters.Server",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.DataService",
+        "RyanAssets.Shared.Declarations",
+        "RyanAssets.Shared.Requests",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "RyanAssets.Core",
+        "RyanAssets.Tools.Shared"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,19 @@
+{
+    "name": "Universes.UniverseData.capture_the_flag.Editor",
+    "references": [
+        "Universes.UniverseData.capture_the_flag.Shared",
+        "Universes.UniverseData.capture_the_flag.Client",
+        "Universes.UniverseData.capture_the_flag.Server",
+        "RyanAssets.Authoring",
+        "RyanAssets.Rounds",
+        "RyanAssets.Platformer",
+        "RyanAssets.Server.ServerFeatures",
+        "RyanAssets.Core",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}

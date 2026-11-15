@@ -1,0 +1,11 @@
+{
+    "name": "Universes.UniverseData.capture_the_flag.Shared",
+    "rootNamespace": "Universes.UniverseData.capture_the_flag",
+    "references": [
+        "FishNet.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Rounds",
+        "Unity.TextMeshPro"
+    ],
+    "autoReferenced": true
+}

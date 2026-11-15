@@ -1,0 +1,27 @@
+{
+    "name": "Universes.UniverseData.capture_the_flag.Client",
+    "rootNamespace": "Universes.UniverseData.capture_the_flag.Client",
+    "references": [
+        "Universes.UniverseData.capture_the_flag.Shared",
+        "RyanAssets.Rounds",
+        "RyanAssets.Core",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Characters.Client",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui",
+        "RyanAssets.Input"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
