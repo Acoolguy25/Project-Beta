@@ -35,6 +35,8 @@ namespace Universes.UniverseData.obby.Client {
             OB_StageKind.Spinner => "Sweeper",
             OB_StageKind.LavaRun => "Lava Stones",
             OB_StageKind.Boost => "Boost Gap",
+            OB_StageKind.WallWalk => "Wall Walk",
+            OB_StageKind.CeilingRun => "Ceiling Run",
             _ => kind.ToString()
         };
 
@@ -50,6 +52,8 @@ namespace Universes.UniverseData.obby.Client {
             OB_StageKind.Spinner => "Jump over the sweeping lava bar.",
             OB_StageKind.LavaRun => "Hop across the stones. Lava sends you back.",
             OB_StageKind.Boost => "Run over the boost pad to fly across the gap.",
+            OB_StageKind.WallWalk => "Step into the glowing field and gravity pulls you onto the wall. Run along it!",
+            OB_StageKind.CeilingRun => "Gravity flips upside down here. Run along the ceiling and jump the lava.",
             _ => ""
         };
 

@@ -83,5 +83,51 @@ namespace Universes.UniverseData.obby.Tests {
                 Assert.AreEqual(c.StageCount, c.pieces.Count(p => p.kind == OB_PieceKind.Coin));
             }
         }
+
+        /// <summary>
+        /// A field that turns gravity must end flush against a solid surface in its gravity direction,
+        /// so a player pulled across it lands on something instead of falling straight through.
+        /// </summary>
+        [Test] public void DirectionalGravityFieldsEndOnASurface() {
+            int fields = 0;
+            for (int seed = 1; seed <= 150; seed++) {
+                var c = Make(seed);
+                foreach (var zone in c.pieces.Where(p => p.kind == OB_PieceKind.GravityZone && p.vector != Vector3.zero)) {
+                    fields++;
+                    Quaternion toLocal = Quaternion.Inverse(Quaternion.Euler(0f, zone.yaw, 0f));
+                    Vector3 down = toLocal * zone.vector;
+                    int axis = Mathf.Abs(down.x) > 0.99f ? 0 : Mathf.Abs(down.y) > 0.99f ? 1 : 2;
+                    Assert.Greater(Mathf.Abs(down[axis]), 0.99f, $"seed {seed}: field direction is not along a box axis");
+                    float sign = Mathf.Sign(down[axis]);
+                    float face = sign * zone.size[axis] * 0.5f;
+
+                    bool supported = c.pieces.Any(p => {
+                        if (p.kind != OB_PieceKind.Platform || p.stage != zone.stage) return false;
+                        Vector3 centre = toLocal * (p.position - zone.position);
+                        if (Mathf.Abs(centre[axis] - sign * p.size[axis] * 0.5f - face) > 0.01f) return false;
+                        for (int other = 0; other < 3; other++) {
+                            if (other == axis) continue;
+                            float overlap = Mathf.Min(centre[other] + p.size[other] * 0.5f, zone.size[other] * 0.5f)
+                                - Mathf.Max(centre[other] - p.size[other] * 0.5f, -zone.size[other] * 0.5f);
+                            if (overlap < 1f) return false;
+                        }
+                        return true;
+                    });
+                    Assert.IsTrue(supported, $"seed {seed} stage {zone.stage}: nothing to stand on at the end of the gravity field");
+                }
+            }
+            Assert.Greater(fields, 50);
+        }
+
+        [Test] public void GravityStageCoinsSitInsideTheirField() {
+            for (int seed = 1; seed <= 150; seed++) {
+                var c = Make(seed);
+                foreach (var stage in c.stages.Where(s => s.kind is OB_StageKind.WallWalk or OB_StageKind.CeilingRun)) {
+                    var zone = c.pieces.Single(p => p.stage == stage.index && p.kind == OB_PieceKind.GravityZone);
+                    Vector3 local = Quaternion.Inverse(Quaternion.Euler(0f, zone.yaw, 0f)) * (stage.coin - zone.position);
+                    Assert.IsTrue(new Bounds(Vector3.zero, zone.size).Contains(local), $"seed {seed} stage {stage.index}: coin outside the field");
+                }
+            }
+        }
     }
 }

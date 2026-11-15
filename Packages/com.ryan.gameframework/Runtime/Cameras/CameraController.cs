@@ -91,9 +91,8 @@ namespace RyanAssets.Cameras
                 return; // we are being destroyed
             if (target)
                 Assert.IsNotNull(target.CharacterCamera, $"Target {target.name} does not have a valid CharacterCamera");
-            foreach (var cinemachine in GetComponentsInChildren<CinemachineCamera>(true)) {
-                cinemachine.LookAt = cinemachine.Follow = target?.CharacterCamera;
-            }
+            foreach (var mode in GetComponentsInChildren<ICamera>(true))
+                mode.SetTarget(target);
             if (targetCharacter)
                 OnCameraTargetRemoved?.Invoke(targetCharacter);
             targetCharacter = target;

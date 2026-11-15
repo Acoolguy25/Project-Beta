@@ -37,7 +37,8 @@ namespace RyanAssets.Platformer {
             if (Time.time < nextLaunch || !LocalBody.TryGet(other, out CharacterMovement movement)) return;
             Vector3 velocity = WorldLaunchVelocity;
             // A character already rising fast from this pad must not be relaunched every step.
-            if (velocity.y > 0f && movement.Body.linearVelocity.y > velocity.y * 0.5f) return;
+            float launchRise = Vector3.Dot(velocity, movement.Up);
+            if (launchRise > 0f && Vector3.Dot(movement.Body.linearVelocity, movement.Up) > launchRise * 0.5f) return;
             nextLaunch = Time.time + cooldown;
             movement.Launch(velocity);
             stretchUntil = Time.time + StretchSeconds;

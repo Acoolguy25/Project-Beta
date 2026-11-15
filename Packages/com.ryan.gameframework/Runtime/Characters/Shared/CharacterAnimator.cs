@@ -115,8 +115,8 @@ namespace RyanAssets.Characters.Shared
             hasPreviousPosition = true;
             if (_groundPhysics != null)
                 velocity -= _groundPhysics.InheritedGroundVelocity;
-            velocity.y = 0f; // Vertical movement does not drive locomotion animation.
-            return velocity;
+            // Movement along the character's up (jumps, falls) does not drive locomotion animation.
+            return Vector3.ProjectOnPlane(velocity, transform.up);
         }
     }
 }

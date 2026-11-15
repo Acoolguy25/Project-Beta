@@ -236,8 +236,8 @@ namespace Universes.UniverseData.obby.Server {
                     }
                 }
 
-                bounds.Expand(HazardSkin);
-                if (PlatformerQuery.Overlap(scene, bounds, hazards) > 0) {
+                PlatformerQuery.GetBox(body, HazardSkin, out Vector3 boxCenter, out Vector3 halfExtents, out Quaternion orientation);
+                if (PlatformerQuery.Overlap(scene, boxCenter, halfExtents, orientation, hazards) > 0) {
                     SendBack(character, runner, OB_ProgressReason.Hazard);
                     continue;
                 }

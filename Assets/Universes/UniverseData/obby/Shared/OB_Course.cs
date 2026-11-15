@@ -32,6 +32,8 @@ namespace Universes.UniverseData.obby {
         [Tooltip("Beat block materials per group: solid then ghost.")]
         public Material beatSolidA, beatGhostA, beatSolidB, beatGhostB;
         [Min(0.1f)] public float tileMetres = 2f;
+        [Tooltip("Tint for gravity fields that turn gravity (strength-only fields keep their material colour).")]
+        public Color directionalFieldTint = new(0.3f, 0.85f, 1f, 0.09f);
         [Tooltip("Client-only HUD and course presentation.")]
         public GameObject clientPrefab;
 
@@ -39,6 +41,7 @@ namespace Universes.UniverseData.obby {
         Transform root;
         MaterialPropertyBlock tiling;
         static readonly int BaseMapST = Shader.PropertyToID("_BaseMap_ST");
+        static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
 
         public OB_CourseLayout Layout { get; private set; }
         /// <summary>Spawned objects, index-aligned with <see cref="OB_CourseLayout.pieces"/>.</summary>
@@ -133,9 +136,16 @@ namespace Universes.UniverseData.obby {
                 case OB_PieceKind.Boost:
                     go.GetComponentInChildren<LaunchPad>().Configure(piece.vector);
                     break;
-                case OB_PieceKind.GravityZone:
-                    go.GetComponentInChildren<GravityZone>().Configure(piece.speed);
+                case OB_PieceKind.GravityZone: {
+                    var zone = go.GetComponentInChildren<GravityZone>();
+                    if (piece.vector == Vector3.zero) {
+                        zone.Configure(piece.speed);
+                    } else {
+                        zone.Configure(piece.vector, piece.speed);
+                        Tint(go, directionalFieldTint);
+                    }
                     break;
+                }
                 case OB_PieceKind.Conveyor:
                     go.GetComponentInChildren<ConveyorSurface>().Configure(Vector3.forward, piece.speed);
                     break;
@@ -162,6 +172,17 @@ namespace Universes.UniverseData.obby {
             if (piece.kind == OB_PieceKind.Crumble)
                 go.GetComponentInChildren<CrumbleBlock>().Configure(piece.speed, piece.period);
             return go;
+        }
+
+        void Tint(GameObject go, Color color) {
+#if !UNITY_SERVER
+            tiling ??= new MaterialPropertyBlock();
+            foreach (var r in go.GetComponentsInChildren<Renderer>()) {
+                r.GetPropertyBlock(tiling);
+                tiling.SetColor(BaseColor, color);
+                r.SetPropertyBlock(tiling);
+            }
+#endif
         }
 
         /// <summary>Keeps the tile texture at a constant world size on scaled boxes.</summary>

@@ -9,7 +9,11 @@ namespace Universes.UniverseData.obby {
         Crumble, Beat, WallJumpWall, Mover, SpinnerBar, SpinnerCross, Coin
     }
 
-    public enum OB_StageKind : byte { Hops, Springs, MoonLeap, Conveyors, Crumble, Beat, WallJump, Movers, Spinner, LavaRun, Boost }
+    public enum OB_StageKind : byte {
+        Hops, Springs, MoonLeap, Conveyors, Crumble, Beat, WallJump, Movers, Spinner, LavaRun, Boost,
+        // Added later: keep new kinds at the end so existing values (sent over the network) stay stable.
+        WallWalk, CeilingRun
+    }
 
     /// <summary>One placed course piece. Field meaning per kind is documented on <see cref="OB_CourseGenerator"/>.</summary>
     [Serializable]
@@ -35,8 +39,12 @@ namespace Universes.UniverseData.obby {
         public float gravity;
         [Tooltip("Matches CharacterMovement.ExternalAirDamping; used to size boost gaps.")]
         public float airMomentumDamping;
+        [Tooltip("Height of the character's collider; gravity stages size their clearances from it.")]
+        public float bodyHeight;
 
-        public static OB_Movement Default => new() { walkSpeed = 10f, jumpHeight = 2.6f, gravity = 30f, airMomentumDamping = 0.6f };
+        public static OB_Movement Default => new() {
+            walkSpeed = 10f, jumpHeight = 2.6f, gravity = 30f, airMomentumDamping = 0.6f, bodyHeight = 5.6f
+        };
         public float JumpSpeed => Mathf.Sqrt(2f * gravity * jumpHeight);
         public float AirTime(float gravityScale = 1f) => 2f * JumpSpeed / (gravity * gravityScale);
         public float FlatJumpReach(float gravityScale = 1f) => walkSpeed * AirTime(gravityScale);
@@ -77,7 +85,8 @@ namespace Universes.UniverseData.obby {
     /// same pieces on every peer, so the server sends only the seed. Stages get harder from first to last.
     /// <para>
     /// Piece fields by kind: Spring/Boost <c>vector</c> = pad-space launch velocity; GravityZone
-    /// <c>speed</c> = gravity scale; Conveyor <c>vector</c> = local push direction, <c>speed</c>;
+    /// <c>speed</c> = gravity scale, <c>vector</c> = world gravity direction (zero keeps it; strength
+    /// only); Conveyor <c>vector</c> = local push direction, <c>speed</c>;
     /// Crumble <c>speed</c> = crumble delay, <c>period</c> = respawn delay; Beat <c>period</c>,
     /// <c>phase</c>, <c>group</c>; WallJumpWall <c>vector.x</c> = away speed, <c>vector.y</c> = up speed;
     /// Mover <c>vector</c> = world travel, <c>speed</c>, <c>phase</c>; SpinnerBar/Cross <c>speed</c> =
@@ -89,6 +98,8 @@ namespace Universes.UniverseData.obby {
         public const float FinishSize = 10f;
         public const float KillDepth = 12f;
         public const int MaxStages = 60;
+        /// <summary>Height of a coin above the surface it is collected from.</summary>
+        const float CoinLift = 1.6f;
 
         readonly SeededStoryRandom rng;
         readonly OB_CourseLayout layout;
@@ -111,6 +122,7 @@ namespace Universes.UniverseData.obby {
         public static OB_CourseLayout Generate(int seed, int stageCount, OB_Movement movement, Vector3 start, float startYaw, Vector3 lobbySpawn) {
             if (movement.gravity <= 0f || movement.jumpHeight <= 0f || movement.walkSpeed <= 0f)
                 throw new ArgumentException("Course movement needs positive gravity, jump height and walk speed.", nameof(movement));
+            if (movement.bodyHeight <= 0f) movement.bodyHeight = OB_Movement.Default.bodyHeight; // older scenes
             var generator = new OB_CourseGenerator(seed, movement);
             return generator.Build(Mathf.Clamp(stageCount, 1, MaxStages), start, startYaw, lobbySpawn);
         }
@@ -145,11 +157,32 @@ namespace Universes.UniverseData.obby {
         void Step(Vector3 top, Vector2 size, float gravityScale = 1f) {
             float dx = Mathf.Max(0f, Mathf.Abs(top.x - lastTop.x) - (size.x + lastSize.x) * 0.5f);
             float dz = Mathf.Max(0f, Mathf.Abs(top.z - lastTop.z) - (size.y + lastSize.y) * 0.5f);
+            CheckJump(Mathf.Sqrt(dx * dx + dz * dz), top.y - lastTop.y, gravityScale);
+            Land(top, size);
+        }
+
+        /// <summary>
+        /// Records a jump of <paramref name="gap"/> across and <paramref name="rise"/> up, measured in the
+        /// player's own frame (on a wall or ceiling "up" is away from that surface).
+        /// </summary>
+        void CheckJump(float gap, float rise, float gravityScale = 1f) {
             layout.jumpChecks.Add(new OB_JumpCheck {
-                stage = stage, gap = Mathf.Sqrt(dx * dx + dz * dz), rise = top.y - lastTop.y,
+                stage = stage, gap = gap, rise = rise,
                 maxGap = m.FlatJumpReach(gravityScale) * 0.7f, maxRise = m.jumpHeight * 0.75f / gravityScale
             });
-            Land(top, size);
+        }
+
+        /// <summary>
+        /// Adds a gravity field spanning the local box <paramref name="min"/>..<paramref name="max"/>.
+        /// <paramref name="localDown"/> turns gravity (zero keeps its direction); <paramref name="scale"/>
+        /// multiplies its strength.
+        /// </summary>
+        void Field(Vector3 min, Vector3 max, Vector3 localDown, float scale = 1f) {
+            Add(new OB_Piece {
+                kind = OB_PieceKind.GravityZone, yaw = yaw, speed = scale,
+                position = World((min + max) * 0.5f), size = max - min,
+                vector = localDown == Vector3.zero ? Vector3.zero : rotation * localDown.normalized
+            });
         }
 
         /// <summary>Makes a surface reached some other way (spring, ride, wall jump) the last surface.</summary>
@@ -234,6 +267,8 @@ namespace Universes.UniverseData.obby {
             OB_StageKind.Spinner => Spinner(d),
             OB_StageKind.LavaRun => LavaRun(d),
             OB_StageKind.Boost => Boost(d),
+            OB_StageKind.WallWalk => WallWalk(d),
+            OB_StageKind.CeilingRun => CeilingRun(d),
             _ => Hops(d)
         };
 
@@ -295,12 +330,7 @@ namespace Universes.UniverseData.obby {
                 z += w;
             }
             Vector3 exit = Exit(3f, scale);
-            float bottom = -KillDepth, ceiling = highest + 14f;
-            Add(new OB_Piece {
-                kind = OB_PieceKind.GravityZone, yaw = yaw, speed = scale,
-                position = World(0f, (bottom + ceiling) * 0.5f, (exit.z - 1f) * 0.5f),
-                size = new Vector3(22f, ceiling - bottom, exit.z + 3f)
-            });
+            Field(new Vector3(-11f, -KillDepth, -2f), new Vector3(11f, highest + 14f, exit.z + 1f), Vector3.zero, scale);
             return exit;
         }
 
@@ -485,6 +515,111 @@ namespace Universes.UniverseData.obby {
             var landing = new Vector3(Range(-1f, 1f), -drop, 9.5f + gap + length * 0.5f);
             Platform(landing, new Vector3(8f, 1f, length));
             Land(landing, new Vector2(8f, length));
+            return Exit(2.5f);
+        }
+            // Gravity-direction stages. A field turns "down" toward a surface beside or above the path.
+        // Each field ends flush with that surface so a player standing on it stays inside, and its far
+        // end opens over a landing, so walking out of it drops the player back to normal gravity on
+        // solid ground. Sizes allow for the character turning over about its middle
+        // (OB_Movement.bodyHeight tall, about a third as wide).
+        const float GravityPathHalfWidth = 2.5f;
+        const float GravityFieldStart = 3f;
+
+        /// <summary>Approach floor from the stage start into the start of the field.</summary>
+        void GravityApproach(float halfWidth) {
+            var approach = new Vector3(0f, 0f, (GravityFieldStart + 1f) * 0.5f);
+            Platform(approach, new Vector3(halfWidth * 2f, 1f, GravityFieldStart + 1f));
+            Step(approach, new Vector2(halfWidth * 2f, GravityFieldStart + 1f));
+        }
+
+        void WallSegment(float x, float top, float height, float thickness, float fromZ, float toZ) {
+            if (toZ - fromZ < 0.01f) return;
+            Box(OB_PieceKind.Platform, new Vector3(x, top, (fromZ + toZ) * 0.5f), new Vector3(thickness, height, toZ - fromZ), standable: false);
+        }
+
+        /// <summary>Wall Walk: gravity turns sideways, onto a tall wall that players run along.</summary>
+        Vector3 WallWalk(float d) {
+            const float halfWidth = GravityPathHalfWidth, thickness = 1f, overrun = 1.5f;
+            float side = Chance(0.5f) ? 1f : -1f;
+            // The wall stands clear of the approach so a player turning over beside it does not
+            // swing their feet into it; they fall the rest of the way.
+            float wallGap = m.bodyHeight * 0.35f;
+            float face = side * (halfWidth + wallGap);
+            float bottom = -1.5f, top = Mathf.Max(m.bodyHeight + 2f, Lerp(7f, 8f, d)), height = top - bottom;
+            GravityApproach(halfWidth);
+
+            // Falling across onto the wall carries the player forward, so the first obstacle comes after
+            // room to land. Obstacles (gaps in the wall or lava strips across it) sit a running jump
+            // apart, so clearing one never lands the player on the next.
+            float settle = m.walkSpeed * Mathf.Sqrt(2f * (halfWidth * 2f + wallGap) / m.gravity);
+            float spacing = m.FlatJumpReach() + 3f;
+            int obstacles = 1 + Mathf.RoundToInt(d * 2f);
+            float first = GravityFieldStart + settle + 3f;
+            float wallEnd = first + (obstacles - 1) * spacing + Lerp(7f, 6f, d) + overrun;
+            float wallX = face + side * thickness * 0.5f;
+            float z = GravityFieldStart;
+            for (int i = 0; i < obstacles; i++) {
+                float centre = first + i * spacing;
+                if (Chance(0.5f)) {
+                    float gap = Lerp(2.2f, 3.2f, d);
+                    WallSegment(wallX, top, height, thickness, z, centre - gap * 0.5f);
+                    z = centre + gap * 0.5f;
+                    CheckJump(gap, 0f);
+                } else {
+                    float strip = Lerp(1.4f, 2.4f, d);
+                    Box(OB_PieceKind.Lava, new Vector3(face - side * 0.2f, top, centre), new Vector3(0.4f, height, strip), standable: false);
+                    CheckJump(strip, 0f);
+                }
+            }
+            WallSegment(wallX, top, height, thickness, z, wallEnd);
+            // Between the first two obstacles (or after the only one), near the wall's high edge.
+            float coinZ = obstacles > 1 ? first + spacing * 0.5f : first + 4f;
+            coin = new Vector3(face - side * CoinLift, top - 2f, coinZ);
+
+            float fieldEnd = wallEnd - overrun;
+            float near = -side * halfWidth;
+            Field(new Vector3(Mathf.Min(near, face), bottom + 0.5f, GravityFieldStart),
+                new Vector3(Mathf.Max(near, face), top, fieldEnd), new Vector3(side, 0f, 0f));
+
+            // Leaving the field drops the player down the wall face onto this landing.
+            const float landingLength = 9f;
+            float landingWidth = halfWidth + Mathf.Abs(face);
+            var landing = new Vector3((near + face) * 0.5f, bottom, fieldEnd + landingLength * 0.5f);
+            Platform(landing, new Vector3(landingWidth, 1f, landingLength));
+            Land(landing, new Vector2(landingWidth, landingLength));
+            return Exit(2.5f);
+        }
+
+        /// <summary>Ceiling Run: gravity flips upward and players run upside down along a ceiling.</summary>
+        Vector3 CeilingRun(float d) {
+            const float thickness = 1f, overrun = 1.5f;
+            float halfWidth = Lerp(GravityPathHalfWidth, 1.75f, d);
+            // High enough to walk under upright, low enough that the flip is a short fall.
+            float height = m.bodyHeight + Lerp(2f, 3.5f, d);
+            GravityApproach(halfWidth);
+
+            // Lava hanging under the ceiling. Patches sit a full running jump apart, so a jump over one
+            // never comes down on the next.
+            int patches = 1 + Mathf.RoundToInt(d * 1.4f);
+            float patch = Lerp(1.4f, 2.6f, d);
+            float spacing = m.FlatJumpReach() + patch + 3f;
+            float first = GravityFieldStart + 7f;
+            for (int i = 0; i < patches; i++) {
+                Box(OB_PieceKind.Lava, new Vector3(0f, height, first + i * spacing), new Vector3(halfWidth * 2f, 0.3f, patch), standable: false);
+                CheckJump(patch, 0f);
+            }
+
+            float start = GravityFieldStart - 0.5f;
+            float fieldEnd = first + (patches - 1) * spacing + Lerp(7f, 6f, d), end = fieldEnd + overrun;
+            Box(OB_PieceKind.Platform, new Vector3(0f, height + thickness, (start + end) * 0.5f),
+                new Vector3(halfWidth * 2f, thickness, end - start), standable: false);
+            coin = new Vector3(0f, height - CoinLift, fieldEnd - 1.2f); // past the last patch, still under the ceiling
+            Field(new Vector3(-halfWidth, -1f, GravityFieldStart), new Vector3(halfWidth, height, fieldEnd), Vector3.up);
+
+            const float landingLength = 8f;
+            var landing = new Vector3(0f, 0f, fieldEnd + landingLength * 0.5f);
+            Platform(landing, new Vector3(6f, 1f, landingLength));
+            Land(landing, new Vector2(6f, landingLength));
             return Exit(2.5f);
         }
     }

@@ -2218,6 +2218,7 @@ GameObject:
   - component: {fileID: 8293697685302373730}
   - component: {fileID: 36641937799527138}
   - component: {fileID: 3610477358266564413}
+  - component: {fileID: 7544864114889964565}
   m_Layer: 12
   m_Name: RobotPlayer
   m_TagString: Player
@@ -2691,6 +2692,25 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 9155375541221003514}
   _networkObjectCache: {fileID: 0}
+  probeStartAboveFeet: 0.03
+  probeDistance: 0.085
+  maxGroundAngle: 60
+  ignoredLayers:
+  - Character
+  - LocalCharacter
+--- !u!114 &7544864114889964565
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6865002775998532502}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb323b4b870b835deaef817c65d42748, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: RyanAssets.Characters.Shared::RyanAssets.Characters.Shared.CharacterGravity
+  defaultDown: {x: 0, y: -1, z: 0}
 --- !u!1 &7044496254920343005
 GameObject:
   m_ObjectHideFlags: 0
