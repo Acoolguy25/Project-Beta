@@ -10,7 +10,8 @@ namespace Universes.UniverseData.tower_defense {
         public GameObject[] towerPrefabs;
         [Tooltip("Index-aligned with TD_EnemyKind.")]
         public GameObject[] enemyPrefabs;
-        public GameObject slotPrefab, tracerPrefab, explosionPrefab;
+        public GameObject slotPrefab;
+        public TD_EffectSet effects = new();
         [Tooltip("Client-only HUD.")]
         public GameObject clientPrefab;
 

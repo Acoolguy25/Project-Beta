@@ -130,7 +130,7 @@ namespace Universes.UniverseData.tower_defense.Server {
                 int seconds = wave == 1 ? firstBuildSeconds : buildSeconds;
                 for (float left = seconds; left > 0f; left -= 0.25f) {
                     secondsLeft = Mathf.CeilToInt(left);
-                    SetTopMessage($"Wave {wave}/{waveCount} in {secondsLeft}   ({ReadyText()})");
+                    SetTopMessage($"Build phase: wave {wave} in {secondsLeft}s");
                     if (AllReady()) break;
                     BroadcastStateThrottled();
                     await AwaitTime(250, token);
@@ -143,7 +143,7 @@ namespace Universes.UniverseData.tower_defense.Server {
                 while (spawnsPending > 0 || enemies.Count > 0) {
                     token.ThrowIfCancellationRequested();
                     if (baseHealth <= 0) break;
-                    SetTopMessage($"Wave {wave}/{waveCount}: {spawnsPending + enemies.Count} enemies left   Base {baseHealth}/{TD_Rules.BaseHealth}");
+                    SetTopMessage($"Wave {wave}/{waveCount} in progress");
                     BroadcastStateThrottled();
                     await AwaitTime(250, token);
                 }
@@ -201,10 +201,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             return active.Length > 0 && active.All(p => ready.Contains(p.Owner));
         }
 
-        string ReadyText() {
-            var active = GetActivePlayers();
-            return $"{active.Count(p => ready.Contains(p.Owner))}/{active.Length} ready, press R to skip";
-        }
+        int ReadyCount() => GetActivePlayers().Count(p => ready.Contains(p.Owner));
 
         // ---------------------------------------------------------------- simulation
         void Update() {
@@ -340,6 +337,7 @@ namespace Universes.UniverseData.tower_defense.Server {
         TD_StateBroadcast MakeState() => new() {
             phase = phase, wave = Mathf.Max(1, Mathf.Min(wave, waveCount)), secondsLeft = secondsLeft, cash = cash, baseHealth = baseHealth,
             enemiesLeft = spawnsPending + enemies.Count, headline = headline,
+            readyPlayers = (byte)Mathf.Min(255, ReadyCount()), activePlayers = (byte)Mathf.Min(255, GetActivePlayers().Length),
             towers = towers.Values.Select(t => new TD_TowerSnap { slot = t.slot, kind = t.kind, level = (byte)t.level, owner = t.ownerName }).ToArray()
         };
 

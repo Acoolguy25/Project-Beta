@@ -42,6 +42,9 @@ namespace Universes.UniverseData.tower_defense {
         public int baseHealth;
         public int enemiesLeft;
         public string headline;
+        /// <summary>Players who voted to skip the build countdown, out of <see cref="activePlayers"/>.</summary>
+        public byte readyPlayers;
+        public byte activePlayers;
         public TD_TowerSnap[] towers;
     }
 

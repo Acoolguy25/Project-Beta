@@ -6,27 +6,46 @@ using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using static RyanAssets.Authoring.UniverseAuthoringKit;
-#if !UNITY_SERVER
-using Universes.UniverseData.tower_defense.Client;
-#endif
 
 namespace Universes.UniverseData.tower_defense.Editor {
     /// <summary>
-    /// Rebuilds Tower Defense's materials, tower/enemy/slot prefabs (Cartoon Military models), HUD and
-    /// start scene. Safe to re-run. Server runner: run BuildServerAssets from the Linux Server profile.
+    /// Rebuilds Tower Defense: materials, tower / enemy / pad / effect prefabs (Cartoon Military
+    /// models on military helipads), the HUD (<see cref="TD_HudAuthoring"/>), the map
+    /// (<see cref="TD_MapAuthoring"/>) and the start scene. Safe to re-run.
+    /// Server runner: run BuildServerAssets from the Linux Server profile.
     /// </summary>
     public static class TD_Authoring {
         public const string Universe = "tower_defense";
         public const string Root = "Assets/Universes/UniverseData/tower_defense";
-        static readonly UniverseAuthoringKit Kit = new(Root);
+        public const string IconFolder = Root + "/UI/Icons";
+        internal static readonly UniverseAuthoringKit Kit = new(Root);
         const string ServerPrefab = Root + "/Server/TD_ServerRunner.prefab";
         const string Military = "Assets/CartoonMilitaryModelPack/Prefebs/";
+        const string Effects = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs/";
+        const string FireClip = "Packages/com.ryan.gameframework/Runtime/Tools/Audio/pistol-gun-shot.mp3";
+
+        /// <summary>Turret model and plinth-relative size per tower, index-aligned with <see cref="TD_TowerKind"/>.</summary>
+        static readonly (string model, float size)[] TowerModels = {
+            ("Turret_01_Prefeb.prefab", 4.2f), ("Turret_05_Prefeb.prefab", 4.8f), ("Turret_08_Prefeb.prefab", 4.4f), ("Turret_10_Prefeb.prefab", 5.2f),
+        };
+
+        /// <summary>Vehicle model and size per enemy, index-aligned with <see cref="TD_EnemyKind"/>.</summary>
+        static readonly (string model, float size)[] EnemyModels = {
+            ("APC_Prefebs/APC_01_Prefeb.prefab", 3.6f), ("APC_Prefebs/APC_03_Prefeb.prefab", 4.6f), ("Tank_Prefebs/Tank_01_Prefeb.prefab", 5.2f),
+            ("Chopper_Prefebs/Chopper_01_Prefeb.prefab", 6f), ("Tank_Prefebs/Tank_05_Prefeb.prefab", 8.5f),
+        };
+
+        /// <summary>Width of a tower pad (the helipad model) in metres.</summary>
+        const float PadSize = 5.4f;
 
         [MenuItem("Ryan/Tower Defense/Build Client Assets")]
         public static void BuildClientAssets() {
             if (Application.isPlaying) throw new System.InvalidOperationException("Stop play mode first.");
-            Kit.EnsureFolders("Prefabs", "Prefabs/Towers", "Prefabs/Enemies", "Materials", "Textures", "Server");
+            Kit.EnsureFolders("Prefabs", "Prefabs/Towers", "Prefabs/Enemies", "Prefabs/Fx", "Materials", "Textures", "Meshes", "Server", "UI", "UI/Portraits");
+            TD_HudAuthoring.ImportIcons();
             BuildTextures();
             BuildScene();
             RegisterScenes(Kit.StartScene(Universe), Kit.ServerScene(Universe));
@@ -34,9 +53,13 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Debug.Log("[TowerDefense] Client assets built.");
         }
 
+        /// <summary>Batch entry point: builds everything, then (with a GPU) portraits and previews.</summary>
         public static void BuildClientAssetsBatch() {
             BuildClientAssets();
-            if (SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null) RenderPreviews();
+            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null) return;
+            TD_Portraits.RenderAll();
+            BuildClientAssets(); // re-generate the HUD with the fresh portraits
+            RenderPreviews();
         }
 
         [MenuItem("Ryan/Tower Defense/Build Server Assets (Linux Server profile)")]
@@ -51,214 +74,329 @@ namespace Universes.UniverseData.tower_defense.Editor {
 #endif
         }
 
+        // ---------------------------------------------------------------- textures + materials
         static void BuildTextures() {
-            Kit.SaveTexture("Tile", Studded);
-            Kit.SaveTexture("Grass", (u, v) => {
-                float n = Hash(Mathf.Floor(u * 64f), Mathf.Floor(v * 64f));
-                float c = 0.8f + 0.2f * n;
-                return new Color(0.48f * c, 0.66f * c, 0.3f * c);
-            });
-            Kit.SaveTexture("Dirt", (u, v) => {
-                float n = Hash(Mathf.Floor(u * 48f), Mathf.Floor(v * 48f));
-                float rut = Mathf.Abs(Mathf.Repeat(u * 2f, 1f) - 0.5f) < 0.06f ? 0.85f : 1f;
-                float c = (0.85f + 0.15f * n) * rut;
-                return new Color(0.62f * c, 0.5f * c, 0.36f * c);
+            // Worn dirt road: warm sand with pebbles, darker wheel ruts and soft darker shoulders.
+            Kit.SaveTexture("Road", (u, v) => {
+                float grain = Hash(Mathf.Floor(u * 96f), Mathf.Floor(v * 96f));
+                float pebble = Hash(Mathf.Floor(u * 24f) + 7f, Mathf.Floor(v * 24f)) > 0.93f ? 0.82f : 1f;
+                float rut = Mathf.Abs(Mathf.Abs(u - 0.5f) - 0.2f) < 0.045f ? 0.9f : 1f;
+                float shoulder = Mathf.SmoothStep(0.8f, 1f, Mathf.Abs(u - 0.5f) * 2f);
+                float c = (0.92f + 0.08f * grain) * pebble * rut * (1f - 0.18f * shoulder);
+                return new Color(0.86f * c, 0.7f * c, 0.5f * c);
+            }, 256);
+            Kit.SaveTexture("Blob", (u, v) => {
+                float d = Vector2.Distance(new Vector2(u, v), new Vector2(0.5f, 0.5f)) * 2f;
+                return new Color(0f, 0f, 0f, Mathf.Clamp01(1f - d) * 0.55f);
             });
             Kit.SaveTexture("Hazard", (u, v) => Mathf.Repeat(u + v, 0.5f) < 0.25f ? new Color(1f, 0.8f, 0.15f) : new Color(0.12f, 0.12f, 0.14f));
+            foreach (string name in new[] { "Blob" }) {
+                var importer = (TextureImporter)AssetImporter.GetAtPath($"{Root}/Textures/{name}.png");
+                if (importer == null || importer.alphaIsTransparency) continue;
+                importer.alphaIsTransparency = true;
+                importer.wrapMode = TextureWrapMode.Clamp;
+                importer.SaveAndReimport();
+            }
         }
 
-        // ---------------------------------------------------------------- prefabs
-        static GameObject Slot(Material concrete, Material idle, Material focused) {
+        /// <summary>The KayKit atlas on URP Lit with a tint, used to pull the pack's lime grass toward a deeper green.</summary>
+        internal static Material Tinted(string name, string atlasPath, Color tint) {
+            var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(atlasPath);
+            return Kit.Mat(name, tint, atlas, smoothness: 0.08f);
+        }
+
+        /// <summary>Unlit (optionally transparent) URP material: health bars, glows, icons on quads.</summary>
+        internal static Material Unlit(string name, Color color, Texture texture = null, bool transparent = false, bool additive = false) {
+            string path = $"{Root}/Materials/{name}.mat";
+            var shader = Shader.Find(additive ? "Universal Render Pipeline/Particles/Unlit" : "Universal Render Pipeline/Unlit");
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) {
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            mat.shader = shader;
+            mat.SetColor("_BaseColor", color);
+            mat.SetTexture("_BaseMap", texture);
+            bool blend = transparent || additive;
+            mat.SetFloat("_Surface", blend ? 1f : 0f);
+            mat.SetFloat("_Blend", additive ? 2f : 0f);
+            mat.SetFloat("_SrcBlend", blend ? (float)BlendMode.SrcAlpha : (float)BlendMode.One);
+            mat.SetFloat("_DstBlend", additive ? (float)BlendMode.One : blend ? (float)BlendMode.OneMinusSrcAlpha : (float)BlendMode.Zero);
+            mat.SetFloat("_ZWrite", blend ? 0f : 1f);
+            mat.SetOverrideTag("RenderType", blend ? "Transparent" : "Opaque");
+            mat.renderQueue = blend ? (int)RenderQueue.Transparent : -1;
+            if (blend) mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); else mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        internal sealed class Materials {
+            public Material barBack, barFill, frost, blob, star, marker, ring, tracer, projectile;
+            public Material[] trims;
+        }
+
+        static Materials BuildMaterials() {
+            return new Materials {
+                barBack = Unlit("BarBack", new Color(0.06f, 0.07f, 0.1f, 0.85f), transparent: true),
+                barFill = Unlit("BarFill", Color.white),
+                frost = Kit.Mat("FrostShell", new Color(0.6f, 0.88f, 1f), emission: 0.8f, alpha: 0.35f, smoothness: 0.9f),
+                blob = Unlit("ShadowBlob", Color.white, Kit.Tex("Blob"), transparent: true),
+                star = Unlit("Star", new Color(1f, 0.82f, 0.25f), TD_HudAuthoring.IconTexture("star"), transparent: true),
+                marker = Unlit("BuildMarker", new Color(1f, 1f, 1f, 0.9f), TD_HudAuthoring.IconTexture("build"), transparent: true),
+                ring = Unlit("RangeRing", Color.white, additive: true),
+                tracer = Unlit("Tracer", Color.white, additive: true),
+                projectile = Kit.Mat("Projectile", Color.white, emission: 2f),
+                trims = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>()
+                    .Select(k => Kit.Mat("Trim" + k, TD_Palette.Tower(k), emission: 0.6f, smoothness: 0.5f)).ToArray(),
+            };
+        }
+
+        // ---------------------------------------------------------------- prefab pieces
+        static GameObject IconQuad(string name, Transform parent, Vector3 position, float size, Material material) {
+            var quad = Primitive(PrimitiveType.Quad, name, parent, position, Vector3.one * size, material, false);
+            NoShadows(quad);
+            return quad;
+        }
+
+        static LineRenderer Ring(Transform parent, Material material) {
+            var go = Empty("RangeRing", parent);
+            var ring = go.AddComponent<LineRenderer>();
+            ring.useWorldSpace = true;
+            ring.loop = true;
+            ring.positionCount = 72;
+            ring.widthMultiplier = 0.3f;
+            ring.sharedMaterial = material;
+            ring.shadowCastingMode = ShadowCastingMode.Off;
+            ring.alignment = LineAlignment.TransformZ;
+            go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            go.SetActive(false);
+            return ring;
+        }
+
+        static TextMeshPro Label(Transform parent, Vector3 position, string text, float size, Color color) {
+            var label = WorldText("Label", parent, position, text, size, color, new Vector2(10f, 1.4f));
+            label.fontStyle = FontStyles.Bold;
+            label.outlineWidth = 0.25f;
+            label.outlineColor = new Color32(10, 12, 18, 220);
+            label.gameObject.AddComponent<Billboard>();
+            return label;
+        }
+
+        /// <summary>A flat ring of <paramref name="radius"/> metres in the parent's space (pad glows).</summary>
+        static LineRenderer FlatRing(string name, Transform parent, float radius, float height, Material material, int points = 48) {
+            var go = Empty(name, parent);
+            var ring = go.AddComponent<LineRenderer>();
+            ring.useWorldSpace = false;
+            ring.loop = true;
+            ring.positionCount = points;
+            for (int i = 0; i < points; i++) {
+                float a = i * Mathf.PI * 2f / points;
+                ring.SetPosition(i, new Vector3(Mathf.Cos(a) * radius, height, Mathf.Sin(a) * radius));
+            }
+            ring.widthMultiplier = 0.22f;
+            ring.sharedMaterial = material;
+            ring.shadowCastingMode = ShadowCastingMode.Off;
+            ring.alignment = LineAlignment.View;
+            return ring;
+        }
+
+        /// <summary>Concrete helipad from the military pack with a glow ring, a floating build marker and a range preview.</summary>
+        static GameObject Slot(Materials m) {
             var root = new GameObject("TowerSlot");
             var view = root.AddComponent<TD_SlotView>();
-            Cube("Base", root.transform, new Vector3(0f, 0.15f, 0f), new Vector3(4.4f, 0.3f, 4.4f), concrete);
-            view.pad = Cube("Pad", root.transform, new Vector3(0f, 0.33f, 0f), new Vector3(3.6f, 0.08f, 3.6f), idle, false).GetComponent<Renderer>();
-            view.idle = idle; view.focused = focused;
-            view.label = WorldText("Label", root.transform, new Vector3(0f, 1.6f, 0f), "TOWER PAD", 3f, new Color(1f, 0.9f, 0.5f), new Vector2(5f, 1.2f));
-            view.label.gameObject.AddComponent<Billboard>();
+            var pad = Model(Military + "Building_Prefebs/HeliPad_Prefeb.prefab", root.transform, PadSize, keepColliders: true);
+            float top = pad != null ? RendererBounds(pad).max.y : 0.3f;
+            if (pad == null) Debug.LogWarning("[TowerDefense] HeliPad prefab missing; the tower pad has no model.");
+            view.topHeight = top;
+            view.glow = FlatRing("Glow", root.transform, PadSize * 0.4f, top + 0.04f, m.ring);
+            var marker = Empty("Marker", root.transform, new Vector3(0f, 2.6f, 0f));
+            marker.AddComponent<Billboard>();
+            IconQuad("Icon", marker.transform, Vector3.zero, 1.6f, m.marker);
+            view.marker = marker.transform;
+            view.rangeRing = Ring(root.transform, m.ring);
             return Kit.Save(root, "", "TowerSlot");
         }
 
-        static GameObject Tower(TD_TowerKind kind, string model, float size, Material concrete, Material tint, Material pip) {
+        /// <summary>A Cartoon Military turret (placed on a pad's top by the client), level stars, owner label and range ring.</summary>
+        static GameObject Tower(TD_TowerKind kind, Materials m) {
             var stats = TD_Rules.Tower(kind);
+            var (model, size) = TowerModels[(int)kind];
             var root = new GameObject(stats.name);
             var view = root.AddComponent<TD_TowerView>();
-            Cube("Plinth", root.transform, new Vector3(0f, 0.6f, 0f), new Vector3(3.2f, 1.2f, 3.2f), concrete);
-            Cube("Band", root.transform, new Vector3(0f, 1.25f, 0f), new Vector3(3.3f, 0.12f, 3.3f), tint, false);
-            var head = Empty("Head", root.transform, new Vector3(0f, 1.3f, 0f));
+            var head = Empty("Head", root.transform);
             view.head = head.transform;
             var turret = Model(Military + "CustomPart_Prefebs/Turrets_Prefebs/" + model, head.transform, size);
-            if (turret == null) Cube("Gun", head.transform, new Vector3(0f, 0.8f, 0.8f), new Vector3(0.6f, 0.6f, 2.2f), tint, false);
+            if (turret == null) Debug.LogWarning($"[TowerDefense] Turret model {model} missing; {stats.name} has no model.");
             else if (kind == TD_TowerKind.Frost)
-                foreach (var r in turret.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => tint).ToArray();
+                foreach (var r in turret.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => m.trims[(int)kind]).ToArray();
+            if (turret != null) {
+                var b = RendererBounds(turret);
+                var box = root.AddComponent<BoxCollider>();
+                box.center = b.center;
+                box.size = b.size;
+            }
             view.muzzle = Empty("Muzzle", head.transform, new Vector3(0f, size * 0.45f, size * 0.55f)).transform;
-            view.levelPips = new GameObject[TD_Rules.MaxLevel];
+
+            var badge = Empty("Badge", root.transform, new Vector3(0f, size + 1.6f, 0f));
+            badge.AddComponent<Billboard>();
+            view.levelStars = new GameObject[TD_Rules.MaxLevel];
             for (int i = 0; i < TD_Rules.MaxLevel; i++)
-                view.levelPips[i] = Cube($"Pip{i}", root.transform, new Vector3(-0.6f + i * 0.6f, 1.25f, 1.66f), new Vector3(0.4f, 0.25f, 0.05f), pip, false);
-            view.label = WorldText("Label", root.transform, new Vector3(0f, size + 2.6f, 0f), stats.name, 3f, Color.white, new Vector2(6f, 1.6f));
-            view.label.gameObject.AddComponent<Billboard>();
+                view.levelStars[i] = IconQuad($"Star{i}", badge.transform, new Vector3((i - (TD_Rules.MaxLevel - 1) * 0.5f) * 0.85f, 0f, 0f), 0.8f, m.star);
+            view.label = Label(badge.transform, new Vector3(0f, 0.8f, 0f), "", 2.4f, Color.white);
+
+            view.rangeRing = Ring(root.transform, m.ring);
             var audio = Empty("FireSound", root.transform, new Vector3(0f, 2f, 0f)).AddComponent<AudioSource>();
             audio.playOnAwake = false;
             audio.spatialBlend = 1f;
             audio.maxDistance = 60f;
             audio.volume = kind == TD_TowerKind.Gunner ? 0.25f : 0.5f;
-            audio.clip = Clip("Packages/com.ryan.gameframework/Runtime/Tools/Audio/pistol-gun-shot.mp3");
+            audio.pitch = kind switch { TD_TowerKind.Cannon => 0.6f, TD_TowerKind.Frost => 1.4f, TD_TowerKind.Sniper => 0.8f, _ => 1f };
+            audio.clip = Clip(FireClip);
             view.fireSound = audio;
             return Kit.Save(root, "Towers", stats.name);
         }
 
-        static GameObject Enemy(TD_EnemyKind kind, string model, float size, Material barBack, Material barFill, Material frost) {
+        static GameObject Enemy(TD_EnemyKind kind, Materials m) {
             var stats = TD_Rules.Enemy(kind);
+            var (model, size) = EnemyModels[(int)kind];
             var root = new GameObject(stats.name);
             var view = root.AddComponent<TD_EnemyView>();
             var body = Empty("Body", root.transform);
             view.body = body.transform;
             if (Model(Military + model, body.transform, size) == null)
-                Cube("Hull", body.transform, new Vector3(0f, size * 0.25f, 0f), new Vector3(size * 0.5f, size * 0.4f, size), barFill, false);
+                Cube("Hull", body.transform, new Vector3(0f, size * 0.25f, 0f), new Vector3(size * 0.5f, size * 0.4f, size), m.barFill, false);
             NoShadows(body);
+
+            // Soft contact shadow (on the ground even for flying enemies).
+            var blob = Primitive(PrimitiveType.Quad, "Shadow", root.transform, new Vector3(0f, (stats.flying ? -TD_Rules.FlyHeight : 0f) + 0.06f, 0f), new Vector3(size * 0.8f, size * 0.8f, 1f), m.blob, false);
+            blob.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            NoShadows(blob);
+
+            float barWidth = Mathf.Clamp(size * 0.5f, 2.2f, 4f);
             var bar = Empty("HealthBar", root.transform, new Vector3(0f, size * 0.7f + 1.2f, 0f));
             bar.AddComponent<Billboard>();
-            NoShadows(Cube("Back", bar.transform, Vector3.zero, new Vector3(2.4f, 0.28f, 0.05f), barBack, false));
-            var pivot = Empty("Pivot", bar.transform, new Vector3(-1.15f, 0f, -0.04f));
-            NoShadows(Cube("Fill", pivot.transform, new Vector3(1.15f, 0f, 0f), new Vector3(2.3f, 0.2f, 0.05f), barFill, false));
+            NoShadows(Cube("Back", bar.transform, Vector3.zero, new Vector3(barWidth + 0.16f, 0.42f, 0.02f), m.barBack, false));
+            var pivot = Empty("Pivot", bar.transform, new Vector3(-barWidth * 0.5f, 0f, -0.03f));
+            var fill = Cube("Fill", pivot.transform, new Vector3(barWidth * 0.5f, 0f, 0f), new Vector3(barWidth, 0.26f, 0.02f), m.barFill, false);
+            NoShadows(fill);
             view.healthFill = pivot.transform;
-            var ice = Primitive(PrimitiveType.Sphere, "Frost", root.transform, new Vector3(0f, size * 0.25f, 0f), Vector3.one * size * 0.9f, frost, false);
+            view.healthRenderer = fill.GetComponent<Renderer>();
+
+            var ice = Primitive(PrimitiveType.Sphere, "FrostShell", root.transform, new Vector3(0f, size * 0.25f, 0f), Vector3.one * size * 0.9f, m.frost, false);
             NoShadows(ice);
             ice.SetActive(false);
             view.slowTint = ice.GetComponent<Renderer>();
             return Kit.Save(root, "Enemies", stats.name);
         }
 
-        static GameObject Tracer(Material glow) {
-            var go = new GameObject("Tracer");
-            var line = go.AddComponent<LineRenderer>();
+        // ---------------------------------------------------------------- effects
+        static TD_EffectSet BuildEffects(Materials m) {
+            var tracer = new GameObject("Tracer");
+            var line = tracer.AddComponent<LineRenderer>();
             line.positionCount = 2;
             line.useWorldSpace = true;
             line.widthMultiplier = 0.12f;
-            line.sharedMaterial = glow;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.numCapVertices = 2;
-            return Kit.Save(go, "", "Tracer");
-        }
+            line.sharedMaterial = m.tracer;
+            line.shadowCastingMode = ShadowCastingMode.Off;
+            line.numCapVertices = 3;
 
-        // ---------------------------------------------------------------- HUD
-        static GameObject BuildHud() {
-#if UNITY_SERVER
-            return AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/TowerDefenseHUD.prefab");
-#else
-            var root = Canvas("TowerDefenseHUD");
-            var hud = root.AddComponent<TD_ClientController>();
-            Color white = new(0.97f, 0.98f, 1f), yellow = new(1f, 0.85f, 0.25f), money = new(0.45f, 1f, 0.55f);
-            var top = Panel("TopPanel", root.transform, new Vector2(0.33f, 0.79f), new Vector2(0.67f, 0.9f), Ink);
-            hud.waveLabel = Text("Wave", top.transform, new Vector2(0.03f, 0.5f), new Vector2(0.97f, 0.98f), 30, yellow, TextAlignmentOptions.Center, true);
-            hud.cashLabel = Text("Cash", top.transform, new Vector2(0.03f, 0.05f), new Vector2(0.4f, 0.5f), 30, money, TextAlignmentOptions.MidlineLeft, true);
-            var barBack = Panel("BaseBar", top.transform, new Vector2(0.42f, 0.12f), new Vector2(0.97f, 0.42f), new Color(0.3f, 0.05f, 0.05f, 0.9f));
-            hud.baseFill = Panel("Fill", barBack.transform, Vector2.zero, Vector2.one, new Color(0.3f, 0.9f, 0.4f, 0.95f));
-            hud.baseFill.type = UnityEngine.UI.Image.Type.Filled;
-            hud.baseFill.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
-            hud.baseFill.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            hud.baseLabel = Text("Base", barBack.transform, Vector2.zero, Vector2.one, 20, white, TextAlignmentOptions.Center, true);
-            hud.headlineLabel = Text("Headline", root.transform, new Vector2(0.25f, 0.73f), new Vector2(0.75f, 0.78f), 22, white, TextAlignmentOptions.Center);
-            hud.promptLabel = Text("Prompt", root.transform, new Vector2(0.25f, 0.22f), new Vector2(0.75f, 0.28f), 30, white, TextAlignmentOptions.Center, true);
-            hud.toastLabel = Text("Toast", root.transform, new Vector2(0.2f, 0.62f), new Vector2(0.8f, 0.71f), 38, yellow, TextAlignmentOptions.Center, true);
-            hud.bannerLabel = Text("Banner", root.transform, new Vector2(0.15f, 0.4f), new Vector2(0.85f, 0.62f), 96, yellow, TextAlignmentOptions.Center, true);
-            int n = TD_Rules.Towers.Length;
-            hud.towerButtons = new TMP_Text[n];
-            hud.towerButtonBacks = new UnityEngine.UI.Image[n];
-            for (int i = 0; i < n; i++) {
-                float x0 = 0.2f + i * 0.152f;
-                var back = Panel($"Tower{i + 1}", root.transform, new Vector2(x0, 0.03f), new Vector2(x0 + 0.145f, 0.13f), hud.idleColor);
-                hud.towerButtonBacks[i] = back;
-                hud.towerButtons[i] = Text("Label", back.transform, new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.95f), 21, white, TextAlignmentOptions.Center);
-            }
-            hud.sfx = Sfx(root.transform);
-            hud.buildClip = hud.waveClip = Clip(CoinClip);
-            hud.deniedClip = hud.leakClip = Clip(LandClip);
-            return Kit.Save(root, "", "TowerDefenseHUD");
-#endif
+            var projectile = Primitive(PrimitiveType.Sphere, "Projectile", null, Vector3.zero, Vector3.one, m.projectile, false);
+            NoShadows(projectile);
+            var trail = projectile.AddComponent<TrailRenderer>();
+            trail.time = 0.25f;
+            trail.widthMultiplier = 0.5f;
+            trail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+            trail.sharedMaterial = m.tracer;
+            trail.shadowCastingMode = ShadowCastingMode.Off;
+            trail.minVertexDistance = 0.2f;
+
+            var popup = new GameObject("RewardPopup");
+            var text = popup.AddComponent<TextMeshPro>();
+            text.text = "+$0";
+            text.fontSize = 6f;
+            text.fontStyle = FontStyles.Bold;
+            text.alignment = TextAlignmentOptions.Center;
+            text.color = new Color(1f, 0.83f, 0.25f);
+            text.outlineWidth = 0.3f;
+            text.outlineColor = new Color32(40, 24, 0, 255);
+            text.rectTransform.sizeDelta = new Vector2(8f, 2f);
+            popup.AddComponent<Billboard>();
+
+            return new TD_EffectSet {
+                tracer = Kit.Save(tracer, "Fx", "Tracer"),
+                projectile = Kit.Save(projectile, "Fx", "Projectile"),
+                rewardPopup = Kit.Save(popup, "Fx", "RewardPopup"),
+                muzzleFlash = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_MuzzleFlash_01.prefab"),
+                impact = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_Sparks_01.prefab"),
+                frostImpact = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_Shockwave_01.prefab"),
+                explosion = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_Explosion_01.prefab"),
+            };
         }
 
         // ---------------------------------------------------------------- scene
         static void BuildScene() {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            var tile = Kit.Tex("Tile");
-            var concrete = Kit.Mat("Concrete", new Color(0.7f, 0.71f, 0.72f), tile, smoothness: 0.2f);
-            var idle = Kit.Mat("PadIdle", new Color(0.35f, 0.8f, 1f), tile, 0.6f);
-            var focused = Kit.Mat("PadFocused", new Color(1f, 0.85f, 0.3f), tile, 1.3f);
-            var barBack = Kit.Mat("BarBack", new Color(0.15f, 0.05f, 0.05f), emission: 0.2f);
-            var barFill = Kit.Mat("BarFill", new Color(0.3f, 1f, 0.35f), emission: 0.8f);
-            var frost = Kit.Mat("FrostShell", new Color(0.55f, 0.85f, 1f), emission: 0.6f, alpha: 0.3f);
-            var pip = Kit.Mat("Pip", new Color(1f, 0.8f, 0.2f), emission: 1.2f);
-            var glow = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
-            string glowPath = Root + "/Materials/Tracer.mat";
-            if (AssetDatabase.LoadAssetAtPath<Material>(glowPath) == null) AssetDatabase.CreateAsset(glow, glowPath);
-            glow = AssetDatabase.LoadAssetAtPath<Material>(glowPath);
-            glow.SetColor("_BaseColor", Color.white);
-            Material[] tints = {
-                Kit.Mat("TintGunner", new Color(0.95f, 0.8f, 0.3f), emission: 0.4f),
-                Kit.Mat("TintCannon", new Color(0.95f, 0.45f, 0.25f), emission: 0.4f),
-                Kit.Mat("TintFrost", new Color(0.55f, 0.85f, 1f), emission: 0.5f, smoothness: 0.8f),
-                Kit.Mat("TintSniper", new Color(0.9f, 0.3f, 0.35f), emission: 0.4f)
-            };
-            var grass = Tiled(Kit.Mat("Grass", Color.white, Kit.Tex("Grass"), smoothness: 0.1f), 10f, 7f);
-            var dirt = Kit.Mat("Dirt", Color.white, Kit.Tex("Dirt"), smoothness: 0.05f);
-            var hazard = Kit.Mat("Hazard", Color.white, Kit.Tex("Hazard"), 0.2f);
+            var m = BuildMaterials();
+            var slot = Slot(m);
+            var towers = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>().Select(k => Tower(k, m)).ToArray();
+            var enemies = System.Enum.GetValues(typeof(TD_EnemyKind)).Cast<TD_EnemyKind>().Select(k => Enemy(k, m)).ToArray();
+            var effects = BuildEffects(m);
+            var hud = TD_HudAuthoring.Build();
 
-            var slot = Slot(concrete, idle, focused);
-            var towers = new[] {
-                Tower(TD_TowerKind.Gunner, "Turret_01_Prefeb.prefab", 3.2f, concrete, tints[0], pip),
-                Tower(TD_TowerKind.Cannon, "Turret_05_Prefeb.prefab", 3.8f, concrete, tints[1], pip),
-                Tower(TD_TowerKind.Frost, "Turret_08_Prefeb.prefab", 3.4f, concrete, tints[2], pip),
-                Tower(TD_TowerKind.Sniper, "Turret_10_Prefeb.prefab", 4.2f, concrete, tints[3], pip),
-            };
-            var enemies = new[] {
-                Enemy(TD_EnemyKind.Scout, "APC_Prefebs/APC_01_Prefeb.prefab", 3.6f, barBack, barFill, frost),
-                Enemy(TD_EnemyKind.Apc, "APC_Prefebs/APC_03_Prefeb.prefab", 4.6f, barBack, barFill, frost),
-                Enemy(TD_EnemyKind.Tank, "Tank_Prefebs/Tank_01_Prefeb.prefab", 5.2f, barBack, barFill, frost),
-                Enemy(TD_EnemyKind.Chopper, "Chopper_Prefebs/Chopper_01_Prefeb.prefab", 6f, barBack, barFill, frost),
-                Enemy(TD_EnemyKind.Boss, "Tank_Prefebs/Tank_05_Prefeb.prefab", 8.5f, barBack, barFill, frost),
-            };
-            var tracer = Tracer(glow);
-            var hud = BuildHud();
-
-            Kit.NewLitScene(new Color(0.5f, 0.7f, 1f), new Color(0.75f, 0.84f, 0.95f), 160f, 450f, new Vector3(48f, 35f, 0f));
-            var world = new GameObject("World");
-            Cube("Ground", world.transform, new Vector3(0f, -0.5f, 0f), new Vector3(220f, 1f, 160f), grass);
-            var lane = TD_Rules.Lane;
-            for (int i = 0; i + 1 < lane.Length; i++) {
-                Vector3 a = lane[i], b = lane[i + 1], mid = (a + b) * 0.5f;
-                var seg = Cube($"Road{i}", world.transform, mid + new Vector3(0f, 0.02f, 0f), new Vector3(8f, 0.06f, Vector3.Distance(a, b) + 8f), dirt, false);
-                seg.transform.rotation = Quaternion.LookRotation(b - a);
-            }
-            Vector3 start = lane[0], end = lane[^1];
-            Place("Building_Prefebs/VehicleHangar_01_Prefeb.prefab", world.transform, start - (lane[1] - start).normalized * 10f, 16f, Yaw(lane[1] - start));
-            Place("Building_Prefebs/MilitaryBase_Prefeb.prefab", world.transform, end + (end - lane[^2]).normalized * 12f, 22f, Yaw(lane[^2] - end));
-            var flag = WorldText("BaseSign", world.transform, end + (end - lane[^2]).normalized * 12f + Vector3.up * 16f, "DEFEND THE BASE", 8f, new Color(1f, 0.85f, 0.3f), new Vector2(24f, 3f));
-            flag.gameObject.AddComponent<Billboard>();
-            var stripe = Cube("FinishLine", world.transform, end + new Vector3(0f, 0.05f, 0f), new Vector3(9f, 0.08f, 1.5f), hazard, false);
-            stripe.transform.rotation = Quaternion.LookRotation(end - lane[^2]);
-            string[] props = { "Building_Prefebs/OilTank_Prefeb.prefab", "Building_Prefebs/LightTower_Prefeb.prefab", "Building_Prefebs/Radar_Prefeb.prefab", "Building_Prefebs/GuardPoint_01_Prefeb.prefab" };
-            Vector3[] propSpots = { new(-90f, 0f, 60f), new(-90f, 0f, -60f), new(90f, 0f, 60f), new(-20f, 0f, 62f), new(55f, 0f, 65f), new(-95f, 0f, 0f), new(95f, 0f, -60f), new(15f, 0f, -62f) };
-            for (int i = 0; i < propSpots.Length; i++) Place(props[i % props.Length], world.transform, propSpots[i], 9f + i % 3 * 3f, i * 47f);
+            Kit.NewLitScene(new Color(0.42f, 0.66f, 1f), new Color(0.7f, 0.82f, 0.95f), 180f, 520f, new Vector3(48f, -38f, 0f), 1.45f);
+            RenderSettings.ambientEquatorColor = new Color(0.62f, 0.66f, 0.62f);
+            RenderSettings.ambientGroundColor = new Color(0.36f, 0.4f, 0.3f);
+            AddPostProcessing();
+            TD_MapAuthoring.Build(m);
 
             var mapGo = new GameObject("TowerDefenseMap");
             var map = mapGo.AddComponent<TD_Map>();
+            Vector3 end = TD_Rules.Lane[^1];
             map.playerSpawn = Empty("PlayerSpawn", mapGo.transform, end + new Vector3(-8f, 0f, -12f)).transform;
             map.towerPrefabs = towers;
             map.enemyPrefabs = enemies;
             map.slotPrefab = slot;
-            map.tracerPrefab = tracer;
-            map.explosionPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs/vfx_Explosion_01.prefab");
+            map.effects = effects;
             map.clientPrefab = hud;
             EditorUtility.SetDirty(map);
             Kit.SaveActiveScene(Kit.StartScene(Universe));
         }
 
-        static float Yaw(Vector3 dir) => Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+        static T Override<T>(VolumeProfile profile) where T : VolumeComponent {
+            if (!profile.TryGet(out T component)) {
+                component = profile.Add<T>(true);
+                component.name = typeof(T).Name;
+                AssetDatabase.AddObjectToAsset(component, profile);
+            }
+            component.active = true;
+            return component;
+        }
 
-        static void Place(string model, Transform parent, Vector3 position, float size, float yaw) {
-            var anchor = Empty(Path.GetFileNameWithoutExtension(model), parent, position);
-            Model(Military + model, anchor.transform, size, yaw: yaw, keepColliders: true);
+        /// <summary>A bright, saturated grade: filmic tonemapping, bloom on glowing pads and shots, light vignette.</summary>
+        static void AddPostProcessing() {
+            string path = Root + "/Materials/TowerDefensePost.asset";
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
+            if (profile == null) {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, path);
+            }
+            Override<Tonemapping>(profile).mode.Override(TonemappingMode.Neutral);
+            var bloom = Override<Bloom>(profile);
+            bloom.threshold.Override(1f);
+            bloom.intensity.Override(0.4f);
+            bloom.scatter.Override(0.6f);
+            var color = Override<ColorAdjustments>(profile);
+            color.postExposure.Override(0.15f);
+            color.contrast.Override(8f);
+            color.saturation.Override(4f);
+            var vignette = Override<Vignette>(profile);
+            vignette.intensity.Override(0.18f);
+            vignette.smoothness.Override(0.5f);
+            EditorUtility.SetDirty(profile);
+            var volume = new GameObject("PostProcessing").AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 5f;
+            volume.sharedProfile = profile;
         }
 
         [MenuItem("Ryan/Tower Defense/Register Scenes")]
@@ -273,9 +411,15 @@ namespace Universes.UniverseData.tower_defense.Editor {
             string dir = PreviewDir(Universe);
             int[] built = { 0, 2, 5, 6, 8, 9, 12, 13 };
             for (int i = 0; i < TD_Rules.Slots.Length; i++) {
-                var prefab = System.Array.IndexOf(built, i) is int k && k >= 0 ? map.towerPrefabs[k % map.towerPrefabs.Length] : map.slotPrefab;
-                var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, map.transform);
-                go.transform.position = TD_Rules.Slots[i];
+                var pad = (GameObject)PrefabUtility.InstantiatePrefab(map.slotPrefab, map.transform);
+                pad.transform.position = TD_Rules.Slots[i];
+                var slot = pad.GetComponent<TD_SlotView>();
+                int k = System.Array.IndexOf(built, i);
+                if (k < 0) continue;
+                slot.marker.gameObject.SetActive(false);
+                var tower = ((GameObject)PrefabUtility.InstantiatePrefab(map.towerPrefabs[k % map.towerPrefabs.Length], map.transform)).GetComponent<TD_TowerView>();
+                tower.transform.position = TD_Rules.Slots[i] + Vector3.up * slot.topHeight;
+                for (int s = 0; s < tower.levelStars.Length; s++) tower.levelStars[s].SetActive(s < 1 + k % 3);
             }
             var kinds = new[] { TD_EnemyKind.Scout, TD_EnemyKind.Scout, TD_EnemyKind.Apc, TD_EnemyKind.Tank, TD_EnemyKind.Chopper, TD_EnemyKind.Apc, TD_EnemyKind.Boss, TD_EnemyKind.Scout };
             for (int i = 0; i < kinds.Length; i++) {
@@ -284,9 +428,10 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 go.transform.SetPositionAndRotation(p, Quaternion.LookRotation(f));
             }
             var cam = PreviewCamera();
-            Shoot(cam, new Vector3(-20f, 95f, -110f), new Vector3(0f, 0f, 0f), Path.Combine(dir, "overview.png"), 1600, 900);
+            cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            Shoot(cam, new Vector3(-20f, 110f, -135f), new Vector3(0f, 0f, -5f), Path.Combine(dir, "overview.png"), 1600, 900);
             Shoot(cam, new Vector3(-62f, 14f, 50f), new Vector3(-40f, 2f, 10f), Path.Combine(dir, "lane.png"), 1600, 900);
-            Shoot(cam, new Vector3(-75f, 22f, 55f), new Vector3(-35f, 0f, 5f), Path.Combine(dir, "thumbnail.png"), 640, 360);
+            Shoot(cam, new Vector3(-75f, 24f, 58f), new Vector3(-35f, 0f, 5f), Path.Combine(dir, "thumbnail.png"), 640, 360);
             Object.DestroyImmediate(cam.gameObject);
             Kit.PublishThumbnail(Universe, Path.Combine(dir, "thumbnail.png"));
             EditorSceneManager.OpenScene(Kit.StartScene(Universe), OpenSceneMode.Single);

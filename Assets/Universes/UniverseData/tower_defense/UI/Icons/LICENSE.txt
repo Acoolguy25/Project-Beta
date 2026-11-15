@@ -1,0 +1,32 @@
+Icons from game-icons.net (https://game-icons.net, https://github.com/game-icons/icons),
+licensed under Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/).
+Rasterized to 128px white-on-transparent PNGs; otherwise unmodified.
+
+coins.png         "Two coins"        by Delapouite
+base.png          "Castle"           by Delapouite
+wave.png          "Crossed swords"   by Lorc
+timer.png         "Sands of time"    by Lorc
+ready.png         "Check mark"       by Delapouite
+upgrade.png       "Upgrade"          by Delapouite
+star.png          "Round star"       by Delapouite
+trophy.png        "Trophy"           by Lorc
+defeat.png        "Broken shield"    by Lorc
+damage.png        "Bullets"          by Lorc
+range.png         "Radar sweep"      by Lorc
+rate.png          "Stopwatch"        by Skoll
+air.png           "Helicopter"       by Delapouite
+armor.png         "Shield"           by Sbed
+splash.png        "Explosion rays"   by Lorc
+slow.png          "Snail"            by Lorc
+pierce.png        "Targeting"        by Lorc
+skull.png         "Half dead"        by Delapouite
+tower_gunner.png  "Machine gun"      by Skoll
+tower_cannon.png  "Cannon"           by Lorc
+tower_frost.png   "Snowflake 1"      by Lorc
+tower_sniper.png  "Crosshair"        by Delapouite
+enemy_scout.png   "Jeep"             by Delapouite
+enemy_apc.png     "APC"              by Skoll
+enemy_tank.png    "Tank"             by Lorc
+enemy_chopper.png "Helicopter"       by Delapouite
+enemy_boss.png    "Battle tank"      by Lorc
+build.png         "Stone tower"      by Lorc
