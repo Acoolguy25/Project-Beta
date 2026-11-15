@@ -6,8 +6,8 @@ ParrelSync clone. UnityBackend isn't needed for this; it's optional.
 
 | Script | What it does | When |
 |---|---|---|
-| `setup.sh` | System libraries, Xvfb, Unity Editor + Linux Dedicated Server module (version and changeset read from `ProjectSettings/ProjectVersion.txt`, md5-checked against Unity's release manifest), the Unity CLI (sha256-checked), and optionally the UnityBackend venv | Once per container image (works as the environment's **Setup script**) |
-| `license.sh` | Activates a Unity license | Once per new container |
+| `setup.sh` | System libraries, Xvfb, the Unity Editor plus Linux Server, Windows Server and Windows Mono modules (version and changeset read from `ProjectSettings/ProjectVersion.txt`, md5-checked against Unity's release manifest), Git LFS assets, the Unity CLI (sha256-checked), and optionally the UnityBackend venv | Once per container (works as the environment's **Setup script**) |
+| `license.sh` | Activates a Unity license and, if the account owner agreed, accepts the Editor terms | Once per new container |
 | `local-multiplayer.sh` | Imports the project, creates the ParrelSync clone, starts a server Editor and a client Editor under Xvfb, enters Play mode, takes screenshots | Whenever you want a local client/server run |
 
 ## Quick start
@@ -39,12 +39,18 @@ Setup scripts can't read the environment's secrets, which is why licensing is a 
 
 ## Unity version
 
-Never hard-coded. `setup.sh` parses `m_EditorVersionWithRevision` (currently `6000.5.5f1
-(d16e074b49fd)`) and downloads from:
+Never hard-coded. `setup.sh` parses `m_EditorVersionWithRevision` (for example `6000.6.9f1
+(8c45277fb9c5)`) and downloads from:
 
 - `https://download.unity3d.com/download_unity/<changeset>/unity-<version>-linux.ini` (manifest with md5s)
 - `https://download.unity3d.com/download_unity/<changeset>/LinuxEditorInstaller/Unity.tar.xz`
 - `https://download.unity3d.com/download_unity/<changeset>/LinuxEditorTargetInstaller/UnitySetup-Linux-Server-Support-for-Editor-<version>.tar.xz`
+- `https://download.unity3d.com/download_unity/<changeset>/MacEditorTargetInstaller/UnitySetup-Windows-{Server,Mono}-Support-for-Editor-<version>.pkg`
+  (Unity's Linux manifest points at these `.pkg` files; Unity Hub on Linux unpacks the same ones)
+
+Why the Windows modules: some asmdefs exclude `WindowsStandalone64Server`, and the Editor refuses to
+compile when that platform isn't installed. The client Editor uses the `Windows` build profile, like
+your Windows machine, so its `bundleVersion` matches the server profile's (see Known issues).
 
 When the project is upgraded, re-running `setup.sh` installs the new version next to the old one
 under `/opt/unity/editors/<version>`.
@@ -59,23 +65,52 @@ Unity can't open a project without one. `license.sh` uses the first of these tha
    browser (it isn't a localhost callback). With `UNITY_ACCEPT_PERSONAL_EULA=1` it then activates
    Unity Personal. Only set that if the account owner accepted the Personal terms.
 
+Unity 6.6+ also shows a blocking **Unity Editor Software Terms** dialog once per Editor version.
+`UNITY_ACCEPT_EDITOR_TERMS=1 Tools/CloudEnv/license.sh` (or `unity terms accept <version> --yes`)
+accepts them; only the account owner should. `local-multiplayer.sh start` stops with a clear
+message instead of hanging on that dialog.
+
 ## How the local client/server run works
 
 - `Assets/Resources/NetworkSettings/LocalNetworkConfig.asset` has `editor_direct_connection: 1`,
-  `editor_universe_id: dot_invaders`, `editor_game_port: 20000`. In that mode the server binds
+  `editor_universe_id` (currently `war_valley`), `editor_game_port: 20000`. In that mode the server binds
   `127.0.0.1:20000`, `ClientConnector` joins it directly, and backend calls are disabled.
 - The **server** is the ParrelSync clone `../Project-Beta_clone_0` (created with ParrelSync's own
   `ClonesManager.CreateCloneFromCurrent`, argument `server`), switched to the
   `Linux Server` build profile (so `UNITY_SERVER` is defined) and playing `Assets/Scenes/ServerInit.unity`.
-- The **client** is the main project playing `Assets/Scenes/MainMenu.unity`.
+- The **client** is the main project, in the `Windows` build profile, playing `Assets/Scenes/MainMenu.unity`.
 - Each Editor runs on its own Xvfb display (`:91` server, `:92` client) so screenshots are separate.
   Logs and screenshots go to `Logs/local-multiplayer/` (ignored by git).
-- Editors are driven with the Unity CLI (`unity status`, `unity command script eval`) through the
-  `com.unity.pipeline` package that's already in the manifest.
+- Graphical Editors started as root show a "running Unity as root" dialog; the script clicks
+  "Continue anyway" with `xdotool`.
+- Editors are driven with the Unity CLI (`unity status`, `unity command open_scene`,
+  `editor_play`, `editor_stop`, `eval`) through the `com.unity.pipeline` package in the manifest.
 
 ParrelSync comes from `Packages/manifest.json`:
 `https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync` (locked to commit
 `610157ad762084380380148ba8ce14e266a6da97` in `packages-lock.json`).
+
+## Things the Linux Editor changes that you shouldn't commit
+
+Opening the project on Linux rewrites `Packages/manifest.json` and `packages-lock.json` (adds
+`com.unity.toolchain.linux-x86_64-linux`, bumps the sdk packages), deletes
+`Packages/com.ryan.codegenerator/RpcGenerator.csproj.meta`, and migrates
+`ProjectSettings/Packages/com.unity.dedicated-server/ContentSelectionSettings.asset`. Discard those
+before committing: `git checkout -- Packages ProjectSettings/Packages`.
+
+## Known issues found while setting this up
+
+- `ProjectSettings` has `bundleVersion: 0.1.0`, but both build profiles override it to `0.04e`. The
+  server rejects a client whose version differs, so any Editor without a build profile active
+  can't join.
+- `*.asset` is marked `unity-yaml` (`eol=lf`) in `.gitattributes`, but some assets are saved in
+  binary, e.g. `war_valley/start_map/WarValleyTerrain.asset` and
+  `war_valley/war_valley_start/NavMesh-Navigation.asset`. Line-ending normalization damages them in
+  git, so a fresh clone logs "Unknown error occurred while loading" for both. Mark them `binary` in
+  `.gitattributes` (like the existing `LightingData.asset` rule) and re-commit them from a working
+  copy that still has the good files.
+- Containers here have no IPv6. LiteNetLib's client socket assumed IPv6 works whenever
+  `Socket.OSSupportsIPv6` says so and crashed; `NetManager.Socket.cs` now falls back to IPv4.
 
 ## Resources
 

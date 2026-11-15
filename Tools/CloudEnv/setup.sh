@@ -146,16 +146,22 @@ else
   install_component Linux-Server
   touch "$EDITOR_ROOT/.linux-server-installed"
 fi
-# Some asmdefs exclude "WindowsStandalone64Server"; the Editor rejects that platform name (and
-# refuses to compile) unless the Windows Dedicated Server module is installed.
-if [[ "${WINDOWS_SERVER_MODULE:-1}" == 1 ]]; then
-  if [[ -f "$EDITOR_ROOT/.windows-server-installed" ]]; then
-    log "Windows Dedicated Server module already installed"
+# Windows modules, unpacked into PlaybackEngines/WindowsStandaloneSupport:
+#  - Windows-Server: some asmdefs exclude "WindowsStandalone64Server", and the Editor rejects
+#    that platform name (and refuses to compile) unless this module is installed.
+#  - Windows-Mono: the client Editor uses the project's "Windows" build profile, like on the
+#    Windows dev machine. Its bundleVersion is what the server compares against at login.
+for mod in Windows-Server Windows-Mono; do
+  var="$(tr 'a-z-' 'A-Z_' <<<"$mod")_MODULE"   # WINDOWS_SERVER_MODULE / WINDOWS_MONO_MODULE
+  [[ "${!var:-1}" == 1 ]] || continue
+  marker="$EDITOR_ROOT/.$(tr 'A-Z' 'a-z' <<<"$mod")-installed"
+  if [[ -f "$marker" ]]; then
+    log "$mod module already installed"
   else
-    install_component Windows-Server "$PE/WindowsStandaloneSupport"
-    touch "$EDITOR_ROOT/.windows-server-installed"
+    install_component "$mod" "$PE/WindowsStandaloneSupport"
+    touch "$marker"
   fi
-fi
+done
 ln -sfn "$EDITOR_ROOT" "$UNITY_INSTALL_ROOT/current"
 
 # ---------------------------------------------------------------- Unity CLI

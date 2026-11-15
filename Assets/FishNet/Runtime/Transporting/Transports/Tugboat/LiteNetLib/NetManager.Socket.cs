@@ -347,9 +347,19 @@ namespace LiteNetLib
             // Check IPv6 support
             if (IPv6Support && IPv6Enabled)
             {
-                _udpSocketv6 = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+                // OSSupportsIPv6 can report true on Linux hosts/containers whose kernel has IPv6
+                // disabled; creating the socket then throws. Fall back to IPv4 only in that case.
+                try
+                {
+                    _udpSocketv6 = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+                }
+                catch (SocketException e)
+                {
+                    NetDebug.Write(NetLogLevel.Trace, $"[NM] IPv6 unavailable, using IPv4 only: {e.SocketErrorCode}");
+                    _udpSocketv6 = null;
+                }
                 // Use one port for two sockets
-                if (BindSocket(_udpSocketv6, new(addressIPv6, LocalPort)))
+                if (_udpSocketv6 != null && BindSocket(_udpSocketv6, new(addressIPv6, LocalPort)))
                 {
                     if (_manualMode)
                         _bufferEndPointv6 = new(IPAddress.IPv6Any, 0);

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run Project-Beta locally as server + client with ParrelSync, no UnityBackend needed.
 #
-#   main project     -> CLIENT editor  (default build target, plays Assets/Scenes/MainMenu.unity)
+#   main project     -> CLIENT editor  (Windows build profile, plays Assets/Scenes/MainMenu.unity)
 #   ParrelSync clone -> SERVER editor  (Linux Server build profile => UNITY_SERVER, plays ServerInit)
 #
 # Both use LocalNetworkConfig (editor_direct_connection=1): the server binds 127.0.0.1:<port> and the
@@ -29,6 +29,9 @@ OUT_DIR="${OUT_DIR:-$PROJECT_DIR/Logs/local-multiplayer}"
 SERVER_DISPLAY="${SERVER_DISPLAY:-:91}"
 CLIENT_DISPLAY="${CLIENT_DISPLAY:-:92}"
 SERVER_PROFILE="Assets/Settings/Build Profiles/Linux Server.asset"
+# Same profile as on the Windows dev machine. Its bundleVersion must match the server profile's,
+# because the server rejects clients whose Application.version differs.
+CLIENT_PROFILE="${CLIENT_PROFILE:-Assets/Settings/Build Profiles/Windows.asset}"
 SERVER_SCENE="${SERVER_SCENE:-Assets/Scenes/ServerInit.unity}"
 CLIENT_SCENE="${CLIENT_SCENE:-Assets/Scenes/MainMenu.unity}"
 READY_TIMEOUT="${READY_TIMEOUT:-1800}"
@@ -70,10 +73,12 @@ cmd_clone() {
 
 start_display() { # display
   local d="$1" n="${1#:}"
-  if [[ ! -S /tmp/.X11-unix/X$n ]]; then
-    Xvfb "$d" -screen 0 1600x900x24 -nolisten tcp >"$OUT_DIR/xvfb$n.log" 2>&1 &
-    for _ in $(seq 50); do [[ -S /tmp/.X11-unix/X$n ]] && break; sleep 0.2; done
+  if ! xdpyinfo -display "$d" >/dev/null 2>&1; then
+    rm -f "/tmp/.X11-unix/X$n" "/tmp/.X$n-lock"   # stale socket from a dead Xvfb
+    setsid nohup Xvfb "$d" -screen 0 1600x900x24 -nolisten tcp >"$OUT_DIR/xvfb$n.log" 2>&1 </dev/null &
+    for _ in $(seq 50); do xdpyinfo -display "$d" >/dev/null 2>&1 && break; sleep 0.2; done
   fi
+  xdpyinfo -display "$d" >/dev/null 2>&1 || die "Xvfb $d did not start; see $OUT_DIR/xvfb$n.log"
 }
 
 check_terms() {
@@ -102,7 +107,7 @@ start_editor() { # display project logname extra-args...
   local d="$1" proj="$2" name="$3"; shift 3
   if U status --project-path "$proj" >/dev/null 2>&1; then log "$name Editor already running"; return; fi
   log "starting $name Editor on $d ($proj)"
-  DISPLAY="$d" nohup "$UNITY_EDITOR" -projectPath "$proj" -logFile "$OUT_DIR/$name-editor.log" "$@" \
+  DISPLAY="$d" setsid nohup "$UNITY_EDITOR" -projectPath "$proj" -logFile "$OUT_DIR/$name-editor.log" "$@" \
     >/dev/null 2>&1 </dev/null &
   [[ $EUID -eq 0 ]] && dismiss_root_warning "$d" &
 }
@@ -118,18 +123,24 @@ cmd_start() {
   [[ -f "$CLONE_DIR/.clone" ]] || cmd_clone
   start_display "$SERVER_DISPLAY"; start_display "$CLIENT_DISPLAY"
   start_editor "$SERVER_DISPLAY" "$CLONE_DIR" server -activeBuildProfile "$SERVER_PROFILE"
-  start_editor "$CLIENT_DISPLAY" "$PROJECT_DIR" client
+  start_editor "$CLIENT_DISPLAY" "$PROJECT_DIR" client -activeBuildProfile "$CLIENT_PROFILE"
   wait_ready "$CLONE_DIR" server
   wait_ready "$PROJECT_DIR" client
 }
 
 eval_cs() { # project code
-  U command script eval --caller plugin --skill unity-cli --project-path "$1" "$2"
+  U command eval --caller plugin --skill unity-cli --project-path "$1" --code "$2"
+}
+
+ucmd() { # project command args...   (Pipeline commands exposed by the connected Editor)
+  local p="$1"; shift
+  U command "$@" --caller plugin --skill unity-cli --project-path "$p"
 }
 
 play() { # project scene name
   log "$3: open $2 and enter Play mode"
-  eval_cs "$1" "UnityEditor.SceneManagement.EditorSceneManager.OpenScene(\"$2\"); UnityEditor.EditorApplication.EnterPlaymode(); return \"ok\";"
+  ucmd "$1" open_scene --path "$2" >/dev/null
+  ucmd "$1" editor_play >/dev/null
 }
 
 wait_log() { # file pattern seconds
@@ -160,7 +171,7 @@ cmd_shot() {
 
 cmd_stop() {
   for p in "$PROJECT_DIR" "$CLONE_DIR"; do
-    eval_cs "$p" 'UnityEditor.EditorApplication.ExitPlaymode(); return "ok";' >/dev/null 2>&1 || true
+    ucmd "$p" editor_stop >/dev/null 2>&1 || true
     U close "$p" >/dev/null 2>&1 || true
   done
 }
