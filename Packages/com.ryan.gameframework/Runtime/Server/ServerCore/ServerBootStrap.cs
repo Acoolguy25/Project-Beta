@@ -115,6 +115,15 @@ namespace RyanAssets.Server.ServerCore {
                         ushort.TryParse(split[1], out ushort intvl);
                         serverSettings.ServerHeartbeatIntvSeconds = intvl;
                         break;
+                    case "-backend_url":
+                        // Set by the backend when this server runs on a different machine than the backend.
+                        if (!Uri.TryCreate(split[1], UriKind.Absolute, out _)) {
+                            Debug.LogError($"Invalid backend url: {split[1]}");
+                            break;
+                        }
+                        BackendNetwork.SetBackendURL(split[1]);
+                        BackendSocket.SetBaseAddress(split[1]);
+                        break;
                     case "-server_folder":
                         // case "-backend_local":
                         break;
@@ -136,6 +145,16 @@ namespace RyanAssets.Server.ServerCore {
             BackendSocket.SetServerHeader("universe-id", serverInfo.universe_id);
             BackendSocket.SetServerHeader("server-id", serverInfo.server_id);
             BackendSocket.SetServerHeader("server-port", serverInfo.server_port.ToString());
+#if !UNITY_EDITOR
+            // Servers on other machines authenticate to /api/internal with a shared secret
+            // (UNITYBACKEND_INTERNAL_TOKEN on the backend). Read from the environment so it
+            // never appears in the process list.
+            string internalToken = Environment.GetEnvironmentVariable("UNITYBACKEND_INTERNAL_TOKEN");
+            if (!string.IsNullOrEmpty(internalToken)) {
+                BackendNetwork.SetServerHeader("x-internal-token", internalToken);
+                BackendSocket.SetServerHeader("x-internal-token", internalToken);
+            }
+#endif
 
             universeCfg = UniverseRegistry.GetUniverseFromId(serverInfo.universe_id);
         }
