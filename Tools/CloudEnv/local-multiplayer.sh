@@ -4,8 +4,15 @@
 #   main project     -> CLIENT editor  (Windows build profile, plays Assets/Scenes/MainMenu.unity)
 #   ParrelSync clone -> SERVER editor  (Linux Server build profile => UNITY_SERVER, plays ServerInit)
 #
-# Both use LocalNetworkConfig (editor_direct_connection=1): the server binds 127.0.0.1:<port> and the
-# client's ClientConnector joins it directly; backend requests are disabled in that mode.
+# Default: direct connection (no UnityBackend). The server binds 127.0.0.1:<port> and the client's
+# ClientConnector joins it directly; backend requests are disabled in that mode.
+#
+# BACKEND=1: also run a local UnityBackend (Tools/CloudEnv/backend.sh, debug mode, 127.0.0.1:8212),
+# with direct connection off, so the client logs in and joins war_valley through the backend (the
+# main menu's EasyDebug DebugPlayGame does that by itself), and the server Editor registers with it
+# as "unity-test-server". Needs setup.sh INSTALL_BACKEND=1.
+# The mode is passed to both Editors as PROJECT_BETA_DIRECT_CONNECTION, so LocalNetworkConfig.asset
+# isn't edited.
 #
 # Usage: Tools/CloudEnv/local-multiplayer.sh [import|clone|start|play|shot|stop|all]   (default: all)
 #   import  first-time package resolve + asset import of the main project (batchmode, slow once)
@@ -17,7 +24,7 @@
 #
 # Env: PROJECT_DIR (default: this repo), UNITY_EDITOR (from setup.sh), OUT_DIR (default
 #      $PROJECT_DIR/Logs/local-multiplayer), SERVER_DISPLAY (:91), CLIENT_DISPLAY (:92),
-#      SERVER_SCENE, CLIENT_SCENE, READY_TIMEOUT (seconds, default 1800)
+#      SERVER_SCENE, CLIENT_SCENE, READY_TIMEOUT (seconds, default 1800), BACKEND (0|1)
 set -euo pipefail
 [[ -f /etc/profile.d/project-beta-unity.sh ]] && source /etc/profile.d/project-beta-unity.sh
 export UNITY_NO_CONSENT_PROMPT=1 UNITY_NO_AGENT_HINTS=1
@@ -35,6 +42,9 @@ CLIENT_PROFILE="${CLIENT_PROFILE:-Assets/Settings/Build Profiles/Windows.asset}"
 SERVER_SCENE="${SERVER_SCENE:-Assets/Scenes/ServerInit.unity}"
 CLIENT_SCENE="${CLIENT_SCENE:-Assets/Scenes/MainMenu.unity}"
 READY_TIMEOUT="${READY_TIMEOUT:-1800}"
+BACKEND="${BACKEND:-0}"
+if [[ "$BACKEND" == 1 ]]; then export PROJECT_BETA_DIRECT_CONNECTION=0; else export PROJECT_BETA_DIRECT_CONNECTION=1; fi
+BACKEND_SH="$(dirname "${BASH_SOURCE[0]}")/backend.sh"
 mkdir -p "$OUT_DIR"
 
 log() { printf '[local-mp] %s\n' "$*"; }
@@ -112,6 +122,9 @@ dismiss_root_warning() { # display
 start_editor() { # display project logname extra-args...
   local d="$1" proj="$2" name="$3"; shift 3
   if U status --project-path "$proj" >/dev/null 2>&1; then log "$name Editor already running"; return; fi
+  # An Editor that was killed leaves Temp/__Backupscenes, and the next start stops on a modal
+  # "Scene Backup Detected" dialog. These Editors only ever hold scenes opened by this script.
+  rm -rf "$proj/Temp/__Backupscenes"
   log "starting $name Editor on $d ($proj)"
   DISPLAY="$d" setsid nohup "$UNITY_EDITOR" -projectPath "$proj" -logFile "$OUT_DIR/$name-editor.log" "$@" \
     >/dev/null 2>&1 </dev/null &
@@ -127,6 +140,7 @@ wait_ready() { # project name
 cmd_start() {
   check_terms
   [[ -f "$CLONE_DIR/.clone" ]] || cmd_clone
+  [[ "$BACKEND" == 1 ]] && "$BACKEND_SH" start
   start_display "$SERVER_DISPLAY"; start_display "$CLIENT_DISPLAY"
   start_editor "$SERVER_DISPLAY" "$CLONE_DIR" server -activeBuildProfile "$SERVER_PROFILE"
   start_editor "$CLIENT_DISPLAY" "$PROJECT_DIR" client -activeBuildProfile "$CLIENT_PROFILE"
@@ -166,6 +180,8 @@ cmd_play() {
   sleep 15
   log "server log tail:"; grep -E "Hosting|Server|connect|Exception|Error" "$OUT_DIR/server-editor.log" | tail -n 15 || true
   log "client log tail:"; grep -E "Connect|connect|Exception|Error" "$OUT_DIR/client-editor.log" | tail -n 15 || true
+  [[ "$BACKEND" == 1 ]] && { log "backend log tail:"; "$BACKEND_SH" log | grep -v 'universes/v1/list' | tail -n 15 || true; }
+  return 0
 }
 
 cmd_shot() {
@@ -180,6 +196,8 @@ cmd_stop() {
     ucmd "$p" editor_stop >/dev/null 2>&1 || true
     U close "$p" >/dev/null 2>&1 || true
   done
+  [[ "$BACKEND" == 1 ]] && "$BACKEND_SH" stop
+  return 0
 }
 
 case "${1:-all}" in

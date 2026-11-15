@@ -38,6 +38,11 @@ namespace RyanAssets.NetworkService {
 #if UNITY_EDITOR
             var editorConfig = loadResource("LocalNetworkConfig");
             EditorDirectConnection = editorConfig != null && editorConfig.editor_direct_connection;
+            // PROJECT_BETA_DIRECT_CONNECTION=0/1 overrides the asset for this Editor process, so a
+            // script can test through a local UnityBackend without editing LocalNetworkConfig.
+            string directOverride = System.Environment.GetEnvironmentVariable("PROJECT_BETA_DIRECT_CONNECTION");
+            if (editorConfig != null && (directOverride == "0" || directOverride == "1"))
+                EditorDirectConnection = directOverride == "1";
             if (EditorDirectConnection) {
                 EditorUniverseId = editorConfig.editor_universe_id;
                 EditorGamePort = (ushort)Mathf.Clamp(editorConfig.editor_game_port, 1, ushort.MaxValue);

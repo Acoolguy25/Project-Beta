@@ -9,17 +9,49 @@ ParrelSync clone. UnityBackend isn't needed for this; it's optional.
 | `setup.sh` | System libraries, Xvfb, the Unity Editor plus Linux Server, Windows Server and Windows Mono modules (version and changeset read from `ProjectSettings/ProjectVersion.txt`, md5-checked against Unity's release manifest), Git LFS assets, the Unity CLI (sha256-checked), and optionally the UnityBackend venv | Once per container (works as the environment's **Setup script**) |
 | `license.sh` | Activates a Unity license and, if the account owner agreed, accepts the Editor terms | Once per new container |
 | `local-multiplayer.sh` | Imports the project, creates the ParrelSync clone, starts a server Editor and a client Editor under Xvfb, enters Play mode, takes screenshots | Whenever you want a local client/server run |
+| `backend.sh` | Runs UnityBackend locally in debug mode on `127.0.0.1:8212` (`start`, `stop`, `status`, `log`) | Used by `local-multiplayer.sh` with `BACKEND=1`, or on its own |
 
 ## Quick start
 
 ```bash
-sudo Tools/CloudEnv/setup.sh                 # INSTALL_BACKEND=1 to also set up ../UnityBackend/.venv
+sudo Tools/CloudEnv/setup.sh                 # sudo INSTALL_BACKEND=1 ... to also clone UnityBackend + venv
 source /etc/profile.d/project-beta-unity.sh
 Tools/CloudEnv/license.sh                    # see "License" below
 Tools/CloudEnv/local-multiplayer.sh          # import -> clone -> start -> play -> shot
 Tools/CloudEnv/local-multiplayer.sh shot     # more screenshots, in Logs/local-multiplayer/
 Tools/CloudEnv/local-multiplayer.sh stop
 ```
+
+### With UnityBackend
+
+```bash
+sudo INSTALL_BACKEND=1 Tools/CloudEnv/setup.sh   # clones https://github.com/Acoolguy25/UnityBackend.git to ../UnityBackend if missing
+BACKEND=1 Tools/CloudEnv/local-multiplayer.sh    # backend + server + client; the client joins through the backend
+BACKEND=1 Tools/CloudEnv/local-multiplayer.sh stop
+```
+
+With `BACKEND=1` the Editors run with `PROJECT_BETA_DIRECT_CONNECTION=0`, which overrides
+`editor_direct_connection` in `LocalNetworkConfig.asset` for that process only (Editor-only code in
+`NetworkSettings.cs`; `1` forces direct connection, unset uses the asset). So:
+
+- `backend.sh` starts UnityBackend the same way its `run.sh` does (`python -m net`) but forces its
+  **debug** mode, which it normally only picks on a machine whose hostname contains "ryan". Prod
+  mode would demand real Unity player tokens and try to launch `LinuxServer` builds. In debug mode it
+  listens on `127.0.0.1:8212`, which `LocalNetworkConfig`/`ServerNetworkConfig` already point at,
+  and hands every player the server Editor as `unity-test-server` on port 20000.
+- It runs from `~/.cache/project-beta-backend` with a copy of `game.db`, so the UnityBackend checkout
+  stays clean (`BACKEND_RESET=1` re-copies the database). It writes
+  `LinuxServer/application.json` there from the Linux Server profile's `bundleVersion` unless the
+  checkout has one from a server build.
+- The server Editor registers with the backend over its websocket. The client logs in (`no_login`),
+  and the main menu's EasyDebug `DebugPlayGame` asks the backend to play `war_valley`; the backend
+  hands back `unity-test-server` on `127.0.0.1:20000`, and the server adds the player through the
+  backend's internal API. The checkout's `game.db` has no `war_valley` row, so `backend.sh` adds
+  `BACKEND_UNIVERSES` (default `war_valley`) to its local copy.
+- UnityBackend's `requirements.txt` isn't pinned. FastAPI 0.145 removed the `**extra` arguments the
+  backend passes from `root.toml` (`docs = ""`), so a fresh install fails with "unexpected keyword
+  argument 'docs'". `setup.sh` installs with `backend-constraints.txt` (`fastapi<0.145`). A fresh
+  install on the VPS would hit the same error.
 
 To use it as the cloud environment's setup script, set the script to:
 
@@ -57,7 +89,14 @@ under `/opt/unity/editors/<version>`.
 
 ## License
 
-Unity can't open a project without one. `license.sh` uses the first of these that's set:
+Unity can't open a project without one. A Personal license is a file
+(`~/.config/unity3d/Unity/licenses/UnityEntitlementLicense.xml`) bound to `/etc/machine-id`, which
+the cloud containers share, and it works without being signed in. So `license.sh` first restores the
+copy saved in project files (`/mnt/project-files/project-beta/cloud-env/license/`, override with
+`UNITY_LICENSE_STORE`) and only falls back to activating when that doesn't give an active license.
+After activating it saves the file there. `license.sh save` / `license.sh restore` do just one half.
+
+Otherwise it uses the first of these that's set:
 
 1. `UNITY_LICENSE_SERIAL`: a Plus/Pro serial (env var in the cloud environment settings).
 2. `UNITY_LICENSE_B64` (base64 of a `Unity_lic.ulf`) or `UNITY_LICENSE_FILE`.
@@ -66,8 +105,14 @@ Unity can't open a project without one. `license.sh` uses the first of these tha
    Unity Personal. Only set that if the account owner accepted the Personal terms.
 
 Unity 6.6+ also shows a blocking **Unity Editor Software Terms** dialog once per Editor version.
-`UNITY_ACCEPT_EDITOR_TERMS=1 Tools/CloudEnv/license.sh` (or `unity terms accept <version> --yes`)
-accepts them; only the account owner should. `local-multiplayer.sh start` stops with a clear
+`license.sh` accepts them when the account owner has: `UNITY_ACCEPT_EDITOR_TERMS=1` (for example in
+the cloud environment's variables, which covers every version), or a recorded acceptance for that
+exact version in `<store>/editor-terms-accepted/<version>`, which `license.sh save` writes once the
+terms are accepted.
+
+`setup.sh` points the Unity CLI at the Editor's bundled licensing client
+(`UNITY_CLI_INTERNAL_LICENSING_CLIENT_PATH`), because otherwise the CLI downloads one from
+`public-stevedore.unity3d.com`, which some network policies block. `local-multiplayer.sh start` stops with a clear
 message instead of hanging on that dialog.
 
 ## How the local client/server run works
@@ -109,8 +154,13 @@ before committing: `git checkout -- Packages ProjectSettings/Packages`.
   git, so a fresh clone logs "Unknown error occurred while loading" for both. Mark them `binary` in
   `.gitattributes` (like the existing `LightingData.asset` rule) and re-commit them from a working
   copy that still has the good files.
-- Containers here have no IPv6. LiteNetLib's client socket assumed IPv6 works whenever
-  `Socket.OSSupportsIPv6` says so and crashed; `NetManager.Socket.cs` now falls back to IPv4.
+- Containers here boot with IPv6 disabled, but Unity's Mono still reports
+  `Socket.OSSupportsIPv6 = true`. LiteNetLib crashed creating its IPv6 socket (`NetManager.Socket.cs`
+  now falls back to IPv4), and every `HttpClient` request failed with "An address incompatible with
+  the requested protocol was used" because `SocketsHttpHandler` always opens a dual-stack socket.
+  `Assets/RyanAssets/NetworkService/IPv6Support.cs` checks once at startup and, if an IPv6 socket
+  can't be created, clears Mono's cached flag so requests go over IPv4. (Mono ignores the
+  `DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER` switch, so there's no environment-only fix.)
 
 ## Resources
 
