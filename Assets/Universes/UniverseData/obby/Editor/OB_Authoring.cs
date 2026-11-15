@@ -9,15 +9,21 @@ using UnityEditor;
 using UnityEditor.Build.Profile;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
+using UnityEngine.TextCore.LowLevel;
+using UnityEngine.UI;
 #if !UNITY_SERVER
 using Universes.UniverseData.obby.Client;
 #endif
 
 namespace Universes.UniverseData.obby.Editor {
     /// <summary>
-    /// Rebuilds the obby's textures, materials, piece prefabs, HUD, start scene and build-profile
-    /// entries. Safe to run again: assets are overwritten in place, keeping their GUIDs.
+    /// Rebuilds the obby's textures, materials, fonts, effects, sky backdrop, piece prefabs, client
+    /// presentation prefab (HUD, effects, backdrop, post-processing), start scene and build-profile
+    /// entries. Colours come from <see cref="OB_Palette"/>. Safe to run again: assets are overwritten
+    /// in place, keeping their GUIDs.
     /// Run "Build Server Assets" from an Editor in the Linux Server profile for the server runner.
     /// </summary>
     public static class OB_Authoring {
@@ -26,14 +32,13 @@ namespace Universes.UniverseData.obby.Editor {
         const string StartScene = Root + "/obby_start.unity";
         const string ServerScene = Root + "/obby_server.unity";
         const string ServerPrefab = Root + "/Server/OB_ServerRunner.prefab";
+        const string ClientPrefab = Root + "/Prefabs/ObbyClient.prefab";
+        const string Fx = Root + "/Prefabs/Fx";
+        const string Backdrop = Root + "/Prefabs/Backdrop";
+        const string Icons = "Packages/com.ryan.ui/Runtime/UI/Icons/Material/";
         const string ThumbnailPath = Root + "/Resources/UniverseDataPub/obby/thumbnail.png";
         const float LobbyTop = 100f;
         const float LobbySize = 18f;
-
-        static readonly Color[] Palette = {
-            new(0.31f, 0.67f, 1f), new(0.38f, 0.86f, 0.42f), new(1f, 0.78f, 0.25f), new(0.98f, 0.45f, 0.38f),
-            new(0.72f, 0.5f, 1f), new(0.25f, 0.85f, 0.82f), new(1f, 0.6f, 0.85f), new(0.95f, 0.95f, 0.98f)
-        };
 
         // ---------------------------------------------------------------- entry points
         [MenuItem("Ryan/Obby/Build Client Assets")]
@@ -41,10 +46,14 @@ namespace Universes.UniverseData.obby.Editor {
             if (Application.isPlaying) throw new System.InvalidOperationException("Stop play mode first.");
             EnsureFolders();
             BuildTextures();
-            var prefabs = BuildPieces();
-            var hud = BuildHud();
-            BuildStartScene(prefabs, hud);
+            var fx = BuildEffects();
+            var prefabs = BuildPieces(fx);
+            var client = BuildClient(fx);
+            BuildStartScene(prefabs, client);
             RegisterScenes();
+            // Assets from the earlier look that nothing references any more.
+            foreach (string retired in new[] { Root + "/Prefabs/ObbyHUD.prefab", Root + "/Textures/Tile.png" })
+                if (AssetDatabase.LoadMainAssetAtPath(retired) != null) AssetDatabase.DeleteAsset(retired);
             AssetDatabase.SaveAssets();
             Debug.Log("[Obby] Client assets built.");
         }
@@ -104,7 +113,7 @@ namespace Universes.UniverseData.obby.Editor {
 #endif
 
         static void EnsureFolders() {
-            foreach (string folder in new[] { "Prefabs", "Prefabs/Pieces", "Materials", "Textures", "Resources", "Resources/UniverseDataPub", "Resources/UniverseDataPub/obby", "Server" }) {
+            foreach (string folder in new[] { "Prefabs", "Prefabs/Pieces", "Prefabs/Fx", "Prefabs/Backdrop", "Materials", "Fonts", "Textures", "Resources", "Resources/UniverseDataPub", "Resources/UniverseDataPub/obby", "Server" }) {
                 string path = Root + "/" + folder;
                 if (AssetDatabase.IsValidFolder(path)) continue;
                 string parent = Path.GetDirectoryName(path).Replace('\\', '/');
@@ -115,7 +124,10 @@ namespace Universes.UniverseData.obby.Editor {
         // ---------------------------------------------------------------- textures
         delegate Color Pixel(float u, float v);
 
-        static Texture2D SaveTexture(string name, Pixel pixel, int size = 128, bool sprite = false) {
+        enum TextureUse { Tiled, Sprite, Particle }
+
+        /// <summary>Renders <paramref name="pixel"/> into a PNG and imports it. Sprites are 9-sliced by <paramref name="border"/> pixels.</summary>
+        static Texture2D SaveTexture(string name, Pixel pixel, int size = 128, TextureUse use = TextureUse.Tiled, int border = 0) {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
@@ -126,59 +138,120 @@ namespace Universes.UniverseData.obby.Editor {
             Object.DestroyImmediate(tex);
             AssetDatabase.ImportAsset(path);
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
-            importer.wrapMode = TextureWrapMode.Repeat;
-            importer.mipmapEnabled = true;
-            importer.filterMode = FilterMode.Trilinear;
-            importer.anisoLevel = 4;
+            importer.wrapMode = use == TextureUse.Tiled ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+            importer.mipmapEnabled = use != TextureUse.Sprite;
+            importer.filterMode = use == TextureUse.Tiled ? FilterMode.Trilinear : FilterMode.Bilinear;
+            importer.anisoLevel = use == TextureUse.Tiled ? 4 : 1;
+            importer.alphaIsTransparency = use != TextureUse.Tiled;
+            if (use == TextureUse.Sprite) {
+                importer.textureType = TextureImporterType.Sprite;
+                importer.spriteImportMode = SpriteImportMode.Single;
+                importer.spritePixelsPerUnit = 100f;
+                importer.spriteBorder = Vector4.one * border;
+            }
             importer.SaveAndReimport();
             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
+
+        static Sprite SpriteAt(string path) => AssetDatabase.LoadAssetAtPath<Sprite>(path);
 
         static float Hash(float x, float y) {
             float h = Mathf.Sin(x * 127.1f + y * 311.7f) * 43758.5453f;
             return h - Mathf.Floor(h);
         }
 
+        /// <summary>Hermite step from 0 at <paramref name="edge0"/> to 1 at <paramref name="edge1"/> (shader-style smoothstep).</summary>
+        static float Smooth(float edge0, float edge1, float x) {
+            float t = Mathf.Clamp01((x - edge0) / (edge1 - edge0));
+            return t * t * (3f - 2f * t);
+        }
+
+        /// <summary>Signed distance (in UV units) from a rounded square of half-size 0.5 - <paramref name="inset"/>.</summary>
+        static float RoundedBox(float u, float v, float radius, float inset) {
+            float qx = Mathf.Abs(u - 0.5f) - (0.5f - inset - radius);
+            float qy = Mathf.Abs(v - 0.5f) - (0.5f - inset - radius);
+            float outside = new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude;
+            return outside + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
+        }
+
         static void BuildTextures() {
-            // A soft studded tile: bright face, darker bevelled edge, faint inner square.
-            SaveTexture("Tile", (u, v) => {
-                float edge = Mathf.Min(Mathf.Min(u, 1 - u), Mathf.Min(v, 1 - v));
-                float shade = edge < 0.04f ? 0.62f : edge < 0.08f ? 0.82f : 1f;
-                float inner = Mathf.Abs(Mathf.Max(Mathf.Abs(u - 0.5f), Mathf.Abs(v - 0.5f)) - 0.25f) < 0.012f ? 0.9f : 1f;
-                float c = shade * inner * (0.96f + 0.04f * Hash(u, v));
-                return new Color(c, c, c, 1);
-            });
             // Chevrons pointing along +V, for belts and boost pads.
             SaveTexture("Arrows", (u, v) => {
                 float x = Mathf.Abs(u - 0.5f);
                 float chevron = Mathf.Repeat(v - x * 0.9f, 0.5f);
                 bool arrow = chevron < 0.18f && x < 0.38f;
-                return arrow ? new Color(1f, 0.85f, 0.2f) : new Color(0.16f, 0.17f, 0.2f);
+                return arrow ? OB_Palette.Gold : OB_Palette.Ink;
             });
-            SaveTexture("Stripes", (u, v) => Mathf.Repeat(u + v, 0.5f) < 0.25f ? new Color(1f, 0.82f, 0.1f) : new Color(0.12f, 0.12f, 0.14f));
+            SaveTexture("Stripes", (u, v) => Mathf.Repeat(u + v, 0.5f) < 0.25f ? OB_Palette.Gold : OB_Palette.Ink);
             SaveTexture("Lava", (u, v) => {
                 float n = 0.5f + 0.25f * Mathf.Sin(u * 18f + Mathf.Sin(v * 9f) * 2f) + 0.25f * Mathf.Sin(v * 14f + Mathf.Cos(u * 7f) * 2f);
                 return Color.Lerp(new Color(0.55f, 0.05f, 0.02f), new Color(1f, 0.65f, 0.1f), Mathf.Clamp01(n));
             });
-            SaveTexture("Checker", (u, v) => (Mathf.FloorToInt(u * 4) + Mathf.FloorToInt(v * 4)) % 2 == 0 ? Color.white : new Color(0.1f, 0.1f, 0.12f));
+            SaveTexture("Checker", (u, v) => (Mathf.FloorToInt(u * 4) + Mathf.FloorToInt(v * 4)) % 2 == 0 ? OB_Palette.Paper : OB_Palette.Ink);
+            // Cracks for crumble blocks, multiplied over the block colour (white = no change).
             SaveTexture("Cracks", (u, v) => {
                 float crack = Mathf.Min(Mathf.Abs(u - 0.5f - 0.12f * Mathf.Sin(v * 9f)), Mathf.Abs(v - 0.35f - 0.1f * Mathf.Sin(u * 11f)));
-                float edge = Mathf.Min(Mathf.Min(u, 1 - u), Mathf.Min(v, 1 - v));
-                float c = crack < 0.015f ? 0.45f : edge < 0.05f ? 0.7f : 0.92f + 0.08f * Hash(u, v);
-                return new Color(c, c * 0.88f, c * 0.7f, 1);
+                float c = crack < 0.012f ? 0.45f : crack < 0.03f ? 0.8f : 0.94f + 0.06f * Hash(u, v);
+                return new Color(c, c, c, 1);
             });
+
+            // UI: a rounded panel and its soft drop shadow, both white so Image.color tints them.
+            SaveTexture("Panel", (u, v) => {
+                float d = RoundedBox(u, v, 30f / 96f, 0f) * 96f;
+                return new Color(1f, 1f, 1f, Mathf.Clamp01(0.5f - d));
+            }, 96, TextureUse.Sprite, 36);
+            SaveTexture("PanelShadow", (u, v) => {
+                float d = RoundedBox(u, v, 40f / 128f, 18f / 128f) * 128f;
+                float a = 1f - Smooth(-6f, 18f, d);
+                return new Color(1f, 1f, 1f, a * a);
+            }, 128, TextureUse.Sprite, 60);
+
+            // Particles.
+            SaveTexture("FxGlow", (u, v) => {
+                float r = Mathf.Clamp01(new Vector2(u - 0.5f, v - 0.5f).magnitude * 2f);
+                float a = Mathf.Pow(1f - r, 2.2f);
+                return new Color(1f, 1f, 1f, a);
+            }, 64, TextureUse.Particle);
+            SaveTexture("FxSparkle", (u, v) => {
+                float x = Mathf.Abs(u - 0.5f) * 2f, y = Mathf.Abs(v - 0.5f) * 2f;
+                float r = Mathf.Sqrt(x * x + y * y);
+                float rays = Mathf.Max(Mathf.Clamp01(1f - x * 9f) * (1f - y), Mathf.Clamp01(1f - y * 9f) * (1f - x));
+                float core = Mathf.Pow(Mathf.Clamp01(1f - r * 2.2f), 2f);
+                return new Color(1f, 1f, 1f, Mathf.Clamp01(rays * rays + core));
+            }, 64, TextureUse.Particle);
+            SaveTexture("FxPuff", (u, v) => {
+                float angle = Mathf.Atan2(v - 0.5f, u - 0.5f);
+                float edge = 0.86f + 0.08f * Mathf.Sin(angle * 5f) + 0.05f * Mathf.Sin(angle * 9f + 1.3f);
+                float r = new Vector2(u - 0.5f, v - 0.5f).magnitude * 2f / edge;
+                float a = 1f - Smooth(0.55f, 1f, r);
+                float shade = Mathf.Lerp(0.9f, 1f, Mathf.Clamp01(v * 1.2f));
+                return new Color(shade, shade, shade, a);
+            }, 64, TextureUse.Particle);
         }
 
         // ---------------------------------------------------------------- materials
         static Texture2D Tex(string name) => AssetDatabase.LoadAssetAtPath<Texture2D>(Root + "/Textures/" + name + ".png");
 
-        static Material Mat(string name, Color color, Texture2D texture = null, float emission = 0f, float alpha = 1f, float smoothness = 0.25f, float metallic = 0f) {
-            string path = Root + "/Materials/" + name + ".mat";
+        static Shader FindShader(string name) => Shader.Find(name) ?? throw new System.InvalidOperationException("Shader not found: " + name);
+
+        /// <summary>Loads the material at <paramref name="path"/>, or creates it; either way it ends up clean on <paramref name="shader"/>.</summary>
+        static Material MaterialAsset(string path, Shader shader) {
             var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (mat == null) {
-                mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                mat = new Material(shader);
                 AssetDatabase.CreateAsset(mat, path);
+            } else if (mat.shader != shader) {
+                // Switching shader: drop the old shader's properties and keywords too.
+                var fresh = new Material(shader);
+                EditorUtility.CopySerialized(fresh, mat);
+                Object.DestroyImmediate(fresh);
             }
+            return mat;
+        }
+
+        /// <summary>A URP Lit material, for props that are not toy blocks (metal, flags, belts, lava, glass).</summary>
+        static Material Mat(string name, Color color, Texture2D texture = null, float emission = 0f, float alpha = 1f, float smoothness = 0.25f, float metallic = 0f) {
+            var mat = MaterialAsset(Root + "/Materials/" + name + ".mat", FindShader("Universal Render Pipeline/Lit"));
             color.a = alpha;
             mat.SetColor("_BaseColor", color);
             mat.SetTexture("_BaseMap", texture);
@@ -196,14 +269,349 @@ namespace Universes.UniverseData.obby.Editor {
             bool transparent = alpha < 1f;
             mat.SetFloat("_Surface", transparent ? 1f : 0f);
             mat.SetFloat("_Blend", 0f);
-            mat.SetFloat("_SrcBlend", transparent ? (float)UnityEngine.Rendering.BlendMode.SrcAlpha : (float)UnityEngine.Rendering.BlendMode.One);
-            mat.SetFloat("_DstBlend", transparent ? (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha : (float)UnityEngine.Rendering.BlendMode.Zero);
+            mat.SetFloat("_SrcBlend", transparent ? (float)BlendMode.SrcAlpha : (float)BlendMode.One);
+            mat.SetFloat("_DstBlend", transparent ? (float)BlendMode.OneMinusSrcAlpha : (float)BlendMode.Zero);
             mat.SetFloat("_ZWrite", transparent ? 0f : 1f);
             mat.SetOverrideTag("RenderType", transparent ? "Transparent" : "Opaque");
-            mat.renderQueue = transparent ? (int)UnityEngine.Rendering.RenderQueue.Transparent : -1;
+            mat.renderQueue = transparent ? (int)RenderQueue.Transparent : -1;
             if (transparent) mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); else mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
             EditorUtility.SetDirty(mat);
             return mat;
+        }
+
+        /// <summary>A toy-block material (bevelled edges and a world-scaled grid, see OB_Block.shader).</summary>
+        static Material BlockMat(string name, Color color, float grid = 0.1f, float emission = 0f, float smoothness = 0.42f,
+            Texture2D detail = null, float detailStrength = 0f, float bevel = 0.35f) {
+            var mat = MaterialAsset(Root + "/Materials/" + name + ".mat", FindShader("Universes/Obby/Block"));
+            mat.SetColor("_BaseColor", color);
+            mat.SetFloat("_GridStrength", grid);
+            mat.SetFloat("_EmissionStrength", emission);
+            mat.SetFloat("_Smoothness", smoothness);
+            mat.SetFloat("_BevelLight", bevel);
+            mat.SetTexture("_DetailMap", detail);
+            mat.SetFloat("_DetailStrength", detail != null ? detailStrength : 0f);
+            mat.enableInstancing = true;
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        /// <summary>A URP particle material: soft alpha blend, or additive for glows and sparkles.</summary>
+        static Material FxMat(string name, Texture2D texture, bool additive) {
+            var mat = MaterialAsset(Root + "/Materials/" + name + ".mat", FindShader("Universal Render Pipeline/Particles/Unlit"));
+            mat.SetTexture("_BaseMap", texture);
+            mat.SetColor("_BaseColor", Color.white);
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", additive ? 2f : 0f);
+            mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", additive ? (float)BlendMode.One : (float)BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            mat.SetFloat("_DstBlendAlpha", additive ? (float)BlendMode.One : (float)BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.SetFloat("_Cull", (float)CullMode.Off);
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        static Material SimpleMat(string name, string shader, System.Action<Material> setup) {
+            var mat = MaterialAsset(Root + "/Materials/" + name + ".mat", FindShader(shader));
+            setup(mat);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        static Material CloudMat() => SimpleMat("Cloud", "Universes/Obby/Cloud", m => {
+            m.SetColor("_TopColor", OB_Palette.Cloud);
+            m.SetColor("_ShadeColor", OB_Palette.CloudShade);
+            m.enableInstancing = true;
+        });
+
+        // ---------------------------------------------------------------- effects
+        sealed class FxPrefabs {
+            public ParticleSystem coinBurst, checkpointBurst, finishBurst, respawnPoof, jumpPuff, landPuff, lavaEmbers, gravityDrift;
+        }
+
+        static Gradient Fade(Color color, float fadeInEnd = 0.05f, float fadeOutStart = 0.6f) => new() {
+            colorKeys = new[] { new GradientColorKey(color, 0f), new GradientColorKey(color, 1f) },
+            alphaKeys = new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, fadeInEnd), new GradientAlphaKey(1f, fadeOutStart), new GradientAlphaKey(0f, 1f) }
+        };
+
+        static ParticleSystem.MinMaxGradient PaletteColors() {
+            var gradient = new Gradient { mode = GradientMode.Fixed };
+            var keys = new GradientColorKey[OB_Palette.Blocks.Length];
+            for (int i = 0; i < keys.Length; i++) keys[i] = new GradientColorKey(OB_Palette.Blocks[i], (i + 1f) / keys.Length);
+            gradient.colorKeys = keys;
+            return new ParticleSystem.MinMaxGradient(gradient) { mode = ParticleSystemGradientMode.RandomColor };
+        }
+
+        static AnimationCurve Curve(params float[] timeValue) {
+            var keys = new Keyframe[timeValue.Length / 2];
+            for (int i = 0; i < keys.Length; i++) keys[i] = new Keyframe(timeValue[i * 2], timeValue[i * 2 + 1]);
+            var curve = new AnimationCurve(keys);
+            for (int i = 0; i < keys.Length; i++) AnimationUtility.SetKeyLeftTangentMode(curve, i, AnimationUtility.TangentMode.Auto);
+            return curve;
+        }
+
+        /// <summary>A world-space particle system with no emission; callers add bursts or a rate.</summary>
+        static ParticleSystem NewParticles(string name, Transform parent, Material material, float duration, bool loop, int maxParticles = 200) {
+            var go = new GameObject(name);
+            if (parent != null) go.transform.SetParent(parent, false);
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = ps.main;
+            main.duration = duration;
+            main.loop = loop;
+            main.playOnAwake = false;   // one-shots are played by OB_Fx, ambient loops by OB_Course on clients only
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.scalingMode = ParticleSystemScalingMode.Shape;
+            main.maxParticles = maxParticles;
+            main.startSpeed = 0f;
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.sortingFudge = 0f;
+            return ps;
+        }
+
+        static void Burst(ParticleSystem ps, params (float time, int count)[] bursts) {
+            var emission = ps.emission;
+            emission.SetBursts(bursts.Select(b => new ParticleSystem.Burst(b.time, (short)b.count)).ToArray());
+        }
+
+        static void FadeOver(ParticleSystem ps, Gradient gradient) {
+            var col = ps.colorOverLifetime;
+            col.enabled = true;
+            col.color = gradient;
+        }
+
+        static void SizeOver(ParticleSystem ps, AnimationCurve curve) {
+            var size = ps.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f, curve);
+        }
+
+        static ParticleSystem SaveFx(ParticleSystem ps) {
+            var prefab = PrefabUtility.SaveAsPrefabAsset(ps.gameObject, Fx + "/" + ps.name + ".prefab");
+            Object.DestroyImmediate(ps.gameObject);
+            return prefab.GetComponent<ParticleSystem>();
+        }
+
+        /// <summary>Confetti: palette-coloured paper squares tumbling down.</summary>
+        static ParticleSystem Confetti(string name, Material paper, int count, Vector2 speed, float spread, bool secondWave) {
+            var ps = NewParticles(name, null, paper, 0.6f, false, count * 2 + 20);
+            var main = ps.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 2.8f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed.x, speed.y);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.6f);
+            main.startRotation3D = true;
+            main.startRotationX = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startRotationY = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startRotationZ = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = PaletteColors();
+            main.gravityModifier = 0.55f;
+            Burst(ps, secondWave ? new[] { (0f, count), (0.35f, count / 2) } : new[] { (0f, count) });
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = spread;
+            shape.radius = 1.2f;
+            shape.rotation = new Vector3(-90f, 0f, 0f);
+            var drag = ps.limitVelocityOverLifetime;
+            drag.enabled = true;
+            drag.limit = 3.5f;
+            drag.dampen = 0.08f;
+            var spin = ps.rotationOverLifetime;
+            spin.enabled = true;
+            spin.separateAxes = true;
+            spin.x = new ParticleSystem.MinMaxCurve(-6f, 6f);
+            spin.y = new ParticleSystem.MinMaxCurve(-4f, 4f);
+            spin.z = new ParticleSystem.MinMaxCurve(-6f, 6f);
+            var noise = ps.noise;
+            noise.enabled = true;
+            noise.strength = 1.2f;
+            noise.frequency = 0.5f;
+            FadeOver(ps, Fade(Color.white, 0.01f, 0.8f));
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Mesh;
+            renderer.mesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            renderer.alignment = ParticleSystemRenderSpace.Local;
+            return ps;
+        }
+
+        /// <summary>One bright flash at the effect origin, used under bursts.</summary>
+        static void Flash(Transform parent, Material glow, Color color, float size, float life) {
+            var ps = NewParticles("Flash", parent, glow, 0.2f, false, 2);
+            var main = ps.main;
+            main.startLifetime = life;
+            main.startSize = size;
+            main.startColor = color;
+            Burst(ps, (0f, 1));
+            SizeOver(ps, Curve(0f, 0.5f, 0.3f, 1f, 1f, 1.2f));
+            FadeOver(ps, Fade(Color.white, 0.02f, 0.3f));
+        }
+
+        static FxPrefabs BuildEffects() {
+            var glow = FxMat("FxGlow", Tex("FxGlow"), true);
+            // Sparkles and drifting motes are alpha-blended: additive would vanish against the bright sky.
+            var sparkle = FxMat("FxSparkle", Tex("FxSparkle"), false);
+            var mote = FxMat("FxMote", Tex("FxGlow"), false);
+            var puff = FxMat("FxPuff", Tex("FxPuff"), false);
+            var paper = FxMat("FxConfetti", null, false);
+            var fx = new FxPrefabs();
+
+            {   // Coin: a gold flash and a ring of sparkles.
+                var ps = NewParticles("CoinBurst", null, sparkle, 0.5f, false, 40);
+                var main = ps.main;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.8f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(5f, 11f);
+                main.startSize = new ParticleSystem.MinMaxCurve(1.4f, 2.4f);
+                main.startColor = new ParticleSystem.MinMaxGradient(OB_Palette.Gold, OB_Palette.Hex(0xFF9F1C));
+                main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI);
+                main.gravityModifier = 0.4f;
+                Burst(ps, (0f, 22));
+                var shape = ps.shape;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 0.4f;
+                var drag = ps.limitVelocityOverLifetime;
+                drag.enabled = true;
+                drag.limit = 1.5f;
+                drag.dampen = 0.15f;
+                SizeOver(ps, Curve(0f, 1f, 1f, 0f));
+                FadeOver(ps, Fade(Color.white, 0.02f, 0.5f));
+                Flash(ps.transform, glow, OB_Palette.Gold, 5f, 0.3f);
+                fx.coinBurst = SaveFx(ps);
+            }
+            {   // Checkpoint: confetti fountain from the pad plus a green flash.
+                var ps = Confetti("CheckpointConfetti", paper, 70, new Vector2(12f, 20f), 22f, false);
+                Flash(ps.transform, glow, OB_Palette.Go, 10f, 0.4f);
+                fx.checkpointBurst = SaveFx(ps);
+            }
+            {   // Finish: a bigger confetti blast in two waves with gold sparkles.
+                var ps = Confetti("FinishConfetti", paper, 150, new Vector2(18f, 30f), 35f, true);
+                var sparks = NewParticles("Sparkles", ps.transform, sparkle, 0.5f, false, 60);
+                var main = sparks.main;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.8f, 1.4f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(10f, 22f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.8f, 1.8f);
+                main.startColor = OB_Palette.Gold;
+                Burst(sparks, (0f, 40));
+                var shape = sparks.shape;
+                shape.shapeType = ParticleSystemShapeType.Hemisphere;
+                shape.radius = 1f;
+                shape.rotation = new Vector3(-90f, 0f, 0f);
+                SizeOver(sparks, Curve(0f, 1f, 1f, 0f));
+                Flash(ps.transform, glow, OB_Palette.Gold, 16f, 0.5f);
+                fx.finishBurst = SaveFx(ps);
+            }
+            {   // Respawn: a cloud poof with cyan sparkles.
+                var ps = NewParticles("RespawnPoof", null, puff, 0.3f, false, 30);
+                var main = ps.main;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.85f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(3f, 7f);
+                main.startSize = new ParticleSystem.MinMaxCurve(2.2f, 3.6f);
+                main.startColor = OB_Palette.Cloud;
+                main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+                Burst(ps, (0f, 16));
+                var shape = ps.shape;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 1.2f;
+                shape.position = new Vector3(0f, 2.5f, 0f);
+                var drag = ps.limitVelocityOverLifetime;
+                drag.enabled = true;
+                drag.limit = 0.5f;
+                drag.dampen = 0.2f;
+                SizeOver(ps, Curve(0f, 0.6f, 0.4f, 1f, 1f, 1.1f));
+                FadeOver(ps, Fade(Color.white, 0.05f, 0.45f));
+                var sparks = NewParticles("Sparkles", ps.transform, sparkle, 0.3f, false, 20);
+                var sm = sparks.main;
+                sm.startLifetime = new ParticleSystem.MinMaxCurve(0.4f, 0.7f);
+                sm.startSpeed = new ParticleSystem.MinMaxCurve(4f, 9f);
+                sm.startSize = new ParticleSystem.MinMaxCurve(0.6f, 1.1f);
+                sm.startColor = OB_Palette.Gravity;
+                Burst(sparks, (0f, 12));
+                var ss = sparks.shape;
+                ss.shapeType = ParticleSystemShapeType.Sphere;
+                ss.radius = 1f;
+                ss.position = new Vector3(0f, 2.5f, 0f);
+                SizeOver(sparks, Curve(0f, 1f, 1f, 0f));
+                fx.respawnPoof = SaveFx(ps);
+            }
+            fx.jumpPuff = SaveFx(DustRing("JumpPuff", puff, 7, new Vector2(2f, 4f), new Vector2(1.2f, 2f), 0.4f));
+            fx.landPuff = SaveFx(DustRing("LandPuff", puff, 12, new Vector2(4f, 8f), new Vector2(1.8f, 3.2f), 0.55f));
+            {   // Lava embers: rise from the lava's top face. OB_Course sets the rate and drift per piece.
+                var ps = NewParticles("LavaEmbers", null, mote, 2f, true, 80);
+                var main = ps.main;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(1f, 1.8f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.45f, 0.9f);
+                main.startColor = new ParticleSystem.MinMaxGradient(OB_Palette.Gold, OB_Palette.Hex(0xFF9F1C));
+                var emission = ps.emission;
+                emission.rateOverTime = 6f;
+                var shape = ps.shape;
+                shape.shapeType = ParticleSystemShapeType.Box;
+                shape.position = new Vector3(0f, 0.5f, 0f);
+                shape.scale = new Vector3(1f, 0f, 1f);
+                var noise = ps.noise;
+                noise.enabled = true;
+                noise.strength = 0.8f;
+                noise.frequency = 0.8f;
+                SizeOver(ps, Curve(0f, 1f, 1f, 0.2f));
+                FadeOver(ps, Fade(Color.white, 0.15f, 0.5f));
+                fx.lavaEmbers = SaveFx(ps);
+            }
+            {   // Gravity drift: streaks that fall the way the field pulls. OB_Course sets the direction.
+                var ps = NewParticles("GravityDrift", null, mote, 2f, true, 120);
+                var main = ps.main;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.45f);
+                main.startColor = Color.Lerp(OB_Palette.Blocks[4], Color.white, 0.4f);
+                var emission = ps.emission;
+                emission.rateOverTime = 10f;
+                var shape = ps.shape;
+                shape.shapeType = ParticleSystemShapeType.Box;
+                shape.scale = Vector3.one;
+                FadeOver(ps, Fade(Color.white, 0.2f, 0.6f));
+                var renderer = ps.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Stretch;
+                renderer.velocityScale = 0.35f;
+                renderer.lengthScale = 1.5f;
+                fx.gravityDrift = SaveFx(ps);
+            }
+            return fx;
+        }
+
+        /// <summary>A flat ring of dust puffs at the feet, oriented by the effect's up axis.</summary>
+        static ParticleSystem DustRing(string name, Material puff, int count, Vector2 speed, Vector2 size, float life) {
+            var ps = NewParticles(name, null, puff, 0.2f, false, count * 3);
+            var main = ps.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.7f, life);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed.x, speed.y);
+            main.startSize = new ParticleSystem.MinMaxCurve(size.x, size.y);
+            main.startColor = OB_Palette.Cloud;
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            Burst(ps, (0f, count));
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.9f;
+            shape.radiusThickness = 0f;
+            shape.rotation = new Vector3(90f, 0f, 0f);
+            shape.position = new Vector3(0f, 0.3f, 0f);
+            var drag = ps.limitVelocityOverLifetime;
+            drag.enabled = true;
+            drag.limit = 0.5f;
+            drag.dampen = 0.25f;
+            var lift = ps.velocityOverLifetime;
+            lift.enabled = true;
+            lift.space = ParticleSystemSimulationSpace.Local;
+            lift.x = 0f;
+            lift.y = 1.2f;
+            lift.z = 0f;
+            SizeOver(ps, Curve(0f, 0.5f, 0.35f, 1f, 1f, 1.15f));
+            FadeOver(ps, Fade(Color.white, 0.05f, 0.35f));
+            return ps;
         }
 
         // ---------------------------------------------------------------- prefab helpers
@@ -243,33 +651,34 @@ namespace Universes.UniverseData.obby.Editor {
         }
 
         // ---------------------------------------------------------------- pieces
-        static PiecePrefabs BuildPieces() {
-            var tile = Tex("Tile");
+        static PiecePrefabs BuildPieces(FxPrefabs fx) {
+            Color pink = OB_Palette.Blocks[6], blue = OB_Palette.Blocks[0];
             var p = new PiecePrefabs {
-                palette = Palette.Select((c, i) => Mat($"Platform{i}", c, tile, smoothness: 0.35f)).ToArray(),
-                beatSolidA = Mat("BeatPink", new Color(1f, 0.35f, 0.7f), tile, 0.4f),
-                beatGhostA = Mat("BeatPinkGhost", new Color(1f, 0.35f, 0.7f), tile, 0.2f, 0.22f),
-                beatSolidB = Mat("BeatBlue", new Color(0.25f, 0.65f, 1f), tile, 0.4f),
-                beatGhostB = Mat("BeatBlueGhost", new Color(0.25f, 0.65f, 1f), tile, 0.2f, 0.22f)
+                palette = OB_Palette.Blocks.Select((c, i) => BlockMat($"Platform{i}", c)).ToArray(),
+                beatSolidA = BlockMat("BeatPink", pink, 0.06f, 0.35f),
+                beatGhostA = Mat("BeatPinkGhost", pink, emission: 0.2f, alpha: 0.22f),
+                beatSolidB = BlockMat("BeatBlue", blue, 0.06f, 0.35f),
+                beatGhostB = Mat("BeatBlueGhost", blue, emission: 0.2f, alpha: 0.22f)
             };
-            var lavaMat = Mat("Lava", new Color(1f, 0.45f, 0.1f), Tex("Lava"), 1.6f, smoothness: 0.6f);
-            var grey = Mat("PadGrey", new Color(0.78f, 0.8f, 0.86f), tile, smoothness: 0.35f);
-            var pole = Mat("Pole", new Color(0.92f, 0.92f, 0.95f), smoothness: 0.6f, metallic: 0.5f);
-            var flagIdle = Mat("FlagIdle", new Color(0.9f, 0.2f, 0.2f), emission: 0.2f);
-            var flagReached = Mat("FlagReached", new Color(0.2f, 1f, 0.35f), emission: 1.2f);
-            var gold = Mat("Gold", new Color(1f, 0.78f, 0.2f), emission: 0.6f, smoothness: 0.8f, metallic: 0.9f);
+            var lavaMat = Mat("Lava", OB_Palette.Lava, Tex("Lava"), 1.6f, smoothness: 0.6f);
+            var grey = BlockMat("PadGrey", OB_Palette.Stone, 0.08f);
+            var pole = Mat("Pole", OB_Palette.Paper, smoothness: 0.6f, metallic: 0.5f);
+            var flagIdle = Mat("FlagIdle", OB_Palette.Blocks[3], emission: 0.2f);
+            var flagReached = Mat("FlagReached", OB_Palette.Go, emission: 1.2f);
+            var gold = Mat("Gold", OB_Palette.Gold, emission: 0.7f, smoothness: 0.8f, metallic: 0.9f);
             var checker = Mat("FinishChecker", Color.white, Tex("Checker"), smoothness: 0.3f);
-            var springRed = Mat("SpringRed", new Color(0.92f, 0.18f, 0.18f), smoothness: 0.5f);
-            var springTop = Mat("SpringTop", new Color(1f, 0.85f, 0.2f), emission: 0.5f, smoothness: 0.5f);
-            var coil = Mat("SpringCoil", new Color(0.75f, 0.75f, 0.8f), smoothness: 0.8f, metallic: 0.9f);
-            var boostMat = Mat("Boost", new Color(0.4f, 1f, 1f), Tex("Arrows"), 1.2f);
+            var springRed = BlockMat("SpringRed", OB_Palette.Blocks[3], 0f);
+            var springTop = BlockMat("SpringTop", OB_Palette.Gold, 0f, 0.4f);
+            var coil = Mat("SpringCoil", OB_Palette.StoneDark, smoothness: 0.8f, metallic: 0.9f);
+            var boostMat = Mat("Boost", OB_Palette.Gravity, Tex("Arrows"), 1.2f);
             var belt = Mat("Belt", Color.white, Tex("Arrows"), smoothness: 0.2f);
-            var zone = Mat("GravityZone", new Color(0.65f, 0.4f, 1f), emission: 0.3f, alpha: 0.07f);
-            var cracks = Mat("Crumble", new Color(0.95f, 0.8f, 0.55f), Tex("Cracks"));
+            var zone = Mat("GravityZone", OB_Palette.Blocks[4], emission: 0.3f, alpha: 0.07f);
+            var cracks = BlockMat("Crumble", OB_Palette.Hex(0xF2C98B), 0f, detail: Tex("Cracks"), detailStrength: 1f);
             var stripes = Mat("WallJump", Color.white, Tex("Stripes"), 0.15f);
-            var moverMat = Mat("Mover", new Color(0.85f, 0.95f, 1f), tile, 0.25f, smoothness: 0.5f);
-            var lobbyMat = Mat("Lobby", new Color(0.88f, 0.9f, 0.95f), tile, smoothness: 0.35f);
-            var gateMat = Mat("Gate", new Color(0.35f, 0.75f, 1f), emission: 0.8f, alpha: 0.3f);
+            var moverMat = BlockMat("Mover", OB_Palette.Paper, 0.06f, 0.12f);
+            var lobbyMat = BlockMat("Lobby", OB_Palette.Stone, 0.12f);
+            var gateMat = Mat("Gate", OB_Palette.Gravity, emission: 0.8f, alpha: 0.3f);
+            var font = Font("Fredoka-Bold");
 
             p.platform = Save(Cube("Platform", null, Vector3.zero, Vector3.one, p.palette[0]), "Platform");
 
@@ -282,6 +691,9 @@ namespace Universes.UniverseData.obby.Editor {
                 marker.flagRenderers = new[] { flag.GetComponent<Renderer>() };
                 marker.idleMaterial = flagIdle;
                 marker.reachedMaterial = flagReached;
+                var confetti = (GameObject)PrefabUtility.InstantiatePrefab(fx.checkpointBurst.gameObject, root.transform);
+                confetti.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+                marker.reachedEffect = confetti.GetComponent<ParticleSystem>();
                 p.checkpointPad = Save(root, "CheckpointPad");
             }
             {
@@ -295,15 +707,18 @@ namespace Universes.UniverseData.obby.Editor {
                 text.transform.localPosition = new Vector3(0f, 5.8f, -0.25f);
                 var tmp = text.GetComponent<TextMeshPro>();
                 tmp.text = "FINISH";
+                tmp.font = font.asset;
+                tmp.fontSharedMaterial = font.outline;
                 tmp.fontSize = 6f;
                 tmp.alignment = TextAlignmentOptions.Center;
-                tmp.color = new Color(1f, 0.85f, 0.2f);
+                tmp.color = OB_Palette.Gold;
                 tmp.rectTransform.sizeDelta = new Vector2(9f, 1f);
                 p.finishPad = Save(root, "FinishPad");
             }
             {
                 var go = Cube("Lava", null, Vector3.zero, Vector3.one, lavaMat);
                 go.AddComponent<HazardVolume>().glowRenderer = go.GetComponent<Renderer>();
+                PrefabUtility.InstantiatePrefab(fx.lavaEmbers.gameObject, go.transform);
                 p.lava = Save(go, "Lava");
             }
             {   // Spring: origin on the surface it sits on.
@@ -335,8 +750,9 @@ namespace Universes.UniverseData.obby.Editor {
             {
                 var go = Cube("GravityZone", null, Vector3.zero, Vector3.one, zone);
                 go.GetComponent<BoxCollider>().isTrigger = true;
-                go.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                go.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
                 go.AddComponent<GravityZone>();
+                PrefabUtility.InstantiatePrefab(fx.gravityDrift.gameObject, go.transform);
                 p.gravityZone = Save(go, "GravityZone");
             }
             {
@@ -379,7 +795,7 @@ namespace Universes.UniverseData.obby.Editor {
             p.coin = BuildCoin(gold);
             {
                 var go = Cube("Gate", null, Vector3.zero, Vector3.one, gateMat);
-                go.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                go.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
                 p.gate = Save(go, "StartGate");
             }
             {
@@ -397,10 +813,12 @@ namespace Universes.UniverseData.obby.Editor {
                 sign.transform.SetParent(root.transform, false);
                 sign.transform.localPosition = new Vector3(0f, 3.2f, LobbySize * 0.5f - 0.6f);
                 var tmp = sign.GetComponent<TextMeshPro>();
-                tmp.text = "SKY OBBY\n<size=50%>A new course every race. Reach the finish first!</size>";
+                tmp.text = "SKY OBBY\n<size=45%>A new course every race. Reach the finish first!</size>";
+                tmp.font = font.asset;
+                tmp.fontSharedMaterial = font.outline;
                 tmp.fontSize = 5f;
                 tmp.alignment = TextAlignmentOptions.Center;
-                tmp.color = Color.white;
+                tmp.color = OB_Palette.Paper;
                 tmp.rectTransform.sizeDelta = new Vector2(12f, 3f);
                 sign.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
                 p.lobby = Save(root, "Lobby");
@@ -434,7 +852,7 @@ namespace Universes.UniverseData.obby.Editor {
                 foreach (var c in coin.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(c);
                 foreach (var r in coin.GetComponentsInChildren<Renderer>()) {
                     r.sharedMaterial = gold;
-                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    r.shadowCastingMode = ShadowCastingMode.Off;
                 }
                 // Normalise the imported coin to a 1.1 m upright disc, whatever its import scale/axis.
                 var bounds = Bounds(coin);
@@ -459,118 +877,429 @@ namespace Universes.UniverseData.obby.Editor {
             return bounds;
         }
 
-        // ---------------------------------------------------------------- HUD
-        static readonly Color Ink = new(0.05f, 0.07f, 0.12f, 0.72f);
+        // ---------------------------------------------------------------- fonts
+        /// <summary>A TMP font asset for one of the bundled Fredoka faces, plus its styled materials.</summary>
+        sealed class FontSet {
+            public TMP_FontAsset asset;
+            /// <summary>Thick ink outline and drop shadow: for text over the 3D world.</summary>
+            public Material outline;
+            /// <summary>Soft drop shadow only: for text on HUD panels.</summary>
+            public Material shadow;
+        }
 
-        static RectTransform Rect(string name, Transform parent, Vector2 min, Vector2 max) {
+        const string FontCharacters = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~•…–—×·°";
+
+        /// <summary>
+        /// Creates (once) a static SDF font asset with ASCII and common punctuation baked in, so the
+        /// asset never changes at runtime; other characters (player names) fall back to TMP's default font.
+        /// </summary>
+        static FontSet Font(string face) {
+            string path = Root + "/Fonts/" + face + " SDF.asset";
+            var asset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);
+            if (asset == null) {
+                var source = AssetDatabase.LoadAssetAtPath<UnityEngine.Font>(Root + "/Fonts/" + face + ".ttf")
+                    ?? throw new System.InvalidOperationException("Missing font " + face);
+                asset = TMP_FontAsset.CreateFontAsset(source, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024, AtlasPopulationMode.Dynamic, false);
+                asset.name = face + " SDF";
+                asset.TryAddCharacters(FontCharacters);
+                asset.atlasPopulationMode = AtlasPopulationMode.Static;
+                AssetDatabase.CreateAsset(asset, path);
+                asset.atlasTexture.name = face + " Atlas";
+                AssetDatabase.AddObjectToAsset(asset.atlasTexture, asset);
+                asset.material.name = face + " Material";
+                AssetDatabase.AddObjectToAsset(asset.material, asset);
+                EditorUtility.SetDirty(asset);
+                AssetDatabase.SaveAssets();
+            }
+            return new FontSet {
+                asset = asset,
+                outline = FontPreset(asset, face + " Outline", 0.24f, 0.9f),
+                shadow = FontPreset(asset, face + " Shadow", 0f, 0.6f)
+            };
+        }
+
+        static Material FontPreset(TMP_FontAsset font, string name, float outline, float shadow) {
+            var mat = MaterialAsset(Root + "/Fonts/" + name + ".mat", FindShader("TextMeshPro/Distance Field"));
+            mat.SetTexture("_MainTex", font.atlasTexture);
+            mat.SetFloat("_TextureWidth", font.atlasWidth);
+            mat.SetFloat("_TextureHeight", font.atlasHeight);
+            mat.SetFloat("_GradientScale", font.atlasPadding + 1);
+            mat.SetFloat("_WeightNormal", font.normalStyle);
+            mat.SetFloat("_WeightBold", font.boldStyle);
+            mat.SetColor("_FaceColor", Color.white);
+            mat.SetFloat("_OutlineWidth", outline);
+            mat.SetColor("_OutlineColor", OB_Palette.Ink);
+            mat.SetFloat("_OutlineSoftness", 0f);
+            if (outline > 0f) mat.EnableKeyword("OUTLINE_ON"); else mat.DisableKeyword("OUTLINE_ON");
+            if (shadow > 0f) {
+                mat.EnableKeyword("UNDERLAY_ON");
+                mat.SetColor("_UnderlayColor", OB_Palette.Ink.WithAlpha(0.6f));
+                mat.SetFloat("_UnderlayOffsetX", 0f);
+                mat.SetFloat("_UnderlayOffsetY", -shadow);
+                mat.SetFloat("_UnderlayDilate", outline > 0f ? 0.5f : 0.1f);
+                mat.SetFloat("_UnderlaySoftness", 0.35f);
+            } else {
+                mat.DisableKeyword("UNDERLAY_ON");
+            }
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        // ---------------------------------------------------------------- client presentation
+        static RectTransform Box(string name, Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position, Vector2 size) {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var rect = (RectTransform)go.transform;
-            rect.anchorMin = min; rect.anchorMax = max; rect.offsetMin = rect.offsetMax = Vector2.zero;
+            rect.anchorMin = rect.anchorMax = anchor;
+            rect.pivot = pivot;
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
             return rect;
         }
 
-        static UnityEngine.UI.Image Panel(string name, Transform parent, Vector2 min, Vector2 max, Color color) {
-            var image = Rect(name, parent, min, max).gameObject.AddComponent<UnityEngine.UI.Image>();
+        static RectTransform Stretch(string name, Transform parent, Vector2 min, Vector2 max, Vector2 offsetMin = default, Vector2 offsetMax = default) {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rect = (RectTransform)go.transform;
+            rect.anchorMin = min;
+            rect.anchorMax = max;
+            rect.offsetMin = offsetMin;
+            rect.offsetMax = offsetMax;
+            return rect;
+        }
+
+        /// <summary>A rounded, sliced panel image on <paramref name="rect"/>; <paramref name="radius"/> is the corner radius in canvas pixels.</summary>
+        static Image Panel(RectTransform rect, Color color, float radius = 30f) {
+            var image = rect.gameObject.AddComponent<Image>();
+            image.sprite = SpriteAt(Root + "/Textures/Panel.png");
+            image.type = Image.Type.Sliced;
+            image.pixelsPerUnitMultiplier = 30f / radius;
             image.color = color;
             image.raycastTarget = false;
             return image;
         }
 
-        static TMP_Text Text(string name, Transform parent, Vector2 min, Vector2 max, float size, Color color, TextAlignmentOptions align = TextAlignmentOptions.Left, bool bold = false) {
-            var text = Rect(name, parent, min, max).gameObject.AddComponent<TextMeshProUGUI>();
+        /// <summary>A soft drop shadow behind <paramref name="panel"/> (added as its first child, drawn first).</summary>
+        static void Shadow(RectTransform panel, float radius = 30f) {
+            var rect = Stretch("Shadow", panel, Vector2.zero, Vector2.one, new Vector2(-16f, -24f), new Vector2(16f, 10f));
+            rect.SetAsFirstSibling();
+            var image = rect.gameObject.AddComponent<Image>();
+            image.sprite = SpriteAt(Root + "/Textures/PanelShadow.png");
+            image.type = Image.Type.Sliced;
+            image.pixelsPerUnitMultiplier = 30f / radius;
+            image.color = OB_Palette.Ink.WithAlpha(0.45f);
+            image.raycastTarget = false;
+        }
+
+        /// <summary>A panel with a soft shadow: returns the panel body that content goes in.</summary>
+        static RectTransform Card(string name, Transform parent, Vector2 anchor, Vector2 pivot, Vector2 position, Vector2 size, Color color, float radius = 30f) {
+            var root = Box(name, parent, anchor, pivot, position, size);
+            Shadow(root, radius);
+            var body = Stretch("Body", root, Vector2.zero, Vector2.one);
+            Panel(body, color, radius);
+            return root;
+        }
+
+        static Image Icon(string name, Transform parent, string icon, Vector2 anchor, Vector2 position, float size, Color color) {
+            var rect = Box(name, parent, anchor, new Vector2(0.5f, 0.5f), position, Vector2.one * size);
+            var image = rect.gameObject.AddComponent<Image>();
+            image.sprite = SpriteAt(Icons + icon + ".png");
+            image.color = color;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        static TMP_Text Label(RectTransform rect, FontSet font, Material material, float size, Color color, TextAlignmentOptions align) {
+            var text = rect.gameObject.AddComponent<TextMeshProUGUI>();
+            text.font = font.asset;
+            text.fontSharedMaterial = material;
             text.fontSize = size;
             text.color = color;
             text.alignment = align;
             text.raycastTarget = false;
             text.textWrappingMode = TextWrappingModes.Normal;
-            if (bold) text.fontStyle = FontStyles.Bold;
-            text.outlineWidth = 0.18f;
-            text.outlineColor = new Color32(0, 0, 0, 200);
+            text.overflowMode = TextOverflowModes.Overflow;
             return text;
         }
 
-        static GameObject BuildHud() {
+        static GameObject BuildClient(FxPrefabs fx) {
 #if UNITY_SERVER
             // The client assembly is not compiled in the server profile; keep the prefab authored by a client Editor.
-            return AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/ObbyHUD.prefab");
+            return AssetDatabase.LoadAssetAtPath<GameObject>(ClientPrefab);
 #else
-            var root = new GameObject("ObbyHUD", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler));
-            var canvas = root.GetComponent<Canvas>();
+            var bold = Font("Fredoka-Bold");
+            var semi = Font("Fredoka-SemiBold");
+            var root = new GameObject("ObbyClient");
+            var client = root.AddComponent<OB_ClientController>();
+
+            // Post-processing for the whole obby (the client camera already renders post effects).
+            var volume = root.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.priority = 10f;
+            volume.sharedProfile = BuildPostProfile();
+
+            var fxRoot = new GameObject("Fx");
+            fxRoot.transform.SetParent(root.transform, false);
+            client.fx = fxRoot.AddComponent<OB_Fx>();
+            client.fx.coinBurst = fx.coinBurst;
+            client.fx.finishBurst = fx.finishBurst;
+            client.fx.respawnPoof = fx.respawnPoof;
+            client.fx.jumpPuff = fx.jumpPuff;
+            client.fx.landPuff = fx.landPuff;
+
+            var skyRoot = new GameObject("Backdrop");
+            skyRoot.transform.SetParent(root.transform, false);
+            client.backdrop = skyRoot.AddComponent<OB_Backdrop>();
+            BuildBackdrop(client.backdrop);
+
+            var canvasGo = new GameObject("HUD", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
+            canvasGo.transform.SetParent(root.transform, false);
+            var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 30;
-            var scaler = root.GetComponent<UnityEngine.UI.CanvasScaler>();
-            scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            var scaler = canvasGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.matchWidthOrHeight = 0.5f;
-            var hud = root.AddComponent<OB_ClientController>();
-            Color white = new(0.97f, 0.98f, 1f), yellow = new(1f, 0.85f, 0.25f);
+            var hud = canvasGo.transform;
+            Color panel = OB_Palette.Ink.WithAlpha(0.86f), muted = OB_Palette.Hex(0xC3CEEE);
+            Vector2 topLeft = new(0f, 1f), top = new(0.5f, 1f), bottomLeft = Vector2.zero, centre = new(0.5f, 0.5f);
+            // The shared HUD owns the top corners (chat, player list) and the top strip (round topbar),
+            // so the race clock sits under the topbar and the stage card in the bottom-left corner.
+            const float clockTop = -140f;
 
-            var stage = Panel("StagePanel", root.transform, new Vector2(0.012f, 0.4f), new Vector2(0.25f, 0.6f), Ink);
-            hud.stageLabel = Text("Stage", stage.transform, new Vector2(0.05f, 0.62f), new Vector2(0.95f, 0.97f), 40, yellow, bold: true);
-            hud.stageNameLabel = Text("StageName", stage.transform, new Vector2(0.05f, 0.4f), new Vector2(0.95f, 0.64f), 26, white);
-            hud.hintLabel = Text("Hint", stage.transform, new Vector2(0.05f, 0.04f), new Vector2(0.95f, 0.42f), 19, new Color(0.8f, 0.86f, 0.95f));
-            var stats = Panel("StatsPanel", root.transform, new Vector2(0.012f, 0.31f), new Vector2(0.25f, 0.39f), Ink);
-            hud.timerLabel = Text("Timer", stats.transform, new Vector2(0.05f, 0.05f), new Vector2(0.62f, 0.95f), 28, white, TextAlignmentOptions.MidlineLeft, true);
-            hud.coinsLabel = Text("Coins", stats.transform, new Vector2(0.6f, 0.05f), new Vector2(0.96f, 0.95f), 24, yellow, TextAlignmentOptions.MidlineRight);
-            hud.leaderLabel = Text("Leader", root.transform, new Vector2(0.3f, 0.79f), new Vector2(0.7f, 0.85f), 24, white, TextAlignmentOptions.Center);
-            hud.toastLabel = Text("Toast", root.transform, new Vector2(0.2f, 0.6f), new Vector2(0.8f, 0.7f), 44, yellow, TextAlignmentOptions.Center, true);
-            hud.centerLabel = Text("Center", root.transform, new Vector2(0.3f, 0.38f), new Vector2(0.7f, 0.62f), 140, white, TextAlignmentOptions.Center, true);
-            var results = Panel("Results", root.transform, new Vector2(0.3f, 0.2f), new Vector2(0.7f, 0.56f), new Color(0.05f, 0.07f, 0.12f, 0.88f));
-            hud.resultsPanel = results.gameObject;
-            Text("ResultsTitle", results.transform, new Vector2(0.05f, 0.82f), new Vector2(0.95f, 0.97f), 36, yellow, TextAlignmentOptions.Center, true).text = "RACE RESULTS";
-            hud.resultsBody = Text("ResultsBody", results.transform, new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.8f), 26, white, TextAlignmentOptions.TopLeft);
+            {   // Stage card, bottom left: stage number, name, hint and course progress.
+                var card = Card("StageCard", hud, bottomLeft, bottomLeft, new Vector2(32f, 32f), new Vector2(540f, 214f), panel);
+                client.stageCard = card;
+                var body = card.Find("Body");
+                client.stageLabel = Label(Box("Stage", body, topLeft, topLeft, new Vector2(30f, -22f), new Vector2(480f, 38f)), bold, bold.shadow, 28, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
+                client.stageLabel.characterSpacing = 4f;
+                client.stageNameLabel = Label(Box("StageName", body, topLeft, topLeft, new Vector2(30f, -60f), new Vector2(480f, 58f)), bold, bold.shadow, 48, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
+                client.hintLabel = Label(Box("Hint", body, topLeft, topLeft, new Vector2(30f, -120f), new Vector2(480f, 56f)), semi, semi.asset.material, 21, muted, TextAlignmentOptions.TopLeft);
+                client.hintLabel.lineSpacing = -8f;
+                var track = Box("Progress", body, topLeft, topLeft, new Vector2(30f, -186f), new Vector2(480f, 12f));
+                Panel(track, OB_Palette.InkSoft, 6f);
+                var fill = Stretch("Fill", track, Vector2.zero, new Vector2(0.3f, 1f));
+                Panel(fill, OB_Palette.Gold, 6f);
+                client.progressFill = fill;
+            }
+            {   // Race clock, top centre, with its status underneath.
+                var pill = Card("TimerPill", hud, top, top, new Vector2(-120f, clockTop), new Vector2(330f, 88f), panel, 44f);
+                var body = pill.Find("Body");
+                Icon("Clock", body, "icon_schedule", new Vector2(0f, 0.5f), new Vector2(50f, 0f), 46f, OB_Palette.Gold);
+                client.timerLabel = Label(Stretch("Timer", body, Vector2.zero, Vector2.one, new Vector2(86f, 0f), new Vector2(-24f, 0f)), bold, bold.shadow, 52, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
+                client.timerLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-120f, clockTop - 96f), new Vector2(330f, 32f)), semi, semi.outline, 24, OB_Palette.Paper, TextAlignmentOptions.Center);
+                client.leaderLabel = Label(Box("Leader", hud, top, top, new Vector2(0f, clockTop - 132f), new Vector2(900f, 40f)), bold, bold.outline, 28, OB_Palette.Paper, TextAlignmentOptions.Center);
+            }
+            {   // Coins, beside the clock.
+                var pill = Card("CoinPill", hud, top, top, new Vector2(175f, clockTop), new Vector2(220f, 88f), panel, 44f);
+                client.coinPill = pill;
+                var body = pill.Find("Body");
+                Icon("Coin", body, "icon_paid", new Vector2(0f, 0.5f), new Vector2(52f, 0f), 54f, OB_Palette.Gold);
+                client.coinsLabel = Label(Stretch("Coins", body, Vector2.zero, Vector2.one, new Vector2(92f, 0f), new Vector2(-24f, 0f)), bold, bold.shadow, 48, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
+                client.coinsLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            }
+            {   // Toast: a coloured pill that pops in above the player.
+                var toast = Box("Toast", hud, new Vector2(0.5f, 0.62f), centre, Vector2.zero, new Vector2(820f, 96f));
+                client.toast = toast;
+                client.toastGroup = toast.gameObject.AddComponent<CanvasGroup>();
+                client.toastGroup.interactable = client.toastGroup.blocksRaycasts = false;
+                Shadow(toast, 48f);
+                var body = Stretch("Body", toast, Vector2.zero, Vector2.one);
+                client.toastBackground = Panel(body, OB_Palette.Gold, 48f);
+                client.toastLabel = Label(Stretch("Label", body, Vector2.zero, Vector2.one, new Vector2(30f, 0f), new Vector2(-30f, 0f)), bold, bold.asset.material, 42, OB_Palette.Ink, TextAlignmentOptions.Center);
+                client.toastLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            }
+            {   // Countdown and GO!
+                client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.45f), centre, Vector2.zero, new Vector2(900f, 320f)), bold, bold.outline, 230, OB_Palette.Paper, TextAlignmentOptions.Center);
+                client.centerLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            }
+            {   // Results board.
+                var results = Card("Results", hud, centre, centre, new Vector2(0f, -40f), new Vector2(980f, 600f), OB_Palette.Ink.WithAlpha(0.97f), 36f);
+                client.resultsPanel = results.gameObject;
+                var body = results.Find("Body");
+                var header = Stretch("Header", body, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -104f), Vector2.zero);
+                Panel(header, OB_Palette.Gold, 36f);
+                Icon("Medal", header, "icon_military_tech", new Vector2(0f, 0.5f), new Vector2(64f, 0f), 60f, OB_Palette.Ink);
+                Label(Stretch("Title", header, Vector2.zero, Vector2.one, new Vector2(110f, 0f), new Vector2(-40f, 0f)), bold, bold.asset.material, 52, OB_Palette.Ink, TextAlignmentOptions.MidlineLeft).text = "RACE RESULTS";
+                client.resultsBody = Label(Stretch("Rows", body, Vector2.zero, Vector2.one, new Vector2(56f, 36f), new Vector2(-48f, -130f)), semi, semi.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.TopLeft);
+                client.resultsBody.lineSpacing = 24f;
+                client.resultsBody.textWrappingMode = TextWrappingModes.NoWrap;
+            }
+
             var audio = new GameObject("Sfx");
             audio.transform.SetParent(root.transform, false);
-            hud.sfx = audio.AddComponent<AudioSource>();
-            hud.sfx.playOnAwake = false;
-            hud.sfx.spatialBlend = 0f;
+            client.sfx = audio.AddComponent<AudioSource>();
+            client.sfx.playOnAwake = false;
+            client.sfx.spatialBlend = 0f;
             var coinClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Packages/com.ryan.gameframework/Runtime/Items/Coin/freesound_gamestudio-drop-coin-384921.mp3");
-            hud.coinClip = coinClip;
-            hud.checkpointClip = coinClip;
-            hud.finishClip = coinClip;
-            hud.fallClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/UnityTechnologies/SpaceRobotKyle/Sfx/Player_Land.wav");
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, Root + "/Prefabs/ObbyHUD.prefab");
+            client.coinClip = coinClip;
+            client.checkpointClip = coinClip;
+            client.finishClip = coinClip;
+            client.fallClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/UnityTechnologies/SpaceRobotKyle/Sfx/Player_Land.wav");
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, ClientPrefab);
             Object.DestroyImmediate(root);
             return prefab;
 #endif
         }
 
+        // ---------------------------------------------------------------- post-processing
+        static T Override<T>(VolumeProfile profile) where T : VolumeComponent {
+            if (!profile.TryGet(out T component)) {
+                component = profile.Add<T>(true);
+                component.name = typeof(T).Name;
+                AssetDatabase.AddObjectToAsset(component, profile);
+            }
+            component.active = true;
+            return component;
+        }
+
+        /// <summary>The obby's grade: filmic tonemapping, a soft bloom on glowing pickups and hazards, a light vignette.</summary>
+        static VolumeProfile BuildPostProfile() {
+            string path = Root + "/Materials/ObbyPost.asset";
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
+            if (profile == null) {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, path);
+            }
+            var tonemap = Override<Tonemapping>(profile);
+            tonemap.mode.Override(TonemappingMode.ACES);
+            var bloom = Override<Bloom>(profile);
+            bloom.threshold.Override(1.05f);
+            bloom.intensity.Override(0.35f);
+            bloom.scatter.Override(0.65f);
+            var color = Override<ColorAdjustments>(profile);
+            color.postExposure.Override(0f);
+            color.contrast.Override(10f);
+            color.saturation.Override(18f);
+            var vignette = Override<Vignette>(profile);
+            vignette.intensity.Override(0.2f);
+            vignette.smoothness.Override(0.45f);
+            vignette.color.Override(OB_Palette.Ink);
+            EditorUtility.SetDirty(profile);
+            return profile;
+        }
+
+        // ---------------------------------------------------------------- sky backdrop
+#if !UNITY_SERVER
+        static void BuildBackdrop(OB_Backdrop backdrop) {
+            var cloud = CloudMat();
+            var grass = BlockMat("IslandGrass", OB_Palette.Grass, 0f, bevel: 0.25f);
+            var earth = BlockMat("IslandEarth", OB_Palette.Earth, 0f, bevel: 0.15f, smoothness: 0.2f);
+            var trunk = BlockMat("IslandTrunk", OB_Palette.Hex(0x8A5A3C), 0f, bevel: 0.1f, smoothness: 0.2f);
+            var leaves = new[] { BlockMat("IslandLeaves", OB_Palette.Blocks[1], 0f, bevel: 0.3f), BlockMat("IslandLeavesWarm", OB_Palette.Hex(0xA7E06A), 0f, bevel: 0.3f) };
+            var sea = SimpleMat("CloudSea", "Universes/Obby/Cloud Sea", m => {
+                m.SetColor("_TopColor", OB_Palette.Cloud);
+                m.SetColor("_ShadeColor", OB_Palette.CloudShade);
+            });
+
+            var random = new System.Random(1337);
+            float Range(float a, float b) => Mathf.Lerp(a, b, (float)random.NextDouble());
+
+            var clouds = new List<GameObject>();
+            for (int v = 0; v < 4; v++) {
+                // A flat-bottomed cumulus: a row of overlapping puffs, biggest in the middle, on a squashed base.
+                var root = new GameObject($"Cloud{v}");
+                int puffs = 4 + v;
+                float width = 14f + v * 5f;
+                for (int i = 0; i < puffs; i++) {
+                    float t = puffs == 1 ? 0.5f : i / (puffs - 1f);
+                    float x = (t - 0.5f) * width;
+                    float size = Mathf.Lerp(7f, 13f, 1f - Mathf.Abs(t - 0.5f) * 2f) * Range(0.85f, 1.15f);
+                    Puff(root.transform, new Vector3(x, size * 0.25f + Range(0f, 1.5f), Range(-2.5f, 2.5f)), Vector3.one * size, cloud);
+                }
+                Puff(root.transform, new Vector3(0f, 0f, 0f), new Vector3(width + 8f, 4.5f, 10f), cloud);
+                clouds.Add(SaveAt(root, Backdrop + $"/Cloud{v}.prefab"));
+            }
+
+            var islands = new List<GameObject>();
+            for (int v = 0; v < 2; v++) {
+                // A floating grass island: a bevelled grass slab on stepped earth, with toy-block trees.
+                var root = new GameObject($"Island{v}");
+                float w = v == 0 ? 26f : 38f, d = v == 0 ? 20f : 28f;
+                Cube("Grass", root.transform, new Vector3(0f, 0f, 0f), new Vector3(w, 2.5f, d), grass, false);
+                float y = -2.75f;
+                for (int step = 0; step < 3; step++) {
+                    float shrink = 0.82f - step * 0.2f, h = 3.5f - step * 0.5f;
+                    var block = Cube($"Earth{step}", root.transform, new Vector3(Range(-1f, 1f), y - h * 0.5f + 1.5f, Range(-1f, 1f)), new Vector3(w * shrink, h, d * shrink), earth, false);
+                    block.transform.localRotation = Quaternion.Euler(0f, Range(-6f, 6f), 0f);
+                    y -= h;
+                }
+                int trees = v == 0 ? 2 : 4;
+                for (int i = 0; i < trees; i++) {
+                    var at = new Vector3(Range(-w * 0.35f, w * 0.35f), 1.25f, Range(-d * 0.3f, d * 0.3f));
+                    float height = Range(4f, 7f);
+                    Cube($"Trunk{i}", root.transform, at + Vector3.up * height * 0.5f, new Vector3(1.2f, height, 1.2f), trunk, false);
+                    float crown = Range(4.5f, 6.5f);
+                    var top = Cube($"Leaves{i}", root.transform, at + Vector3.up * (height + crown * 0.35f), Vector3.one * crown, leaves[i % 2], false);
+                    top.transform.localRotation = Quaternion.Euler(0f, Range(0f, 90f), 0f);
+                }
+                Puff(root.transform, new Vector3(w * 0.4f, -3f, 0f), new Vector3(10f, 6f, 9f), cloud);
+                Puff(root.transform, new Vector3(-w * 0.45f, -5f, d * 0.2f), new Vector3(8f, 5f, 8f), cloud);
+                islands.Add(SaveAt(root, Backdrop + $"/Island{v}.prefab"));
+            }
+
+            var seaGo = Primitive(PrimitiveType.Plane, "CloudSea", null, Vector3.zero, new Vector3(260f, 1f, 260f), sea, false);
+            var seaRenderer = seaGo.GetComponent<Renderer>();
+            seaRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            seaRenderer.receiveShadows = false;
+            var seaPrefab = SaveAt(seaGo, Backdrop + "/CloudSea.prefab");
+
+            backdrop.cloudPrefabs = clouds.ToArray();
+            backdrop.islandPrefabs = islands.ToArray();
+            backdrop.cloudSea = ((GameObject)PrefabUtility.InstantiatePrefab(seaPrefab, backdrop.transform)).transform;
+        }
+
+        static void Puff(Transform parent, Vector3 position, Vector3 scale, Material cloud) {
+            var puff = Primitive(PrimitiveType.Sphere, "Puff", parent, position, scale, cloud, false);
+            var renderer = puff.GetComponent<Renderer>();
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        static GameObject SaveAt(GameObject go, string path) {
+            var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);
+            Object.DestroyImmediate(go);
+            return prefab;
+        }
+#endif
+
         // ---------------------------------------------------------------- scenes
-        static void BuildStartScene(PiecePrefabs p, GameObject hud) {
+        static void BuildStartScene(PiecePrefabs p, GameObject client) {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             {
-                var sky = AssetDatabase.LoadAssetAtPath<Material>(Root + "/Materials/Sky.mat");
-                if (sky == null) {
-                    sky = new Material(Shader.Find("Skybox/Procedural"));
-                    AssetDatabase.CreateAsset(sky, Root + "/Materials/Sky.mat");
-                }
-                sky.SetColor("_SkyTint", new Color(0.45f, 0.65f, 1f));
-                sky.SetColor("_GroundColor", new Color(0.55f, 0.7f, 0.95f));
-                sky.SetFloat("_AtmosphereThickness", 0.8f);
-                sky.SetFloat("_Exposure", 1.25f);
-                EditorUtility.SetDirty(sky);
-                RenderSettings.skybox = sky;
-                RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-                RenderSettings.ambientSkyColor = new Color(0.62f, 0.72f, 0.9f);
-                RenderSettings.ambientEquatorColor = new Color(0.55f, 0.6f, 0.7f);
-                RenderSettings.ambientGroundColor = new Color(0.35f, 0.38f, 0.45f);
-                RenderSettings.fog = true;
-                RenderSettings.fogMode = FogMode.Linear;
-                RenderSettings.fogColor = new Color(0.7f, 0.82f, 0.98f);
-                RenderSettings.fogStartDistance = 120f;
-                RenderSettings.fogEndDistance = 420f;
-                Lightmapping.bakeOnSceneLoad = Lightmapping.BakeOnSceneLoadMode.Never;
-
+                // Warm late-morning key light at 42 degrees, cool periwinkle bounce from the clouds below.
                 var sun = new GameObject("Sun", typeof(Light));
                 var light = sun.GetComponent<Light>();
                 light.type = LightType.Directional;
-                light.intensity = 1.3f;
-                light.color = new Color(1f, 0.96f, 0.88f);
+                light.intensity = 1.2f;
+                light.color = OB_Palette.Sun;
                 light.shadows = LightShadows.Soft;
-                sun.transform.rotation = Quaternion.Euler(52f, -35f, 0f);
+                light.shadowStrength = 0.75f;
+                sun.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
                 RenderSettings.sun = light;
+
+                var sky = SimpleMat("Sky", "Universes/Obby/Sky", m => {
+                    m.SetColor("_ZenithColor", OB_Palette.SkyZenith);
+                    m.SetColor("_HorizonColor", OB_Palette.SkyHorizon);
+                    m.SetColor("_BelowColor", OB_Palette.SkyBelow);
+                    m.SetColor("_SunColor", OB_Palette.Sun);
+                    m.SetVector("_SunDirection", -sun.transform.forward);
+                });
+                RenderSettings.skybox = sky;
+                RenderSettings.ambientMode = AmbientMode.Trilight;
+                RenderSettings.ambientSkyColor = OB_Palette.Hex(0x8FB0E6);
+                RenderSettings.ambientEquatorColor = OB_Palette.Hex(0xB5C2E6);
+                RenderSettings.ambientGroundColor = OB_Palette.Hex(0x8F9AC7);
+                RenderSettings.fog = true;
+                RenderSettings.fogMode = FogMode.Linear;
+                RenderSettings.fogColor = OB_Palette.Fog;
+                RenderSettings.fogStartDistance = 160f;
+                RenderSettings.fogEndDistance = 950f;
+                Lightmapping.bakeOnSceneLoad = Lightmapping.BakeOnSceneLoadMode.Never;
 
                 var courseGo = new GameObject("Course");
                 var course = courseGo.AddComponent<OB_Course>();
@@ -596,7 +1325,7 @@ namespace Universes.UniverseData.obby.Editor {
                 course.mover = p.mover; course.spinnerBar = p.spinnerBar; course.spinnerCross = p.spinnerCross; course.coin = p.coin;
                 course.platformPalette = p.palette;
                 course.beatSolidA = p.beatSolidA; course.beatGhostA = p.beatGhostA; course.beatSolidB = p.beatSolidB; course.beatGhostB = p.beatGhostB;
-                course.clientPrefab = hud;
+                course.clientPrefab = client;
                 EditorUtility.SetDirty(course);
                 EditorSceneManager.SaveScene(scene, StartScene);
             }
@@ -635,13 +1364,19 @@ namespace Universes.UniverseData.obby.Editor {
             {
                 var course = Object.FindAnyObjectByType<OB_Course>();
                 var layout = course.Build(seed, 14);
+                // Dress the shot like the game: the client prefab brings the sky backdrop and post-processing.
+                var client = course.clientPrefab != null ? (GameObject)PrefabUtility.InstantiatePrefab(course.clientPrefab) : null;
+#if !UNITY_SERVER
+                if (client != null) client.GetComponentInChildren<OB_Backdrop>().Arrange(layout, course.LobbySpawn);
+#endif
                 string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "../Logs/obby-previews"));
                 Directory.CreateDirectory(outDir);
                 var camGo = new GameObject("PreviewCamera", typeof(Camera));
                 var cam = camGo.GetComponent<Camera>();
                 cam.fieldOfView = 55f;
-                cam.farClipPlane = 1500f;
+                cam.farClipPlane = 1000f;
                 cam.clearFlags = CameraClearFlags.Skybox;
+                cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
                 Vector3 start = course.LobbySpawn, end = layout.finishTop;
                 Vector3 mid = (start + end) * 0.5f;
                 Shoot(cam, mid + new Vector3(-150f, 90f, -40f), mid, Path.Combine(outDir, "overview.png"), 1600, 900);
@@ -656,6 +1391,7 @@ namespace Universes.UniverseData.obby.Editor {
                 Shoot(cam, start + new Vector3(-9f, 7f, -14f), start + new Vector3(0f, 2f, 18f), Path.Combine(outDir, "thumbnail.png"), 640, 360);
                 File.Copy(Path.Combine(outDir, "thumbnail.png"), ThumbnailPath, true);
                 Object.DestroyImmediate(camGo);
+                if (client != null) Object.DestroyImmediate(client);
                 course.Clear();
             }
             AssetDatabase.ImportAsset(ThumbnailPath);

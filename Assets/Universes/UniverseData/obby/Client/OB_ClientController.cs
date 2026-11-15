@@ -5,15 +5,44 @@ using FishNet.Transporting;
 using RyanAssets.Platformer;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Universes.UniverseData.obby.Client {
-    /// <summary>Builds the course the server announces and shows race progress. Decides nothing.</summary>
+    /// <summary>
+    /// Builds the course the server announces and presents the race: HUD, effects and the sky around
+    /// the course. Decides nothing; every rule lives on the server.
+    /// </summary>
     public sealed class OB_ClientController : MonoBehaviour {
-        public TMP_Text stageLabel, stageNameLabel, hintLabel, coinsLabel, timerLabel, toastLabel, centerLabel, leaderLabel;
+        [Header("Stage card")]
+        public TMP_Text stageLabel;
+        public TMP_Text stageNameLabel, hintLabel;
+        [Tooltip("Course progress bar fill; its anchor max x is set to the fraction of checkpoints reached.")]
+        public RectTransform progressFill;
+        public RectTransform stageCard;
+
+        [Header("Race status")]
+        public TMP_Text timerLabel;
+        public TMP_Text statusLabel, coinsLabel, leaderLabel;
+        public RectTransform coinPill;
+
+        [Header("Announcements")]
+        public TMP_Text toastLabel;
+        public RectTransform toast;
+        public CanvasGroup toastGroup;
+        public Image toastBackground;
+        public TMP_Text centerLabel;
+
+        [Header("Results")]
         public GameObject resultsPanel;
         public TMP_Text resultsBody;
+
+        [Header("Presentation")]
+        public OB_Fx fx;
+        public OB_Backdrop backdrop;
         public AudioSource sfx;
         public AudioClip coinClip, checkpointClip, finishClip, fallClip;
+        [Tooltip("Seconds the stage progress bar takes to catch up.")]
+        [Min(0.01f)] public float progressSmoothing = 0.25f;
 
         OB_Course course;
         ClientManager manager;
@@ -21,7 +50,37 @@ namespace Universes.UniverseData.obby.Client {
         OB_ProgressBroadcast progress;
         bool hasProgress;
         OB_RoundBroadcast round;
-        float roundReceivedAt, toastUntil, resultsUntil, nextRequest;
+        float roundReceivedAt, toastShownAt, toastUntil, resultsUntil, nextRequest;
+        float progressShown, progressTarget, progressVelocity;
+        Pop stagePop, coinPop, toastPop, centerPop;
+
+        /// <summary>A scale "pop" with overshoot, for HUD elements that change.</summary>
+        struct Pop {
+            RectTransform target;
+            float start, duration, from;
+
+            public Pop(RectTransform target, float duration, float from) {
+                this.target = target;
+                this.duration = duration;
+                this.from = from;
+                start = -1f;
+            }
+
+            public void Play() => start = Time.unscaledTime;
+
+            public void Tick() {
+                if (target == null || start < 0f) return;
+                float t = (Time.unscaledTime - start) / duration;
+                if (t >= 1f) {
+                    target.localScale = Vector3.one;
+                    start = -1f;
+                    return;
+                }
+                const float c1 = 1.70158f, c3 = c1 + 1f;
+                float back = 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
+                target.localScale = Vector3.one * Mathf.LerpUnclamped(from, 1f, back);
+            }
+        }
 
         static string StageName(OB_StageKind kind) => kind switch {
             OB_StageKind.Hops => "Skyhop",
@@ -61,13 +120,21 @@ namespace Universes.UniverseData.obby.Client {
             course = GetComponentInParent<OB_Course>();
             resultsPanel.SetActive(false);
             toastLabel.text = "";
+            toastGroup.alpha = 0f;
             centerLabel.text = "";
-            stageLabel.text = "OBBY";
+            stageLabel.text = "SKY OBBY";
             stageNameLabel.text = "Connecting...";
             hintLabel.text = "";
-            coinsLabel.text = "";
-            timerLabel.text = "";
+            coinsLabel.text = "0";
+            timerLabel.text = "0:00.0";
+            statusLabel.text = "";
             leaderLabel.text = "";
+            SetProgress(0f, true);
+            stagePop = new Pop(stageCard, 0.35f, 0.92f);
+            coinPop = new Pop(coinPill, 0.3f, 1.35f);
+            toastPop = new Pop(toast, 0.4f, 0.6f);
+            centerPop = new Pop(centerLabel.rectTransform, 0.45f, 1.8f);
+            if (backdrop != null && course != null) backdrop.Arrange(null, course.LobbySpawn);
         }
 
         void OnDestroy() {
@@ -91,9 +158,30 @@ namespace Universes.UniverseData.obby.Client {
                 nextRequest = Time.unscaledTime + 2f;
                 manager.Broadcast(new OB_CourseRequest { knownSeed = builtSeed });
             }
-            if (toastLabel.text.Length > 0 && Time.unscaledTime > toastUntil) toastLabel.text = "";
             if (resultsPanel.activeSelf && Time.unscaledTime > resultsUntil) resultsPanel.SetActive(false);
             RefreshTimer();
+            AnimateHud();
+        }
+
+        void AnimateHud() {
+            // Toast: pop in, hold, fade out over its last quarter second.
+            float fadeOut = Mathf.Clamp01((toastUntil - Time.unscaledTime) / 0.25f);
+            float fadeIn = Mathf.Clamp01((Time.unscaledTime - toastShownAt) / 0.08f);
+            toastGroup.alpha = Mathf.Min(fadeIn, fadeOut);
+            progressShown = Mathf.SmoothDamp(progressShown, progressTarget, ref progressVelocity, progressSmoothing, Mathf.Infinity, Time.unscaledDeltaTime);
+            SetProgress(progressShown, false);
+            stagePop.Tick();
+            coinPop.Tick();
+            toastPop.Tick();
+            centerPop.Tick();
+        }
+
+        void SetProgress(float fraction, bool snap) {
+            if (snap) progressShown = progressTarget = fraction;
+            if (progressFill == null) return;
+            var max = progressFill.anchorMax;
+            max.x = Mathf.Clamp01(progressShown);
+            progressFill.anchorMax = max;
         }
 
         void OnCourse(OB_CourseBroadcast message, Channel channel) {
@@ -104,6 +192,8 @@ namespace Universes.UniverseData.obby.Client {
             builtSeed = message.seed;
             hasProgress = false;
             resultsPanel.SetActive(false);
+            SetProgress(0f, true);
+            if (backdrop != null) backdrop.Arrange(course.Layout, course.LobbySpawn);
             RefreshStage();
         }
 
@@ -115,24 +205,31 @@ namespace Universes.UniverseData.obby.Client {
             int previous = hasProgress ? progress.checkpoint : 0;
             progress = message;
             hasProgress = true;
-            ApplyMarkers(message.reason == OB_ProgressReason.Checkpoint);
+            ApplyMarkers(message.reason == OB_ProgressReason.Checkpoint, message.reason == OB_ProgressReason.Coin);
             RefreshStage();
             int total = course.Layout.StageCount;
             switch (message.reason) {
                 case OB_ProgressReason.Checkpoint:
-                    Toast($"CHECKPOINT {message.checkpoint}/{total - 1}" + (message.checkpoint - previous > 1 ? "  (skipped ahead!)" : ""), checkpointClip);
+                    Toast($"CHECKPOINT {message.checkpoint}/{total - 1}" + (message.checkpoint - previous > 1 ? "  <size=70%>skipped ahead!</size>" : ""),
+                        OB_Palette.Go, checkpointClip);
+                    stagePop.Play();
                     break;
                 case OB_ProgressReason.Coin:
-                    Toast("+1 COIN", coinClip);
+                    Toast("+1 COIN", OB_Palette.Gold, coinClip);
+                    coinPop.Play();
                     break;
                 case OB_ProgressReason.Finish:
-                    Toast($"FINISHED {Ordinal(message.place)}!  {Clock(message.finishTime, true)}", finishClip, 5f);
+                    Toast($"FINISHED {Ordinal(message.place)}!  {Clock(message.finishTime, true)}", OB_Palette.Gold, finishClip, 5f);
+                    stagePop.Play();
+                    if (fx != null) fx.Finish(course.Layout.finishTop);
                     break;
                 case OB_ProgressReason.Hazard:
-                    Toast("Ouch! Back to your checkpoint.", fallClip, 1.5f);
+                    Toast("Ouch! Back to your checkpoint.", OB_Palette.Lava, fallClip, 1.5f);
+                    if (fx != null) fx.RespawnAtPlayer();
                     break;
                 case OB_ProgressReason.Fell:
-                    Toast("Back to your checkpoint.", fallClip, 1.5f);
+                    Toast("Back to your checkpoint.", OB_Palette.InkSoft, fallClip, 1.5f);
+                    if (fx != null) fx.RespawnAtPlayer();
                     break;
             }
         }
@@ -143,14 +240,19 @@ namespace Universes.UniverseData.obby.Client {
             if (course != null) course.SetGateClosed(message.phase is OB_Phase.Waiting or OB_Phase.Countdown or OB_Phase.Results);
             if (message.seed != builtSeed && message.seed == wantedSeed && wantedSeed != 0)
                 OnCourse(new OB_CourseBroadcast { seed = wantedSeed, stageCount = wantedStages }, channel);
-            centerLabel.text = message.phase switch {
+            string center = message.phase switch {
                 OB_Phase.Countdown => message.secondsLeft.ToString(),
                 OB_Phase.Racing when message.raceTime < 1.5f => "GO!",
                 _ => ""
             };
+            if (center != centerLabel.text) {
+                centerLabel.text = center;
+                centerLabel.color = center == "GO!" ? OB_Palette.Go : OB_Palette.Paper;
+                if (center.Length > 0) centerPop.Play();
+            }
             leaderLabel.text = message.phase switch {
                 OB_Phase.Racing or OB_Phase.Closing when !string.IsNullOrEmpty(message.leaderName) =>
-                    $"Leader: {message.leaderName} ({(message.finishedCount > 0 ? "finished" : "stage " + message.leaderStage)})",
+                    $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Gold)}>LEADER</color>  {message.leaderName}  <alpha=#AA>{(message.finishedCount > 0 ? "finished" : "stage " + message.leaderStage)}",
                 OB_Phase.Results => message.headline,
                 _ => ""
             };
@@ -161,15 +263,21 @@ namespace Universes.UniverseData.obby.Client {
             int place = 0;
             foreach (var entry in message.entries) {
                 place++;
-                string result = entry.finished ? Clock(entry.time, true) : $"stage {entry.stage}";
-                text.AppendLine($"{place}. {entry.name}   {result}   {entry.coins} coins");
+                string medal = ColorUtility.ToHtmlStringRGB(place switch {
+                    1 => OB_Palette.Gold,
+                    2 => OB_Palette.Hex(0xD3DCEF),
+                    3 => OB_Palette.Hex(0xE89A5E),
+                    _ => OB_Palette.Paper
+                });
+                string result = entry.finished ? Clock(entry.time, true) : $"<alpha=#99>stage {entry.stage}<alpha=#FF>";
+                text.Append($"<color=#{medal}><b>{Ordinal(place)}</b></color><pos=12%>{entry.name}<pos=62%>{result}<pos=84%><color=#{medal}>{entry.coins}</color> <size=75%>coins</size>\n");
             }
             resultsBody.text = text.Length > 0 ? text.ToString() : "No racers.";
             resultsPanel.SetActive(true);
             resultsUntil = Time.unscaledTime + 9f;
         }
 
-        void ApplyMarkers(bool celebrate) {
+        void ApplyMarkers(bool celebrate, bool coinCollected) {
             if (course == null || course.Layout == null) return;
             var pieces = course.Layout.pieces;
             var instances = course.Instances;
@@ -183,7 +291,10 @@ namespace Universes.UniverseData.obby.Client {
                     case OB_PieceKind.Coin:
                         int stage = pieces[i].stage;
                         bool collected = stage < 64 && (progress.coins & (1UL << stage)) != 0;
-                        if (instances[i].activeSelf == collected) instances[i].SetActive(!collected);
+                        if (instances[i].activeSelf == collected) {
+                            if (collected && coinCollected && fx != null) fx.Coin(instances[i].transform.position);
+                            instances[i].SetActive(!collected);
+                        }
                         break;
                 }
             }
@@ -195,33 +306,43 @@ namespace Universes.UniverseData.obby.Client {
             int checkpoint = hasProgress ? progress.checkpoint : 0;
             if (hasProgress && progress.finished) {
                 stageLabel.text = "FINISHED";
-                stageNameLabel.text = $"{Ordinal(progress.place)} place";
+                stageNameLabel.text = $"{Ordinal(progress.place)} place!";
                 hintLabel.text = "Wait here for the next course, or watch the others.";
+                progressTarget = 1f;
             } else {
                 var stage = layout.stages[Mathf.Clamp(checkpoint, 0, layout.StageCount - 1)];
-                stageLabel.text = $"STAGE {checkpoint + 1}/{layout.StageCount}";
+                stageLabel.text = $"STAGE {checkpoint + 1} <alpha=#88>/ {layout.StageCount}";
                 stageNameLabel.text = StageName(stage.kind);
                 hintLabel.text = StageHint(stage.kind);
+                progressTarget = layout.StageCount > 0 ? (float)checkpoint / layout.StageCount : 0f;
             }
             int coins = 0;
             for (ulong c = hasProgress ? progress.coins : 0; c != 0; c &= c - 1) coins++;
-            coinsLabel.text = $"Coins {coins}/{layout.StageCount}";
+            coinsLabel.text = $"{coins}<size=70%><alpha=#99> / {layout.StageCount}</size>";
         }
 
         void RefreshTimer() {
-            if (hasProgress && progress.finished) { timerLabel.text = Clock(progress.finishTime, true); return; }
-            timerLabel.text = round.phase switch {
-                OB_Phase.Racing or OB_Phase.Closing => Clock(round.raceTime + (Time.unscaledTime - roundReceivedAt), true)
-                    + (round.phase == OB_Phase.Closing ? $"   closes in {Mathf.Max(0, round.secondsLeft - (int)(Time.unscaledTime - roundReceivedAt))}s" : ""),
-                OB_Phase.Countdown => "Get ready",
-                OB_Phase.Results => "Race over",
-                _ => "Waiting for players"
+            float elapsed = Time.unscaledTime - roundReceivedAt;
+            bool racing = round.phase is OB_Phase.Racing or OB_Phase.Closing;
+            if (hasProgress && progress.finished) timerLabel.text = Clock(progress.finishTime, true);
+            else timerLabel.text = racing ? Clock(round.raceTime + elapsed, true) : "0:00.0";
+            string status = round.phase switch {
+                OB_Phase.Closing => $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Lava)}>closes in {Mathf.Max(0, round.secondsLeft - (int)elapsed)}s</color>",
+                OB_Phase.Racing => hasProgress && progress.finished ? "your time" : "race time",
+                OB_Phase.Countdown => "get ready",
+                OB_Phase.Results => "race over",
+                _ => "waiting for players"
             };
+            if (statusLabel.text != status) statusLabel.text = status;
         }
 
-        void Toast(string message, AudioClip clip, float seconds = 2.2f) {
+        void Toast(string message, Color accent, AudioClip clip, float seconds = 2.2f) {
             toastLabel.text = message;
+            toastBackground.color = accent;
+            toastLabel.color = accent.grayscale > 0.55f ? OB_Palette.Ink : OB_Palette.Paper;
+            toastShownAt = Time.unscaledTime;
             toastUntil = Time.unscaledTime + seconds;
+            toastPop.Play();
             if (sfx != null && clip != null) sfx.PlayOneShot(clip);
         }
 

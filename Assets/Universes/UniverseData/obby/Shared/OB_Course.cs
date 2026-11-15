@@ -129,6 +129,9 @@ namespace Universes.UniverseData.obby {
                     Tile(go, size);
                     break;
                 case OB_PieceKind.Lava:
+                    Tile(go, piece.size);
+                    Ambient(go, Vector3.up * 2.2f, piece.size.x * piece.size.z * 0.12f);
+                    break;
                 case OB_PieceKind.Crumble:
                     Tile(go, piece.size);
                     break;
@@ -138,11 +141,14 @@ namespace Universes.UniverseData.obby {
                     break;
                 case OB_PieceKind.GravityZone: {
                     var zone = go.GetComponentInChildren<GravityZone>();
+                    float volume = piece.size.x * piece.size.y * piece.size.z;
                     if (piece.vector == Vector3.zero) {
                         zone.Configure(piece.speed);
+                        Ambient(go, Vector3.up * 1.2f, volume * 0.004f);
                     } else {
                         zone.Configure(piece.vector, piece.speed);
                         Tint(go, directionalFieldTint);
+                        Ambient(go, piece.vector.normalized * 6f, volume * 0.006f, directionalFieldTint);
                     }
                     break;
                 }
@@ -174,10 +180,35 @@ namespace Universes.UniverseData.obby {
             return go;
         }
 
+        /// <summary>
+        /// Sets up a piece's ambient particles (lava embers, gravity-field drift): they drift with
+        /// <paramref name="velocity"/> (world space) at a rate that suits the piece's size.
+        /// </summary>
+        void Ambient(GameObject go, Vector3 velocity, float rate, Color? color = null) {
+#if !UNITY_SERVER
+            var particles = go.GetComponentInChildren<ParticleSystem>();
+            if (particles == null) return;
+            var motion = particles.velocityOverLifetime;
+            motion.enabled = true;
+            motion.space = ParticleSystemSimulationSpace.World;
+            motion.x = velocity.x;
+            motion.y = velocity.y;
+            motion.z = velocity.z;
+            var emission = particles.emission;
+            emission.rateOverTime = Mathf.Clamp(rate, 3f, 60f);
+            if (color.HasValue) {
+                var main = particles.main;
+                main.startColor = new Color(color.Value.r, color.Value.g, color.Value.b, 0.9f);
+            }
+            particles.Play();
+#endif
+        }
+
         void Tint(GameObject go, Color color) {
 #if !UNITY_SERVER
             tiling ??= new MaterialPropertyBlock();
             foreach (var r in go.GetComponentsInChildren<Renderer>()) {
+                if (r is ParticleSystemRenderer) continue;
                 r.GetPropertyBlock(tiling);
                 tiling.SetColor(BaseColor, color);
                 r.SetPropertyBlock(tiling);
@@ -190,6 +221,7 @@ namespace Universes.UniverseData.obby {
 #if !UNITY_SERVER
             tiling ??= new MaterialPropertyBlock();
             foreach (var r in go.GetComponentsInChildren<Renderer>()) {
+                if (r is ParticleSystemRenderer) continue;
                 r.GetPropertyBlock(tiling);
                 tiling.SetVector(BaseMapST, new Vector4(size.x / tileMetres, size.z / tileMetres, 0f, 0f));
                 r.SetPropertyBlock(tiling);
