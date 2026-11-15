@@ -12,7 +12,7 @@ public class SceneSwitcherWindow : EditorWindow {
     private const string AllUniversesLabel = "All Universes";
     private const string UniverseScenesRoot = "Assets/Universes/UniverseData";
     private const string ClientDebugPlayGameSourcePath = "Assets/EasyDebug/Client/DebugPlayGame.cs";
-    private const string ServerBootStrapSourcePath = "Assets/RyanAssets/Server/ServerCore/ServerBootStrap.cs";
+    private const string ServerBootStrapSourcePath = "Packages/com.ryan.gameframework/Runtime/Server/ServerCore/ServerBootStrap.cs";
     private const string PreviousScenePathSessionKey = "SceneSwitcherWindow.PreviousScenePath";
 
     private readonly List<SceneEntry> scenes = new();

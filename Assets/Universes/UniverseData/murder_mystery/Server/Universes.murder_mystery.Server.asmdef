@@ -2,6 +2,7 @@
     "name": "Universes.murder_mystery.Server",
     "rootNamespace": "",
     "references": [
+        "RyanAssets.Universes",
         "RyanAssets.Shared.Component",
         "GameKit.Dependencies",
         "GUID:39cf4af17d22e66448d4cd56fe623fa9",

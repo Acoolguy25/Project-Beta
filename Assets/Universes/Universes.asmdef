@@ -1,7 +1,9 @@
 {
     "name": "Universes",
     "rootNamespace": "Universes",
-    "references": [],
+    "references": [
+        "RyanAssets.Universes"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

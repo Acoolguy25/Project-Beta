@@ -1,0 +1,32 @@
+{
+    "name": "RyanAssets.Server.ServerCore",
+    "rootNamespace": "RyanAssets.Server.ServerCore",
+    "references": [
+        "RyanAssets.Shared.Component",
+        "GUID:9bc24441b1edc054a980e2afec52bdcc",
+        "GUID:ca690fb16f5b4bd4dafc3ab48139d9fc",
+        "GUID:aecf8615d7e72ef4291bf847c34b8e7c",
+        "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
+        "GUID:fe264023cf80b5c4d970ee18f18982a1",
+        "GUID:d81c570acb0546e47865a9bb58cc7645",
+        "GUID:70dd2fe1c53976f4794150f7c02437b4",
+        "GUID:2b2629be14d020e46b3cd9e44f6dc4c0",
+        "GUID:7c88a4a7926ee5145ad2dfa06f454c67",
+        "GUID:da01a9a0aa24eb94ea427fd540755587",
+        "GUID:8658255f531113649bacf96894a008e1",
+        "GUID:51d1f3989c9c42b409eee84039a85d82",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "RyanAssets.Universes"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

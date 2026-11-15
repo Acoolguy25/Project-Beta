@@ -22,7 +22,7 @@ namespace Universes.UniverseData.war_valley.Tests {
             shooter = Character("Shooter", origin - Vector3.up, TeamColor.Blue, TeamColor.Blue);
             ally = Character("Ally", origin + Vector3.forward * 4f - Vector3.up, TeamColor.Blue, TeamColor.Green);
             enemy = Character("Enemy", origin + Vector3.forward * 12f - Vector3.up, TeamColor.Red, TeamColor.Blue);
-            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/RyanAssets/Tools/Implemented/FN_Five_Seven.prefab");
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Packages/com.ryan.gameframework/Runtime/Tools/Implemented/FN_Five_Seven.prefab");
             gun = Object.Instantiate(prefab, root.transform).GetComponent<ToolGunShared>();
             gun.connectedCharacter = shooter;
             gun.weaponRoot.transform.position = origin;
@@ -32,7 +32,7 @@ namespace Universes.UniverseData.war_valley.Tests {
         }
 
         GameCharacter Character(string name, Vector3 position, TeamColor team, TeamColor display) {
-            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/RyanAssets/Characters/RobotNPC.prefab");
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Packages/com.ryan.gameframework/Runtime/Characters/RobotNPC.prefab");
             GameObject instance = Object.Instantiate(prefab, root.transform);
             instance.name = name;
             instance.transform.position = position;

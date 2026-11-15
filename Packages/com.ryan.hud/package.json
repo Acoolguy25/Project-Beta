@@ -1,0 +1,16 @@
+{
+  "name": "com.ryan.hud",
+  "version": "0.1.0",
+  "displayName": "Ryan HUD",
+  "description": "In-game HUD prefabs: chat, top bar, player list, vote, spectate, stamina, toolbar, name tags, build menu, credits.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Ryan"
+  },
+  "dependencies": {
+    "com.ryan.core": "0.1.0",
+    "com.ryan.ui": "0.1.0",
+    "com.ryan.networking": "0.1.0",
+    "com.ryan.gameframework": "0.1.0"
+  }
+}

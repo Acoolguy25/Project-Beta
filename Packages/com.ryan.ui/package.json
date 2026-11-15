@@ -1,0 +1,13 @@
+{
+  "name": "com.ryan.ui",
+  "version": "0.1.0",
+  "displayName": "Ryan UI",
+  "description": "UI controls (Textbox, ListGrid, ButtonGrid, Autocomplete), prompts, game settings, client audio and the command bar UI.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Ryan"
+  },
+  "dependencies": {
+    "com.ryan.core": "0.1.0"
+  }
+}

@@ -27,6 +27,62 @@
       "source": "embedded",
       "dependencies": {}
     },
+    "com.ryan.commands": {
+      "version": "file:com.ryan.commands",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.ryan.core": "0.1.0",
+        "com.ryan.ui": "0.1.0",
+        "com.ryan.networking": "0.1.0",
+        "com.ryan.gameframework": "0.1.0",
+        "com.ryan.hud": "0.1.0"
+      }
+    },
+    "com.ryan.core": {
+      "version": "file:com.ryan.core",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
+    "com.ryan.gameframework": {
+      "version": "file:com.ryan.gameframework",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.ryan.core": "0.1.0",
+        "com.ryan.ui": "0.1.0",
+        "com.ryan.networking": "0.1.0"
+      }
+    },
+    "com.ryan.hud": {
+      "version": "file:com.ryan.hud",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.ryan.core": "0.1.0",
+        "com.ryan.ui": "0.1.0",
+        "com.ryan.networking": "0.1.0",
+        "com.ryan.gameframework": "0.1.0"
+      }
+    },
+    "com.ryan.networking": {
+      "version": "file:com.ryan.networking",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.ryan.core": "0.1.0",
+        "com.ryan.ui": "0.1.0"
+      }
+    },
+    "com.ryan.ui": {
+      "version": "file:com.ryan.ui",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.ryan.core": "0.1.0"
+      }
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.16",
       "depth": 0,

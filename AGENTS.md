@@ -12,11 +12,13 @@ This file applies to the entire repository. Follow it before making any change.
 
 ## Project Shape
 
-- Unity version: `6000.5.5f1`.
+- Unity version: read `ProjectSettings/ProjectVersion.txt` (it changes; don't hard-code it).
 - The manifest currently pins `com.unity.pipeline` to `0.5.0-exp.1`; re-check this before relying on parameterized `unity command` calls.
 - Rendering: URP.
 - Networking: FishNet; gameplay state that affects all players must be server-authoritative.
-- Shared/reusable code and assets belong under `Assets/RyanAssets/`.
+- Shared/reusable code and assets live in the embedded UPM packages under `Packages/com.ryan.*` (one monorepo; the old `Assets/RyanAssets/` is gone). Each file keeps its old relative path under `Runtime/`, e.g. `Assets/RyanAssets/Characters/Client/X.cs` is now `Packages/com.ryan.gameframework/Runtime/Characters/Client/X.cs`. `Tools/Packaging/packages.json` maps every old path to its package.
+- Package layering (a package may only reference asmdefs in its own or a lower layer, never a universe): `com.ryan.core` (0) < `com.ryan.ui` (1) < `com.ryan.networking` (2) < `com.ryan.gameframework` (3) < `com.ryan.hud` (4) < `com.ryan.commands` (5) < universes. Run `python3 Tools/Packaging/asmdef_graph.py --check` after changing asmdef references; CI runs it too.
+- Every script in a package must belong to an asmdef (Unity silently skips package scripts that don't). Packages get the universe list only through `UniverseRegistry` (com.ryan.core); the list itself stays in `Assets/Universes/UniverseCfg.cs`.
 - Universe-specific code, rules, state, presentation, and prefabs belong under `Assets/Universes/UniverseData/<universe>/`.
 - Keep client, server, and shared code in the appropriate folders and asmdefs. Do not make a client assembly the authority for server behavior.
 - Treat `Assets/FishNet/` and third-party asset folders as vendor code. Avoid modifying them unless the task explicitly requires it.
@@ -25,15 +27,16 @@ This file applies to the entire repository. Follow it before making any change.
 Useful high-level structure:
 
 ```text
+Packages/
+  com.ryan.core/Runtime/            Core, Input, TweenService, DataService, NetworkService, Shared/{Declarations,Requests,Global,Component,WorldUI}, Commands/Shared, Universes registry
+  com.ryan.ui/Runtime/              UI controls, PromptService, ClientUI/GameSettings, ClientAudio, ClientUI/Command
+  com.ryan.networking/Runtime/      Authentication, Login, Client/ClientCore, Client/ClientModules, Server/ServerModules, Levels/{Shared,Client}
+  com.ryan.gameframework/Runtime/   Server/{ServerCore,ServerFeatures}, Characters, Tools, Items, Shared/{Combat,Server}, network manager prefabs, Cameras, Editor tools
+  com.ryan.hud/Runtime/             Client/ClientUI/{Chat,Topbar,PlayerList,Vote,Spectate,Stamina,Toolbar,NameTag,Structure}
+  com.ryan.commands/Runtime/        Commands/{Client,Server}
+  com.ryan.codegenerator/           [SharedRpc] source generator
 Assets/
-  RyanAssets/                       reusable systems and shared prefabs
-    Characters/                     character and NPC foundations
-    Client/ClientUI/                reusable runtime UI prefabs and logic
-    Commands/                       client/server/shared command framework
-    Items/ and Tools/               reusable networked gameplay objects
-    Server/                         server core and server features
-    Shared/                         shared declarations, components, and globals
-    UI/                             reusable UI controls
+  Universes/UniverseCfg.cs          the universe list (registered with UniverseRegistry)
   Universes/UniverseData/
     <universe>/
       Client/                       universe presentation and client behavior
@@ -45,7 +48,7 @@ Assets/
 ## Coding Style
 
 - Follow `.editorconfig`: C# opening braces stay on the same line; `else`, `catch`, and `finally` stay on the closing-brace line.
-- Match namespaces to folders. `Assets/RyanAssets` namespaces begin with `RyanAssets`; universe code follows the existing `Universes.UniverseData.<universe>` convention.
+- Match namespaces to folders. Package (`Packages/com.ryan.*`) namespaces begin with `RyanAssets`; universe code follows the existing `Universes.UniverseData.<universe>` convention.
 - Prefer clear, focused components over large managers and duplicated one-off behavior.
 - Reuse an existing setting as the source of truth. Apply requested multipliers or derived behavior instead of introducing a parallel setting.
 - Expose intentional tuning through serialized fields or the existing configuration/command system. Validate values at the authority boundary.

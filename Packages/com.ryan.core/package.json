@@ -1,0 +1,11 @@
+{
+  "name": "com.ryan.core",
+  "version": "0.1.0",
+  "displayName": "Ryan Core",
+  "description": "Foundation: core helpers, input, tweening, data service, network settings, shared declarations/requests/globals/components, world UI, command definitions, client effects, shaders.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Ryan"
+  },
+  "dependencies": {}
+}

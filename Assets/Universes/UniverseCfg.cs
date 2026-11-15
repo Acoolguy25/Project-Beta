@@ -1,40 +1,14 @@
 using UnityEngine;
-using UnityEngine.Assertions;
 
 namespace Universes {
-    public enum UniverseAccess : sbyte {
-        Private = 0,
-        Protected = 1,
-        Public = 2
-    }
-    public struct UniverseStruct {
-        public string id;
-        public string title;
-        public string description;
-        public string creator_playerid;
-        public UniverseAccess access;
-        public bool disableDefaultCommands;
-        public string GetResourcePath(string localPath) {
-            return $"UniverseDataPub/{id}/{localPath}";
-        }
-        public Sprite LoadSprite() {
-            Sprite thumbnail = Resources.Load<Sprite>(GetResourcePath("thumbnail"));
-            Assert.IsNotNull(thumbnail, $"{id} Thumnail Not Found!");
-            return thumbnail;
-        }
-        public string LoadText(string localPath) {
-            TextAsset textAsset = Resources.Load<TextAsset>(GetResourcePath(localPath));
-            Assert.IsNotNull(textAsset, $"{id} TextAsset Not Found: {localPath}");
-            return textAsset.text;
-        }
-        public string LoadRandomText(string localPath) {
-            TextAsset textAsset = Resources.Load<TextAsset>(GetResourcePath(localPath));
-            Assert.IsNotNull(textAsset, $"{id} TextAsset Not Found: {localPath}");
-            string[] lines = textAsset.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
-            return lines[Random.Range(0, lines.Length)];
-        }
-    };
+    /// <summary>The game's universe list. Registered with UniverseRegistry (com.ryan.core) on load.</summary>
     public static class UniverseCfg {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+#if UNITY_EDITOR
+        [UnityEditor.InitializeOnLoadMethod]
+#endif
+        static void RegisterWithPackages() => UniverseRegistry.Register(ActiveUniverses);
+
         public readonly static UniverseStruct[] ActiveUniverses = {
             new(){
                 id = "example",
@@ -94,13 +68,6 @@ namespace Universes {
                 access = UniverseAccess.Protected
             },
         };
-        public static UniverseStruct GetUniverseFromId(string id) {
-            foreach (UniverseStruct universe in ActiveUniverses) {
-                if (universe.id == id)
-                    return universe;
-            }
-            Debug.LogError($"Universe id lookup failed: {id}!");
-            return default;
-        }
+        public static UniverseStruct GetUniverseFromId(string id) => UniverseRegistry.GetUniverseFromId(id);
     }
 }

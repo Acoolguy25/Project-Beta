@@ -48,16 +48,16 @@ namespace Universes.UniverseData.war_valley.Editor {
         const string PresentationFolder = Root + "/Presentation";
 
         const string RobotModelPath = "Assets/UnityTechnologies/SpaceRobotKyle/Models/KyleRobot.fbx";
-        const string RobotControllerPath = "Assets/RyanAssets/Characters/CustomAnimations/RobotNPC.controller";
+        const string RobotControllerPath = "Packages/com.ryan.gameframework/Runtime/Characters/CustomAnimations/RobotNPC.controller";
         const string CircleTexturePath = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Textures/Circle01_v1.png";
 
         // Shared presentation every structure reuses rather than growing a War Valley copy of.
-        const string WorldTimerBarPath = "Assets/RyanAssets/Shared/WorldUI/WorldTimerBar.prefab";
+        const string WorldTimerBarPath = "Packages/com.ryan.core/Runtime/Shared/WorldUI/WorldTimerBar.prefab";
         const string EffectsRoot = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs";
         const string ExplosionVfxPath = EffectsRoot + "/vfx_Explosion_01.prefab";
         const string SmokeVfxPath = EffectsRoot + "/vfx_Smoke_01.prefab";
         const string MuzzleFlashVfxPath = EffectsRoot + "/vfx_MuzzleFlash_01.prefab";
-        const string GunShotAudioPath = "Assets/RyanAssets/Tools/Audio/pistol-gun-shot.mp3";
+        const string GunShotAudioPath = "Packages/com.ryan.gameframework/Runtime/Tools/Audio/pistol-gun-shot.mp3";
         const string ShieldVfxPath = EffectsRoot + "/vfx_Shield_01.prefab";
         /// <summary>Radius the shield effect is authored at: its largest billboard is ten units across.</summary>
         const float ShieldVfxRadius = 5f;

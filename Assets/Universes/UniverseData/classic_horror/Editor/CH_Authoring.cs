@@ -22,7 +22,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         public static void EnsureFolders() {
             foreach (string folder in new[] { "Prefabs", "Materials", "Data", "Scenes" })
                 if (!AssetDatabase.IsValidFolder(Root + "/" + folder)) AssetDatabase.CreateFolder(Root, folder);
-            if (!AssetDatabase.IsValidFolder("Assets/RyanAssets/Tools/Flashlight")) AssetDatabase.CreateFolder("Assets/RyanAssets/Tools", "Flashlight");
+            if (!AssetDatabase.IsValidFolder("Packages/com.ryan.gameframework/Runtime/Tools/Flashlight")) AssetDatabase.CreateFolder("Packages/com.ryan.gameframework/Runtime/Tools", "Flashlight");
         }
         static Material Material(string name, Color color, bool glow = false, string folder = null) {
             string path = (folder ?? Root + "/Materials") + "/" + name + ".mat";
@@ -118,7 +118,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         static void BuildFlashlight() {
-            const string folder = "Assets/RyanAssets/Tools/Flashlight";
+            const string folder = "Packages/com.ryan.gameframework/Runtime/Tools/Flashlight";
             var shell = Material("FlashlightShell", new Color(0.045f, 0.052f, 0.055f), false, folder);
             var lens = Material("FlashlightLens", new Color(0.85f, 0.91f, 0.82f), true, folder);
             var root = new GameObject("Flashlight");
@@ -351,7 +351,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             var portrait = face.gameObject.AddComponent<UnityEngine.UI.RawImage>();
             portrait.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(RyanAssets.Editor.NPCCharacterAuthoring.Root + "/Data/PresencePortrait.png"); portrait.raycastTarget = false;
             scare.sting = scarePanel.gameObject.AddComponent<AudioSource>();
-            scare.sting.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/RyanAssets/Client/ClientAudio/JumpscareAudio/jumpscare.mp3");
+            scare.sting.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Packages/com.ryan.ui/Runtime/Client/ClientAudio/JumpscareAudio/jumpscare.mp3");
             scare.sting.playOnAwake = false; scare.sting.volume = 0.75f; scare.sting.spatialBlend = 0;
             PrefabUtility.SaveAsPrefabAsset(root, Root + "/Prefabs/InvestigationHUD.prefab"); Object.DestroyImmediate(root);
         }

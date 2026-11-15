@@ -1,0 +1,46 @@
+{
+  "_comment": "Where each Assets/RyanAssets path lives. Files keep their relative path under Packages/<package>/Runtime/. Layers: a package may only reference asmdefs in its own or a lower layer.",
+  "packages": {
+    "com.ryan.core": {
+      "layer": 0,
+      "displayName": "Ryan Core",
+      "description": "Foundation: core helpers, input, tweening, data service, network settings, shared declarations/requests/globals/components, world UI, command definitions, client effects, shaders.",
+      "paths": ["Core", "DataService", "Input", "TweenService", "NetworkService", "Shared/Declarations", "Shared/Requests", "Shared/Global", "Shared/Component", "Shared/WorldUI", "Commands/Shared", "Client/ClientEffects", "Shaders"]
+    },
+    "com.ryan.ui": {
+      "layer": 1,
+      "displayName": "Ryan UI",
+      "description": "UI controls (Textbox, ListGrid, ButtonGrid, Autocomplete), prompts, game settings, client audio and the command bar UI.",
+      "dependencies": ["com.ryan.core"],
+      "paths": ["UI", "PromptService", "Client/ClientUI/GameSettings", "Client/ClientAudio", "Client/ClientUI/Command"]
+    },
+    "com.ryan.networking": {
+      "layer": 2,
+      "displayName": "Ryan Networking",
+      "description": "Backend authentication and login, client connection core and modules, server modules, and player levels.",
+      "dependencies": ["com.ryan.core", "com.ryan.ui"],
+      "paths": ["Authentication", "Login", "Client/ClientCore", "Client/ClientModules", "Server/ServerModules", "Levels/Shared", "Levels/Client"]
+    },
+    "com.ryan.gameframework": {
+      "layer": 3,
+      "displayName": "Ryan Game Framework",
+      "description": "Server runner and features, characters, tools, items, combat, cameras, platformer mechanics, network manager prefabs and authoring tools that every universe builds on.",
+      "dependencies": ["com.ryan.core", "com.ryan.ui", "com.ryan.networking"],
+      "paths": ["Server/ServerCore", "Server/ServerFeatures", "Shared/Server", "Shared/Combat", "Shared/ClientNetworkManager.prefab", "Shared/ServerNetworkManager.prefab", "Shared/GlobalNetworkHelper.prefab", "Characters", "Tools", "Items", "Levels/Server", "Cameras", "Client/CharacterEffects", "Platformer", "Editor"]
+    },
+    "com.ryan.hud": {
+      "layer": 4,
+      "displayName": "Ryan HUD",
+      "description": "In-game HUD prefabs: chat, top bar, player list, vote, spectate, stamina, toolbar, name tags, build menu, credits.",
+      "dependencies": ["com.ryan.core", "com.ryan.ui", "com.ryan.networking", "com.ryan.gameframework"],
+      "paths": ["Client/ClientUI/Chat", "Client/ClientUI/NameTag", "Client/ClientUI/PlayerList", "Client/ClientUI/Spectate", "Client/ClientUI/Stamina", "Client/ClientUI/Structure", "Client/ClientUI/Toolbar", "Client/ClientUI/Topbar", "Client/ClientUI/Vote", "Client/CreditsList.html"]
+    },
+    "com.ryan.commands": {
+      "layer": 5,
+      "displayName": "Ryan Commands",
+      "description": "Chat command framework: server command handlers and the client command console.",
+      "dependencies": ["com.ryan.core", "com.ryan.ui", "com.ryan.networking", "com.ryan.gameframework", "com.ryan.hud"],
+      "paths": ["Commands/Client", "Commands/Server"]
+    }
+  }
+}

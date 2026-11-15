@@ -1,0 +1,16 @@
+{
+    "name": "RyanAssets.Shared.Server",
+    "rootNamespace": "RyanAssets.Shared.Server",
+    "references": [
+        "FishNet.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
