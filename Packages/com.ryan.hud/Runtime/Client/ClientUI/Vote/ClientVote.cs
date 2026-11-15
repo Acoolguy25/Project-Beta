@@ -32,6 +32,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
         SharedGlobalEvents subscribedEvents;
         bool initialized;
         bool displayedVote;
+        bool localCanVote = true;
         SharedVoteHeader displayedHeader;
 
         protected override void Start() {
@@ -99,6 +100,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
             events.SharedVoteHeader.OnChange += OnVoteHeaderChanged;
             events.VoteTotals.OnChange += OnVoteTotalsChanged;
             events.SkipVoteCount.OnChange += OnSkipVoteCountChanged;
+            events.DynamicVote.OnChange += OnDynamicVoteChanged;
             subscribedEvents = events;
             return true;
         }
@@ -112,6 +114,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
             events.SharedVoteHeader.OnChange -= OnVoteHeaderChanged;
             events.VoteTotals.OnChange -= OnVoteTotalsChanged;
             events.SkipVoteCount.OnChange -= OnSkipVoteCountChanged;
+            events.DynamicVote.OnChange -= OnDynamicVoteChanged;
         }
 
         void OnVoteHeaderChanged(SharedVoteHeader previous, SharedVoteHeader next, bool asServer) => Refresh();
@@ -122,6 +125,42 @@ namespace RyanAssets.Client.ClientUI.Vote {
         }
 
         void OnSkipVoteCountChanged(int previous, int next, bool asServer) => UpdateVoteCounts();
+
+        void OnDynamicVoteChanged(SharedDynamicVote previous, SharedDynamicVote next, bool asServer) {
+            if (displayedVote && displayedHeader.voteId == VoteEnum.Dynamic)
+                Refresh();
+        }
+
+        /// <summary>Presentation data for the running vote: declared in the prefab, or sent by the server for dynamic votes.</summary>
+        static ClientVoteInfo GetDisplayedVoteInfo(SharedVoteHeader header, out bool canVote) {
+            canVote = true;
+            if (header.voteId != VoteEnum.Dynamic)
+                return VoteDeclarations.GetVoteInfo(header.voteId);
+
+            SharedDynamicVote dynamicVote = SharedGlobalEvents.Instance.DynamicVote.Value;
+            int localId = InstanceFinder.ClientManager != null && InstanceFinder.ClientManager.Connection != null
+                ? InstanceFinder.ClientManager.Connection.ClientId : -1;
+            canVote = dynamicVote.CanVote(localId);
+            int count = dynamicVote.OptionCount;
+            ClientVoteOption[] options = new ClientVoteOption[count];
+            for (int i = 0; i < count; i++) {
+                options[i] = new ClientVoteOption {
+                    optionId = i,
+                    title = dynamicVote.options[i],
+                    description = dynamicVote.optionDescriptions != null && i < dynamicVote.optionDescriptions.Length
+                        ? dynamicVote.optionDescriptions[i] : string.Empty,
+                };
+            }
+            string description = dynamicVote.description;
+            if (!canVote)
+                description = string.IsNullOrWhiteSpace(description) ? "You are spectating and can't vote." : description + "\nYou are spectating and can't vote.";
+            return new ClientVoteInfo {
+                voteId = VoteEnum.Dynamic,
+                title = dynamicVote.title,
+                description = description,
+                options = options,
+            };
+        }
 
         void OnPlayerChanged(PlayerData player) => UpdateVoteCounts();
 
@@ -137,7 +176,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
                 return;
 
             displayedHeader = SharedGlobalEvents.Instance.SharedVoteHeader.Value;
-            ClientVoteInfo voteInfo = VoteDeclarations.GetVoteInfo(displayedHeader.voteId);
+            ClientVoteInfo voteInfo = GetDisplayedVoteInfo(displayedHeader, out localCanVote);
             if (titleText != null)
                 titleText.text = voteInfo.title;
             if (descriptionText != null) {
@@ -148,6 +187,10 @@ namespace RyanAssets.Client.ClientUI.Vote {
             ResetButtonSelections();
             FadeSelectedVoteButton(noVoteButton); // no vote is selected by default
             RefreshPrefabs(voteInfo.options ?? System.Array.Empty<ClientVoteOption>());
+            if (noVoteButton != null)
+                noVoteButton.interactable = localCanVote;
+            if (skipVoteButton != null)
+                skipVoteButton.interactable = localCanVote;
             UpdateVoteCounts();
         }
 
@@ -173,6 +216,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
                     optionCountTexts[optionId] = optionVoteCount;
                 button.onClick.RemoveAllListeners();
                 button.onClick.AddListener(() => SubmitVote(optionId, button));
+                button.interactable = localCanVote;
             }
 
             UpdateVoteCounts();
@@ -203,13 +247,16 @@ namespace RyanAssets.Client.ClientUI.Vote {
                     label.text = $"{count} vote{(count == 1 ? string.Empty : "s")}";
             }
 
+            int voterCount = PlayerData.Players.Count;
+            if (displayedVote && displayedHeader.voteId == VoteEnum.Dynamic)
+                voterCount = events.DynamicVote.Value.VoterCount(voterCount);
             if (noVoteCountText != null) {
-                int noVoteCount = Mathf.Max(0, PlayerData.Players.Count - selectedVotes);
+                int noVoteCount = Mathf.Max(0, voterCount - selectedVotes);
                 noVoteCountText.text = $"No Vote ({noVoteCount})";
             }
 
             if (skipVoteCountText != null)
-                skipVoteCountText.text = $"Skip Vote ({events.SkipVoteCount.Value}/{PlayerData.Players.Count})";
+                skipVoteCountText.text = $"Skip Vote ({events.SkipVoteCount.Value}/{voterCount})";
         }
 
         void FadeSelectedVoteButton(Button button) {

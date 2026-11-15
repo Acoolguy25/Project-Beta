@@ -8,6 +8,33 @@ namespace RyanAssets.Shared.Declarations {
         None = -1,
         MM_VoteMode,
         CS_VoteMode,
+        /// <summary>A vote whose title and options the server sends at runtime (<see cref="SharedDynamicVote"/>).</summary>
+        Dynamic,
+    }
+
+    /// <summary>
+    /// Server-written description of a <see cref="VoteEnum.Dynamic"/> vote, for votes whose options are only
+    /// known at runtime (for example "who is the murderer?"). Option i is VoteTotals[i].
+    /// </summary>
+    [Serializable]
+    public struct SharedDynamicVote {
+        public string title;
+        public string description;
+        public string[] options;
+        public string[] optionDescriptions;
+        /// <summary>Client ids allowed to vote. Null or empty means every player may vote.</summary>
+        public int[] voterClientIds;
+
+        public int OptionCount => options?.Length ?? 0;
+
+        public bool CanVote(int clientId) {
+            if (voterClientIds == null || voterClientIds.Length == 0)
+                return true;
+            return Array.IndexOf(voterClientIds, clientId) >= 0;
+        }
+
+        public int VoterCount(int playerCount) =>
+            voterClientIds == null || voterClientIds.Length == 0 ? playerCount : voterClientIds.Length;
     }
 
     /// <summary>Small, server-authoritative description of the currently running vote.</summary>

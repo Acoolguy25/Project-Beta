@@ -1,0 +1,8 @@
+{
+    "name": "Universes.UniverseData.murder_mystery.Shared",
+    "rootNamespace": "Universes.UniverseData.murder_mystery",
+    "references": [
+        "FishNet.Runtime"
+    ],
+    "autoReferenced": true
+}

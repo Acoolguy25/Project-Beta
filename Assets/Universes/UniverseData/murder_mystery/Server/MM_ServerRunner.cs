@@ -18,7 +18,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using UnityEngine;
+using Universes.UniverseData.murder_mystery;
 using Universes.UniverseData.murder_mystery.Server;
+using FishNet;
 
 namespace Universes.murder_mystery.Server {
     enum MM_Mode {
@@ -54,8 +56,17 @@ namespace Universes.murder_mystery.Server {
         string[] alienNames;
         int startNPCs, startPlayers, gameDurationLeft;
         int startMurd, startSheriff, startInnocent;
+        // Classic mode's round structure (reveal, hunt, reports, meetings, results).
+        MM_ClassicRound classic;
+        int roundNumber;
+        const int ClassicResultsSeconds = 12;
+        const float StateInterval = 0.5f;
         protected override void Awake() {
             base.Awake();
+            classic = new MM_ClassicRound(this);
+            if (InstanceFinder.ServerManager != null)
+                InstanceFinder.ServerManager.RegisterBroadcast<MM_ReportRequest>(classic.OnReportRequest, true);
+            BroadcastStateLoop(destroyCancellationToken).Forget(exception => Debug.LogException(exception, this));
             SharedGlobalEvents.TeamEnemies = new() {
                 [TeamColor.Red] = new() { TeamColor.Blue, TeamColor.Green },
                 [TeamColor.Blue] = new() { TeamColor.Red },
@@ -180,6 +191,8 @@ namespace Universes.murder_mystery.Server {
         void SharedOnDied(GameCharacter character, DamageType source, IEntity killer) {
             GameCharacter killerCharacter = killer as GameCharacter;
             if (mode == MM_Mode.Classic) {
+                if (gameInProgress)
+                    classic.OnCharacterDied(character, killerCharacter);
                 if (killerCharacter != null) {
                     if (killerCharacter.Owner.IsValid && source == DamageType.Gun && character.GetTeam().realTeam != TeamColor.Red) {
                         //ServerTool.Instance.DespawnTool(killerCharacter.Owner, ToolEnum.Pistol);
@@ -290,7 +303,9 @@ namespace Universes.murder_mystery.Server {
             }
             return false;
         }
+        readonly List<GameCharacter> pendingNpcParticipants = new();
         void SpawnNpcs() {
+            pendingNpcParticipants.Clear();
             for (int i = 0; i < startNPCs; i++) {
                 LocalNPC npc = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: (DebugSingleNpc.Value ? new Vector3(1117.56995f, 12.12100029f, 1008.34003f) : null));
                 GameCharacter gameCharacter = npc.GetComponent<GameCharacter>();
@@ -319,6 +334,8 @@ namespace Universes.murder_mystery.Server {
                 }
                 npc.gameObject.AddComponent<MM_LocalNPC>();
                 npc.gameObject.AddComponent<MM_NPC>();
+                if (mode == MM_Mode.Classic)
+                    pendingNpcParticipants.Add(gameCharacter);
                 gameCharacter.OnDied += (source, killer) => {
                     SharedOnDied(gameCharacter, source, killer);
                     if (source == DamageType.Fall) {
@@ -385,6 +402,8 @@ namespace Universes.murder_mystery.Server {
                     continue;
                 RandomizeCharacterName(character);
                 SpawnPlayerTools(player, character.NetworkObject);
+                if (mode == MM_Mode.Classic)
+                    classic.AddParticipant(character, player, player.team.Value.realTeam);
                 string teamName = GetTeamName(player.team.Value.realTeam);
                 ServerChat.SendSystemMessage(player.Owner, new($"Welcome to the {teamName} team!", SystemMessageSource.CustomMessage));
                 i++;
@@ -494,8 +513,21 @@ namespace Universes.murder_mystery.Server {
                 AssignInfectionRoles();
             }
 
+            roundNumber++;
+            if (mode == MM_Mode.Classic)
+                classic.Begin(roundNumber);
             SpawnNpcs();
+            // Names are randomized at spawn, so record NPCs once they have their alias.
+            foreach (GameCharacter npc in pendingNpcParticipants)
+                classic.AddParticipant(npc, null, npc.GetTeam().realTeam);
+            pendingNpcParticipants.Clear();
             SpawnPlayers();
+            if (mode == MM_Mode.Classic) {
+                gameInProgress = true;
+                await classic.RunRoleReveal(token);
+                await RunClassicRound(token);
+                return;
+            }
             base.SetGlobalInvul(false);
             int gameTime = mode == MM_Mode.Classic ? 180 : 90;
             gameDurationLeft = DebugTimerSpeedUp.Value ? 10 : gameTime;
@@ -530,8 +562,54 @@ namespace Universes.murder_mystery.Server {
                     break;
             }
         }
+        /// <summary>Classic: the hunt (paused by meetings), then the full role reveal.</summary>
+        async UniTask RunClassicRound(CancellationToken token) {
+            const int huntSeconds = 180;
+            base.SetGlobalInvul(false);
+            using CancellationTokenSource coinCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            SpawnCoinLoop(coinCts.Token).Forget(exception => Debug.LogException(exception, this));
+            try {
+                await classic.RunHunt(DebugTimerSpeedUp.Value ? 30 : huntSeconds,
+                    () => GetWinnerTeam(GetPlayerCount() > 0) != TeamColor.None, token);
+            } finally {
+                coinCts.Cancel();
+            }
+            ServerCoin.ClearAllCoins();
+            base.SetGlobalInvul(true);
+            TeamColor winner = GetWinnerTeam(false);
+            // Every player was eliminated while murderers are still loose: that is the murderers' win,
+            // not a survival win for the NPC townsfolk.
+            if (winner == TeamColor.Green && GetPlayerCount() == 0 && GetTeamCount(TeamColor.Red) > 0)
+                winner = TeamColor.Red;
+            string summary = $"{GetTeamCount(TeamColor.Red)}/{startMurd} Murderers, {GetTeamCount(TeamColor.Blue)}/{startSheriff} Sheriffs, {GetTeamCount(TeamColor.Green)}/{startInnocent} Innocents remaining";
+            ServerChat.SendSystemMessage(new($"{GetWinnerName(winner)} win! {summary}.", SystemMessageSource.CustomMessage));
+            await classic.RunResults(GetWinnerName(winner), summary, DebugTimerSpeedUp.Value ? 4 : ClassicResultsSeconds, token);
+        }
+
+        /// <summary>Tells each player the round phase, their own role and any body they can report.</summary>
+        async UniTask BroadcastStateLoop(CancellationToken token) {
+            while (!token.IsCancellationRequested) {
+                if (await UniTask.Delay(TimeSpan.FromSeconds(StateInterval), cancellationToken: token).SuppressCancellationThrow())
+                    return;
+                if (InstanceFinder.ServerManager == null || !InstanceFinder.ServerManager.Started || PlayerData.Players == null)
+                    continue;
+                bool classicRound = mode == MM_Mode.Classic && gameInProgress;
+                foreach (PlayerData player in PlayerData.Players.Values.ToList()) {
+                    if (player == null || !player.Owner.IsActive)
+                        continue;
+                    MM_StateBroadcast state = classic.BuildState(player, classicRound);
+                    if (!classicRound) {
+                        state.phase = gameInProgress ? MM_Phase.Hunt : MM_Phase.Lobby;
+                        state.secondsLeft = gameDurationLeft;
+                    }
+                    InstanceFinder.ServerManager.Broadcast(player.Owner, state);
+                }
+            }
+        }
+
         protected override void Stop() {
             base.Stop();
+            classic?.End();
             gameInProgress = false;
             gameDurationLeft = 0;
             pendingInfectionRevives.Clear();
@@ -552,6 +630,8 @@ namespace Universes.murder_mystery.Server {
             SetLeaderboardEnabled("Kills", false);
         }
         protected override void OnDestroy() {
+            if (InstanceFinder.ServerManager != null && classic != null)
+                InstanceFinder.ServerManager.UnregisterBroadcast<MM_ReportRequest>(classic.OnReportRequest);
             //ServerPlayerCharacter.CharacterAdded -= OnCharacterAdded;
             if (ServerPlayerCharacter.CanSpawnFunction == CanSpawnFunction)
                 ServerPlayerCharacter.CanSpawnFunction = null;

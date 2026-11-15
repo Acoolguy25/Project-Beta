@@ -1,0 +1,15 @@
+{
+    "name": "Universes.UniverseData.murder_mystery.Editor",
+    "references": [
+        "Universes.UniverseData.murder_mystery.Shared",
+        "Universes.UniverseData.murder_mystery.Client",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ]
+}

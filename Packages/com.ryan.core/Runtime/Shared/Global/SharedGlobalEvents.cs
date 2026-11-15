@@ -49,6 +49,8 @@ namespace RyanAssets.Shared.Global {
         public readonly SyncVar<SharedVoteHeader> SharedVoteHeader = new(new());
         public readonly SyncList<int> VoteTotals = new(new());
         public readonly SyncVar<int> SkipVoteCount = new(0);
+        /// <summary>Title and options of the running vote when its id is <see cref="VoteEnum.Dynamic"/>.</summary>
+        public readonly SyncVar<SharedDynamicVote> DynamicVote = new(new SharedDynamicVote());
 
         // Structure building
         public readonly SyncList<ushort> Builds = new();
