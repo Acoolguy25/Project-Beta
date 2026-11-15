@@ -111,6 +111,7 @@ namespace Universes.UniverseData.obby.Server {
             RunnerFor(player.Owner);
             PreparePlayer(player);
             SendCourse(player.Owner);
+            PlayerProgress.Load<OB_SaveData>(player, OB_SaveData.Universe).Forget();
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -240,6 +241,7 @@ namespace Universes.UniverseData.obby.Server {
                         if ((runner.coins & bit) != 0 || (centre - layout.stages[s].coin).sqrMagnitude > CoinRadius * CoinRadius) continue;
                         runner.coins |= bit;
                         Award(pair.Key, 0, coinGold, "a coin");
+                        PlayerProgress.Modify<OB_SaveData>(pair.Key, save => save.totalCoins++);
                         if (PlayerData.TryGetPlayerData(pair.Key, out var player)) WriteLeaderboard(player);
                         SendProgress(pair.Key, OB_ProgressReason.Coin);
                     }
@@ -260,6 +262,7 @@ namespace Universes.UniverseData.obby.Server {
             int gained = checkpoint - runner.checkpoint;
             runner.checkpoint = checkpoint;
             Award(connection, checkpointXP * (ulong)gained, 0, "a checkpoint");
+            PlayerProgress.Modify<OB_SaveData>(connection, save => save.RecordStage(checkpoint));
             if (PlayerData.TryGetPlayerData(connection, out var player)) WriteLeaderboard(player);
             SendProgress(connection, OB_ProgressReason.Checkpoint);
         }
@@ -271,6 +274,9 @@ namespace Universes.UniverseData.obby.Server {
             runner.checkpoint = layout.StageCount;
             ulong gold = finishGold + (runner.place <= podiumGold.Length ? podiumGold[runner.place - 1] : 0);
             Award(connection, finishXP, gold, "finishing");
+            float finishTime = runner.finishTime;
+            int stages = layout.StageCount;
+            PlayerProgress.Modify<OB_SaveData>(connection, save => save.RecordFinish(finishTime, stages));
             string name = PlayerData.GetPlayerName(connection);
             headline = $"{name} finished {Ordinal(runner.place)} in {Clock(runner.finishTime, true)}!";
             if (runner.place == 1 && phase == OB_Phase.Racing) {

@@ -258,6 +258,7 @@ namespace Universes.UniverseData.war_valley.Server
             playerData.SetPlayerTeam(
                 new TeamConfig(WV_Alliances.GetCommanderSide(clientId), WV_Rules.GetCommanderColor(clientId)));
             playerData.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
+            PlayerProgress.Load<WV_SaveData>(playerData, WV_SaveData.Universe).Forget();
         }
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
@@ -399,6 +400,8 @@ namespace Universes.UniverseData.war_valley.Server
                 // Each wave is built from its number, so the round hardens as it goes.
                 currentWave = WV_WavePlan.Build(WaveNumber + 1, WaveTuning);
                 GameState = WV_ActiveGameState.Wave;
+                int waveNumber = currentWave.Number;
+                PlayerProgress.ModifyAll<WV_SaveData>(save => save.RecordWave(waveNumber));
                 WV_ServerCommand.NotifyAll(WV_WavePlan.Describe(currentWave, WaveTuning.WaveCount));
                 // No countdown runs while a wave streams in, so nothing else would replace the
                 // previous intermission's "next wave in N seconds" on the top bar.
@@ -449,6 +452,7 @@ namespace Universes.UniverseData.war_valley.Server
             if (currentWave != null)
                 wavesHeld = currentWave.Number;
             GameState = WV_ActiveGameState.Victory;
+            PlayerProgress.ModifyAll<WV_SaveData>(save => save.victories++);
             SharedGlobalEvents.Instance.CanBuild.Value = false;
             if (WaveTuning.VictoryBounty > 0)
                 serverEconomy.PayEveryone(WaveTuning.VictoryBounty, $"Victory bonus: +{WaveTuning.VictoryBounty:N0} funds");

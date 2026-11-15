@@ -218,6 +218,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
             PreparePlayer(player);
+            PlayerProgress.Load<CH_SaveData>(player, CH_SaveData.Universe).Forget();
             string account = AccountKey(player.Owner);
             player.lives.Value = account != null && CaseActive && accountLives.TryGetValue(account, out int left) ? left : livesPerPlayer;
             if (account != null && CaseActive && eliminatedAccounts.Contains(account)) {
@@ -419,8 +420,12 @@ namespace Universes.UniverseData.classic_horror.Server {
                     : "DISPATCH / Signal received. You are coming home. Every new case has different evidence, rules and a different ritual.");
             } else return;
 
+            if (itemCollected) PlayerProgress.Modify<CH_SaveData>(connection, save => save.evidenceFound++);
             if (oldPhase != current.Phase) {
                 if (current.Phase == CH_Phase.Descent) {
+                    // Chapter I is closed for everyone still in the case.
+                    foreach (var player in PlayerData.Players.Values)
+                        if (player != null && !eliminated.Contains(player.Owner)) PlayerProgress.Modify<CH_SaveData>(player, save => save.chaptersCompleted++);
                     deadline = Time.time + descentSeconds;
                     // Let the final record be read before the chapter turns.
                     pendingSpeech.Clear();
@@ -445,6 +450,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             foreach (var player in PlayerData.Players.Values) {
                 if (player == null || eliminated.Contains(player.Owner)) continue;
                 AwardReward(player.Owner, winXPReward, winCreditReward, "surviving the case");
+                PlayerProgress.Modify<CH_SaveData>(player, save => save.RecordCaseClosed());
             }
         }
 

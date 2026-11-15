@@ -113,6 +113,7 @@ namespace Universes.UniverseData.dot_invaders {
                 }
             }
 
+            RecordMatchProgress(winnerTeamId);
             if (winnerTeamId >= 0)
                 SendTeamChatMessage(winnerTeamId, "wins the game!");
 

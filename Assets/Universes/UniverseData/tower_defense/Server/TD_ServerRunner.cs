@@ -94,6 +94,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             player.staminaMax.Value = 400f;
             player.staminaRegen.Value = 80f;
             SendState(player.Owner);
+            PlayerProgress.Load<TD_SaveData>(player, TD_SaveData.Universe).Forget();
         }
 
         void OnPlayerLeft(PlayerData player) {
@@ -138,6 +139,8 @@ namespace Universes.UniverseData.tower_defense.Server {
 
                 phase = TD_Phase.Wave;
                 headline = $"Wave {wave}: {DescribeWave(wave)}";
+                int startedWave = wave;
+                PlayerProgress.ModifyAll<TD_SaveData>(save => save.RecordWave(startedWave));
                 MarkDirty();
                 SpawnWave(wave, token).Forget(e => { if (e is not OperationCanceledException) Debug.LogException(e, this); });
                 while (spawnsPending > 0 || enemies.Count > 0) {
@@ -158,8 +161,10 @@ namespace Universes.UniverseData.tower_defense.Server {
             int reached = Mathf.Min(wave, waveCount);
             headline = won ? $"VICTORY! The base held all {waveCount} waves." : $"The base fell on wave {reached}.";
             SetMusic(won ? MusicSelection.VictoryMusic : MusicSelection.GameMusic);
-            foreach (var player in GetActivePlayers())
+            foreach (var player in GetActivePlayers()) {
                 Award(player.Owner, won ? victoryXP : (ulong)(4 * reached), won ? victoryGold : 0);
+                if (won) PlayerProgress.Modify<TD_SaveData>(player, save => save.gamesWon++);
+            }
             enemies.Clear();
             ServerChat.SendSystemMessage(new(headline, SystemMessageSource.CustomMessage));
             for (int i = resultsSeconds; i > 0; i--) {
@@ -270,7 +275,10 @@ namespace Universes.UniverseData.tower_defense.Server {
             enemies.Remove(e);
             killed.Add(e.id);
             cash += TD_Rules.Enemy(e.kind).reward;
-            if (tower.owner != null && PlayerData.TryGetPlayerData(tower.owner, out var player)) RoundLeaderboard.Add(player, KillsColumn, 1);
+            if (tower.owner != null && PlayerData.TryGetPlayerData(tower.owner, out var player)) {
+                RoundLeaderboard.Add(player, KillsColumn, 1);
+                PlayerProgress.Modify<TD_SaveData>(player, save => save.totalKills++);
+            }
             MarkDirty();
         }
 

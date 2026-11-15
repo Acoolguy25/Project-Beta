@@ -88,6 +88,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             ApplyMovement(player);
             ApplyTeam(player);
             MarkDirty();
+            PlayerProgress.Load<HS_SaveData>(player, HS_SaveData.Universe).Forget();
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -213,6 +214,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             headline = hidersWin ? $"HIDERS WIN! {survivors} stayed hidden." : "SEEKERS WIN! Everyone was found.";
             SetMusic(MusicSelection.VictoryMusic);
             foreach (var pair in roles.Where(r => r.Key.IsActive)) {
+                bool survived = pair.Value == HS_Role.Hider;
+                if (pair.Value != HS_Role.None) PlayerProgress.Modify<HS_SaveData>(pair.Key, save => save.RecordRound(survived));
                 if (pair.Value == HS_Role.Hider) {
                     Award(pair.Key, surviveXP, surviveGold);
                     if (PlayerData.TryGetPlayerData(pair.Key, out var p)) RoundLeaderboard.Add(p, SurvivedColumn, 1);
@@ -253,6 +256,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             roles[best] = HS_Role.Caught;
             if (PlayerData.TryGetPlayerData(best, out var caught)) { ApplyMovement(caught); ApplyTeam(caught); }
             if (PlayerData.TryGetPlayerData(connection, out var tagger)) RoundLeaderboard.Add(tagger, TagsColumn, 1);
+            PlayerProgress.Modify<HS_SaveData>(connection, save => save.tags++);
             Award(connection, tagXP, 0);
             string seekerName = PlayerData.GetPlayerName(connection), hiderName = PlayerData.GetPlayerName(best);
             InstanceFinder.ServerManager.Broadcast(new HS_TagBroadcast {

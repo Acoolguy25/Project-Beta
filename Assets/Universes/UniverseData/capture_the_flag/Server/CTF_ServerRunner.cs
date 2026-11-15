@@ -94,6 +94,7 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             player.tools.Clear();
             player.tools.AddRange(Loadout);
             AssignTeam(player.Owner);
+            PlayerProgress.Load<CTF_SaveData>(player, CTF_SaveData.Universe).Forget();
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -130,6 +131,7 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             if (killer is GameCharacter k && k.Owner != null && k.Owner.IsValid && k.Owner != owner && PlayerData.TryGetPlayerData(k.Owner, out var p)) {
                 RoundLeaderboard.Add(p, KillsColumn, 1);
                 Award(k.Owner, killXP, 0);
+                PlayerProgress.Modify<CTF_SaveData>(p, save => save.kills++);
             }
         }
 
@@ -192,7 +194,10 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             headline = winner is CTF_Team w ? $"{CTF_Rules.Name(w)} TEAM WINS {Math.Max(redScore, blueScore)}-{Math.Min(redScore, blueScore)}!" : $"DRAW {redScore}-{blueScore}";
             SetMusic(MusicSelection.VictoryMusic);
             if (winner is CTF_Team won) {
-                foreach (var pair in teams.Where(t => t.Value == won && t.Key.IsActive)) Award(pair.Key, winXP, winGold);
+                foreach (var pair in teams.Where(t => t.Value == won && t.Key.IsActive)) {
+                    Award(pair.Key, winXP, winGold);
+                    PlayerProgress.Modify<CTF_SaveData>(pair.Key, save => save.wins++);
+                }
                 InstanceFinder.ServerManager.Broadcast(new CTF_EventBroadcast { kind = CTF_EventKind.Won, flag = won });
             }
             ServerChat.SendSystemMessage(new(headline, SystemMessageSource.CustomMessage));
@@ -260,6 +265,7 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             if (scorer == CTF_Team.Red) redScore++; else blueScore++;
             if (PlayerData.TryGetPlayerData(carrier, out var p)) RoundLeaderboard.Add(p, CapturesColumn, 1);
             Award(carrier, captureXP, captureGold);
+            PlayerProgress.Modify<CTF_SaveData>(carrier, save => save.captures++);
             Event(CTF_EventKind.Captured, flag.team, carrier);
             ServerChat.SendSystemMessage(new($"{PlayerData.GetPlayerName(carrier)} captured the {CTF_Rules.Name(flag.team)} flag! RED {redScore} - {blueScore} BLUE", SystemMessageSource.CustomMessage));
             Return(flag, false);

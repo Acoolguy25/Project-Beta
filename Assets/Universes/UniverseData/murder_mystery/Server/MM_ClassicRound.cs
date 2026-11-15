@@ -243,6 +243,7 @@ namespace Universes.murder_mystery.Server {
                     $"Who killed {body.victimName}?",
                     $"Reported by {reporterName}. These were seen near the body. Most votes is ejected; a tie ejects nobody.",
                     names, descriptions, VoteSeconds, token, CanVote);
+                MM_SaveData.RecordVotes(suspects);
 
                 MM_EjectionBroadcast ejection = new() { round = Round };
                 GameCharacter chosen = result.winner >= 0 && result.winner < suspects.Count ? suspects[result.winner] : null;

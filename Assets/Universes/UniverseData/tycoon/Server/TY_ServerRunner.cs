@@ -24,7 +24,7 @@ namespace Universes.UniverseData.tycoon.Server {
     /// token for the perk shop. Every rule (cash, prices, unlocks, claims, pickups) is decided here
     /// from replicated character positions; clients only draw.
     /// </summary>
-    public sealed class TY_ServerRunner : ServerRunner {
+    public sealed partial class TY_ServerRunner : ServerRunner {
         [Header("Economy")]
         [Tooltip("Multiplies all income. 1 is the tuned pace (about ten minutes to the first rebirth).")]
         [SerializeField, Min(0.01f)] float incomeScale = 1f;
@@ -108,6 +108,7 @@ namespace Universes.UniverseData.tycoon.Server {
             ApplySpeed(player, t);
             WriteLeaderboard(player);
             SendState(player.Owner);
+            LoadProgressAsync(player).Forget();
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -116,7 +117,10 @@ namespace Universes.UniverseData.tycoon.Server {
         }
 
         void OnPlayerLeft(PlayerData player) {
-            if (players.TryGetValue(player.Owner, out var t) && t.plot >= 0) Release(t.plot);
+            if (players.TryGetValue(player.Owner, out var t)) {
+                CaptureProgressOnLeave(player, t);
+                if (t.plot >= 0) Release(t.plot);
+            }
             players.Remove(player.Owner);
             requestTimes.Remove(player.Owner);
         }
@@ -227,6 +231,7 @@ namespace Universes.UniverseData.tycoon.Server {
                 nextGolden = Time.time + Random.Range(goldenInterval.x, goldenInterval.y) * 0.5f
             };
             t.plot = index;
+            RestoreBuild(connection, index);
             plotsDirty = true;
             Event(connection, TY_EventKind.Claimed, index, -1, 0, "You claimed a tycoon! Step on the glowing pads to build.");
             ServerChat.SendSystemMessage(new($"{PlayerData.GetPlayerName(connection)} claimed tycoon #{index + 1}.", SystemMessageSource.CustomMessage));

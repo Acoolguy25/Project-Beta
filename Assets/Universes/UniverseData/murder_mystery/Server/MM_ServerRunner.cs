@@ -127,6 +127,7 @@ namespace Universes.murder_mystery.Server {
         }
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
+            PlayerProgress.Load<MM_SaveData>(player, MM_SaveData.Universe).Forget();
             player.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
             //data.leaderboard.AddRange(new[] { 0 });
             //data.tools.AddRange(new[] { ToolEnum.Dagger });
@@ -514,6 +515,7 @@ namespace Universes.murder_mystery.Server {
             }
 
             roundNumber++;
+            PlayerProgress.ModifyAll<MM_SaveData>(save => save.roundsPlayed++);
             if (mode == MM_Mode.Classic)
                 classic.Begin(roundNumber);
             SpawnNpcs();
@@ -581,6 +583,7 @@ namespace Universes.murder_mystery.Server {
             // not a survival win for the NPC townsfolk.
             if (winner == TeamColor.Green && GetPlayerCount() == 0 && GetTeamCount(TeamColor.Red) > 0)
                 winner = TeamColor.Red;
+            MM_SaveData.RecordClassicResult(winner);
             string summary = $"{GetTeamCount(TeamColor.Red)}/{startMurd} Murderers, {GetTeamCount(TeamColor.Blue)}/{startSheriff} Sheriffs, {GetTeamCount(TeamColor.Green)}/{startInnocent} Innocents remaining";
             ServerChat.SendSystemMessage(new($"{GetWinnerName(winner)} win! {summary}.", SystemMessageSource.CustomMessage));
             await classic.RunResults(GetWinnerName(winner), summary, DebugTimerSpeedUp.Value ? 4 : ClassicResultsSeconds, token);

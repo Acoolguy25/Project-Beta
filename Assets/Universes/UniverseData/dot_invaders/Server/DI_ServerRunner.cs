@@ -188,6 +188,7 @@ namespace Universes.UniverseData.dot_invaders {
             base.OnPlayerAdded(playerData);
             playerData.cameraTypes.Add(GameCameraType.TwoDimCamera);
             AssignPlayer(playerData);
+            PlayerProgress.Load<DI_SaveData>(playerData, DI_SaveData.Universe).Forget();
         }
 
         void Update() {
