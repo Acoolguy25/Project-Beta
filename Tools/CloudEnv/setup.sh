@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# Project-Beta cloud dev environment setup (Ubuntu 24.04, run as root).
+#
+# Installs, idempotently:
+#   1. System libraries Unity's Linux Editor needs, plus Xvfb for running it without a display.
+#   2. The exact Unity Editor version pinned in ProjectSettings/ProjectVersion.txt (version AND
+#      changeset), downloaded straight from Unity's CDN and checked against the md5 in Unity's
+#      own release manifest (unity-<version>-linux.ini).
+#   3. The Linux Dedicated Server build-support module (the server role uses the Linux Server
+#      build profile, which needs it).
+#   4. The Unity CLI (https://unity.com/install.sh), used for licensing and to drive Editors.
+#   5. Optionally (INSTALL_BACKEND=1) a Python venv for the UnityBackend repo.
+#
+# ParrelSync itself is a UPM git dependency already in Packages/manifest.json
+# (https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync), so Unity's package manager
+# fetches it on first import; Tools/CloudEnv/local-multiplayer.sh creates the clone.
+#
+# Usable as a Claude Code cloud environment "Setup script" (no secrets are needed here; the
+# license is activated per session by Tools/CloudEnv/license.sh).
+#
+# Environment overrides:
+#   PROJECT_DIR         Project-Beta checkout (default: auto-detect, else shallow sparse clone)
+#   PROJECT_REPO        git URL used only when no checkout is found
+#   UNITY_VERSION       override (default: m_EditorVersion from ProjectVersion.txt)
+#   UNITY_CHANGESET     override (default: revision from m_EditorVersionWithRevision)
+#   UNITY_INSTALL_ROOT  default /opt/unity/editors  -> $UNITY_INSTALL_ROOT/<version>/Editor/Unity
+#   INSTALL_BACKEND     1 to also set up UnityBackend's Python venv (default 0)
+#   BACKEND_DIR         UnityBackend checkout (default: auto-detect)
+#   SKIP_UNITY_CLI      1 to skip installing the Unity CLI
+set -euo pipefail
+
+log() { printf '\n[setup] %s\n' "$*"; }
+die() { printf '[setup] ERROR: %s\n' "$*" >&2; exit 1; }
+
+[[ $EUID -eq 0 ]] || die "run as root"
+
+UNITY_INSTALL_ROOT="${UNITY_INSTALL_ROOT:-/opt/unity/editors}"
+PROJECT_REPO="${PROJECT_REPO:-https://github.com/Acoolguy25/Project-Beta.git}"
+INSTALL_BACKEND="${INSTALL_BACKEND:-0}"
+UNITY_CDN="https://download.unity3d.com/download_unity"
+
+# ---------------------------------------------------------------- locate project + version
+find_project() {
+  local here
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd || true)"
+  for d in "${PROJECT_DIR:-}" "$here" /home/user/Project-Beta "$PWD"; do
+    [[ -n "$d" && -f "$d/ProjectSettings/ProjectVersion.txt" ]] && { echo "$d"; return; }
+  done
+}
+
+PROJECT_DIR="$(find_project || true)"
+VERSION_FILE=""
+if [[ -n "$PROJECT_DIR" ]]; then
+  VERSION_FILE="$PROJECT_DIR/ProjectSettings/ProjectVersion.txt"
+else
+  # Setup scripts can run before the repo is cloned: fetch only ProjectSettings from git.
+  tmp="$(mktemp -d)"
+  log "No checkout found; reading ProjectVersion.txt from $PROJECT_REPO"
+  git clone -q --depth 1 --filter=blob:none --sparse "$PROJECT_REPO" "$tmp/pb"
+  git -C "$tmp/pb" sparse-checkout set ProjectSettings
+  VERSION_FILE="$tmp/pb/ProjectSettings/ProjectVersion.txt"
+fi
+
+if [[ -z "${UNITY_VERSION:-}" || -z "${UNITY_CHANGESET:-}" ]]; then
+  line="$(grep '^m_EditorVersionWithRevision:' "$VERSION_FILE")" || die "no m_EditorVersionWithRevision in $VERSION_FILE"
+  # m_EditorVersionWithRevision: 6000.5.5f1 (d16e074b49fd)
+  UNITY_VERSION="${UNITY_VERSION:-$(sed -E 's/^[^:]+: *([^ ]+) .*/\1/' <<<"$line")}"
+  UNITY_CHANGESET="${UNITY_CHANGESET:-$(sed -E 's/.*\(([0-9a-f]+)\).*/\1/' <<<"$line")}"
+fi
+[[ "$UNITY_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+[abfp][0-9]+$ ]] || die "bad Unity version '$UNITY_VERSION'"
+[[ "$UNITY_CHANGESET" =~ ^[0-9a-f]{12}$ ]] || die "bad changeset '$UNITY_CHANGESET'"
+log "Unity $UNITY_VERSION ($UNITY_CHANGESET) from ${VERSION_FILE}"
+
+EDITOR_ROOT="$UNITY_INSTALL_ROOT/$UNITY_VERSION"
+UNITY_BIN="$EDITOR_ROOT/Editor/Unity"
+
+# ---------------------------------------------------------------- system packages
+log "Installing system packages"
+export DEBIAN_FRONTEND=noninteractive
+PKGS=(
+  ca-certificates curl git git-lfs xz-utils python3 python3-venv
+  xvfb xauth x11-utils x11-apps imagemagick
+  libgtk-3-0t64 libglu1-mesa libgl1-mesa-dri libegl1 libvulkan1 mesa-vulkan-drivers
+  libnss3 libasound2t64 libgbm1 libxss1 libxtst6 libxrandr2 libxcursor1 libxi6
+  libsecret-1-0 libcap2 libxkbcommon0 libdbus-1-3 cpio
+)
+missing=()
+for p in "${PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
+if ((${#missing[@]})); then
+  apt-get update -q
+  apt-get install -y -q --no-install-recommends "${missing[@]}"
+fi
+git lfs install --system >/dev/null 2>&1 || true
+
+# ---------------------------------------------------------------- Unity Editor + module
+INI_URL="$UNITY_CDN/$UNITY_CHANGESET/unity-$UNITY_VERSION-linux.ini"
+INI="$(curl -fsSL "$INI_URL")" || die "release manifest not found: $INI_URL (version/changeset mismatch?)"
+
+ini_get() { # section key
+  awk -v s="[$1]" -v k="$2" '$0==s{f=1;next} /^\[/{f=0} f && index($0,k"=")==1{print substr($0,length(k)+2)}' <<<"$INI"
+}
+
+install_component() { # section label
+  local section="$1" url md5 got tmpd
+  url="$(ini_get "$section" url)"; md5="$(ini_get "$section" md5)"
+  [[ -n "$url" && -n "$md5" ]] || die "section [$section] missing from $INI_URL"
+  url="$UNITY_CDN/$UNITY_CHANGESET/$url"
+  log "Downloading [$section] $url ($(ini_get "$section" size) bytes)"
+  tmpd="$(mktemp -d)"
+  mkdir -p "$EDITOR_ROOT"
+  # Stream: download once, hash and extract at the same time (no 4 GB archive on disk).
+  curl -fsSL --retry 5 --retry-delay 5 "$url" \
+    | tee >(md5sum | cut -d' ' -f1 >"$tmpd/md5") \
+    | tar -xJ -C "$EDITOR_ROOT"
+  sleep 1
+  got="$(cat "$tmpd/md5")"; rm -rf "$tmpd"
+  [[ "$got" == "$md5" ]] || die "[$section] md5 mismatch: expected $md5 got $got"
+  log "[$section] md5 OK ($md5)"
+}
+
+if [[ -x "$UNITY_BIN" ]]; then
+  log "Editor already installed at $UNITY_BIN"
+else
+  install_component Unity
+fi
+if [[ -d "$EDITOR_ROOT/Editor/Data/PlaybackEngines/LinuxStandaloneSupport/Variations/linux64_server_development_mono" ]] \
+   || [[ -f "$EDITOR_ROOT/.linux-server-installed" ]]; then
+  log "Linux Dedicated Server module already installed"
+else
+  install_component Linux-Server
+  touch "$EDITOR_ROOT/.linux-server-installed"
+fi
+ln -sfn "$EDITOR_ROOT" "$UNITY_INSTALL_ROOT/current"
+
+# ---------------------------------------------------------------- Unity CLI
+if [[ "${SKIP_UNITY_CLI:-0}" != 1 ]]; then
+  if ! command -v unity >/dev/null 2>&1; then
+    # Same source and checks as https://unity.com/install.sh, without running a remote script:
+    # read the channel manifest, download the linux-x64 binary, verify its sha256.
+    CLI_CDN="https://public-cdn.cloud.unity3d.com/hub/prod/cli"
+    manifest="$(curl -fsSL "$CLI_CDN/${UNITY_CLI_VERSION:+$UNITY_CLI_VERSION/}latest.json")"
+    read -r cli_ver cli_file cli_sha < <(python3 -c 'import json,sys; m=json.load(sys.stdin); b=m["binaries"]["linux-x64"]; print(m["version"], b["filename"], b["sha256"])' <<<"$manifest")
+    log "Installing Unity CLI $cli_ver from $CLI_CDN/$cli_ver/$cli_file"
+    curl -fsSL --retry 3 "$CLI_CDN/$cli_ver/$cli_file" -o /usr/local/bin/unity.tmp
+    echo "$cli_sha  /usr/local/bin/unity.tmp" | sha256sum -c --quiet - || die "Unity CLI sha256 mismatch"
+    chmod +x /usr/local/bin/unity.tmp && mv /usr/local/bin/unity.tmp /usr/local/bin/unity
+  fi
+  if command -v unity >/dev/null 2>&1; then
+    UNITY_NO_CONSENT_PROMPT=1 unity editors add "$UNITY_BIN" --non-interactive --no-banner >/dev/null 2>&1 || true
+    # Stage the licensing client while we still have the network (exit 4 = no license yet: expected).
+    UNITY_NO_CONSENT_PROMPT=1 unity license status --non-interactive --no-banner >/dev/null 2>&1 || true
+  fi
+fi
+
+# ---------------------------------------------------------------- env file for later shells
+cat >/etc/profile.d/project-beta-unity.sh <<EOF
+export UNITY_VERSION="$UNITY_VERSION"
+export UNITY_CHANGESET="$UNITY_CHANGESET"
+export UNITY_EDITOR="$UNITY_BIN"
+export UNITY_NO_CONSENT_PROMPT=1
+export UNITY_NO_AGENT_HINTS=1
+EOF
+
+# ---------------------------------------------------------------- optional: UnityBackend
+if [[ "$INSTALL_BACKEND" == 1 ]]; then
+  for d in "${BACKEND_DIR:-}" "$(dirname "${PROJECT_DIR:-/home/user/x}")/UnityBackend" /home/user/UnityBackend; do
+    [[ -n "$d" && -f "$d/requirements.txt" ]] && { BACKEND_DIR="$d"; break; }
+  done
+  [[ -n "${BACKEND_DIR:-}" && -f "$BACKEND_DIR/requirements.txt" ]] || die "INSTALL_BACKEND=1 but no UnityBackend checkout found"
+  log "Setting up UnityBackend venv in $BACKEND_DIR/.venv"
+  python3 -m venv "$BACKEND_DIR/.venv"
+  "$BACKEND_DIR/.venv/bin/pip" install -q --upgrade pip
+  "$BACKEND_DIR/.venv/bin/pip" install -q -r "$BACKEND_DIR/requirements.txt"
+fi
+
+log "Done. Editor: $UNITY_BIN"
+"$UNITY_BIN" -version 2>/dev/null || true
