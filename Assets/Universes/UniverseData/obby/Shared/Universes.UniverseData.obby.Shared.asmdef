@@ -1,0 +1,12 @@
+{
+    "name": "Universes.UniverseData.obby.Shared",
+    "rootNamespace": "Universes.UniverseData.obby",
+    "references": [
+        "FishNet.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Platformer",
+        "RyanAssets.Items.Platform",
+        "RyanAssets.Characters.Shared"
+    ],
+    "autoReferenced": true
+}

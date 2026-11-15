@@ -1,0 +1,21 @@
+{
+    "name": "Universes.UniverseData.obby.Editor",
+    "references": [
+        "Universes.UniverseData.obby.Shared",
+        "Universes.UniverseData.obby.Client",
+        "Universes.UniverseData.obby.Server",
+        "RyanAssets.Server.ServerCore",
+        "RyanAssets.Server.ServerFeatures",
+        "RyanAssets.Platformer",
+        "RyanAssets.Items.Platform",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Core",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}

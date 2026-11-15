@@ -30,11 +30,14 @@ namespace RyanAssets.Characters.Shared {
         public static event Action<LocalCharacter> LocalCharacterAdded;
         public static event Action<LocalCharacter> LocalCharacterRemoved;
         public static event Action<LocalCharacter, DamageType, GameCharacter> LocalCharacterDied;
+        /// <summary>Raised on every peer that applies a server-directed respawn or teleport.</summary>
+        public static event Action<LocalCharacter> Teleported;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init() {
             LocalCharacterAdded = null;
             LocalCharacterRemoved = null;
             LocalCharacterDied = null;
+            Teleported = null;
         }
 #if !UNITY_SERVER
         public override void OnOwnershipClient(NetworkConnection prevOwner) {
@@ -121,6 +124,25 @@ namespace RyanAssets.Characters.Shared {
 #endif
         }
 
+        /// <summary>
+        /// Moves a living character to <paramref name="position"/> on the server and every client,
+        /// including its owner, whose client-authoritative movement then continues from there.
+        /// Used for checkpoint returns that should not cost a death and respawn delay.
+        /// </summary>
+        [Server]
+        public bool TeleportTo(Vector3 position) {
+#if UNITY_SERVER
+            if (IsDead || !IsSpawned)
+                return false;
+            Vector3 target = position + Vector3.down * RespawnVerticalOffset;
+            ApplyRespawnPosition(target);
+            RpcApplyRespawnPosition(target);
+            return true;
+#else
+            return false;
+#endif
+        }
+
         [ObserversRpc]
         private void RpcApplyRespawnPosition(Vector3 position) {
             ApplyRespawnPosition(position);
@@ -139,6 +161,7 @@ namespace RyanAssets.Characters.Shared {
             Physics.SyncTransforms();
             if (TryGetComponent(out NetworkTransform networkTransform))
                 networkTransform.Teleport();
+            Teleported?.Invoke(this);
         }
 
         public override void OnStopNetwork() {

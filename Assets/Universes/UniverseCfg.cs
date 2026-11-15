@@ -67,6 +67,13 @@ namespace Universes {
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Protected
             },
+            new(){
+                id = "obby",
+                title = "Sky Obby",
+                description = "Race a brand new randomly generated sky course every round: springs, gravity fields, beat blocks and wall kicks.",
+                creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
+                access = UniverseAccess.Public
+            },
         };
         public static UniverseStruct GetUniverseFromId(string id) => UniverseRegistry.GetUniverseFromId(id);
     }

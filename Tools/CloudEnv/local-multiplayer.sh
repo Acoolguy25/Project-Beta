@@ -62,6 +62,12 @@ cmd_clone() {
     batch "$PROJECT_DIR" clone -executeMethod ParrelSync.ClonesManager.CreateCloneFromCurrent
     [[ -f "$CLONE_DIR/.clone" ]] || die "ParrelSync did not create $CLONE_DIR"
   fi
+  # ParrelSync copies Packages/, but the shared code now lives in embedded Packages/com.ryan.*:
+  # link it like Assets/ and ProjectSettings/ so the clone compiles the same packages.
+  if [[ -d "$CLONE_DIR/Packages" && ! -L "$CLONE_DIR/Packages" ]]; then
+    rm -rf "$CLONE_DIR/Packages"
+    ln -s "$PROJECT_DIR/Packages" "$CLONE_DIR/Packages"
+  fi
   # ClonesManager.GetArgument() reads this; EditorPlayerIdSpoof uses it as the player id.
   printf 'server' >"$CLONE_DIR/.parrelsyncarg"
   # Switch the clone's own Library to the Linux Server profile once, in batchmode.

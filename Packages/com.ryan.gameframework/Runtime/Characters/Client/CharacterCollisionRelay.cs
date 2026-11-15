@@ -1,3 +1,4 @@
+using RyanAssets.Characters.Shared;
 using UnityEngine;
 
 namespace RyanAssets.Characters.Client {
@@ -12,6 +13,8 @@ namespace RyanAssets.Characters.Client {
 
         private Rigidbody _rigidbody;
         private CharacterMovement _movement;
+        private Collider _lastWallCollider;
+        private IWallJumpSurface _lastWallSurface;
 
         public void Initialize(Rigidbody body, CharacterMovement movement) {
             _rigidbody = body;
@@ -19,11 +22,36 @@ namespace RyanAssets.Characters.Client {
         }
 
         private void OnCollisionEnter(Collision collision) {
+            if (ReportWallJumpSurface(collision)) return;
             StabilizeWallCollision(collision);
         }
 
         private void OnCollisionStay(Collision collision) {
+            if (ReportWallJumpSurface(collision)) return;
             StabilizeWallCollision(collision);
+        }
+
+        /// <summary>
+        /// Tells movement about a touched wall-jump surface. Those walls are exempt from the upward
+        /// velocity stabilization below, which would otherwise cancel every kick up a shaft.
+        /// </summary>
+        private bool ReportWallJumpSurface(Collision collision) {
+            if (_movement == null)
+                return false;
+            if (collision.collider != _lastWallCollider) {
+                _lastWallCollider = collision.collider;
+                _lastWallSurface = collision.collider != null ? collision.collider.GetComponentInParent<IWallJumpSurface>() : null;
+            }
+            if (_lastWallSurface == null)
+                return false;
+            for (int i = 0; i < collision.contactCount; i++) {
+                Vector3 normal = collision.GetContact(i).normal;
+                if (Mathf.Abs(normal.y) <= MaximumWallNormalY) {
+                    _movement.ReportWallContact(normal, _lastWallSurface);
+                    break;
+                }
+            }
+            return true;
         }
 
         private void StabilizeWallCollision(Collision collision) {

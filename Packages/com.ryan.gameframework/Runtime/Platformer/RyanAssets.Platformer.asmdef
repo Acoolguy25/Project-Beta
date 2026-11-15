@@ -1,0 +1,19 @@
+{
+    "name": "RyanAssets.Platformer",
+    "rootNamespace": "RyanAssets.Platformer",
+    "references": [
+        "RyanAssets.Core",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Characters.Client",
+        "FishNet.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

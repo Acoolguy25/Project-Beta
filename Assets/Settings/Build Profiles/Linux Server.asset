@@ -67,6 +67,12 @@ MonoBehaviour:
   - m_enabled: 1
     m_path: Assets/Universes/UniverseData/escape/escape_start.unity
     m_guid: c08d924f0400bcb48ba62690fdea114d
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/obby/obby_start.unity
+    m_guid: 8721ca5aeabdf97d2a48338f39a9e09f
+  - m_enabled: 1
+    m_path: Assets/Universes/UniverseData/obby/obby_server.unity
+    m_guid: a8b14846f3b19be1da973d2772b99cd5
   m_HasScriptingDefines: 0
   m_ScriptingDefines: []
   m_PlayerSettingsYaml:
@@ -86,8 +92,7 @@ MonoBehaviour:
     - line: '|   productName: Project Beta'
     - line: '|   defaultCursor: {instanceID: 0}'
     - line: '|   cursorHotspot: {x: 0, y: 0}'
-    - line: '|   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b:
-        0.1254902, a: 1}'
+    - line: '|   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}'
     - line: '|   m_ShowUnitySplashScreen: 1'
     - line: '|   m_ShowUnitySplashLogo: 1'
     - line: '|   m_SplashScreenOverlayOpacity: 1'
@@ -221,8 +226,7 @@ MonoBehaviour:
     - line: '|   tvOSBundleVersion: 1.0'
     - line: '|   bundleVersion: 0.04e'
     - line: '|   preloadedAssets:'
-    - line: '|   - {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b,
-        type: 3}'
+    - line: '|   - {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}'
     - line: '|   metroInputSource: 0'
     - line: '|   wsaTransparentSwapchain: 0'
     - line: '|   xboxOneDisableKinectGpuReservation: 1'
@@ -962,10 +966,8 @@ MonoBehaviour:
     - line: '|   metroLastRequiredScene: 0'
     - line: '|   metroDefaultTileSize: 1'
     - line: '|   metroTileForegroundText: 2'
-    - line: '|   metroTileBackgroundColor: {r: 0.13333334, g: 0.17254902, b: 0.21568628,
-        a: 0}'
-    - line: '|   metroSplashScreenBackgroundColor: {r: 0.12941177, g: 0.17254902,
-        b: 0.21568628, a: 1}'
+    - line: '|   metroTileBackgroundColor: {r: 0.13333334, g: 0.17254902, b: 0.21568628, a: 0}'
+    - line: '|   metroSplashScreenBackgroundColor: {r: 0.12941177, g: 0.17254902, b: 0.21568628, a: 1}'
     - line: '|   metroSplashScreenUseBackgroundColor: 0'
     - line: '|   syncCapabilities: 0'
     - line: '|   platformCapabilities: {}'

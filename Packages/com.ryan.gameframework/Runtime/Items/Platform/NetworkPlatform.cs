@@ -20,6 +20,8 @@ namespace RyanAssets.Items.Platform {
         [Header("Tween Properties")]
         [SerializeField] private bool reverseMovement = true;
         [SerializeField] private bool reverseRotation = false;
+        [Tooltip("Seconds added to the shared clock, so identical platforms can move out of step.")]
+        [SerializeField] private float timeOffset = 0f;
 
         private Rigidbody _rb;
         private RigidbodyReposition _reposition;
@@ -51,6 +53,25 @@ namespace RyanAssets.Items.Platform {
             _rb.interpolation = RigidbodyInterpolation.Interpolate;
         }
 
+        /// <summary>
+        /// Sets up a platform spawned at runtime (for example by a level generator). The current
+        /// pose becomes the start pose; every peer that passes the same values moves in lockstep.
+        /// </summary>
+        public void Configure(Vector3 deltaPosition, float movementSpeed, Vector3 deltaRotation, float rotateSpeed,
+            bool reverseMovement = true, bool reverseRotation = false, float timeOffset = 0f) {
+            this.deltaPosition = deltaPosition;
+            this.movementSpeed = movementSpeed;
+            this.deltaRotation = deltaRotation;
+            this.rotateSpeed = rotateSpeed;
+            this.reverseMovement = reverseMovement;
+            this.reverseRotation = reverseRotation;
+            this.timeOffset = timeOffset;
+            _startPosition = transform.position;
+            _startRotation = transform.rotation.eulerAngles;
+            _placed = false;
+            Precompute();
+        }
+
         private void OnEnable() => Update();
 
         private void OnDisable() {
@@ -73,6 +94,7 @@ namespace RyanAssets.Items.Platform {
         }
 
         private void MovePlatform(double time, double deltaTime) {
+            time += timeOffset;
             Vector3 targetPosition = _startPosition + deltaPosition * Progress(time, _movementHalfPeriod, reverseMovement);
             Quaternion targetRotation = RotationAt(time);
             if (!_placed || _clock.IsResynchronizing) {
