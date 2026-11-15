@@ -1,16 +1,15 @@
-using UnityEngine;
-using UnityEngine.UI;
-using Cysharp.Threading.Tasks;
-using RyanAssets.UI;
-using Unity.VisualScripting;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using TMPro;
-using System.ComponentModel;
+using Cysharp.Threading.Tasks;
 using RyanAssets.Input;
+using RyanAssets.UI;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 
 namespace RyanAssets.PromptService {
-    public enum PromptButton: sbyte {
+    public enum PromptButton : sbyte {
         ErrorPromptId = -20,
         ErrorDuplicate = -10,
         Unknown = -1,
@@ -19,8 +18,9 @@ namespace RyanAssets.PromptService {
         Retry = 2,
         Cancel = 3,
         No = 4
-    };
-    public enum PromptId{
+    }
+
+    public enum PromptId {
         None, // Will not display
         Protected, // Cannot be deleted
         Error, // Error state
@@ -43,161 +43,163 @@ namespace RyanAssets.PromptService {
         ResetCharacterConfirm,
         ResetCharAwait
     }
+
     public struct PromptData {
         public string title, description;
         public PromptId promptId;
         public PromptButton[] buttons;
         public UniTaskCompletionSource<PromptButton> response;
-    };
+    }
 
-    public class PromptManager: MonoBehaviour {
-        // Instance Initalization
+    /// <summary>
+    /// A queue of modal dialogs. Only the oldest prompt is shown; answering it shows the next one.
+    /// Every button the dialog can show lives in the prefab (see <see cref="slots"/>) and is turned
+    /// on per prompt, so the look is authored in the prefab, not in code.
+    /// </summary>
+    public class PromptManager : MonoBehaviour {
         public static PromptManager Instance;
-        
-        // Button Presets
-        public static readonly PromptButton[] ButtonPreset_YesNo = {PromptButton.Yes, PromptButton.No};
-        public static readonly PromptButton[] ButtonPreset_OkCancel = {PromptButton.Ok, PromptButton.Cancel};
-        public static readonly PromptButton[] ButtonPreset_RetryCancel = {PromptButton.Retry, PromptButton.Cancel};
-        public static readonly PromptButton[] ButtonPreset_OkOnly = {PromptButton.Ok};
-        public static readonly PromptButton[] ButtonPreset_CancelOnly = {PromptButton.Cancel};
-        public static readonly PromptButton[] ButtonPreset_RetryOnly = {PromptButton.Retry};
-        public static readonly PromptButton[] ButtonPreset_None = {};
 
-        List<PromptData> PromptList;
-        // [SerializeField]
-        // List<GameObject> PromptObjects;
-        [SerializeField]
-        CanvasGroupController canvasGroupUI;
-        [SerializeField]
-        TextMeshProUGUI titleText, descText;
-        [SerializeField]
-        Transform buttons;
-        bool PromptInProgress;
-        private void UpdateRenderer(float duration = 0.5f){
-            bool NewPromptInProgress = PromptList.Count > 0;
-            if (!PromptInProgress && NewPromptInProgress){
-                InputService.SetInputScreenActive(InputScreen.Prompt, true);
-            } else if (PromptInProgress && !NewPromptInProgress){
-                InputService.SetInputScreenActive(InputScreen.Prompt, false);
-            }
-            PromptInProgress = NewPromptInProgress;
-            canvasGroupUI.SetVisible(PromptInProgress, duration);
-            if (PromptInProgress){
-                PromptData TopPrompt = PromptList[0];
-                titleText.text = TopPrompt.title;
-                descText.text = TopPrompt.description;
-                sbyte activeCnt = 0;
-                for (sbyte btnIdx = 0; btnIdx < buttons.childCount; btnIdx++){
-                    RectTransform btn = buttons.GetChild(btnIdx).GetComponent<RectTransform>();
-                    bool visible = TopPrompt.buttons.Contains((PromptButton)btnIdx);
-                    if (visible){
-                        btn.anchorMin = new Vector2(((float) activeCnt) / TopPrompt.buttons.Count(), 0);
-                        btn.anchorMax = new Vector2(((float) activeCnt + 1) / TopPrompt.buttons.Count(), 1);
-                        activeCnt++;
-                    }
-                    btn.gameObject.SetActive(visible);
-                }
-            }
+        // Button presets
+        public static readonly PromptButton[] ButtonPreset_YesNo = { PromptButton.Yes, PromptButton.No };
+        public static readonly PromptButton[] ButtonPreset_OkCancel = { PromptButton.Ok, PromptButton.Cancel };
+        public static readonly PromptButton[] ButtonPreset_RetryCancel = { PromptButton.Retry, PromptButton.Cancel };
+        public static readonly PromptButton[] ButtonPreset_OkOnly = { PromptButton.Ok };
+        public static readonly PromptButton[] ButtonPreset_CancelOnly = { PromptButton.Cancel };
+        public static readonly PromptButton[] ButtonPreset_RetryOnly = { PromptButton.Retry };
+        public static readonly PromptButton[] ButtonPreset_None = { };
+
+        static readonly PromptButton[] ConfirmButtons = { PromptButton.Ok, PromptButton.Yes, PromptButton.Retry };
+        static readonly PromptButton[] DenyButtons = { PromptButton.Cancel, PromptButton.No };
+
+        [Serializable]
+        public struct ButtonSlot {
+            public PromptButton id;
+            public Button button;
         }
-        public void CompleteAction(int idx, PromptButton resp){
-            PromptData top_prompt = PromptList[idx];
-            PromptList.RemoveAt(idx);
-            Debug.Assert(top_prompt.response.TrySetResult(resp), $"Failed to set prompt result for: ${top_prompt.title}");
-            if (idx == 0) // active index
-                UpdateRenderer();
-        }
-        public bool CompleteAction(PromptId promptId, PromptButton resp){
-            for (int idx = 0; idx < PromptList.Count; idx++){
-                PromptData prompt = PromptList[idx];
-                if (prompt.promptId == promptId){
-                    CompleteAction(idx, resp);
-                    return true;
-                }
+
+        [SerializeField] CanvasGroupController content;
+        [SerializeField] TMP_Text titleText;
+        [SerializeField] TMP_Text descText;
+        [Tooltip("Every button a prompt can show. Their order in the prefab is the order on screen.")]
+        [SerializeField] ButtonSlot[] slots = Array.Empty<ButtonSlot>();
+        [Tooltip("Shown instead of buttons while a prompt waits on something (no buttons).")]
+        [SerializeField] GameObject waitingIndicator;
+        [SerializeField, Min(0f)] float fadeDuration = 0.2f;
+
+        readonly List<PromptData> queue = new();
+        bool showing;
+
+        void Awake() {
+            Instance = this;
+            foreach (ButtonSlot slot in slots) {
+                PromptButton id = slot.id;
+                slot.button.onClick.AddListener(() => PromptButtonPressed(id));
             }
-            return false;
+            PromptControls.confirmEvent = PromptConfirmPressed;
+            PromptControls.denyEvent = PromptDenyPressed;
+            Render(0f);
         }
-        public void PromptButtonPressed(PromptButton btn){
-            if (PromptInProgress)
+
+        void Render(float duration) {
+            bool show = queue.Count > 0;
+            if (show != showing)
+                InputService.SetInputScreenActive(InputScreen.Prompt, show);
+            showing = show;
+            content.SetVisible(show, duration);
+            if (!show)
+                return;
+
+            PromptData top = queue[0];
+            titleText.text = top.title;
+            descText.text = top.description;
+            descText.gameObject.SetActive(!string.IsNullOrEmpty(top.description));
+            foreach (ButtonSlot slot in slots)
+                slot.button.gameObject.SetActive(top.buttons.Contains(slot.id));
+            if (waitingIndicator != null)
+                waitingIndicator.SetActive(top.buttons.Length == 0);
+        }
+
+        public void CompleteAction(int idx, PromptButton resp) {
+            PromptData prompt = queue[idx];
+            queue.RemoveAt(idx);
+            if (!prompt.response.TrySetResult(resp))
+                Debug.LogWarning($"Prompt \"{prompt.title}\" was already answered.");
+            if (idx == 0) // the visible prompt
+                Render(fadeDuration);
+        }
+
+        public bool CompleteAction(PromptId promptId, PromptButton resp) {
+            int idx = queue.FindIndex(p => p.promptId == promptId);
+            if (idx < 0)
+                return false;
+            CompleteAction(idx, resp);
+            return true;
+        }
+
+        public void PromptButtonPressed(PromptButton btn) {
+            if (showing)
                 CompleteAction(0, btn);
         }
-        public void PromptButtonPressed(int btn){
-            if (PromptInProgress)
-                CompleteAction(0, (PromptButton)btn);
-        }
-        public void PromptConfirmPressed(){
-            if (!PromptInProgress)
-                return;
 
-            PromptData prompt = PromptList[0];
-            foreach (PromptButton button in new[]{PromptButton.Ok, PromptButton.Yes, PromptButton.Retry}){
-                if (prompt.buttons.Contains(button))
-                    CompleteAction(0, button);
-            }
-        }
-        public void PromptDenyPressed(){
-            if (!PromptInProgress)
-                return;
+        public void PromptButtonPressed(int btn) => PromptButtonPressed((PromptButton)btn);
 
-            PromptData prompt = PromptList[0];
-            foreach (PromptButton button in new[]{PromptButton.Cancel, PromptButton.No}){
-                if (prompt.buttons.Contains(button))
+        /// <summary>Enter: the prompt's positive answer, if it has one.</summary>
+        public void PromptConfirmPressed() => AnswerWithFirst(ConfirmButtons);
+
+        /// <summary>Escape: the prompt's negative answer, if it has one.</summary>
+        public void PromptDenyPressed() => AnswerWithFirst(DenyButtons);
+
+        void AnswerWithFirst(PromptButton[] candidates) {
+            if (!showing)
+                return;
+            PromptButton[] offered = queue[0].buttons;
+            foreach (PromptButton button in candidates) {
+                if (offered.Contains(button)) {
                     CompleteAction(0, button);
-            }
-        }
-        public UniTask<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons){
-            if (promptId == PromptId.None)
-                return UniTask.FromResult(PromptButton.ErrorPromptId);
-            if (promptId != PromptId.Protected){
-                foreach (PromptData prompt in PromptList){
-                    if (prompt.promptId == promptId){
-                        return UniTask.FromResult(PromptButton.ErrorDuplicate);
-                    }
+                    return;
                 }
             }
-            var promptResponse = new UniTaskCompletionSource<PromptButton>();
-            PromptData newPrompt = new() {
+        }
+
+        public UniTask<PromptButton> PromptLocalUser(string title, string description, PromptId promptId, PromptButton[] buttons) {
+            if (promptId == PromptId.None)
+                return UniTask.FromResult(PromptButton.ErrorPromptId);
+            if (promptId != PromptId.Protected && queue.Any(p => p.promptId == promptId))
+                return UniTask.FromResult(PromptButton.ErrorDuplicate);
+
+            var response = new UniTaskCompletionSource<PromptButton>();
+            queue.Add(new PromptData {
                 title = title,
                 description = description,
                 buttons = buttons,
                 promptId = promptId,
-                response = promptResponse
-            };
-            PromptList.Add(newPrompt);
-            if (!PromptInProgress)
-                UpdateRenderer();
-            return promptResponse.Task;
-        }
-        void Awake(){
-            Instance = this;
-            PromptInProgress = false;
-            PromptList = new();
-            PromptControls.confirmEvent = PromptConfirmPressed;
-            PromptControls.denyEvent = PromptDenyPressed;
-            UpdateRenderer(0f);
+                response = response
+            });
+            if (queue.Count == 1)
+                Render(fadeDuration);
+            return response.Task;
         }
 
-
-        // Useless helper functions
-        public static void PromptError(string title, System.Exception e){
+        // Shorthands
+        public static void PromptError(string title, Exception e) =>
             Instance.PromptLocalUser(title + " Error", e.Message, PromptId.Error, ButtonPreset_OkOnly);
-        }
-        public static void PromptError(string title, string e){
+
+        public static void PromptError(string title, string e) =>
             Instance.PromptLocalUser(title + " Error", e, PromptId.Error, ButtonPreset_OkOnly);
-        }
-        public static void PromptWait(string title, string description, PromptId promptId){
+
+        public static void PromptWait(string title, string description, PromptId promptId) =>
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_None);
-        }
-        public static UniTask<PromptButton> PromptCancelableWait(string title, string description, PromptId promptId){
-            return Instance.PromptLocalUser(title, description, promptId, ButtonPreset_CancelOnly);
-        }
-        public static void PromptOk(string title, string description, PromptId promptId = PromptId.Protected){
+
+        public static UniTask<PromptButton> PromptCancelableWait(string title, string description, PromptId promptId) =>
+            Instance.PromptLocalUser(title, description, promptId, ButtonPreset_CancelOnly);
+
+        public static void PromptOk(string title, string description, PromptId promptId = PromptId.Protected) =>
             Instance.PromptLocalUser(title, description, promptId, ButtonPreset_OkOnly);
-        }
-        public static bool PromptDelete(PromptId promptId){
-            return Instance.CompleteAction(promptId, PromptButton.Unknown);
-        }
-        public static bool HasPrompt(PromptId promptId) {
-            return Instance.PromptList.Any((promptData) => promptData.promptId == promptId);
-        }
+
+        public static bool PromptDelete(PromptId promptId) =>
+            Instance.CompleteAction(promptId, PromptButton.Unknown);
+
+        public static bool HasPrompt(PromptId promptId) =>
+            Instance.queue.Any(p => p.promptId == promptId);
     }
 }

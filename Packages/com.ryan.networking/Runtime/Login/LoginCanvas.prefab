@@ -995,7 +995,7 @@ RectTransform:
   - {fileID: 4446214318919866213}
   - {fileID: 3962116517433604296}
   - {fileID: 9100000000000001001}
-  - {fileID: 6416809754129125832}
+  - {fileID: 1512607329935585888}
   - {fileID: 6620963127501445875}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -1148,7 +1148,7 @@ MonoBehaviour:
   signin: {fileID: 2354734513870670883}
   logout: {fileID: 1174502420052893829}
   continueCanvas: {fileID: 0}
-  settingsPanel: {fileID: 5603117503873270662}
+  settingsPanel: {fileID: 14231587247185966}
   AnimationTime: 0.522
 --- !u!1 &5262831474664032584
 GameObject:
@@ -2880,7 +2880,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
---- !u!1001 &2829570840288219593
+--- !u!1001 &7688890943993836129
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -2985,10 +2985,10 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7a40623e161b44308195701e053a48d3, type: 3}
---- !u!114 &5603117503873270662 stripped
+--- !u!114 &14231587247185966 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 7676071237252878927, guid: 7a40623e161b44308195701e053a48d3, type: 3}
-  m_PrefabInstance: {fileID: 2829570840288219593}
+  m_PrefabInstance: {fileID: 7688890943993836129}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
@@ -2996,8 +2996,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0c5c9fb87b50674fca57908837cd2bc6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.HudPanel
---- !u!224 &6416809754129125832 stripped
+--- !u!224 &1512607329935585888 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 9100000000000000001, guid: 7a40623e161b44308195701e053a48d3, type: 3}
-  m_PrefabInstance: {fileID: 2829570840288219593}
+  m_PrefabInstance: {fileID: 7688890943993836129}
   m_PrefabAsset: {fileID: 0}

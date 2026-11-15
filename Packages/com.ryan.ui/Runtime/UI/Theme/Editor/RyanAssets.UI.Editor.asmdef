@@ -3,6 +3,7 @@
     "rootNamespace": "RyanAssets.UI.Editor",
     "references": [
         "RyanAssets.UI",
+        "RyanAssets.PromptService",
         "RyanAssets.UI.Textbox",
         "RyanAssets.Client.ClientUI.GameSettings",
         "Unity.TextMeshPro",

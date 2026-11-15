@@ -1,0 +1,24 @@
+{
+    "name": "RyanAssets.Levels.Client.Editor",
+    "rootNamespace": "RyanAssets.Levels.Client.Editor",
+    "references": [
+        "RyanAssets.Levels.Client",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

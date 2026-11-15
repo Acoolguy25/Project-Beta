@@ -124,8 +124,7 @@ namespace Universes.GameBrowser.Editor {
             Button refresh = IconButton(header, "RefreshButton", "refresh", 44f, UIColorRole.SurfaceInset, 12f, out _, out Image refreshIcon);
             UnityEventTools.AddPersistentListener(refresh.onClick, new UnityAction(list.Refresh_ButtonClicked));
 
-            var levelBadge = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(LevelBadgePath), header);
-            Size(levelBadge.transform, 56f, 44f);
+            PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(LevelBadgePath), header);
 
             RectTransform account = Node(header, "AccountButton");
             Size(account, -1f, 44f);

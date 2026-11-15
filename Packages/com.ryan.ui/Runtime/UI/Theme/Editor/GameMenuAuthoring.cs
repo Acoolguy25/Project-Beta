@@ -211,9 +211,15 @@ namespace RyanAssets.UI.Editor {
             Size(title, -1f, -1f, 1f);
             Button close = IconButton(header, "CloseButton", "close", 36f, UIColorRole.SurfaceInset, 10f, out _, out _);
 
-            // Game actions: resume / reset / leave
+            // Settings list
+            RectTransform listArea = Node(window, "Settings");
+            Size(listArea, -1f, -1f).flexibleHeight = 1f;
+            ScrollRect scroll = ScrollList(listArea, 6f, new RectOffset(28, 28, 4, 16), fitContent: true);
+
+            // Game actions, pinned under the list: resume / reset / leave
             RectTransform actions = Node(window, "GameActions");
-            Column(actions.gameObject, 16f, new RectOffset(28, 28, 4, 0));
+            Column(actions.gameObject, 16f, new RectOffset(28, 28, 0, 24));
+            Divider(actions);
             RectTransform buttons = Node(actions, "Buttons");
             Row(buttons.gameObject, 10f, null, TextAnchor.MiddleCenter, expandWidth: true);
             Size(buttons, -1f, ActionHeight);
@@ -221,12 +227,6 @@ namespace RyanAssets.UI.Editor {
             Button reset = TextButton(buttons, "ResetButton", "Reset", "replay", UIColorRole.SurfaceHover, UIColorRole.TextPrimary, ActionHeight, "R");
             Button leave = TextButton(buttons, "LeaveButton", "Leave", "logout", UIColorRole.Danger, UIColorRole.Danger, ActionHeight, "L");
             leave.GetComponent<UIThemeColor>().Opacity = 0.16f;
-            Divider(actions);
-
-            // Settings list
-            RectTransform listArea = Node(window, "Settings");
-            Size(listArea, -1f, -1f).flexibleHeight = 1f;
-            ScrollRect scroll = ScrollList(listArea, 6f, new RectOffset(28, 28, 4, 28), fitContent: true);
 
             var panel = root.gameObject.AddComponent<HudPanel>();
             SerializedFields.SetEnum(panel, "id", (int)HudPanelId.GameMenu);

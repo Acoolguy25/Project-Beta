@@ -49,11 +49,12 @@ namespace RyanAssets.Client.ClientUI.Editor {
         public static void BuildAll() {
             UIThemeAssets.Ensure();
             GameMenuAuthoring.Build();
+            PromptAuthoring.Build();
             BuildTopbar();
             BuildChat();
             BuildPlayerList();
             AssetDatabase.SaveAssets();
-            ReseatInstances(ClientPrefabPath, TopbarPath, ChatPath, PlayerListPath, GameMenuAuthoring.CanvasPath);
+            ReseatInstances(ClientPrefabPath, TopbarPath, ChatPath, PlayerListPath, GameMenuAuthoring.CanvasPath, PromptAuthoring.CanvasPath);
             ReseatLoginSettings();
             AssetDatabase.SaveAssets();
             Debug.Log("Shared HUD rebuilt.");
