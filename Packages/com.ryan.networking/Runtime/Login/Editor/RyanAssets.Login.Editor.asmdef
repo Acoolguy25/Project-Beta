@@ -1,0 +1,25 @@
+{
+    "name": "RyanAssets.Login.Editor",
+    "rootNamespace": "RyanAssets.Login.Editor",
+    "references": [
+        "RyanAssets.Login",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "RyanAssets.UI.Textbox",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

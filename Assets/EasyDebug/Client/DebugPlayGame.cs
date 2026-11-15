@@ -1,25 +1,19 @@
 using System.Collections;
 using RyanAssets.Client.ClientCore;
+using RyanAssets.Login;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using Universes.GameBrowser;
 
 namespace EasyDebug.Debug {
+    /// <summary>Editor shortcut: once signed in, skips the login screen and joins war_valley.</summary>
     public class DebugPlayGame : MonoBehaviour {
         const string PlayGameUniverseId = "war_valley";
-        [SerializeField]
-        Button continueButton;
 #if UNITY_EDITOR
-        IEnumerator PressButton(Button button) {
-            while (!button.IsInteractable()) {
-                yield return new WaitForSeconds(0.5f);
-            }
-            button.onClick.Invoke();
-        }
         IEnumerator Start() {
             ClientConnector.OnDisconnected += OnDisconnected;
-            yield return PressButton(continueButton);
+            yield return new WaitUntil(() => LoginManager.Instance != null && LoginScreen.IsSignedIn());
+            LoginManager.Instance.loginScreen.Continue_ButtonPressed();
             Connect();
         }
 

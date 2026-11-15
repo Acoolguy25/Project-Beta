@@ -177,6 +177,13 @@ namespace RyanAssets.UI.Editor {
             image.pixelsPerUnitMultiplier = UIThemeAssets.ShadowSpriteMargin / blur;
             image.raycastTarget = false;
             image.color = new Color(0f, 0f, 0f, opacity);
+            if (panel.anchorMin == panel.anchorMax) {
+                // Follows the panel's real size, which may come from a ContentSizeFitter.
+                var follower = rect.gameObject.AddComponent<UIShadowFollower>();
+                SerializedFields.Set(follower, "target", panel);
+                SerializedFields.Set(follower, "blur", blur);
+                SerializedFields.Set(follower, "offsetY", offsetY);
+            }
             return image;
         }
 

@@ -1,16 +1,12 @@
-// using RyanAssets.PromptService;
-using Unity.Services.Authentication;
-using RyanAssets.NetworkService;
-using UnityEngine;
 using System;
-using System.Net.Http;
-using Newtonsoft.Json.Linq;
 using Cysharp.Threading.Tasks;
-using RyanAssets.DataService;
-using RyanAssets.PromptService;
+using Newtonsoft.Json.Linq;
 using RyanAssets.Client.ClientModules;
-using UnityEngine.UI;
-using System.Linq;
+using RyanAssets.NetworkService;
+using RyanAssets.PromptService;
+using RyanAssets.UI.Textbox;
+using Unity.Services.Authentication;
+using UnityEngine;
 
 namespace RyanAssets.Login {
     public class LoginManager : MonoBehaviour {
@@ -21,7 +17,7 @@ namespace RyanAssets.Login {
         [SerializeField]
         public LoginScreen loginScreen;
         [SerializeField]
-        InputField usernameInputField;
+        CustomInputField usernameInputField;
         async UniTask<(string, JObject)> LoadPlayerStats() {
             if (NetworkSettings.EditorDirectConnection)
                 return (null, NetworkSettings.CreateEditorPlayerProfile(NetworkSettings.EditorPlayerId));
@@ -40,7 +36,7 @@ namespace RyanAssets.Login {
             LocalPlayerDataHandler.PlayerInit(json);
             usernameInputField.text = json["username"].ToString();
             if (!LoginAuthenticator.didTryLogin)
-                GetComponent<LoginScreen>().SetLoginScreenVisible(false, true);
+                loginScreen.SetLoginScreenVisible(false, true);
         }
         void SignedOut() {
             loginScreen.RefreshScreen();

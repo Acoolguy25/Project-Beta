@@ -176,17 +176,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d8b343595d1037948a7274412fdf4f67, type: 3}
---- !u!114 &169215605 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 3990969582851006258, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-  m_PrefabInstance: {fileID: 8125114074414780783}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b4f8c068f702cd64bba6f5343c3486b0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: RyanAssets.Login::RyanAssets.Login.LoginModifyUsername
 --- !u!1001 &274022416
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -356,17 +345,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 7271396106941265475, guid: f7d1c294d492a5443b11033f22cc4673, type: 3}
   m_PrefabInstance: {fileID: 1024280790}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &643041136 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 409605290905112966, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-  m_PrefabInstance: {fileID: 8125114074414780783}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!1001 &1024280790
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -823,7 +801,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e6495cf6e9073c41a76dabfdb4e8347, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Debug::EasyDebug.DebugPlayGame
-  continueButton: {fileID: 643041136}
 --- !u!4 &1955165352
 Transform:
   m_ObjectHideFlags: 0
@@ -1090,42 +1067,6 @@ PrefabInstance:
     - target: {fileID: 4855746894705542107, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
       propertyPath: m_IsActive
       value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6848546994579580325, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_Enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnSubmit.m_PersistentCalls.m_Calls.Array.size
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.size
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_Target
-      value: 
-      objectReference: {fileID: 169215605}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: UsernameSubmit
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
-      value: RyanAssets.Login.LoginModifyUsername, RyanAssets.Login
-      objectReference: {fileID: 0}
-    - target: {fileID: 9100000000000000024, guid: f159831b7dc5a9d44a4b8db31b19a6f0, type: 3}
-      propertyPath: m_OnDidEndEdit.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
-      value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

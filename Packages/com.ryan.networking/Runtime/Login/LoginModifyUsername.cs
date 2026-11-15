@@ -1,22 +1,21 @@
-using System;
+using System.Text.RegularExpressions;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using RyanAssets.Client.ClientModules;
 using RyanAssets.NetworkService;
 using RyanAssets.PromptService;
-using RyanAssets.DataService;
-using RyanAssets.Client.ClientModules;
+using RyanAssets.UI.Textbox;
 using UnityEngine;
-using UnityEngine.UI;
-using System.Text.RegularExpressions;
 
 namespace RyanAssets.Login {
     public class LoginModifyUsername : MonoBehaviour {
         [SerializeField]
-        InputField usernameInputField;
+        CustomInputField usernameInputField;
         string newUsername;
-        static string usernameRegexPattern = @"^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$";
+        static readonly string usernameRegexPattern = @"^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$";
         public void EditButtonClicked() {
             usernameInputField.Select();
+            usernameInputField.ActivateInputField();
         }
         async UniTask<(string, JObject)> CheckUsernameAvailability() {
             return await BackendNetwork.GetRequest($"/api/players/v1/check-availability?username={newUsername}");
@@ -26,7 +25,7 @@ namespace RyanAssets.Login {
             if (newUsername == LocalPlayerDataHandler.localData.username)
                 return;
             else if (!Regex.IsMatch(newUsername, usernameRegexPattern)) {
-                await PromptManager.Instance.PromptLocalUser("Invalid Username", "Username cannot contain spaces or non alphanumeric characters", PromptId.UsernameResponse, PromptManager.ButtonPreset_CancelOnly);
+                await PromptManager.Instance.PromptLocalUser("Invalid Username", "Use letters and numbers only, with at most one underscore between them.", PromptId.UsernameResponse, PromptManager.ButtonPreset_CancelOnly);
                 return;
             }
 
@@ -35,11 +34,11 @@ namespace RyanAssets.Login {
             if (res != null || json == null)
                 return;
             if (!(bool)json["Available"]) {
-                PromptManager.PromptError("Username Unavailable", "Selected username is taken, please choose another one!");
+                PromptManager.PromptError("Username Unavailable", "That username is taken. Please choose another one.");
                 return;
             }
-            PromptButton resp = await PromptManager.Instance.PromptLocalUser("Confirm Username Change?",
-                $"Are you sure that you want your username to be\n\"{newUsername}\"\nThis action is irreverisble!", PromptId.UsernameChangeConfirm,
+            PromptButton resp = await PromptManager.Instance.PromptLocalUser("Change username?",
+                $"Your username will be \"{newUsername}\". This can't be undone.", PromptId.UsernameChangeConfirm,
                 PromptManager.ButtonPreset_YesNo
             );
             if (resp != PromptButton.Yes) {
