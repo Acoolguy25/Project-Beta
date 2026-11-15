@@ -19,6 +19,8 @@ namespace Universes.UniverseData.hide_and_seek {
         public int hidersAtStart;
         public string headline;
         public HS_PlayerRole[] roles;
+        /// <summary>Length of the current phase, for the HUD's countdown bar.</summary>
+        public int phaseSeconds;
     }
 
     /// <summary>A seeker tries to tag whoever is closest in front of them.</summary>

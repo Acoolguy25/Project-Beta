@@ -48,7 +48,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         readonly System.Random random = new();
         HS_Map map;
         HS_Phase phase;
-        int round, secondsLeft, hidersAtStart;
+        int round, secondsLeft, phaseSeconds, hidersAtStart;
         string headline = "";
         bool stateDirty;
 
@@ -149,6 +149,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             }
 
             phase = HS_Phase.Intermission;
+            phaseSeconds = intermissionSeconds;
             for (int i = intermissionSeconds; i > 0; i--) {
                 secondsLeft = i;
                 headline = $"Round {round + 1} starts in {i}";
@@ -173,6 +174,9 @@ namespace Universes.UniverseData.hide_and_seek.Server {
 
             // ---- hide
             phase = HS_Phase.Hiding;
+            phaseSeconds = hideSeconds;
+            // The HUD's round card shows the phase and timer from here on.
+            SetTopMessage("");
             ApplyAll();
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
             string seekerNames = string.Join(", ", roles.Where(r => r.Value == HS_Role.Seeker).Select(r => PlayerData.GetPlayerName(r.Key)));
@@ -180,13 +184,13 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             for (int i = hideSeconds; i > 0; i--) {
                 secondsLeft = i;
                 headline = $"HIDE! Seekers are released in {i}";
-                SetTopMessage(headline);
                 BroadcastState();
                 await AwaitTime(1000, token);
             }
 
             // ---- seek
             phase = HS_Phase.Seeking;
+            phaseSeconds = seekSeconds;
             ApplyAll();
             SetMusic(MusicSelection.HorrorChaseMusic);
             float end = Time.time + seekSeconds;
@@ -197,13 +201,13 @@ namespace Universes.UniverseData.hide_and_seek.Server {
                 if (secondsLeft == 0 || HidersLeft == 0 || !roles.Any(r => Seeks(r.Value) && r.Key.IsActive)) break;
                 if (pingFrom > 0 && secondsLeft <= nextPing) { Ping(); nextPing = secondsLeft - pingEvery; }
                 headline = $"SEEK! {HidersLeft}/{hidersAtStart} hiders left";
-                SetTopMessage($"{headline}  ({RoundFormat.Clock(secondsLeft)})");
                 BroadcastState();
                 await AwaitTime(500, token);
             }
 
             // ---- results
             phase = HS_Phase.Results;
+            phaseSeconds = resultsSeconds;
             int survivors = HidersLeft;
             bool hidersWin = survivors > 0;
             headline = hidersWin ? $"HIDERS WIN! {survivors} stayed hidden." : "SEEKERS WIN! Everyone was found.";
@@ -217,7 +221,6 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             ServerChat.SendSystemMessage(new(headline, SystemMessageSource.CustomMessage));
             for (int i = resultsSeconds; i > 0; i--) {
                 secondsLeft = i;
-                SetTopMessage($"{headline}  Next round in {i}");
                 BroadcastState();
                 await AwaitTime(1000, token);
             }
@@ -292,7 +295,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         }
 
         HS_StateBroadcast MakeState() => new() {
-            phase = phase, round = round, secondsLeft = secondsLeft, hidersLeft = HidersLeft, hidersAtStart = hidersAtStart, headline = headline,
+            phase = phase, round = round, secondsLeft = secondsLeft, phaseSeconds = phaseSeconds, hidersLeft = HidersLeft, hidersAtStart = hidersAtStart, headline = headline,
             roles = roles.Where(r => r.Key.IsActive).Select(r => new HS_PlayerRole { clientId = r.Key.ClientId, role = r.Value, name = PlayerData.GetPlayerName(r.Key) }).ToArray()
         };
 

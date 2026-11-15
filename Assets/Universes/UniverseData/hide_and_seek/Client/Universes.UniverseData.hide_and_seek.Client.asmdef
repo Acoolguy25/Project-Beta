@@ -12,7 +12,8 @@
         "Unity.TextMeshPro",
         "Unity.ugui",
         "RyanAssets.Client.ClientUI.NameTag",
-        "RyanAssets.Input"
+        "RyanAssets.Input",
+        "RyanAssets.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

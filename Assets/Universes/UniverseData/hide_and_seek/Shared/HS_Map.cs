@@ -1,17 +1,29 @@
 using UnityEngine;
 
 namespace Universes.UniverseData.hide_and_seek {
+    /// <summary>A named part of the map (a room or a yard), for the HUD's "where am I" label.</summary>
+    [System.Serializable]
+    public struct HS_MapArea {
+        public string name;
+        public Bounds bounds;
+        public bool indoor;
+    }
+
     /// <summary>
-    /// Lives in hide_and_seek_start: where hiders scatter to, where seekers wait blindfolded, and
-    /// the client prefabs. Points are found by the authoring script by probing the map's floors.
+    /// Lives in hide_and_seek_start: where hiders scatter to, where seekers wait blindfolded, the named
+    /// areas and the client prefabs. Points are found by the authoring script by probing the map's floors.
     /// </summary>
     public sealed class HS_Map : MonoBehaviour {
+        [Tooltip("Shown on the HUD and the results screen.")]
+        public string mapName = "Hide and Seek";
         [Tooltip("Floor points with headroom, spread over the whole map. Hiders start at random ones.")]
         public Vector3[] hidePoints;
         public Transform seekerSpawn, lobbySpawn;
         [Min(0f)] public float spawnScatter = 2f;
         [Tooltip("Anything below this height has fallen out of the map.")]
         public float killY = -30f;
+        [Tooltip("Rooms first, then larger outdoor zones: the first area containing a point names it.")]
+        public HS_MapArea[] areas;
         [Header("Client presentation")]
         public GameObject pingPrefab;
         public GameObject clientPrefab;
@@ -27,6 +39,14 @@ namespace Universes.UniverseData.hide_and_seek {
         public Vector3 Scatter(Vector3 point) {
             Vector2 s = Random.insideUnitCircle * spawnScatter;
             return point + new Vector3(s.x, 0f, s.y);
+        }
+
+        /// <summary>The name of the area containing <paramref name="position"/>, or an empty string.</summary>
+        public string AreaAt(Vector3 position) {
+            if (areas == null) return "";
+            foreach (var area in areas)
+                if (area.bounds.Contains(position)) return area.name;
+            return "";
         }
     }
 }

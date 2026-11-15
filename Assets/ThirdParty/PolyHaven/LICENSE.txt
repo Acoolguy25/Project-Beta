@@ -1,0 +1,5 @@
+Poly Haven assets (https://polyhaven.com) are released under CC0 1.0 Universal (public domain).
+https://polyhaven.com/license  -  https://creativecommons.org/publicdomain/zero/1.0/
+Each texture folder has a SOURCE.txt with the asset page and its authors (credit is appreciated, not required).
+Textures are the 1k JPG set; <id>_mask.png is the URP Lit mask map packed from Poly Haven's ARM map
+(R metallic, G occlusion, A smoothness = 1 - roughness).
