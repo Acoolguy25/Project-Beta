@@ -1,0 +1,26 @@
+{
+    "name": "Universes.UniverseData.tycoon.Client",
+    "rootNamespace": "Universes.UniverseData.tycoon.Client",
+    "references": [
+        "Universes.UniverseData.tycoon.Shared",
+        "RyanAssets.Rounds",
+        "RyanAssets.Core",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Characters.Client",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

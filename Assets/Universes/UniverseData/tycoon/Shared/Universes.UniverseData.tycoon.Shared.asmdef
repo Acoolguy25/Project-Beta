@@ -1,0 +1,11 @@
+{
+    "name": "Universes.UniverseData.tycoon.Shared",
+    "rootNamespace": "Universes.UniverseData.tycoon",
+    "references": [
+        "FishNet.Runtime",
+        "RyanAssets.Core",
+        "RyanAssets.Rounds",
+        "Unity.TextMeshPro"
+    ],
+    "autoReferenced": true
+}

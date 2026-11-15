@@ -1,0 +1,19 @@
+{
+    "name": "Universes.UniverseData.tycoon.Editor",
+    "references": [
+        "Universes.UniverseData.tycoon.Shared",
+        "Universes.UniverseData.tycoon.Client",
+        "Universes.UniverseData.tycoon.Server",
+        "RyanAssets.Authoring",
+        "RyanAssets.Rounds",
+        "RyanAssets.Platformer",
+        "RyanAssets.Server.ServerFeatures",
+        "RyanAssets.Core",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
+}
