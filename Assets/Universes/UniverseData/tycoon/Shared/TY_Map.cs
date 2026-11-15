@@ -15,13 +15,20 @@ namespace Universes.UniverseData.tycoon {
         [Header("Prefabs (client presentation)")]
         [Tooltip("Index-aligned with TY_Catalog.Items; null for items without a model.")]
         public GameObject[] itemPrefabs;
-        public GameObject buttonPrefab, claimPrefab, orePrefab;
+        [Tooltip("Index-aligned with TY_Catalog.Items: a rendered picture of each item for the HUD.")]
+        public Sprite[] itemPictures;
+        [Tooltip("Buy pad per lane, indexed by TY_ItemKind.")]
+        public GameObject[] padPrefabs;
+        public GameObject orePrefab, goldCoinPrefab;
         public Material[] oreMaterials;
         [Tooltip("Client-only HUD and plot presentation.")]
         public GameObject clientPrefab;
 
         public int PlotCount => plots?.Length ?? 0;
-        public bool IsConfigured => PlotCount > 0 && plazaSpawn != null && itemPrefabs != null && itemPrefabs.Length == TY_Catalog.Count;
+        public bool IsConfigured => PlotCount > 0 && plazaSpawn != null && itemPrefabs != null && itemPrefabs.Length == TY_Catalog.Count
+            && padPrefabs != null && padPrefabs.Length == System.Enum.GetValues(typeof(TY_ItemKind)).Length;
+
+        public Sprite Picture(int item) => itemPictures != null && item >= 0 && item < itemPictures.Length ? itemPictures[item] : null;
 
         void Start() {
 #if !UNITY_SERVER
@@ -33,7 +40,8 @@ namespace Universes.UniverseData.tycoon {
         public float Yaw(int plot) => plots[plot].transform.eulerAngles.y;
         ZoneBox Zone(int plot, Vector3 local, Vector3 size) => new(World(plot, local) + Vector3.up * 0.5f, size, Yaw(plot));
 
-        public ZoneBox ButtonZone(int plot, int item) => Zone(plot, TY_Catalog.Items[item].buttonPosition, TY_Catalog.ButtonSize);
+        public ZoneBox ButtonZone(int plot, int item) => Zone(plot, TY_Catalog.LanePosition(TY_Catalog.Items[item].kind), TY_Catalog.ButtonSize);
+        public ZoneBox GoldenZone(int plot, Vector3 local) => Zone(plot, local, new Vector3(2.4f, 3f, 2.4f));
         public ZoneBox ClaimZone(int plot) => Zone(plot, TY_Catalog.ClaimPosition, TY_Catalog.PadSize);
         public ZoneBox CollectZone(int plot) => Zone(plot, TY_Catalog.CollectPosition, TY_Catalog.PadSize);
         public ZoneBox PlotZone(int plot) => Zone(plot, Vector3.zero, new Vector3(TY_Catalog.PlotSize, 30f, TY_Catalog.PlotSize));

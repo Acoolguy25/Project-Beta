@@ -11,7 +11,10 @@
         "RyanAssets.Core",
         "FishNet.Runtime",
         "Unity.TextMeshPro",
-        "Unity.ugui"
+        "Unity.ugui",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

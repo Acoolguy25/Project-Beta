@@ -6,48 +6,82 @@ using UnityEngine;
 
 namespace Universes.UniverseData.tycoon.Tests {
     public class TY_CatalogTests {
+        static readonly TY_PerkLevels NoPerks = default;
+
         [Test]
-        public void EveryItemIsReachableAndButtonsNeverOverlap() {
+        public void EveryItemIsReachableAndLanesAreChains() {
             var random = new System.Random(7);
             for (int run = 0; run < 200; run++) {
-                uint purchased = TY_Catalog.StarterMask;
+                ulong purchased = TY_Catalog.StarterMask;
                 int guard = 0;
                 while ((purchased & TY_Catalog.AllButRebirth) != TY_Catalog.AllButRebirth) {
                     var available = TY_Catalog.AvailableItems(purchased).Where(i => i != TY_Catalog.RebirthIndex).ToList();
                     Assert.IsNotEmpty(available, "build order dead-ends");
-                    var spots = available.Select(i => TY_Catalog.Items[i].buttonPosition).ToList();
-                    Assert.AreEqual(spots.Count, spots.Distinct().Count(), "two visible buttons share a spot");
-                    purchased |= 1u << available[random.Next(available.Count)];
+                    // One pad per lane: at most one available item per lane, and it is the lane's next item.
+                    foreach (var lane in available.GroupBy(i => TY_Catalog.Items[i].kind)) {
+                        Assert.AreEqual(1, lane.Count(), $"two {lane.Key} items available at once");
+                        Assert.AreEqual(TY_Catalog.NextInLane(purchased, lane.Key), lane.Single());
+                    }
+                    purchased |= 1ul << available[random.Next(available.Count)];
                     Assert.Less(++guard, 100);
                 }
                 Assert.IsTrue(TY_Catalog.Available(purchased, TY_Catalog.RebirthIndex), "rebirth unlocks once everything is built");
             }
+            Assert.Less(TY_Catalog.Count, 64, "purchases are a 64-bit mask");
         }
 
         [Test]
         public void PricesRiseAndIncomeGrows() {
-            double income = TY_Catalog.Income(TY_Catalog.StarterMask, 0);
+            double income = TY_Catalog.Income(TY_Catalog.StarterMask, 0, NoPerks);
             Assert.Greater(income, 0);
-            uint all = TY_Catalog.AllButRebirth;
-            Assert.Greater(TY_Catalog.Income(all, 0), income * 50);
-            Assert.AreEqual(TY_Catalog.Income(all, 0) * 1.5, TY_Catalog.Income(all, 1), 1e-6);
-            Assert.AreEqual(3.0, TY_Catalog.UpgradeMultiplier(all), 1e-6);
+            ulong all = TY_Catalog.AllButRebirth;
+            Assert.Greater(TY_Catalog.Income(all, 0, NoPerks), income * 50);
+            Assert.AreEqual(TY_Catalog.Income(all, 0, NoPerks) * 1.5, TY_Catalog.Income(all, 1, NoPerks), 1e-6);
+            Assert.AreEqual(3.75, TY_Catalog.UpgradeMultiplier(all), 1e-6);
+            var perks = new TY_PerkLevels { income = 2 };
+            Assert.AreEqual(TY_Catalog.Income(all, 0, NoPerks) * 1.5, TY_Catalog.Income(all, 0, perks), 1e-6);
+            for (int i = 0; i < TY_Catalog.Count; i++) {
+                var item = TY_Catalog.Items[i];
+                if (item.prereq >= 0 && TY_Catalog.Items[item.prereq].kind == item.kind)
+                    Assert.Greater(item.price, TY_Catalog.Items[item.prereq].price, $"{item.name} is cheaper than the item before it");
+            }
+        }
+
+        [Test]
+        public void CollectorCapacityGrowsWithVaultsAndPerks() {
+            Assert.AreEqual(TY_Catalog.BaseCapacity, TY_Catalog.Capacity(TY_Catalog.StarterMask, NoPerks));
+            ulong all = TY_Catalog.AllButRebirth;
+            Assert.Greater(TY_Catalog.Capacity(all, NoPerks), TY_Catalog.Items[TY_Catalog.RebirthIndex].price, "the last vault holds a rebirth");
+            Assert.AreEqual(TY_Catalog.Capacity(all, NoPerks) * 2, TY_Catalog.Capacity(all, new TY_PerkLevels { vault = 2 }));
+            Assert.IsFalse(TY_Catalog.AutoCollects(TY_Catalog.StarterMask));
+            Assert.IsTrue(TY_Catalog.AutoCollects(all));
         }
 
         [Test]
         public void FirstRebirthTakesMinutesNotHours() {
-            // Greedy player: always buys the cheapest available upgrade as soon as it can afford it.
-            uint purchased = TY_Catalog.StarterMask;
+            // Greedy player: buys the cheapest available upgrade once it can afford it, collecting in time.
+            ulong purchased = TY_Catalog.StarterMask;
             double cash = 0, seconds = 0;
             while (true) {
                 int next = TY_Catalog.AvailableItems(purchased).OrderBy(i => TY_Catalog.Items[i].price).First();
                 double need = TY_Catalog.Items[next].price - cash;
-                if (need > 0) { double dt = need / TY_Catalog.Income(purchased, 0); seconds += dt; cash += need; }
+                if (need > 0) { double dt = need / TY_Catalog.Income(purchased, 0, NoPerks); seconds += dt; cash += need; }
                 cash -= TY_Catalog.Items[next].price;
                 if (next == TY_Catalog.RebirthIndex) break;
-                purchased |= 1u << next;
+                purchased |= 1ul << next;
             }
             Assert.That(seconds, Is.InRange(5 * 60, 20 * 60), $"first rebirth after {seconds / 60:0.0} min");
+        }
+
+        [Test]
+        public void PerkCostsAndLevels() {
+            var levels = new TY_PerkLevels();
+            foreach (var perk in TY_Perks.All) {
+                Assert.AreEqual(perk.id, TY_Perks.Get(perk.id).id, "perks are indexed by id");
+                levels = levels.WithLevel(perk.id, perk.maxLevel);
+                Assert.AreEqual(perk.maxLevel, levels.Level(perk.id));
+                Assert.Greater(perk.Cost(1), perk.Cost(0));
+            }
         }
 
         [Test]

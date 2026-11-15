@@ -10,7 +10,8 @@
         "RyanAssets.Characters.Client",
         "FishNet.Runtime",
         "Unity.TextMeshPro",
-        "Unity.ugui"
+        "Unity.ugui",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

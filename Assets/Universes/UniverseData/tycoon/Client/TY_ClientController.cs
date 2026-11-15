@@ -1,29 +1,33 @@
+using System.Collections;
 using System.Collections.Generic;
 using FishNet;
 using FishNet.Managing.Client;
 using FishNet.Transporting;
-using RyanAssets.Rounds;
-using TMPro;
 using UnityEngine;
 
 namespace Universes.UniverseData.tycoon.Client {
     /// <summary>
-    /// Draws Brick Tycoon from server state: who owns each plot, bought items, buy buttons, collector
-    /// totals and the ore that rides each belt. Ore is cosmetic; cash is counted on the server.
+    /// Draws Brick Tycoon from server state: who owns each plot, bought items, lane buy pads,
+    /// collector totals, gold coins and the bricks that ride each belt, and feeds the HUD.
+    /// Bricks are cosmetic; cash is counted on the server.
     /// </summary>
     public sealed class TY_ClientController : MonoBehaviour {
-        public TMP_Text cashLabel, incomeLabel, plotLabel, hintLabel, toastLabel;
-        public AudioSource sfx;
-        public AudioClip buyClip, collectClip, deniedClip, rebirthClip;
+        [Tooltip("The HUD on this prefab.")]
+        public TY_Hud hud;
+        [Tooltip("Most bricks a belt shows at once.")]
+        [SerializeField, Min(8)] int maxBricksPerBelt = 80;
+
+        static readonly TY_ItemKind[] PadLanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Rebirth };
 
         sealed class Ore { public Transform t; public Renderer r; public float distance; public int stage; }
 
         sealed class PlotVisual {
             public TY_PlotState state;
             public readonly GameObject[] items = new GameObject[TY_Catalog.Count];
-            public readonly TY_ButtonView[] buttons = new TY_ButtonView[TY_Catalog.Count];
+            public readonly TY_ButtonView[] pads = new TY_ButtonView[PadLanes.Length];
             public readonly float[] dropTimers = new float[TY_Catalog.Count];
             public readonly List<Ore> ores = new();
+            public GameObject golden;
             public bool hasState;
         }
 
@@ -33,20 +37,18 @@ namespace Universes.UniverseData.tycoon.Client {
         readonly Stack<Ore> orePool = new();
         TY_WalletBroadcast wallet;
         bool hasWallet, hasPlots;
-        float toastUntil, nextRequest;
+        float nextRequest;
         float[] upgraderDistances;
+        int[] upgraderItems;
 
         void Awake() {
             map = GetComponentInParent<TY_Map>();
-            toastLabel.text = "";
-            cashLabel.text = "$0";
-            incomeLabel.text = "";
-            plotLabel.text = "BRICK TYCOON";
-            hintLabel.text = "Connecting...";
-            var upgraders = new List<float>();
-            foreach (var item in TY_Catalog.Items)
-                if (item.kind == TY_ItemKind.Upgrader) upgraders.Add(TY_Catalog.BeltDistance(item.itemPosition));
-            upgraderDistances = upgraders.ToArray();
+            var distances = new List<float>();
+            var items = new List<int>();
+            for (int i = 0; i < TY_Catalog.Count; i++)
+                if (TY_Catalog.Items[i].kind == TY_ItemKind.Upgrader) { distances.Add(TY_Catalog.BeltDistance(TY_Catalog.Items[i].itemPosition)); items.Add(i); }
+            upgraderDistances = distances.ToArray();
+            upgraderItems = items.ToArray();
         }
 
         void Start() {
@@ -54,13 +56,17 @@ namespace Universes.UniverseData.tycoon.Client {
             for (int i = 0; i < visuals.Length; i++) {
                 var v = visuals[i] = new PlotVisual();
                 var view = map.plots[i];
-                for (int item = 0; item < TY_Catalog.Count; item++) {
-                    var go = Instantiate(map.buttonPrefab, view.itemRoot);
-                    go.transform.localPosition = TY_Catalog.Items[item].buttonPosition;
+                for (int lane = 0; lane < PadLanes.Length; lane++) {
+                    var go = Instantiate(map.padPrefabs[(int)PadLanes[lane]], view.itemRoot);
+                    go.transform.localPosition = TY_Catalog.LanePosition(PadLanes[lane]);
                     go.transform.localRotation = Quaternion.identity;
-                    go.name = $"Button {TY_Catalog.Items[item].name}";
-                    v.buttons[item] = go.GetComponent<TY_ButtonView>();
+                    go.name = $"Pad {TY_Lanes.Title(PadLanes[lane])}";
+                    v.pads[lane] = go.GetComponent<TY_ButtonView>();
                     go.SetActive(false);
+                }
+                if (map.goldCoinPrefab != null) {
+                    v.golden = Instantiate(map.goldCoinPrefab, view.itemRoot);
+                    v.golden.SetActive(false);
                 }
                 ApplyPlot(i, new TY_PlotState { plot = (byte)i, ownerId = -1 });
             }
@@ -84,7 +90,6 @@ namespace Universes.UniverseData.tycoon.Client {
                 nextRequest = Time.unscaledTime + 2f;
                 manager.Broadcast(new TY_StateRequest());
             }
-            if (toastLabel.text.Length > 0 && Time.unscaledTime > toastUntil) toastLabel.text = "";
             if (visuals != null) for (int i = 0; i < visuals.Length; i++) AnimateOre(i, Time.deltaTime);
         }
 
@@ -100,20 +105,11 @@ namespace Universes.UniverseData.tycoon.Client {
         void OnWallet(TY_WalletBroadcast message, Channel channel) {
             wallet = message;
             hasWallet = true;
-            RefreshButtons();
+            RefreshPads();
             RefreshHud();
         }
 
-        void OnEvent(TY_EventBroadcast message, Channel channel) {
-            AudioClip clip = message.kind switch {
-                TY_EventKind.Bought or TY_EventKind.Claimed => buyClip,
-                TY_EventKind.Collected => collectClip,
-                TY_EventKind.TooPoor => deniedClip,
-                TY_EventKind.Rebirth => rebirthClip,
-                _ => null
-            };
-            Toast(message.text, clip, message.kind == TY_EventKind.Rebirth ? 5f : 2.5f);
-        }
+        void OnEvent(TY_EventBroadcast message, Channel channel) => hud.ShowEvent(message);
 
         int LocalClientId => manager != null && manager.Connection != null ? manager.Connection.ClientId : -2;
 
@@ -126,16 +122,21 @@ namespace Universes.UniverseData.tycoon.Client {
             bool owned = state.ownerId >= 0;
             if (view.claimPad != null && view.claimPad.activeSelf == owned) view.claimPad.SetActive(!owned);
             if (view.ownerLabel != null)
-                view.ownerLabel.text = owned ? $"{state.ownerName}'s Tycoon" + (state.rebirths > 0 ? $"\n<size=60%>Rebirth {state.rebirths}</size>" : "") : "FREE PLOT\n<size=60%>Step on the pad to claim</size>";
+                view.ownerLabel.text = owned
+                    ? $"{state.ownerName}'s Tycoon" + (state.rebirths > 0 ? $"\n<size=60%><color=#FF9CF2>Rebirth {state.rebirths}</color></size>" : "")
+                    : "FREE PLOT\n<size=60%>Step on the green pad to claim</size>";
             if (view.bankLabel != null)
-                view.bankLabel.text = owned ? $"${RoundFormat.Money(state.bank)}\n<size=55%>step here to collect</size>" : "";
+                view.bankLabel.text = !owned ? ""
+                    : TY_Catalog.AutoCollects(state.purchased) ? $"${TY_Catalog.Money(state.income)}/s\n<size=55%>auto-collecting</size>"
+                    : $"${TY_Catalog.Money(state.bank)}<size=55%> / ${TY_Catalog.Money(state.capacity)}</size>\n<size=55%>{(state.bank >= state.capacity ? "<color=#FF6B6B>FULL! step here</color>" : "step here to collect")}</size>";
             for (int item = 0; item < TY_Catalog.Count; item++) {
                 bool has = owned && TY_Catalog.Owns(state.purchased, item) && map.itemPrefabs[item] != null;
                 if (has && v.items[item] == null) {
+                    var data = TY_Catalog.Items[item];
                     var go = Instantiate(map.itemPrefabs[item], view.itemRoot);
-                    go.transform.localPosition = TY_Catalog.Items[item].itemPosition;
-                    go.transform.localRotation = Quaternion.identity;
-                    go.name = TY_Catalog.Items[item].name;
+                    go.transform.localPosition = data.itemPosition;
+                    go.transform.localRotation = Quaternion.Euler(0f, data.itemYaw, 0f);
+                    go.name = data.name;
                     v.items[item] = go;
                     if (!ownerChanged) StartCoroutine(PopIn(go.transform));
                 } else if (!has && v.items[item] != null) {
@@ -143,53 +144,49 @@ namespace Universes.UniverseData.tycoon.Client {
                     v.items[item] = null;
                 }
             }
+            if (v.golden != null) {
+                bool show = owned && state.golden;
+                if (show) v.golden.transform.localPosition = state.goldenPosition;
+                if (v.golden.activeSelf != show) v.golden.SetActive(show);
+            }
             if (!owned) ClearOre(v);
-            RefreshButtons(index);
+            RefreshPads(index);
         }
 
-        void RefreshButtons() {
-            if (visuals != null) for (int i = 0; i < visuals.Length; i++) RefreshButtons(i);
+        void RefreshPads() {
+            if (visuals != null) for (int i = 0; i < visuals.Length; i++) RefreshPads(i);
         }
 
-        void RefreshButtons(int index) {
+        void RefreshPads(int index) {
             var v = visuals[index];
             bool owned = v.state.ownerId >= 0;
             bool mine = owned && v.state.ownerId == LocalClientId;
-            for (int item = 0; item < TY_Catalog.Count; item++) {
-                bool show = owned && TY_Catalog.Available(v.state.purchased, item);
-                var button = v.buttons[item];
-                if (button == null) continue;
-                if (button.gameObject.activeSelf != show) button.gameObject.SetActive(show);
+            for (int lane = 0; lane < PadLanes.Length; lane++) {
+                var pad = v.pads[lane];
+                if (pad == null) continue;
+                int item = PadLanes[lane] == TY_ItemKind.Rebirth
+                    ? (TY_Catalog.Available(v.state.purchased, TY_Catalog.RebirthIndex) ? TY_Catalog.RebirthIndex : -1)
+                    : TY_Catalog.NextInLane(v.state.purchased, PadLanes[lane]);
+                bool show = owned && item >= 0;
+                if (pad.gameObject.activeSelf != show) pad.gameObject.SetActive(show);
                 if (!show) continue;
                 var data = TY_Catalog.Items[item];
-                int look = !mine ? 2 : hasWallet && wallet.cash >= data.price ? 0 : 1;
-                button.Show(data.name, data.price, look);
+                bool locked = !TY_Catalog.Available(v.state.purchased, item);
+                TY_ButtonLook look = !mine ? TY_ButtonLook.Foreign
+                    : locked ? TY_ButtonLook.Locked
+                    : hasWallet && wallet.cash >= data.price ? TY_ButtonLook.Affordable
+                    : TY_ButtonLook.Expensive;
+                pad.Show(data, map.Picture(item), look, TY_Hud.LockedNote(item));
             }
         }
 
         void RefreshHud() {
-            if (!hasWallet) { hintLabel.text = "Loading tycoon..."; return; }
-            cashLabel.text = $"${RoundFormat.Money(wallet.cash)}";
-            if (wallet.plot < 0) {
-                plotLabel.text = "BRICK TYCOON";
-                incomeLabel.text = "";
-                hintLabel.text = "Find a FREE PLOT and step on its glowing pad to claim it.";
-                return;
-            }
-            var v = visuals[wallet.plot];
-            plotLabel.text = $"TYCOON #{wallet.plot + 1}" + (wallet.rebirths > 0 ? $"  <color=#FF9CF2>REBIRTH {wallet.rebirths}</color>" : "");
-            incomeLabel.text = $"+${RoundFormat.Money(wallet.income)}/s   collector ${RoundFormat.Money(v.state.bank)}";
-            int next = -1;
-            long cheapest = long.MaxValue;
-            foreach (int item in TY_Catalog.AvailableItems(v.state.purchased))
-                if (TY_Catalog.Items[item].price < cheapest) { cheapest = TY_Catalog.Items[item].price; next = item; }
-            hintLabel.text = next < 0 ? "Everything is built!"
-                : wallet.cash >= cheapest ? $"Step on the green {TY_Catalog.Items[next].name} button to build it."
-                : v.state.bank > 0 ? "Step on the furnace's collector pad to bank your cash."
-                : $"Next: {TY_Catalog.Items[next].name} for ${RoundFormat.Money(cheapest)}. Your droppers are earning.";
+            if (!hasWallet) return;
+            TY_PlotState? plot = wallet.plot >= 0 && wallet.plot < visuals.Length ? visuals[wallet.plot].state : null;
+            hud.Refresh(wallet, plot, map);
         }
 
-        // ---------------------------------------------------------------- ore
+        // ---------------------------------------------------------------- bricks on the belt
         void AnimateOre(int index, float dt) {
             var v = visuals[index];
             if (!v.hasState || v.state.ownerId < 0 || map.orePrefab == null) return;
@@ -200,18 +197,19 @@ namespace Universes.UniverseData.tycoon.Client {
                 v.dropTimers[item] += dt;
                 if (v.dropTimers[item] < data.interval) continue;
                 v.dropTimers[item] -= data.interval;
-                if (v.ores.Count < 80) v.ores.Add(SpawnOre(plot, TY_Catalog.BeltDistance(data.itemPosition), data.value));
+                if (v.ores.Count < maxBricksPerBelt) v.ores.Add(SpawnOre(plot, TY_Catalog.BeltDistance(data.itemPosition)));
             }
             float end = TY_Catalog.BeltEndX - TY_Catalog.BeltStartX + 1.5f;
             for (int i = v.ores.Count - 1; i >= 0; i--) {
                 var ore = v.ores[i];
                 ore.distance += TY_Catalog.BeltSpeed * dt;
                 int stage = 0;
-                foreach (float d in upgraderDistances) if (ore.distance >= d && UpgraderOwned(v, d)) stage++;
+                for (int u = 0; u < upgraderDistances.Length; u++)
+                    if (ore.distance >= upgraderDistances[u] && TY_Catalog.Owns(v.state.purchased, upgraderItems[u])) stage++;
                 if (stage != ore.stage) {
                     ore.stage = stage;
                     if (map.oreMaterials != null && map.oreMaterials.Length > 0) ore.r.sharedMaterial = map.oreMaterials[Mathf.Min(stage, map.oreMaterials.Length - 1)];
-                    ore.t.localScale = Vector3.one * (0.55f + 0.12f * stage);
+                    ore.t.localScale = Vector3.one * (1f + 0.1f * stage);
                 }
                 if (ore.distance >= end) {
                     ore.t.gameObject.SetActive(false);
@@ -219,21 +217,12 @@ namespace Universes.UniverseData.tycoon.Client {
                     v.ores.RemoveAt(i);
                     continue;
                 }
-                ore.t.position = plot.TransformPoint(new Vector3(TY_Catalog.BeltStartX + ore.distance, TY_Catalog.BeltTop + 0.3f, TY_Catalog.BeltZ));
-                ore.t.Rotate(0f, 90f * dt, 0f, Space.Self);
+                ore.t.position = plot.TransformPoint(new Vector3(TY_Catalog.BeltStartX + ore.distance, TY_Catalog.BeltTop + 0.2f, TY_Catalog.BeltZ));
+                ore.t.rotation = plot.rotation;
             }
         }
 
-        static bool UpgraderOwned(PlotVisual v, float distance) {
-            for (int i = 0; i < TY_Catalog.Count; i++) {
-                var item = TY_Catalog.Items[i];
-                if (item.kind == TY_ItemKind.Upgrader && Mathf.Approximately(TY_Catalog.BeltDistance(item.itemPosition), distance))
-                    return TY_Catalog.Owns(v.state.purchased, i);
-            }
-            return false;
-        }
-
-        Ore SpawnOre(Transform plot, float distance, double value) {
+        Ore SpawnOre(Transform plot, float distance) {
             Ore ore = orePool.Count > 0 ? orePool.Pop() : null;
             if (ore == null) {
                 var go = Instantiate(map.orePrefab, map.transform);
@@ -251,7 +240,7 @@ namespace Universes.UniverseData.tycoon.Client {
             v.ores.Clear();
         }
 
-        System.Collections.IEnumerator PopIn(Transform t) {
+        static IEnumerator PopIn(Transform t) {
             Vector3 target = t.localScale;
             for (float a = 0f; a < 1f && t != null; a += Time.deltaTime * 3f) {
                 float s = 1f + Mathf.Sin(a * Mathf.PI) * 0.25f;
@@ -259,12 +248,6 @@ namespace Universes.UniverseData.tycoon.Client {
                 yield return null;
             }
             if (t != null) t.localScale = target;
-        }
-
-        void Toast(string message, AudioClip clip, float seconds) {
-            toastLabel.text = message;
-            toastUntil = Time.unscaledTime + seconds;
-            if (sfx != null && clip != null) sfx.PlayOneShot(clip);
         }
     }
 }

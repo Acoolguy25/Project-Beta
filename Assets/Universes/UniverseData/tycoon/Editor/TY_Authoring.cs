@@ -8,22 +8,21 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using static RyanAssets.Authoring.UniverseAuthoringKit;
-#if !UNITY_SERVER
-using Universes.UniverseData.tycoon.Client;
-#endif
 
 namespace Universes.UniverseData.tycoon.Editor {
     /// <summary>
-    /// Rebuilds Brick Tycoon's textures, materials, item/button prefabs, plot bases, HUD and start scene.
-    /// Safe to re-run (assets are overwritten in place). Build the server runner from an Editor in the
+    /// Rebuilds Brick Tycoon's materials, item/pad prefabs, plot bases, item pictures, HUD and start
+    /// scene. Safe to re-run (assets are overwritten in place). Models come from the CC0 KayKit packs
+    /// under Assets/ThirdParty/KayKit (see CREDITS.md). Build the server runner from an Editor in the
     /// Linux Server profile: <c>-executeMethod Universes.UniverseData.tycoon.Editor.TY_Authoring.BuildServerAssets</c>.
     /// </summary>
     public static class TY_Authoring {
         public const string Universe = "tycoon";
         public const string Root = "Assets/Universes/UniverseData/tycoon";
-        static readonly UniverseAuthoringKit Kit = new(Root);
+        internal static readonly UniverseAuthoringKit Kit = new(Root);
         const string ServerPrefab = Root + "/Server/TY_ServerRunner.prefab";
-        const float Radius = 64f;
+        const string KayKit = "Assets/ThirdParty/KayKit";
+        const float Radius = 66f;
         const int PlotCount = 6;
 
         static readonly Color[] PlotColors = {
@@ -34,9 +33,12 @@ namespace Universes.UniverseData.tycoon.Editor {
         [MenuItem("Ryan/Tycoon/Build Client Assets")]
         public static void BuildClientAssets() {
             if (Application.isPlaying) throw new System.InvalidOperationException("Stop play mode first.");
-            Kit.EnsureFolders("Prefabs", "Prefabs/Items", "Materials", "Textures", "Server");
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            Kit.EnsureFolders("Prefabs", "Prefabs/Items", "Prefabs/Pads", "Materials", "Textures", "Server", "UI", "UI/Pictures");
+            TY_HudAuthoring.ImportIcons();
             BuildTextures();
             var p = BuildPrefabs();
+            TY_PictureRenderer.RenderAll(p.items);
             BuildStartScene(p);
             RegisterScenes(Kit.StartScene(Universe), Kit.ServerScene(Universe));
             AssetDatabase.SaveAssets();
@@ -82,13 +84,49 @@ namespace Universes.UniverseData.tycoon.Editor {
                 return mortar ? new Color(0.82f, 0.8f, 0.76f) : new Color(0.72f * n, 0.3f * n, 0.22f * n);
             });
             Kit.SaveTexture("Stripes", (u, v) => Mathf.Repeat(u + v, 0.5f) < 0.25f ? new Color(1f, 0.82f, 0.1f) : new Color(0.12f, 0.12f, 0.14f));
+            // Brick face: soft bevel so a single cube reads as a brick.
+            Kit.SaveTexture("BrickFace", (u, v) => {
+                float edge = Mathf.Min(Mathf.Min(u, 1f - u), Mathf.Min(v, 1f - v));
+                float shade = Mathf.Lerp(0.72f, 1f, Mathf.SmoothStep(0f, 0.12f, edge));
+                float grain = 0.94f + 0.06f * Hash(Mathf.Floor(u * 24f), Mathf.Floor(v * 24f));
+                return new Color(shade * grain, shade * grain, shade * grain);
+            }, 64);
         }
 
-        sealed class Prefabs {
-            public GameObject plotBase, button, claim, ore;
-            public GameObject[] items;
+        internal sealed class Prefabs {
+            public GameObject plotBase, ore, coin;
+            public GameObject[] items, pads;
             public Material[] plotMats, oreMats, floorMats;
-            public Material grass, plaza, stone;
+            public Material grass, plaza, stone, city, space, proto;
+        }
+
+        // ---------------------------------------------------------------- KayKit models
+        enum Pack { City, Space, Proto }
+
+        static string PackPath(Pack pack) => pack switch {
+            Pack.City => KayKit + "/CityBuilderBits/Models",
+            Pack.Space => KayKit + "/SpaceBaseBits/Models",
+            _ => KayKit + "/PrototypeBits/Models",
+        };
+
+        /// <summary>One URP material per KayKit pack: every model in a pack shares its palette texture.</summary>
+        static Material PackMaterial(Pack pack) {
+            string texture = pack switch { Pack.City => "citybits_texture", Pack.Space => "spacebits_texture", _ => "prototypebits_texture" };
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>($"{PackPath(pack)}/{texture}.png");
+            if (tex == null) throw new FileNotFoundException($"KayKit texture missing: {PackPath(pack)}/{texture}.png");
+            return Kit.Mat($"KayKit{pack}", Color.white, tex, smoothness: 0.3f);
+        }
+
+        static Material Pal(Prefabs p, Pack pack) => pack switch { Pack.City => p.city, Pack.Space => p.space, _ => p.proto };
+
+        /// <summary>A KayKit model under <paramref name="parent"/>, largest side <paramref name="size"/> m, base on the parent origin + offset.</summary>
+        static GameObject Kay(Prefabs p, Pack pack, string model, Transform parent, float size, Vector3 offset = default, float yaw = 0f, Material overrideMaterial = null) {
+            string path = $"{PackPath(pack)}/{model}.fbx";
+            var go = Model(path, parent, size, offset, yaw);
+            if (go == null) throw new FileNotFoundException("KayKit model missing: " + path);
+            var mat = overrideMaterial != null ? overrideMaterial : Pal(p, pack);
+            foreach (var r in go.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => mat).ToArray();
+            return go;
         }
 
         // ---------------------------------------------------------------- prefabs
@@ -96,247 +134,343 @@ namespace Universes.UniverseData.tycoon.Editor {
             var tile = Kit.Tex("Tile");
             var p = new Prefabs {
                 plotMats = PlotColors.Select((c, i) => Kit.Mat($"Plot{i}", c, tile, smoothness: 0.35f)).ToArray(),
+                // Raw clay -> polished -> washed -> glazed gold, one stage per upgrader.
                 oreMats = new[] {
-                    Kit.Mat("Ore0", new Color(0.6f, 0.62f, 0.66f), tile, smoothness: 0.4f),
-                    Kit.Mat("Ore1", new Color(0.35f, 0.95f, 0.55f), tile, 0.5f, smoothness: 0.6f),
-                    Kit.Mat("Ore2", new Color(1f, 0.8f, 0.2f), tile, 0.9f, smoothness: 0.85f, metallic: 0.7f)
+                    Kit.Mat("Ore0", new Color(0.62f, 0.33f, 0.24f), Kit.Tex("BrickFace"), smoothness: 0.15f),
+                    Kit.Mat("Ore1", new Color(0.92f, 0.32f, 0.24f), Kit.Tex("BrickFace"), 0.2f, smoothness: 0.55f),
+                    Kit.Mat("Ore2", new Color(0.55f, 0.85f, 1f), Kit.Tex("BrickFace"), 0.5f, smoothness: 0.8f),
+                    Kit.Mat("Ore3", new Color(1f, 0.8f, 0.2f), Kit.Tex("BrickFace"), 0.9f, smoothness: 0.9f, metallic: 0.7f),
                 },
                 grass = Tiled(Kit.Mat("Grass", Color.white, Kit.Tex("Grass"), smoothness: 0.1f), 8f, 8f),
                 plaza = Tiled(Kit.Mat("Plaza", new Color(0.86f, 0.88f, 0.92f), tile, smoothness: 0.3f), 8f, 8f),
-                stone = Tiled(Kit.Mat("Stone", new Color(0.55f, 0.57f, 0.62f), tile, smoothness: 0.2f), 2f, 8f)
+                stone = Tiled(Kit.Mat("Stone", new Color(0.55f, 0.57f, 0.62f), tile, smoothness: 0.2f), 2f, 8f),
+                city = PackMaterial(Pack.City),
+                space = PackMaterial(Pack.Space),
+                proto = PackMaterial(Pack.Proto),
             };
-            p.floorMats = PlotColors.Select((c, i) => Tiled(Kit.Mat($"PlotFloor{i}", Color.Lerp(c, Color.white, 0.25f), tile, smoothness: 0.3f), 10f, 10f)).ToArray();
-            var belt = Tiled(Kit.Mat("Belt", Color.white, Kit.Tex("Arrows"), 0.15f, smoothness: 0.2f), 17f, 1f);
-            var brickWall = Tiled(Kit.Mat("BrickWall", Color.white, Kit.Tex("Brick")), 10f, 1f);
-            var steel = Kit.Mat("Steel", new Color(0.55f, 0.58f, 0.64f), smoothness: 0.7f, metallic: 0.8f);
-            var dark = Kit.Mat("Dark", new Color(0.15f, 0.16f, 0.19f), smoothness: 0.4f);
-            var lava = Kit.Mat("FurnaceGlow", new Color(1f, 0.45f, 0.1f), emission: 2.2f);
-            var brick = Kit.Mat("Brick", Color.white, Kit.Tex("Brick"));
-            var gold = Kit.Mat("Gold", new Color(1f, 0.78f, 0.2f), emission: 0.35f, smoothness: 0.85f, metallic: 0.95f);
-            var green = Kit.Mat("ButtonGreen", new Color(0.25f, 0.9f, 0.35f), tile, 0.7f);
-            var red = Kit.Mat("ButtonRed", new Color(0.95f, 0.3f, 0.25f), tile, 0.5f);
-            var grey = Kit.Mat("ButtonGrey", new Color(0.6f, 0.62f, 0.66f), tile, 0.15f);
-            var claimMat = Kit.Mat("Claim", new Color(0.3f, 1f, 0.6f), tile, 1.4f);
-            var collectMat = Kit.Mat("Collect", new Color(0.3f, 0.75f, 1f), tile, 1.1f);
-            var wood = Kit.Mat("Wood", new Color(0.55f, 0.36f, 0.2f), smoothness: 0.2f);
-            var leaves = Kit.Mat("Leaves", new Color(0.3f, 0.7f, 0.3f), tile, smoothness: 0.15f);
-            var glass = Kit.Mat("Glow", new Color(1f, 0.95f, 0.7f), emission: 1.6f);
-            var upgradeGlow = Kit.Mat("UpgradeField", new Color(0.35f, 1f, 0.55f), emission: 1.2f, alpha: 0.35f);
-            var washGlow = Kit.Mat("WashField", new Color(0.35f, 0.75f, 1f), emission: 1.4f, alpha: 0.35f);
-            var stripes = Kit.Mat("Stripes", Color.white, Kit.Tex("Stripes"));
+            p.floorMats = PlotColors.Select((c, i) => Tiled(Kit.Mat($"PlotFloor{i}", Color.Lerp(c, new Color(0.9f, 0.92f, 0.95f), 0.82f), tile, smoothness: 0.3f), 10f, 10f)).ToArray();
+            var mats = new Mats {
+                belt = Tiled(Kit.Mat("Belt", Color.white, Kit.Tex("Arrows"), 0.15f, smoothness: 0.2f), 17f, 1f),
+                brickWall = Tiled(Kit.Mat("BrickWall", Color.white, Kit.Tex("Brick")), 10f, 1f),
+                steel = Kit.Mat("Steel", new Color(0.55f, 0.58f, 0.64f), smoothness: 0.7f, metallic: 0.8f),
+                dark = Kit.Mat("Dark", new Color(0.15f, 0.16f, 0.19f), smoothness: 0.4f),
+                lava = Kit.Mat("FurnaceGlow", new Color(1f, 0.45f, 0.1f), emission: 2.2f),
+                gold = Kit.Mat("Gold", new Color(1f, 0.78f, 0.2f), emission: 0.35f, smoothness: 0.85f, metallic: 0.95f),
+                claim = Kit.Mat("Claim", new Color(0.3f, 1f, 0.6f), tile, 1.4f),
+                collect = Kit.Mat("Collect", new Color(0.3f, 0.75f, 1f), tile, 1.1f),
+                padReady = Kit.Mat("PadReady", new Color(0.25f, 0.9f, 0.35f), tile, 0.9f),
+                padExpensive = Kit.Mat("PadExpensive", new Color(0.95f, 0.3f, 0.25f), tile, 0.4f),
+                padLocked = Kit.Mat("PadLocked", new Color(0.45f, 0.47f, 0.52f), tile, 0.05f),
+                padForeign = Kit.Mat("PadForeign", new Color(0.62f, 0.64f, 0.68f), tile, 0.1f),
+                upgradeFields = new[] {
+                    Kit.Mat("FieldPolish", new Color(1f, 0.45f, 0.35f), emission: 1.4f, alpha: 0.35f),
+                    Kit.Mat("FieldWash", new Color(0.35f, 0.75f, 1f), emission: 1.4f, alpha: 0.35f),
+                    Kit.Mat("FieldGlaze", new Color(1f, 0.8f, 0.25f), emission: 1.6f, alpha: 0.35f),
+                },
+            };
 
-            {   // Plot base: floor, belt, furnace, collector, owner sign, claim pad.
-                var root = new GameObject("PlotBase");
-                var view = root.AddComponent<TY_PlotView>();
-                Cube("Floor", root.transform, new Vector3(0f, -0.25f, 0f), new Vector3(TY_Catalog.PlotSize, 0.5f, TY_Catalog.PlotSize), p.floorMats[0]);
-                Cube("Trim", root.transform, new Vector3(0f, -0.3f, 0f), new Vector3(TY_Catalog.PlotSize + 1.2f, 0.5f, TY_Catalog.PlotSize + 1.2f), p.plotMats[0]);
-                float len = TY_Catalog.BeltEndX - TY_Catalog.BeltStartX + 2f;
-                float mid = (TY_Catalog.BeltEndX + TY_Catalog.BeltStartX) * 0.5f + 1f;
-                Cube("Belt", root.transform, new Vector3(mid, TY_Catalog.BeltTop * 0.5f, TY_Catalog.BeltZ), new Vector3(len, TY_Catalog.BeltTop, 1.6f), belt);
-                for (int s = -1; s <= 1; s += 2)
-                    Cube($"Rail{s}", root.transform, new Vector3(mid, TY_Catalog.BeltTop + 0.15f, TY_Catalog.BeltZ + s * 0.9f), new Vector3(len, 0.3f, 0.2f), steel);
-                var furnace = Empty("Furnace", root.transform, TY_Catalog.FurnacePosition);
-                Cube("Body", furnace.transform, new Vector3(0.5f, 2f, 0f), new Vector3(3.4f, 4f, 3.6f), brick);
-                Cube("Mouth", furnace.transform, new Vector3(-1.25f, 1.1f, 0f), new Vector3(0.1f, 1.4f, 2f), lava, false);
-                Cube("Chimney", furnace.transform, new Vector3(1.2f, 5f, 1.1f), new Vector3(0.9f, 2.5f, 0.9f), brick);
-                var collect = Cube("CollectPad", root.transform, TY_Catalog.CollectPosition + new Vector3(0f, 0.1f, 0f), new Vector3(TY_Catalog.PadSize.x, 0.2f, TY_Catalog.PadSize.z), collectMat);
-                view.bankLabel = WorldText("Bank", root.transform, TY_Catalog.CollectPosition + new Vector3(0f, 2.6f, 0f), "$0", 5f, new Color(0.6f, 0.95f, 1f), new Vector2(8f, 3f));
-                view.bankLabel.gameObject.AddComponent<Billboard>();
-                var sign = Empty("OwnerSign", root.transform, new Vector3(0f, 0f, TY_Catalog.PlotSize * 0.5f + 1.2f));
-                Cube("PostL", sign.transform, new Vector3(-5.5f, 2.5f, 0f), new Vector3(0.4f, 5f, 0.4f), dark);
-                Cube("PostR", sign.transform, new Vector3(5.5f, 2.5f, 0f), new Vector3(0.4f, 5f, 0.4f), dark);
-                Cube("Board", sign.transform, new Vector3(0f, 5.4f, 0f), new Vector3(11.8f, 2.2f, 0.3f), p.plotMats[0], false);
-                view.ownerLabel = WorldText("Owner", sign.transform, new Vector3(0f, 5.4f, 0.2f), "FREE PLOT", 6f, Color.white, new Vector2(11f, 2f), 180f);
-                var claim = Empty("ClaimPad", root.transform, TY_Catalog.ClaimPosition);
-                Cube("Pad", claim.transform, new Vector3(0f, 0.1f, 0f), new Vector3(TY_Catalog.PadSize.x, 0.2f, TY_Catalog.PadSize.z), claimMat);
-                WorldText("Label", claim.transform, new Vector3(0f, 2.2f, 0f), "CLAIM\n<size=60%>step here</size>", 5f, new Color(0.6f, 1f, 0.7f), new Vector2(6f, 3f)).gameObject.AddComponent<Billboard>();
-                view.claimPad = claim;
-                view.itemRoot = Empty("Items", root.transform).transform;
-                p.plotBase = Kit.Save(root, "", "PlotBase");
-            }
-            {
-                var root = new GameObject("BuyButton");
-                var view = root.AddComponent<TY_ButtonView>();
-                view.pad = Cube("Pad", root.transform, new Vector3(0f, 0.15f, 0f), new Vector3(TY_Catalog.ButtonSize.x, 0.3f, TY_Catalog.ButtonSize.z), green).GetComponent<Renderer>();
-                Cube("Rim", root.transform, new Vector3(0f, 0.07f, 0f), new Vector3(TY_Catalog.ButtonSize.x + 0.4f, 0.14f, TY_Catalog.ButtonSize.z + 0.4f), dark);
-                view.label = WorldText("Label", root.transform, new Vector3(0f, 2.3f, 0f), "Item\n$0", 4f, Color.white, new Vector2(7f, 3f));
-                view.label.gameObject.AddComponent<Billboard>();
-                view.affordable = green; view.expensive = red; view.locked = grey;
-                p.button = Kit.Save(root, "", "BuyButton");
-            }
-            {
-                var ore = Cube("Ore", null, Vector3.zero, Vector3.one, p.oreMats[0], false);
-                ore.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                p.ore = Kit.Save(ore, "", "Ore");
-            }
+            p.plotBase = PlotBase(p, mats);
+            p.pads = System.Enum.GetValues(typeof(TY_ItemKind)).Cast<TY_ItemKind>().Select(kind => Pad(kind, mats)).ToArray();
+            p.ore = Brick(p.oreMats[0]);
+            p.coin = Coin(p);
 
             p.items = new GameObject[TY_Catalog.Count];
+            int dropperTier = 0, upgraderTier = 0;
             for (int i = 0; i < TY_Catalog.Count; i++) {
                 var item = TY_Catalog.Items[i];
-                string name = item.name.Replace(" ", "");
-                switch (item.kind) {
-                    case TY_ItemKind.Dropper: p.items[i] = Dropper(name, i, item, steel, dark, PlotTint(i)); break;
-                    case TY_ItemKind.Upgrader: p.items[i] = Upgrader(name, item.value >= 2 ? washGlow : upgradeGlow, steel, stripes, item.value >= 2); break;
-                }
+                if (item.kind == TY_ItemKind.Dropper) p.items[i] = Dropper(p, item, dropperTier++, mats);
+                else if (item.kind == TY_ItemKind.Upgrader) p.items[i] = Upgrader(p, item, upgraderTier++, mats);
             }
-            p.items[Index("Walls")] = Walls(brickWall, dark);
-            p.items[Index("Lamp Posts")] = Lamps(dark, glass);
-            p.items[Index("Front Gate")] = Gate(gold, brick);
-            p.items[Index("Garden")] = Garden(wood, leaves);
-            p.items[Index("Lookout Tower")] = Tower(wood, brick, p.plotMats[3]);
-            p.items[Index("Golden Statue")] = Statue(gold, p.stone);
+            p.items[Index("Brick Walls")] = Walls(mats);
+            p.items[Index("Street Lamps")] = Lamps(p);
+            p.items[Index("Office")] = Building(p, "Office", "building_C");
+            p.items[Index("Corner Shop")] = Building(p, "CornerShop", "building_A");
+            p.items[Index("Apartments")] = Building(p, "Apartments", "building_H");
+            p.items[Index("Wind Farm")] = WindFarm(p);
+            p.items[Index("Golden Statue")] = Statue(mats.gold, p.stone);
+            p.items[Index("Vault")] = Props(p, "Vault", Pack.Space, "cargo_A_stacked", 2.4f, "VAULT");
+            p.items[Index("Big Vault")] = Props(p, "BigVault", Pack.Space, "cargodepot_A", 3.4f, "BIG VAULT");
+            p.items[Index("Mega Vault")] = Props(p, "MegaVault", Pack.Space, "basemodule_A", 3.6f, "MEGA VAULT");
+            p.items[Index("Auto-Collector")] = AutoCollector(p);
+            p.items[Index("Bank Tower")] = Building(p, "BankTower", "building_E");
             return p;
         }
 
-        static int Index(string name) => System.Array.FindIndex(TY_Catalog.Items, i => i.name == name);
-
-        static Material PlotTint(int item) {
-            Color[] tiers = { new(0.75f, 0.78f, 0.84f), new(0.45f, 0.7f, 1f), new(0.45f, 0.9f, 0.5f), new(1f, 0.7f, 0.3f), new(0.95f, 0.4f, 0.4f), new(0.75f, 0.45f, 1f), new(1f, 0.85f, 0.25f) };
-            int tier = TY_Catalog.Items.Take(item + 1).Count(i => i.kind == TY_ItemKind.Dropper) - 1;
-            return Kit.Mat($"DropperTier{tier}", tiers[Mathf.Clamp(tier, 0, tiers.Length - 1)], Kit.Tex("Tile"), tier >= 6 ? 0.4f : 0.1f, smoothness: 0.5f, metallic: tier >= 6 ? 0.6f : 0f);
+        sealed class Mats {
+            public Material belt, brickWall, steel, dark, lava, gold, claim, collect, padReady, padExpensive, padLocked, padForeign;
+            public Material[] upgradeFields;
         }
 
-        /// <summary>Dropper tower behind the belt with an arm and spout over it. Origin on the belt line.</summary>
-        static GameObject Dropper(string name, int index, TY_Item item, Material steel, Material dark, Material body) {
-            bool mega = item.value >= 100;
-            float s = mega ? 1.35f : 1f;
+        static int Index(string name) {
+            int i = System.Array.FindIndex(TY_Catalog.Items, item => item.name == name);
+            if (i < 0) throw new System.ArgumentException($"No catalog item named {name}");
+            return i;
+        }
+
+        /// <summary>Plot base: floor, belt, furnace, collector, owner sign, claim pad.</summary>
+        static GameObject PlotBase(Prefabs p, Mats m) {
+            var root = new GameObject("PlotBase");
+            var view = root.AddComponent<TY_PlotView>();
+            Cube("Floor", root.transform, new Vector3(0f, -0.25f, 0f), new Vector3(TY_Catalog.PlotSize, 0.5f, TY_Catalog.PlotSize), p.floorMats[0]);
+            Cube("Trim", root.transform, new Vector3(0f, -0.3f, 0f), new Vector3(TY_Catalog.PlotSize + 1.2f, 0.5f, TY_Catalog.PlotSize + 1.2f), p.plotMats[0]);
+
+            float len = TY_Catalog.BeltEndX - TY_Catalog.BeltStartX + 2f;
+            float mid = (TY_Catalog.BeltEndX + TY_Catalog.BeltStartX) * 0.5f + 1f;
+            Cube("Belt", root.transform, new Vector3(mid, TY_Catalog.BeltTop * 0.5f, TY_Catalog.BeltZ), new Vector3(len, TY_Catalog.BeltTop, 1.6f), m.belt);
+            for (int s = -1; s <= 1; s += 2)
+                Cube($"Rail{s}", root.transform, new Vector3(mid, TY_Catalog.BeltTop + 0.15f, TY_Catalog.BeltZ + s * 0.9f), new Vector3(len, 0.3f, 0.2f), m.steel);
+
+            // Furnace: a KayKit garage module the belt runs into, with a glowing mouth.
+            var furnace = Empty("Furnace", root.transform, TY_Catalog.FurnacePosition);
+            Kay(p, Pack.Space, "basemodule_garage", furnace.transform, 4.2f, new Vector3(1.1f, 0f, 0f), 90f);
+            NoShadows(Cube("Mouth", furnace.transform, new Vector3(-0.95f, 0.95f, 0f), new Vector3(0.1f, 1.3f, 1.8f), m.lava, false));
+            var fire = new GameObject("FireLight", typeof(Light));
+            fire.transform.SetParent(furnace.transform, false);
+            fire.transform.localPosition = new Vector3(-1.6f, 1.2f, 0f);
+            var light = fire.GetComponent<Light>();
+            light.type = LightType.Point; light.color = new Color(1f, 0.55f, 0.2f); light.range = 6f; light.intensity = 2.5f;
+
+            Cube("CollectPad", root.transform, TY_Catalog.CollectPosition + new Vector3(0f, 0.1f, 0f), new Vector3(TY_Catalog.PadSize.x, 0.2f, TY_Catalog.PadSize.z), m.collect);
+            Kay(p, Pack.Proto, "Coin_A", Empty("CollectCoin", root.transform, TY_Catalog.CollectPosition + new Vector3(0f, 0.4f, 0f)).transform, 1.2f)
+                .transform.parent.gameObject.AddComponent<Spinner>().degreesPerSecond = new Vector3(0f, 90f, 0f);
+            view.bankLabel = WorldText("Bank", root.transform, TY_Catalog.CollectPosition + new Vector3(0f, 3f, 0f), "$0", 5f, new Color(0.6f, 0.95f, 1f), new Vector2(9f, 3f));
+            view.bankLabel.gameObject.AddComponent<Billboard>();
+
+            var sign = Empty("OwnerSign", root.transform, new Vector3(0f, 0f, TY_Catalog.PlotSize * 0.5f + 1.2f));
+            Cube("PostL", sign.transform, new Vector3(-5.5f, 2.5f, 0f), new Vector3(0.4f, 5f, 0.4f), m.dark);
+            Cube("PostR", sign.transform, new Vector3(5.5f, 2.5f, 0f), new Vector3(0.4f, 5f, 0.4f), m.dark);
+            Cube("Board", sign.transform, new Vector3(0f, 5.4f, 0f), new Vector3(11.8f, 2.2f, 0.3f), p.plotMats[0], false);
+            view.ownerLabel = WorldText("Owner", sign.transform, new Vector3(0f, 5.4f, 0.2f), "FREE PLOT", 6f, Color.white, new Vector2(11f, 2f), 180f);
+
+            var claim = Empty("ClaimPad", root.transform, TY_Catalog.ClaimPosition);
+            Cube("Pad", claim.transform, new Vector3(0f, 0.1f, 0f), new Vector3(TY_Catalog.PadSize.x, 0.2f, TY_Catalog.PadSize.z), m.claim);
+            WorldText("Label", claim.transform, new Vector3(0f, 2.4f, 0f), "CLAIM\n<size=60%>step here</size>", 5f, new Color(0.6f, 1f, 0.7f), new Vector2(6f, 3f)).gameObject.AddComponent<Billboard>();
+            view.claimPad = claim;
+            view.itemRoot = Empty("Items", root.transform).transform;
+            return Kit.Save(root, "", "PlotBase");
+        }
+
+        /// <summary>A lane's buy pad with its floating sign (picture, name, effect, price).</summary>
+        static GameObject Pad(TY_ItemKind kind, Mats m) {
+            Color laneColor = TY_Lanes.Color(kind);
+            var laneMat = Kit.Mat($"Lane{kind}", laneColor, Kit.Tex("Tile"), 0.6f, smoothness: 0.4f);
+            var root = new GameObject($"Pad{kind}");
+            var view = root.AddComponent<TY_ButtonView>();
+            var pulse = Empty("Pulse", root.transform);
+            view.pulse = pulse.transform;
+            view.pad = Cube("Pad", pulse.transform, new Vector3(0f, 0.15f, 0f), new Vector3(TY_Catalog.ButtonSize.x - 0.4f, 0.3f, TY_Catalog.ButtonSize.z - 0.4f), m.padReady, false).GetComponent<Renderer>();
+            Cube("Rim", root.transform, new Vector3(0f, 0.08f, 0f), new Vector3(TY_Catalog.ButtonSize.x + 0.2f, 0.16f, TY_Catalog.ButtonSize.z + 0.2f), laneMat, false);
+            view.affordable = m.padReady; view.expensive = m.padExpensive; view.locked = m.padLocked; view.foreign = m.padForeign;
+
+            var sign = Empty("Sign", root.transform, new Vector3(0f, 2.7f, 0f));
+            sign.transform.localScale = Vector3.one * 0.85f;
+            sign.AddComponent<Billboard>();
+            var back = SpriteChild("Back", sign.transform, Vector3.zero, TY_HudAuthoring.SignSprite(), new Color(0.06f, 0.08f, 0.12f, 0.94f), 0);
+            back.transform.localScale = new Vector3(4.4f, 2.3f, 1f);
+            var strip = SpriteChild("LaneStrip", sign.transform, new Vector3(0f, 1.08f, -0.01f), TY_HudAuthoring.WhiteSprite(), laneColor, 1);
+            strip.transform.localScale = new Vector3(4.1f, 0.12f, 1f);
+            view.picture = SpriteChild("Picture", sign.transform, new Vector3(-1.25f, 0.05f, -0.01f), null, Color.white, 1);
+            view.picture.transform.localScale = Vector3.one * 1.55f;
+            SpriteChild("LaneIcon", sign.transform, new Vector3(1.9f, 0.82f, -0.01f), TY_HudAuthoring.IconSprite(TY_Lanes.Icon(kind)), laneColor, 2).transform.localScale = Vector3.one * 0.32f;
+            view.title = SignText("Title", sign.transform, new Vector3(0.75f, 0.52f, -0.02f), 2.6f, Color.white, FontStyles.Bold, new Vector2(2.6f, 0.6f));
+            view.effect = SignText("Effect", sign.transform, new Vector3(0.75f, 0.02f, -0.02f), 1.9f, laneColor, FontStyles.Normal, new Vector2(2.6f, 0.5f));
+            view.price = SignText("Price", sign.transform, new Vector3(0.75f, -0.58f, -0.02f), 3.2f, new Color(0.45f, 1f, 0.55f), FontStyles.Bold, new Vector2(2.6f, 0.7f));
+            return Kit.Save(root, "Pads", $"Pad{kind}");
+        }
+
+        static SpriteRenderer SpriteChild(string name, Transform parent, Vector3 position, Sprite sprite, Color color, int order) {
+            var go = new GameObject(name, typeof(SpriteRenderer));
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = position;
+            var sr = go.GetComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            sr.color = color;
+            sr.sortingOrder = order;
+            sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return sr;
+        }
+
+        static TextMeshPro SignText(string name, Transform parent, Vector3 position, float size, Color color, FontStyles style, Vector2 box) {
+            var text = WorldText(name, parent, position, "", size, color, box);
+            text.alignment = TextAlignmentOptions.MidlineLeft;
+            text.fontStyle = style;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.sortingOrder = 3;
+            var font = TY_HudAuthoring.Font(style == FontStyles.Bold);
+            if (font != null) text.font = font;
+            return text;
+        }
+
+        static GameObject Brick(Material mat) {
+            var root = new GameObject("Brick");
+            var body = Cube("Body", root.transform, Vector3.zero, new Vector3(0.9f, 0.42f, 0.5f), mat, false);
+            body.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return Kit.Save(root, "", "Ore");
+        }
+
+        static GameObject Coin(Prefabs p) {
+            var root = new GameObject("GoldCoin");
+            var spin = Empty("Spin", root.transform, new Vector3(0f, 1.4f, 0f));
+            var spinner = spin.AddComponent<Spinner>();
+            spinner.degreesPerSecond = new Vector3(0f, 150f, 0f);
+            spinner.bobHeight = 0.35f;
+            Kay(p, Pack.Proto, "Coin_A", spin.transform, 1.8f, new Vector3(0f, -0.9f, 0f), 0f, Kit.Mat("Gold", new Color(1f, 0.78f, 0.2f), emission: 0.35f, smoothness: 0.85f, metallic: 0.95f));
+            var glow = new GameObject("Glow", typeof(Light));
+            glow.transform.SetParent(root.transform, false);
+            glow.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            var light = glow.GetComponent<Light>();
+            light.type = LightType.Point; light.color = new Color(1f, 0.82f, 0.3f); light.range = 5f; light.intensity = 3f;
+            WorldText("Label", root.transform, new Vector3(0f, 3.3f, 0f), "GOLD COIN", 3.2f, new Color(1f, 0.85f, 0.3f), new Vector2(5f, 1f)).gameObject.AddComponent<Billboard>();
+            return Kit.Save(root, "", "GoldCoin");
+        }
+
+        static readonly (string model, float size)[] DropperModels = {
+            ("structure_low", 3.3f), ("structure_low", 3.4f), ("structure_tall", 4.6f), ("structure_tall", 4.8f),
+            ("drill_structure", 5f), ("drill_structure", 5.4f), ("drill_structure", 6.2f),
+        };
+
+        static readonly Color[] TierColors = {
+            new(0.85f, 0.87f, 0.9f), new(0.45f, 0.7f, 1f), new(0.45f, 0.9f, 0.5f), new(1f, 0.7f, 0.3f),
+            new(0.95f, 0.4f, 0.4f), new(0.75f, 0.45f, 1f), new(1f, 0.85f, 0.25f)
+        };
+
+        /// <summary>A KayKit tripod straddling the belt, with a tier-coloured crate hopper on top. Origin on the belt line.</summary>
+        static GameObject Dropper(Prefabs p, in TY_Item item, int tier, Mats m) {
+            string name = item.name.Replace(" ", "");
+            var (model, size) = DropperModels[Mathf.Min(tier, DropperModels.Length - 1)];
             var root = new GameObject(name);
-            Cube("Tower", root.transform, new Vector3(0f, 2f * s, -2.6f), new Vector3(1.4f * s, 4f * s, 1.4f * s), body);
-            Cube("Arm", root.transform, new Vector3(0f, 3.6f * s, -1.3f), new Vector3(0.9f * s, 0.7f * s, 2.8f), body);
-            Cube("Spout", root.transform, new Vector3(0f, 3.0f * s, 0f), new Vector3(1f * s, 0.6f, 1f * s), dark, false);
-            Cube("Cap", root.transform, new Vector3(0f, 4.15f * s, -2.6f), new Vector3(1.7f * s, 0.3f, 1.7f * s), steel);
-            var label = WorldText("Label", root.transform, new Vector3(0f, 4.9f * s, -2.6f), $"${item.value / item.interval:0.#}/s", 3.2f, Color.white, new Vector2(4f, 1.2f));
+            var frame = Kay(p, Pack.Space, model, root.transform, size);
+            float top = RendererBounds(frame).max.y;
+            var tint = Kit.Mat($"DropperTier{tier}", TierColors[tier % TierColors.Length], p.space.GetTexture("_BaseMap") as Texture2D, tier >= 6 ? 0.3f : 0f, smoothness: 0.45f, metallic: tier >= 6 ? 0.5f : 0f);
+            Kay(p, Pack.Space, tier >= 4 ? "cargo_A_stacked" : "cargo_A", root.transform, tier >= 4 ? 1.9f : 1.4f, new Vector3(0f, top - 0.15f, 0f), 0f, tint);
+            var label = WorldText("Label", root.transform, new Vector3(0f, top + (tier >= 4 ? 2.6f : 2f), 0f),
+                $"<size=70%>{item.name}</size>\n${item.value / item.interval:0.#}/s", 3f, Color.white, new Vector2(5f, 1.6f));
             label.gameObject.AddComponent<Billboard>();
             return Kit.Save(root, "Items", name);
         }
 
-        static GameObject Upgrader(string name, Material field, Material steel, Material stripes, bool washer) {
+        /// <summary>A KayKit tunnel over the belt with a glowing field; bricks change look as they pass.</summary>
+        static GameObject Upgrader(Prefabs p, in TY_Item item, int tier, Mats m) {
+            string name = item.name.Replace(" ", "");
             var root = new GameObject(name);
+            var tunnel = Kay(p, Pack.Space, tier % 2 == 0 ? "tunnel_straight_A" : "tunnel_straight_B", root.transform, 2.6f, Vector3.zero, 0f);
+            tunnel.transform.localScale = Vector3.Scale(tunnel.transform.localScale, new Vector3(1f, 2.6f, 2.4f));
+            var b = RendererBounds(tunnel);
+            tunnel.transform.position += Vector3.down * b.min.y;
+            var field = Cube("Field", root.transform, new Vector3(0f, 1.3f, 0f), new Vector3(0.12f, 1.9f, 1.9f), m.upgradeFields[tier % m.upgradeFields.Length], false);
+            NoShadows(field);
+            WorldText("Label", root.transform, new Vector3(0f, RendererBounds(tunnel).max.y + 1.1f, 0f), $"{item.name.ToUpperInvariant()}\n<size=70%>x{item.value:0.##}</size>", 3f,
+                m.upgradeFields[tier % m.upgradeFields.Length].GetColor("_BaseColor") * 1.2f + new Color(0.2f, 0.2f, 0.2f), new Vector2(5f, 1.6f)).gameObject.AddComponent<Billboard>();
+            return Kit.Save(root, "Items", name);
+        }
+
+        static GameObject Walls(Mats m) {
+            var root = new GameObject("BrickWalls");
+            float h = 3f, half = TY_Catalog.PlotSize * 0.5f - 0.3f;
+            Cube("Back", root.transform, new Vector3(0f, h * 0.5f, -half), new Vector3(TY_Catalog.PlotSize, h, 0.6f), m.brickWall);
+            Cube("Left", root.transform, new Vector3(-half, h * 0.5f, 0f), new Vector3(0.6f, h, TY_Catalog.PlotSize), m.brickWall);
+            Cube("Right", root.transform, new Vector3(half, h * 0.5f, 0f), new Vector3(0.6f, h, TY_Catalog.PlotSize), m.brickWall);
+            float gap = 5f, seg = (TY_Catalog.PlotSize - gap * 2f) * 0.5f;
             for (int side = -1; side <= 1; side += 2)
-                Cube($"Post{side}", root.transform, new Vector3(0f, 1.6f, side * 1.4f), new Vector3(0.5f, 3.2f, 0.4f), stripes);
-            Cube("Beam", root.transform, new Vector3(0f, 3.3f, 0f), new Vector3(0.7f, 0.4f, 3.4f), steel);
-            var glow = Cube("Field", root.transform, new Vector3(0f, 1.6f, 0f), new Vector3(0.15f, 2.8f, 2.4f), field, false);
-            NoShadows(glow);
-            if (washer) {
-                var ring = Empty("Ring", root.transform, new Vector3(0f, 3.9f, 0f));
-                ring.AddComponent<Spinner>().degreesPerSecond = new Vector3(0f, 0f, 160f);
-                for (int k = 0; k < 4; k++) {
-                    var blade = Cube($"Blade{k}", ring.transform, Vector3.zero, new Vector3(0.15f, 0.25f, 2.2f), steel, false);
-                    blade.transform.localRotation = Quaternion.Euler(k * 45f, 0f, 0f);
-                }
+                Cube($"Front{side}", root.transform, new Vector3(side * (gap + seg * 0.5f), h * 0.5f, half), new Vector3(seg, h, 0.6f), m.brickWall);
+            foreach (var c in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1), new Vector2(-gap / half, 1), new Vector2(gap / half, 1) })
+                Cube("Cap", root.transform, new Vector3(c.x * half, h + 0.3f, c.y * half), new Vector3(1.2f, 0.6f, 1.2f), m.dark);
+            return Kit.Save(root, "Items", "BrickWalls");
+        }
+
+        static GameObject Lamps(Prefabs p) {
+            var root = new GameObject("StreetLamps");
+            float r = TY_Catalog.PlotSize * 0.5f - 1.6f;
+            (Vector2 spot, float yaw)[] lamps = {
+                (new(-1f, -0.35f), 0f), (new(1f, -0.35f), 180f), (new(-1f, 0.45f), 0f), (new(1f, 0.45f), 180f),
+                (new(-0.35f, 1f), 90f), (new(0.35f, 1f), 90f),
+            };
+            for (int i = 0; i < lamps.Length; i++) {
+                var lamp = Empty(i == 0 ? TY_PictureRenderer.FocusName : $"Lamp{i}", root.transform, new Vector3(lamps[i].spot.x * r, 0f, lamps[i].spot.y * r));
+                Kay(p, Pack.City, "streetlight", lamp.transform, 5.2f, Vector3.zero, lamps[i].yaw);
+                var glow = new GameObject("Light", typeof(Light));
+                glow.transform.SetParent(lamp.transform, false);
+                glow.transform.localPosition = new Vector3(0f, 4.6f, 0f);
+                var light = glow.GetComponent<Light>();
+                light.type = LightType.Point; light.color = new Color(1f, 0.9f, 0.7f); light.range = 9f; light.intensity = 1.2f;
+                light.shadows = LightShadows.None;
             }
-            WorldText("Label", root.transform, new Vector3(0f, 4.8f, 0f), washer ? "WASHER x2" : "UPGRADER x1.5", 3f, washer ? new Color(0.6f, 0.85f, 1f) : new Color(0.6f, 1f, 0.7f), new Vector2(5f, 1.2f))
+            return Kit.Save(root, "Items", "StreetLamps");
+        }
+
+        /// <summary>A KayKit city building facing the plot centre (+Z), with a bush and bench out front.</summary>
+        static GameObject Building(Prefabs p, string name, string model) {
+            var root = new GameObject(name);
+            Kay(p, Pack.City, model, root.transform, 8.2f, Vector3.zero, 180f);
+            return Kit.Save(root, "Items", name);
+        }
+
+        static GameObject WindFarm(Prefabs p) {
+            var root = new GameObject("WindFarm");
+            for (int k = -1; k <= 1; k++)
+                Kay(p, Pack.Space, "windturbine_tall", Empty($"Turbine{k + 1}", root.transform, new Vector3(0f, 0f, k * 4.5f)).transform, 7f, Vector3.zero, 90f);
+            return Kit.Save(root, "Items", "WindFarm");
+        }
+
+        static GameObject Props(Prefabs p, string name, Pack pack, string model, float size, string label) {
+            var root = new GameObject(name);
+            var go = Kay(p, pack, model, root.transform, size, Vector3.zero, 270f);
+            WorldText("Label", root.transform, new Vector3(0f, RendererBounds(go).max.y + 0.9f, 0f), label, 2.6f, TY_Lanes.Color(TY_ItemKind.Utility) * 1.3f, new Vector2(5f, 1f))
                 .gameObject.AddComponent<Billboard>();
             return Kit.Save(root, "Items", name);
         }
 
-        static GameObject Walls(Material brick, Material dark) {
-            var root = new GameObject("Walls");
-            float h = 3f, half = TY_Catalog.PlotSize * 0.5f - 0.3f;
-            Cube("Back", root.transform, new Vector3(0f, h * 0.5f, -half), new Vector3(TY_Catalog.PlotSize, h, 0.6f), brick);
-            Cube("Left", root.transform, new Vector3(-half, h * 0.5f, 0f), new Vector3(0.6f, h, TY_Catalog.PlotSize), brick);
-            Cube("Right", root.transform, new Vector3(half, h * 0.5f, 0f), new Vector3(0.6f, h, TY_Catalog.PlotSize), brick);
-            float gap = 5f, seg = (TY_Catalog.PlotSize - gap * 2f) * 0.5f;
-            for (int side = -1; side <= 1; side += 2)
-                Cube($"Front{side}", root.transform, new Vector3(side * (gap + seg * 0.5f), h * 0.5f, half), new Vector3(seg, h, 0.6f), brick);
-            foreach (var c in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1) })
-                Cube("Cap", root.transform, new Vector3(c.x * half, h + 0.3f, c.y * half), new Vector3(1.2f, 0.6f, 1.2f), dark);
-            return Kit.Save(root, "Items", "Walls");
-        }
-
-        static GameObject Lamps(Material post, Material glow) {
-            var root = new GameObject("LampPosts");
-            float r = TY_Catalog.PlotSize * 0.5f - 2f;
-            foreach (var c in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1), new Vector2(-0.3f, 1), new Vector2(0.3f, 1) }) {
-                var lamp = Empty("Lamp", root.transform, new Vector3(c.x * r, 0f, c.y * r));
-                Primitive(PrimitiveType.Cylinder, "Post", lamp.transform, new Vector3(0f, 2.2f, 0f), new Vector3(0.25f, 2.2f, 0.25f), post);
-                NoShadows(Primitive(PrimitiveType.Sphere, "Bulb", lamp.transform, new Vector3(0f, 4.7f, 0f), Vector3.one * 0.8f, glow, false));
-            }
-            return Kit.Save(root, "Items", "LampPosts");
-        }
-
-        static GameObject Gate(Material gold, Material brick) {
-            var root = new GameObject("FrontGate");
-            for (int side = -1; side <= 1; side += 2)
-                Cube($"Pillar{side}", root.transform, new Vector3(side * 5f, 3f, 0f), new Vector3(1.2f, 6f, 1.2f), brick);
-            Cube("Arch", root.transform, new Vector3(0f, 6.4f, 0f), new Vector3(11.2f, 0.9f, 1.4f), gold);
-            return Kit.Save(root, "Items", "FrontGate");
-        }
-
-        static GameObject Garden(Material wood, Material leaves) {
-            var root = new GameObject("Garden");
-            Vector3[] spots = { new(0f, 0f, 0f), new(4f, 0f, 1f), new(1.5f, 0f, 4f), new(-2f, 0f, 3f), new(3f, 0f, -2.5f) };
-            for (int i = 0; i < spots.Length; i++) {
-                float h = 2.5f + i % 3 * 0.8f;
-                var tree = Empty($"Tree{i}", root.transform, spots[i]);
-                Primitive(PrimitiveType.Cylinder, "Trunk", tree.transform, new Vector3(0f, h * 0.5f, 0f), new Vector3(0.45f, h * 0.5f, 0.45f), wood);
-                Primitive(PrimitiveType.Sphere, "Crown", tree.transform, new Vector3(0f, h + 1f, 0f), Vector3.one * (2.6f + i % 2 * 0.6f), leaves, false);
-            }
-            return Kit.Save(root, "Items", "Garden");
-        }
-
-        static GameObject Tower(Material wood, Material brick, Material roof) {
-            var root = new GameObject("LookoutTower");
-            for (int x = -1; x <= 1; x += 2)
-                for (int z = -1; z <= 1; z += 2)
-                    Cube("Leg", root.transform, new Vector3(x * 2f, 4f, z * 2f), new Vector3(0.6f, 8f, 0.6f), wood);
-            Cube("Deck", root.transform, new Vector3(0f, 8.2f, 0f), new Vector3(5.6f, 0.4f, 5.6f), wood);
-            Cube("Hut", root.transform, new Vector3(0f, 9.6f, 0f), new Vector3(4.6f, 2.4f, 4.6f), brick);
-            var top = Cube("Roof", root.transform, new Vector3(0f, 11.3f, 0f), new Vector3(4.3f, 1.2f, 4.3f), roof);
-            top.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
-            for (int k = 0; k < 6; k++)
-                Cube($"Step{k}", root.transform, new Vector3(-2.9f, 0.6f + k * 1.3f, -2.4f + k * 0.9f), new Vector3(1.4f, 0.25f, 0.9f), wood);
-            return Kit.Save(root, "Items", "LookoutTower");
+        static GameObject AutoCollector(Prefabs p) {
+            var root = new GameObject("AutoCollector");
+            Kay(p, Pack.Space, "lights", root.transform, 3.2f, Vector3.zero, 270f);
+            WorldText("Label", root.transform, new Vector3(0f, 4f, 0f), "AUTO", 2.6f, new Color(0.35f, 1f, 0.6f), new Vector2(4f, 1f)).gameObject.AddComponent<Billboard>();
+            return Kit.Save(root, "Items", "AutoCollector");
         }
 
         static GameObject Statue(Material gold, Material stone) {
             var root = new GameObject("GoldenStatue");
             Cube("Plinth", root.transform, new Vector3(0f, 0.75f, 0f), new Vector3(4f, 1.5f, 4f), stone);
             var figure = Model("Assets/UnityTechnologies/SpaceRobotKyle/Models/KyleRobot.fbx", Empty("Figure", root.transform, new Vector3(0f, 1.5f, 0f)).transform, 4.5f, yaw: 180f);
-            if (figure != null) foreach (var r in figure.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => gold).ToArray();
-            else Primitive(PrimitiveType.Capsule, "Figure", root.transform, new Vector3(0f, 3.5f, 0f), new Vector3(1.4f, 2f, 1.4f), gold);
+            if (figure == null) throw new FileNotFoundException("KyleRobot model missing for the Golden Statue.");
+            foreach (var r in figure.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => gold).ToArray();
             return Kit.Save(root, "Items", "GoldenStatue");
-        }
-
-        // ---------------------------------------------------------------- HUD
-        static GameObject BuildHud() {
-#if UNITY_SERVER
-            return AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/TycoonHUD.prefab");
-#else
-            var root = Canvas("TycoonHUD");
-            var hud = root.AddComponent<TY_ClientController>();
-            Color white = new(0.97f, 0.98f, 1f), money = new(0.45f, 1f, 0.55f), yellow = new(1f, 0.85f, 0.25f);
-            var panel = Panel("WalletPanel", root.transform, new Vector2(0.012f, 0.4f), new Vector2(0.24f, 0.58f), Ink);
-            hud.plotLabel = Text("Plot", panel.transform, new Vector2(0.06f, 0.7f), new Vector2(0.96f, 0.97f), 26, yellow, bold: true);
-            hud.cashLabel = Text("Cash", panel.transform, new Vector2(0.06f, 0.3f), new Vector2(0.96f, 0.74f), 56, money, TextAlignmentOptions.MidlineLeft, true);
-            hud.incomeLabel = Text("Income", panel.transform, new Vector2(0.06f, 0.03f), new Vector2(0.96f, 0.32f), 21, white);
-            var hint = Panel("HintPanel", root.transform, new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.09f), Ink);
-            hud.hintLabel = Text("Hint", hint.transform, new Vector2(0.03f, 0f), new Vector2(0.97f, 1f), 24, white, TextAlignmentOptions.Center);
-            hud.toastLabel = Text("Toast", root.transform, new Vector2(0.2f, 0.66f), new Vector2(0.8f, 0.76f), 40, yellow, TextAlignmentOptions.Center, true);
-            hud.sfx = Sfx(root.transform);
-            hud.buyClip = hud.collectClip = hud.rebirthClip = Clip(CoinClip);
-            hud.deniedClip = Clip(LandClip);
-            return Kit.Save(root, "", "TycoonHUD");
-#endif
         }
 
         // ---------------------------------------------------------------- scene
         static void BuildStartScene(Prefabs p) {
-            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            var hud = BuildHud();
-            Kit.NewLitScene(new Color(0.45f, 0.68f, 1f), new Color(0.72f, 0.84f, 0.98f), 140f, 420f, new Vector3(50f, -30f, 0f));
+            var hud = TY_HudAuthoring.Build();
+            Kit.NewLitScene(new Color(0.45f, 0.68f, 1f), new Color(0.72f, 0.84f, 0.98f), 160f, 460f, new Vector3(50f, -30f, 0f));
             var world = new GameObject("World");
-            Cube("Baseplate", world.transform, new Vector3(0f, -0.6f, 0f), new Vector3(260f, 1f, 260f), p.grass);
+            Cube("Baseplate", world.transform, new Vector3(0f, -0.6f, 0f), new Vector3(280f, 1f, 280f), p.grass);
             Primitive(PrimitiveType.Cylinder, "Plaza", world.transform, new Vector3(0f, -0.08f, 0f), new Vector3(30f, 0.1f, 30f), p.plaza);
             for (int i = 0; i < PlotCount; i++) {
                 float angle = i * 360f / PlotCount;
                 Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
                 var path = Cube($"Path{i}", world.transform, dir * (Radius * 0.5f - 2f) + new Vector3(0f, -0.07f, 0f), new Vector3(6f, 0.1f, Radius - 34f), p.stone);
                 path.transform.rotation = Quaternion.Euler(0f, angle, 0f);
+                // Lamps and bushes line each path between plots and plaza.
+                for (int side = -1; side <= 1; side += 2) {
+                    Vector3 across = Quaternion.Euler(0f, angle, 0f) * Vector3.right * side * 4.2f;
+                    var lamp = Empty($"PathLamp{i}{side}", world.transform, dir * 22f + across);
+                    Kay(p, Pack.City, "streetlight", lamp.transform, 5.2f, Vector3.zero, angle + (side < 0 ? 0f : 180f));
+                    Kay(p, Pack.City, "bush", Empty($"Bush{i}{side}", world.transform, dir * 18f + across).transform, 1.8f);
+                }
             }
-            var sign = Empty("PlazaSign", world.transform, new Vector3(0f, 0f, 0f));
-            Cube("Pillar", sign.transform, new Vector3(0f, 2.5f, 0f), new Vector3(1.4f, 5f, 1.4f), p.stone);
-            var title = WorldText("Title", sign.transform, new Vector3(0f, 6.8f, 0f), "BRICK TYCOON\n<size=45%>Claim a plot. Build droppers. Get rich. Rebirth.</size>", 7f, new Color(1f, 0.85f, 0.25f), new Vector2(18f, 5f));
+            // Plaza furniture between the paths.
+            for (int i = 0; i < PlotCount; i++) {
+                float angle = (i + 0.5f) * 360f / PlotCount;
+                Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+                Kay(p, Pack.City, "bench", Empty($"Bench{i}", world.transform, dir * 12.5f).transform, 2.4f, Vector3.zero, angle + 180f);
+                Kay(p, Pack.City, "bush", Empty($"PlazaBush{i}", world.transform, dir * 14.5f).transform, 2.2f);
+                Kay(p, Pack.City, "watertower", Empty($"Tower{i}", world.transform, dir * 40f).transform, 7f, Vector3.zero, angle);
+            }
+            var sign = Empty("PlazaSign", world.transform, Vector3.zero);
+            Kay(p, Pack.Proto, "Pillar_A", sign.transform, 5f);
+            var coin = Empty("Coin", sign.transform, new Vector3(0f, 5.6f, 0f));
+            coin.AddComponent<Spinner>().degreesPerSecond = new Vector3(0f, 60f, 0f);
+            Kay(p, Pack.Proto, "Coin_A", coin.transform, 2.4f, new Vector3(0f, -1.2f, 0f), 0f, Kit.Mat("Gold", new Color(1f, 0.78f, 0.2f), emission: 0.35f, smoothness: 0.85f, metallic: 0.95f));
+            var title = WorldText("Title", sign.transform, new Vector3(0f, 9.2f, 0f), "BRICK TYCOON\n<size=45%>Claim a plot. Build droppers. Get rich. Rebirth.</size>", 7f, new Color(1f, 0.85f, 0.25f), new Vector2(18f, 5f));
             title.gameObject.AddComponent<Billboard>();
 
             var mapGo = new GameObject("TycoonMap");
@@ -359,12 +493,24 @@ namespace Universes.UniverseData.tycoon.Editor {
                 map.plots[i] = plot.GetComponent<TY_PlotView>();
             }
             map.itemPrefabs = p.items;
-            map.buttonPrefab = p.button;
+            map.itemPictures = TY_PictureRenderer.LoadAll();
+            map.padPrefabs = p.pads;
             map.orePrefab = p.ore;
+            map.goldCoinPrefab = p.coin;
             map.oreMaterials = p.oreMats;
             map.clientPrefab = hud;
             EditorUtility.SetDirty(map);
             Kit.SaveActiveScene(Kit.StartScene(Universe));
+        }
+
+        /// <summary>Like <see cref="Shoot"/>, but first turns every <see cref="Billboard"/> to the camera, as it would at runtime.</summary>
+        static void Shot(Camera cam, Vector3 position, Vector3 target, string path, int width, int height) {
+            foreach (var billboard in Object.FindObjectsByType<Billboard>(FindObjectsInactive.Exclude)) {
+                Vector3 away = billboard.transform.position - position;
+                away.y = 0f;
+                if (away.sqrMagnitude > 1e-4f) billboard.transform.rotation = Quaternion.LookRotation(away, Vector3.up);
+            }
+            Shoot(cam, position, target, path, width, height);
         }
 
         [MenuItem("Ryan/Tycoon/Register Scenes")]
@@ -383,30 +529,39 @@ namespace Universes.UniverseData.tycoon.Editor {
                 var view = map.plots[plot];
                 view.claimPad.SetActive(false);
                 view.ownerLabel.text = plot == 0 ? "Ryan's Tycoon" : "Guest's Tycoon";
-                view.bankLabel.text = "$1.2K";
+                view.bankLabel.text = "$1.2K<size=55%> / $6K</size>";
                 for (int i = 0; i < TY_Catalog.Count; i++) {
-                    if (map.itemPrefabs[i] == null || plot == 1 && i > 7) continue;
+                    if (map.itemPrefabs[i] == null || plot == 1 && TY_Catalog.Items[i].price > 2500) continue;
                     var go = (GameObject)PrefabUtility.InstantiatePrefab(map.itemPrefabs[i], view.itemRoot);
                     go.transform.localPosition = TY_Catalog.Items[i].itemPosition;
-                    go.transform.localRotation = Quaternion.identity;
+                    go.transform.localRotation = Quaternion.Euler(0f, TY_Catalog.Items[i].itemYaw, 0f);
                 }
                 for (int k = 0; k < 14; k++) {
                     var ore = (GameObject)PrefabUtility.InstantiatePrefab(map.orePrefab, view.itemRoot);
-                    ore.transform.localPosition = new Vector3(TY_Catalog.BeltStartX + 1f + k * 2.2f, TY_Catalog.BeltTop + 0.3f, TY_Catalog.BeltZ);
-                    ore.transform.localScale = Vector3.one * 0.6f;
-                    ore.GetComponent<Renderer>().sharedMaterial = map.oreMaterials[k < 9 ? 0 : k < 11 ? 1 : 2];
+                    float x = TY_Catalog.BeltStartX + 1f + k * 2.2f;
+                    ore.transform.localPosition = new Vector3(x, TY_Catalog.BeltTop + 0.2f, TY_Catalog.BeltZ);
+                    ore.transform.localRotation = Quaternion.identity;
+                    int stage = x < 7.4f ? 0 : x < 10.2f ? 1 : x < 13f ? 2 : 3;
+                    ore.GetComponentInChildren<Renderer>().sharedMaterial = map.oreMaterials[stage];
                 }
                 if (plot == 1) {
-                    var button = (GameObject)PrefabUtility.InstantiatePrefab(map.buttonPrefab, view.itemRoot);
-                    button.transform.localPosition = TY_Catalog.Items[8].buttonPosition;
-                    button.GetComponent<TY_ButtonView>().Show(TY_Catalog.Items[8].name, TY_Catalog.Items[8].price, 0);
+                    foreach (var kind in TY_Lanes.BuildLanes) {
+                        int next = TY_Catalog.Items.Select((item, i) => (item, i)).First(x => x.item.kind == kind && x.item.price > 2500).i;
+                        var pad = (GameObject)PrefabUtility.InstantiatePrefab(map.padPrefabs[(int)kind], view.itemRoot);
+                        pad.transform.localPosition = TY_Catalog.LanePosition(kind);
+                        pad.GetComponent<TY_ButtonView>().Show(TY_Catalog.Items[next], map.Picture(next), kind == TY_ItemKind.Building ? TY_ButtonLook.Affordable : TY_ButtonLook.Expensive, "");
+                    }
                 }
             }
+            var coin = (GameObject)PrefabUtility.InstantiatePrefab(map.goldCoinPrefab, map.plots[1].itemRoot);
+            coin.transform.localPosition = new Vector3(-4f, 0f, 3f);
             var cam = PreviewCamera();
-            Shoot(cam, new Vector3(-60f, 70f, -95f), new Vector3(0f, 0f, 10f), Path.Combine(dir, "overview.png"), 1600, 900);
+            Shot(cam, new Vector3(-70f, 80f, -105f), new Vector3(0f, 0f, 10f), Path.Combine(dir, "overview.png"), 1600, 900);
             var plotT = map.plots[0].transform;
-            Shoot(cam, plotT.TransformPoint(new Vector3(-24f, 16f, 30f)), plotT.TransformPoint(new Vector3(0f, 2f, -3f)), Path.Combine(dir, "plot.png"), 1600, 900);
-            Shoot(cam, plotT.TransformPoint(new Vector3(-16f, 9f, 22f)), plotT.TransformPoint(new Vector3(2f, 2f, -5f)), Path.Combine(dir, "thumbnail.png"), 640, 360);
+            Shot(cam, plotT.TransformPoint(new Vector3(-26f, 18f, 32f)), plotT.TransformPoint(new Vector3(0f, 2f, -4f)), Path.Combine(dir, "plot.png"), 1600, 900);
+            var plot2 = map.plots[1].transform;
+            Shot(cam, plot2.TransformPoint(new Vector3(-8f, 9f, 24f)), plot2.TransformPoint(new Vector3(-2f, 2f, 3f)), Path.Combine(dir, "pads.png"), 1600, 900);
+            Shot(cam, plotT.TransformPoint(new Vector3(-17f, 10f, 23f)), plotT.TransformPoint(new Vector3(2f, 2f, -6f)), Path.Combine(dir, "thumbnail.png"), 640, 360);
             Object.DestroyImmediate(cam.gameObject);
             Kit.PublishThumbnail(Universe, Path.Combine(dir, "thumbnail.png"));
             EditorSceneManager.OpenScene(Kit.StartScene(Universe), OpenSceneMode.Single);

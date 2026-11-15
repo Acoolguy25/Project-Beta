@@ -1,0 +1,7 @@
+Sound effects by Kenney (www.kenney.nl), copied from Kenney's official starter kits:
+  coin.ogg, break.ogg                     https://github.com/KenneyNL/Starter-Kit-3D-Platformer
+  placement-a.ogg, removal-a.ogg, toggle.ogg  https://github.com/KenneyNL/Starter-Kit-City-Builder
+
+License: Creative Commons Zero, CC0 (https://creativecommons.org/publicdomain/zero/1.0/)
+"Assets included in this package (2D sprites, 3D models and sound effects) are CC0 licensed" (kit README).
+Credit is not required; crediting Kenney is appreciated.
