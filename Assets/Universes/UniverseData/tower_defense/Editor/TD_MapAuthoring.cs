@@ -79,7 +79,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             float colStep = across * 0.75f, rowStep = flat;
 
             // The pack's grass is a bright lime; a tint pulls it toward a meadow green that reads better under the HUD.
-            var grass = TD_Authoring.Tinted("HexGrass", KayKit + "tiles/base/hexagons_medieval.png", new Color(0.74f, 0.9f, 0.7f));
+            var grass = TD_Authoring.Tinted("HexGrass", KayKit + "tiles/base/hexagons_medieval.png", new Color(0.6f, 0.7f, 0.56f));
             float minX = Field.xMin - Margin, maxX = Field.xMax + Margin, minZ = Field.yMin - Margin, maxZ = Field.yMax + Margin;
             int cols = Mathf.CeilToInt((cornersOnX ? maxX - minX : maxZ - minZ) / colStep) + 1;
             int rows = Mathf.CeilToInt((cornersOnX ? maxZ - minZ : maxX - minX) / rowStep) + 1;

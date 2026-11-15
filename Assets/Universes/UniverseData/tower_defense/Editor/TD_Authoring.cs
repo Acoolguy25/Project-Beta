@@ -388,7 +388,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             var color = Override<ColorAdjustments>(profile);
             color.postExposure.Override(0.15f);
             color.contrast.Override(8f);
-            color.saturation.Override(4f);
+            color.saturation.Override(-6f);
             var vignette = Override<Vignette>(profile);
             vignette.intensity.Override(0.18f);
             vignette.smoothness.Override(0.5f);
