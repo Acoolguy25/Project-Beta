@@ -34,8 +34,10 @@ namespace Universes.UniverseData.classic_horror.Server {
         [Header("Investigator Spawning")]
         [Tooltip("How far from the chosen authored location a spawn may be scattered.")]
         [SerializeField, Min(0)] float spawnScatterRadius = 6f;
-        [Tooltip("Scattered candidates tried before falling back to the arrival jetty.")]
-        [SerializeField, Min(1)] int spawnCandidateAttempts = 12;
+        [Tooltip("Scattered candidates tried around each authored location before moving to the next one.")]
+        [SerializeField, Min(1)] int spawnCandidateAttempts = 6;
+        [Tooltip("Respawns avoid authored locations closer than this to the Presence.")]
+        [SerializeField, Min(0)] float spawnMonsterSafeDistance = 25f;
         [Header("Progression Rewards")]
         [Tooltip("XP granted to the investigator who secures an evidence item, memory, or offering.")]
         [SerializeField] ulong itemXPReward = 10;
@@ -51,6 +53,15 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly Dictionary<NetworkConnection, float> snapshotTimes = new();
         readonly HashSet<NetworkConnection> eliminated = new();
         readonly HashSet<NetworkConnection> reviving = new();
+        // Lives and eliminations are also kept per account so leaving and rejoining
+        // mid-case cannot refill an investigator's lives or skip spectating.
+        readonly Dictionary<string, int> accountLives = new();
+        readonly HashSet<string> eliminatedAccounts = new();
+        readonly List<(float at, string text)> pendingSpeech = new();
+        readonly List<Vector3> spawnTeammates = new();
+        readonly List<(Transform anchor, float score)> spawnOrder = new();
+        bool caseStartSpawn, beatEarly, beatHalfway;
+        float caseStarted, lastSpeech;
         int scareSequence;
         CH_Map map;
         CH_Case current;
@@ -64,6 +75,13 @@ namespace Universes.UniverseData.classic_horror.Server {
         public CH_Map Map => map;
         public bool CaseActive => current != null && current.Phase is CH_Phase.Investigation or CH_Phase.Descent or CH_Phase.Escape;
         const float PlayerSpawnClearance = 1.25f;
+        // Standing room checked around a spawn: the investigator's capsule at scale 1.05.
+        const float SpawnCapsuleRadius = 0.4f, SpawnCapsuleHeight = 2.1f;
+        // Navigation projection radius. The Presence's tiny agent bakes walkable polygons on
+        // crates, porch rails and under low roofs, so only accept points close to the candidate.
+        const float SpawnNavSampleRadius = 2.5f;
+        // Queued radio lines wait until the current one has been readable for this long.
+        const float SpeechSpacing = 9f;
         // Used only when the map is missing or every authored anchor is rejected.
         static readonly Vector3 FallbackSpawn = new(500, 25, 490);
         // Keep tension continuous when the monster briefly loses sight of an investigator.
@@ -79,7 +97,15 @@ namespace Universes.UniverseData.classic_horror.Server {
             InstanceFinder.ServerManager.RegisterBroadcast<CH_StateRequest>(OnStateRequest);
         }
 
-        bool CanSpawn(NetworkConnection conn) => acceptingPlayers && map != null && !eliminated.Contains(conn);
+        bool CanSpawn(NetworkConnection conn) {
+            if (!acceptingPlayers || map == null || eliminated.Contains(conn)) return false;
+            string account = AccountKey(conn);
+            return account == null || !eliminatedAccounts.Contains(account);
+        }
+
+        static string AccountKey(NetworkConnection conn) =>
+            PlayerData.TryGetPlayerData(conn, out var player) && !string.IsNullOrEmpty(player.username.Value)
+                ? player.username.Value : null;
 
         /// <summary>Collects the authored dry-land anchors a spawn may be scattered around.</summary>
         void RebuildSpawnAnchors() {
@@ -92,35 +118,90 @@ namespace Universes.UniverseData.classic_horror.Server {
                 if (location != null) spawnAnchors.Add(location);
         }
 
+        /// <summary>
+        /// The whole team arrives together on the jetty when a case starts. A recovered or
+        /// late-joining investigator regroups at the authored location closest to a living
+        /// teammate that is not close to the Presence, instead of a random corner of the map.
+        /// </summary>
         Vector3 SpawnPosition(NetworkConnection conn) {
             if (map == null) return FallbackSpawn;
-            for (int attempt = 0; attempt < spawnCandidateAttempts && spawnAnchors.Count > 0; attempt++) {
-                Transform anchor = spawnAnchors[UnityEngine.Random.Range(0, spawnAnchors.Count)];
-                Vector2 scatter = UnityEngine.Random.insideUnitCircle * spawnScatterRadius;
-                if (TryResolveSpawn(anchor.position + new Vector3(scatter.x, 0f, scatter.y), out Vector3 resolved))
-                    return resolved;
+            Vector3? monsterPosition = monster != null ? monster.transform.position : null;
+            bool regroup = !caseStartSpawn && CaseActive;
+            OrderSpawnAnchors(conn, regroup, monsterPosition);
+            // First pass keeps the Presence's distance; the second accepts any standable point.
+            for (int pass = 0; pass < 2; pass++) {
+                foreach (var (anchor, _) in spawnOrder) {
+                    for (int attempt = 0; attempt < spawnCandidateAttempts; attempt++) {
+                        // The first candidate is the authored point itself, then scattered ones.
+                        // A team arriving together is spread around the jetty instead of stacked on it.
+                        Vector2 scatter = attempt == 0 && regroup ? Vector2.zero : UnityEngine.Random.insideUnitCircle * spawnScatterRadius;
+                        Vector3 candidate = anchor.position + new Vector3(scatter.x, 0f, scatter.y);
+                        if (TryResolveSpawn(candidate, pass == 0 ? monsterPosition : null, out Vector3 resolved))
+                            return resolved;
+                    }
+                }
             }
-            // Every scattered candidate was rejected. The authored arrival is always dry land.
+            Debug.LogWarning("Classic Horror rejected every spawn candidate; using the arrival jetty.");
             return map.arrival != null ? map.arrival.position + Vector3.up * PlayerSpawnClearance : FallbackSpawn;
         }
 
+        void OrderSpawnAnchors(NetworkConnection conn, bool regroup, Vector3? monsterPosition) {
+            spawnOrder.Clear();
+            spawnTeammates.Clear();
+            if (regroup)
+                foreach (var pair in LocalCharacter.Characters)
+                    if (pair.Key != conn && pair.Value != null && !pair.Value.IsDead) spawnTeammates.Add(pair.Value.transform.position);
+            Vector3 home = map.arrival != null ? map.arrival.position : FallbackSpawn;
+            foreach (Transform anchor in spawnAnchors) {
+                float score;
+                if (!regroup) score = Vector3.Distance(anchor.position, home);
+                else if (spawnTeammates.Count == 0) score = anchor == map.arrival ? 0f : 50f + Vector3.Distance(anchor.position, home);
+                else {
+                    score = float.MaxValue;
+                    foreach (Vector3 mate in spawnTeammates) score = Mathf.Min(score, Vector3.Distance(anchor.position, mate));
+                }
+                if (regroup && monsterPosition.HasValue && Vector3.Distance(anchor.position, monsterPosition.Value) < spawnMonsterSafeDistance)
+                    score += 10000f;
+                spawnOrder.Add((anchor, score));
+            }
+            spawnOrder.Sort((a, b) => a.score.CompareTo(b.score));
+        }
+
         /// <summary>
-        /// Accepts a spawn point only where the navigation mesh exists and only above the map's
-        /// water line. Both checks are required: the map's deep-water exclusion volume already
-        /// carves the flooded ground out of the mesh and keeps a spawn off geometry nobody can
-        /// stand on, while the water line rejects the shallows the mesh still covers.
+        /// Accepts a spawn point only on dry, open, level ground the navigation mesh covers.
+        /// The mesh is baked for the Presence's tiny agent, so it also covers crates, rails and
+        /// crawl spaces under porches; a physics check makes sure a full investigator fits.
         /// </summary>
-        bool TryResolveSpawn(Vector3 candidate, out Vector3 spawnPosition) {
+        bool TryResolveSpawn(Vector3 candidate, Vector3? avoid, out Vector3 spawnPosition) {
             spawnPosition = default;
-            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, spawnScatterRadius + 2f, NavMesh.AllAreas))
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, SpawnNavSampleRadius, NavMesh.AllAreas))
                 return false;
-            if (hit.position.y <= map.waterLevel) return false;
-            // Authored anchors sit directly on the terrain. Spawn a full collider-safe distance
-            // above the resolved point so client physics can settle the character onto the map
-            // instead of beginning partially embedded in the ground.
-            spawnPosition = hit.position + Vector3.up * PlayerSpawnClearance;
+            if (hit.position.y <= map.waterLevel + 0.1f) return false;
+            if (avoid.HasValue && Vector3.Distance(hit.position, avoid.Value) < spawnMonsterSafeDistance) return false;
+            foreach (var other in LocalCharacter.Characters.Values)
+                if (other != null && !other.IsDead && (other.transform.position - hit.position).sqrMagnitude < 1.44f) return false;
+            int mask = SpawnBlockingMask();
+            // Solid, roughly level ground directly under the projected point.
+            if (!Physics.Raycast(hit.position + Vector3.up * 0.6f, Vector3.down, out RaycastHit ground, 1.4f, mask, QueryTriggerInteraction.Ignore))
+                return false;
+            if (ground.normal.y < 0.8f || ground.point.y <= map.waterLevel + 0.1f) return false;
+            // A wider footprint rules out rails, crate lids and thin ledges.
+            for (int i = 0; i < 4; i++) {
+                Vector3 offset = Quaternion.Euler(0, i * 90f, 0) * Vector3.forward * (SpawnCapsuleRadius + 0.2f);
+                if (!Physics.Raycast(ground.point + offset + Vector3.up * 0.5f, Vector3.down, out RaycastHit edge, 1.1f, mask, QueryTriggerInteraction.Ignore)
+                    || Mathf.Abs(edge.point.y - ground.point.y) > 0.35f)
+                    return false;
+            }
+            // Standing room for the whole investigator, including head clearance.
+            Vector3 bottom = ground.point + Vector3.up * (SpawnCapsuleRadius + 0.08f);
+            Vector3 top = ground.point + Vector3.up * (SpawnCapsuleHeight - SpawnCapsuleRadius);
+            if (Physics.CheckCapsule(bottom, top, SpawnCapsuleRadius, mask, QueryTriggerInteraction.Ignore)) return false;
+            // Spawn slightly above the ground so physics settles the character onto it.
+            spawnPosition = ground.point + Vector3.up * PlayerSpawnClearance;
             return true;
         }
+
+        static int SpawnBlockingMask() => ~LayerMask.GetMask("Character", "LocalCharacter", "UI", "Ignore Raycast", "Water");
 
         void PreparePlayer(PlayerData player) {
             player.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
@@ -136,8 +217,14 @@ namespace Universes.UniverseData.classic_horror.Server {
         }
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
-            player.lives.Value = livesPerPlayer;
             PreparePlayer(player);
+            string account = AccountKey(player.Owner);
+            player.lives.Value = account != null && CaseActive && accountLives.TryGetValue(account, out int left) ? left : livesPerPlayer;
+            if (account != null && CaseActive && eliminatedAccounts.Contains(account)) {
+                // Rejoining does not undo an elimination; they watch until the next case.
+                eliminated.Add(player.Owner);
+                player.LockCamera(GameCameraType.SpectateCamera);
+            }
         }
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
@@ -170,6 +257,10 @@ namespace Universes.UniverseData.classic_horror.Server {
             livesLost = 0;
             eliminated.Clear();
             reviving.Clear();
+            accountLives.Clear();
+            eliminatedAccounts.Clear();
+            pendingSpeech.Clear();
+            beatEarly = beatHalfway = false;
             scareSequence = 0;
             chaseMusicUntil = 0;
             ending = "";
@@ -179,7 +270,10 @@ namespace Universes.UniverseData.classic_horror.Server {
             SetTeamKillEnabled(true);
             foreach (var player in PlayerData.Players.Values) { player.lives.Value = livesPerPlayer; PreparePlayer(player); }
             acceptingPlayers = true;
-            ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
+            // The team arrives together on the jetty.
+            caseStartSpawn = true;
+            try { ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters(); }
+            finally { caseStartSpawn = false; }
             var npc = ServerNPC.SpawnNPC(NPCCharacter.Monster, map.monsterSpawn.position, map.gameObject.scene);
             npc.GetComponent<GameCharacter>().SetScale(Vector3.one * 1.1f);
             npc.GetComponent<GameCharacter>().SetTeam(new TeamConfig(TeamColor.Red));
@@ -189,15 +283,18 @@ namespace Universes.UniverseData.classic_horror.Server {
             monster.Initialize(this, npc, current.Temperament, seed);
             SetHorrorMusic(MusicSelection.HorrorAmbientMusic);
             deadline = Time.time + investigationSeconds;
+            caseStarted = Time.time;
             Speak(current.Introduction);
             while (CaseActive) {
                 token.ThrowIfCancellationRequested();
                 secondsLeft = Mathf.Max(0, Mathf.CeilToInt(deadline - Time.time));
                 if (secondsLeft == 0 || EveryoneOut()) {
                     current.Fail();
-                    ending = "STILL MISSING\nThe radio repeats your last call. The settlement keeps another name.";
+                    ending = $"STILL MISSING\nThe radio repeats your last call. {current.Witness} waits on the jetty until dark. The settlement keeps another name.";
+                    pendingSpeech.Clear();
                     Speak("DISPATCH / We have lost the signal. A new investigation will begin shortly.");
                 }
+                UpdateStoryBeats();
                 SetTopMessage(Objective());
                 if (monster != null && monster.IsChasing)
                     chaseMusicUntil = Time.time + ChaseMusicReleaseDelay;
@@ -224,6 +321,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (!CaseActive || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
             livesLost++;
+            string account = AccountKey(character.Owner);
             if (monster != null && source == monster.GetComponent<GameCharacter>()) ScareCaughtByMonster(character);
             character.CanSpectate.Value = false;
             PlayerData.TryGetPlayerData(character.Owner, out var player);
@@ -231,12 +329,14 @@ namespace Universes.UniverseData.classic_horror.Server {
             // so the last life is spent here rather than granting one more return to play.
             int livesLeft = player != null ? Mathf.Max(0, player.lives.Value - 1) : 0;
             if (player != null) player.lives.Value = livesLeft;
+            if (account != null) accountLives[account] = livesLeft;
             if (livesLeft > 0) {
                 reviving.Add(character.Owner);
                 // Keep the first-person lock through the shared respawn delay.
-                Speak($"DISPATCH / Recovering an investigator. {livesLeft} {(livesLeft == 1 ? "life remains" : "lives remain")} for them. Your evidence is safe.");
+                Speak($"DISPATCH / Recovering an investigator. They will regroup with the team. {livesLeft} {(livesLeft == 1 ? "life remains" : "lives remain")} for them. Your evidence is safe.");
             } else {
                 eliminated.Add(character.Owner);
+                if (account != null) eliminatedAccounts.Add(account);
                 if (player != null) player.LockCamera(GameCameraType.SpectateCamera);
                 Speak("DISPATCH / Investigator lost. Survivors: finish the case. They will return with the next team.");
             }
@@ -281,12 +381,24 @@ namespace Universes.UniverseData.classic_horror.Server {
 
             CH_Phase oldPhase = current.Phase;
             bool itemCollected = false;
-            if (request.targetId < 9) {
+            if (request.targetId >= CH_Case.DiaryFirstId) {
+                int page = request.targetId - CH_Case.DiaryFirstId;
+                if (!current.CollectDiary(page)) { RejectInteraction(connection, "This page has already been read."); return; }
+                itemCollected = true;
+                AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
+                Speak(current.Diary[page]);
+                // Reading his own words aloud makes the priest falter.
+                monster?.Repel(6f);
+                if (current.DiaryComplete)
+                    QueueSpeak($"RADIO / The knocking stops. For a moment the whole settlement holds its breath. You know his name now: {current.Priest}. Speak it at the source.", 0f);
+            } else if (request.targetId < 9) {
                 if (!current.Collect(request.targetId)) { RejectInteraction(connection, "This record has already been secured."); return; }
                 itemCollected = true;
                 AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
                 Speak(request.targetId < 6 ? current.Evidence[request.targetId]
                     : $"Recovered the {CH_Case.Offerings[request.targetId - 6]}. {current.RelicCount}/3 offerings secured. Check the ritual order in your journal.");
+                if (request.targetId < 4 && current.EvidenceCount < 4) QueueSpeak(current.EvidenceReplies[request.targetId], 0f);
+                if (request.targetId < 4 && current.EvidenceCount == 2 && !beatHalfway) { beatHalfway = true; QueueSpeak(current.StoryBeats[1], 0f); monster?.Enrage(4f); }
             } else if (request.targetId >= 11 && request.targetId <= 13 && current.Phase == CH_Phase.Descent) {
                 if (current.RelicCount < 3) { Speak("The source refuses you. Recover all three offerings first."); return; }
                 int offering = request.targetId - 11;
@@ -300,19 +412,25 @@ namespace Universes.UniverseData.classic_horror.Server {
                 }
             } else if (request.targetId == 10 && current.Extract()) {
                 AwardVictoryRewards();
-                ending = current.MemoryCount == 2
-                    ? "THE WATER REMEMBERS\nYou brought the lost names home. At dawn, the settlement's windows reflect the sky again."
-                    : "BORROWED SILENCE\nYou escaped and sealed the source. But the names you left behind still whisper beneath the water.";
-                Speak("DISPATCH / Signal received. You are coming home. Every new case has different evidence, rules and a different ritual.");
+                pendingSpeech.Clear();
+                ending = Ending();
+                Speak(current.MemoryCount == 2
+                    ? $"{current.Witness} / You found them. You actually found them. Thank you for bringing {current.Missing} home."
+                    : "DISPATCH / Signal received. You are coming home. Every new case has different evidence, rules and a different ritual.");
             } else return;
 
             if (oldPhase != current.Phase) {
                 if (current.Phase == CH_Phase.Descent) {
                     deadline = Time.time + descentSeconds;
-                    Speak(current.ChapterTwoLine);
+                    // Let the final record be read before the chapter turns.
+                    pendingSpeech.Clear();
+                    QueueSpeak(current.ChapterTwoLine, 0f);
+                    QueueSpeak(current.StoryBeats[2], 25f);
                     monster?.Enrage(6f);
                 } else if (current.Phase == CH_Phase.Escape) {
                     deadline = Time.time + escapeSeconds;
+                    pendingSpeech.Clear();
+                    QueueSpeak(current.StoryBeats[3], 20f);
                     monster?.Repel(12f);
                 }
             }
@@ -356,6 +474,12 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         bool TryGetPoint(int id, out Vector3 position) {
             position = default;
+            if (id >= CH_Case.DiaryFirstId) {
+                int page = id - CH_Case.DiaryFirstId;
+                if (page >= current.Diary.Length || current.DiaryCollected(page)) return false;
+                position = map.searchLocations[current.LocationIndices[9 + page]].position + Vector3.up * 1.3f;
+                return true;
+            }
             if (id >= 0 && id < 9) {
                 if (id >= 6 && current.Phase != CH_Phase.Descent || current.Collected(id)) return false;
                 position = map.searchLocations[current.LocationIndices[id]].position + Vector3.up * 1.3f;
@@ -381,7 +505,42 @@ namespace Universes.UniverseData.classic_horror.Server {
             _ => "Waiting for investigators"
         };
 
-        public void Speak(string text) { dialogue = text; dialogueRevision++; }
+        public void Speak(string text) { dialogue = text; dialogueRevision++; lastSpeech = Time.time; }
+
+        /// <summary>Plays a radio line after <paramref name="delay"/>, once the current one has been readable.</summary>
+        void QueueSpeak(string text, float delay) {
+            if (!string.IsNullOrEmpty(text)) pendingSpeech.Add((Time.time + delay, text));
+        }
+
+        void UpdateStoryBeats() {
+            if (!CaseActive) return;
+            if (!beatEarly && current.Phase == CH_Phase.Investigation && Time.time - caseStarted > 55f) {
+                beatEarly = true;
+                QueueSpeak(current.StoryBeats[0], 0f);
+            }
+            if (pendingSpeech.Count == 0 || Time.time - lastSpeech < SpeechSpacing) return;
+            for (int i = 0; i < pendingSpeech.Count; i++) {
+                if (pendingSpeech[i].at > Time.time) continue;
+                string line = pendingSpeech[i].text;
+                pendingSpeech.RemoveAt(i);
+                Speak(line);
+                return;
+            }
+        }
+
+        string Ending() {
+            string missing = Capitalize(current.Missing);
+            bool memories = current.MemoryCount == 2, diary = current.DiaryComplete;
+            if (memories && diary)
+                return $"LAST RITES\nYou brought {current.Missing} home and spoke {current.Priest}'s name at the source. The water gives back every name it took. At dawn the chapel bell rings once, and never again.";
+            if (memories)
+                return $"THE WATER REMEMBERS\n{missing} is remembered. At dawn, the settlement's windows reflect the sky again. Somewhere below, {current.Priest} is still walking.";
+            if (diary)
+                return $"A NAME FOR A NAME\n{current.Priest} finally rests. But the memories of {current.Missing} stayed under the water, and {current.Witness} still leaves the porch light on.";
+            return "BORROWED SILENCE\nYou escaped and sealed the source. But the names you left behind still whisper beneath the water, and it will be hungry again.";
+        }
+
+        static string Capitalize(string text) => string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text.Substring(1);
         CH_StateBroadcast MakeState() {
             var points = new List<CH_PointState>();
             string[] labels = { "Witness testimony", "Light observation", "Keeper's instructions", "Survey map", "Lost memory", "Lost memory", "Salt canister", "Hand bell", "Keeper's lantern" };
@@ -391,6 +550,13 @@ namespace Universes.UniverseData.classic_horror.Server {
                 points.Add(new CH_PointState {
                     id = i, position = socket.position + Vector3.up * 1.3f, title = labels[i], area = socket.name,
                     collected = current.Collected(i), navigationTarget = i < 4 || i >= 6
+                });
+            }
+            for (int page = 0; page < current.Diary.Length; page++) {
+                Transform socket = map.searchLocations[current.LocationIndices[9 + page]];
+                points.Add(new CH_PointState {
+                    id = CH_Case.DiaryFirstId + page, position = socket.position + Vector3.up * 1.3f, title = "Priest's diary page",
+                    area = socket.name, collected = current.DiaryCollected(page), navigationTarget = false
                 });
             }
             if (current.Phase != CH_Phase.Investigation) {
@@ -412,6 +578,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             });
             var journal = new List<string> { current.Introduction };
             for (int i = 0; i < 6; i++) if (current.Collected(i)) journal.Add(current.Evidence[i]);
+            for (int page = 0; page < current.Diary.Length; page++) if (current.DiaryCollected(page)) journal.Add(current.Diary[page]);
             return new CH_StateBroadcast {
                 seed = current.Seed, phase = current.Phase, caseTitle = current.Title, objective = Objective(),
                 dialogue = dialogue, dialogueRevision = dialogueRevision, journal = journal.ToArray(), points = points.ToArray(),

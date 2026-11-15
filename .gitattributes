@@ -169,3 +169,11 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+# Navigation and terrain data are serialized in binary even with Force Text. As unity-yaml text
+# they lose every CR byte that precedes LF, and Unity can no longer load them.
+NavMesh-*.asset        binary
+HorrorTerrainData.asset binary
+Scene_A_Terrain.asset  binary
+WarValleyTerrain.asset binary
+New[[:space:]]Terrain.asset binary
+ProjectSettings/XRSettings.asset binary

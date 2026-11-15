@@ -27,7 +27,8 @@ namespace Universes.UniverseData.classic_horror.Tests {
             var orders = new HashSet<string>();
             for (int seed = 1; seed <= 512; seed++) {
                 var c = library.Generate(unchecked(seed * 7919), 16, 3);
-                Assert.AreEqual(9, c.LocationIndices.Distinct().Count());
+                Assert.AreEqual(9 + CH_Case.DiaryPageCount, c.LocationIndices.Distinct().Count());
+                Assert.AreEqual(c.LocationIndices.Length, c.LocationIndices.Distinct().Count());
                 Assert.IsTrue(c.LocationIndices.All(i => i >= 0 && i < 16));
                 CollectionAssert.AreEquivalent(new[] { 0, 1, 2 }, c.Order);
                 Assert.IsFalse(c.Collect(6), "Chapter II items must not unlock early.");
@@ -55,6 +56,31 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.IsTrue(c.Collect(4)); Assert.IsTrue(c.Collect(5));
             Assert.AreEqual(2, c.MemoryCount); Assert.AreEqual(0, c.EvidenceCount);
             Assert.AreEqual(CH_Phase.Investigation, c.Phase);
+        }
+
+        [Test] public void PriestDiaryIsOptionalNamedAndConsistent() {
+            var c = library.Generate(211, 16, 3);
+            Assert.AreEqual(CH_Case.DiaryPageCount, c.Diary.Length);
+            Assert.IsFalse(string.IsNullOrEmpty(c.Priest));
+            foreach (string page in c.Diary) {
+                StringAssert.Contains(c.Priest, page);
+                StringAssert.DoesNotContain("{", page);
+            }
+            foreach (string line in c.EvidenceReplies) StringAssert.DoesNotContain("{witness}", line);
+            StringAssert.Contains(c.Priest, c.ChapterTwoLine);
+            Assert.IsTrue(c.CollectDiary(0)); Assert.IsFalse(c.CollectDiary(0)); Assert.IsFalse(c.CollectDiary(3));
+            Assert.IsFalse(c.DiaryComplete);
+            Assert.IsTrue(c.CollectDiary(1)); Assert.IsTrue(c.CollectDiary(2));
+            Assert.IsTrue(c.DiaryComplete);
+            Assert.AreEqual(CH_Phase.Investigation, c.Phase, "Diary pages never advance the case.");
+        }
+
+        [Test] public void SmallMapsSkipDiaryPages() {
+            var c = library.Generate(5, 9, 3);
+            Assert.AreEqual(9, c.LocationIndices.Length);
+            Assert.AreEqual(0, c.Diary.Length);
+            Assert.IsFalse(c.CollectDiary(0));
+            Assert.IsFalse(c.DiaryComplete);
         }
 
         [Test] public void FailedCasesRejectProgressAndInvalidIds() {

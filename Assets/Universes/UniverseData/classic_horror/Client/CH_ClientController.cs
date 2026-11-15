@@ -146,7 +146,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                     view = Instantiate(point.id == 9 ? map.sourceViewPrefab : map.clueViewPrefab, map.transform);
                     view.name = $"{point.title} / {point.area}";
                     view.transform.position = point.position;
-                    if (point.id >= 11) view.transform.localScale = Vector3.one * 0.65f;
+                    if (point.id >= 11 && point.id <= 13) view.transform.localScale = Vector3.one * 0.65f;
                     pointViews.Add(point.id, view);
                 }
                 view.SetActive(!point.collected && !endingPanel.activeSelf);

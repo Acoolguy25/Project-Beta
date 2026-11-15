@@ -26,11 +26,22 @@ The game locks the camera to first person. The journal releases the cursor and d
 
 **II — What Answered:** recover the salt, bell, and lantern from newly revealed locations. Reach the source and offer them in the order recorded in this case's journal. A mistake resets the ritual and enrages the monster. Once the seal holds, return to the arrival radio within two minutes. Recovering both optional memories earns the fuller ending.
 
-Each investigator has four lives per case, counting the spawn they start the case with. A death spends one life and returns that investigator after five seconds; spending the last life eliminates them into spectate for the rest of the case. Investigators spawn at a random authored location each time, scattered within a few metres of it, and a spawn point is only accepted where the navigation mesh exists and above the map's `waterLevel`, so nobody starts in the flooded ground. Evidence survives a death; the case fails when every investigator is eliminated. Successful and failed rounds automatically restart after 18 seconds with a new seed. Chapter limits default to 12 and 9 minutes; tune them on `Server/CH_ServerRunner.prefab`.
+Each investigator has four lives per case, counting the spawn they start the case with. A death spends one life and returns that investigator after five seconds; spending the last life eliminates them into spectate for the rest of the case. Lives and eliminations are tracked per account, so leaving and rejoining mid-case does not refill them. The team arrives together, spread around the arrival jetty. A recovered or late-joining investigator regroups at the authored location nearest a living teammate, skipping locations within 25 m of the Presence (`spawnMonsterSafeDistance`). A spawn point must be on the navigation mesh, above the map's `waterLevel`, on level ground with a full investigator-sized capsule of headroom, and clear of other investigators; the Presence's tiny-agent navmesh alone also covers crates, rails and crawl spaces. Evidence survives a death; the case fails when every investigator is eliminated. Successful and failed rounds automatically restart after 18 seconds with a new seed. Chapter limits default to 12 and 9 minutes; tune them on `Server/CH_ServerRunner.prefab`.
+
+## Story
+
+Beyond the dispatch introduction and the records themselves, the radio carries the case's story:
+
+- **Witness replies** after each of the first three required records, and the final record now stays readable before Chapter II's transmission plays.
+- **Story beats:** an unknown voice about a minute in, the chapel bell and the missing person's whisper once two records are found (the Presence briefly hunts harder), the priest's invitation 25 seconds into Chapter II, and the missing person begging during the escape.
+- **The priest's diary:** three optional pages (ids 14 to 16) in otherwise unused search locations tell how the chapel priest (one of three seeded names) bargained names to the water and became the Cursed Priest. Reading a page makes the Presence falter for six seconds. Pages land in the journal.
+- **Four endings:** LAST RITES (both memories and the whole diary), THE WATER REMEMBERS (both memories), A NAME FOR A NAME (whole diary), BORROWED SILENCE (neither), plus STILL MISSING on failure. Endings name the case's witness, missing person and priest.
+
+Radio lines queue so a new line never cuts off the previous one within nine seconds.
 
 ## Replayability and authoring
 
-Each case selects a witness, missing person, cause, dialog variants, one of three source locations, nine distinct sockets from sixteen search locations, one of six ritual orders, two optional memories, warning order, and one of three monster temperaments:
+Each case selects a witness, missing person, cause, dialog variants, one of three source locations, twelve distinct sockets from sixteen search locations (nine for the case, three for the diary), one of six ritual orders, two optional memories, warning order, and a priest, and one of three monster temperaments:
 
 - **Light seeker:** sees lit investigators from much farther away; extinguish the light and use cover.
 - **Light shy:** a directly aimed beam drives it to retreat while sight is clear.
@@ -54,7 +65,7 @@ The Flooded Grounds materials use URP Lit or the reusable water shader. The conv
 
 ## Validation
 
-Five Editor tests pass, covering deterministic generation, 512 solvable seeds with all monster/source/order variants, optional evidence, invalid progression, and map preconditions. The authored navigation was checked for complete paths to all 21 arrival/search/source/monster anchors.
+Seven Editor tests pass, covering deterministic generation, 512 solvable seeds with all monster/source/order variants, optional evidence, invalid progression, and map preconditions. The authored navigation was checked for complete paths to all 21 arrival/search/source/monster anchors.
 
 The current client/server Editor playtest passed mouse look, left-click flashlight toggling (including sky aim), F journal open/close and input gating, E interactions for all evidence and offerings, the ritual, extraction, and THE WATER REMEMBERS ending. Input checks also verified first-person lock, smaller player scale, and no monster nametag. The test repositioned the client between objectives and repelled the monster to isolate progression; it was not a full walking/balance playthrough. All 26 objective positions have reachable ground approaches in the geometry audit.
 

@@ -43,6 +43,33 @@ namespace Universes.UniverseData.classic_horror {
             "RADIO / The lights are failing ahead of you. Do not let it close the distance."
         };
 
+        [Header("The priest")]
+        public string[] priests = { "Father Aldous Crane", "Father Silas Merrow", "Father Edmund Vey" };
+        [TextArea] public string[] diaryPages = {
+            "{priest}'s diary, page one / The river came up the chapel steps tonight. Something beneath the water spoke to me in my mother's voice. It offered to hold the flood back. It only wanted names: the names nobody would miss.",
+            "{priest}'s diary, page two / I gave it the drowned first, then the strangers, then the poor. The water stayed low. I told the village it was prayer. When {cause}, the bargain broke, and it asked for {missing}.",
+            "{priest}'s diary, final page / I tried to undo it and walked into the water with the bell. I am still walking. If anyone reads this, say my name at the source. {priest}. Let it be the last name I give."
+        };
+        [Tooltip("Radio replies after each required record, indexed by evidence 0-3.")]
+        [TextArea] public string[] evidenceReplies = {
+            "{witness} / So now you know. I kept that secret for years. Please... keep looking. {missing} deserves better than me.",
+            "{witness} / That is how it hunted us. Every night the same. Do not let it learn your habits too.",
+            "{witness} / The keeper wrote those instructions with shaking hands. Get the order right. It does not forgive mistakes.",
+            "{witness} / That map. The chapel never had a basement, but the priest dug one anyway. Whatever answered him is down there."
+        };
+        [Tooltip("Lines heard on the radio as the case progresses. Index 0: early static, 1: halfway, 2: Chapter II, 3: escape.")]
+        [TextArea] public string[] storyBeats = {
+            "RADIO / ...static... a voice that is not dispatch: \"{witness}? Is that you? The water is warm down here.\"",
+            "RADIO / The chapel bell rang once. No one is near it. Under the static, {missing} is whispering your names, one for every record you found.",
+            "RADIO / A man's voice, very calm: \"You have seen what this place gave away. Come down to {source}, and give me one more.\"",
+            "RADIO / The voice of {missing}: \"Don't leave me in the water again. Please. I can hear you running.\""
+        };
+        public string[] priestWhispers = {
+            "RADIO / A sermon in reverse, coming through the static. It is getting closer.",
+            "RADIO / \"Every name is an offering,\" the voice says. It knows yours now.",
+            "RADIO / Footsteps in water, slow and patient, right behind the signal."
+        };
+
         public CH_Case Generate(int seed, int locationCount, int sourceCount) {
             if (locationCount < 9 || sourceCount < 1) throw new ArgumentException("A case needs nine search locations and a source.");
             var random = new SeededStoryRandom(seed);
@@ -79,9 +106,29 @@ namespace Universes.UniverseData.classic_horror {
             random.Shuffle(memoryOrder);
             result.Evidence[4] = Expand(memoryOrder[0]);
             result.Evidence[5] = Expand(memoryOrder[1]);
-            result.ChapterTwoLine = Expand("{witness}'s final transmission / You know what woke it now. Take the salt, bell and lantern to {source}. Follow the order in your journal. Bring the lost memories too, if you can.");
-            result.Warnings = (string[])warningLines.Clone();
+            result.ChapterTwoLine = Expand("{witness}'s final transmission / You know what woke it now. Take the salt, bell and lantern to {source}. Follow the order in your journal. {priest} is waiting there; he was the first one to answer it. Bring the lost memories too, if you can.");
+            var warnings = new List<string>(warningLines);
+            if (priestWhispers != null) warnings.AddRange(priestWhispers);
+            result.Warnings = warnings.ToArray();
             random.Shuffle(result.Warnings);
+
+            // The priest's story is drawn after every original pick so existing seeds keep their layout.
+            string priest = priests != null && priests.Length > 0 ? random.Pick(priests) : "the chapel priest";
+            tokens["priest"] = priest;
+            result.Priest = priest;
+            result.ChapterTwoLine = result.ChapterTwoLine.Replace("{priest}", priest);
+            result.LocationIndices = locations.GetRange(0, Mathf.Min(locationCount, 9 + CH_Case.DiaryPageCount)).ToArray();
+            int pages = Mathf.Min(CH_Case.DiaryPageCount, result.LocationIndices.Length - 9, diaryPages?.Length ?? 0);
+            result.Diary = new string[pages];
+            for (int i = 0; i < pages; i++) result.Diary[i] = Expand(diaryPages[i]);
+            result.EvidenceReplies = new string[4];
+            for (int i = 0; i < 4; i++)
+                result.EvidenceReplies[i] = evidenceReplies != null && i < evidenceReplies.Length ? Expand(evidenceReplies[i]) : "";
+            result.StoryBeats = new string[4];
+            for (int i = 0; i < 4; i++)
+                result.StoryBeats[i] = storyBeats != null && i < storyBeats.Length ? Expand(storyBeats[i]) : "";
+            result.Witness = witness;
+            result.Missing = missing;
             return result;
         }
     }
@@ -89,10 +136,25 @@ namespace Universes.UniverseData.classic_horror {
     /// <summary>Pure case state: authored clues guarantee a solvable, seed-specific ritual.</summary>
     public sealed class CH_Case {
         public static readonly string[] Offerings = { "salt", "bell", "lantern" };
+        /// <summary>Optional priest's diary pages, interactable as ids <see cref="DiaryFirstId"/>+.</summary>
+        public const int DiaryPageCount = 3;
+        public const int DiaryFirstId = 14;
         public int Seed, SourceIndex;
         public CH_Temperament Temperament;
-        public string Title, Introduction, ChapterTwoLine;
+        public string Title, Introduction, ChapterTwoLine, Priest, Witness, Missing;
         public string[] Evidence, Warnings;
+        /// <summary>Diary page text; may be shorter than <see cref="DiaryPageCount"/> on small maps.</summary>
+        public string[] Diary = new string[0];
+        public string[] EvidenceReplies = new string[4], StoryBeats = new string[4];
+        public int DiaryMask { get; private set; }
+        public int DiaryCount => CountBits(DiaryMask);
+        public bool DiaryComplete => Diary.Length > 0 && DiaryCount == Diary.Length;
+        public bool DiaryCollected(int page) => (DiaryMask & (1 << page)) != 0;
+        public bool CollectDiary(int page) {
+            if (page < 0 || page >= Diary.Length || Phase is CH_Phase.Complete or CH_Phase.Failed || DiaryCollected(page)) return false;
+            DiaryMask |= 1 << page;
+            return true;
+        }
         public int[] LocationIndices, Order;
         public CH_Phase Phase { get; private set; } = CH_Phase.Investigation;
         public int EvidenceMask { get; private set; }
