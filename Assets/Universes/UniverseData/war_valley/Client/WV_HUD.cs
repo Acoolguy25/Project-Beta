@@ -69,6 +69,8 @@ namespace Universes.UniverseData.war_valley.Client {
 
         [Header("Hints")]
         [SerializeField] TextMeshProUGUI hintLabel;
+        [Tooltip("The pill around the hint; hidden while there is no hint.")]
+        [SerializeField] GameObject hintPanel;
 
         readonly StringBuilder builder = new();
         readonly Dictionary<string, int> troopCounts = new();
@@ -168,6 +170,8 @@ namespace Universes.UniverseData.war_valley.Client {
         public void SetHint(string text) {
             if (hintLabel != null)
                 hintLabel.text = text;
+            if (hintPanel != null)
+                hintPanel.SetActive(!string.IsNullOrEmpty(text));
         }
 
         /// <summary>

@@ -8,6 +8,9 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using static RyanAssets.Authoring.UniverseAuthoringKit;
 #if !UNITY_SERVER
+using RyanAssets.UI;
+using RyanAssets.UI.Editor;
+using UnityEngine.UI;
 using Universes.UniverseData.capture_the_flag.Client;
 #endif
 
@@ -103,28 +106,123 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
 #if UNITY_SERVER
             return AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/FlagWarsHUD.prefab");
 #else
-            var root = Canvas("FlagWarsHUD");
-            var hud = root.AddComponent<CTF_ClientController>();
-            Color white = new(0.97f, 0.98f, 1f), yellow = new(1f, 0.85f, 0.25f);
-            var score = Panel("ScorePanel", root.transform, new Vector2(0.4f, 0.8f), new Vector2(0.6f, 0.88f), Ink);
-            Panel("RedBack", score.transform, new Vector2(0f, 0f), new Vector2(0.38f, 1f), new Color(0.85f, 0.2f, 0.18f, 0.85f));
-            Panel("BlueBack", score.transform, new Vector2(0.62f, 0f), new Vector2(1f, 1f), new Color(0.18f, 0.42f, 0.9f, 0.85f));
-            hud.redScoreLabel = Text("Red", score.transform, new Vector2(0f, 0f), new Vector2(0.38f, 1f), 46, white, TextAlignmentOptions.Center, true);
-            hud.blueScoreLabel = Text("Blue", score.transform, new Vector2(0.62f, 0f), new Vector2(1f, 1f), 46, white, TextAlignmentOptions.Center, true);
-            hud.timerLabel = Text("Timer", score.transform, new Vector2(0.38f, 0f), new Vector2(0.62f, 1f), 22, yellow, TextAlignmentOptions.Center, true);
-            var team = Panel("TeamPanel", root.transform, new Vector2(0.012f, 0.52f), new Vector2(0.2f, 0.58f), Ink);
-            hud.teamStripe = Panel("Stripe", team.transform, new Vector2(0f, 0f), new Vector2(0.04f, 1f), white);
-            hud.teamLabel = Text("Team", team.transform, new Vector2(0.08f, 0f), new Vector2(0.98f, 1f), 26, white, TextAlignmentOptions.MidlineLeft, true);
-            var objective = Panel("ObjectivePanel", root.transform, new Vector2(0.27f, 0.14f), new Vector2(0.73f, 0.2f), Ink);
-            hud.objectiveLabel = Text("Objective", objective.transform, new Vector2(0.03f, 0f), new Vector2(0.97f, 1f), 24, white, TextAlignmentOptions.Center);
-            hud.toastLabel = Text("Toast", root.transform, new Vector2(0.62f, 0.7f), new Vector2(0.988f, 0.78f), 24, white, TextAlignmentOptions.Right, true);
-            hud.bannerLabel = Text("Banner", root.transform, new Vector2(0.1f, 0.6f), new Vector2(0.9f, 0.72f), 48, yellow, TextAlignmentOptions.Center, true);
-            hud.sfx = Sfx(root.transform);
+            RectTransform root = HudKit.Canvas("FlagWarsHUD", 30);
+            var hud = root.gameObject.AddComponent<CTF_ClientController>();
+            hud.flagIcon = HudKit.Icon("flying_flag");
+            hud.homeIcon = HudKit.Icon("home");
+            hud.carriedIcon = HudKit.Icon("run");
+            hud.droppedIcon = HudKit.Icon("place");
+            hud.attackIcon = HudKit.Icon("crossed_swords");
+            hud.defendIcon = HudKit.Icon("templar_shield");
+            hud.victoryIcon = HudKit.Icon("laurels_trophy");
+            hud.defeatIcon = HudKit.Icon("tombstone");
+
+            BuildScoreboard(root, hud);
+            BuildTeamCard(root, hud);
+
+            // Objective, lower centre: what to do right now and how far away it is.
+            RectTransform objective = UIKit.Pinned(root, "Objective", new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(520f, 48f));
+            HudKit.Glass(objective, 24f);
+            UIKit.Row(objective.gameObject, 10f, new RectOffset(10, 20, 0, 0), TextAnchor.MiddleLeft);
+            UIKit.FitContent(objective.gameObject, true, false);
+            HudKit.Emblem(objective, "Emblem", "flying_flag", 36f, CTF_Rules.Color(CTF_Team.Red), out hud.objectiveDisc, out hud.objectiveIcon);
+            hud.objectiveLabel = UIKit.Text(objective, "Text", "Grab their flag", UIText.Strong);
+            hud.objectiveLabel.richText = true;
+            hud.objectiveLabel.fontSize = 18f;
+            hud.objectiveDistance = HudKit.Chip(objective, "Distance", "navigation", "40 m", UIKit.Theme.textSecondary, 28f, UIText.Small);
+            hud.objectiveDistance.background.enabled = false;
+            hud.objective = HudKit.Popup(objective, false);
+
+            hud.toasts = HudKit.ToastFeed(root, "Feed", new Vector2(1f, 0.66f), new Vector2(-20f, 0f), 420f);
+            hud.banner = HudKit.Banner(root, "Banner", new Vector2(0.5f, 0.5f), new Vector2(0f, 120f), 600f, "flying_flag", new Color(1f, 0.79f, 0.24f), 84f);
+
+            hud.sfx = Sfx(root);
             hud.takenClip = hud.returnedClip = Clip(LandClip);
             hud.capturedClip = Clip(CoinClip);
-            return Kit.Save(root, "", "FlagWarsHUD");
+            return Kit.Save(root.gameObject, "", "FlagWarsHUD");
 #endif
         }
+
+#if !UNITY_SERVER
+        /// <summary>
+        /// Top centre, under the shared top bar: both scores on their team colour, the clock between
+        /// them, and where each flag is right now.
+        /// </summary>
+        static void BuildScoreboard(RectTransform root, CTF_ClientController hud) {
+            RectTransform board = UIKit.Pinned(root, "Scoreboard", new Vector2(0.5f, 1f), new Vector2(0f, -62f), new Vector2(420f, 64f));
+            HudKit.Glass(board, 18f);
+            UIKit.Row(board.gameObject, 0f, new RectOffset(6, 6, 6, 6), TextAnchor.MiddleCenter);
+
+            hud.redScoreLabel = TeamScore(board, CTF_Team.Red);
+            RectTransform clock = UIKit.Node(board, "Clock");
+            UIKit.Size(clock, 156f, 52f);
+            UIKit.Column(clock.gameObject, -2f, null, TextAnchor.MiddleCenter);
+            hud.timerLabel = UIKit.Text(clock, "Time", "5:00", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            hud.timerLabel.fontSize = 26f;
+            hud.phaseLabel = UIKit.Text(clock, "Phase", $"First to {CTF_Rules.CapturesToWin}", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            hud.blueScoreLabel = TeamScore(board, CTF_Team.Blue);
+
+            // Where each flag is: one chip centred under each team's score.
+            hud.redFlagStatus = FlagChip(root, CTF_Team.Red, -138f);
+            hud.blueFlagStatus = FlagChip(root, CTF_Team.Blue, 138f);
+        }
+
+        static RyanAssets.UI.GameHud.HudChip FlagChip(RectTransform root, CTF_Team team, float x) {
+            var chip = HudKit.Chip(root, CTF_Rules.Name(team) + "Flag", "home", "Home", CTF_Rules.Color(team), 28f, UIText.Small);
+            RectTransform rect = (RectTransform)chip.transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(x, -132f);
+            return chip;
+        }
+
+        static TMP_Text TeamScore(RectTransform board, CTF_Team team) {
+            RectTransform block = UIKit.Node(board, CTF_Rules.Name(team) + "Score");
+            UIKit.Size(block, 120f, 52f);
+            Image fill = UIKit.Rounded(block, UIColorRole.Accent, 13f, raycast: false);
+            Object.DestroyImmediate(fill.GetComponent<UIThemeColor>());
+            fill.color = CTF_Rules.Color(team) * new Color(1f, 1f, 1f, 0.92f);
+            bool red = team == CTF_Team.Red;
+            UIKit.Row(block.gameObject, 8f, new RectOffset(14, 14, 0, 0), red ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight);
+            Image flag = HudKit.Icon(block, "flying_flag", 26f, Color.white);
+            TMP_Text score = UIKit.Text(block, "Score", "0", UIText.Display, UIColorRole.OnAccent, red ? TextAlignmentOptions.MidlineRight : TextAlignmentOptions.MidlineLeft);
+            score.fontSize = 34f;
+            UIKit.Size(score, -1f, -1f, 1f);
+            if (!red) {
+                score.transform.SetAsFirstSibling();
+                flag.rectTransform.localScale = new Vector3(-1f, 1f, 1f);
+            }
+            return score;
+        }
+
+        /// <summary>Bottom-left: your team, and the two weapon keys.</summary>
+        static void BuildTeamCard(RectTransform root, CTF_ClientController hud) {
+            RectTransform card = UIKit.Pinned(root, "TeamCard", Vector2.zero, new Vector2(20f, 200f), new Vector2(260f, 64f));
+            HudKit.Glass(card, 16f);
+            UIKit.Row(card.gameObject, 12f, new RectOffset(10, 18, 0, 0), TextAnchor.MiddleLeft);
+            UIKit.FitContent(card.gameObject, true, false);
+            HudKit.Emblem(card, "Emblem", "templar_shield", 46f, CTF_Rules.Color(CTF_Team.Red), out hud.teamDisc, out _);
+            RectTransform text = UIKit.Node(card, "Text");
+            UIKit.Column(text.gameObject, 0f, null, TextAnchor.MiddleLeft);
+            UIKit.Text(text, "Caption", "Your team", UIText.Caption, UIColorRole.TextMuted);
+            hud.teamLabel = UIKit.Text(text, "Team", "Red", UIText.Title);
+            hud.teamLabel.fontSize = 20f;
+
+            RectTransform divider = UIKit.Node(card, "Divider");
+            UIKit.Size(divider, 1f, 36f);
+            UIKit.Paint(divider.gameObject.AddComponent<Image>(), UIColorRole.Stroke).raycastTarget = false;
+            WeaponKey(card, "1", "pistol");
+            WeaponKey(card, "2", "dagger");
+            hud.teamCard = HudKit.Popup(card, false);
+        }
+
+        static void WeaponKey(RectTransform parent, string key, string icon) {
+            RectTransform slot = UIKit.Node(parent, "Weapon" + key);
+            UIKit.Row(slot.gameObject, 4f, null, TextAnchor.MiddleLeft);
+            HudKit.KeyCap(slot, key);
+            UIKit.Icon(slot, icon, 26f, UIColorRole.TextSecondary);
+        }
+#endif
 
         // ---------------------------------------------------------------- scene
         /// <summary>A pack model with a box collider over it, so it works as cover.</summary>

@@ -231,12 +231,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 06320a99f2323ad4ab0c7803a9a0ec98, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.DI_ClientController
+  hudPrefab: {fileID: 5368503431858014163, guid: 54415cdae40fa8b0d9dddd8ec5c6c8e7, type: 3}
   basePrefab: {fileID: 1227341139883262616, guid: 2e858148db7402e4fb217db333a91445, type: 3}
   dotPrefab: {fileID: 1141363471160665555, guid: d9cf004f57e48d3478bc2264b93837d8, type: 3}
   linkPrefab: {fileID: 2865798720731803667, guid: 776eb25c2aabbff4c9381dc2b6528ca3, type: 3}
   minimumPickRadiusPixels: 24
   pickPaddingPixels: 8
   neighborSnapRadiusPixels: 38
+  dragSelectMinimumPixels: 8
   roadColor: {r: 0.35, g: 0.45, b: 0.6, a: 1}
   roadWidth: 0.3
 --- !u!114 &3074514017627796893

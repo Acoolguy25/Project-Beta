@@ -1,0 +1,63 @@
+{
+  "_comment": "Icons the shared UI and game HUDs use. Run fetch_icons.py after editing. 'material' = Google Material Icons (round style, Apache-2.0); 'game-icons' = game-icons.net (CC BY 3.0, credit the author folder).",
+  "material": {
+    "out": "Packages/com.ryan.ui/Runtime/UI/Theme/Icons",
+    "icons": [
+      "arrow_forward", "timer", "visibility", "check_circle", "cancel", "help", "how_to_vote",
+      "campaign", "place", "sports_score", "military_tech", "bolt", "star", "speed", "hub",
+      "radio", "menu_book", "local_fire_department", "location_on", "hourglass_bottom",
+      "shield", "report", "trending_up", "paid", "navigation", "keyboard_arrow_up", "warning"
+    ]
+  },
+  "game-icons": {
+    "out": "Packages/com.ryan.ui/Runtime/UI/Theme/GameIcons",
+    "icons": {
+      "innocent": "delapouite/person.svg",
+      "sheriff": "andymeneely/police-badge.svg",
+      "assassin": "darkzaitzev/hooded-assassin.svg",
+      "dagger": "lorc/plain-dagger.svg",
+      "skull": "lorc/skull-crossed-bones.svg",
+      "dead_head": "delapouite/dead-head.svg",
+      "tombstone": "lorc/tombstone.svg",
+      "megaphone": "delapouite/megaphone.svg",
+      "siren": "skoll/siren.svg",
+      "handcuffs": "lorc/handcuffs.svg",
+      "gavel": "delapouite/banging-gavel.svg",
+      "ballot": "delapouite/vote.svg",
+      "magnifier": "lorc/magnifying-glass.svg",
+      "candle": "lorc/candle-flame.svg",
+      "hourglass": "lorc/hourglass.svg",
+      "pocket_radio": "delapouite/pocket-radio.svg",
+      "notebook": "delapouite/notebook.svg",
+      "ghost": "lorc/ghost.svg",
+      "pentagram": "lorc/pentagram-rose.svg",
+      "compass": "lorc/compass.svg",
+      "flying_flag": "lorc/flying-flag.svg",
+      "flag_objective": "delapouite/flag-objective.svg",
+      "trophy": "lorc/trophy.svg",
+      "laurels_trophy": "delapouite/laurels-trophy.svg",
+      "crossed_swords": "lorc/crossed-swords.svg",
+      "pistol": "john-colburn/pistol-gun.svg",
+      "run": "lorc/run.svg",
+      "sprint": "lorc/sprint.svg",
+      "templar_shield": "delapouite/templar-shield.svg",
+      "battle_tank": "lorc/battle-tank.svg",
+      "jet_fighter": "delapouite/jet-fighter.svg",
+      "barracks": "delapouite/barracks.svg",
+      "warlord": "caro-asercion/warlord-helmet.svg",
+      "rally_troops": "lorc/rally-the-troops.svg",
+      "crowned_skull": "lorc/crowned-skull.svg",
+      "coins": "delapouite/two-coins.svg",
+      "castle": "delapouite/castle.svg",
+      "power": "lorc/power-lightning.svg",
+      "meeple_army": "delapouite/meeple-army.svg",
+      "stopwatch": "lorc/stopwatch.svg",
+      "checkered_flag": "delapouite/checkered-flag.svg",
+      "podium": "delapouite/podium-winner.svg",
+      "star_medal": "delapouite/star-medal.svg",
+      "crosshair": "delapouite/crosshair.svg",
+      "mountains": "lorc/mountains.svg",
+      "eye": "delapouite/all-seeing-eye.svg"
+    }
+  }
+}

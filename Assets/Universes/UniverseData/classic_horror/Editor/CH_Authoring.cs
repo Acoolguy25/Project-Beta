@@ -6,6 +6,8 @@ using RyanAssets.Shared.Declarations;
 using RyanAssets.Tools.Client;
 using RyanAssets.Tools.Shared;
 using RyanAssets.UI.Navigation;
+using RyanAssets.UI;
+using RyanAssets.UI.Editor;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
@@ -15,8 +17,6 @@ namespace Universes.UniverseData.classic_horror.Editor {
     /// <summary>Rebuildable presentation assets. Scene layout and story edits are kept separate.</summary>
     public static class CH_Authoring {
         public const string Root = "Assets/Universes/UniverseData/classic_horror";
-        static readonly Color Ink = new(0.025f, 0.042f, 0.05f, 0.93f);
-        static readonly Color Paper = new(0.86f, 0.86f, 0.78f);
         static readonly Color Amber = new(0.78f, 0.55f, 0.28f);
 
         public static void EnsureFolders() {
@@ -283,57 +283,38 @@ namespace Universes.UniverseData.classic_horror.Editor {
             var rect = Rect(name, parent, min, max, Vector2.zero, Vector2.zero);
             var image = rect.gameObject.AddComponent<UnityEngine.UI.Image>(); image.color = color; image.raycastTarget = false; return image;
         }
-        static TextMeshProUGUI Text(string name, Transform parent, Vector2 min, Vector2 max, float size, Color color, TextAlignmentOptions alignment = TextAlignmentOptions.TopLeft) {
-            var rect = Rect(name, parent, min, max, new Vector2(20, 6), new Vector2(-20, -6));
-            var text = rect.gameObject.AddComponent<TextMeshProUGUI>(); text.font = TMP_Settings.defaultFontAsset;
-            text.fontSize = size; text.color = color; text.alignment = alignment; text.raycastTarget = false;
-            text.textWrappingMode = TextWrappingModes.Normal; text.overflowMode = TextOverflowModes.Ellipsis; text.text = name;
-            return text;
-        }
-        static UnityEngine.UI.Button Button(string name, Transform parent, Vector2 min, Vector2 max) {
-            var background = Panel(name, parent, min, max, new Color(0.15f, 0.19f, 0.2f)); background.raycastTarget = true;
-            var button = background.gameObject.AddComponent<UnityEngine.UI.Button>(); button.targetGraphic = background;
-            Text(name, background.transform, Vector2.zero, Vector2.one, 25, Paper, TextAlignmentOptions.Center);
-            return button;
-        }
+
+        /// <summary>
+        /// The investigation HUD, made from the shared HudKit so it matches the rest of the game, in a
+        /// horror key: dark glass, one amber accent, and nothing on screen that the case doesn't need
+        /// right now. Case status top centre, compass under it, prompts low, radio transcript at the
+        /// bottom, journal and ending as cards.
+        /// </summary>
         static void BuildHud() {
-            var root = new GameObject("InvestigationHUD", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
-            var canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 40;
-            var scaler = root.GetComponent<UnityEngine.UI.CanvasScaler>(); scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize; scaler.referenceResolution = new Vector2(1920, 1080); scaler.matchWidthOrHeight = 0.5f;
+            RectTransform canvas = HudKit.Canvas("InvestigationHUD", 40);
+            var root = canvas.gameObject;
             var client = root.AddComponent<CH_ClientController>();
             client.dangerOverlay = Panel("Danger", root.transform, Vector2.zero, Vector2.one, new Color(0.3f, 0.035f, 0.025f, 0));
-            // A single centered status panel keeps the active evidence/offerings count
-            // and the authoritative case timer together without competing with play.
-            var top = Panel("EvidenceHUD", root.transform, new Vector2(0.34f, 0.855f), new Vector2(0.66f, 0.955f), Ink);
-            Panel("AmberRule", top.transform, new Vector2(0, 0), new Vector2(0.006f, 1), Amber);
-            client.chapterLabel = Text("Chapter", top.transform, new Vector2(0.02f, 0.66f), new Vector2(0.98f, 0.96f), 18, Amber, TextAlignmentOptions.Center);
-            client.objectiveLabel = Text("Objective", top.transform, new Vector2(0.02f, 0.30f), new Vector2(0.98f, 0.70f), 23, Paper, TextAlignmentOptions.Center);
-            client.countersLabel = Text("Case progress", top.transform, new Vector2(0.02f, 0.03f), new Vector2(0.49f, 0.32f), 16, Amber, TextAlignmentOptions.Left);
-            client.timerLabel = Text("Timer", top.transform, new Vector2(0.51f, 0.03f), new Vector2(0.98f, 0.32f), 16, Amber, TextAlignmentOptions.Right);
-            var compassPanel = Panel("ObjectiveCompass", root.transform, new Vector2(0.39f, 0.785f), new Vector2(0.61f, 0.84f), Ink);
-            Panel("AmberRule", compassPanel.transform, new Vector2(0, 0), new Vector2(0.008f, 1), Amber);
-            var compassPointer = Rect("DirectionPointer", compassPanel.transform, new Vector2(0.03f, 0.08f), new Vector2(0.22f, 0.92f), Vector2.zero, Vector2.zero);
-            Panel("NeedleShaft", compassPointer, new Vector2(0.45f, 0.04f), new Vector2(0.55f, 0.62f), Amber);
-            Text("NeedleTip", compassPointer, new Vector2(0.15f, 0.47f), new Vector2(0.85f, 0.98f), 34, Amber, TextAlignmentOptions.Center).text = "▲";
-            var compassReadout = Text("Readout", compassPanel.transform, new Vector2(0.20f, 0.08f), new Vector2(0.98f, 0.92f), 17, Paper, TextAlignmentOptions.Center);
-            client.objectiveCompass = root.AddComponent<ObjectiveCompass>();
-            client.objectiveCompass.Configure(compassPanel.gameObject, compassPointer, compassReadout, "SEARCH");
-            Text("Reticle", root.transform, new Vector2(0.475f, 0.475f), new Vector2(0.525f, 0.525f), 25, Paper, TextAlignmentOptions.Center).text = "+";
-            client.interactionLabel = Text("Interaction", root.transform, new Vector2(0.22f, 0.35f), new Vector2(0.78f, 0.44f), 26, Paper, TextAlignmentOptions.Center);
-            var dialogue = Panel("RadioTranscript", root.transform, new Vector2(0.2f, 0.17f), new Vector2(0.8f, 0.34f), Ink);
-            client.dialoguePanel = dialogue.gameObject;
-            client.dialogueLabel = Text("Transcript", dialogue.transform, new Vector2(0.01f, 0.06f), new Vector2(0.99f, 0.94f), 25, Paper);
-            var journal = Panel("FieldJournal", root.transform, new Vector2(0.17f, 0.17f), new Vector2(0.83f, 0.83f), new Color(0.04f, 0.06f, 0.065f, 0.995f));
-            journal.raycastTarget = true; client.journalPanel = journal.gameObject;
-            client.journalPageLabel = Text("Field notes", journal.transform, new Vector2(0.035f, 0.85f), new Vector2(0.97f, 0.97f), 25, Amber);
-            client.journalBody = Text("Journal entry", journal.transform, new Vector2(0.05f, 0.23f), new Vector2(0.95f, 0.82f), 31, Paper);
-            client.journalBody.overflowMode = TextOverflowModes.Overflow;
-            Text("Live warning", journal.transform, new Vector2(0.045f, 0.14f), new Vector2(0.95f, 0.21f), 19, Amber).text = "The settlement does not pause while you read.";
-            client.journalPrevious = Button("Previous", journal.transform, new Vector2(0.06f, 0.035f), new Vector2(0.28f, 0.12f));
-            client.journalNext = Button("Next", journal.transform, new Vector2(0.32f, 0.035f), new Vector2(0.54f, 0.12f));
-            client.journalClose = Button("Close [F / Esc]", journal.transform, new Vector2(0.65f, 0.035f), new Vector2(0.94f, 0.12f));
-            var ending = Panel("CaseEnding", root.transform, new Vector2(0.13f, 0.23f), new Vector2(0.87f, 0.77f), Ink); client.endingPanel = ending.gameObject;
-            client.endingLabel = Text("Ending", ending.transform, new Vector2(0.045f, 0.07f), new Vector2(0.955f, 0.93f), 32, Paper, TextAlignmentOptions.Center);
+            client.evidenceIcon = HudKit.Icon("magnifier");
+            client.offeringIcon = HudKit.Icon("candle");
+            client.solvedIcon = HudKit.Icon("laurels_trophy");
+            client.failedIcon = HudKit.Icon("skull");
+
+            BuildCaseStatus(canvas, client);
+            BuildCompass(canvas, client);
+
+            RectTransform reticle = UIKit.Pinned(canvas, "Reticle", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(6f, 6f));
+            UIKit.Rounded(reticle, UIColorRole.TextPrimary, 3f, 0.75f, raycast: false);
+
+            RectTransform interaction = HudKit.KeyPrompt(canvas, "Interaction", "E", "Inspect", Amber, out client.interactionLabel, out UnityEngine.UI.Image key, 46f);
+            interaction.anchorMin = interaction.anchorMax = interaction.pivot = new Vector2(0.5f, 0.5f);
+            interaction.anchoredPosition = new Vector2(0f, -110f);
+            client.interactionKey = key.gameObject;
+            client.interactionPrompt = HudKit.Popup(interaction, false);
+
+            BuildRadio(canvas, client);
+            BuildJournal(canvas, client);
+            BuildEnding(canvas, client);
             var radio = new GameObject("RadioAudio"); radio.transform.SetParent(root.transform, false); client.radioAudio = radio.AddComponent<AudioSource>(); client.radioAudio.playOnAwake = false;
             client.radioCue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Flooded_Grounds/Content/Sounds/Taps.mp3");
             var objectiveCollect = new GameObject("ObjectiveCollectAudio"); objectiveCollect.transform.SetParent(root.transform, false); client.objectiveCollectAudio = objectiveCollect.AddComponent<AudioSource>();
@@ -353,7 +334,134 @@ namespace Universes.UniverseData.classic_horror.Editor {
             scare.sting = scarePanel.gameObject.AddComponent<AudioSource>();
             scare.sting.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Packages/com.ryan.ui/Runtime/Client/ClientAudio/JumpscareAudio/jumpscare.mp3");
             scare.sting.playOnAwake = false; scare.sting.volume = 0.75f; scare.sting.spatialBlend = 0;
-            PrefabUtility.SaveAsPrefabAsset(root, Root + "/Prefabs/InvestigationHUD.prefab"); Object.DestroyImmediate(root);
+            UIKit.SavePrefab(root, Root + "/Prefabs/InvestigationHUD.prefab");
+        }
+
+        /// <summary>Top centre: chapter, the current objective, case progress and the clock.</summary>
+        static void BuildCaseStatus(RectTransform canvas, CH_ClientController client) {
+            RectTransform card = UIKit.Pinned(canvas, "CaseStatus", new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(560f, 100f));
+            HudKit.Glass(card, 16f);
+            UIKit.Row(card.gameObject, 14f, new RectOffset(14, 20, 12, 12), TextAnchor.MiddleLeft);
+            UIKit.FitContent(card.gameObject, false, true);
+            HudKit.Emblem(card, "Emblem", "magnifier", 58f, Amber, out _, out client.caseIcon);
+
+            RectTransform text = UIKit.Node(card, "Text");
+            UIKit.Size(text, -1f, -1f, 1f);
+            UIKit.Column(text.gameObject, 3f, null, TextAnchor.MiddleLeft);
+            client.chapterLabel = UIKit.Text(text, "Chapter", "Investigator", UIText.Caption, UIColorRole.TextMuted);
+            client.chapterLabel.color = Amber;
+            Object.DestroyImmediate(client.chapterLabel.GetComponent<UIThemeColor>());
+            client.objectiveLabel = UIKit.Text(text, "Objective", "Establishing the radio link...", UIText.Strong);
+            client.objectiveLabel.fontSize = 18f;
+            client.objectiveLabel.textWrappingMode = TextWrappingModes.Normal;
+
+            RectTransform chips = UIKit.Node(text, "Chips");
+            UIKit.Row(chips.gameObject, 8f, new RectOffset(0, 0, 4, 0), TextAnchor.MiddleLeft);
+            client.progressChip = HudKit.Chip(chips, "Progress", "magnifier", "Evidence 0 / 4", Amber, 28f, UIText.Small);
+            client.timerChip = HudKit.Chip(chips, "Time", "hourglass", "00:00", Amber, 28f, UIText.Small);
+            RectTransform journal = UIKit.Node(chips, "JournalHint");
+            UIKit.Row(journal.gameObject, 6f, new RectOffset(6, 0, 0, 0), TextAnchor.MiddleLeft);
+            HudKit.KeyCap(journal, "F");
+            UIKit.Text(journal, "Label", "Journal", UIText.Small, UIColorRole.TextSecondary);
+        }
+
+        /// <summary>Under the case status: an arrow towards the nearest lead and how far it is.</summary>
+        static void BuildCompass(RectTransform canvas, CH_ClientController client) {
+            RectTransform pill = UIKit.Pinned(canvas, "ObjectiveCompass", new Vector2(0.5f, 1f), new Vector2(0f, -184f), new Vector2(260f, 38f));
+            HudKit.Glass(pill, 19f);
+            UIKit.Row(pill.gameObject, 8f, new RectOffset(8, 16, 0, 0), TextAnchor.MiddleLeft);
+            UIKit.FitContent(pill.gameObject, true, false);
+            RectTransform pointer = UIKit.Node(pill, "DirectionPointer");
+            UIKit.Size(pointer, 26f, 26f);
+            UnityEngine.UI.Image arrow = HudKit.Icon(pointer, "navigation", 22f, Amber);
+            UIKit.Center(arrow.rectTransform);
+            var readout = UIKit.Text(pill, "Readout", "SEARCH   FORWARD   12 m", UIText.Caption, UIColorRole.TextPrimary);
+            client.objectiveCompass = canvas.gameObject.AddComponent<ObjectiveCompass>();
+            client.objectiveCompass.Configure(pill.gameObject, pointer, readout, "SEARCH");
+        }
+
+        /// <summary>Bottom centre: the radio transcript, as a card that fades in for each new message.</summary>
+        static void BuildRadio(RectTransform canvas, CH_ClientController client) {
+            RectTransform card = HudKit.Card(canvas, "RadioTranscript", new Vector2(0.5f, 0f), new Vector2(0f, 120f), new Vector2(820f, 120f));
+            HudKit.AccentStripe(card, Amber, 4f, left: true);
+            UIKit.Row(card.gameObject, 16f, new RectOffset(22, 26, 18, 18), TextAnchor.UpperLeft);
+            UIKit.FitContent(card.gameObject, false, true);
+            HudKit.Emblem(card, "Emblem", "pocket_radio", 52f, Amber, out _, out _);
+            RectTransform text = UIKit.Node(card, "Text");
+            UIKit.Size(text, -1f, -1f, 1f);
+            UIKit.Column(text.gameObject, 4f, null, TextAnchor.UpperLeft);
+            var caption = UIKit.Text(text, "Caption", "Radio", UIText.Caption, UIColorRole.TextMuted);
+            caption.color = Amber;
+            Object.DestroyImmediate(caption.GetComponent<UIThemeColor>());
+            client.dialogueLabel = UIKit.Text(text, "Transcript", string.Empty, UIText.Body);
+            client.dialogueLabel.fontSize = 19f;
+            client.dialogueLabel.textWrappingMode = TextWrappingModes.Normal;
+            client.dialogueLabel.richText = true;
+            client.dialoguePopup = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
+        }
+
+        /// <summary>The field journal: a readable card with page buttons; the world keeps running behind it.</summary>
+        static void BuildJournal(RectTransform canvas, CH_ClientController client) {
+            RectTransform card = HudKit.Card(canvas, "FieldJournal", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1040f, 700f));
+            client.journalPanel = card.gameObject;
+            card.GetComponentInChildren<UnityEngine.UI.Image>().raycastTarget = true;
+            HudKit.AccentStripe(card, Amber, 5f);
+            UIKit.Column(card.gameObject, 14f, new RectOffset(40, 40, 30, 30), TextAnchor.UpperLeft);
+
+            RectTransform header = UIKit.Node(card, "Header");
+            UIKit.Row(header.gameObject, 14f, null, TextAnchor.MiddleLeft);
+            HudKit.Emblem(header, "Emblem", "notebook", 56f, Amber, out _, out _);
+            RectTransform titles = UIKit.Node(header, "Titles");
+            UIKit.Size(titles, -1f, -1f, 1f);
+            UIKit.Column(titles.gameObject, 0f, null, TextAnchor.MiddleLeft);
+            UIKit.Text(titles, "Title", "Field notes", UIText.Title);
+            client.journalPageLabel = UIKit.Text(titles, "Page", "Page 1 / 1", UIText.Small, UIColorRole.TextMuted);
+            client.journalClose = UIKit.IconButton(header, "Close", "close", 40f, UIColorRole.SurfaceInset, 20f, out _, out _);
+            UIKit.Divider(card);
+
+            client.journalBody = UIKit.Text(card, "Entry", string.Empty, UIText.Body, UIColorRole.TextPrimary, TextAlignmentOptions.TopLeft);
+            client.journalBody.fontSize = 23f;
+            client.journalBody.lineSpacing = 12f;
+            client.journalBody.textWrappingMode = TextWrappingModes.Normal;
+            client.journalBody.overflowMode = TextOverflowModes.Overflow;
+            client.journalBody.richText = true;
+            UIKit.Size(client.journalBody, -1f, 440f);
+
+            RectTransform footer = UIKit.Node(card, "Footer");
+            UIKit.Row(footer.gameObject, 10f, null, TextAnchor.MiddleLeft);
+            UnityEngine.UI.Image warn = HudKit.Icon(footer, "warning", 20f, Amber);
+            var note = UIKit.Text(footer, "Warning", "The settlement does not pause while you read.", UIText.Small, UIColorRole.TextSecondary);
+            UIKit.Size(note, -1f, -1f, 1f);
+            client.journalPrevious = UIKit.TextButton(footer, "Previous", "Previous", "arrow_back", UIColorRole.SurfaceInset, UIColorRole.TextPrimary, 42f);
+            UIKit.Size(client.journalPrevious, 150f, 42f);
+            client.journalNext = UIKit.TextButton(footer, "Next", "Next", "arrow_forward", UIColorRole.Accent, UIColorRole.OnAccent, 42f);
+            UIKit.Size(client.journalNext, 150f, 42f);
+            warn.raycastTarget = false;
+            card.gameObject.SetActive(false);
+            // The journal opens and closes by script, not through HudPopup.
+            Object.DestroyImmediate(card.GetComponent<RyanAssets.UI.GameHud.HudPopup>());
+            card.GetComponent<CanvasGroup>().alpha = 1f;
+        }
+
+        /// <summary>The case ending: how it ended, the epilogue, and when the next case starts.</summary>
+        static void BuildEnding(RectTransform canvas, CH_ClientController client) {
+            RectTransform card = HudKit.Card(canvas, "CaseEnding", new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(860f, 420f));
+            client.endingStripe = HudKit.AccentStripe(card, Amber, 5f);
+            UIKit.Column(card.gameObject, 10f, new RectOffset(48, 48, 32, 30), TextAnchor.UpperCenter);
+            UIKit.FitContent(card.gameObject, false, true);
+            HudKit.Emblem(card, "Emblem", "laurels_trophy", 92f, Amber, out client.endingDisc, out client.endingIcon);
+            UIKit.Text(card, "Kicker", "Case closed", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            client.endingTitle = UIKit.Text(card, "Title", "Last rites", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            Object.DestroyImmediate(client.endingTitle.GetComponent<UIThemeColor>());
+            client.endingLabel = UIKit.Text(card, "Epilogue", string.Empty, UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            client.endingLabel.fontSize = 20f;
+            client.endingLabel.lineSpacing = 8f;
+            client.endingLabel.textWrappingMode = TextWrappingModes.Normal;
+            RectTransform chips = UIKit.Node(card, "Chips");
+            UIKit.Row(chips.gameObject, 10f, new RectOffset(0, 0, 10, 0), TextAnchor.MiddleCenter);
+            client.endingNextCase = HudKit.Chip(chips, "NextCase", "hourglass_bottom", "Next case in 20s", Amber, 32f, UIText.Small);
+            client.endingSolved = HudKit.Chip(chips, "Solved", "star_medal", "Cases solved: 0", Amber, 32f, UIText.Small);
+            client.endingPopup = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
         }
     }
 }

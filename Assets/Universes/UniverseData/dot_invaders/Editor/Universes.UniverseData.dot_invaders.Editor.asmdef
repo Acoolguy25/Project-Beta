@@ -1,0 +1,25 @@
+{
+    "name": "Universes.UniverseData.dot_invaders.Editor",
+    "rootNamespace": "Universes.UniverseData.dot_invaders.Editor",
+    "references": [
+        "Universes.UniverseData.dot_invaders.Shared",
+        "Universes.UniverseData.dot_invaders.Client",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "Unity.TextMeshPro",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

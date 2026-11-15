@@ -1,4 +1,6 @@
 using System;
+using RyanAssets.UI;
+using RyanAssets.UI.Editor;
 using RyanAssets.UI.Hover;
 using RyanAssets.UI.Textbox;
 using TMPro;
@@ -18,40 +20,34 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
     /// </para>
     /// </summary>
     public static class UIAuthoringKit {
-        public const string FontPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset";
-
         // --- Palette ----------------------------------------------------------
-        // Derived from the shared settings menu so every generated HUD matches the pause menu.
-        public static readonly Color PanelFill = new(0.075f, 0.085f, 0.1f, 0.94f);
-        public static readonly Color PanelBorder = new(0.22f, 0.26f, 0.3f, 1f);
-        public static readonly Color CardFill = new(0.13f, 0.16f, 0.2f, 1f);
-        public static readonly Color Track = new(0.04f, 0.05f, 0.065f, 1f);
-        public static readonly Color Header = new(0.72f, 0.86f, 1f, 1f);
-        public static readonly Color Ink = new(0.93f, 0.96f, 1f, 1f);
-        public static readonly Color Muted = new(0.62f, 0.67f, 0.74f, 1f);
-        public static readonly Color Accent = new(0.1f, 0.49f, 0.75f, 1f);
-        public static readonly Color Gold = new(1f, 0.86f, 0.45f, 1f);
-        public static readonly Color Danger = new(0.66f, 0.2f, 0.18f, 1f);
-        public static readonly Color Warning = new(1f, 0.72f, 0.35f, 1f);
-        public static readonly Color Scrim = new(0f, 0f, 0f, 0.72f);
+        // Read from the shared UITheme (Ryan > UI), so generated command panels and universe HUDs
+        // match the top bar, chat and menus, and follow the theme when it changes.
+        static UITheme Theme => UIThemeAssets.Theme;
+
+        public static Color PanelFill => Theme.surfaceRaised;
+        public static Color PanelBorder => Theme.stroke;
+        public static Color CardFill => Color.Lerp(Theme.surfaceRaised, Color.white, 0.05f);
+        public static Color Track => new(0.03f, 0.035f, 0.05f, 0.85f);
+        public static Color Header => Theme.textPrimary;
+        public static Color Ink => Theme.textPrimary;
+        public static Color Muted => Theme.textSecondary;
+        public static Color Accent => Theme.accent;
+        public static Color Gold => Theme.currency;
+        public static Color Danger => Color.Lerp(Theme.danger, Color.black, 0.3f);
+        public static Color Warning => Theme.warning;
+        public static Color Scrim => Theme.scrim;
+
+        /// <summary>Corner radius, in canvas units, of panels made by <see cref="Panel"/>.</summary>
+        public const float CornerRadius = 10f;
 
         // --- Built-in art -----------------------------------------------------
 
-        /// <summary>Unity's rounded, nine-sliced UI sprite, the same one the default controls use.</summary>
-        public static Sprite RoundedSprite => AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+        /// <summary>The theme's nine-sliced rounded rectangle.</summary>
+        public static Sprite RoundedSprite => Theme.roundedSprite;
 
         /// <summary>Unity's built-in circle, for badges.</summary>
         public static Sprite CircleSprite => AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
-
-        static TMP_FontAsset font;
-
-        static TMP_FontAsset Font {
-            get {
-                if (font == null)
-                    font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontPath);
-                return font;
-            }
-        }
 
         // --- Primitives -------------------------------------------------------
 
@@ -72,6 +68,7 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             if (rounded) {
                 image.sprite = RoundedSprite;
                 image.type = Image.Type.Sliced;
+                image.pixelsPerUnitMultiplier = UIThemeAssets.RoundedSpriteRadius / CornerRadius;
             }
             image.raycastTarget = color.a > 0.01f;
             return image;
@@ -119,15 +116,8 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             label.alignment = alignment;
             label.raycastTarget = false;
             label.overflowMode = TextOverflowModes.Ellipsis;
-            if (bold) {
-                label.fontStyle = FontStyles.Bold;
-                // The project font has no bold face, and TMP looks the ellipsis glyph up in the bold
-                // face for bold text, so it warns and falls back on every rebuild. Bold labels are
-                // short captions and figures, so they simply truncate.
-                label.overflowMode = TextOverflowModes.Truncate;
-            }
-            if (Font != null)
-                label.font = Font;
+            // The theme's Inter faces: semi-bold for text, bold for figures and titles.
+            label.font = bold ? Theme.boldFont : Theme.semiBoldFont;
             return label;
         }
 
@@ -242,8 +232,7 @@ namespace RyanAssets.Client.ClientUI.Command.Editor {
             field.placeholder = hint;
             field.contentType = contentType;
             field.lineType = TMP_InputField.LineType.SingleLine;
-            if (Font != null)
-                field.fontAsset = Font;
+            field.fontAsset = Theme.regularFont;
             field.pointSize = fontSize;
             field.navigation = new Navigation { mode = Navigation.Mode.None };
             background.gameObject.AddComponent<TextboxHelper>();

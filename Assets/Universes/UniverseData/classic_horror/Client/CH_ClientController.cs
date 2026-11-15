@@ -8,6 +8,7 @@ using RyanAssets.Client.ClientAudio;
 using RyanAssets.Input;
 using RyanAssets.Shared.Globals;
 using RyanAssets.Tools.Shared;
+using RyanAssets.UI.GameHud;
 using RyanAssets.UI.Navigation;
 using TMPro;
 using UnityEngine;
@@ -17,10 +18,35 @@ namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>Presentation and input only; the server decides every case outcome.</summary>
     public sealed class CH_ClientController : MonoBehaviour {
         const float FootstepPaceMultiplier = 3f;
-        public TMP_Text chapterLabel, objectiveLabel, countersLabel, timerLabel, interactionLabel;
-        public TMP_Text dialogueLabel, journalBody, journalPageLabel, endingLabel;
+        [Header("Case status")]
+        public TMP_Text chapterLabel;
+        public TMP_Text objectiveLabel;
+        public UnityEngine.UI.Image caseIcon;
+        public HudChip progressChip, timerChip;
         public ObjectiveCompass objectiveCompass;
-        public GameObject dialoguePanel, journalPanel, endingPanel;
+
+        [Header("Prompts and radio")]
+        public HudPopup interactionPrompt;
+        public TMP_Text interactionLabel;
+        [Tooltip("The E keycap; hidden when the prompt shows feedback rather than an action.")]
+        public GameObject interactionKey;
+        public HudPopup dialoguePopup;
+        public TMP_Text dialogueLabel;
+
+        [Header("Journal")]
+        public GameObject journalPanel;
+        public TMP_Text journalBody, journalPageLabel;
+
+        [Header("Ending")]
+        public HudPopup endingPopup;
+        public UnityEngine.UI.Image endingDisc, endingIcon, endingStripe;
+        public TMP_Text endingTitle, endingLabel;
+        public HudChip endingNextCase, endingSolved;
+
+        [Header("Icons")]
+        public Sprite evidenceIcon;
+        public Sprite offeringIcon, solvedIcon, failedIcon;
+
         public UnityEngine.UI.Image dangerOverlay;
         public UnityEngine.UI.Button journalClose, journalNext, journalPrevious;
         public AudioSource radioAudio, dangerAudio, objectiveCollectAudio;
@@ -53,10 +79,11 @@ namespace Universes.UniverseData.classic_horror.Client {
             journalNext.onClick.AddListener(NextPage);
             journalPrevious.onClick.AddListener(PreviousPage);
             journalPanel.SetActive(false);
-            endingPanel.SetActive(false);
-            dialoguePanel.SetActive(false);
+            endingPopup.HideImmediate();
+            dialoguePopup.HideImmediate();
+            interactionPrompt.HideImmediate();
             // LocalCharacter.OnCharacterAdded.Subscribe();
-            chapterLabel.text = "INVESTIGATOR";
+            chapterLabel.text = "Investigator";
             objectiveLabel.text = "Establishing the radio link...";
         }
         // void OnCharacterAdded(LocalCharacter character){
@@ -82,7 +109,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             if (!hasState) return;
             if (Time.unscaledTime > nextFocus) { nextFocus = Time.unscaledTime + 0.08f; UpdateFocus(); }
-            dialoguePanel.SetActive(!journalOpen && Time.unscaledTime < dialogueUntil && !endingPanel.activeSelf);
+            dialoguePopup.SetVisible(!journalOpen && Time.unscaledTime < dialogueUntil && !CaseOver);
             UpdateThreat();
         }
 
@@ -122,12 +149,18 @@ namespace Universes.UniverseData.classic_horror.Client {
             bool chapterChanged = !fresh && next.phase != state.phase;
             state = next;
             hasState = true;
-            chapterLabel.text = next.phase == CH_Phase.Investigation ? "I   /   THE LAST CALL" : "II   /   WHAT ANSWERED";
+            chapterLabel.text = next.phase switch {
+                CH_Phase.Investigation => "Chapter I  ·  The last call",
+                CH_Phase.Descent => "Chapter II  ·  What answered",
+                CH_Phase.Escape => "Chapter III  ·  Escape",
+                _ => "Case closed",
+            };
             objectiveLabel.text = next.objective.Contains("|") ? next.objective.Substring(next.objective.IndexOf('|') + 1).Trim() : next.objective;
-            countersLabel.text = next.phase == CH_Phase.Investigation
-                ? $"EVIDENCE  {next.evidenceCount}/4"
-                : $"OFFERINGS  {next.relicCount}/3";
-            timerLabel.text = $"TIME  {FormatTime(next.secondsLeft)}";
+            bool investigating = next.phase == CH_Phase.Investigation;
+            progressChip.SetIcon(investigating ? evidenceIcon : offeringIcon);
+            progressChip.Text = investigating ? $"Evidence  {next.evidenceCount} / 4" : $"Offerings  {next.relicCount} / 3";
+            if (caseIcon != null) caseIcon.sprite = investigating ? evidenceIcon : offeringIcon;
+            timerChip.Text = FormatTime(next.secondsLeft);
             if (lastDialogue != next.dialogueRevision) {
                 lastDialogue = next.dialogueRevision;
                 dialogueLabel.text = next.dialogue;
@@ -135,8 +168,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                 if (radioAudio != null && radioCue != null) radioAudio.PlayOneShot(radioCue, 0.14f);
             }
             if (chapterChanged && next.phase == CH_Phase.Descent) dialogueUntil = Time.unscaledTime + 20;
-            endingPanel.SetActive(next.phase is CH_Phase.Complete or CH_Phase.Failed);
-            endingLabel.text = next.ending + $"\n\nNext case in {next.secondsLeft}s\nA new source. New evidence. New rules.\nCases solved this session: {next.completedCases}";
+            ShowEnding(next);
             RefreshJournal();
             // Phase changes remove points from snapshots; those old views must
             // disappear too, otherwise completed offerings look interactable.
@@ -149,19 +181,44 @@ namespace Universes.UniverseData.classic_horror.Client {
                     if (point.id >= 11 && point.id <= 13) view.transform.localScale = Vector3.one * 0.65f;
                     pointViews.Add(point.id, view);
                 }
-                view.SetActive(!point.collected && !endingPanel.activeSelf);
+                view.SetActive(!point.collected && !CaseOver);
             }
             RefreshNavigationObjectives();
         }
 
+        bool CaseOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
+
+        /// <summary>The ending card: the epilogue's first line is its title, the rest the story.</summary>
+        void ShowEnding(CH_StateBroadcast next) {
+            bool over = next.phase is CH_Phase.Complete or CH_Phase.Failed;
+            endingPopup.SetVisible(over);
+            if (!over) return;
+            string ending = next.ending ?? string.Empty;
+            int split = ending.IndexOf('\n');
+            string title = split >= 0 ? ending.Substring(0, split) : ending;
+            string story = split >= 0 ? ending.Substring(split + 1) : string.Empty;
+            bool solved = next.phase == CH_Phase.Complete;
+            Color accent = solved ? new Color(0.94f, 0.68f, 0.32f) : new Color(0.86f, 0.24f, 0.2f);
+            endingTitle.text = string.IsNullOrEmpty(title) ? (solved ? "CASE CLOSED" : "STILL MISSING") : title.ToUpperInvariant();
+            endingTitle.color = Color.Lerp(accent, Color.white, 0.3f);
+            endingLabel.text = story;
+            endingDisc.color = endingStripe.color = accent;
+            endingIcon.sprite = solved ? solvedIcon : failedIcon;
+            endingNextCase.Text = $"Next case in {next.secondsLeft}s";
+            endingSolved.Text = $"Cases solved: {next.completedCases}";
+        }
+
         void UpdateFocus() {
             focusedId = -1;
-            interactionLabel.text = "";
+            string prompt = null;
             var camera = Camera.main;
             bool canNavigate = camera != null && LocalPlayer.Character != null && !LocalPlayer.Character.IsDead
-                && !journalOpen && !endingPanel.activeSelf;
+                && !journalOpen && !CaseOver;
             objectiveCompass?.SetDisplayAllowed(canNavigate);
-            if (!canNavigate) return;
+            if (!canNavigate) {
+                interactionPrompt.SetVisible(false);
+                return;
+            }
             float best = 0.9f;
             foreach (var point in state.points) {
                 if (point.collected || point.id == 9 && state.relicCount == 3) continue;
@@ -171,12 +228,21 @@ namespace Universes.UniverseData.classic_horror.Client {
                 if (distance <= 3.5f && alignment > best && WorldInteraction.CanReach(camera.transform.position, point.position, 3.5f, visibilityMask)) {
                     best = alignment;
                     focusedId = point.id;
-                    interactionLabel.text = point.id == 9
-                        ? state.relicCount < 3 ? "THE SOURCE / Recover all three offerings" : "Approach an offering. Follow the order in your journal."
-                        : $"[E]  {point.title.ToUpperInvariant()}";
+                    prompt = point.id == 9
+                        ? state.relicCount < 3 ? "<b>The source</b>  ·  recover all three offerings" : "Approach an offering. Follow the order in your journal."
+                        : point.title;
                 }
             }
-            if (Time.unscaledTime < feedbackUntil) interactionLabel.text = interactionFeedback;
+            // The keycap only shows for something E acts on; the source and feedback are just text.
+            bool actionable = prompt != null && focusedId != 9;
+            if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(interactionFeedback)) {
+                prompt = interactionFeedback;
+                actionable = false;
+            }
+            interactionPrompt.SetVisible(prompt != null);
+            if (prompt == null) return;
+            interactionLabel.text = prompt;
+            if (interactionKey.activeSelf != actionable) interactionKey.SetActive(actionable);
         }
         void RefreshNavigationObjectives() {
             navigationObjectives.Clear();
@@ -224,7 +290,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (state.journal == null || state.journal.Length == 0) return;
             journalPage = Mathf.Clamp(journalPage, 0, state.journal.Length - 1);
             journalBody.text = state.journal[journalPage];
-            journalPageLabel.text = $"FIELD NOTES    {journalPage + 1} / {state.journal.Length}";
+            journalPageLabel.text = $"Page {journalPage + 1} of {state.journal.Length}";
             journalPrevious.interactable = journalPage > 0;
             journalNext.interactable = journalPage + 1 < state.journal.Length;
         }

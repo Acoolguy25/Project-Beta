@@ -7,6 +7,7 @@
         "RyanAssets.Client.ClientUI.Command",
         "RyanAssets.Client.ClientUI.Command.Editor",
         "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
         "Unity.TextMeshPro",
         "Unity.ugui"
     ],

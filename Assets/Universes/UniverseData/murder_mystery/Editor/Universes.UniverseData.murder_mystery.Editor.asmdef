@@ -4,7 +4,9 @@
         "Universes.UniverseData.murder_mystery.Shared",
         "Universes.UniverseData.murder_mystery.Client",
         "Unity.TextMeshPro",
-        "Unity.ugui"
+        "Unity.ugui",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor"
     ],
     "includePlatforms": [
         "Editor"

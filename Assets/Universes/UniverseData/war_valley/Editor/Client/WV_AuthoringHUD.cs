@@ -1,6 +1,8 @@
 using System.Linq;
 using RyanAssets.Client.ClientUI.Command;
 using RyanAssets.Client.ClientUI.Command.Editor;
+using RyanAssets.UI;
+using RyanAssets.UI.Editor;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
@@ -40,7 +42,9 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
 
         static readonly Color BoxFill = new(0.35f, 1f, 0.55f, 0.12f);
         static readonly Color BoxEdge = new(0.35f, 1f, 0.55f, 0.8f);
-        static readonly Color Glass = new(0.055f, 0.065f, 0.08f, 0.86f);
+        /// <summary>The theme's glass, a little more opaque: these panels hold numbers read mid-battle.</summary>
+        static Color Glass => new(UIKit.Theme.surface.r, UIKit.Theme.surface.g, UIKit.Theme.surface.b, 0.86f);
+        const float PanelRadius = 14f;
         static readonly Color ButtonFill = new(1f, 1f, 1f, 0.06f);
         static readonly Color Divider = new(1f, 1f, 1f, 0.08f);
         static readonly Color SellFill = new(0.42f, 0.13f, 0.12f, 1f);
@@ -99,7 +103,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static bool IsCurrent(WV_HUD hud) {
             if (!HasReferences(hud, "structurePanel", "optionMenu", "commandMenu", "researchLabel",
                     "selectionHealthFill", "donateButton", "donatePanel", "researchButton", "sellButton",
-                    "sellLabel", "troopRangeIndicator"))
+                    "sellLabel", "troopRangeIndicator", "hintPanel"))
                 return false;
             SerializedProperty forces = new SerializedObject(hud).FindProperty("forceCounts");
             return forces != null && forces.arraySize == 4;
@@ -187,17 +191,23 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
                 new Vector2(Margin + CardWidth + 12f, Margin), CommandUIAuthoring.TransferPanelSize);
             donatePanel.gameObject.SetActive(false);
 
-            // One line for alerts and notices, just above the order prompt. Long messages end in an
-            // ellipsis rather than wrapping over the battlefield.
-            TextMeshProUGUI hint = Label(root.transform, "HintLabel", string.Empty, 17f, Ink, TextAlignmentOptions.Bottom);
+            // One pill for alerts and notices, just above the order prompt. It sizes to the message,
+            // and long messages end in an ellipsis rather than wrapping over the battlefield.
+            RectTransform hintPill = UIKit.Pinned(root.transform, "Hint", new Vector2(0.5f, 0f),
+                new Vector2(0f, Margin + BarHeight + 30f), new Vector2(400f, 36f));
+            HudKit.Glass(hintPill, 18f);
+            UIKit.Row(hintPill.gameObject, 8f, new RectOffset(12, 16, 0, 0), TextAnchor.MiddleLeft);
+            UIKit.FitContent(hintPill.gameObject, true, false);
+            UIKit.Icon(hintPill, "campaign", 18f, UIColorRole.Warning);
+            TextMeshProUGUI hint = UIKit.Text(hintPill, "HintLabel", string.Empty, UIText.Strong);
             hint.richText = true;
-            hint.textWrappingMode = TextWrappingModes.NoWrap;
-            Anchor(hint, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-                new Vector2(0f, Margin + BarHeight + 30f), new Vector2(1100f, 24f));
+            UIKit.Size(hint, -1f, -1f, 0f).maxWidth = 1100f;
+            hintPill.gameObject.SetActive(false);
 
             Wire(hud,
                 ("donatePanel", donatePanel), ("selectionBox", selectionBox),
                 ("structurePanel", structurePanel), ("optionMenu", optionMenu), ("hintLabel", hint),
+                ("hintPanel", hintPill.gameObject),
                 ("troopRangeIndicator", AssetDatabase.LoadAssetAtPath<WV_RangeIndicator>(
                     Root + "/Presentation/WV_AttackRange.prefab")));
             WireTroopIcons(hud);
@@ -245,6 +255,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             Image panel = Panel(parent, "EconomyPanel", Glass);
             Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(Margin, Margin),
                 new Vector2(CardWidth, EconomyCardHeight));
+            Round(panel, withShadow: true);
 
             Image coin = Icon(panel.transform, "Coin", "paid", Gold);
             PlaceTopLeft(coin, 14f, 14f, 26f, 26f);
@@ -299,6 +310,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             Image panel = Panel(parent, "SelectionPanel", Glass);
             Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero,
                 new Vector2(Margin, Margin + EconomyCardHeight + 28f), new Vector2(CardWidth, SelectionPanelHeight));
+            Round(panel, withShadow: false);
 
             TextMeshProUGUI label = Label(panel.transform, "SelectionLabel", string.Empty, 15f, Ink, TextAlignmentOptions.TopLeft);
             label.richText = true;
@@ -357,6 +369,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             Image bar = Panel(parent, "CommandPanel", Glass);
             Anchor(bar, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, Margin), new Vector2(width, BarHeight));
+            Round(bar, withShadow: true);
 
             float x = Pad;
             float y = (BarHeight - ButtonSize) * 0.5f;
@@ -422,6 +435,16 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             float lineX = afterX + (SectionGap - 1f) * 0.5f;
             PlaceTopLeft(line, lineX, 16f, 1f, BarHeight - 32f);
             return afterX + SectionGap;
+        }
+
+        /// <summary>
+        /// Gives a generated panel the theme's corner radius and, for panels that are always on screen,
+        /// a soft shadow behind it (a sibling, so it would outlive a panel that hides itself).
+        /// </summary>
+        static void Round(Image panel, bool withShadow) {
+            panel.pixelsPerUnitMultiplier = UIThemeAssets.RoundedSpriteRadius / PanelRadius;
+            if (withShadow)
+                UIKit.Shadow(panel.rectTransform, 24f, 6f, 0.35f);
         }
 
         /// <summary>Places a child by its top-left corner, in pixels from the parent's top-left.</summary>

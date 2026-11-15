@@ -12,6 +12,13 @@ namespace RyanAssets.UI {
         [Tooltip("Multiplied into the slot's alpha, for fainter variants of a colour.")]
         [SerializeField, Range(0f, 1f)] float opacity = 1f;
 
+        /// <summary>
+        /// The colour this component last painted. If the graphic no longer has it when re-enabled, a
+        /// script recoloured it (team, role, result) and that colour is kept instead of the slot's.
+        /// </summary>
+        [SerializeField, HideInInspector] Color painted;
+        [SerializeField, HideInInspector] bool hasPainted;
+
         Graphic graphic;
 
         public UIColorRole Role {
@@ -26,7 +33,11 @@ namespace RyanAssets.UI {
 
         void OnEnable() {
             UITheme.Changed += OnThemeChanged;
-            Apply();
+            if (graphic == null)
+                graphic = GetComponent<Graphic>();
+            bool recolouredByScript = hasPainted && graphic != null && graphic.color != painted;
+            if (!recolouredByScript)
+                Apply();
         }
 
         void OnDisable() => UITheme.Changed -= OnThemeChanged;
@@ -43,6 +54,8 @@ namespace RyanAssets.UI {
             Color color = UITheme.Active.Get(role);
             color.a *= opacity;
             graphic.color = color;
+            painted = color;
+            hasPainted = true;
         }
     }
 }

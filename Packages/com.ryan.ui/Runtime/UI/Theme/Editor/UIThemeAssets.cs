@@ -14,6 +14,7 @@ namespace RyanAssets.UI.Editor {
         public const string Root = "Packages/com.ryan.ui/Runtime/UI/Theme";
         public const string ThemePath = Root + "/Resources/" + UITheme.ResourcePath + ".asset";
         public const string IconFolder = Root + "/Icons";
+        public const string GameIconFolder = Root + "/GameIcons";
 
         /// <summary>Corner radius, in pixels, drawn into <c>Sprites/ui_rounded.png</c>.</summary>
         public const float RoundedSpriteRadius = 24f;
@@ -57,8 +58,19 @@ namespace RyanAssets.UI.Editor {
 
         public static UITheme Theme => AssetDatabase.LoadAssetAtPath<UITheme>(ThemePath) ?? Ensure();
 
+        /// <summary>
+        /// The icon called <paramref name="name"/>: a Material icon from <see cref="IconFolder"/>, or a
+        /// game-icons.net illustration from <see cref="GameIconFolder"/> (see its CREDITS.md). Both sets
+        /// are white so an Image tints them. Add icons through Tools/UIIcons/icons.json.
+        /// </summary>
         public static Sprite Icon(string name) {
             string path = $"{IconFolder}/icon_{name}.png";
+            if (!File.Exists(path)) {
+                string game = $"{GameIconFolder}/icon_{name}.png";
+                if (!File.Exists(game))
+                    throw new FileNotFoundException($"No UI icon '{name}' in {IconFolder} or {GameIconFolder} (add it to Tools/UIIcons/icons.json)", path);
+                path = game;
+            }
             Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
             return sprite != null ? sprite : ImportSprite(path, 0);
         }
