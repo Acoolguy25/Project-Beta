@@ -7,17 +7,17 @@ TerrainLayer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: WarValleyGrass
-  m_DiffuseTexture: {fileID: 2800000, guid: 32625dece0b19104e88a03888d43454c, type: 2}
-  m_NormalMapTexture: {fileID: 0}
+  m_DiffuseTexture: {fileID: 2800000, guid: 156071b731d90dc6f85916574e2f3710, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: 5195592c15c754a2bbf57f353f36d8dc, type: 3}
   m_MaskMapTexture: {fileID: 0}
-  m_TileSize: {x: 58, y: 58}
+  m_TileSize: {x: 24, y: 24}
   m_TileOffset: {x: 0, y: 0}
   m_Specular: {r: 0, g: 0, b: 0, a: 0}
   m_Metallic: 0
-  m_Smoothness: 0
+  m_Smoothness: 0.05
   m_NormalScale: 1
   m_DiffuseRemapMin: {x: 0, y: 0, z: 0, w: 0}
-  m_DiffuseRemapMax: {x: 1, y: 1, z: 1, w: 0}
+  m_DiffuseRemapMax: {x: 1, y: 1, z: 1, w: 1}
   m_MaskMapRemapMin: {x: 0, y: 0, z: 0, w: 0}
   m_MaskMapRemapMax: {x: 1, y: 1, z: 1, w: 0}
   m_SmoothnessSource: 1

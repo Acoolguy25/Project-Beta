@@ -7,17 +7,17 @@ TerrainLayer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: WarValleyRock
-  m_DiffuseTexture: {fileID: 2800000, guid: 30a2b615e7cc36b42959f88f1fe91260, type: 2}
-  m_NormalMapTexture: {fileID: 0}
+  m_DiffuseTexture: {fileID: 2800000, guid: 6a6d8b5a4b19e14ab880dfd4cb869cbe, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: 58e97a8841d2468d38bdc7d78d0d05dd, type: 3}
   m_MaskMapTexture: {fileID: 0}
-  m_TileSize: {x: 82, y: 82}
+  m_TileSize: {x: 22, y: 22}
   m_TileOffset: {x: 0, y: 0}
   m_Specular: {r: 0, g: 0, b: 0, a: 0}
   m_Metallic: 0
-  m_Smoothness: 0
+  m_Smoothness: 0.15
   m_NormalScale: 1
   m_DiffuseRemapMin: {x: 0, y: 0, z: 0, w: 0}
-  m_DiffuseRemapMax: {x: 1, y: 1, z: 1, w: 0}
+  m_DiffuseRemapMax: {x: 1.08, y: 1.02, z: 0.94, w: 1}
   m_MaskMapRemapMin: {x: 0, y: 0, z: 0, w: 0}
   m_MaskMapRemapMax: {x: 1, y: 1, z: 1, w: 0}
   m_SmoothnessSource: 1

@@ -7,17 +7,17 @@ TerrainLayer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: WarValleyDirt
-  m_DiffuseTexture: {fileID: 2800000, guid: f2c127f3d8b6f614699f7bbfec570bfa, type: 2}
-  m_NormalMapTexture: {fileID: 0}
+  m_DiffuseTexture: {fileID: 2800000, guid: 5ca47372cb4a21c0ba2a967c48701a88, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: 7351d55146463fc8ba5f306080f4e168, type: 3}
   m_MaskMapTexture: {fileID: 0}
-  m_TileSize: {x: 46, y: 46}
+  m_TileSize: {x: 13, y: 13}
   m_TileOffset: {x: 0, y: 0}
   m_Specular: {r: 0, g: 0, b: 0, a: 0}
   m_Metallic: 0
-  m_Smoothness: 0
+  m_Smoothness: 0.1
   m_NormalScale: 1
   m_DiffuseRemapMin: {x: 0, y: 0, z: 0, w: 0}
-  m_DiffuseRemapMax: {x: 1, y: 1, z: 1, w: 0}
+  m_DiffuseRemapMax: {x: 1, y: 1, z: 1, w: 1}
   m_MaskMapRemapMin: {x: 0, y: 0, z: 0, w: 0}
   m_MaskMapRemapMax: {x: 1, y: 1, z: 1, w: 0}
   m_SmoothnessSource: 1
