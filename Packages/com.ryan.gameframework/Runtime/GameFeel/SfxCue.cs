@@ -26,5 +26,7 @@ namespace RyanAssets.GameFeel {
         Footstep = 18,
         Jump = 19,
         Land = 20,
+        /// <summary>A brass horn blast: round or wave start, kick-off, overtime.</summary>
+        Horn = 21,
     }
 }

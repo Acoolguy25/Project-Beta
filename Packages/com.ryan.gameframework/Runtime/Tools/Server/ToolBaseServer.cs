@@ -23,9 +23,14 @@ namespace RyanAssets.Tools.Server
         /// <see cref="GameCharacter"/> on it at all. Resolving the entity rather than assuming a
         /// character keeps those hits damaging instead of throwing on a null cast.
         /// </para>
+        /// <para>Hits that arrive while a server lockout runs (<see cref="ToolBaseShared.ServerCooldownBlocksHits"/>) are dropped.</para>
         /// </summary>
         void HandleHit(NetworkObject hitObject) {
             if (hitObject == null)
+                return;
+            // The client already refuses to attack during a server lockout; this is the authority's
+            // copy of that rule, for clients that do not.
+            if (toolBaseShared.ServerCooldownBlocksHits)
                 return;
 
             GameCharacter character = hitObject.GetComponent<GameCharacter>();

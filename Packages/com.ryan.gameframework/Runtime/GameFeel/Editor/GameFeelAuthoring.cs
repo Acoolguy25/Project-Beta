@@ -128,6 +128,7 @@ namespace RyanAssets.GameFeel.Editor {
             [SfxCue.Footstep] = new(0.5f, 1f, "footstep_1", "footstep_2", "footstep_3", "footstep_4", "footstep_5"),
             [SfxCue.Jump] = new(0.3f, 1f, "jump"),
             [SfxCue.Land] = new(0.6f, 1f, "land_1", "land_2", "land_3"),
+            [SfxCue.Horn] = new(0.8f, 0f, "horn"),
         };
 
         static SfxCueLibrary BuildCues() {

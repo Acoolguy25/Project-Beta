@@ -13,6 +13,16 @@ namespace RyanAssets.GameFeel {
     /// </code>
     /// </summary>
     public static class GameFx {
+        /// <summary>
+        /// Whether shared <see cref="RyanAssets.Shared.Combat.ExplosionEffect"/> blasts get the kit's
+        /// camera shake (and a sound when they author none). Default true; a game with its own blast
+        /// feedback turns it off while it runs.
+        /// </summary>
+        public static bool ExplosionEffectFeedback { get; set; } = true;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => ExplosionEffectFeedback = true;
+
         /// <summary>Plays a one-shot at <paramref name="position"/>, upright, as designed.</summary>
         public static void Play(FxKind kind, Vector3 position, float scale = 1f) =>
             Run(kind, position, Quaternion.identity, Color.white, scale, false, null, default);

@@ -70,6 +70,12 @@ MonoBehaviour:
     decayExponent: 2
     falloffExponent: 1.5
     maxKicks: 8
+  explosions:
+    enabled: 1
+    shakeStrength: 0.7
+    shakeRadius: 40
+    shakeSeconds: 0.6
+    largeScale: 2.5
   moods:
     arcadeBright: {fileID: 11400000, guid: c85afa2e214c95109aae1e75650d5c6d, type: 2}
     warmIndoor: {fileID: 11400000, guid: 58cb3ee1fe9038ab98ad89446c74667d, type: 2}
@@ -93,3 +99,8 @@ MonoBehaviour:
     jumpSound: 1
     landSound: 0
     landVolume: {x: 0.5, y: 1}
+    landShake: 1
+    landShakeSpeed: 18
+    landShakeStrength: {x: 0.08, y: 0.35}
+    landShakeSeconds: 0.25
+    teleportGraceSeconds: 0.75

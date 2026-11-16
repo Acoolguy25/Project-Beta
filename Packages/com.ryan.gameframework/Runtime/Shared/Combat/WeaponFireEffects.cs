@@ -16,6 +16,19 @@ namespace RyanAssets.Shared.Combat {
     /// </summary>
     public static class WeaponFireEffects {
         /// <summary>
+        /// Raised on a client each time a shot is shown, for the local player's shots and everyone
+        /// else's alike (handheld guns, turrets, units): muzzle position, impact point, impact normal,
+        /// and whether the shot struck something. Games hang their own juice on it (impact particles,
+        /// hit sounds, shake). Never raised on a dedicated server.
+        /// </summary>
+#pragma warning disable CS0414 // never raised in a dedicated-server build
+        public static event System.Action<Vector3, Vector3, Vector3, bool> ShotShown;
+#pragma warning restore CS0414
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => ShotShown = null;
+
+        /// <summary>
         /// Plays one shot's presentation. <paramref name="impactPoint"/> is where the tracer ends,
         /// and <paramref name="hasImpact"/> is false for a shot that reached maximum range without
         /// striking anything, which should leave no impact spark.
@@ -38,6 +51,8 @@ namespace RyanAssets.Shared.Combat {
                 MusicService.CreateOneShot(audioSource, fireAudio);
             else if (fireAudio != null)
                 MusicService.CreateOneShot(fireAudio, muzzlePosition);
+
+            ShotShown?.Invoke(muzzlePosition, impactPoint, impactNormal, hasImpact);
 #endif
         }
 

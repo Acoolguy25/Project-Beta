@@ -77,6 +77,25 @@ namespace RyanAssets.Shared.Combat {
 
         public bool HasDetonated => detonated;
 
+        /// <summary>
+        /// Raised on every client when a blast is drawn: the effect, the blast centre, and the scale the
+        /// effects were drawn at (1 = as authored; larger wrecks draw bigger). The game-feel kit adds
+        /// camera shake (and a sound for blasts with none authored) from it; games can add their own.
+        /// Never raised on a dedicated server.
+        /// </summary>
+#pragma warning disable CS0414 // never raised in a dedicated-server build
+        public static event System.Action<ExplosionEffect, Vector3, float> Exploded;
+#pragma warning restore CS0414
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Exploded = null;
+
+        /// <summary>Metres within which the blast damages (0 = no damage).</summary>
+        public float DamageRadius => damageRadius;
+
+        /// <summary>Whether this prefab plays its own report, so listeners should not add another sound.</summary>
+        public bool HasAuthoredAudio => explosionAudio != null;
+
 #if UNITY_SERVER
         IEntity entity;
 
@@ -196,6 +215,8 @@ namespace RyanAssets.Shared.Combat {
 
             ExplosionDebris.Launch(
                 debrisSource, centre, debrisUpwardForce, debrisOutwardForce, debrisSpin, debrisBurnSeconds);
+
+            Exploded?.Invoke(this, centre, scale);
 #endif
         }
 

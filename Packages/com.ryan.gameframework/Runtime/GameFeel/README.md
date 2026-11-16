@@ -35,7 +35,8 @@ frame play once.
 | `new SfxLadder(SfxCue cue, float semitoneStep = 1, int maxSteps = 12, float resetSeconds = 1.2f)` | `readonly SfxLadder coins = new(SfxCue.Coin);` then `coins.PlayAt(pos);` (each play inside 1.2 s is a semitone higher) |
 
 Cues: `UiClick, UiHover, Coin, Pickup, Purchase, Build, Hit, Kill, Explosion, ExplosionLarge,
-Whoosh, CountdownBeep, Go, Win, Lose, LevelUp, Error, Alarm, Footstep, Jump, Land` (Kenney CC0,
+Whoosh, CountdownBeep, Go, Win, Lose, LevelUp, Error, Alarm, Footstep, Jump, Land, Horn` (Kenney CC0, plus a
+synthesized CC0 horn,
 see `Audio/CREDITS.md`). For a game's own sounds, serialize an `SfxSound` (clips, volume, jitter,
 min interval, 3D distances) on your component and play it with the same calls.
 
@@ -62,7 +63,8 @@ and stay readable at any distance. Styles live in GameFeelSettings > Floating Te
 | Call | Example |
 |---|---|
 | `FloatingText.Damage(Vector3 pos, float amount, float size = 1)` | `FloatingText.Damage(hit.point, 35);` |
-| `FloatingText.Money(pos, amount, size = 1)` | `FloatingText.Money(pad.position, 120);` shows "+$120" |
+| `FloatingText.Money(Vector3 pos, double amount, float size = 1)` | `FloatingText.Money(pad.position, 120);` shows "+$120"; `12500` shows "+$12.5K" (the shared `RoundFormat.Money` style; under 10K it does not allocate; negative shows "-$") |
+| `FloatingText.Money(Vector3 pos, double amount, Func<double, string> format, float size = 1)` | `FloatingText.Money(pos, gems, g => g.ToString("N0"));` your own number text, "+$"/"-$" prefixed |
 | `FloatingText.Heal(pos, amount, size = 1)` | `FloatingText.Heal(pos, 25);` |
 | `FloatingText.Callout(pos, string text, [Color color], size = 1)` | `FloatingText.Callout(flag, "CHECKPOINT");` |
 | `FloatingText.Spawn(pos, string text, Color color, float size = 1)` | `FloatingText.Spawn(pos, "COMBO x3", Color.cyan);` |
@@ -118,6 +120,7 @@ them to a surface or a custom gravity.
 | `FxHandle GameFx.Attach(kind, Transform target, Vector3 localOffset, Color tint, float scale = 1)` | `trail = GameFx.Attach(FxKind.Trail, rocket, Vector3.zero, Color.yellow);` (stops itself if the target is destroyed) |
 | `GameFx.Explosion(Vector3 pos, bool large = false, float radius = 30)` | effect + sound + camera shake in one call |
 | `handle.Stop(bool clear = false)`, `handle.IsPlaying`, `handle.SetPosition(pos)`, `handle.SetTint(color)` | a default/stale handle is safe to use |
+| `GameFx.ExplosionEffectFeedback` (bool, default true) | shared `ExplosionEffect` blasts get camera shake, plus `SfxCue.Explosion`/`ExplosionLarge` when the prefab authors no sound (GameFeelSettings > Shared Explosions). Set false for a game with its own blast feedback. |
 
 Kinds: `DustPuff, Sparks, Confetti, CoinBurst, ExplosionSmall, ExplosionLarge, Smoke, Heal,
 ShockwaveRing, BeaconBeam (looping), Trail (looping)`. Sizes at scale 1 suit a 1-3 m object; the
@@ -148,6 +151,15 @@ it too. Footstep and landing sounds already come from `CharacterAnimator` (the r
 `CharacterAnimator.Footstep` / `Landed` events expose those animation events. Tune or turn it off in
 GameFeelSettings > Characters. (Obby's `OB_Fx` jump/land puffs now double up with this: remove them.)
 
+A hard landing of the local player also kicks the camera (from 18 m/s, scaled up to the hard-landing
+speed, and by the player's Camera Shake setting). It never fires within 0.75 s of a teleport: jumps of
+over 25 m in a frame are detected, and code that warps a character can say so.
+
+| Call | Example |
+|---|---|
+| `CharacterFeel.LandingShake` (bool, default true) | `CharacterFeel.LandingShake = false;` for a game with its own camera work |
+| `CharacterFeel.NotifyTeleported(GameCharacter character)` | after a checkpoint warp or respawn: drops the measured fall, no shake on arrival |
+
 ## Shared UI feel (com.ryan.ui)
 
 - Every button built by `UIKit.Clickable` (all shared and HudKit HUDs) gets `UIButtonFeel`: hover grow,
@@ -156,7 +168,25 @@ GameFeelSettings > Characters. (Obby's `OB_Fx` jump/land puffs now double up wit
 - `UISound.Click()` / `UISound.Hover()` / `UISound.Play(clip, volume)` play UI sounds from code.
 - `HudPanel` panels and the prompt dialog pop in (`UITheme.panelPopScale`, `CanvasGroupController.popFrom/popTarget`).
 - Name tags shrink so they never cover more than 7% of the screen height and fade out between 60 and
-  95 m (`NameTagManager` prefab fields).
+  95 m (`NameTagManager` prefab fields). A game can change that while it runs:
+  `var view = NameTagManager.OverrideView(float fadeStartDistance, float fadeEndDistance, float maxScreenHeight = 0)`
+  (0 keeps the prefab's screen cap; the fields can be changed later, e.g. with commander zoom), and
+  `view.Dispose()` restores the previous values. The newest override wins.
+- `NameTagManager.EntityTagFilter` (`Func<EntityBase, bool>`, null = show all) hides shared entity tags
+  (vehicles, structures, objectives) like `CharacterTagFilter` does for characters.
+
+## Other shared client hooks (outside the kit)
+
+| Hook | Where | Raised |
+|---|---|---|
+| `static event Action<LaunchPad, CharacterMovement> LaunchPad.Launched` | `RyanAssets.Platformer` (client only) | after a pad launches the local character |
+| `static event Action<Vector3, Vector3, Vector3, bool> WeaponFireEffects.ShotShown` (muzzle, impact point, impact normal, hasImpact) | `RyanAssets.Shared.Combat` | on clients, for every shot shown, local and remote |
+| `static event Action<ToolBaseClient, Vector3> ToolBaseClient.Activated` (tool script, aimed point) and `ToolBaseClient.SharedTool` | `RyanAssets.Tools.Client` | when a tool actually fires/swings/toggles, where it is controlled (owner's client, or the server for NPC tools) |
+| `static event Action<ExplosionEffect, Vector3, float> ExplosionEffect.Exploded` (effect, centre, drawn scale), plus `DamageRadius`, `HasAuthoredAudio` | `RyanAssets.Shared.Combat` | on clients when a shared blast is drawn (the kit's explosion feedback uses it) |
+
+Server side, tool hits are now dropped while a server lockout (`ToolBaseShared.UpdateServerCooldown`,
+e.g. a jammed pistol or a kill cooldown) is running, less `ToolBaseShared.serverCooldownTolerance`
+(0.15 s, serialized) for latency; `ToolBaseShared.ServerCooldownBlocksHits` reports it.
 
 ## Gotchas
 

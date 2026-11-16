@@ -16,6 +16,20 @@ namespace RyanAssets.Tools.Client
 {
     [RequireComponent(typeof(ToolBaseShared))]
     public class ToolBaseClient : MonoBehaviour {
+        /// <summary>
+        /// Raised when a tool actually fires, swings or toggles (its cooldown, ammo and
+        /// <see cref="CanActivateEvent"/> checks passed), with the aimed world point. It runs where the
+        /// tool is controlled: the owning player's client, or the server for an NPC's tool. Use
+        /// <see cref="SharedTool"/> for the tool's kind and stats.
+        /// </summary>
+        public static event Action<ToolBaseClient, Vector3> Activated;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Activated = null;
+
+        /// <summary>The networked tool this script drives.</summary>
+        public ToolBaseShared SharedTool => toolBaseShared;
+
         public Func<bool> CanActivateEvent = null;
         public event Action<float, float> onCooldownChangeEvent;
         //protected List<CancellationTokenSource> activeTasks = new();
@@ -71,6 +85,7 @@ namespace RyanAssets.Tools.Client
         public virtual void TryActivate(Vector3 targetLocation = default) { 
             if (CanAttack()) {
                 OnActivate(targetLocation);
+                Activated?.Invoke(this, targetLocation);
             } else if (MustReload()) {
                 TryReload();
             }

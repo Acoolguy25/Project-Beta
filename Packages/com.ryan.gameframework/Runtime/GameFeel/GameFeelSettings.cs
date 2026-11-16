@@ -95,6 +95,30 @@ namespace RyanAssets.GameFeel {
             public bool landSound;
             [Tooltip("Land cue volume for the softest and the hardest landing.")]
             public Vector2 landVolume = new(0.5f, 1f);
+            [Tooltip("Kick the camera when the local player lands hard (scaled by the player's Camera Shake setting).")]
+            public bool landShake = true;
+            [Tooltip("Landing speed (m/s, along gravity) from which the local player's landing shakes the camera.")]
+            [Min(0f)] public float landShakeSpeed = 18f;
+            [Tooltip("Shake strength (0..1) at that speed and at the hard-landing speed.")]
+            public Vector2 landShakeStrength = new(0.08f, 0.35f);
+            [Tooltip("Seconds the landing shake lasts.")]
+            [Range(0.05f, 1f)] public float landShakeSeconds = 0.25f;
+            [Tooltip("Seconds after a teleport or respawn during which landings never shake the camera.")]
+            [Min(0f)] public float teleportGraceSeconds = 0.75f;
+        }
+
+        [Serializable]
+        public sealed class ExplosionTuning {
+            [Tooltip("Shake the camera (and play a sound for blasts that author none) whenever a shared ExplosionEffect goes off on this client.")]
+            public bool enabled = true;
+            [Tooltip("Shake strength (0..1) at the centre of a blast drawn at scale 1.")]
+            [Range(0f, 1f)] public float shakeStrength = 0.7f;
+            [Tooltip("Metres from the blast at which the shake has died out, for a blast drawn at scale 1 (a damaging blast uses at least twice its damage radius).")]
+            [Min(1f)] public float shakeRadius = 40f;
+            [Tooltip("Seconds the shake lasts.")]
+            [Range(0.1f, 2f)] public float shakeSeconds = 0.6f;
+            [Tooltip("Blasts drawn at this scale or larger use the ExplosionLarge cue and full strength.")]
+            [Min(1f)] public float largeScale = 2.5f;
         }
 
         [Serializable]
@@ -125,6 +149,9 @@ namespace RyanAssets.GameFeel {
 
         [Header("Camera shake")]
         public CameraShakeTuning cameraShake = new();
+
+        [Header("Shared explosions")]
+        public ExplosionTuning explosions = new();
 
         [Header("Moods")]
         public MoodTuning moods = new();

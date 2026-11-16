@@ -25,6 +25,15 @@ namespace RyanAssets.Platformer {
         public void Configure(Vector3 localVelocity) => localLaunchVelocity = localVelocity;
 
 #if !UNITY_SERVER
+        /// <summary>
+        /// Raised on the client right after a pad launches the local character (games add their own
+        /// sound, particles or stats). Client only: not compiled into servers.
+        /// </summary>
+        public static event System.Action<LaunchPad, CharacterMovement> Launched;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Launched = null;
+
         const float StretchSeconds = 0.25f;
         float nextLaunch, stretchUntil = float.NegativeInfinity;
         Vector3 visualScale;
@@ -43,6 +52,7 @@ namespace RyanAssets.Platformer {
             movement.Launch(velocity);
             stretchUntil = Time.time + StretchSeconds;
             if (launchAudio != null) launchAudio.Play();
+            Launched?.Invoke(this, movement);
         }
 
         void Update() {

@@ -1,6 +1,6 @@
 # Game feel kit sounds
 
-All sounds are by Kenney (www.kenney.nl), released under CC0 1.0 (public domain,
+All sounds except horn.ogg (see the end) are by Kenney (www.kenney.nl), released under CC0 1.0 (public domain,
 https://creativecommons.org/publicdomain/zero/1.0/). Crediting is optional; we do it anyway.
 Files were renamed for the cue they serve; the original pack and file name are listed.
 kenney.nl is not reachable from the cloud environment, so the packs were taken from GitHub
@@ -27,6 +27,11 @@ mirrors of the original downloads (license files included in each mirror).
 | error.ogg | Interface Sounds | error_006.ogg | github.com/ETdoFresh/kenney.nl |
 | alarm.ogg | Digital Audio | zapTwoTone.ogg | github.com/ETdoFresh/kenney.nl |
 | jump.ogg | Digital Audio | phaseJump1.ogg | github.com/ETdoFresh/kenney.nl |
+
+`horn.ogg` is not from Kenney: no CC0 pack we could reach has a horn, so it was synthesized for
+this kit (Project Beta, own work) and is dedicated to the public domain under the same CC0 1.0.
+It is a 1.4 s G3-B3-D4 chord of band-limited sawtooth voices with 5.5 Hz vibrato, a 50 ms attack
+and a 0.4 s release, low-passed at 3.2 kHz and loudness-normalized to -15 LUFS (Python + ffmpeg/libvorbis).
 
 The UI click and hover sounds live with the theme in
 `Packages/com.ryan.ui/Runtime/UI/Theme/Sounds` (see the CREDITS.md there).

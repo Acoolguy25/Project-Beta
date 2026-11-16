@@ -39,6 +39,11 @@ namespace RyanAssets.Tools.Shared {
         public float attackCooldownInit = 0.85f;
         [SerializeField]
         public float reloadDurationInit = 1.0f;
+        [Tooltip("Server-side lockouts (UpdateServerCooldown) drop hits until they end. A hit is still " +
+                 "accepted up to this many seconds before the end, so a client that saw the lockout " +
+                 "expire on its own clock is not refused over network latency.")]
+        [SerializeField, Min(0f)]
+        public float serverCooldownTolerance = 0.15f;
 
         [Header("Ammo Stats")]
         [SerializeField]
@@ -223,6 +228,13 @@ namespace RyanAssets.Tools.Shared {
             serverCooldownSync.Value = cooldown + NetworkHelper.GetServerTime();
         }
 #endif
+        /// <summary>
+        /// True while a server lockout (<c>UpdateServerCooldown</c>) is still running, less
+        /// <see cref="serverCooldownTolerance"/>. The server drops hits from the tool meanwhile, so a
+        /// modified client cannot ignore a jam or a kill cooldown.
+        /// </summary>
+        public bool ServerCooldownBlocksHits => serverCooldownSync.Value > NetworkHelper.GetServerTime() + serverCooldownTolerance;
+
         public override void OnStartNetwork() {
             ResolveConnectedCharacter();
             if (connectedCharacter == null) {

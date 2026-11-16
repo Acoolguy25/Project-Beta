@@ -2,6 +2,18 @@
 
 namespace RyanAssets.Clients.ClientEffects {
     public static class GunVisualEffects {
+        // One shared material for every tracer and spark: a new Material per shot was never destroyed
+        // with its object, so every shot leaked one.
+        static Material effectMaterial;
+
+        static Material EffectMaterial {
+            get {
+                if (effectMaterial == null)
+                    effectMaterial = new Material(Shader.Find("Sprites/Default")) { name = "GunVisualEffects (shared)", hideFlags = HideFlags.DontSave };
+                return effectMaterial;
+            }
+        }
+
         public static void VisualizeBullet(RaycastHit hit, Vector3 origin, ParticleSystem particleSystem = null) {
             if (particleSystem != null) {
                 particleSystem.Play();
@@ -27,7 +39,7 @@ namespace RyanAssets.Clients.ClientEffects {
             GameObject lineObj = new GameObject("BulletTrail");
             LineRenderer lr = lineObj.AddComponent<LineRenderer>();
 
-            lr.material = new Material(Shader.Find("Sprites/Default"));
+            lr.sharedMaterial = EffectMaterial;
             lr.startColor = new Color(1f, 0.9f, 0.5f, 1f);
             lr.endColor = new Color(1f, 0.9f, 0.5f, 1f);
             lr.startWidth = 0.02f;
@@ -72,7 +84,7 @@ namespace RyanAssets.Clients.ClientEffects {
             shape.angle = 15f;
 
             var renderer = spark.GetComponent<ParticleSystemRenderer>();
-            renderer.material = new Material(Shader.Find("Sprites/Default"));
+            renderer.sharedMaterial = EffectMaterial;
 
             GameObject.Destroy(spark, main.duration + main.startLifetime.constant);
         }

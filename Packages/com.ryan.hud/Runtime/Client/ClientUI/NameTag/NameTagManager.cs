@@ -27,8 +27,61 @@ namespace RyanAssets.Client.ClientUI.NameTag {
         /// other side's tags, since tags draw through walls). Null shows every living character's tag.
         /// </summary>
         public static Func<GameCharacter, bool> CharacterTagFilter;
+
+        /// <summary>
+        /// Optional per-game rule for which world-entity tags (structures, vehicles, objectives) this
+        /// client may see, applied on top of the shared rule (alive, and damaged or always-labelled).
+        /// Null keeps the shared rule alone.
+        /// </summary>
+        public static Func<EntityBase, bool> EntityTagFilter;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetFilter() => CharacterTagFilter = null;
+        static void ResetFilter() {
+            CharacterTagFilter = null;
+            EntityTagFilter = null;
+            ViewOverrides.Clear();
+        }
+
+        /// <summary>
+        /// A game's temporary replacement for the prefab's fade distances and screen-size cap, e.g. a
+        /// commander camera that looks at the field from far above. Change its fields at any time
+        /// (they apply next frame); <see cref="Dispose"/> it to go back to the previous values.
+        /// <code>
+        /// var view = NameTagManager.OverrideView(150f, 220f);
+        /// ...
+        /// view.Dispose();
+        /// </code>
+        /// </summary>
+        public sealed class ViewOverride : IDisposable {
+            /// <summary>Tags start fading out beyond this distance from the camera (m).</summary>
+            public float FadeStartDistance;
+            /// <summary>Tags are fully hidden beyond this distance (m); kept at or above the start.</summary>
+            public float FadeEndDistance;
+            /// <summary>Largest share of the screen height a tag may cover (0..1); 0 or less keeps the prefab's value.</summary>
+            public float MaxScreenHeight;
+
+            internal ViewOverride() { }
+
+            /// <summary>Removes this override; the one pushed before it (or the prefab's values) applies again.</summary>
+            public void Dispose() => ViewOverrides.Remove(this);
+        }
+
+        // The most recent override wins; releasing it restores the one under it.
+        static readonly List<ViewOverride> ViewOverrides = new();
+
+        /// <summary>
+        /// Replaces the tag fade distances (and, when <paramref name="maxScreenHeight"/> is above 0, the
+        /// screen-size cap) until the returned handle is disposed. Several can be active; the newest wins.
+        /// </summary>
+        public static ViewOverride OverrideView(float fadeStartDistance, float fadeEndDistance, float maxScreenHeight = 0f) {
+            var view = new ViewOverride {
+                FadeStartDistance = fadeStartDistance,
+                FadeEndDistance = fadeEndDistance,
+                MaxScreenHeight = maxScreenHeight,
+            };
+            ViewOverrides.Add(view);
+            return view;
+        }
 
         [SerializeField]
         GameObject nameTagPrefab;
@@ -245,6 +298,14 @@ namespace RyanAssets.Client.ClientUI.NameTag {
         /// shrink naturally with perspective until they fade.
         /// </summary>
         void FitToView(Canvas canvas, CanvasGroup group, Vector3 baseScale, float worldHeight, Camera camera) {
+            float fadeStartDistance = this.fadeStartDistance, fadeEndDistance = this.fadeEndDistance, maxScreenHeight = this.maxScreenHeight;
+            if (ViewOverrides.Count > 0) {
+                ViewOverride view = ViewOverrides[^1];
+                fadeStartDistance = Mathf.Max(0f, view.FadeStartDistance);
+                fadeEndDistance = Mathf.Max(fadeStartDistance, view.FadeEndDistance);
+                if (view.MaxScreenHeight > 0f)
+                    maxScreenHeight = Mathf.Min(1f, view.MaxScreenHeight);
+            }
             float scale = 1f, alpha = 1f;
             if (camera != null) {
                 Transform tagTransform = canvas.transform;
@@ -439,7 +500,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                 }
 
                 EntityBase entity = tag.Entity;
-                bool show = ShouldShowEntityTag(entity);
+                bool show = ShouldShowEntityTag(entity) && (EntityTagFilter == null || EntityTagFilter(entity));
                 if (show != tag.Canvas.gameObject.activeSelf) {
                     tag.Canvas.gameObject.SetActive(show);
                     // A structure finishes construction, and a vehicle is built, at its full size only

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
 using UnityEngine;
 
@@ -28,6 +29,7 @@ namespace RyanAssets.GameFeel {
             public float groundSpeed;
             public float peakFallSpeed;
             public bool near;
+            public float teleportedAt = float.NegativeInfinity;
         }
 
         static readonly int GroundedId = Animator.StringToHash("Grounded");
@@ -145,6 +147,7 @@ namespace RyanAssets.GameFeel {
                 entry.hasPosition = true;
                 entry.lastPosition = position;
                 entry.peakFallSpeed = 0f;
+                entry.teleportedAt = Time.time;
                 return;
             }
             Vector3 velocity = (position - entry.lastPosition) / dt;
@@ -183,6 +186,26 @@ namespace RyanAssets.GameFeel {
             GameFx.Play(FxKind.DustPuff, position, up, tuning.dustColor, tuning.footDustScale * BodyScale(entry) * Mathf.Lerp(tuning.landDustScale.x, tuning.landDustScale.y, impact));
             if (tuning.landSound)
                 GameSfx.PlayAt(SfxCue.Land, position, Mathf.Lerp(tuning.landVolume.x, tuning.landVolume.y, impact));
+            if (tuning.landShake && CharacterFeel.LandingShake && speed >= tuning.landShakeSpeed
+                && entry.character == LocalPlayer.Character
+                && Time.time - entry.teleportedAt >= tuning.teleportGraceSeconds) {
+                float shake = Mathf.InverseLerp(tuning.landShakeSpeed, Mathf.Max(tuning.landShakeSpeed, tuning.hardLandSpeed), speed);
+                CameraShake.Kick(Mathf.Lerp(tuning.landShakeStrength.x, tuning.landShakeStrength.y, shake), tuning.landShakeSeconds);
+            }
+        }
+
+        /// <summary>
+        /// Call after moving a character by code (checkpoints, respawns, launch pads that place
+        /// rather than push): its next landing gets no camera shake and the fall measured so far is dropped.
+        /// </summary>
+        public void NotifyTeleported(GameCharacter character) {
+            for (int i = 0; i < tracked.Count; i++) {
+                if (tracked[i].character != character)
+                    continue;
+                tracked[i].peakFallSpeed = 0f;
+                tracked[i].teleportedAt = Time.time;
+                tracked[i].hasPosition = false;
+            }
         }
 
         void OnFootstep(Tracked entry) {

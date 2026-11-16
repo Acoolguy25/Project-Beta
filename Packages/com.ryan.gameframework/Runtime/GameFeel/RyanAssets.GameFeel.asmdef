@@ -7,6 +7,8 @@
         "RyanAssets.Shared.Declarations",
         "RyanAssets.Characters.Shared",
         "RyanAssets.Characters.Client",
+        "RyanAssets.Rounds",
+        "RyanAssets.Shared.Combat",
         "RyanAssets.Client.ClientUI.GameSettings",
         "RyanAssets.UI",
         "FishNet.Runtime",

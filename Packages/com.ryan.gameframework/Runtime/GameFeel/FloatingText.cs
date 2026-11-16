@@ -1,3 +1,4 @@
+using RyanAssets.Rounds;
 using TMPro;
 using UnityEngine;
 
@@ -45,8 +46,29 @@ namespace RyanAssets.GameFeel {
         /// <summary>A red damage number ("35").</summary>
         public static void Damage(Vector3 position, float amount, float size = 1f) => Styled(position, "{0}", amount, s => s.damage, size);
 
-        /// <summary>A gold money popup ("+$120").</summary>
-        public static void Money(Vector3 position, float amount, float size = 1f) => Styled(position, "+${0}", amount, s => s.money, size);
+        /// <summary>
+        /// A gold money popup in the shared <see cref="RoundFormat.Money"/> style: "+$120", "+$12.5K",
+        /// "+$3.2M" (negative amounts show "-$..."). Amounts under 10,000 do not allocate.
+        /// </summary>
+        public static void Money(Vector3 position, double amount, float size = 1f) {
+            if (System.Math.Abs(amount) < ShortMoneyLimit) {
+                // Same text RoundFormat.Money gives below 10K (whole units), without a string.
+                Styled(position, amount < 0 ? "-${0}" : "+${0}", (float)System.Math.Truncate(System.Math.Abs(amount)), s => s.money, size);
+                return;
+            }
+            Money(position, amount, RoundFormat.Money, size);
+        }
+
+        /// <summary>A gold money popup whose number text comes from <paramref name="format"/> (e.g. your own currency style); "+$" / "-$" is prefixed.</summary>
+        public static void Money(Vector3 position, double amount, System.Func<double, string> format, float size = 1f) {
+            GameFeelSettings settings = GameFeelSettings.Active;
+            if (settings == null || format == null)
+                return;
+            Spawn(position, (amount < 0 ? "-$" : "+$") + format(System.Math.Abs(amount)), settings.floatingText.money.Scaled(size));
+        }
+
+        // RoundFormat.Money switches to the "12.5K" form at this amount.
+        const double ShortMoneyLimit = 10_000;
 
         /// <summary>A green heal popup ("+25").</summary>
         public static void Heal(Vector3 position, float amount, float size = 1f) => Styled(position, "+{0}", amount, s => s.heal, size);
