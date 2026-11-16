@@ -1,0 +1,29 @@
+{
+    "name": "RyanAssets.GameFeel",
+    "rootNamespace": "RyanAssets.GameFeel",
+    "references": [
+        "RyanAssets.Core",
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Declarations",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Characters.Client",
+        "RyanAssets.Client.ClientUI.GameSettings",
+        "RyanAssets.UI",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

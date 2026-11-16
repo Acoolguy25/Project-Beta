@@ -202,6 +202,7 @@ namespace RyanAssets.UI.Editor {
             Shadow(window, 40f, 12f, 0.5f);
             Rounded(window, UIColorRole.SurfaceRaised, WindowRadius);
             Column(window.gameObject, 0f);
+            fader.popTarget = window; // the scrim stays full-screen while the window pops
 
             // Header: title + close
             RectTransform header = Node(window, "Header");

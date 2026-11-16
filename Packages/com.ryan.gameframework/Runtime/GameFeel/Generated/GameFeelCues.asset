@@ -1,0 +1,269 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 568ba9f929bdde2ba8a406593113837c, type: 3}
+  m_Name: GameFeelCues
+  m_EditorClassIdentifier: RyanAssets.GameFeel::RyanAssets.GameFeel.SfxCueLibrary
+  entries:
+  - cue: 0
+    sound:
+      clips:
+      - {fileID: 8300000, guid: a62390d32a680845cbf34e27de894160, type: 3}
+      volume: 0.6
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.4
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 1
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 7206af27c4d4f122cad87517b10a623d, type: 3}
+      volume: 0.3
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.6
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 2
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 53c0349881da06d5bb87c730bbc04803, type: 3}
+      volume: 0.7
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.3
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 3
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 4a5633259ec09b986ab7aa2e96a2d540, type: 3}
+      volume: 0.7
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.5
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 4
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 3017a8dcf12f51c80bdd1dd3186b230d, type: 3}
+      - {fileID: 8300000, guid: de7ceae4d21480d61a9238ede0a004b9, type: 3}
+      volume: 0.85
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.5
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 5
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 52516756a2985d3739a678b9ba4dc3f8, type: 3}
+      - {fileID: 8300000, guid: 457263a51e965758eae5005296f40fc4, type: 3}
+      - {fileID: 8300000, guid: 42dc717a642830986aa43dea213d6906, type: 3}
+      - {fileID: 8300000, guid: 9cc41f97300e57ce19107c8d8175f1e0, type: 3}
+      - {fileID: 8300000, guid: 615cb7df2475d4eb394006e501f333aa, type: 3}
+      volume: 0.85
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 1
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 6
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 7f6ff4f219c74fb5582211df328a2cd9, type: 3}
+      - {fileID: 8300000, guid: 22d0a6dcae0f285359df7f148f6ccf9c, type: 3}
+      - {fileID: 8300000, guid: 8f1c2645e3e654676b826a88c14f247a, type: 3}
+      - {fileID: 8300000, guid: d0c8d65e00a3408bea45c510d42ae01b, type: 3}
+      - {fileID: 8300000, guid: 58d5a883ea4b7c1ac9b7bd24005a3068, type: 3}
+      volume: 0.8
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 1
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 7
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 7480273e73ec59b1a91511e9cd126a40, type: 3}
+      - {fileID: 8300000, guid: f3125e7728db4b2cf8fbb36d5dcc6a3e, type: 3}
+      - {fileID: 8300000, guid: 745e41dbac70b2ad78813e1dac6a6f40, type: 3}
+      volume: 1
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.6
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 8
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 06cf793e990f5079e8211a405a2ebbf7, type: 3}
+      - {fileID: 8300000, guid: ec563932d18daab94889797999ee9973, type: 3}
+      - {fileID: 8300000, guid: 1b04c9f8f6b0b32449ce749630a22519, type: 3}
+      - {fileID: 8300000, guid: 05966acf8d56c566b8609203ff03b203, type: 3}
+      - {fileID: 8300000, guid: 343380fffdbfffa7595b8920171dd5b6, type: 3}
+      volume: 1
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 1.2
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 9
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 2756175d00d55d0529a72279ed7e1721, type: 3}
+      - {fileID: 8300000, guid: 71a457c44c322b6baad24c23b73761fa, type: 3}
+      volume: 1
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.8
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 10
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 42729e3ad5b17cc8587eccb48048740d, type: 3}
+      - {fileID: 8300000, guid: 3294d7a32c0a4de829a8c02af5d378e4, type: 3}
+      volume: 0.7
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 1.5
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 11
+    sound:
+      clips:
+      - {fileID: 8300000, guid: a3c8731a96df769fe9df83916dbc9c90, type: 3}
+      volume: 0.7
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 12
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 88dbbd3afc8390d3cb6f4f102a636015, type: 3}
+      volume: 0.9
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 13
+    sound:
+      clips:
+      - {fileID: 8300000, guid: df1536e93402a95b8b6760372c0dc140, type: 3}
+      volume: 0.8
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 14
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 5d1f7d0a93af08cd6ae2902268c657d4, type: 3}
+      volume: 0.8
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 15
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 036c06e32c42d0517b0067e44b5feb89, type: 3}
+      volume: 0.7
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 16
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 952d6994d7e151cd0b74a01cea1ec6c1, type: 3}
+      volume: 0.6
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0.2
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 17
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 0d8302aa485099ed497f00fea825b3ec, type: 3}
+      volume: 0.8
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 0
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 18
+    sound:
+      clips:
+      - {fileID: 8300000, guid: c71b5d941871e5e6d9cc6ed71b5e7716, type: 3}
+      - {fileID: 8300000, guid: 2b6edc5859b01bb1a9caa7059c19efe8, type: 3}
+      - {fileID: 8300000, guid: 2de0ce4697c4297fda43d027cb397080, type: 3}
+      - {fileID: 8300000, guid: 0f6999c0e92ed096e891cb2769ef2164, type: 3}
+      - {fileID: 8300000, guid: 2beccf681e5d3e08a98d50212027233c, type: 3}
+      volume: 0.5
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 1
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 19
+    sound:
+      clips:
+      - {fileID: 8300000, guid: 036af0cebdd11f0728d8d69ea0e1dd27, type: 3}
+      volume: 0.3
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 1
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0
+  - cue: 20
+    sound:
+      clips:
+      - {fileID: 8300000, guid: ec542de1984054c96a61da55fea2cd4e, type: 3}
+      - {fileID: 8300000, guid: f8ffca86f5fd97cd09cfa51e60934d4e, type: 3}
+      - {fileID: 8300000, guid: 492fb8bed9b4a19f296929fcfaa9bca8, type: 3}
+      volume: 0.6
+      volumeJitter: 0.1
+      pitch: 1
+      pitchJitterSemitones: 1
+      minInterval: 0.04
+      minDistance: 0
+      maxDistance: 0

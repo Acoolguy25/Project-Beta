@@ -180,6 +180,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 9
   opacity: 1
+  painted: {r: 0.23921569, g: 0.54509807, b: 1, a: 1}
+  hasPainted: 1
 --- !u!1 &920251170573444226
 GameObject:
   m_ObjectHideFlags: 0
@@ -332,6 +334,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &1102551617219102101
 GameObject:
   m_ObjectHideFlags: 0
@@ -532,6 +536,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 10
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 1}
+  hasPainted: 1
 --- !u!1 &1463486941943876808
 GameObject:
   m_ObjectHideFlags: 0
@@ -740,6 +746,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 3
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 0.12}
+  hasPainted: 1
 --- !u!114 &8351032743396895248
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1036,6 +1044,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 2
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 0.06}
+  hasPainted: 1
 --- !u!114 &3593031628428392031
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1360,6 +1370,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &3791042211934138614
 GameObject:
   m_ObjectHideFlags: 0
@@ -1512,6 +1524,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 8
   opacity: 1
+  painted: {r: 0.49019608, g: 0.5294118, b: 0.5882353, a: 1}
+  hasPainted: 1
 --- !u!1 &4203053770275902419
 GameObject:
   m_ObjectHideFlags: 0
@@ -1762,6 +1776,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 10
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 1}
+  hasPainted: 1
 --- !u!1 &4549940424332800814
 GameObject:
   m_ObjectHideFlags: 0
@@ -1914,6 +1930,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &4855746894705542107
 GameObject:
   m_ObjectHideFlags: 0
@@ -1956,7 +1974,7 @@ RectTransform:
   - {fileID: 1417958568191920095}
   - {fileID: 3194111833500182232}
   - {fileID: 5789669027851544525}
-  - {fileID: 1113030201686688059}
+  - {fileID: 4927674192171358886}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -2054,6 +2072,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CanvasGroupController
   alwaysActive: 0
   targetAlpha: 0
+  popFrom: 1
+  popTarget: {fileID: 0}
 --- !u!114 &2014124812158855259
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2108,7 +2128,7 @@ MonoBehaviour:
   signInGroup: {fileID: 456792710946443100}
   accountGroup: {fileID: 7149866654407356900}
   continueCanvas: {fileID: 0}
-  settingsPanel: {fileID: 1998776649802453877}
+  settingsPanel: {fileID: 5813529495226337512}
   animationTime: 0.25
 --- !u!1 &5099819061002911004
 GameObject:
@@ -2228,6 +2248,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 9
   opacity: 1
+  painted: {r: 0.23921569, g: 0.54509807, b: 1, a: 1}
+  hasPainted: 1
 --- !u!114 &6122571893877712313
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2462,6 +2484,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 7
   opacity: 1
+  painted: {r: 0.7058824, g: 0.7372549, b: 0.78431374, a: 1}
+  hasPainted: 1
 --- !u!1 &5636996922612091622
 GameObject:
   m_ObjectHideFlags: 0
@@ -2610,6 +2634,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 5
   opacity: 1.6666666
+  painted: {r: 0.019607844, g: 0.02745098, b: 0.039215688, a: 1}
+  hasPainted: 1
 --- !u!1 &6066562240268582247
 GameObject:
   m_ObjectHideFlags: 0
@@ -2762,6 +2788,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 10
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 1}
+  hasPainted: 1
 --- !u!1 &6221689818625955987
 GameObject:
   m_ObjectHideFlags: 0
@@ -2880,6 +2908,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 9
   opacity: 1
+  painted: {r: 0.23921569, g: 0.54509807, b: 1, a: 1}
+  hasPainted: 1
 --- !u!114 &6264349836604715631
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3201,6 +3231,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 8
   opacity: 1
+  painted: {r: 0.49019608, g: 0.5294118, b: 0.5882353, a: 1}
+  hasPainted: 1
 --- !u!1 &6552399080157347556
 GameObject:
   m_ObjectHideFlags: 0
@@ -3314,6 +3346,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &6567915027051798541
 GameObject:
   m_ObjectHideFlags: 0
@@ -3408,6 +3442,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 1
   opacity: 1
+  painted: {r: 0.08235294, g: 0.09803922, b: 0.13333334, a: 0.97}
+  hasPainted: 1
 --- !u!114 &6736215025088633179
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3563,6 +3599,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 9
   opacity: 0.16
+  painted: {r: 0.23921569, g: 0.54509807, b: 1, a: 0.16}
+  hasPainted: 1
 --- !u!114 &3930429299107480065
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3707,6 +3745,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 3
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 0.12}
+  hasPainted: 1
 --- !u!114 &819604819220202469
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3941,6 +3981,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &7149866654407356900
 GameObject:
   m_ObjectHideFlags: 0
@@ -4260,6 +4302,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 7
   opacity: 1
+  painted: {r: 0.7058824, g: 0.7372549, b: 0.78431374, a: 1}
+  hasPainted: 1
 --- !u!1 &7433780760133762472
 GameObject:
   m_ObjectHideFlags: 0
@@ -4412,6 +4456,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &7531564329775823738
 GameObject:
   m_ObjectHideFlags: 0
@@ -4675,6 +4721,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 10
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 1}
+  hasPainted: 1
 --- !u!1 &8706421633323367539
 GameObject:
   m_ObjectHideFlags: 0
@@ -4886,6 +4934,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &9219746644261072142
 GameObject:
   m_ObjectHideFlags: 0
@@ -5002,6 +5052,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 2
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 0.06}
+  hasPainted: 1
 --- !u!114 &7292137997034601235
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5306,7 +5358,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
---- !u!1001 &8159386570435002682
+--- !u!1001 &4191492637371783847
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -5411,15 +5463,15 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7a40623e161b44308195701e053a48d3, type: 3}
---- !u!224 &1113030201686688059 stripped
+--- !u!224 &4927674192171358886 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 9100000000000000001, guid: 7a40623e161b44308195701e053a48d3, type: 3}
-  m_PrefabInstance: {fileID: 8159386570435002682}
+  m_PrefabInstance: {fileID: 4191492637371783847}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1998776649802453877 stripped
+--- !u!114 &5813529495226337512 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 7676071237252878927, guid: 7a40623e161b44308195701e053a48d3, type: 3}
-  m_PrefabInstance: {fileID: 8159386570435002682}
+  m_PrefabInstance: {fileID: 4191492637371783847}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1

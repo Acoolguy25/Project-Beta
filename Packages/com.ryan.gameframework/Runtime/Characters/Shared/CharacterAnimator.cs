@@ -9,6 +9,12 @@ namespace RyanAssets.Characters.Shared
     [DisallowMultipleComponent]
     public class CharacterAnimator: NetworkBehaviour {
         public event System.Action LethalAttackStarted, LethalAttackEnded;
+        /// <summary>
+        /// Raised on every peer that animates this character when a footstep or landing animation
+        /// event plays (after de-duplication), so client-only feedback such as dust can follow the
+        /// feet without its own timing.
+        /// </summary>
+        public event System.Action Footstep, Landed;
         public bool LethalAttackEnabled { get; set; } = false;
         public AudioClip LandingAudioClip;
         public AudioClip[] FootstepAudioClips;
@@ -46,6 +52,7 @@ namespace RyanAssets.Characters.Shared
 
             _lastFootstepTime = Time.time;
             PlayOneShot(FootstepAudioClips[Random.Range(0, FootstepAudioClips.Length)]);
+            Footstep?.Invoke();
         }
         public void OnLand(AnimationEvent animationEvent) {
             if (Time.time - _lastLandingTime < duplicateSoundWindow)
@@ -53,6 +60,7 @@ namespace RyanAssets.Characters.Shared
 
             _lastLandingTime = Time.time;
             PlayOneShot(LandingAudioClip);
+            Landed?.Invoke();
         }
         private void PlayOneShot(AudioClip clip) {
             if (clip == null)

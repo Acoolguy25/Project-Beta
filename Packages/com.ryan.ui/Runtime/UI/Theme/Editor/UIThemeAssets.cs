@@ -1,7 +1,9 @@
 using System.IO;
+using System.Linq;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.TextCore.LowLevel;
 
 namespace RyanAssets.UI.Editor {
@@ -15,6 +17,9 @@ namespace RyanAssets.UI.Editor {
         public const string ThemePath = Root + "/Resources/" + UITheme.ResourcePath + ".asset";
         public const string IconFolder = Root + "/Icons";
         public const string GameIconFolder = Root + "/GameIcons";
+        public const string SoundFolder = Root + "/Sounds";
+        const string MixerPath = "Packages/com.ryan.ui/Runtime/Client/ClientAudio/MainMixer.mixer";
+        const string SfxGroupName = "SFXVolume";
 
         /// <summary>Corner radius, in pixels, drawn into <c>Sprites/ui_rounded.png</c>.</summary>
         public const float RoundedSpriteRadius = 24f;
@@ -51,6 +56,12 @@ namespace RyanAssets.UI.Editor {
             if (theme.boldFont == null) theme.boldFont = bold;
             if (theme.roundedSprite == null) theme.roundedSprite = rounded;
             if (theme.shadowSprite == null) theme.shadowSprite = shadow;
+            if (theme.buttonHoverSound == null) theme.buttonHoverSound = AssetDatabase.LoadAssetAtPath<AudioClip>(SoundFolder + "/ui_hover.ogg");
+            if (theme.buttonClickSound == null) theme.buttonClickSound = AssetDatabase.LoadAssetAtPath<AudioClip>(SoundFolder + "/ui_click.ogg");
+            if (theme.soundGroup == null) {
+                var mixer = AssetDatabase.LoadAssetAtPath<AudioMixer>(MixerPath);
+                theme.soundGroup = mixer != null ? mixer.FindMatchingGroups(SfxGroupName).FirstOrDefault() : null;
+            }
             EditorUtility.SetDirty(theme);
             AssetDatabase.SaveAssets();
             return theme;

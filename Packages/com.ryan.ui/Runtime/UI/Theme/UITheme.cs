@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace RyanAssets.UI {
     /// <summary>The colour slots every shared UI element is painted from.</summary>
@@ -97,6 +98,26 @@ namespace RyanAssets.UI {
 
         [Header("Motion")]
         [Min(0f)] public float fadeDuration = 0.16f;
+        [Tooltip("Scale a button shrinks to while pressed (1 = no press animation).")]
+        [Range(0.8f, 1f)] public float buttonPressScale = 0.95f;
+        [Tooltip("Scale a button grows to while hovered (1 = none).")]
+        [Range(1f, 1.1f)] public float buttonHoverScale = 1.02f;
+        [Tooltip("Seconds a button takes to reach its hover or press scale.")]
+        [Min(0.01f)] public float buttonScaleSeconds = 0.07f;
+        [Tooltip("Scale a shared panel pops in from when it opens (1 = no pop).")]
+        [Range(0.5f, 1f)] public float panelPopScale = 0.94f;
+
+        [Header("Sound")]
+        [Tooltip("Played when the pointer enters an interactable button.")]
+        public AudioClip buttonHoverSound;
+        [Tooltip("Played when a button is clicked.")]
+        public AudioClip buttonClickSound;
+        [Range(0f, 1f)] public float buttonHoverVolume = 0.25f;
+        [Range(0f, 1f)] public float buttonClickVolume = 0.6f;
+        [Tooltip("Hovers closer together than this (s) stay silent, so sweeping across a toolbar does not rattle.")]
+        [Min(0f)] public float hoverSoundInterval = 0.06f;
+        [Tooltip("Mixer group UI sounds play through (the SFX group, so the SFX Volume setting applies).")]
+        public AudioMixerGroup soundGroup;
 
         public Color Get(UIColorRole role) => role switch {
             UIColorRole.Surface => surface,

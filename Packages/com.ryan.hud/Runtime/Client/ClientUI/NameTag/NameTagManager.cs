@@ -48,9 +48,23 @@ namespace RyanAssets.Client.ClientUI.NameTag {
         [SerializeField]
         float entityNameTagPadding = 2f;
 
+        [Header("Distance")]
+        [Tooltip("Tags start fading out beyond this distance from the camera (m).")]
+        [SerializeField, Min(0f)]
+        float fadeStartDistance = 60f;
+        [Tooltip("Tags are fully hidden beyond this distance from the camera (m).")]
+        [SerializeField, Min(0f)]
+        float fadeEndDistance = 95f;
+        [Tooltip("Largest share of the screen height a tag may cover. A closer tag is shrunk to this, " +
+                 "so names near the camera never turn into giant overlapping banners.")]
+        [SerializeField, Range(0.01f, 0.5f)]
+        float maxScreenHeight = 0.07f;
+
         /// <summary>One character's tag and the subscriptions that keep it current.</summary>
         sealed class CharacterTag {
             public Canvas Canvas;
+            public CanvasGroup Group;
+            public Vector3 BaseScale;
             public GameCharacter Character;
             public Action Unbind;
         }
@@ -58,6 +72,8 @@ namespace RyanAssets.Client.ClientUI.NameTag {
         /// <summary>One world entity's tag, and how far above the entity's root it floats.</summary>
         sealed class EntityTag {
             public Canvas Canvas;
+            public CanvasGroup Group;
+            public Vector3 BaseScale;
             public EntityBase Entity;
             public GameObject HealthBar;
             public float Height;
@@ -123,7 +139,12 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             if (!gameCharater.ShowNameTag) return;
             Canvas nameTagCanvas = CreateTag(nameTagSize);
             GameObject nameTag = nameTagCanvas.gameObject;
-            var tag = new CharacterTag { Canvas = nameTagCanvas, Character = gameCharater };
+            var tag = new CharacterTag {
+                Canvas = nameTagCanvas,
+                Group = nameTagCanvas.GetComponent<CanvasGroup>(),
+                BaseScale = nameTag.transform.localScale,
+                Character = gameCharater
+            };
 
             GetNameTagParts(
                 nameTag,
@@ -215,6 +236,35 @@ namespace RyanAssets.Client.ClientUI.NameTag {
             tagTransform.position = body.position + body.rotation * offset;
             if (mainCamera != null)
                 tagTransform.forward = mainCamera.transform.forward;
+            FitToView(tag.Canvas, tag.Group, tag.BaseScale, nameTagSize.y, mainCamera);
+        }
+
+        /// <summary>
+        /// Shrinks a tag that would cover more than <see cref="maxScreenHeight"/> of the screen and
+        /// fades it out between the fade distances. Further tags keep their authored size, so they
+        /// shrink naturally with perspective until they fade.
+        /// </summary>
+        void FitToView(Canvas canvas, CanvasGroup group, Vector3 baseScale, float worldHeight, Camera camera) {
+            float scale = 1f, alpha = 1f;
+            if (camera != null) {
+                Transform tagTransform = canvas.transform;
+                float distance = Vector3.Distance(camera.transform.position, tagTransform.position);
+                alpha = fadeEndDistance > fadeStartDistance
+                    ? 1f - Mathf.InverseLerp(fadeStartDistance, fadeEndDistance, distance)
+                    : distance <= fadeEndDistance ? 1f : 0f;
+                float viewHeight = camera.orthographic
+                    ? camera.orthographicSize * 2f
+                    : 2f * distance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                float share = viewHeight > 0f ? worldHeight / viewHeight : 0f;
+                if (share > maxScreenHeight)
+                    scale = maxScreenHeight / share;
+            }
+            canvas.transform.localScale = baseScale * scale;
+            if (group != null)
+                group.alpha = alpha;
+            bool visible = alpha > 0f;
+            if (canvas.enabled != visible)
+                canvas.enabled = visible;
         }
 
         // --- World entities ---------------------------------------------------
@@ -244,6 +294,8 @@ namespace RyanAssets.Client.ClientUI.NameTag {
 
             var tag = new EntityTag {
                 Canvas = nameTagCanvas,
+                Group = nameTagCanvas.GetComponent<CanvasGroup>(),
+                BaseScale = nameTagCanvas.transform.localScale,
                 Entity = entity,
                 HealthBar = healthBarBacking.gameObject
             };
@@ -408,6 +460,7 @@ namespace RyanAssets.Client.ClientUI.NameTag {
                 tagTransform.position = entity.transform.position + Vector3.up * tag.Height;
                 if (mainCamera != null)
                     tagTransform.forward = mainCamera.transform.forward;
+                FitToView(tag.Canvas, tag.Group, tag.BaseScale, entityNameTagSize.y, mainCamera);
             }
         }
 

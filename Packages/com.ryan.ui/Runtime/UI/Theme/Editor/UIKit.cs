@@ -1,4 +1,5 @@
 using System.IO;
+using RyanAssets.UI.Feel;
 using RyanAssets.UI.Textbox;
 using TMPro;
 using UnityEditor;
@@ -229,7 +230,8 @@ namespace RyanAssets.UI.Editor {
 
         /// <summary>
         /// Makes <paramref name="target"/> a button whose hover / press feedback is a light "state
-        /// layer" over it, so the same feedback reads on any background colour.
+        /// layer" over it, so the same feedback reads on any background colour, plus a press scale
+        /// and the theme's hover / click sounds (<see cref="UIButtonFeel"/>).
         /// </summary>
         public static Button Clickable(RectTransform target, float radius) {
             RectTransform layer = Fill(target, "StateLayer");
@@ -254,6 +256,9 @@ namespace RyanAssets.UI.Editor {
                 fadeDuration = 0.08f,
             };
             NoNavigation(button);
+            // Press scale plus the theme's hover / click sounds.
+            var feel = target.gameObject.AddComponent<UIButtonFeel>();
+            SerializedFields.Set(feel, "selectable", button);
             return button;
         }
 

@@ -43,6 +43,8 @@ namespace RyanAssets.UI.Editor {
             Rounded(window, UIColorRole.SurfaceRaised, WindowRadius);
             Column(window.gameObject, 10f, new RectOffset(28, 28, 26, 24));
             FitContent(window.gameObject, false, true);
+            fader.popTarget = window; // the scrim stays full-screen while the window pops
+            fader.popFrom = Theme.panelPopScale;
 
             TextMeshProUGUI title = Text(window, "Title", "Title", UIText.Title);
             title.textWrappingMode = TextWrappingModes.Normal;

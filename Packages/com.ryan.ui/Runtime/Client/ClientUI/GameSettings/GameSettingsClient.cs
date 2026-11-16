@@ -50,6 +50,13 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
                 category = GameSettingCategory.Camera,
                 min = 1, max = 250, start = 100
             },
+            [CameraShakeSetting] = new IntGameSetting(){
+                // Named here as well as in Awake: the game-feel kit loads it before the menu opens.
+                name = CameraShakeSetting,
+                title = "Camera Shake",
+                category = GameSettingCategory.Camera,
+                min = 0, max = 100, start = 100
+            },
             ["MasterVolume"] = new IntGameSetting(){
                 name = "MasterVolume",
                 title = "Master Volume",
@@ -103,6 +110,12 @@ namespace RyanAssets.Client.ClientUI.GameSettings {
         /// through <see cref="GameHelp"/>. Experienced players can turn it off.
         /// </summary>
         public const string ShowGameHelpSetting = "ShowGameHelp";
+
+        /// <summary>
+        /// Percentage (0..100) of camera shake the player wants; read by the game-feel kit's
+        /// <c>CameraShake.Intensity</c>. 0 turns shake off.
+        /// </summary>
+        public const string CameraShakeSetting = "CameraShake";
 
         /// <summary>
         /// Publishes the saved Game Help choice at startup and every change after it. Game modes read

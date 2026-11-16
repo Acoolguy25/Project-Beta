@@ -49,3 +49,13 @@ MonoBehaviour:
   smallFontSize: 13
   titleFontSize: 22
   fadeDuration: 0.16
+  buttonPressScale: 0.95
+  buttonHoverScale: 1.02
+  buttonScaleSeconds: 0.07
+  panelPopScale: 0.94
+  buttonHoverSound: {fileID: 8300000, guid: 7206af27c4d4f122cad87517b10a623d, type: 3}
+  buttonClickSound: {fileID: 8300000, guid: a62390d32a680845cbf34e27de894160, type: 3}
+  buttonHoverVolume: 0.25
+  buttonClickVolume: 0.6
+  hoverSoundInterval: 0.06
+  soundGroup: {fileID: 4144306746528415441, guid: a3706924799c36f459396edda30f4552, type: 2}

@@ -1,0 +1,26 @@
+{
+    "name": "RyanAssets.GameFeel.Editor",
+    "rootNamespace": "RyanAssets.GameFeel.Editor",
+    "references": [
+        "RyanAssets.GameFeel",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

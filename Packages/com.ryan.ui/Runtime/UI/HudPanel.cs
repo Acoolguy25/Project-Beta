@@ -30,6 +30,8 @@ namespace RyanAssets.UI {
         [SerializeField] bool registerById = true;
         [Tooltip("Seconds to fade in or out. Negative uses the theme's fade duration.")]
         [SerializeField] float fadeDuration = -1f;
+        [Tooltip("Pop the content in from the theme's panel pop scale when it opens.")]
+        [SerializeField] bool openPop = true;
 
         static readonly Dictionary<HudPanelId, HudPanel> panels = new();
 
@@ -64,6 +66,7 @@ namespace RyanAssets.UI {
             if (content == null || content.isVisible == visible)
                 return;
             float duration = instant ? 0f : fadeDuration >= 0f ? fadeDuration : UITheme.Active.fadeDuration;
+            content.popFrom = openPop ? UITheme.Active.panelPopScale : 1f;
             content.SetVisible(visible, duration);
             Toggled?.Invoke(visible);
             if (registerById)

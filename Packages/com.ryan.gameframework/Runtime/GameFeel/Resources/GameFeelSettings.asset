@@ -1,0 +1,95 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c12f7743f1197541a4d02956371b0c9, type: 3}
+  m_Name: GameFeelSettings
+  m_EditorClassIdentifier: RyanAssets.GameFeel::RyanAssets.GameFeel.GameFeelSettings
+  cues: {fileID: 11400000, guid: 67cccf29b2412245c90a94d7866dceb7, type: 2}
+  audio:
+    mixerGroup: {fileID: 4144306746528415441, guid: a3706924799c36f459396edda30f4552, type: 2}
+    voices: 24
+    minDistance: 6
+    maxDistance: 90
+    doppler: 0
+  effects: {fileID: 11400000, guid: a84ca07d05e2481f6b44e3dcac624bd6, type: 2}
+  floatingText:
+    prefab: {fileID: 1235520443504144468, guid: b450ca284a674d1e699fc25550b34bfc, type: 3}
+    poolSize: 24
+    referenceDistance: 14
+    minDistanceScale: 0.5
+    maxDistanceScale: 4
+    normal:
+      color: {r: 1, g: 1, b: 1, a: 1}
+      size: 0.9
+      rise: 2.2
+      duration: 1.1
+      pop: 1.5
+      scatter: 0.6
+    damage:
+      color: {r: 1, g: 0.32, b: 0.28, a: 1}
+      size: 0.8
+      rise: 1.8
+      duration: 0.8
+      pop: 1.8
+      scatter: 0.8
+    money:
+      color: {r: 1, g: 0.79, b: 0.24, a: 1}
+      size: 0.9
+      rise: 2.4
+      duration: 1.2
+      pop: 1.6
+      scatter: 0.5
+    heal:
+      color: {r: 0.3, g: 0.92, b: 0.5, a: 1}
+      size: 0.8
+      rise: 2
+      duration: 1
+      pop: 1.5
+      scatter: 0.6
+    callout:
+      color: {r: 1, g: 1, b: 1, a: 1}
+      size: 1.6
+      rise: 1.6
+      duration: 1.8
+      pop: 2
+      scatter: 0
+  screenOverlay: {fileID: 6381141769854441507, guid: 3ac70fcafe45b871c942036f4f7c4da1, type: 3}
+  cameraShake:
+    maxAngle: 2.5
+    maxOffset: 0.12
+    frequency: 22
+    roll: 0.5
+    decayExponent: 2
+    falloffExponent: 1.5
+    maxKicks: 8
+  moods:
+    arcadeBright: {fileID: 11400000, guid: c85afa2e214c95109aae1e75650d5c6d, type: 2}
+    warmIndoor: {fileID: 11400000, guid: 58cb3ee1fe9038ab98ad89446c74667d, type: 2}
+    night: {fileID: 11400000, guid: fd379a69d84ea67f3944a8695d16b97b, type: 2}
+    horror: {fileID: 11400000, guid: a07131e18d1b4b3288dc3f0b60521fcf, type: 2}
+    priority: 20
+    enablePostProcessing: 1
+  characters:
+    enabled: 1
+    maxDistance: 70
+    jumpSpeed: 6
+    landSpeed: 9
+    hardLandSpeed: 35
+    minSquash: 0.1
+    maxSquash: 0.28
+    squashSeconds: 0.32
+    runDustSpeed: 11
+    footDustScale: 0.22
+    landDustScale: {x: 1.4, y: 2.6}
+    dustColor: {r: 0.86, g: 0.82, b: 0.74, a: 0.8}
+    jumpSound: 1
+    landSound: 0
+    landVolume: {x: 0.5, y: 1}

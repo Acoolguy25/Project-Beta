@@ -90,6 +90,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 3
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 0.12}
+  hasPainted: 1
 --- !u!1 &4605802183335859021
 GameObject:
   m_ObjectHideFlags: 0
@@ -330,6 +332,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!114 &1058304155728176489
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -504,6 +508,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &5353221908039646243
 GameObject:
   m_ObjectHideFlags: 0
@@ -622,6 +628,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 2
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 0.06}
+  hasPainted: 1
 --- !u!114 &453475167247971813
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -956,6 +964,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 9
   opacity: 1
+  painted: {r: 0.23921569, g: 0.54509807, b: 1, a: 1}
+  hasPainted: 1
 --- !u!1 &5353221908039646265
 GameObject:
   m_ObjectHideFlags: 0
@@ -1082,6 +1092,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 6
   opacity: 1
+  painted: {r: 0.95686275, g: 0.9647059, b: 0.98039216, a: 1}
+  hasPainted: 1
 --- !u!1 &5364663684600227849
 GameObject:
   m_ObjectHideFlags: 0
@@ -1198,6 +1210,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 3
   opacity: 1
+  painted: {r: 1, g: 1, b: 1, a: 0.12}
+  hasPainted: 1
 --- !u!114 &8201579054722848413
 MonoBehaviour:
   m_ObjectHideFlags: 0

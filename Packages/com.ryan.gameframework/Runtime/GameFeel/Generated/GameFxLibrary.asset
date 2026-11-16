@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31ca7763e63e5e26596144ba4233bb61, type: 3}
+  m_Name: GameFxLibrary
+  m_EditorClassIdentifier: RyanAssets.GameFeel::RyanAssets.GameFeel.GameFxLibrary
+  entries:
+  - kind: 0
+    prefab: {fileID: 8501946374381946002, guid: e9d9c03dcacaa518e89d687ae34f9dfb, type: 3}
+    poolSize: 16
+  - kind: 1
+    prefab: {fileID: 7579023043457248833, guid: 3f6252fe6162c6bf4a3568323ffa6ad0, type: 3}
+    poolSize: 12
+  - kind: 2
+    prefab: {fileID: 2102652447151022354, guid: ae069c7c8bc92f9a38fce4d9eb29ade5, type: 3}
+    poolSize: 3
+  - kind: 3
+    prefab: {fileID: 1869134015999055676, guid: 36a794e8b34d7234b9a40df4afd31490, type: 3}
+    poolSize: 10
+  - kind: 4
+    prefab: {fileID: 4232520632615535178, guid: cfa7e69d4e0a54d9490a8a1d6dfbfaf3, type: 3}
+    poolSize: 6
+  - kind: 5
+    prefab: {fileID: 4883733669106107791, guid: ac9b2b9cb15a49a2984a08a04bb4c523, type: 3}
+    poolSize: 4
+  - kind: 6
+    prefab: {fileID: 3533876926573411482, guid: 9031b78d3e9f83399bd14dfa0eb1717d, type: 3}
+    poolSize: 6
+  - kind: 7
+    prefab: {fileID: 5288398968284438287, guid: 4b1cdd56234b039b58fafd2f2d929673, type: 3}
+    poolSize: 6
+  - kind: 8
+    prefab: {fileID: 5946799153401921233, guid: a43b2f398d1b5e4b69d39f4b140ca9db, type: 3}
+    poolSize: 6
+  - kind: 9
+    prefab: {fileID: 4663727492936344412, guid: 24b072ac532422da9bb43a6077549ba6, type: 3}
+    poolSize: 4
+  - kind: 10
+    prefab: {fileID: 662623615602399472, guid: 331256511fb4de515bb1caf2c3509274, type: 3}
+    poolSize: 6
+  loopingPlaySeconds: 2

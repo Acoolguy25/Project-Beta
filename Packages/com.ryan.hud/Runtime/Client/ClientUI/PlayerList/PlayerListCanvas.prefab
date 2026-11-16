@@ -447,6 +447,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 0
   opacity: 1
+  painted: {r: 0.05882353, g: 0.07058824, b: 0.09411765, a: 0.72}
+  hasPainted: 1
 --- !u!114 &4943467780603094284
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -513,6 +515,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.CanvasGroupController
   alwaysActive: 0
   targetAlpha: 1
+  popFrom: 1
+  popTarget: {fileID: 0}
 --- !u!1 &7368286324205099742
 GameObject:
   m_ObjectHideFlags: 0
@@ -666,6 +670,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 7
   opacity: 1
+  painted: {r: 0.7058824, g: 0.7372549, b: 0.78431374, a: 1}
+  hasPainted: 1
 --- !u!114 &3297034349508423717
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -944,6 +950,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 8
   opacity: 1
+  painted: {r: 0.49019608, g: 0.5294118, b: 0.5882353, a: 1}
+  hasPainted: 1
 --- !u!114 &3198456185134404291
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1088,6 +1096,7 @@ MonoBehaviour:
   visibleOnStart: 1
   registerById: 1
   fadeDuration: -1
+  openPop: 1
 --- !u!114 &5959534216556885059
 MonoBehaviour:
   m_ObjectHideFlags: 0

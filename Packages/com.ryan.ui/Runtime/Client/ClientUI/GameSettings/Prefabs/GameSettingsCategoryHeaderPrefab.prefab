@@ -153,6 +153,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: RyanAssets.UI::RyanAssets.UI.UIThemeColor
   role: 8
   opacity: 1
+  painted: {r: 0.49019608, g: 0.5294118, b: 0.5882353, a: 1}
+  hasPainted: 1
 --- !u!114 &6010616964932437528
 MonoBehaviour:
   m_ObjectHideFlags: 0
