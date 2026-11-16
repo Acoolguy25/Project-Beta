@@ -31,6 +31,11 @@ namespace Universes.UniverseData.war_valley.Editor {
 
         static string UnitPath(UnitDef def) => $"{UnitsFolder}/{def.Kind}.prefab";
 
+        /// <summary>Distance within which a unit's report plays at full volume (m).</summary>
+        const float UnitReportMinDistance = 8f;
+        /// <summary>Distance beyond which a unit's report is silent (m).</summary>
+        const float UnitReportMaxDistance = 110f;
+
         /// <summary>Asset-safe name shared by a structure's prefab and its baked icon.</summary>
         static string PrefabName(string displayName) => displayName.Replace(" ", string.Empty);
 
@@ -126,6 +131,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Transform[] rotors = FindRotors(model, def);
                 if (rotors.Length > 0)
                     SetPrivateField(animation, "rotors", rotors);
+                ConfigureUnitWeaponEffects(root);
 
                 if (!WV_Rules.IsAircraft(def.Kind)) {
                     NavMeshAgent agent = Ensure<NavMeshAgent>(root);
@@ -157,6 +163,44 @@ namespace Universes.UniverseData.war_valley.Editor {
                 AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(RobotControllerPath);
             animator.applyRootMotion = false;
             return body;
+        }
+
+        /// <summary>
+        /// Gives a unit the same muzzle flash, tracer, and report a turret has, from its existing Muzzle.
+        /// Idempotent, so the in-place upgrade can run it over prefabs built before it existed.
+        /// </summary>
+        static void ConfigureUnitWeaponEffects(GameObject root) {
+            Transform muzzle = root.transform.Find("Muzzle");
+            var animation = root.GetComponent<WV_UnitAnimation>();
+            if (muzzle == null || animation == null)
+                return;
+
+            Transform flash = muzzle.Find("MuzzleFlash");
+            if (flash == null) {
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(Load<GameObject>(MuzzleFlashVfxPath), muzzle);
+                instance.name = "MuzzleFlash";
+                flash = instance.transform;
+            }
+            flash.localPosition = Vector3.zero;
+            flash.localRotation = Quaternion.identity;
+            // Every child must wait for the replicated shot, including nested flash particles.
+            foreach (ParticleSystem particle in flash.GetComponentsInChildren<ParticleSystem>(true)) {
+                var main = particle.main;
+                main.playOnAwake = false;
+            }
+
+            AudioSource audioSource = Ensure<AudioSource>(muzzle.gameObject);
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 1f;
+            audioSource.rolloffMode = AudioRolloffMode.Linear;
+            audioSource.minDistance = UnitReportMinDistance;
+            audioSource.maxDistance = UnitReportMaxDistance;
+
+            SetPrivateField(animation, "muzzle", muzzle);
+            SetPrivateField(animation, "muzzleFlash", flash.GetComponent<ParticleSystem>());
+            SetPrivateField(animation, "audioSource", audioSource);
+            // The pistol report turrets already use; heavier weapon audio can replace it here.
+            SetPrivateField(animation, "fireAudio", Load<AudioClip>(GunShotAudioPath));
         }
 
         /// <summary>Finds spinning parts by name so rotorcraft read as running rather than gliding.</summary>

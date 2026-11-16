@@ -8,7 +8,9 @@
         "RyanAssets.Shared.Declarations",
         "Unity.AI.Navigation",
         "RyanAssets.Shared.Combat",
-        "RyanAssets.Shared.WorldUI"
+        "RyanAssets.Shared.WorldUI",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [
         "Editor"

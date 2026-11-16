@@ -325,9 +325,15 @@ namespace Universes.UniverseData.war_valley.Server {
             nextFireTime = now + unit.AttackCooldown;
             WV_Combat.DealDamage(currentTarget, unit.AttackDamage, unit.AttackDamageType, unit);
 
-            // Presentation only; the hit above is already authoritative.
-            if (unitAnimation != null)
-                unitAnimation.PlayAttack();
+            // Presentation only; the hit above is already authoritative. The aim point is read after
+            // the hit, so a target the shot killed is still drawn where it stood.
+            if (unitAnimation == null)
+                return;
+            Transform muzzle = unit.WeaponMuzzle;
+            Vector3 impact = WV_Combat.TryGetAimPoint(currentTarget, out Vector3 aim)
+                ? aim
+                : muzzle.position + muzzle.forward * unit.AttackRange;
+            unitAnimation.PlayAttack(impact);
         }
     }
 }

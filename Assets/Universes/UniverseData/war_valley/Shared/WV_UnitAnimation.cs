@@ -1,10 +1,12 @@
+using System;
 using FishNet.Object;
+using RyanAssets.Shared.Combat;
 using UnityEngine;
 
 namespace Universes.UniverseData.war_valley.Shared {
     /// <summary>
     /// Presentation for a unit: locomotion animation for infantry, spinning rotors for rotorcraft,
-    /// and a muzzle flash when the unit fires.
+    /// and a muzzle flash, tracer, impact, and report when the unit fires.
     /// <para>
     /// Speed is derived from the transform rather than from the NavMeshAgent, because on a client the
     /// agent does not exist - the unit is moved by its NetworkTransform. One derivation therefore
@@ -31,8 +33,20 @@ namespace Universes.UniverseData.war_valley.Shared {
         [SerializeField] float rotorDegreesPerSecond = 1440f;
 
         [Header("Weapon")]
+        [Tooltip("Where shots leave the unit. Falls back to this transform when unset.")]
+        [SerializeField] Transform muzzle;
         [Tooltip("Optional. Particle effect played at the muzzle on each shot.")]
         [SerializeField] ParticleSystem muzzleFlash;
+        [Tooltip("Optional. Spatial settings the report is played with.")]
+        [SerializeField] AudioSource audioSource;
+        [Tooltip("Optional. The weapon's report.")]
+        [SerializeField] AudioClip fireAudio;
+
+        /// <summary>
+        /// Raised on each client when a unit's shot is shown, with the muzzle and the point it struck,
+        /// so a game's client layer can add its own reaction (an explosion for a shell) on top.
+        /// </summary>
+        public static event Action<WV_UnitAnimation, Vector3, Vector3> ShotShown;
 
         // GunFire is a bool on the shared robot controller rather than a trigger, so it has to be
         // released explicitly instead of being consumed by the state machine.
@@ -89,20 +103,31 @@ namespace Universes.UniverseData.war_valley.Shared {
             }
         }
 
-        /// <summary>Called on the server when the unit fires; mirrored to observers for presentation.</summary>
+        /// <summary>
+        /// Called on the server when the unit fires at <paramref name="impactPoint"/>; mirrored to
+        /// observers for presentation.
+        /// </summary>
         [Server]
-        public void PlayAttack() {
-            PlayAttackObservers();
+        public void PlayAttack(Vector3 impactPoint) {
+            PlayAttackObservers(impactPoint);
         }
 
         [ObserversRpc(RunLocally = true, BufferLast = false)]
-        void PlayAttackObservers() {
+        void PlayAttackObservers(Vector3 impactPoint) {
             if (hasAnimator) {
                 animator.SetBool(GunFireId, true);
                 gunFireReleaseTime = Time.time + GunFireHoldSeconds;
             }
-            if (muzzleFlash != null)
-                muzzleFlash.Play();
+            Vector3 origin = (muzzle != null ? muzzle : transform).position;
+            Vector3 normal = origin - impactPoint;
+            normal = normal.sqrMagnitude > 0.0001f ? normal.normalized : Vector3.up;
+            // The same tracer, flash, and report a handheld gun and a turret use. Compiled to nothing
+            // on a dedicated server.
+            WeaponFireEffects.Play(origin, impactPoint, normal, true, muzzleFlash, audioSource, fireAudio);
+            ShotShown?.Invoke(this, origin, impactPoint);
         }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => ShotShown = null;
     }
 }

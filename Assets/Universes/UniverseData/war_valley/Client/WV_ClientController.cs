@@ -25,8 +25,11 @@ namespace Universes.UniverseData.war_valley.Client {
     /// <see cref="WV_CommanderSelection"/> (what is selected, and the troop roster it is picked from),
     /// <see cref="WV_ControlGroups"/> (F1-F4), <see cref="WV_StructureInspector"/> (everything about
     /// selected buildings), <see cref="WV_ResearchPresenter"/>, <see cref="WV_DonationsPresenter"/>,
-    /// and <see cref="WV_BaseAlerts"/>. What stays here is turning keys and clicks into selections
-    /// and into the order, rally, and sell requests the server validates again.
+    /// <see cref="WV_BaseAlerts"/>, and the game feel: <see cref="WV_BattleFeedback"/> (hits, deaths,
+    /// explosions), <see cref="WV_OrderFeedback"/> (order pings), and the HUD's
+    /// <see cref="WV_HealthBarLayer"/> and <see cref="WV_WaveDrama"/>. What stays here is turning keys
+    /// and clicks into selections and into the order, rally, and sell requests the server validates
+    /// again.
     /// </para>
     /// <para>
     /// The keys deliberately avoid the number row and WASD/Space/Shift, which belong to the toolbar
@@ -65,6 +68,12 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("Maximum units a single box selection can pick up.")]
         [SerializeField, Min(1)] int maxSelection = 120;
 
+        [Header("Game Feel")]
+        [Tooltip("Hit flashes, death bursts, explosions, damage numbers, and construction dust.")]
+        [SerializeField] WV_BattleFeedbackTuning battleFeedback = new();
+        [Tooltip("Ground pings, the acknowledgement blip, and selection ring pulses for orders.")]
+        [SerializeField] WV_OrderFeedbackTuning orderFeedback = new();
+
         readonly List<int> orderScratch = new();
         readonly List<StructureComponent> structureScratch = new();
         readonly List<RaycastResult> uiHits = new();
@@ -76,6 +85,9 @@ namespace Universes.UniverseData.war_valley.Client {
         WV_ResearchPresenter research;
         WV_DonationsPresenter donations;
         WV_BaseAlerts alerts;
+        WV_BattleFeedback battle;
+        WV_OrderFeedback orders;
+        readonly WV_CameraPostProcessing postProcessing = new();
         PointerEventData uiPointer;
         EventSystem uiPointerSystem;
         float nextSummaryTime;
@@ -126,6 +138,9 @@ namespace Universes.UniverseData.war_valley.Client {
             research = new WV_ResearchPresenter(hud, () => LocalClientId, inspector.MarkDirty);
             donations = new WV_DonationsPresenter(hud, () => LocalClientId);
             alerts = new WV_BaseAlerts(hud.SetHint);
+            battle = new WV_BattleFeedback(battleFeedback, selection);
+            orders = new WV_OrderFeedback(orderFeedback, selection);
+            BindBattlefieldHud();
             hud.SellClicked += RequestSell;
             hud.ResearchClicked += ToggleResearch;
             GameHelp.Changed += HandleGameHelpChanged;
@@ -162,6 +177,34 @@ namespace Universes.UniverseData.war_valley.Client {
             menu.SetHasSelection(false);
         }
 
+        /// <summary>
+        /// Connects the HUD's health bars to the selection and its wave staging to the hint line. A HUD
+        /// authored before they existed is reported rather than silently left without them.
+        /// </summary>
+        void BindBattlefieldHud() {
+            if (hud.HealthBars != null)
+                hud.HealthBars.Bind(IsSelected, IsOwnEntity, () => selection.Count);
+            if (hud.WaveDrama != null)
+                hud.WaveDrama.Bind(hud.SetHint);
+            if (hud.HealthBars == null || hud.WaveDrama == null)
+                Debug.LogWarning(
+                    $"{nameof(WV_ClientController)}: the HUD prefab predates the health bars and wave " +
+                    "banner. Re-run Ryan/War Valley/Rebuild HUD to author them.", this);
+        }
+
+        bool IsSelected(EntityBase entity) => entity switch {
+            GameCharacter troop => selection.Contains(troop),
+            WV_Unit unit => selection.Contains(unit),
+            _ => false
+        };
+
+        /// <summary>True for a troop or vehicle the local commander owns.</summary>
+        bool IsOwnEntity(EntityBase entity) => entity switch {
+            GameCharacter troop => selection.IsCommandableTroop(troop),
+            WV_Unit unit => unit.Owned != null && unit.Owned.IsOwnedBy(LocalClientId),
+            _ => false
+        };
+
         void UnbindCommandMenu() {
             WV_CommandMenu menu = hud != null ? hud.CommandMenu : null;
             if (menu == null)
@@ -179,6 +222,7 @@ namespace Universes.UniverseData.war_valley.Client {
             WV_Unit.RosterChanged += HandleRosterChanged;
             WV_ProductionBuilding.QueueChanged += HandleQueueChanged;
             selection.Enable();
+            battle.Enable();
 
             // The shared build menu knows nothing about research or funds; War Valley answers for it.
             StructureMenu.AvailabilityProvider = GetStructureAvailability;
@@ -192,6 +236,8 @@ namespace Universes.UniverseData.war_valley.Client {
             WV_Unit.RosterChanged -= HandleRosterChanged;
             WV_ProductionBuilding.QueueChanged -= HandleQueueChanged;
             selection?.Disable();
+            battle?.Disable();
+            postProcessing.Release();
             inspector?.Clear();
 
             if (StructureMenu.AvailabilityProvider == GetStructureAvailability)
@@ -204,6 +250,8 @@ namespace Universes.UniverseData.war_valley.Client {
                 InstanceFinder.ClientManager.UnregisterBroadcast<WV_ProductionResult>(HandleProductionResult);
                 InstanceFinder.ClientManager.UnregisterBroadcast<WV_ResearchResult>(HandleResearchResult);
                 InstanceFinder.ClientManager.UnregisterBroadcast<WV_Notice>(HandleNotice);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_WaveStarted>(HandleWaveStarted);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_RoundEnded>(HandleRoundEnded);
             }
             broadcastsRegistered = false;
         }
@@ -229,6 +277,8 @@ namespace Universes.UniverseData.war_valley.Client {
             InstanceFinder.ClientManager.RegisterBroadcast<WV_ProductionResult>(HandleProductionResult);
             InstanceFinder.ClientManager.RegisterBroadcast<WV_ResearchResult>(HandleResearchResult);
             InstanceFinder.ClientManager.RegisterBroadcast<WV_Notice>(HandleNotice);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_WaveStarted>(HandleWaveStarted);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_RoundEnded>(HandleRoundEnded);
         }
 
         /// <summary>
@@ -255,6 +305,16 @@ namespace Universes.UniverseData.war_valley.Client {
 
         /// <summary>Server-side outcomes the player would otherwise never see: refusals, refunds, penalties.</summary>
         void HandleNotice(WV_Notice notice, Channel channel) => hud.SetHint(notice.message);
+
+        void HandleWaveStarted(WV_WaveStarted wave, Channel channel) {
+            if (hud.WaveDrama != null)
+                hud.WaveDrama.ShowWave(wave);
+        }
+
+        void HandleRoundEnded(WV_RoundEnded result, Channel channel) {
+            if (hud.WaveDrama != null)
+                hud.WaveDrama.ShowRoundEnd(result);
+        }
 
         void MarkEconomyDirty() => economyDirty = true;
 
@@ -307,6 +367,8 @@ namespace Universes.UniverseData.war_valley.Client {
             HandleCommandKeys();
             HandlePointer();
             alerts.Tick(LocalClientId);
+            battle.Tick();
+            postProcessing.Tick();
         }
 
         // --- Build menu gates -------------------------------------------------
@@ -896,6 +958,7 @@ namespace Universes.UniverseData.war_valley.Client {
                     });
                 }
                 hud.SetHint(rallyBuildings.Count > 1 ? $"Rally point set for {rallyBuildings.Count} buildings" : "Rally point set");
+                orders.RallySet(groundHit.point);
                 return;
             }
 
@@ -929,6 +992,13 @@ namespace Universes.UniverseData.war_valley.Client {
                 position = position,
                 targetObjectId = target != null ? target.ObjectId : 0
             });
+
+            Vector3? ping = orderType switch {
+                WV_OrderType.Attack when target != null => target.transform.position,
+                WV_OrderType.Move or WV_OrderType.AttackMove => position,
+                _ => null
+            };
+            orders.Ordered(orderType, ping);
 
             hud.SetHint(orderType switch {
                 WV_OrderType.Attack => "Attacking",

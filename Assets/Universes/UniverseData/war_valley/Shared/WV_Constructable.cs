@@ -68,6 +68,8 @@ namespace Universes.UniverseData.war_valley.Shared {
 #endif
 
         public int FootprintCells => footprintCells;
+        /// <summary>The finished building's visuals, for client presentation that reacts to it.</summary>
+        public Transform BuildingRoot => buildingRoot;
         public bool SnapsToGrid => snapToGrid;
         // The root collider reserves the finished structure's space throughout construction and
         // while a gate is open. Animated art and construction hoarding never move that footprint.

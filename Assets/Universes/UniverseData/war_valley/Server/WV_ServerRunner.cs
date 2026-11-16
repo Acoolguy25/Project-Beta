@@ -43,13 +43,6 @@ namespace Universes.UniverseData.war_valley.Server
         private WV_Economy _economyPrefab;
         [SerializeField]
         private int WaveNumber = -1;
-        /// <summary>Where each <see cref="WV_Approach"/> enters the valley, indexed by it.</summary>
-        private static readonly Vector3[] NPCSpawnLocs = {
-            new Vector3(34.47f, 52.07f, 752.17f),
-            new Vector3(754.44f, 51.62f, 1458.77f),
-            new Vector3(749.95f, 51.62f, 30.75f),
-            new Vector3(1470.08f, 51.62f, 737.49f),
-        };
 
         [SerializeField]
         [Tooltip("The soldier body every troop and wave enemy is built from. Only the first entry is " +
@@ -282,8 +275,7 @@ namespace Universes.UniverseData.war_valley.Server
         protected async UniTask<bool> StartTimerCountdown(int duration, CancellationToken token) {
             return await GameTimerCountdown(duration, token);
         }
-        protected static Vector3 GetSpawnLocation(WV_Approach approach) =>
-            NPCSpawnLocs[Mathf.Clamp((int)approach, 0, NPCSpawnLocs.Length - 1)];
+        protected static Vector3 GetSpawnLocation(WV_Approach approach) => WV_WavePlan.GetEntrance(approach);
         /// <summary>
         /// The body every troop and wave enemy is built from. Each kind of troop is this soldier with
         /// a different weapon and build, so one authored prefab serves them all.
@@ -297,18 +289,27 @@ namespace Universes.UniverseData.war_valley.Server
 
         /// <summary>
         /// Spawns one enemy of <paramref name="kind"/> near <paramref name="center"/>, with the
-        /// kind's weapon and build and health raised by <paramref name="healthMultiplier"/> for how
-        /// far into the round the wave is.
+        /// kind's weapon and build, health raised by the wave's health multiplier for how far into
+        /// the round it is, and speed eased by the wave's march multiplier for the opening waves.
         /// </summary>
-        protected void SpawnNpc(WV_TroopKind kind, Vector3 center, float healthMultiplier) {
+        protected void SpawnNpc(WV_TroopKind kind, Vector3 center, WV_Wave wave) {
             WV_TroopProfile profile = WV_TroopCatalog.Get(kind);
-            SpawnNpc(kind, profile.DisplayName, profile.Build, center, healthMultiplier);
+            SpawnNpc(kind, profile.DisplayName, WithMarchSpeed(profile.Build, wave), center, wave.HealthMultiplier);
         }
 
         /// <summary>Spawns a wave's boss: its kind's weapon on the boss's own, larger body and name.</summary>
-        protected void SpawnBoss(WV_WaveBoss boss, Vector3 center, float waveHealthMultiplier) {
-            SpawnNpc(boss.Kind, boss.DisplayName, boss.Build, center, waveHealthMultiplier * boss.HealthMultiplier);
+        protected void SpawnBoss(WV_Wave wave, Vector3 center) {
+            WV_WaveBoss boss = wave.Boss;
+            SpawnNpc(boss.Kind, boss.DisplayName, WithMarchSpeed(boss.Build, wave), center,
+                wave.HealthMultiplier * boss.HealthMultiplier);
             WV_ServerCommand.NotifyAll($"A {boss.DisplayName} has entered the valley!");
+        }
+
+        /// <summary>The build with its speed scaled by the wave's march multiplier (1 after the opening waves).</summary>
+        private static CharacterBuild WithMarchSpeed(CharacterBuild build, WV_Wave wave) {
+            build = build.OrStandard;
+            build.SpeedMultiplier *= wave.MarchSpeedMultiplier;
+            return build;
         }
 
         private void SpawnNpc(WV_TroopKind kind, string displayName, CharacterBuild build, Vector3 center, float healthMultiplier) {
@@ -328,6 +329,7 @@ namespace Universes.UniverseData.war_valley.Server
                 (long)Mathf.Round(WV_TroopCatalog.BaseHealth * Mathf.Max(0.1f, healthMultiplier)));
             // Waves may break through walls and gates but never use a gate's own passage.
             WV_NavAreas.Apply(npc.agent, character.GetTeam());
+            WV_NavAreas.PlaceOnNavMesh(npc.agent, spawnLocation);
             // The weapon half is attached before the brain so the loadout is settled before either
             // component's first frame.
             WV_NpcCombat.Attach(npc.gameObject, kind);
@@ -356,7 +358,7 @@ namespace Universes.UniverseData.war_valley.Server
                 WV_WaveGroup group = wave.Groups[groupIndex];
                 Vector3 center = GetSpawnLocation(wave.Approaches[groupIndex]);
                 if (groupIndex == 0 && wave.Boss != null && !flagDown && !token.IsCancellationRequested)
-                    SpawnBoss(wave.Boss, center, wave.HealthMultiplier);
+                    SpawnBoss(wave, center);
                 for (int i = 0; i < group.Count; i++) {
                     // Backpressure prevents fast countdowns from accumulating an unwinnable army.
                     while (!flagDown && !token.IsCancellationRequested
@@ -368,7 +370,7 @@ namespace Universes.UniverseData.war_valley.Server
                     }
                     if (flagDown || token.IsCancellationRequested)
                         return;
-                    SpawnNpc(group.Kind, center, wave.HealthMultiplier);
+                    SpawnNpc(group.Kind, center, wave);
                     bool cancelled = await UniTask.Delay(spacing, cancellationToken: token)
                         .SuppressCancellationThrow();
                     if (cancelled)
@@ -403,6 +405,15 @@ namespace Universes.UniverseData.war_valley.Server
                 int waveNumber = currentWave.Number;
                 PlayerProgress.ModifyAll<WV_SaveData>(save => save.RecordWave(waveNumber));
                 WV_ServerCommand.NotifyAll(WV_WavePlan.Describe(currentWave, WaveTuning.WaveCount));
+                BroadcastToAll(new WV_WaveStarted {
+                    waveNumber = currentWave.Number,
+                    waveCount = WaveTuning.WaveCount,
+                    theme = (byte)currentWave.Theme,
+                    approaches = WV_WavePlan.EncodeApproaches(currentWave.Approaches),
+                    enemyCount = currentWave.EnemyCount,
+                    isSurge = currentWave.IsSurge,
+                    hasBoss = currentWave.Boss != null
+                });
                 // No countdown runs while a wave streams in, so nothing else would replace the
                 // previous intermission's "next wave in N seconds" on the top bar.
                 UpdateInGameBar(0, false);
@@ -453,6 +464,7 @@ namespace Universes.UniverseData.war_valley.Server
                 wavesHeld = currentWave.Number;
             GameState = WV_ActiveGameState.Victory;
             PlayerProgress.ModifyAll<WV_SaveData>(save => save.victories++);
+            EndRound(victory: true);
             SharedGlobalEvents.Instance.CanBuild.Value = false;
             if (WaveTuning.VictoryBounty > 0)
                 serverEconomy.PayEveryone(WaveTuning.VictoryBounty, $"Victory bonus: +{WaveTuning.VictoryBounty:N0} funds");
@@ -460,6 +472,29 @@ namespace Universes.UniverseData.war_valley.Server
             WV_ServerCommand.NotifyAll($"Victory! War Valley held all {WaveTuning.WaveCount} waves. {summary}");
             await TimerCountdown($"VICTORY - all {WaveTuning.WaveCount} waves held. {summary} Next round in {{0}}",
                 VictorySeconds, token);
+        }
+
+        /// <summary>
+        /// Records the finished round in every commander's saved progress and tells every client how
+        /// it ended, so they can play the result.
+        /// </summary>
+        private void EndRound(bool victory) {
+            int reached = currentWave != null ? currentWave.Number : 0;
+            int held = wavesHeld;
+            int defeated = enemiesDefeated;
+            PlayerProgress.ModifyAll<WV_SaveData>(save => save.RecordRound(held, defeated));
+            BroadcastToAll(new WV_RoundEnded {
+                victory = victory,
+                waveReached = reached,
+                wavesHeld = held,
+                enemiesDefeated = defeated
+            });
+        }
+
+        /// <summary>Sends <paramref name="message"/> to every connected client, while the server is running.</summary>
+        private static void BroadcastToAll<T>(T message) where T : struct, FishNet.Broadcast.IBroadcast {
+            if (InstanceFinder.ServerManager != null && InstanceFinder.ServerManager.Started)
+                InstanceFinder.ServerManager.Broadcast(message);
         }
 
         /// <summary>"312 enemies defeated in 24:10." - the shared half of the victory and defeat summaries.</summary>
@@ -474,6 +509,7 @@ namespace Universes.UniverseData.war_valley.Server
         /// </summary>
         private async UniTask AnnounceFlagLost(CancellationToken token) {
             GameState = WV_ActiveGameState.GameOver;
+            EndRound(victory: false);
             SharedGlobalEvents.Instance.CanBuild.Value = false;
             int reached = currentWave != null ? currentWave.Number : 0;
             string summary = $"Fell on wave {reached}/{WaveTuning.WaveCount} after holding {wavesHeld}. {DescribeRound()}";

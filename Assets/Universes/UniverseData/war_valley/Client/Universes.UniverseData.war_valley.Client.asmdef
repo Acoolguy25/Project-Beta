@@ -18,7 +18,10 @@
         "RyanAssets.UI.ListGrid",
         "Unity.TextMeshPro",
         "Unity.InputSystem",
-        "Unity.ugui"
+        "Unity.ugui",
+        "RyanAssets.GameFeel",
+        "RyanAssets.Client.ClientUI.NameTag",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -37,8 +37,23 @@ namespace Universes.UniverseData.war_valley.Shared {
         [Tooltip("Maximum living wave enemies before spawning waits for the defenders to catch up.")]
         [Min(1)] public int MaxActiveEnemies = 60;
 
-        [Tooltip("Preparation time before the first wave, enough to build and train a starter squad.")]
-        [Min(5)] public int PreparationSeconds = 55;
+        [Tooltip("Preparation time before the first wave: enough to build a mine, a barracks and a " +
+                 "watchtower, train a starter squad, and walk it out to meet the first wave.")]
+        [Min(5)] public int PreparationSeconds = 90;
+
+        [Tooltip("The opening waves that ease new commanders in: smaller and slower than the curve " +
+                 "would make them, rising to the full curve on the wave after the last of them. 0 " +
+                 "turns the easing off.")]
+        [Min(0)] public int EarlyWaves = 2;
+
+        [Tooltip("Wave 1's strength as a fraction of the curve. Each opening wave after it closes the " +
+                 "gap to the full curve evenly.")]
+        [Range(0.1f, 1f)] public float FirstWaveStrengthScale = 0.7f;
+
+        [Tooltip("How fast wave 1's enemies march, as a fraction of their normal speed. Each opening " +
+                 "wave after it closes the gap to full speed evenly, so a commander who has not yet " +
+                 "built a defence still sees the first wave coming in time to answer it.")]
+        [Range(0.1f, 1f)] public float FirstWaveSpeedScale = 0.6f;
 
         [Tooltip("Seconds from the start of one wave to the next, early on.")]
         [Min(5)] public int FirstIntermissionSeconds = 95;
@@ -141,13 +156,19 @@ namespace Universes.UniverseData.war_valley.Shared {
         public float SpawnSpacingMultiplier { get; }
         /// <summary>Which approach each entry of <see cref="Groups"/> arrives along, parallel to it. The boss arrives with the first.</summary>
         public IReadOnlyList<WV_Approach> Approaches { get; }
+        /// <summary>
+        /// Multiplies every enemy's speed in this wave: below 1 for the opening waves, so the first
+        /// enemies take long enough to cross the valley that an undefended commander can still react.
+        /// </summary>
+        public float MarchSpeedMultiplier { get; }
 
         public WV_Wave(int number, IReadOnlyList<WV_WaveGroup> groups, float healthMultiplier, int intermissionSeconds, bool isSurge)
             : this(number, groups, healthMultiplier, intermissionSeconds, isSurge, WV_WaveTheme.Standard, null, 1f, null) { }
 
         public WV_Wave(
             int number, IReadOnlyList<WV_WaveGroup> groups, float healthMultiplier, int intermissionSeconds, bool isSurge,
-            WV_WaveTheme theme, WV_WaveBoss boss, float spawnSpacingMultiplier, IReadOnlyList<WV_Approach> approaches) {
+            WV_WaveTheme theme, WV_WaveBoss boss, float spawnSpacingMultiplier, IReadOnlyList<WV_Approach> approaches,
+            float marchSpeedMultiplier = 1f) {
             Number = number;
             Groups = groups;
             HealthMultiplier = healthMultiplier;
@@ -156,6 +177,7 @@ namespace Universes.UniverseData.war_valley.Shared {
             Theme = theme;
             Boss = boss;
             SpawnSpacingMultiplier = Mathf.Max(0.1f, spawnSpacingMultiplier);
+            MarchSpeedMultiplier = Mathf.Clamp(marchSpeedMultiplier, 0.1f, 1f);
             int total = 0;
             foreach (WV_WaveGroup group in groups)
                 total += group.Count;
@@ -210,6 +232,41 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// <summary>How many approaches the valley has (<see cref="WV_Approach"/>).</summary>
         public const int ApproachCount = 4;
 
+        /// <summary>
+        /// Where each approach enters the valley, on the valley floor, indexed by <see cref="WV_Approach"/>.
+        /// The server spawns a wave's groups here and the client points its approach arrows here, so
+        /// both read the one table.
+        /// </summary>
+        static readonly Vector3[] ApproachEntrances = {
+            new(34.47f, 52.07f, 752.17f),
+            new(754.44f, 51.62f, 1458.77f),
+            new(749.95f, 51.62f, 30.75f),
+            new(1470.08f, 51.62f, 737.49f),
+        };
+
+        /// <summary>Where <paramref name="approach"/> enters the valley.</summary>
+        public static Vector3 GetEntrance(WV_Approach approach) =>
+            ApproachEntrances[Mathf.Clamp((int)approach, 0, ApproachEntrances.Length - 1)];
+
+        /// <summary>The approaches a wave uses as one bit per <see cref="WV_Approach"/>, for the wire.</summary>
+        public static byte EncodeApproaches(IReadOnlyList<WV_Approach> approaches) {
+            int mask = 0;
+            if (approaches != null) {
+                foreach (WV_Approach approach in approaches)
+                    mask |= 1 << Mathf.Clamp((int)approach, 0, ApproachCount - 1);
+            }
+            return (byte)mask;
+        }
+
+        /// <summary>Unpacks <see cref="EncodeApproaches"/> into <paramref name="results"/>, in approach order.</summary>
+        public static void DecodeApproaches(byte mask, List<WV_Approach> results) {
+            results.Clear();
+            for (int i = 0; i < ApproachCount; i++) {
+                if ((mask & (1 << i)) != 0)
+                    results.Add((WV_Approach)i);
+            }
+        }
+
         /// <summary>Share of a themed wave's budget spent on the theme's featured kinds.</summary>
         const float FeaturedShare = 0.65f;
 
@@ -244,7 +301,19 @@ namespace Universes.UniverseData.war_valley.Shared {
             return new WV_Wave(
                 waveNumber, groups, health, intermission, surge, theme,
                 boss ? BuildBoss(tuning) : null, GetSpawnSpacingMultiplier(theme),
-                AssignApproaches(waveNumber, theme, groups.Count));
+                AssignApproaches(waveNumber, theme, groups.Count),
+                GetEarlyWaveScale(waveNumber, tuning.EarlyWaves, tuning.FirstWaveSpeedScale));
+        }
+
+        /// <summary>
+        /// The easing applied to an opening wave: <paramref name="firstWaveScale"/> on wave 1, rising
+        /// evenly to 1 on wave <paramref name="earlyWaves"/> + 1 and staying there.
+        /// </summary>
+        public static float GetEarlyWaveScale(int waveNumber, int earlyWaves, float firstWaveScale) {
+            if (earlyWaves <= 0 || waveNumber > earlyWaves)
+                return 1f;
+            float first = Mathf.Clamp(firstWaveScale, 0.1f, 1f);
+            return Mathf.Lerp(first, 1f, Mathf.Max(0, waveNumber - 1) / (float)earlyWaves);
         }
 
         public static bool IsSurge(int waveNumber, WV_WaveTuning tuning) =>
@@ -379,12 +448,13 @@ namespace Universes.UniverseData.war_valley.Shared {
             return $"{header}: {wave.EnemyCount} enemies from {DescribeApproaches(wave)}{boss} ({GetThemeHint(wave.Theme)})";
         }
 
-        /// <summary>The wave's strength budget, in knifemen.</summary>
+        /// <summary>The wave's strength budget, in knifemen, eased for the opening waves.</summary>
         public static float GetStrength(int waveNumber, WV_WaveTuning tuning) {
             int step = Mathf.Max(0, waveNumber - 1);
             float strength = tuning.BaseStrength
                              + tuning.StrengthPerWave * step
                              + tuning.StrengthAcceleration * step * step;
+            strength *= GetEarlyWaveScale(waveNumber, tuning.EarlyWaves, tuning.FirstWaveStrengthScale);
             return IsSurge(waveNumber, tuning) ? strength * tuning.SurgeMultiplier : strength;
         }
 

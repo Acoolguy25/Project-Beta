@@ -40,7 +40,7 @@ namespace Universes.UniverseData.war_valley.Editor {
         /// Stamp written into each generated prefab's import settings. Change it whenever the
         /// prefabs this script builds change, and every copy older than it is rebuilt on next load.
         /// </summary>
-        const string AuthoringVersion = "war-valley-authoring-3";
+        const string AuthoringVersion = "war-valley-authoring-4";
         const string AutoRebuildSessionKey = "WV_Authoring.AutoRebuildAttempted";
         const string PackRoot = "Assets/CartoonMilitaryModelPack/Prefebs";
         const string StructuresFolder = Root + "/Structures";

@@ -77,10 +77,18 @@ MonoBehaviour:
     HealthGrowthPerWave: 0.03
     MaxEnemiesPerWave: 40
     MaxActiveEnemies: 60
-    PreparationSeconds: 55
+    PreparationSeconds: 90
+    EarlyWaves: 2
+    FirstWaveStrengthScale: 0.7
+    FirstWaveSpeedScale: 0.6
     FirstIntermissionSeconds: 95
     MinimumIntermissionSeconds: 65
     IntermissionShrinkPerWave: 1.5
+    BossEvery: 10
+    BossHealthMultiplier: 12
+    WaveBountyBase: 150
+    WaveBountyPerWave: 25
+    VictoryBounty: 2500
   DebugBuildDuration:
     _editor_value: 1
   DebugInfiniteMoney:

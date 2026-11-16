@@ -121,4 +121,33 @@ namespace Universes.UniverseData.war_valley.Shared {
         public int recipientClientId;
         public long amount;
     }
+
+    /// <summary>
+    /// Sent to every commander as a wave begins, so the client can stage it: a horn, a banner, and
+    /// arrows pointing to the sides it comes from. The text announcement still arrives as a
+    /// <see cref="WV_Notice"/>; this carries the facts the presentation needs as numbers.
+    /// </summary>
+    public struct WV_WaveStarted : IBroadcast {
+        /// <summary>Counting from 1.</summary>
+        public int waveNumber;
+        public int waveCount;
+        /// <summary>A <see cref="WV_WaveTheme"/> value.</summary>
+        public byte theme;
+        /// <summary>One bit per <see cref="WV_Approach"/> the wave uses (<see cref="WV_WavePlan.EncodeApproaches"/>).</summary>
+        public byte approaches;
+        /// <summary>Everything the wave throws at the flag, its boss included.</summary>
+        public int enemyCount;
+        public bool isSurge;
+        public bool hasBoss;
+    }
+
+    /// <summary>Sent to every commander when a round ends, so the client can play the result.</summary>
+    public struct WV_RoundEnded : IBroadcast {
+        /// <summary>True when every wave was held; false when the flag fell.</summary>
+        public bool victory;
+        /// <summary>The last wave fought, counting from 1.</summary>
+        public int waveReached;
+        public int wavesHeld;
+        public int enemiesDefeated;
+    }
 }

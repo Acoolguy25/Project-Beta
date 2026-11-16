@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using RyanAssets.Characters.Shared;
+using RyanAssets.GameFeel;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Component;
 using UnityEngine;
@@ -24,7 +25,8 @@ namespace Universes.UniverseData.war_valley.Client {
     /// </para>
     /// <para>
     /// Selected troops wear an authored ring, and every gunner (selected or not) carries a range
-    /// indicator that brightens while it is selected.
+    /// indicator that brightens while it is selected. A ring pops in as its unit is picked up, so a
+    /// selection is felt as well as seen.
     /// </para>
     /// </summary>
     public sealed class WV_CommanderSelection {
@@ -32,6 +34,9 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly Func<WV_RangeIndicator> troopRangePrefab;
         readonly GameObject troopSelectionIndicator;
         readonly int maxSelection;
+        /// <summary>Scale a selection ring pops in from.</summary>
+        const float RingPopFrom = 0.55f;
+        const float RingPopSeconds = 0.25f;
 
         readonly List<WV_Unit> units = new();
         readonly List<GameCharacter> troops = new();
@@ -175,6 +180,8 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             unit.SelectedLocally = true;
             units.Add(unit);
+            if (unit.SelectionIndicator != null)
+                Punch.Pop(unit.SelectionIndicator.transform, RingPopFrom, RingPopSeconds);
         }
 
         public void Add(GameCharacter troop) {
@@ -192,6 +199,13 @@ namespace Universes.UniverseData.war_valley.Client {
             indicator.transform.localPosition = Vector3.zero;
             indicator.transform.localRotation = Quaternion.identity;
             troopIndicators[troop] = indicator;
+            Punch.Pop(indicator.transform, RingPopFrom, RingPopSeconds);
+        }
+
+        /// <summary>The ring under a selected troop, for feedback that pulses it.</summary>
+        public bool TryGetIndicator(GameCharacter troop, out GameObject indicator) {
+            indicator = null;
+            return troop != null && troopIndicators.TryGetValue(troop, out indicator) && indicator != null;
         }
 
         public void Remove(GameCharacter troop) {

@@ -80,6 +80,8 @@ namespace Universes.UniverseData.war_valley.Shared {
         public Transform WeaponMuzzle => weaponMuzzle != null ? weaponMuzzle : transform;
         public WV_Owned Owned => owned;
         public Sprite Icon => icon;
+        /// <summary>The ring shown under this unit while it is selected locally, or null.</summary>
+        public GameObject SelectionIndicator => selectionIndicator;
         public bool IsAircraft => WV_Rules.IsAircraft(kind);
 
         /// <summary>
@@ -91,8 +93,12 @@ namespace Universes.UniverseData.war_valley.Shared {
             set => displayName = value;
         }
 
-        /// <summary>A vehicle carries its name overhead all the time, as a player does, not only once damaged.</summary>
-        public override bool AlwaysShowNameTag => true;
+        /// <summary>
+        /// A vehicle's overhead tag shows only once it is damaged, like a building's. A name over
+        /// every tank turned a battle into a wall of labels; the commander reads their army from the
+        /// selection panel and hovers a unit to see whose it is.
+        /// </summary>
+        public override bool AlwaysShowNameTag => false;
 
         public override TeamConfig Team => teamSync.Value ?? team;
 

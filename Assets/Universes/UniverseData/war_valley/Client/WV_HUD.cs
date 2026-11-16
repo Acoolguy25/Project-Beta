@@ -72,6 +72,12 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("The pill around the hint; hidden while there is no hint.")]
         [SerializeField] GameObject hintPanel;
 
+        [Header("Battlefield")]
+        [Tooltip("Small health bars over soldiers, drawn under every panel.")]
+        [SerializeField] WV_HealthBarLayer healthBars;
+        [Tooltip("Wave banner, approach arrows, and the flag alarm.")]
+        [SerializeField] WV_WaveDrama waveDrama;
+
         readonly StringBuilder builder = new();
         readonly Dictionary<string, int> troopCounts = new();
         readonly Dictionary<WV_UnitKind, int> unitCounts = new();
@@ -85,6 +91,8 @@ namespace Universes.UniverseData.war_valley.Client {
         public SelectionInfoPanel StructurePanel => structurePanel;
         public CommandOptionGrid OptionMenu => optionMenu;
         public FundsTransferPanel DonatePanel => donatePanel;
+        public WV_HealthBarLayer HealthBars => healthBars;
+        public WV_WaveDrama WaveDrama => waveDrama;
 
         /// <summary>The funds card's Donate button was clicked.</summary>
         public event Action DonateClicked;

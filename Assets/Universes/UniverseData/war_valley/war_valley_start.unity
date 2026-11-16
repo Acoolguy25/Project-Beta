@@ -15,14 +15,14 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.61, g: 0.7, b: 0.79, a: 1}
+  m_FogColor: {r: 0.79, g: 0.79, b: 0.74, a: 1}
   m_FogMode: 1
   m_FogDensity: 0.01
-  m_LinearFogStart: 1200
-  m_LinearFogEnd: 3600
-  m_AmbientSkyColor: {r: 0.46, g: 0.58, b: 0.72, a: 1}
-  m_AmbientEquatorColor: {r: 0.38, g: 0.43, b: 0.32, a: 1}
-  m_AmbientGroundColor: {r: 0.14, g: 0.16, b: 0.11, a: 1}
+  m_LinearFogStart: 200
+  m_LinearFogEnd: 1500
+  m_AmbientSkyColor: {r: 0.6, g: 0.68, b: 0.78, a: 1}
+  m_AmbientEquatorColor: {r: 0.6, g: 0.58, b: 0.5, a: 1}
+  m_AmbientGroundColor: {r: 0.3, g: 0.27, b: 0.21, a: 1}
   m_AmbientIntensity: 0.94
   m_AmbientMode: 1
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
@@ -151,6 +151,37 @@ MonoBehaviour:
   hudPrefab: {fileID: 1307344703195898989, guid: cbf8ae651e945e9438119105f2ef05b8, type: 3}
   troopSelectionIndicator: {fileID: 2854674636289431624, guid: 9417d0883bab0b048b93d3c662505a9b, type: 3}
   maxSelection: 120
+  battleFeedback:
+    effectsDistance: 240
+    hitFlashColor: {r: 1, g: 0.82, b: 0.68, a: 1}
+    selectedFightRadius: 32
+    damageNumberSize: 1
+    soldierBurstScale: 1.2
+    soldierSparkScale: 1.4
+    enemyDeathTint: {r: 1, g: 0.45, b: 0.35, a: 1}
+    defenderDeathTint: {r: 0.6, g: 0.9, b: 1, a: 1}
+    vehicleExplosionRadius: 50
+    structureSmokeScale: 2.2
+    shellShakeRadius: 35
+    tankImpactScale: 2.5
+    tankShakeStrength: 0.35
+    tankShakeSeconds: 0.3
+    tankReportVolume: 0.7
+    constructionDustScale: 1.6
+    constructionDustHeight: 4
+    constructionDustTint: {r: 1, g: 0.96, b: 0.88, a: 1}
+    finishSquash: 0.12
+    finishSquashSeconds: 0.4
+  orderFeedback:
+    moveColor: {r: 0.45, g: 0.85, b: 1, a: 1}
+    advanceColor: {r: 1, g: 0.78, b: 0.3, a: 1}
+    attackColor: {r: 1, g: 0.32, b: 0.26, a: 1}
+    rallyColor: {r: 0.55, g: 1, b: 0.6, a: 1}
+    pingScale: 7
+    innerPing: 0.45
+    acknowledgeVolume: 0.8
+    ringPulse: 0.3
+    ringPulseSeconds: 0.3
 --- !u!4 &77648418
 Transform:
   m_ObjectHideFlags: 0
@@ -841,7 +872,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 575909903}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.3477229, y: -0.22585355, z: 0.08669706, w: 0.9058491}
+  m_LocalRotation: {x: 0.3233864, y: -0.30593404, z: 0.11135087, w: 0.8884969}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -858,8 +889,8 @@ Light:
   m_Enabled: 1
   serializedVersion: 13
   m_Type: 1
-  m_Color: {r: 1, g: 0.96, b: 0.88, a: 1}
-  m_Intensity: 1.24
+  m_Color: {r: 1, g: 0.9, b: 0.74, a: 1}
+  m_Intensity: 1.65
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -868,7 +899,7 @@ Light:
     m_Type: 2
     m_Resolution: -1
     m_CustomResolution: -1
-    m_Strength: 0.66
+    m_Strength: 0.82
     m_Bias: 0.035
     m_NormalBias: 0.28
     m_NearPlane: 0.2

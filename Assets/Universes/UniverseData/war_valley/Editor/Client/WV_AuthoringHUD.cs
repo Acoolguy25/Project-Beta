@@ -3,6 +3,7 @@ using RyanAssets.Client.ClientUI.Command;
 using RyanAssets.Client.ClientUI.Command.Editor;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
+using RyanAssets.UI.GameHud;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
@@ -51,6 +52,10 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static readonly Color SellConfirmFill = new(0.72f, 0.3f, 0.1f, 1f);
         static readonly Color HealthFill = new(0.36f, 0.85f, 0.5f, 1f);
         static readonly Color FreezeIcon = new(0.6f, 0.85f, 1f, 1f);
+        static readonly Color HealthBarTrack = new(0.02f, 0.03f, 0.04f, 0.72f);
+        static readonly Color WaveArrowColor = new(1f, 0.72f, 0.3f, 1f);
+        static readonly Color FlagArrowColor = new(1f, 0.32f, 0.26f, 1f);
+        static readonly Color WaveAccent = new(1f, 0.72f, 0.3f, 1f);
 
         const float Margin = 16f;
         const float CardWidth = 300f;
@@ -62,6 +67,11 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         const float Gap = 6f;
         const float Pad = 10f;
         const float SectionGap = 17f;
+        const float HealthBarWidth = 44f;
+        const float HealthBarHeight = 6f;
+        const float ArrowSize = 64f;
+        const float ArrowCaptionSize = 18f;
+        const float BannerWidth = 620f;
 
         static WV_AuthoringHUD() {
             // Deferred: asset operations are not allowed while the domain is still loading.
@@ -103,7 +113,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static bool IsCurrent(WV_HUD hud) {
             if (!HasReferences(hud, "structurePanel", "optionMenu", "commandMenu", "researchLabel",
                     "selectionHealthFill", "donateButton", "donatePanel", "researchButton", "sellButton",
-                    "sellLabel", "troopRangeIndicator", "hintPanel"))
+                    "sellLabel", "troopRangeIndicator", "hintPanel", "healthBars", "waveDrama"))
                 return false;
             SerializedProperty forces = new SerializedObject(hud).FindProperty("forceCounts");
             return forces != null && forces.arraySize == 4;
@@ -162,6 +172,8 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             Ensure<GraphicRaycaster>(root);
             var hud = Ensure<WV_HUD>(root);
 
+            // First child, so the bars draw under every panel.
+            BuildHealthBars(root.transform, hud);
             RectTransform selectionBox = BuildSelectionBox(root.transform);
             BuildEconomy(root.transform, hud);
             BuildSelectionSummary(root.transform, hud);
@@ -204,6 +216,8 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             UIKit.Size(hint, -1f, -1f, 0f).maxWidth = 1100f;
             hintPill.gameObject.SetActive(false);
 
+            BuildWaveDrama(root.transform, hud);
+
             Wire(hud,
                 ("donatePanel", donatePanel), ("selectionBox", selectionBox),
                 ("structurePanel", structurePanel), ("optionMenu", optionMenu), ("hintLabel", hint),
@@ -231,6 +245,101 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         }
 
         // --- Pieces -----------------------------------------------------------
+
+        /// <summary>
+        /// The layer of small overhead health bars, and the one bar it copies: a dark track, a fill
+        /// recoloured at runtime by side, and a name line above it that only shows on hover.
+        /// </summary>
+        static void BuildHealthBars(Transform parent, WV_HUD hud) {
+            GameObject layerObject = Node(parent, "HealthBars");
+            Stretch(layerObject.transform, 0f);
+            WV_HealthBarLayer layer = Ensure<WV_HealthBarLayer>(layerObject);
+
+            GameObject template = Node(layerObject.transform, "HealthBarTemplate");
+            var rect = (RectTransform)template.transform;
+            rect.anchorMin = rect.anchorMax = Vector2.zero;
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = new Vector2(HealthBarWidth, HealthBarHeight);
+            var group = template.AddComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            Image track = Panel(template.transform, "Track", HealthBarTrack, rounded: false);
+            track.raycastTarget = false;
+            Stretch(track, 0f);
+            Image fill = Fill(track.transform, "Fill", HealthFill);
+            Stretch(fill, 1f);
+
+            TextMeshProUGUI label = Label(template.transform, "Name", string.Empty, 13f, Ink, TextAlignmentOptions.Bottom, bold: true);
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Overflow;
+            label.fontSharedMaterial = UIThemeAssets.ShadowMaterial(label.font);
+            Anchor(label, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f),
+                new Vector2(0f, 3f), new Vector2(240f, 18f));
+            label.gameObject.SetActive(false);
+
+            WV_HealthBar bar = template.AddComponent<WV_HealthBar>();
+            Wire(bar, ("fill", fill), ("nameLabel", label), ("group", group));
+            template.SetActive(false);
+            Wire(layer, ("template", bar));
+            Wire(hud, ("healthBars", layer));
+        }
+
+        /// <summary>
+        /// The wave staging: a centred banner for wave starts and round results, one arrow per
+        /// approach, and an arrow to the flag for when it is under attack off screen.
+        /// </summary>
+        static void BuildWaveDrama(Transform parent, WV_HUD hud) {
+            GameObject layerObject = Node(parent, "WaveDrama");
+            Stretch(layerObject.transform, 0f);
+            WV_WaveDrama drama = Ensure<WV_WaveDrama>(layerObject);
+
+            var arrows = new Object[WV_WavePlan.ApproachCount];
+            for (int i = 0; i < arrows.Length; i++) {
+                string side = ((WV_Approach)i).ToString();
+                arrows[i] = BuildArrow(layerObject.transform, $"Approach{side}", side.ToUpperInvariant(), WaveArrowColor);
+            }
+            RectTransform flagArrow = BuildArrow(layerObject.transform, "FlagArrow", "FLAG", FlagArrowColor);
+
+            HudBanner banner = HudKit.Banner(layerObject.transform, "WaveBanner", new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 210f), BannerWidth, "crossed_swords", WaveAccent, 72f);
+            // Under the arrows: an approach straight ahead pins its arrow to the top edge, right where
+            // the banner shows, and the arrow is the part that has to stay readable.
+            banner.transform.SetAsFirstSibling();
+
+            WireArray(drama, "approachArrows", arrows);
+            Wire(drama, ("banner", banner), ("flagArrow", flagArrow),
+                ("waveIcon", HudKit.Icon("crossed_swords")), ("bossIcon", HudKit.Icon("warlord")),
+                ("victoryIcon", HudKit.Icon("laurels_trophy")), ("defeatIcon", HudKit.Icon("tombstone")));
+
+            Wire(hud, ("waveDrama", drama));
+        }
+
+        /// <summary>
+        /// One edge arrow: a container placed in screen pixels from the bottom-left, whose first child
+        /// is the arrow glyph the runtime rotates, with an upright caption under it.
+        /// </summary>
+        static RectTransform BuildArrow(Transform parent, string name, string caption, Color color) {
+            var container = (RectTransform)Node(parent, name).transform;
+            container.anchorMin = container.anchorMax = Vector2.zero;
+            container.pivot = new Vector2(0.5f, 0.5f);
+            container.sizeDelta = new Vector2(ArrowSize, ArrowSize);
+
+            Image glyph = HudKit.Icon(container, "navigation", ArrowSize, color);
+            glyph.name = "Arrow";
+            glyph.raycastTarget = false;
+            glyph.transform.SetAsFirstSibling();
+            Anchor(glyph, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                Vector2.zero, new Vector2(ArrowSize, ArrowSize));
+
+            TextMeshProUGUI label = Label(container, "Caption", caption, ArrowCaptionSize, color, TextAlignmentOptions.Top, bold: true);
+            label.fontSharedMaterial = UIThemeAssets.ShadowMaterial(label.font);
+            Anchor(label, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f),
+                new Vector2(0f, -2f), new Vector2(140f, ArrowCaptionSize + 6f));
+
+            container.gameObject.SetActive(false);
+            return container;
+        }
 
         /// <summary>
         /// Anchored to the bottom-left with a bottom-left pivot, so the controller can drive it

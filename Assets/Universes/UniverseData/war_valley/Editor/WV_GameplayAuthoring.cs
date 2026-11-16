@@ -166,6 +166,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                     SetPrivateField(unit, "attackDamage", def.AttackDamage);
                     SetPrivateField(unit, "attackCooldown", def.AttackCooldown);
                     ConfigureRangeIndicator(root);
+                    ConfigureUnitWeaponEffects(root);
                     PrefabUtility.SaveAsPrefabAsset(root, path);
                     Stamp(path);
                 } finally {

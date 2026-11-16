@@ -1,4 +1,5 @@
 using RyanAssets.Shared.Declarations;
+using UnityEngine;
 using UnityEngine.AI;
 
 namespace Universes.UniverseData.war_valley.Shared {
@@ -44,6 +45,24 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static void Apply(NavMeshAgent agent, TeamConfig team) {
             if (agent != null && team != null)
                 agent.areaMask = GetAreaMask(team.realTeam);
+        }
+
+        /// <summary>How far from its spawn point a new soldier may be moved to stand on the NavMesh (m).</summary>
+        public const float SpawnSnapDistance = 10f;
+
+        /// <summary>
+        /// Puts a freshly spawned soldier's agent on the NavMesh at its spawn point. The agent wakes up
+        /// where the prefab was instantiated and is only then moved by its transform, which leaves it
+        /// off the NavMesh: it never gets a path, so a wave would stand at the valley edge forever.
+        /// Returns false (and warns) when there is no NavMesh near the point.
+        /// </summary>
+        public static bool PlaceOnNavMesh(NavMeshAgent agent, Vector3 spawnPosition) {
+            if (agent == null || !agent.enabled || agent.isOnNavMesh)
+                return agent != null && agent.isOnNavMesh;
+            if (NavMesh.SamplePosition(spawnPosition, out NavMeshHit hit, SpawnSnapDistance, agent.areaMask))
+                return agent.Warp(hit.position);
+            Debug.LogWarning($"War Valley: no NavMesh within {SpawnSnapDistance} m of {spawnPosition}; {agent.name} cannot move.", agent);
+            return false;
         }
     }
 }
