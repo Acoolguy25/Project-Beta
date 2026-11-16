@@ -48,6 +48,15 @@ namespace Universes.murder_mystery.Server {
         MM_Mode mode;
         [SerializeField]
         List<TeamColor> npcRoles, playerRoles;
+        [Tooltip("Pacing and balance of Classic rounds: phase lengths, reports, the murderers' grace period and kill cooldown, dropped weapons.")]
+        [SerializeField]
+        MM_ClassicTuning classicTuning = new();
+        [Tooltip("Round length of the NPCs vs Players and Infection modes.")]
+        [SerializeField, Min(10)]
+        int otherModesRoundSeconds = 90;
+        [Tooltip("Players this close to a kill hear and see it (kill sting, sparks). The victim and the killer always do.")]
+        [SerializeField, Min(0f)]
+        float killAudibleDistance = 45f;
 
         public static float SpawnMultiplier;
         public static bool ForceEndGame;
@@ -59,11 +68,10 @@ namespace Universes.murder_mystery.Server {
         // Classic mode's round structure (reveal, hunt, reports, meetings, results).
         MM_ClassicRound classic;
         int roundNumber;
-        const int ClassicResultsSeconds = 12;
         const float StateInterval = 0.5f;
         protected override void Awake() {
             base.Awake();
-            classic = new MM_ClassicRound(this);
+            classic = new MM_ClassicRound(this, classicTuning);
             if (InstanceFinder.ServerManager != null)
                 InstanceFinder.ServerManager.RegisterBroadcast<MM_ReportRequest>(classic.OnReportRequest, true);
             BroadcastStateLoop(destroyCancellationToken).Forget(exception => Debug.LogException(exception, this));
@@ -191,24 +199,24 @@ namespace Universes.murder_mystery.Server {
         }
         void SharedOnDied(GameCharacter character, DamageType source, IEntity killer) {
             GameCharacter killerCharacter = killer as GameCharacter;
+            if (gameInProgress && killerCharacter != null && source != DamageType.Command)
+                BroadcastKill(character, source, killerCharacter);
             if (mode == MM_Mode.Classic) {
                 if (gameInProgress)
                     classic.OnCharacterDied(character, killerCharacter);
                 if (killerCharacter != null) {
                     if (killerCharacter.Owner.IsValid && source == DamageType.Gun && character.GetTeam().realTeam != TeamColor.Red) {
-                        //ServerTool.Instance.DespawnTool(killerCharacter.Owner, ToolEnum.Pistol);
+                        // Shooting a non-murderer jams the sheriff's pistol.
                         ToolBaseShared tool = ServerTool.Instance.GetTool(killerCharacter.Owner, ToolEnum.Pistol);
-                        tool.UpdateServerCooldown(20f);
-                        //tool.
+                        if (tool != null)
+                            tool.UpdateServerCooldown(classicTuning.wrongShotJamSeconds);
                     }
                     if (killerCharacter.GetTeam().realTeam == TeamColor.Red) {
-                        killerCharacter.HealMaxHealth(character.Owner.IsValid ? 60 : 20);
+                        killerCharacter.HealMaxHealth(character.Owner.IsValid ? classicTuning.murdererHealOnPlayerKill : classicTuning.murdererHealOnNpcKill);
                     }
                 }
-                if (character.Tools.Any((tool) => tool.toolEnum == ToolEnum.Pistol))
-                    ServerTool.Instance.SpawnFloatingTool(ToolEnum.Pistol, character.transform.position + character.transform.lossyScale.y / 2 * Vector3.up).OnToolCollectedFunc = OnTryCollectToolFunc;
-                if (character.Tools.Any((tool) => tool.toolEnum == ToolEnum.Dagger))
-                    ServerTool.Instance.SpawnFloatingTool(ToolEnum.Dagger, character.transform.position + character.transform.lossyScale.y / 2 * Vector3.up).OnToolCollectedFunc = OnTryCollectToolFunc;
+                if (gameInProgress)
+                    classic.DropWeapons(character);
                 if (character.GetTeam().realTeam == TeamColor.Blue) {
                     if (GetTeamCount(TeamColor.Blue) == 0) {
                         foreach (GameCharacter gameCharacter in GameCharacter.TeamToCharacter[TeamColor.Red]) {
@@ -293,16 +301,32 @@ namespace Universes.murder_mystery.Server {
             }
 
         }
-        bool OnTryCollectToolFunc(NetworkBehaviour collectObject, ToolEnum tool) {
-            if (collectObject.TryGetComponent<GameCharacter>(out GameCharacter gameCharacter) && gameCharacter.Tools.Length == 0 && gameCharacter.GetTeam().realTeam == TeamColor.Green) {
-                if (tool == ToolEnum.Dagger)
-                    gameCharacter.SetTeam(new TeamConfig(TeamColor.Red, TeamColor.Red));
-                else if (tool == ToolEnum.Pistol)
-                    gameCharacter.SetTeam(new TeamConfig(TeamColor.Blue, TeamColor.Blue));
-                ServerTool.Instance.SpawnTool(collectObject, tool);
-                return true;
+        /// <summary>
+        /// Tells the players within earshot of a kill (plus the victim and the killer) where it happened, so
+        /// their clients can play the kill sting. Nobody else learns of it.
+        /// </summary>
+        void BroadcastKill(GameCharacter victim, DamageType source, GameCharacter killer) {
+            if (InstanceFinder.ServerManager == null)
+                return;
+            Vector3 position = victim.transform.position;
+            float audibleSqr = killAudibleDistance * killAudibleDistance;
+            foreach (PlayerData player in PlayerData.Players.Values) {
+                if (player == null || !player.Owner.IsActive)
+                    continue;
+                bool youDied = victim.Owner == player.Owner;
+                bool youKilled = killer.Owner == player.Owner;
+                bool inEarshot = LocalCharacter.Characters.TryGetValue(player.Owner, out LocalCharacter listener)
+                    && listener != null
+                    && (listener.transform.position - position).sqrMagnitude <= audibleSqr;
+                if (!youDied && !youKilled && !inEarshot)
+                    continue;
+                InstanceFinder.ServerManager.Broadcast(player.Owner, new MM_KillBroadcast {
+                    position = position,
+                    byGun = source == DamageType.Gun,
+                    youDied = youDied,
+                    youKilled = youKilled,
+                });
             }
-            return false;
         }
         readonly List<GameCharacter> pendingNpcParticipants = new();
         void SpawnNpcs() {
@@ -333,7 +357,10 @@ namespace Universes.murder_mystery.Server {
                         gameCharacter.SetTeam(new TeamConfig(TeamColor.Green, TeamColor.Green));
                         break;
                 }
-                npc.gameObject.AddComponent<MM_LocalNPC>();
+                MM_LocalNPC mmLocalNpc = npc.gameObject.AddComponent<MM_LocalNPC>();
+                // Classic murderers wait out the grace period and their kill cooldown before striking.
+                if (mode == MM_Mode.Classic)
+                    mmLocalNpc.KillAllowed = () => classic.CanKill(gameCharacter);
                 npc.gameObject.AddComponent<MM_NPC>();
                 if (mode == MM_Mode.Classic)
                     pendingNpcParticipants.Add(gameCharacter);
@@ -531,7 +558,7 @@ namespace Universes.murder_mystery.Server {
                 return;
             }
             base.SetGlobalInvul(false);
-            int gameTime = mode == MM_Mode.Classic ? 180 : 90;
+            int gameTime = otherModesRoundSeconds;
             gameDurationLeft = DebugTimerSpeedUp.Value ? 10 : gameTime;
             gameInProgress = true;
             using CancellationTokenSource coinCts = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -566,12 +593,11 @@ namespace Universes.murder_mystery.Server {
         }
         /// <summary>Classic: the hunt (paused by meetings), then the full role reveal.</summary>
         async UniTask RunClassicRound(CancellationToken token) {
-            const int huntSeconds = 180;
             base.SetGlobalInvul(false);
             using CancellationTokenSource coinCts = CancellationTokenSource.CreateLinkedTokenSource(token);
             SpawnCoinLoop(coinCts.Token).Forget(exception => Debug.LogException(exception, this));
             try {
-                await classic.RunHunt(DebugTimerSpeedUp.Value ? 30 : huntSeconds,
+                await classic.RunHunt(DebugTimerSpeedUp.Value ? 30 : classicTuning.huntSeconds,
                     () => GetWinnerTeam(GetPlayerCount() > 0) != TeamColor.None, token);
             } finally {
                 coinCts.Cancel();
@@ -586,7 +612,7 @@ namespace Universes.murder_mystery.Server {
             MM_SaveData.RecordClassicResult(winner);
             string summary = $"{GetTeamCount(TeamColor.Red)}/{startMurd} Murderers, {GetTeamCount(TeamColor.Blue)}/{startSheriff} Sheriffs, {GetTeamCount(TeamColor.Green)}/{startInnocent} Innocents remaining";
             ServerChat.SendSystemMessage(new($"{GetWinnerName(winner)} win! {summary}.", SystemMessageSource.CustomMessage));
-            await classic.RunResults(GetWinnerName(winner), summary, DebugTimerSpeedUp.Value ? 4 : ClassicResultsSeconds, token);
+            await classic.RunResults(GetWinnerName(winner), summary, DebugTimerSpeedUp.Value ? 4 : classicTuning.resultsSeconds, token);
         }
 
         /// <summary>Tells each player the round phase, their own role and any body they can report.</summary>

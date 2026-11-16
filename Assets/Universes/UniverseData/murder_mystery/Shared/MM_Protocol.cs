@@ -25,6 +25,12 @@ namespace Universes.UniverseData.murder_mystery {
         public string reportableBodyName;
         /// <summary>Unreported bodies near this player, for the floor markers.</summary>
         public Vector3[] nearbyBodies;
+        /// <summary>Murderers only: whole seconds until they may kill again (grace period, kill cooldown).</summary>
+        public int killCooldown;
+        /// <summary>True while a dead sheriff's gun lies on the floor waiting for an innocent to take it.</summary>
+        public bool gunDropped;
+        /// <summary>Where the dropped gun lies, when <see cref="gunDropped"/>.</summary>
+        public Vector3 gunPosition;
     }
 
     /// <summary>Client asks to report the body it is standing next to.</summary>
@@ -51,6 +57,22 @@ namespace Universes.UniverseData.murder_mystery {
         public MM_Role role;
         public bool wasPlayer;
         public string headline;
+        /// <summary>How long the outcome stays on screen.</summary>
+        public int seconds;
+    }
+
+    /// <summary>
+    /// Someone died close to this player (or it was them). Sent only to players within earshot, so a
+    /// client never learns about kills it could not have heard.
+    /// </summary>
+    public struct MM_KillBroadcast : IBroadcast {
+        public Vector3 position;
+        /// <summary>Shot by a gun rather than stabbed.</summary>
+        public bool byGun;
+        /// <summary>The receiving player is the one who died.</summary>
+        public bool youDied;
+        /// <summary>The receiving player made the kill.</summary>
+        public bool youKilled;
     }
 
     public struct MM_ResultEntry {
@@ -82,8 +104,8 @@ namespace Universes.UniverseData.murder_mystery {
         };
 
         public static string RoleGoal(MM_Role role) => role switch {
-            MM_Role.Innocent => "Survive. Report bodies with E and vote out the murderer.",
-            MM_Role.Sheriff => "Find the murderer and shoot them. Shooting an innocent jams your pistol.",
+            MM_Role.Innocent => "Survive. Report bodies with E, vote out the murderer, and grab the sheriff's gun if it drops.",
+            MM_Role.Sheriff => "Find the murderer and shoot them. Shooting an innocent jams your pistol. If you die, your gun drops for an innocent to take.",
             MM_Role.Murderer => "Eliminate everyone with your dagger. Blend in with the crowd and don't get voted out.",
             MM_Role.Spectator => "You joined mid-round. Watch, and play next round.",
             _ => "",

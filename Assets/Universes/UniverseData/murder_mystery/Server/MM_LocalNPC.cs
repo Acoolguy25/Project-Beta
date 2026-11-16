@@ -25,6 +25,17 @@ namespace Universes.murder_mystery.Server {
         ToolBaseShared sharedWeapon;
         GameCharacter pendingAttackTarget;
         float lastAttack = float.MinValue;
+        bool holstered;
+
+        /// <summary>
+        /// Asked before every attack. When it says no (Classic grace period or kill cooldown) the murderer
+        /// holsters: it stops hunting and wanders like a townsperson until it may kill again. Null means
+        /// the game mode puts no limit on kills.
+        /// </summary>
+        public System.Func<bool> KillAllowed;
+
+        /// <summary>Whether this NPC may strike right now.</summary>
+        public bool CanKillNow => KillAllowed == null || KillAllowed();
         void Awake() {
             gameCharacter = GetComponent<GameCharacter>();
             localNPC = GetComponent<LocalNPC>();
@@ -74,7 +85,7 @@ namespace Universes.murder_mystery.Server {
             localNPC.SetTargetingType(NPCTargetingType.Attack);
         }
         void AttackFunction(GameCharacter targetCharacter) {
-            if (sharedWeapon == null || targetCharacter == null)
+            if (sharedWeapon == null || targetCharacter == null || !CanKillNow)
                 return;
 
             lastAttack = Time.time;
@@ -91,6 +102,7 @@ namespace Universes.murder_mystery.Server {
                 || targetCharacter == null
                 || gameCharacter.IsDead
                 || gameCharacter.ActiveTool.Value != sharedWeapon
+                || !CanKillNow
                 || !localNPC.IsTargetInAttackRange(targetCharacter))
                 return;
 
@@ -109,6 +121,21 @@ namespace Universes.murder_mystery.Server {
                 pendingAttackTarget = null;
                 gameCharacter.SwitchTool(null);
             }
+            UpdateHolster();
+        }
+
+        /// <summary>
+        /// Only an armed murderer holsters. While holstered it does not pick targets on its own, so it blends
+        /// into the crowd instead of visibly stalking a victim it is not allowed to kill yet.
+        /// </summary>
+        void UpdateHolster() {
+            bool holster = sharedWeapon != null && !gameCharacter.IsDead && !CanKillNow;
+            if (holster == holstered)
+                return;
+            holstered = holster;
+            localNPC.AutomaticTargeting = !holster;
+            if (holster && localNPC.TargetingType == NPCTargetingType.Attack)
+                localNPC.SetTargetingType(NPCTargetingType.Random);
         }
 
         void OnDestroy() {

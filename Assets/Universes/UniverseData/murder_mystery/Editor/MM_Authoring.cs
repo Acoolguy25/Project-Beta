@@ -1,3 +1,4 @@
+using RyanAssets.GameFeel;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using TMPro;
@@ -9,8 +10,9 @@ using Universes.UniverseData.murder_mystery.Client;
 
 namespace Universes.UniverseData.murder_mystery.Editor {
     /// <summary>
-    /// Rebuilds the murder mystery presentation prefabs (HUD and body marker) and makes sure the HUD is in the
-    /// start scene. Run from Ryan/Murder Mystery in a client (non-server) Editor.
+    /// Rebuilds the murder mystery presentation prefabs (HUD and body marker), makes sure the HUD is in the
+    /// start scene, and applies the mansion's atmosphere (fog, ambient, warm lights) to that scene.
+    /// Run from Ryan/Murder Mystery in a client (non-server) Editor.
     /// </summary>
     public static class MM_Authoring {
         public const string Root = "Assets/Universes/UniverseData/murder_mystery";
@@ -19,6 +21,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         const string StartScene = Root + "/murder_mystery_start.unity";
         const string QuickEffects = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs/";
         const string Sounds = "Assets/Universes/UniverseData/classic_horror/Flooded_Grounds/Content/Sounds/";
+        const string OwnSounds = Root + "/Audio/";
 
         static readonly Color Blood = new(0.9f, 0.08f, 0.06f, 0.85f);
 
@@ -29,6 +32,104 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             BuildHud(marker);
             AddHudToStartScene();
             AssetDatabase.SaveAssets();
+        }
+
+        // ---------- atmosphere ----------
+
+        // A lamp-lit mansion at night rather than grey concrete under white light: warm, dark fog that hides
+        // the void outside the walls, a warm ambient, and tungsten-coloured fill lights. The post-processing
+        // look (MoodPreset.WarmIndoor) is applied at runtime by MM_ClientHUD.
+        static readonly Color FogColor = new(0.085f, 0.066f, 0.052f);
+        const float FogDensity = 0.012f;
+        static readonly Color AmbientSky = new(0.22f, 0.175f, 0.13f);
+        static readonly Color AmbientEquator = new(0.18f, 0.137f, 0.098f);
+        static readonly Color AmbientGround = new(0.058f, 0.045f, 0.036f);
+        static readonly Color TungstenLight = new(1f, 0.78f, 0.55f);
+        const string FillLightPrefix = "Warm Fill";
+        const string CeilingLightPrefix = "Ceiling Light";
+        // Room lights authored in map-local coordinates. An earlier pass gave their containers a transform
+        // that cancelled the Map's offset and scale, which parked every one of them near the world origin,
+        // far outside the house; ApplyAtmosphere puts them back in the rooms.
+        // Each container's fills get one intensity: the dense grid is many small pools, the additional
+        // lights are the few brighter ones at doorways and halls.
+        static readonly (string container, float intensity)[] RoomLightContainers = {
+            ("Dense Warm Fill Lights", 37.5f),
+            ("Additional Warm Lights", 62.5f),
+        };
+        // Light range is not scaled by the Map's 3x transform, so fills authored for the unscaled map need
+        // a world-space range that reaches across a room.
+        const float RoomFillRange = 34f;
+        const string VisibilityFillName = "Global Visibility Fill";
+        // Faint warm moonlight: keeps corners readable without washing out the lamps.
+        static readonly Color VisibilityFillColor = new(0.85f, 0.72f, 0.6f);
+        const float VisibilityFillIntensity = 0.5f;
+
+        [MenuItem("Ryan/Murder Mystery/Apply Atmosphere")]
+        public static void ApplyAtmosphere() {
+            EditInStartScene(scene => {
+                RenderSettings.fog = true;
+                RenderSettings.fogMode = FogMode.ExponentialSquared;
+                RenderSettings.fogColor = FogColor;
+                RenderSettings.fogDensity = FogDensity;
+                RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+                RenderSettings.ambientSkyColor = AmbientSky;
+                RenderSettings.ambientEquatorColor = AmbientEquator;
+                RenderSettings.ambientGroundColor = AmbientGround;
+                foreach (GameObject rootObject in scene.GetRootGameObjects()) {
+                    foreach (Transform container in rootObject.GetComponentsInChildren<Transform>(true))
+                        foreach ((string containerName, float intensity) in RoomLightContainers) {
+                            if (container.name != containerName)
+                                continue;
+                            Undo.RecordObject(container, "Move murder mystery room lights");
+                            container.localPosition = Vector3.zero;
+                            container.localRotation = Quaternion.identity;
+                            container.localScale = Vector3.one;
+                            foreach (Light fill in container.GetComponentsInChildren<Light>(true)) {
+                                Undo.RecordObject(fill, "Warm murder mystery lights");
+                                fill.range = RoomFillRange;
+                                fill.intensity = intensity;
+                                fill.color = TungstenLight;
+                            }
+                        }
+                    foreach (Light light in rootObject.GetComponentsInChildren<Light>(true)) {
+                        string name = light.gameObject.name;
+                        if (name == VisibilityFillName) {
+                            Undo.RecordObject(light, "Dim murder mystery visibility fill");
+                            light.color = VisibilityFillColor;
+                            light.intensity = VisibilityFillIntensity;
+                        } else if (name.StartsWith(FillLightPrefix) || name.StartsWith(CeilingLightPrefix)) {
+                            Undo.RecordObject(light, "Warm murder mystery lights");
+                            light.color = TungstenLight;
+                        }
+                        // The few ceiling lights cast soft shadows so rooms read as lit by real fixtures.
+                        if (name.StartsWith(CeilingLightPrefix))
+                            light.shadows = LightShadows.Soft;
+                    }
+                }
+                return true;
+            });
+        }
+
+        /// <summary>Runs <paramref name="edit"/> on the start scene (opening it if needed) and saves it when the edit says so.</summary>
+        static void EditInStartScene(System.Func<UnityEngine.SceneManagement.Scene, bool> edit) {
+            var scene = EditorSceneManager.GetSceneByPath(StartScene);
+            bool opened = !scene.isLoaded;
+            if (opened)
+                scene = EditorSceneManager.OpenScene(StartScene, OpenSceneMode.Additive);
+            var previousActive = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            try {
+                // RenderSettings belong to the active scene.
+                UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
+                if (edit(scene)) {
+                    EditorSceneManager.MarkSceneDirty(scene);
+                    EditorSceneManager.SaveScene(scene);
+                }
+            } finally {
+                if (previousActive.IsValid() && previousActive.isLoaded && previousActive != scene)
+                    UnityEngine.SceneManagement.SceneManager.SetActiveScene(previousActive);
+                if (opened)
+                    EditorSceneManager.CloseScene(scene, true);
+            }
         }
 
         static void EnsureFolders() {
@@ -91,6 +192,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 AssetDatabase.CreateAsset(material, path);
             }
             material.shader = shader;
+            // A texture that failed to import (e.g. an LFS pointer that was never pulled) must not wipe the
+            // one the material already has.
+            if (source.mainTexture == null)
+                throw new System.InvalidOperationException("Effect texture missing (run git lfs pull?): " + source.name);
             material.SetTexture("_BaseMap", source.mainTexture);
             material.SetColor("_BaseColor", Color.white);
             material.SetFloat("_Surface", 1f);
@@ -132,7 +237,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
             // Role reveal, centre: who you are and what to do.
             hud.roleReveal = HudKit.Banner(root, "RoleReveal", new Vector2(0.5f, 0.5f), new Vector2(0f, 80f), 640f,
-                "innocent", RoleColor(MM_Role.Innocent), 96f, "The mystery begins");
+                "innocent", RoleColor(MM_Role.Innocent), 96f, MM_ClientHUD.RoundStartKicker);
 
             BuildRoleChip(root, hud);
 
@@ -152,16 +257,35 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             BuildResults(root, hud);
 
             hud.bodyMarkerPrefab = marker;
-            GameObject audio = new("Sfx");
-            audio.transform.SetParent(root, false);
-            hud.sfx = audio.AddComponent<AudioSource>();
-            hud.sfx.playOnAwake = false;
-            hud.sfx.spatialBlend = 0f;
-            hud.sfx.volume = 0.6f;
-            hud.meetingClip = AssetDatabase.LoadAssetAtPath<AudioClip>(Sounds + "Horn.mp3");
-            hud.ejectionClip = AssetDatabase.LoadAssetAtPath<AudioClip>(Sounds + "Taps.mp3");
+            hud.mood = MoodPreset.WarmIndoor;
+            AssignSounds(hud);
 
             UIKit.SavePrefab(root.gameObject, HudPath);
+        }
+
+        /// <summary>The round's sounds (Kenney CC0, see CREDITS.md) played through the shared GameSfx kit.</summary>
+        static void AssignSounds(MM_ClientHUD hud) {
+            hud.roleRevealSound = Sound(0.8f, OwnSounds + "role_reveal.ogg");
+            hud.killSting = Sound(0.75f, OwnSounds + "kill_sting.ogg");
+            hud.killSting.minDistance = 8f;
+            hud.killSting.maxDistance = 55f;
+            hud.bodyFoundSound = Sound(0.6f, Sounds + "Horn.mp3");
+            hud.gavelSound = Sound(1f, OwnSounds + "gavel_1.ogg", OwnSounds + "gavel_2.ogg", OwnSounds + "gavel_3.ogg");
+            hud.gavelSound.minInterval = 0.05f;
+            hud.drumSound = Sound(0.8f, OwnSounds + "drum_1.ogg", OwnSounds + "drum_2.ogg", OwnSounds + "drum_3.ogg", OwnSounds + "drum_4.ogg", OwnSounds + "drum_5.ogg");
+            hud.drumSound.minInterval = 0.02f;
+            hud.drumSound.pitchJitterSemitones = 0.4f;
+            hud.ejectionBell = Sound(0.85f, OwnSounds + "bell_toll.ogg");
+        }
+
+        static SfxSound Sound(float volume, params string[] paths) {
+            AudioClip[] clips = new AudioClip[paths.Length];
+            for (int i = 0; i < paths.Length; i++) {
+                clips[i] = AssetDatabase.LoadAssetAtPath<AudioClip>(paths[i]);
+                if (clips[i] == null)
+                    throw new System.InvalidOperationException("Missing murder mystery sound: " + paths[i]);
+            }
+            return new SfxSound { clips = clips, volume = volume };
         }
 
         /// <summary>Bottom-left: your role as a small emblem and name, and the meetings you have left.</summary>
@@ -184,6 +308,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
             hud.meetingsLeft = HudKit.Chip(chip, "Meetings", "megaphone", "2", Alarm, 30f);
             hud.meetingsLeft.background.enabled = false;
+            // Murderers only: the dagger is not ready yet (grace period or kill cooldown).
+            hud.killCooldown = HudKit.Chip(chip, "KillCooldown", "dagger", "25s", RoleColor(MM_Role.Murderer), 30f);
+            hud.killCooldown.background.enabled = false;
+            hud.killCooldown.SetVisible(false);
             hud.roleChip = HudKit.Popup(chip, false);
         }
 
@@ -247,23 +375,15 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         }
 
         static void AddHudToStartScene() {
-            var scene = EditorSceneManager.GetSceneByPath(StartScene);
-            bool opened = !scene.isLoaded;
-            if (opened)
-                scene = EditorSceneManager.OpenScene(StartScene, OpenSceneMode.Additive);
-            try {
-                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(HudPath);
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(HudPath);
+            EditInStartScene(scene => {
                 foreach (GameObject rootObject in scene.GetRootGameObjects())
                     if (PrefabUtility.GetCorrespondingObjectFromSource(rootObject) == prefab)
-                        return;
+                        return false;
                 GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
                 instance.name = "MM_HUD";
-                EditorSceneManager.MarkSceneDirty(scene);
-                EditorSceneManager.SaveScene(scene);
-            } finally {
-                if (opened)
-                    EditorSceneManager.CloseScene(scene, true);
-            }
+                return true;
+            });
         }
     }
 }

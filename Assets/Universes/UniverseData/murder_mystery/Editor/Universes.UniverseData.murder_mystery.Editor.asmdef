@@ -6,7 +6,8 @@
         "Unity.TextMeshPro",
         "Unity.ugui",
         "RyanAssets.UI",
-        "RyanAssets.UI.Editor"
+        "RyanAssets.UI.Editor",
+        "RyanAssets.GameFeel"
     ],
     "includePlatforms": [
         "Editor"

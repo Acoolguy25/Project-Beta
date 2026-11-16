@@ -21,18 +21,23 @@ namespace Universes.murder_mystery.Server {
 
         private LocalNPC localNPC;
         private GameCharacter gameCharacter;
+        private MM_LocalNPC murderPolicy;
 
         private void Awake() {
             localNPC = GetComponent<LocalNPC>();
             gameCharacter = GetComponent<GameCharacter>();
+            murderPolicy = GetComponent<MM_LocalNPC>();
 
             localNPC.AttackTargetRangeMultiplier = GetAttackRangeMultiplier;
             localNPC.AttackTargetPriority = GetAttackPriority;
             gameCharacter.OnDamage += HandleDamage;
         }
 
+        /// <summary>Forced targeting only applies while this NPC may actually kill (not during a grace period or cooldown).</summary>
+        private bool MayForceTarget => localNPC.AllowAttackTargetOverrides && (murderPolicy == null || murderPolicy.CanKillNow);
+
         private void Update() {
-            if (!localNPC.AllowAttackTargetOverrides)
+            if (!MayForceTarget)
                 return;
 
             // Enforce the game-mode priority every frame rather than waiting for LocalNPC's
@@ -64,7 +69,7 @@ namespace Universes.murder_mystery.Server {
         }
 
         private void HandleDamage(DamageType source, IEntity attacker) {
-            if (localNPC.AllowAttackTargetOverrides
+            if (MayForceTarget
                 && source == DamageType.Gun
                 && attacker is GameCharacter attackerCharacter)
                 localNPC.TargetCharacter(attackerCharacter);

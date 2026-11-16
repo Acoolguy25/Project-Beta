@@ -1,11 +1,15 @@
 using Cysharp.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
+using FishNet.Object;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
+using RyanAssets.Item.FloatingTool;
+using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Tools.Shared;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,23 +20,19 @@ using Universes.UniverseData.murder_mystery;
 namespace Universes.murder_mystery.Server {
     /// <summary>
     /// The Classic round structure on top of <see cref="MM_ServerRunner"/>: role reveal, the hunt, body
-    /// reports, emergency meetings with an accusation vote, ejections, and the end-of-round reveal.
-    /// The runner still owns spawning, roles, tools and win conditions.
+    /// reports, emergency meetings with an accusation vote, ejections, the end-of-round reveal, the
+    /// murderers' grace period and kill cooldown, and weapons dropped by the dead.
+    /// The runner still owns spawning, roles, tools and win conditions. Numbers come from
+    /// <see cref="MM_ClassicTuning"/> on the runner.
     /// </summary>
     public sealed class MM_ClassicRound {
-        public const float ReportDistance = 6f;
-        const float MarkerDistance = 30f;
-        const float WitnessDistance = 40f;
         // The shared vote window fits three options in a row.
         const int MaxWitnesses = 3;
         const int MinSuspects = 3;
-        public const int MeetingsPerRound = 3;
-        const int RoleRevealSeconds = 6;
-        const int DiscussionSeconds = 15;
-        const int VoteSeconds = 25;
-        const int EjectionSeconds = 6;
-        const int ReportCooldownSeconds = 20;
-        const int FirstReportDelaySeconds = 10;
+        // A report is accepted from a little further than the prompt shows, to absorb movement lag.
+        const float ReportDistanceTolerance = 1.5f;
+        // Dropped weapons float at the middle of the body they fell from.
+        const float DropHeightFraction = 0.5f;
 
         sealed class Body {
             public int id;
@@ -52,6 +52,7 @@ namespace Universes.murder_mystery.Server {
         }
 
         readonly MM_ServerRunner runner;
+        readonly MM_ClassicTuning tuning;
         readonly List<Body> bodies = new();
         readonly List<Participant> participants = new();
         readonly Dictionary<GameCharacter, int> kills = new();
@@ -60,15 +61,19 @@ namespace Universes.murder_mystery.Server {
         float reportAllowedAt;
         bool ejecting;
         UniTaskCompletionSource<Body> reportSignal = new();
+        MM_KillClock killClock;
+        FloatingToolShared droppedGun;
 
         public int Round { get; private set; }
         public MM_Phase Phase { get; private set; } = MM_Phase.Lobby;
         public bool Active { get; private set; }
         public int SecondsLeft { get; set; }
-        public int MeetingsLeft => Mathf.Max(0, MeetingsPerRound - meetingsHeld);
+        public int MeetingsLeft => Mathf.Max(0, tuning.meetingsPerRound - meetingsHeld);
 
-        public MM_ClassicRound(MM_ServerRunner runner) {
+        public MM_ClassicRound(MM_ServerRunner runner, MM_ClassicTuning tuning) {
             this.runner = runner;
+            this.tuning = tuning ?? throw new ArgumentNullException(nameof(tuning));
+            killClock = new MM_KillClock(tuning);
         }
 
         // ---------- lifecycle ----------
@@ -83,6 +88,9 @@ namespace Universes.murder_mystery.Server {
             meetingsHeld = 0;
             ejecting = false;
             reportSignal = new UniTaskCompletionSource<Body>();
+            // Rebuilt every round so Inspector changes to the tuning apply from the next round on.
+            killClock = new MM_KillClock(tuning);
+            droppedGun = null;
             Phase = MM_Phase.RoleReveal;
         }
 
@@ -92,6 +100,8 @@ namespace Universes.murder_mystery.Server {
             bodies.Clear();
             participants.Clear();
             kills.Clear();
+            killClock.Clear();
+            droppedGun = null;
             reportSignal.TrySetCanceled();
         }
 
@@ -114,20 +124,67 @@ namespace Universes.murder_mystery.Server {
             _ => MM_Role.None,
         };
 
+        public static TeamColor TeamOf(MM_Role role) => role switch {
+            MM_Role.Murderer => TeamColor.Red,
+            MM_Role.Sheriff => TeamColor.Blue,
+            MM_Role.Innocent => TeamColor.Green,
+            _ => TeamColor.None,
+        };
+
+        // ---------- murderer balance ----------
+
+        /// <summary>
+        /// Whether this murderer may kill right now: only during the hunt, after the grace period, and once
+        /// their own kill cooldown has run out. NPC murderers ask before every attack.
+        /// </summary>
+        public bool CanKill(GameCharacter murderer) =>
+            Active && Phase == MM_Phase.Hunt && murderer != null && killClock.CanKill(KillerId(murderer), Time.time);
+
+        static int KillerId(GameCharacter character) => character.NetworkObject.ObjectId;
+
+        /// <summary>
+        /// Puts every living player murderer's dagger on the server cooldown the kill clock dictates, so their
+        /// client shows it and refuses to swing early. NPC murderers are held back through <see cref="CanKill"/>
+        /// before they swing; <see cref="OnCharacterDied"/> also locks their dagger after a kill.
+        /// </summary>
+        void SyncPlayerDaggers() {
+            foreach (Participant participant in participants)
+                if (participant.player != null && participant.role == MM_Role.Murderer)
+                    SyncDagger(participant.character);
+        }
+
+        /// <summary>
+        /// Locks the murderer's dagger for as long as the kill clock says. Applies to NPCs too: one swing of
+        /// an NPC's dagger can sweep several victims, and the server cooldown drops every hit after the first.
+        /// </summary>
+        void SyncDagger(GameCharacter murderer) {
+            if (!IsAlive(murderer))
+                return;
+            ToolBaseShared dagger = ServerTool.Instance.GetTool(murderer.NetworkObject, ToolEnum.Dagger);
+            if (dagger != null)
+                dagger.UpdateServerCooldown(killClock.SecondsUntilReady(KillerId(murderer), Time.time));
+        }
+
         // ---------- deaths and reports ----------
 
         public void OnCharacterDied(GameCharacter victim, GameCharacter killer) {
             if (!Active || victim == null)
                 return;
-            if (killer != null && killer != victim)
+            if (killer != null && killer != victim) {
                 kills[killer] = kills.TryGetValue(killer, out int k) ? k + 1 : 1;
+                MM_SaveData.RecordKill(killer, victim);
+                if (RoleOf(killer.GetTeam().realTeam) == MM_Role.Murderer) {
+                    killClock.RecordKill(KillerId(killer), Time.time);
+                    SyncDagger(killer);
+                }
+            }
             if (ejecting)
                 return;
 
             Vector3 position = victim.transform.position;
             // The registry only holds living characters, so this is "who was around".
             List<GameCharacter> witnesses = LivingCharacters()
-                .Where(c => c != victim && (c.transform.position - position).sqrMagnitude <= WitnessDistance * WitnessDistance)
+                .Where(c => c != victim && (c.transform.position - position).sqrMagnitude <= tuning.witnessDistance * tuning.witnessDistance)
                 .OrderBy(c => (c.transform.position - position).sqrMagnitude)
                 .Take(MaxWitnesses)
                 .ToList();
@@ -145,7 +202,7 @@ namespace Universes.murder_mystery.Server {
             if (!TryGetLivingCharacter(conn, out GameCharacter reporter))
                 return;
             Body body = bodies.FirstOrDefault(b => b.id == request.bodyId && !b.reported);
-            if (body == null || (reporter.transform.position - body.position).sqrMagnitude > ReportDistance * ReportDistance * 1.5f)
+            if (body == null || (reporter.transform.position - body.position).sqrMagnitude > tuning.reportDistance * tuning.reportDistance * ReportDistanceTolerance)
                 return;
             body.reported = true;
             pendingReporter = reporter;
@@ -154,11 +211,70 @@ namespace Universes.murder_mystery.Server {
 
         GameCharacter pendingReporter;
 
+        // ---------- dropped weapons ----------
+
+        /// <summary>
+        /// A character died: the sheriff's gun (and, when enabled, a murderer's dagger) drops where they fell for
+        /// an innocent player to take over. The role is read before the runner recolours the corpse.
+        /// </summary>
+        public void DropWeapons(GameCharacter character) {
+            if (!Active || character == null)
+                return;
+            MM_DroppedWeapon weapon = MM_DropRules.WeaponLeftBy(RoleOf(character.GetTeam().realTeam), tuning.dropDaggerOnMurdererDeath);
+            if (weapon == MM_DroppedWeapon.None)
+                return;
+            Vector3 position = character.transform.position + character.transform.lossyScale.y * DropHeightFraction * Vector3.up;
+            FloatingToolShared floating = ServerTool.Instance.SpawnFloatingTool(ToolFor(weapon), position);
+            floating.OnToolCollectedFunc = OnDroppedWeaponCollected;
+            if (weapon == MM_DroppedWeapon.Gun) {
+                droppedGun = floating;
+                ServerChat.SendSystemMessage(new("The sheriff is down! Their gun lies where they fell. An innocent can pick it up.", SystemMessageSource.CustomMessage));
+            }
+        }
+
+        static ToolEnum ToolFor(MM_DroppedWeapon weapon) => weapon == MM_DroppedWeapon.Gun ? ToolEnum.Pistol : ToolEnum.Dagger;
+
+        static MM_DroppedWeapon WeaponOf(ToolEnum tool) => tool switch {
+            ToolEnum.Pistol => MM_DroppedWeapon.Gun,
+            ToolEnum.Dagger => MM_DroppedWeapon.Dagger,
+            _ => MM_DroppedWeapon.None,
+        };
+
+        /// <summary>Server side of a pickup: the collector takes the weapon and, secretly, the role that goes with it.</summary>
+        bool OnDroppedWeaponCollected(NetworkBehaviour collector, ToolEnum tool) {
+            if (!Active || Phase != MM_Phase.Hunt || !collector.TryGetComponent(out GameCharacter character))
+                return false;
+            MM_DroppedWeapon weapon = WeaponOf(tool);
+            MM_Role current = RoleOf(character.GetTeam().realTeam);
+            if (weapon == MM_DroppedWeapon.None || !MM_DropRules.CanPickUp(current, IsAlive(character), character.Tools.Length))
+                return false;
+
+            MM_Role role = MM_DropRules.RoleFor(weapon);
+            // The display team stays hidden, exactly like a role dealt at the start of the round.
+            character.SetTeam(new TeamConfig(TeamOf(role), TeamColor.None));
+            if (ServerTool.Instance.SpawnTool(character.NetworkObject, tool) == null)
+                return false;
+            Participant participant = participants.FirstOrDefault(p => p.character == character);
+            if (participant != null)
+                participant.role = role;
+            if (weapon == MM_DroppedWeapon.Gun) {
+                droppedGun = null;
+                MM_SaveData.RecordGunPickup(character);
+            }
+            if (role == MM_Role.Murderer)
+                SyncDagger(character);
+            if (character.Owner.IsValid)
+                ServerChat.SendSystemMessage(character.Owner, new(role == MM_Role.Sheriff
+                    ? "You picked up the gun. You are the Sheriff now: find the murderer."
+                    : "You picked up the dagger. You are a Murderer now: don't get caught.", SystemMessageSource.CustomMessage));
+            return true;
+        }
+
         // ---------- phases ----------
 
         public async UniTask RunRoleReveal(CancellationToken token) {
             Phase = MM_Phase.RoleReveal;
-            for (int i = RoleRevealSeconds; i > 0; i--) {
+            for (int i = tuning.roleRevealSeconds; i > 0; i--) {
                 SecondsLeft = i;
                 ServerRunner.SetTopMessage($"Round {Round}: check your role! ({i})");
                 if (await runner.AwaitTime(1000, token))
@@ -173,7 +289,9 @@ namespace Universes.murder_mystery.Server {
         public async UniTask RunHunt(int seconds, Func<bool> roundOver, CancellationToken token) {
             Phase = MM_Phase.Hunt;
             SecondsLeft = seconds;
-            reportAllowedAt = Time.time + FirstReportDelaySeconds;
+            reportAllowedAt = Time.time + tuning.firstReportDelaySeconds;
+            killClock.BeginHunt(Time.time);
+            SyncPlayerDaggers();
             while (SecondsLeft > 0 && !roundOver()) {
                 ServerRunner.SetTopMessage($"Mystery In Progress ({SecondsLeft})");
                 UniTask<bool> tick = runner.AwaitTime(1000, token);
@@ -187,7 +305,9 @@ namespace Universes.murder_mystery.Server {
                     await RunMeeting(report.Result, pendingReporter, token);
                     SecondsLeft = huntLeft;
                     Phase = MM_Phase.Hunt;
-                    reportAllowedAt = Time.time + ReportCooldownSeconds;
+                    reportAllowedAt = Time.time + tuning.reportCooldownSeconds;
+                    killClock.EndMeeting(Time.time);
+                    SyncPlayerDaggers();
                     continue;
                 }
                 if (skipped)
@@ -221,10 +341,10 @@ namespace Universes.murder_mystery.Server {
                     reporterName = reporterName,
                     victimName = body.victimName,
                     suspects = names,
-                    discussionSeconds = DiscussionSeconds,
+                    discussionSeconds = tuning.discussionSeconds,
                 });
                 ServerChat.SendSystemMessage(new($"EMERGENCY MEETING: {reporterName} found the body of {body.victimName}. Seen nearby: {string.Join(", ", names)}.", SystemMessageSource.CustomMessage));
-                for (int i = DiscussionSeconds; i > 0; i--) {
+                for (int i = tuning.discussionSeconds; i > 0; i--) {
                     SecondsLeft = i;
                     ServerRunner.SetTopMessage($"Meeting: discuss who killed {body.victimName}! ({i})");
                     if (await runner.AwaitTime(1000, token))
@@ -237,12 +357,12 @@ namespace Universes.murder_mystery.Server {
                 }
 
                 Phase = MM_Phase.Voting;
-                SecondsLeft = VoteSeconds;
+                SecondsLeft = tuning.voteSeconds;
                 string[] descriptions = suspects.Select(s => s.Owner.IsValid ? "Player" : "Townsperson").ToArray();
                 VoteResult result = await ServerVote.StartDynamicVote(
                     $"Who killed {body.victimName}?",
                     $"Reported by {reporterName}. These were seen near the body. Most votes is ejected; a tie ejects nobody.",
-                    names, descriptions, VoteSeconds, token, CanVote);
+                    names, descriptions, tuning.voteSeconds, token, CanVote);
                 MM_SaveData.RecordVotes(suspects);
 
                 MM_EjectionBroadcast ejection = new() { round = Round };
@@ -277,8 +397,9 @@ namespace Universes.murder_mystery.Server {
 
         async UniTask ShowEjection(MM_EjectionBroadcast ejection, CancellationToken token) {
             Phase = MM_Phase.Ejection;
+            ejection.seconds = tuning.ejectionSeconds;
             InstanceFinder.ServerManager.Broadcast(ejection);
-            for (int i = EjectionSeconds; i > 0; i--) {
+            for (int i = tuning.ejectionSeconds; i > 0; i--) {
                 SecondsLeft = i;
                 ServerRunner.SetTopMessage($"{ejection.headline} ({i})");
                 if (await runner.AwaitTime(1000, token))
@@ -316,6 +437,7 @@ namespace Universes.murder_mystery.Server {
         // ---------- per-player state ----------
 
         public MM_StateBroadcast BuildState(PlayerData player, bool classic) {
+            bool gunDropped = Active && classic && droppedGun != null && droppedGun.IsSpawned;
             MM_StateBroadcast state = new() {
                 round = Round,
                 phase = Active ? Phase : MM_Phase.Lobby,
@@ -325,6 +447,8 @@ namespace Universes.murder_mystery.Server {
                 reportCooldown = Mathf.Max(0, Mathf.CeilToInt(reportAllowedAt - Time.time)),
                 reportableBody = -1,
                 nearbyBodies = Array.Empty<Vector3>(),
+                gunDropped = gunDropped,
+                gunPosition = gunDropped ? droppedGun.transform.position : Vector3.zero,
             };
             bool alive = TryGetLivingCharacter(player.Owner, out GameCharacter character);
             state.alive = alive;
@@ -335,6 +459,9 @@ namespace Universes.murder_mystery.Server {
             if (!Active || !classic || !alive)
                 return state;
 
+            if (state.role == MM_Role.Murderer && killClock.Running)
+                state.killCooldown = Mathf.CeilToInt(killClock.SecondsUntilReady(KillerId(character), Time.time));
+
             Vector3 at = character.transform.position;
             List<Vector3> markers = new();
             float best = float.MaxValue;
@@ -342,9 +469,9 @@ namespace Universes.murder_mystery.Server {
                 if (body.reported)
                     continue;
                 float sqr = (body.position - at).sqrMagnitude;
-                if (sqr <= MarkerDistance * MarkerDistance)
+                if (sqr <= tuning.markerDistance * tuning.markerDistance)
                     markers.Add(body.position);
-                if (sqr <= ReportDistance * ReportDistance && sqr < best) {
+                if (sqr <= tuning.reportDistance * tuning.reportDistance && sqr < best) {
                     best = sqr;
                     state.reportableBody = body.id;
                     state.reportableBodyName = body.victimName;
