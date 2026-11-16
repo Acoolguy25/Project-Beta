@@ -100,7 +100,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
     /// </para>
     /// Change the layout here and run Ryan > Hide and Seek > Build Client Assets.
     /// </summary>
-    public static class HS_ManorPlan {
+    public static partial class HS_ManorPlan {
         public const string MapName = "Pumpkin Hollow Manor";
 
         // ---- dimensions (plan metres)
@@ -284,16 +284,17 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             FurnishUpstairs();
             FurnishOutbuildings();
             FurnishGarden();
+            AddDetail();
         }
 
         static void FurnishGroundFloor() {
             // Foyer: rug, coat cupboard, plants, a grandfather-tall cabinet by the stairs.
             P("furniture/rug_rectangle_stripes_A", 0, 0f, -4.5f, 90f, solid: false);
             P("furniture/cabinet_medium_decorated", 0, -2.2f, -6.8f, 90f);
-            P("furniture/cactus_medium_A", 0, 2.3f, -7.3f);
+            P("furniture/cactus_medium_A", 0, 2.3f, -7.55f, scale: 0.9f);
             P("furniture/cactus_medium_B", 0, 2.3f, -1.5f);
-            P("furniture/lamp_standing", 0, -2.3f, -0.5f);
-            Wardrobe(0, 2.55f, -4.5f, alongX: false, width: 1.6f);
+            P("furniture/lamp_standing", 0, -2.5f, 0.45f);
+            Wardrobe(0, 2.55f, -6.1f, alongX: false, width: 1.6f);
 
             // Living room: sofas around a low table, TV cabinet, reading corner, bookcase.
             P("furniture/rug_oval_A", 0, -7.5f, -4f, solid: false);
@@ -344,7 +345,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("restaurant/shelf_papertowel_decorated", 0, -1.6f, 5.75f, 180f, lift: 1.2f, solid: false);
 
             // Bathroom: shower cubicle (cover), sink counter.
-            Block("ShowerCubicle", 0, 1.3f, 7.0f, 1.8f, 2.2f, 1.8f, Surface.Tiles);
+            HideIn("Shower", 0, 1.3f, 7.0f, Facing.South, 1.8f, 1.8f, Surface.Tiles);
             P("restaurant/kitchentable_sink", 0, 3.25f, 4.8f, 270f, 0.75f);
             P("restaurant/towelrail", 0, 3.85f, 6.6f, 270f, solid: false, lift: 1.1f);
 

@@ -19,6 +19,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             "furniture" => $"{KayKit}/FurnitureBits/Models",
             "restaurant" => $"{KayKit}/RestaurantBits/Models",
             "halloween" => $"{KayKit}/HalloweenBits/Models",
+            "dungeon" => $"{KayKit}/DungeonRemastered/Models",
+            "city" => $"{KayKit}/CityBuilderBits/Models",
             _ => throw new System.ArgumentException($"Unknown model pack '{pack}'. Add it to {nameof(HS_PropCatalog)}."),
         };
 
@@ -35,7 +37,13 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
                 ?? throw new System.IO.FileNotFoundException($"[HideAndSeek] Missing model {path} (from '{model}').");
         }
 
+        /// <summary>
+        /// City Builder Bits is modelled at street-map scale (a car is under 1 unit long); this makes a
+        /// car about 4.5 m long.
+        /// </summary>
+        public const float CityToPlan = 4.8f;
+
         /// <summary>Plan-metre scale for one model of a pack.</summary>
-        public static float PackScale(string model) => KayKitToPlan;
+        public static float PackScale(string model) => model.StartsWith("city/") ? CityToPlan : KayKitToPlan;
     }
 }

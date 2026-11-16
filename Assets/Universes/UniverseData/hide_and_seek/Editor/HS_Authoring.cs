@@ -166,10 +166,18 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             Shoot(cam, new Vector3(10f, 5.4f, 3.8f) * s, new Vector3(6f, 3.6f, 6.5f) * s, Path.Combine(dir, "attic.png"), 1600, 900);
             Shoot(cam, new Vector3(14f, 4f, 10f) * s, new Vector3(24f, 1f, 22f) * s, Path.Combine(dir, "graveyard.png"), 1600, 900);
             Shoot(cam, new Vector3(1.5f, 2.2f, -7.2f) * s, new Vector3(-2f, 1.4f, 3.5f) * s, Path.Combine(dir, "foyer.png"), 1600, 900);
-            Shoot(cam, new Vector3(5f, 2.2f, 3.8f) * s, new Vector3(9f, 0.8f, 7f) * s, Path.Combine(dir, "kitchen.png"), 1600, 900);
+            Shoot(cam, new Vector3(7.2f, 2.2f, 3.9f) * s, new Vector3(10f, 0.8f, 7f) * s, Path.Combine(dir, "kitchen.png"), 1600, 900);
             Shoot(cam, new Vector3(-3.4f, 5.6f, 0.4f) * s, new Vector3(-9f, 3.6f, -5f) * s, Path.Combine(dir, "master-bedroom.png"), 1600, 900);
             Shoot(cam, new Vector3(-8f, 6f, -32f) * s, new Vector3(-20f, 1f, -16f) * s, Path.Combine(dir, "garden.png"), 1600, 900);
             Shoot(cam, house + new Vector3(-26f, 16f, -34f) * s, house, Path.Combine(dir, "thumbnail.png"), 640, 360);
+            // Floor plans: an orthographic camera just under each storey's ceiling, looking straight down.
+            cam.orthographic = true;
+            cam.orthographicSize = 9f * s;
+            for (int level = 0; level < 2; level++) {
+                float eye = level * HS_ManorPlan.StoreyHeight + HS_ManorPlan.StoreyHeight - HS_ManorPlan.SlabThickness - 0.05f;
+                Shoot(cam, new Vector3(0f, eye, 0f) * s, new Vector3(0f, 0f, 0.01f) * s, Path.Combine(dir, $"plan-level{level}.png"), 1600, 900);
+            }
+            cam.orthographic = false;
             Object.DestroyImmediate(cam.gameObject);
             Kit.PublishThumbnail(Universe, Path.Combine(dir, "thumbnail.png"));
             EditorSceneManager.OpenScene(Kit.StartScene(Universe), OpenSceneMode.Single);
