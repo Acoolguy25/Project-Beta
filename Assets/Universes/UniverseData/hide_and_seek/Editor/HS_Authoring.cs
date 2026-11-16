@@ -74,9 +74,14 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             var hud = HS_HudAuthoring.Build();
             var ping = BuildPing();
-            // Autumn dusk: low warm sun, dim ambient, light fog; the lamps do the rest (HS_ManorLighting).
-            Kit.NewLitScene(HS_ManorLighting.SkyTint, HS_ManorLighting.FogColor, HS_ManorLighting.FogStart, HS_ManorLighting.FogEnd,
-                HS_ManorLighting.SunEuler, HS_ManorLighting.SunIntensity).color = HS_ManorLighting.SunColor;
+            // Autumn dusk: soft warm sun, dim ambient, fog that hides the edge of the ground; the lamps do the rest (HS_ManorLighting).
+            Light sun = Kit.NewLitScene(HS_ManorLighting.SkyTint, HS_ManorLighting.FogColor, HS_ManorLighting.FogStart, HS_ManorLighting.FogEnd,
+                HS_ManorLighting.SunEuler, HS_ManorLighting.SunIntensity);
+            sun.color = HS_ManorLighting.SunColor;
+            sun.shadows = LightShadows.Soft;
+            RenderSettings.skybox.SetFloat("_Exposure", HS_ManorLighting.SkyExposure);
+            RenderSettings.skybox.SetColor("_GroundColor", HS_ManorLighting.FogColor);
+            EditorUtility.SetDirty(RenderSettings.skybox);
             RenderSettings.ambientSkyColor = HS_ManorLighting.AmbientSky;
             RenderSettings.ambientEquatorColor = HS_ManorLighting.AmbientEquator;
             RenderSettings.ambientGroundColor = HS_ManorLighting.AmbientGround;
@@ -100,9 +105,13 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             map.pingPrefab = ping;
             map.clientPrefab = hud;
             map.flickerLights = builder.FlickerLights.ToArray();
+            map.flickerGlows = builder.FlickerGlows.ToArray();
+            (int reach, string busiest) = builder.CheckLightReach();
+            if (reach > HS_ManorLighting.MaxLightsPerObject)
+                throw new System.InvalidOperationException($"[HideAndSeek] {reach} lights reach {busiest}; URP draws at most {HS_ManorLighting.MaxLightsPerObject} per object. Shorten ranges in HS_ManorLighting or split that surface.");
             map.clockPosition = HS_ManorPlan.ClockAt * MapScale;
             EditorUtility.SetDirty(map);
-            Debug.Log($"[HideAndSeek] {HS_ManorPlan.MapName}: scale {MapScale:0.##}, {candidates.Count} floor points, {map.hidePoints.Length} hide points, {map.areas.Length} areas, {builder.LightCount} lights ({map.flickerLights.Length} flicker).");
+            Debug.Log($"[HideAndSeek] {HS_ManorPlan.MapName}: scale {MapScale:0.##}, {candidates.Count} floor points, {map.hidePoints.Length} hide points, {map.areas.Length} areas, {builder.LightCount} lights ({map.flickerLights.Length} flicker), at most {reach} reach one surface ({busiest}).");
             Kit.SaveActiveScene(Kit.StartScene(Universe));
         }
 

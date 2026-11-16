@@ -54,7 +54,7 @@ MonoBehaviour:
   intermissionSeconds: 10
   hideSeconds: 30
   seekSeconds: 150
-  resultsSeconds: 8
+  resultsSeconds: 10
   pingFrom: 60
   pingEvery: 15
   tagCooldown: 0.6
@@ -68,4 +68,4 @@ MonoBehaviour:
   seekerWinXP: 20
   tauntXP: 3
   braveTauntXP: 10
-  braveTauntRange: 40
+  braveTauntRange: 20

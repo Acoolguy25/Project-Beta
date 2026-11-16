@@ -19,9 +19,9 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
     /// <list type="bullet">
     /// <item>top centre: round card with phase, timer and countdown bar between hiders and seekers left;</item>
     /// <item>bottom left: role card (icon, role, what to do now) and the room you're in;</item>
-    /// <item>bottom centre: tag prompt (seekers) or taunt prompt (hiders); right: tag feed; centre: toasts
-    /// and the results banner with every survivor's hiding spot;</item>
-    /// <item>full screen: the hider's heartbeat vignette and the seekers' blindfold countdown.</item>
+    /// <item>bottom centre: tag prompt (seekers) or taunt prompt (hiders); right: tag feed; top centre: toasts; left middle:
+    /// the results banner with every survivor's hiding spot;</item>
+    /// <item>full screen: the seekers' blindfold countdown (the hider's heartbeat vignette is the kit's ScreenFx danger overlay).</item>
     /// </list>
     /// The prefab also carries the game's client-side feel: sounds (Audio/, credited in CREDITS.md), the
     /// heartbeat, seeker footsteps, the manor ambience and the candle flicker.
@@ -38,7 +38,6 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
 
         const string AudioFolder = HS_Authoring.Root + "/Audio";
         const string KitAudioFolder = "Packages/com.ryan.gameframework/Runtime/GameFeel/Audio";
-        const string VignetteSprite = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Textures/screen_vignette.png";
 
         public static GameObject Build() {
 #if UNITY_SERVER
@@ -69,7 +68,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.tauntIcon = UIThemeAssets.Icon(TauntIcon);
             AssignSounds(hud);
             BuildFootsteps(canvas, hud);
-            BuildAmbience(canvas);
+            BuildAmbience(canvas, hud);
             canvas.gameObject.AddComponent<HS_LightFlicker>();
             return SavePrefab(canvas.gameObject, PrefabPath);
 #endif
@@ -136,12 +135,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             return source;
         }
 
-        static void BuildAmbience(RectTransform canvas) {
+        static void BuildAmbience(RectTransform canvas, HS_ClientController hud) {
             var ambience = canvas.gameObject.AddComponent<HS_Ambience>();
             AudioSource wind = Loop(canvas, "Wind", "wind_loop", 0.5f, 0f);
             // The clock is heard through the foyer and the rooms beside it (world units).
             AudioSource clock = Loop(canvas, "Clock", "clock_loop", 0.7f, 1f, 8f, 70f);
-            Wire(ambience, ("wind", wind), ("clock", clock),
+            Wire(ambience, ("controller", hud), ("wind", wind), ("clock", clock),
                 ("creaks", Sound(0.55f, 2f, 1f, 6f, 60f, "creak_1", "creak_2", "creak_3", "door_creak_1", "door_creak_2")));
         }
 
@@ -151,17 +150,10 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             Wire(footsteps, ("controller", hud), ("step", Sound(0.9f, 1.5f, 0.05f, 10f, 90f, "seeker_step_1", "seeker_step_2", "seeker_step_3", "seeker_step_4", "seeker_step_5")));
         }
 
-        /// <summary>A full-screen vignette under the HUD that pulses with the hider's heartbeat.</summary>
+        /// <summary>The hider's heartbeat; its vignette is the kit's danger overlay, which sits under every HUD.</summary>
         static void BuildHeartbeat(RectTransform canvas, HS_ClientController hud) {
-            RectTransform layer = Fill(canvas, "HeartbeatVignette");
-            var image = layer.gameObject.AddComponent<Image>();
-            image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(VignetteSprite)
-                ?? throw new FileNotFoundException($"[HideAndSeek] Missing {VignetteSprite}. Run Ryan > Game Feel > Rebuild.");
-            image.color = new Color(0f, 0f, 0f, 0f);
-            image.raycastTarget = false;
-            image.enabled = false;
             var heartbeat = canvas.gameObject.AddComponent<HS_Heartbeat>();
-            Wire(heartbeat, ("controller", hud), ("vignette", image), ("beat", Sound(0.9f, 0f, 0.15f, 0f, 0f, "heartbeat")));
+            Wire(heartbeat, ("controller", hud), ("beat", Sound(0.9f, 0f, 0.15f, 0f, 0f, "heartbeat")));
         }
 
         /// <summary>Graphics whose colour the controller sets at runtime must not follow a theme slot.</summary>
@@ -277,7 +269,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         // ---------------------------------------------------------------- prompt, feed, toast, banner
         static void BuildTagPrompt(RectTransform canvas, HS_ClientController hud) {
             RectTransform layer = Layer(canvas, "Tag");
-            RectTransform prompt = Pinned(layer, "TagPrompt", new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(300f, 52f));
+            RectTransform prompt = Pinned(layer, "TagPrompt", new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(380f, 52f));
             Shadow(prompt, 20f, 6f, 0.4f);
             Rounded(prompt, UIColorRole.Danger, 26f, raycast: false);
             Row(prompt.gameObject, 10f, Pad(16, 0), TextAnchor.MiddleCenter);
@@ -312,7 +304,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         }
 
         static void BuildFeed(RectTransform canvas, HS_ClientController hud) {
-            RectTransform list = Pinned(canvas, "TagFeed", new Vector2(1f, 0.5f), new Vector2(-16f, -40f), new Vector2(360f, 200f));
+            RectTransform list = Pinned(canvas, "TagFeed", new Vector2(1f, 0.5f), new Vector2(-16f, -40f), new Vector2(440f, 200f));
             var column = Column(list.gameObject, 6f, Pad(0), TextAnchor.UpperRight);
             column.childControlHeight = column.childControlWidth = true;
             column.childForceExpandHeight = false;
@@ -325,13 +317,22 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             var feedRow = row.gameObject.AddComponent<HS_FeedRow>();
             feedRow.icon = Icon(row, TagIcon, 18f, UIColorRole.Warning);
             feedRow.label = Text(row, "Text", "Seeker found Hider", UIText.Body, UIColorRole.TextPrimary);
-            Size(feedRow.label, 300f, 36f, 1f);
+            Size(feedRow.label, 400f, 36f, 1f);
+            // Two long player names still fit: shrink a little before cutting with "...".
+            ShrinkToFit(feedRow.label, 12f);
             hud.feedTemplate = feedRow;
+        }
+
+        static void ShrinkToFit(TMP_Text label, float minSize) {
+            label.enableAutoSizing = true;
+            label.fontSizeMax = label.fontSize;
+            label.fontSizeMin = minSize;
         }
 
         static void BuildToast(RectTransform canvas, HS_ClientController hud) {
             RectTransform layer = Layer(canvas, "Toast");
-            RectTransform toast = Pinned(layer, "Toast", new Vector2(0.5f, 0.7f), Vector2.zero, new Vector2(680f, 64f));
+            // Just under the round card: clear of the character's head and of the world popups above it (taunt XP).
+            RectTransform toast = Pinned(layer, "Toast", new Vector2(0.5f, 0.78f), Vector2.zero, new Vector2(780f, 64f));
             Shadow(toast, 24f, 6f, 0.4f);
             Rounded(toast, UIColorRole.SurfaceRaised, 32f, raycast: false);
             Row(toast.gameObject, 12f, Pad(22, 0), TextAnchor.MiddleCenter);
@@ -342,12 +343,14 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
 
         static void BuildBanner(RectTransform canvas, HS_ClientController hud) {
             RectTransform layer = Layer(canvas, "Results");
-            RectTransform banner = Card(layer, "ResultsBanner", new Vector2(0.5f, 0.58f), Vector2.zero, new Vector2(620f, 260f), UIColorRole.SurfaceRaised, 24f);
-            RectTransform accent = Pinned(banner, "Accent", new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(560f, 6f));
+            // Left middle, between the chat and the role card: the centre stays clear for your own character,
+            // and the survivors' names (drawn over the world, mostly near the horizon) are not hidden behind it.
+            RectTransform banner = Card(layer, "ResultsBanner", new Vector2(0f, 0.5f), new Vector2(24f, 0f), new Vector2(560f, 214f), UIColorRole.SurfaceRaised, 24f);
+            RectTransform accent = Pinned(banner, "Accent", new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(500f, 6f));
             hud.bannerAccent = Free(Rounded(accent, UIColorRole.Success, 3f, raycast: false));
-            hud.bannerIcon = Free(PlaceIcon(banner, ResultsIcon, 56f, new Vector2(0.5f, 1f), new Vector2(0f, -26f)));
+            hud.bannerIcon = Free(PlaceIcon(banner, ResultsIcon, 44f, new Vector2(0.5f, 1f), new Vector2(0f, -22f)));
             hud.bannerTitle = Label(banner, "Title", "HIDERS WIN", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center, new Vector2(0f, 0.44f), new Vector2(1f, 0.66f));
-            hud.bannerTitle.fontSize = 44f;
+            hud.bannerTitle.fontSize = 38f;
             hud.bannerSubtitle = Label(banner, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center, new Vector2(0f, 0.32f), new Vector2(1f, 0.44f));
             hud.bannerSubtitle.fontSize = 18f;
             // Where the survivors hid: one line each (HS_ClientController.bannerSpotLines).

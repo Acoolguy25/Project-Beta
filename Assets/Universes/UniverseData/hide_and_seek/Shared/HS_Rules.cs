@@ -21,6 +21,14 @@ namespace Universes.UniverseData.hide_and_seek {
         public static bool CanTaunt(HS_Phase phase, HS_Role role, float secondsSinceLastTaunt, int tauntsThisRound) =>
             phase == HS_Phase.Seeking && role == HS_Role.Hider && secondsSinceLastTaunt >= TauntCooldown && tauntsThisRound < TauntsPerRound;
 
+        /// <summary>Why the server turns a taunt down (shown to the hider), or null when <see cref="CanTaunt"/> allows it.</summary>
+        public static string TauntRefusal(HS_Phase phase, HS_Role role, float secondsSinceLastTaunt, int tauntsThisRound) {
+            if (phase != HS_Phase.Seeking || role != HS_Role.Hider) return "Only hiders can taunt, while the seekers hunt.";
+            if (tauntsThisRound >= TauntsPerRound) return "No taunts left this round.";
+            if (secondsSinceLastTaunt < TauntCooldown) return "Your taunt is still recharging.";
+            return null;
+        }
+
         /// <summary>
         /// XP for a taunt. Taunting with a seeker within <paramref name="braveRange"/> is "brave" and pays
         /// <paramref name="braveXP"/> instead of <paramref name="baseXP"/>: the closer the danger, the bigger the reward.

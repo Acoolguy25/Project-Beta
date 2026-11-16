@@ -29,6 +29,8 @@ namespace Universes.UniverseData.hide_and_seek {
         public GameObject clientPrefab;
         [Tooltip("Candle and lantern lights that flicker on clients (HS_LightFlicker animates them).")]
         public Light[] flickerLights;
+        [Tooltip("The glow sprite of each flickering light (same order as Flicker Lights; null where a light has none), dimmed with it.")]
+        public Renderer[] flickerGlows;
         [Tooltip("Where the grandfather clock ticks (world space), for the ambience.")]
         public Vector3 clockPosition;
 

@@ -4,6 +4,7 @@
     "references": [
         "FishNet.Runtime",
         "RyanAssets.Core",
+        "RyanAssets.Progress",
         "RyanAssets.Rounds",
         "Unity.TextMeshPro"
     ],

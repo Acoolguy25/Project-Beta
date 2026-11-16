@@ -18,6 +18,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         readonly float scale;
         Transform structure, glazing, furniture, lighting, garden;
         readonly List<Light> flickerLights = new();
+        readonly List<Renderer> flickerGlows = new();
+        readonly List<Renderer> glows = new();
 
         /// <param name="scale">World units per plan metre.</param>
         public HS_ManorBuilder(HS_ManorMaterials materials, float scale, string name = "Manor") {
@@ -29,6 +31,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public Transform Root => root;
         /// <summary>Candle and lantern lights, for <see cref="HS_Map.flickerLights"/> (valid after <see cref="Build"/>).</summary>
         public IReadOnlyList<Light> FlickerLights => flickerLights;
+        /// <summary>The glow sprite of each flicker light, in the same order (valid after <see cref="Build"/>).</summary>
+        public IReadOnlyList<Renderer> FlickerGlows => flickerGlows;
         /// <summary>Every light the manor got (valid after <see cref="Build"/>).</summary>
         public int LightCount => lighting.childCount;
 
@@ -74,20 +78,48 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             return go;
         }
 
+        /// <summary>
+        /// A flat <see cref="Box"/> cut into equal tiles no longer than <paramref name="maxTile"/>
+        /// along x and z, so that no single renderer spans more lamps than URP's per-object light limit
+        /// (see <see cref="CheckLightReach"/>). One tile keeps the plain name.
+        /// </summary>
+        Transform Tiled(string name, Transform parent, Vector3 center, Vector3 size, Surface surface, bool collider = true, bool shadows = true, float maxTile = HS_ManorLighting.MaxTile) {
+            int nx = Mathf.Max(1, Mathf.CeilToInt(size.x / maxTile - 0.01f));
+            int nz = Mathf.Max(1, Mathf.CeilToInt(size.z / maxTile - 0.01f));
+            if (nx * nz == 1) return Box(name, parent, center, size, surface, collider, shadows).transform;
+            var group = new GameObject(name).transform;
+            group.SetParent(parent, false);
+            group.localPosition = center;
+            Vector3 tile = new(size.x / nx, size.y, size.z / nz);
+            for (int ix = 0; ix < nx; ix++)
+            for (int iz = 0; iz < nz; iz++)
+                Box($"{name}_{ix}_{iz}", group, new Vector3(tile.x * (ix + 0.5f - nx * 0.5f), 0f, tile.z * (iz + 0.5f - nz * 0.5f)), tile, surface, collider, shadows);
+            return group;
+        }
+
         static float FloorY(int level) => level * HS_ManorPlan.StoreyHeight;
 
         // ---------------------------------------------------------------- ground and rooms
         void BuildGround() {
             Rect plot = HS_ManorPlan.Plot;
             const float margin = 40f;
-            Box("Lawn", garden, new Vector3(plot.center.x, -0.5f, plot.center.y), new Vector3(plot.width + margin * 2f, 1f, plot.height + margin * 2f), Surface.Grass);
             Rect house = HS_ManorPlan.House;
+            // The lawn stops at the house (whose ground floor has its own slab), so the lamps inside
+            // do not count against the grass's per-object light limit.
+            Rect lawn = Rect.MinMaxRect(plot.xMin - margin, plot.yMin - margin, plot.xMax + margin, plot.yMax + margin);
+            LawnPart("LawnSouth", Rect.MinMaxRect(lawn.xMin, lawn.yMin, lawn.xMax, house.yMin));
+            LawnPart("LawnNorth", Rect.MinMaxRect(lawn.xMin, house.yMax, lawn.xMax, lawn.yMax));
+            LawnPart("LawnWest", Rect.MinMaxRect(lawn.xMin, house.yMin, house.xMin, house.yMax));
+            LawnPart("LawnEast", Rect.MinMaxRect(house.xMax, house.yMin, lawn.xMax, house.yMax));
             // Front path from the gate to the door, a drive to the garage, and a back path to the lawn.
             Strip("FrontPath", Surface.Path, Rect.MinMaxRect(-1.3f, plot.yMin, 1.3f, house.yMin));
             Strip("Driveway", Surface.Driveway, Rect.MinMaxRect(18.2f, plot.yMin, 23.8f, -14f));
             Strip("BackPath", Surface.Path, Rect.MinMaxRect(8.8f, house.yMax, 11.2f, 14f));
             Strip("Patio", Surface.Path, Rect.MinMaxRect(-7f, 12f, 1f, 20f));
         }
+
+        void LawnPart(string name, Rect area) =>
+            Tiled(name, garden, new Vector3(area.center.x, -0.5f, area.center.y), new Vector3(area.width, 1f, area.height), Surface.Grass, maxTile: HS_ManorLighting.MaxLawnTile);
 
         void Strip(string name, Surface surface, Rect area) =>
             Box(name, garden, new Vector3(area.center.x, 0.01f, area.center.y), new Vector3(area.width, 0.04f, area.height), surface);
@@ -97,14 +129,14 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             group.SetParent(structure, false);
             Rect a = room.area;
             float floor = FloorY(room.level) + (room.level == 0 ? 0.04f : 0f);
-            Box("Floor", group, new Vector3(a.center.x, floor - HS_ManorPlan.SlabThickness * 0.5f, a.center.y),
+            Tiled("Floor", group, new Vector3(a.center.x, floor - HS_ManorPlan.SlabThickness * 0.5f, a.center.y),
                 new Vector3(a.width, HS_ManorPlan.SlabThickness, a.height), room.floor);
             if (!room.indoor) return;
             bool openAbove = room.name == "Stairs";
             float wallTop = WallHeight(room) + FloorY(room.level);
             float ceiling = room.level == 0 && !IsOutbuilding(room) ? FloorY(1) - HS_ManorPlan.SlabThickness : wallTop;
             if (!openAbove)
-                Box("Ceiling", group, new Vector3(a.center.x, ceiling - 0.02f, a.center.y), new Vector3(a.width, 0.04f, a.height), Surface.Plaster, collider: room.level > 0 || IsOutbuilding(room), shadows: false);
+                Tiled("Ceiling", group, new Vector3(a.center.x, ceiling - 0.02f, a.center.y), new Vector3(a.width, 0.04f, a.height), Surface.Plaster, collider: room.level > 0 || IsOutbuilding(room), shadows: false);
             if (room.fill > 0f) AddFill(room, ceiling);
         }
 
@@ -143,7 +175,66 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             at = lighting.InverseTransformPoint(parent.TransformPoint(at));
             string name = spec.model[(spec.model.IndexOf('/') + 1)..];
             Light light = PointLight(name + " Light", at, preset.color, preset.range, preset.intensity);
-            if (preset.flicker) flickerLights.Add(light);
+            // Pull the glow out past the model's own radius, so the shade, glass or pumpkin skin does not cover it.
+            float pull = Mathf.Clamp(Mathf.Max(b.extents.x, b.extents.z) * HS_ManorLighting.GlowPullFactor, HS_ManorLighting.GlowPull.x, HS_ManorLighting.GlowPull.y);
+            Renderer glow = AddGlow(name + " Glow", light.transform, preset, pull);
+            if (preset.flicker) { flickerLights.Add(light); flickerGlows.Add(glow); }
+        }
+
+        /// <summary>
+        /// A soft additive HDR sprite at the light that always faces the camera: the shade, flame or
+        /// pumpkin face reads as lit, and bloom gives it a halo. The sprite sits <paramref name="pull"/>
+        /// towards the camera from the light (a turning pivot holds it there), so the lamp's own shade or
+        /// glass does not hide it; it is still drawn with depth, so walls do. Up close it is capped to a
+        /// share of the screen, so a lamp next to the camera does not turn into a white ball.
+        /// </summary>
+        Renderer AddGlow(string name, Transform light, PropLight preset, float pull) {
+            var pivot = new GameObject(name).transform;
+            pivot.SetParent(light, false);
+            // Look at the camera (not the camera plane), so the pull runs along the line of sight
+            // and the sprite stays over the lamp anywhere on screen.
+            var turn = pivot.gameObject.AddComponent<RyanAssets.Rounds.Billboard>();
+            turn.facing = RyanAssets.Rounds.Billboard.Facing.LookAtCamera;
+            turn.yawOnly = false;
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = "Sprite";
+            Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.transform.SetParent(pivot, false);
+            go.transform.localPosition = new Vector3(0f, 0f, -pull);
+            go.transform.localScale = Vector3.one * preset.glow;
+            // The screen cap sits on the sprite itself, so shrinking it never shortens the pull.
+            var cap = go.AddComponent<RyanAssets.Rounds.Billboard>();
+            cap.facing = RyanAssets.Rounds.Billboard.Facing.LookAtCamera;
+            cap.yawOnly = false;
+            cap.maxScreenHeight = HS_ManorLighting.GlowMaxScreenHeight;
+            var renderer = go.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = materials.Glow(preset.color, HS_ManorLighting.GlowIntensity);
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            glows.Add(renderer);
+            return renderer;
+        }
+
+        /// <summary>
+        /// The most point lights whose range reaches any one renderer of the manor, and which renderer
+        /// that is. URP's forward renderer drops lights past its per-object limit, which shows as lamp
+        /// pools popping in and out as the camera moves, so the authoring script fails above
+        /// <see cref="HS_ManorLighting.MaxLightsPerObject"/>.
+        /// </summary>
+        public (int count, string where) CheckLightReach() {
+            var lights = lighting.GetComponentsInChildren<Light>();
+            int most = 0;
+            string where = "";
+            foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>()) {
+                if (glows.Contains(renderer)) continue;
+                Bounds b = renderer.bounds;
+                int n = 0;
+                foreach (var light in lights)
+                    if (b.SqrDistance(light.transform.position) <= light.range * light.range) n++;
+                if (n > most) { most = n; where = renderer.transform.parent != null ? $"{renderer.transform.parent.name}/{renderer.name}" : renderer.name; }
+            }
+            return (most, where);
         }
 
         // ---------------------------------------------------------------- walls
@@ -272,8 +363,11 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
                 Vector3 mid = new(house.center.x, (yLow + ridgeY) * 0.5f, (zLow + house.center.y) * 0.5f);
                 var rotation = Quaternion.Euler(side * pitch, 0f, 0f);
                 mid += rotation * Vector3.up * (thickness * 0.5f);
-                var plane = Box(side < 0 ? "SouthSlope" : "NorthSlope", group, mid, new Vector3(width, thickness, slope), Surface.Roof);
-                plane.transform.localRotation = rotation;
+                var plane = new GameObject(side < 0 ? "SouthSlope" : "NorthSlope").transform;
+                plane.SetParent(group, false);
+                plane.localPosition = mid;
+                plane.localRotation = rotation;
+                Tiled("Tiles", plane, Vector3.zero, new Vector3(width, thickness, slope), Surface.Roof);
             }
             Box("Ridge", group, new Vector3(house.center.x, ridgeY + thickness, house.center.y), new Vector3(width, 0.2f, 0.3f), Surface.Trim, collider: false);
             // Gable ends: brick triangles filling the end walls up to the roof line.

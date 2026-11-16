@@ -2,18 +2,16 @@ using RyanAssets.Characters.Client;
 using RyanAssets.GameFeel;
 using RyanAssets.Rounds;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Universes.UniverseData.hide_and_seek.Client {
     /// <summary>
-    /// The hider's tension: while seekers hunt, a heartbeat speeds up and a dark red vignette pulses with
-    /// it as the nearest seeker gets closer. It only uses what this client already has: seekers are
-    /// replicated characters, and roles come from the round state.
+    /// The hider's tension: while seekers hunt, a heartbeat speeds up and the kit's red danger vignette
+    /// (<see cref="ScreenFx.SetDanger(float, Color, float, float)"/>: edge only, under every HUD) pulses at
+    /// the same rate as the nearest seeker gets closer. It only uses what this client already has:
+    /// seekers are replicated characters, and roles come from the round state.
     /// </summary>
     public sealed class HS_Heartbeat : MonoBehaviour {
         [SerializeField] HS_ClientController controller;
-        [Tooltip("Full-screen vignette image; its colour's alpha is driven here.")]
-        [SerializeField] Image vignette;
         [SerializeField] SfxSound beat = new();
 
         [Header("Distance (world units)")]
@@ -32,18 +30,16 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         [SerializeField] Vector2 beatVolume = new(0.25f, 1f);
 
         [Header("Vignette")]
-        [SerializeField] Color vignetteColor = new(0.35f, 0f, 0.02f, 1f);
-        [Tooltip("Vignette alpha between beats and on a beat, at full danger.")]
-        [SerializeField] Vector2 vignetteAlpha = new(0.2f, 0.75f);
-        [SerializeField, Min(0.05f)] float pulseSeconds = 0.35f;
+        [SerializeField] Color vignetteColor = new(0.55f, 0.02f, 0.04f, 1f);
+        [Tooltip("Peak alpha of the edge vignette at full danger. Keep it low: the hider has to watch the doorway.")]
+        [SerializeField, Range(0f, 1f)] float vignetteMaxAlpha = 0.42f;
 
-        float proximity, target, nextScan, sinceBeat, pulse;
-
-        void Awake() => Apply(0f);
+        float proximity, target, nextScan, sinceBeat, sentStrength = -1f, sentRate = -1f;
 
         void OnDisable() {
-            proximity = target = pulse = 0f;
-            Apply(0f);
+            proximity = target = 0f;
+            sentStrength = sentRate = -1f;
+            ScreenFx.ClearDanger();
         }
 
         void Update() {
@@ -53,16 +49,21 @@ namespace Universes.UniverseData.hide_and_seek.Client {
                 target = Hunted() ? HS_Rules.Proximity(NearestSeekerDistance(), near, far) : 0f;
             }
             proximity = Mathf.MoveTowards(proximity, target, dt / smoothing);
-            pulse = Mathf.Max(0f, pulse - dt / pulseSeconds);
+            float bpm = Mathf.Lerp(beatsPerMinute.x, beatsPerMinute.y, proximity);
             if (proximity > 0.01f) {
                 sinceBeat += dt;
-                if (sinceBeat >= 60f / Mathf.Lerp(beatsPerMinute.x, beatsPerMinute.y, proximity)) {
+                if (sinceBeat >= 60f / bpm) {
                     sinceBeat = 0f;
-                    pulse = 1f;
                     GameSfx.Play(beat, Mathf.Lerp(beatVolume.x, beatVolume.y, proximity));
                 }
             } else sinceBeat = 0f;
-            Apply(proximity * Mathf.Lerp(vignetteAlpha.x, vignetteAlpha.y, pulse));
+            float strength = proximity > 0.01f ? proximity : 0f, rate = bpm / 60f;
+            // Only tell the overlay when it changes noticeably.
+            if (Mathf.Abs(strength - sentStrength) > 0.02f || (strength == 0f) != (sentStrength == 0f) || Mathf.Abs(rate - sentRate) > 0.05f) {
+                sentStrength = strength;
+                sentRate = rate;
+                ScreenFx.SetDanger(strength, vignetteColor, vignetteMaxAlpha, rate);
+            }
         }
 
         bool Hunted() => controller.HasState && controller.Phase == HS_Phase.Seeking && controller.LocalRole == HS_Role.Hider && LocalPlayer.Character != null;
@@ -70,20 +71,12 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         float NearestSeekerDistance() {
             Vector3 me = LocalPlayer.Character.transform.position;
             float best = float.MaxValue;
-            foreach (var pair in controller.Roles) {
+            foreach (var pair in controller.RoleTable) {
                 if (!HS_ClientController.Seeks(pair.Value)) continue;
                 var seeker = CharacterLookup.ByClientId(pair.Key);
                 if (seeker != null) best = Mathf.Min(best, Vector3.Distance(me, seeker.transform.position));
             }
             return best;
-        }
-
-        void Apply(float alpha) {
-            Color c = vignetteColor;
-            c.a = alpha;
-            vignette.color = c;
-            bool visible = alpha > 0.001f;
-            if (vignette.enabled != visible) vignette.enabled = visible;
         }
     }
 }

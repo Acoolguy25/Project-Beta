@@ -40,7 +40,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
                 if (!live || !Stomps(pair.Key) || pair.Value.animator == null) stale.Add(pair.Key);
             foreach (int id in stale) { Unsubscribe(tracked[id]); tracked.Remove(id); }
             if (!live) return;
-            foreach (var pair in controller.Roles) {
+            foreach (var pair in controller.RoleTable) {
                 if (!Stomps(pair.Key) || tracked.ContainsKey(pair.Key)) continue;
                 var character = CharacterLookup.ByClientId(pair.Key);
                 if (character == null || !character.TryGetComponent(out CharacterAnimator animator)) continue;
@@ -53,7 +53,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
 
         /// <summary>Other players who seek; your own steps already sound loud enough to you.</summary>
         bool Stomps(int clientId) =>
-            clientId != controller.LocalClientId && controller.Roles.TryGetValue(clientId, out HS_Role role) && HS_ClientController.Seeks(role);
+            clientId != controller.LocalClientId && controller.RoleTable.TryGetValue(clientId, out HS_Role role) && HS_ClientController.Seeks(role);
 
         static void Unsubscribe(Tracked t) {
             if (t.animator != null) t.animator.Footstep -= t.handler;

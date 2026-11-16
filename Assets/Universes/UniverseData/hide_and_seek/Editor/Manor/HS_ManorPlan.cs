@@ -147,8 +147,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             new("Library", 0, -12f, 3.4f, -4f, 8f, Surface.Parquet),
             new("Stairs", 0, -4f, 3.4f, 0.2f, 5.4f, Surface.Laminate),
             new("Pantry", 0, -4f, 5.4f, 0.2f, 8f, Surface.DarkPlanks),
-            new("Bathroom", 0, 0.2f, 3.4f, 4f, 8f, Surface.Tiles, fill: 0.7f),
-            new("Kitchen", 0, 4f, 3.4f, 12f, 8f, Surface.Tiles, fill: 1f),
+            new("Bathroom", 0, 0.2f, 3.4f, 4f, 8f, Surface.Tiles, fill: 0.35f),
+            new("Kitchen", 0, 4f, 3.4f, 12f, 8f, Surface.Tiles, fill: 0.45f),
             // upstairs
             new("Master Bedroom", 1, -12f, -8f, -2f, 1f, Surface.Laminate),
             new("Upstairs Bathroom", 1, -2f, -8f, 2f, 1f, Surface.Tiles),

@@ -63,6 +63,8 @@ namespace Universes.UniverseData.hide_and_seek {
         /// <summary>XP the taunter earned; more when a seeker was close (see <see cref="HS_Rules.TauntReward"/>).</summary>
         public int xp;
         public bool brave;
+        /// <summary>Taunts the taunter has used this round, so their HUD's count survives a reconnect or a late state.</summary>
+        public int used;
     }
 
     /// <summary>Where a hider who was never found spent the end of the round.</summary>
@@ -76,5 +78,7 @@ namespace Universes.UniverseData.hide_and_seek {
     public struct HS_RevealBroadcast : IBroadcast {
         public int round;
         public HS_HidingSpot[] spots;
+        /// <summary>How long the results show, so the clients keep the names up that long.</summary>
+        public int seconds;
     }
 }

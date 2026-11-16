@@ -109,6 +109,28 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             EditorUtility.SetDirty(mat);
         }
 
+        /// <summary>The kit's additive soft-dot effect material, which the lamp glows are copies of.</summary>
+        const string GlowTemplate = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Materials/FxDotAdd.mat";
+
+        /// <summary>An additive soft-dot material in <paramref name="color"/> times <paramref name="intensity"/> (HDR), one per colour.</summary>
+        public Material Glow(Color color, float intensity) {
+            string name = $"Glow_{ColorUtility.ToHtmlStringRGB(color)}";
+            if (cache.TryGetValue(name, out var cached)) return cached;
+            var template = AssetDatabase.LoadAssetAtPath<Material>(GlowTemplate)
+                ?? throw new System.IO.FileNotFoundException($"[HideAndSeek] Missing {GlowTemplate}. Run Ryan > Game Feel > Rebuild.");
+            string path = $"{folder}/{name}.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) {
+                mat = new Material(template);
+                AssetDatabase.CreateAsset(mat, path);
+            } else mat.CopyPropertiesFromMaterial(template);
+            mat.shader = template.shader;
+            mat.SetColor("_BaseColor", new Color(color.r * intensity, color.g * intensity, color.b * intensity, 1f));
+            EditorUtility.SetDirty(mat);
+            cache[name] = mat;
+            return mat;
+        }
+
         Material Glass() {
             if (glass != null) return glass;
             glass = LoadOrCreate("Glass");

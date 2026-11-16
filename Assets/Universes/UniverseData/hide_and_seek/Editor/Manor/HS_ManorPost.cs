@@ -8,7 +8,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
     /// The manor's post-processing: a neutral tonemap with a slightly warm grade, a soft vignette that closes the frame
     /// in, and bloom so lamps and candle flames glow. Saved as a VolumeProfile asset and put on a global
     /// Volume in the start scene (below the game feel kit's moods, which win if a game applies one).
-    /// Ambient occlusion is a renderer feature, not a volume setting (see the phase B notes).
+    /// Ambient occlusion comes from the shared renderer's SSAO feature, not from this volume.
+    /// <para>
+    /// Why not the kit's <c>WarmIndoor</c> or <c>Night</c> mood: the manor is both at once (lamp-lit rooms
+    /// and a dusk yard you can see through the windows), and those moods' exposure and saturation are
+    /// tuned for scenes lit by one or the other. A mood a game applies at runtime still wins (priority 20 vs 5).
+    /// </para>
     /// </summary>
     public static class HS_ManorPost {
         public const float Priority = 5f;

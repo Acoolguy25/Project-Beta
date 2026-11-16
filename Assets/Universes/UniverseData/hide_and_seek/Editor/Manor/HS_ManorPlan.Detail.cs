@@ -169,6 +169,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             // Bathroom
             P("dungeon/barrel_small", 0, 3.5f, 7.4f, 0f, 0.8f);
             On("dungeon/bottle_A_green", 0, 3.25f, 0.8f, 4.5f, 0f, 0.8f);
+            On("dungeon/candle_triple", 0, 3.25f, 0.8f, 5.15f, 0f, SmallDungeonScale, lit: true);
 
             // Kitchen
             On("restaurant/pot_A_stew", 0, 8.0f, 0.95f, 7.2f, 0f);
@@ -183,6 +184,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("restaurant/kitchencounter_straight_B", 0, 11.25f, 5.8f, 270f);
             Clutter(0, 11.25f, 0.95f, 5.8f, 0.4f, 45, "restaurant/pot_B", "restaurant/jar_D_medium");
             P("city/trash_B", 0, 4.45f, 7.5f, 0f, 0.9f);
+            // A real light over the table instead of only an invisible ceiling fill (lighting pass).
+            P("halloween/lantern_hanging", 0, 7.2f, 4.9f, 0f, solid: false, lift: 2.2f, lit: true);
         }
 
         static void DetailUpstairs() {

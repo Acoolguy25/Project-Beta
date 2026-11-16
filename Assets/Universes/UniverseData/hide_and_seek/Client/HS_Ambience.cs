@@ -5,10 +5,12 @@ using UnityEngine;
 namespace Universes.UniverseData.hide_and_seek.Client {
     /// <summary>
     /// The manor's background sound: wind that is loud in the yards and muffled indoors, a grandfather
-    /// clock ticking in the foyer, and now and then a floorboard or door creaking somewhere near you
-    /// while you are inside.
+    /// clock ticking in the foyer, and, during a round, now and then a floorboard or door creaking in a
+    /// room near you while you are inside.
     /// </summary>
     public sealed class HS_Ambience : MonoBehaviour {
+        [SerializeField] HS_ClientController controller;
+
         [Header("Wind (2D loop)")]
         [SerializeField] AudioSource wind;
         [SerializeField, Range(0f, 1f)] float windOutdoors = 0.5f;
@@ -57,11 +59,23 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             wind.volume = Mathf.MoveTowards(wind.volume, indoors ? windIndoors : windOutdoors, Mathf.Abs(windOutdoors - windIndoors) * Time.deltaTime / windFadeSeconds);
             if (Time.unscaledTime < nextCreak) return;
             ScheduleCreak();
-            if (indoors && listener.HasValue) {
-                Vector2 dir = Random.insideUnitCircle.normalized * Random.Range(creakDistance.x, creakDistance.y);
-                GameSfx.PlayAt(creaks, listener.Value + new Vector3(dir.x, 0f, dir.y));
-            }
+            if (indoors && listener.HasValue && InRound() && TryCreakSpot(listener.Value, out Vector3 at)) GameSfx.PlayAt(creaks, at);
         }
+
+        bool InRound() => controller != null && controller.HasState && controller.Phase is HS_Phase.Hiding or HS_Phase.Seeking;
+
+        /// <summary>A spot on your floor, some way off, that is inside a room (not the yard or mid-air).</summary>
+        bool TryCreakSpot(Vector3 listener, out Vector3 at) {
+            for (int attempt = 0; attempt < CreakSpotAttempts; attempt++) {
+                Vector2 dir = Random.insideUnitCircle.normalized * Random.Range(creakDistance.x, creakDistance.y);
+                at = listener + new Vector3(dir.x, 0f, dir.y);
+                if (map.IsIndoors(at)) return true;
+            }
+            at = default;
+            return false;
+        }
+
+        const int CreakSpotAttempts = 4;
 
         void ScheduleCreak() => nextCreak = Time.unscaledTime + Random.Range(creakInterval.x, creakInterval.y);
 
