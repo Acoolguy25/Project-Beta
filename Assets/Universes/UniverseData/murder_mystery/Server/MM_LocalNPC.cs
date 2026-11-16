@@ -23,6 +23,7 @@ namespace Universes.murder_mystery.Server {
         Animator animator;
 
         ToolBaseShared sharedWeapon;
+        ToolBaseShared sheriffPistol;
         GameCharacter pendingAttackTarget;
         float lastAttack = float.MinValue;
         bool holstered;
@@ -64,6 +65,11 @@ namespace Universes.murder_mystery.Server {
             localNPC.SetFleeTeams(isMurderer
                 ? new List<TeamColor>()
                 : new List<TeamColor> { TeamColor.Red });
+
+            // A sheriff NPC (only dealt by the solo play-test switch) carries the pistol, so it can be
+            // recognised as armed and drop the gun when it dies. It does not shoot.
+            if (gameCharacter.GetTeam().realTeam == TeamColor.Blue && sheriffPistol == null)
+                sheriffPistol = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Pistol);
 
             if (!isMurderer)
                 return;

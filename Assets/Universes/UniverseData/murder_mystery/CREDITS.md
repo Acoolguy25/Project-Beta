@@ -21,3 +21,10 @@ and the shared game-feel kit's cues (see `Packages/com.ryan.gameframework/Runtim
 ## Icons
 
 HUD icons come from the shared theme (`Packages/com.ryan.ui/Runtime/UI/Theme/GameIcons/CREDITS.md`).
+
+## Models
+
+The standing lamp (`Prefabs/MM_StandingLamp.prefab`) uses `lamp_standing.fbx` from **KayKit Furniture Bits 1.0**
+by Kay Lousberg (www.kaylousberg.com), CC0 1.0, already in the project at `Assets/ThirdParty/KayKit/FurnitureBits/`
+(license in that folder). Its glowing shade material `Materials/MM_LampGlow.mat` is a copy of the pack's material
+with emission added.

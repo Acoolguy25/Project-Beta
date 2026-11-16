@@ -54,9 +54,9 @@ namespace Universes.murder_mystery.Server {
         [Tooltip("Round length of the NPCs vs Players and Infection modes.")]
         [SerializeField, Min(10)]
         int otherModesRoundSeconds = 90;
-        [Tooltip("Players this close to a kill hear and see it (kill sting, sparks). The victim and the killer always do.")]
-        [SerializeField, Min(0f)]
-        float killAudibleDistance = 45f;
+        [Tooltip("Editor only: with a single player, deal the sheriff to an NPC (armed, AI-driven) so the player can be an innocent and meet the dropped gun. Lets one person play-test the whole Classic flow.")]
+        [SerializeField]
+        DebugBool DebugSoloNpcSheriff = new(false);
 
         public static float SpawnMultiplier;
         public static bool ForceEndGame;
@@ -309,7 +309,7 @@ namespace Universes.murder_mystery.Server {
             if (InstanceFinder.ServerManager == null)
                 return;
             Vector3 position = victim.transform.position;
-            float audibleSqr = killAudibleDistance * killAudibleDistance;
+            float audibleSqr = classicTuning.killAudibleDistance * classicTuning.killAudibleDistance;
             foreach (PlayerData player in PlayerData.Players.Values) {
                 if (player == null || !player.Owner.IsActive)
                     continue;
@@ -361,7 +361,10 @@ namespace Universes.murder_mystery.Server {
                 // Classic murderers wait out the grace period and their kill cooldown before striking.
                 if (mode == MM_Mode.Classic)
                     mmLocalNpc.KillAllowed = () => classic.CanKill(gameCharacter);
-                npc.gameObject.AddComponent<MM_NPC>();
+                MM_NPC threatPolicy = npc.gameObject.AddComponent<MM_NPC>();
+                if (mode == MM_Mode.Classic)
+                    threatPolicy.ConfigureSheriffHunting(classicTuning.sheriffNoticeDistance, classicTuning.exposedSheriffNoticeDistance,
+                        classicTuning.sheriffDetectionMultiplier, classicTuning.sheriffTargetPriority, classic.IsSheriffExposed);
                 if (mode == MM_Mode.Classic)
                     pendingNpcParticipants.Add(gameCharacter);
                 gameCharacter.OnDied += (source, killer) => {
@@ -536,7 +539,7 @@ namespace Universes.murder_mystery.Server {
             startNPCs = FallTest.Value ? 700 : Mathf.RoundToInt((DebugSingleNpc.Value ? 1 : startNPCs) * SpawnMultiplier);
             startPlayers = PlayerData.Players.Count;
             if (mode == MM_Mode.Classic) {
-                GetComponent<MM_Roles>().AssignRoles(startNPCs, startPlayers, out npcRoles, out playerRoles, out startMurd, out startSheriff, out startInnocent);
+                GetComponent<MM_Roles>().AssignRoles(startNPCs, startPlayers, DebugSoloNpcSheriff.Value && startPlayers == 1, out npcRoles, out playerRoles, out startMurd, out startSheriff, out startInnocent);
             } else if (mode == MM_Mode.Infection) {
                 AssignInfectionRoles();
             }
@@ -610,9 +613,15 @@ namespace Universes.murder_mystery.Server {
             if (winner == TeamColor.Green && GetPlayerCount() == 0 && GetTeamCount(TeamColor.Red) > 0)
                 winner = TeamColor.Red;
             MM_SaveData.RecordClassicResult(winner);
-            string summary = $"{GetTeamCount(TeamColor.Red)}/{startMurd} Murderers, {GetTeamCount(TeamColor.Blue)}/{startSheriff} Sheriffs, {GetTeamCount(TeamColor.Green)}/{startInnocent} Innocents remaining";
-            ServerChat.SendSystemMessage(new($"{GetWinnerName(winner)} win! {summary}.", SystemMessageSource.CustomMessage));
-            await classic.RunResults(GetWinnerName(winner), summary, DebugTimerSpeedUp.Value ? 4 : classicTuning.resultsSeconds, token);
+            // An innocent who took a dropped weapon counts with the role they ended with, so the totals
+            // still add up to everyone dealt in (e.g. a dead NPC sheriff and the player who took the gun: 1/2 Sheriffs).
+            int sheriffs = startSheriff + classic.GunTakeovers;
+            int murderers = startMurd + classic.DaggerTakeovers;
+            int innocents = startInnocent - classic.GunTakeovers - classic.DaggerTakeovers;
+            string summary = $"{GetTeamCount(TeamColor.Red)}/{murderers} Murderers, {GetTeamCount(TeamColor.Blue)}/{sheriffs} Sheriffs, {GetTeamCount(TeamColor.Green)}/{innocents} Innocents remaining";
+            string headline = MM_Text.ClassicHeadline(winner == TeamColor.Red);
+            ServerChat.SendSystemMessage(new($"{headline}! {summary}.", SystemMessageSource.CustomMessage));
+            await classic.RunResults(headline, summary, DebugTimerSpeedUp.Value ? 4 : classicTuning.resultsSeconds, token);
         }
 
         /// <summary>Tells each player the round phase, their own role and any body they can report.</summary>

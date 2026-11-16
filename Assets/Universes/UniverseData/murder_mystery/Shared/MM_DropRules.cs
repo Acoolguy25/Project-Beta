@@ -5,9 +5,12 @@ namespace Universes.UniverseData.murder_mystery {
     /// takes it over together with the role that goes with it.
     /// </summary>
     public static class MM_DropRules {
-        /// <summary>Whether a character in this state may pick up a dropped weapon.</summary>
-        public static bool CanPickUp(MM_Role role, bool alive, int toolsHeld) =>
-            alive && role == MM_Role.Innocent && toolsHeld == 0;
+        /// <summary>
+        /// Whether a character in this state may pick up a dropped weapon: a living innocent player with
+        /// empty hands. NPCs never take one, whatever the pickup prefab's trigger settings are.
+        /// </summary>
+        public static bool CanPickUp(MM_Role role, bool alive, int toolsHeld, bool isPlayer) =>
+            isPlayer && alive && role == MM_Role.Innocent && toolsHeld == 0;
 
         /// <summary>The role that comes with a dropped weapon: the gun makes a sheriff, the dagger a murderer.</summary>
         public static MM_Role RoleFor(MM_DroppedWeapon weapon) => weapon switch {
@@ -16,10 +19,13 @@ namespace Universes.UniverseData.murder_mystery {
             _ => MM_Role.None,
         };
 
-        /// <summary>Whether a character with this role leaves a weapon behind when they die.</summary>
-        public static MM_DroppedWeapon WeaponLeftBy(MM_Role role, bool dropDaggers) => role switch {
+        /// <summary>
+        /// Whether a character with this role leaves a weapon behind when they die. A murderer the town
+        /// voted out never leaves a dagger, so a correct vote cannot be undone by whoever walks over it.
+        /// </summary>
+        public static MM_DroppedWeapon WeaponLeftBy(MM_Role role, bool dropDaggers, bool ejected) => role switch {
             MM_Role.Sheriff => MM_DroppedWeapon.Gun,
-            MM_Role.Murderer when dropDaggers => MM_DroppedWeapon.Dagger,
+            MM_Role.Murderer when dropDaggers && !ejected => MM_DroppedWeapon.Dagger,
             _ => MM_DroppedWeapon.None,
         };
     }

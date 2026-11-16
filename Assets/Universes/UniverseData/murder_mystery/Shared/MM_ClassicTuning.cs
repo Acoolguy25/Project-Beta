@@ -47,10 +47,28 @@ namespace Universes.UniverseData.murder_mystery {
         [Tooltip("Health a murderer gets back for killing an NPC.")]
         [Min(0)] public int murdererHealOnNpcKill = 20;
 
+        [Header("NPC murderers and the sheriff")]
+        // Measured with a solo sheriff (README, "Balance"): 12 m and nobody ever came for a sheriff who stayed put
+        // (town won every round on time); 30 m and a sheriff who shoots back won 4 of 5. 45 m is the default.
+        [Tooltip("An NPC murderer that may kill only rushes an armed sheriff closer than this (metres). Further away the sheriff is just another face in the crowd.")]
+        [Min(0f)] public float sheriffNoticeDistance = 45f;
+        [Tooltip("For this long after the sheriff shoots someone, NPC murderers notice them from much further away.")]
+        [Min(0f)] public float sheriffExposedSeconds = 8f;
+        [Tooltip("How far NPC murderers notice a sheriff who has just shot someone (metres).")]
+        [Min(0f)] public float exposedSheriffNoticeDistance = 60f;
+        [Tooltip("Multiplies an NPC's attack detection radius for an armed sheriff (1 = like anyone else).")]
+        [Min(0f)] public float sheriffDetectionMultiplier = 1.5f;
+        [Tooltip("Extra target priority an armed sheriff gets with NPC murderers (0 = none).")]
+        [Min(0f)] public float sheriffTargetPriority = 1f;
+
+        [Header("Kill feedback")]
+        [Tooltip("Players this close to a kill hear and see it (kill sting, sparks). The victim and the killer always do.")]
+        [Min(0f)] public float killAudibleDistance = 45f;
+
         [Header("Sheriff")]
         [Tooltip("Shooting a non-murderer jams the sheriff's pistol for this long.")]
         [Min(0f)] public float wrongShotJamSeconds = 20f;
-        [Tooltip("When a murderer dies their dagger drops too, and an empty-handed innocent player who takes it becomes a murderer.")]
-        public bool dropDaggerOnMurdererDeath = true;
+        [Tooltip("When a murderer is killed (never when voted out) their dagger drops too, and an empty-handed innocent player who walks over it becomes a murderer. Off by default: it turns a catch into a trap.")]
+        public bool dropDaggerOnMurdererDeath;
     }
 }

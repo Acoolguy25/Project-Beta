@@ -26,8 +26,6 @@ namespace Universes.UniverseData.murder_mystery.Client {
         static readonly Color Amber = new(1f, 0.71f, 0.28f);
         /// <summary>The results table lists at most this many people; the rest are summarised in one line.</summary>
         const int MaxResultRows = 12;
-        /// <summary>How long the card announcing a role taken over mid-round stays up.</summary>
-        const float TakeoverRevealSeconds = 4f;
         // The line above the role card's title; the authored prefab text is the round-start one.
         public const string RoundStartKicker = "The mystery begins";
         const string TakeoverKicker = "A weapon changed hands";
@@ -109,6 +107,8 @@ namespace Universes.UniverseData.murder_mystery.Client {
         [Min(0f)] public float killFxHeight = 2.4f;
         [Min(0.1f)] public float killFxScale = 3.5f;
         public Color killSparkColor = new(1f, 0.25f, 0.2f);
+        [Tooltip("A red ring on the floor under the victim, so a kill reads from across a hall.")]
+        [Min(0f)] public float killRingScale = 3f;
         [Tooltip("Players further than this from a kill feel no camera shake from it.")]
         [Min(1f)] public float killShakeRadius = 25f;
         [Range(0f, 1f)] public float killShakeStrength = 0.35f;
@@ -124,8 +124,35 @@ namespace Universes.UniverseData.murder_mystery.Client {
 
         [Header("Dropped gun")]
         [Min(0.1f)] public float gunBeaconScale = 2.5f;
-        [Tooltip("The callout floats this far above the dropped gun.")]
-        [Min(0f)] public float gunCalloutHeight = 3f;
+        [Tooltip("The callout floats this far above the dropped gun: above the name tags of the 5.6 m robots around it.")]
+        [Min(0f)] public float gunCalloutHeight = 8f;
+        [Tooltip("Size of the \"SHERIFF'S GUN\" callout (1 = the kit's callout size).")]
+        [Min(0.1f)] public float gunCalloutSize = 0.5f;
+
+        [Header("Moments")]
+        [Tooltip("How long the card announcing a role taken over mid-round (a picked-up gun) stays up.")]
+        [Min(0.5f)] public float takeoverRevealSeconds = 4f;
+        [Tooltip("Mid-round takeover cards sit at the top of the screen (offset from the top edge), where the meeting card goes, " +
+                 "so they do not cover your own character while a murderer may be next to you.")]
+        public Vector2 takeoverCardOffset = new(0f, -76f);
+        [Tooltip("Flash in the role's colour when the role card appears (alpha, seconds).")]
+        [Range(0f, 1f)] public float roleFlashAlpha = 0.25f;
+        [Min(0f)] public float roleFlashSeconds = 0.5f;
+        [Tooltip("Red flash and jolt when a body is reported.")]
+        [Range(0f, 1f)] public float meetingFlashAlpha = 0.4f;
+        [Min(0f)] public float meetingFlashSeconds = 0.35f;
+        [Range(0f, 1f)] public float meetingKickStrength = 0.35f;
+        [Min(0f)] public float meetingKickSeconds = 0.3f;
+        [Tooltip("Flash in the outcome's colour and a jolt when someone is ejected.")]
+        [Range(0f, 1f)] public float ejectionFlashAlpha = 0.35f;
+        [Min(0f)] public float ejectionFlashSeconds = 0.4f;
+        [Range(0f, 1f)] public float ejectionKickStrength = 0.25f;
+        [Min(0f)] public float ejectionKickSeconds = 0.25f;
+        [Tooltip("Volume of the beep when a murderer's kill cooldown runs out.")]
+        [Range(0f, 1f)] public float killReadyBeepVolume = 0.6f;
+        [Tooltip("How much each gavel knock punches the meeting card (scale, seconds).")]
+        [Min(0f)] public float gavelPunchScale = 0.04f;
+        [Min(0f)] public float gavelPunchSeconds = 0.15f;
 
         ClientManager manager;
         MM_StateBroadcast state;
@@ -170,7 +197,10 @@ namespace Universes.UniverseData.murder_mystery.Client {
             gunBeacon.Stop();
             gunOnFloor = false;
             StopDrumroll();
-            gavel = null;
+            if (gavel != null) {
+                StopCoroutine(gavel);
+                gavel = null;
+            }
         }
 
         void OnDestroy() {
@@ -213,7 +243,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
             if (next.classic && next.phase == MM_Phase.Hunt && next.alive && lastRoleRound == next.round
                 && lastRole != next.role && next.role is MM_Role.Sheriff or MM_Role.Murderer) {
                 revealIsTakeover = true;
-                revealUntil = Time.unscaledTime + TakeoverRevealSeconds;
+                revealUntil = Time.unscaledTime + takeoverRevealSeconds;
             }
             lastRole = next.role;
             lastRoleRound = next.round;
@@ -226,13 +256,14 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 StopDrumroll();
 
             if (next.classic && next.role == MM_Role.Murderer && next.alive && lastKillCooldown > 0 && next.killCooldown == 0 && next.phase == MM_Phase.Hunt) {
-                GameSfx.Play(SfxCue.CountdownBeep, 0.6f);
+                GameSfx.Play(SfxCue.CountdownBeep, killReadyBeepVolume);
                 Punch.Scale(roleChip.transform);
             }
             lastKillCooldown = next.killCooldown;
 
             UpdateGunBeacon();
             UpdateMarkers();
+            ApplyState();
         }
 
         void OnMeeting(MM_MeetingBroadcast next, Channel channel) {
@@ -242,8 +273,10 @@ namespace Universes.UniverseData.murder_mystery.Client {
             // Body found: alarm, a red flash and a jolt, then the gavel calls the meeting to order.
             GameSfx.Play(SfxCue.Alarm);
             GameSfx.Play(bodyFoundSound);
-            ScreenFx.Flash(new Color(Alarm.r, Alarm.g, Alarm.b, 0.4f), 0.35f);
-            CameraShake.Kick(0.35f, 0.3f);
+            ScreenFx.Flash(new Color(Alarm.r, Alarm.g, Alarm.b, meetingFlashAlpha), meetingFlashSeconds);
+            CameraShake.Kick(meetingKickStrength, meetingKickSeconds);
+            FillMeeting();
+            ApplyState();
             if (gavel != null)
                 StopCoroutine(gavel);
             gavel = StartCoroutine(KnockGavel());
@@ -255,6 +288,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
             ejectionShown = false;
             hasMeeting = false;
             StopDrumroll();
+            ApplyState();
             // The reveal: a bell, then a flash in the outcome's colour.
             GameSfx.Play(ejectionBell);
             if (!next.ejected)
@@ -262,13 +296,15 @@ namespace Universes.UniverseData.murder_mystery.Client {
             bool caught = next.role == MM_Role.Murderer;
             GameSfx.Play(caught ? SfxCue.Win : SfxCue.Lose);
             Color flash = caught ? MM_Text.RoleColor(MM_Role.Innocent) : Alarm;
-            ScreenFx.Flash(new Color(flash.r, flash.g, flash.b, 0.35f), 0.4f);
-            CameraShake.Kick(0.25f, 0.25f);
+            ScreenFx.Flash(new Color(flash.r, flash.g, flash.b, ejectionFlashAlpha), ejectionFlashSeconds);
+            CameraShake.Kick(ejectionKickStrength, ejectionKickSeconds);
         }
 
         void OnKill(MM_KillBroadcast kill, Channel channel) {
             Vector3 at = kill.position + Vector3.up * killFxHeight;
             GameFx.Play(FxKind.Sparks, at, killSparkColor, killFxScale);
+            if (killRingScale > 0f)
+                GameFx.Play(FxKind.ShockwaveRing, kill.position, killSparkColor, killRingScale);
             GameSfx.PlayAt(SfxCue.Kill, kill.position);
             if (!kill.byGun)
                 GameSfx.PlayAt(killSting, kill.position);
@@ -288,7 +324,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
             resultsUntil = Time.unscaledTime + next.secondsLeft + 0.5f;
             if (fresh)
                 FillResults();
-            resultsTimer.Text = $"Next round in {next.secondsLeft}s";
+            resultsTimer.label.SetText("Next round in {0}s", next.secondsLeft);
         }
 
         void TryReport() {
@@ -308,27 +344,74 @@ namespace Universes.UniverseData.murder_mystery.Client {
             _ => innocentIcon,
         };
 
+        /// <summary>
+        /// Per frame: only what depends on the clock (the role card's and ejection banner's time on screen,
+        /// the results' countdown). Everything driven by the server's state is set in <see cref="ApplyState"/>
+        /// when a broadcast arrives, so a steady hunt builds no strings here.
+        /// </summary>
         void Refresh() {
             bool classic = hasState && state.classic;
             float now = Time.unscaledTime;
 
             bool showReveal = classic && now < revealUntil
                 && (revealIsTakeover ? state.phase == MM_Phase.Hunt : state.phase == MM_Phase.RoleReveal);
-            if (showReveal && !roleReveal.Visible) {
-                string title = state.role == MM_Role.Spectator
-                    ? "You are spectating"
-                    : revealIsTakeover
-                        ? $"You are now the {MM_Text.RoleName(state.role)}"
-                        : $"You are {(state.role == MM_Role.Innocent ? "" : "the ")}{MM_Text.RoleName(state.role)}";
-                if (roleReveal.kicker != null)
-                    roleReveal.kicker.text = revealIsTakeover ? TakeoverKicker : RoundStartKicker;
-                roleReveal.Show(RoleIcon(state.role), MM_Text.RoleColor(state.role), title.ToUpperInvariant(), MM_Text.RoleGoal(state.role), 0f);
-                GameSfx.Play(roleRevealSound);
-                Color roleColor = MM_Text.RoleColor(state.role);
-                ScreenFx.Flash(new Color(roleColor.r, roleColor.g, roleColor.b, 0.25f), 0.5f);
-            } else if (!showReveal && roleReveal.Visible) {
+            if (showReveal && !roleReveal.Visible)
+                ShowRoleCard();
+            else if (!showReveal && roleReveal.Visible)
                 roleReveal.Hide();
+
+            bool resultsShowing = lastResults.round == ejectionResult.round && now < resultsUntil;
+            bool showEjection = now < ejectionUntil && !resultsShowing;
+            if (showEjection && !ejectionShown)
+                ShowEjection(now);
+            else if (!showEjection && ejection.Visible)
+                ejection.Hide();
+
+            results.SetVisible(now < resultsUntil);
+        }
+
+        void ShowRoleCard() {
+            string title = state.role == MM_Role.Spectator
+                ? "You are spectating"
+                : revealIsTakeover
+                    ? $"You are now the {MM_Text.RoleName(state.role)}"
+                    : $"You are {(state.role == MM_Role.Innocent ? "" : "the ")}{MM_Text.RoleName(state.role)}";
+            if (roleReveal.kicker != null)
+                roleReveal.kicker.text = revealIsTakeover ? TakeoverKicker : RoundStartKicker;
+            PlaceRoleCard(revealIsTakeover);
+            Color roleColor = MM_Text.RoleColor(state.role);
+            roleReveal.Show(RoleIcon(state.role), roleColor, title.ToUpperInvariant(), MM_Text.RoleGoal(state.role), 0f);
+            GameSfx.Play(roleRevealSound);
+            ScreenFx.Flash(new Color(roleColor.r, roleColor.g, roleColor.b, roleFlashAlpha), roleFlashSeconds);
+        }
+
+        Vector2 roleCardCentre;
+        bool roleCardCentreKnown;
+
+        /// <summary>Round start: centre, as authored. Takeover: the top slot the meeting card uses.</summary>
+        void PlaceRoleCard(bool takeover) {
+            RectTransform card = (RectTransform)roleReveal.transform;
+            if (!roleCardCentreKnown) {
+                roleCardCentre = card.anchoredPosition;
+                roleCardCentreKnown = true;
             }
+            Vector2 anchor = takeover ? new Vector2(0.5f, 1f) : new Vector2(0.5f, 0.5f);
+            card.anchorMin = card.anchorMax = card.pivot = anchor;
+            card.anchoredPosition = takeover ? takeoverCardOffset : roleCardCentre;
+        }
+
+        void ShowEjection(float now) {
+            ejectionShown = true;
+            bool murderer = ejectionResult.ejected && ejectionResult.role == MM_Role.Murderer;
+            string title = !ejectionResult.ejected ? "NO ONE WAS EJECTED" : murderer ? "MURDERER CAUGHT" : "WRONG PERSON";
+            Sprite icon = !ejectionResult.ejected ? nobodyIcon : murderer ? caughtIcon : wrongIcon;
+            Color color = !ejectionResult.ejected ? Muted : murderer ? MM_Text.RoleColor(MM_Role.Innocent) : Alarm;
+            ejection.Show(icon, color, title, ejectionResult.headline, Mathf.Max(0.5f, ejectionUntil - now));
+        }
+
+        /// <summary>The role chip, kill cooldown, report prompt and meeting card, from the latest server state.</summary>
+        void ApplyState() {
+            bool classic = hasState && state.classic;
 
             bool showChip = classic && state.role != MM_Role.None && state.phase is not (MM_Phase.Results or MM_Phase.RoleReveal);
             roleChip.SetVisible(showChip);
@@ -338,7 +421,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 roleChipIcon.sprite = state.alive ? RoleIcon(state.role) : diedIcon;
                 roleChipName.text = state.alive ? MM_Text.RoleName(state.role) : $"{MM_Text.RoleName(state.role)} <size=70%><color=#9AA3AF>· eliminated</color></size>";
                 roleChipName.color = Color.Lerp(color, Color.white, 0.2f);
-                meetingsLeft.Text = state.meetingsLeft.ToString();
+                meetingsLeft.label.SetText("{0}", state.meetingsLeft);
                 meetingsLeft.SetTint(state.meetingsLeft > 0 ? Alarm : Muted);
                 meetingsLeft.SetVisible(state.role != MM_Role.Spectator);
             }
@@ -347,7 +430,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 && state.phase == MM_Phase.Hunt && state.killCooldown > 0;
             killCooldown.SetVisible(showKillCooldown);
             if (showKillCooldown)
-                killCooldown.Text = $"{state.killCooldown}s";
+                killCooldown.label.SetText("{0}s", state.killCooldown);
 
             bool showReport = classic && state.alive && state.phase == MM_Phase.Hunt && state.reportableBody >= 0;
             reportPrompt.SetVisible(showReport);
@@ -364,35 +447,22 @@ namespace Universes.UniverseData.murder_mystery.Client {
             // During the vote the shared vote window shows the same details, so the card steps aside.
             bool showMeeting = classic && hasMeeting && state.phase == MM_Phase.Meeting;
             meetingCard.SetVisible(showMeeting);
-            if (showMeeting) {
-                meetingBody.text = $"<b>{meeting.reporterName}</b> found the body of <b>{meeting.victimName}</b>.";
-                string suspects = meeting.suspects == null || meeting.suspects.Length == 0
-                    ? "nobody"
-                    : "<color=#F4F6FA>" + string.Join("</color>,  <color=#F4F6FA>", meeting.suspects) + "</color>";
-                meetingSuspects.text = $"Seen nearby:  {suspects}";
-                meetingTimer.Text = $"Voting in {state.secondsLeft}s";
-            }
+            if (showMeeting)
+                meetingTimer.label.SetText("Voting in {0}s", state.secondsLeft);
+        }
 
-            bool resultsShowing = lastResults.round == ejectionResult.round && now < resultsUntil;
-            bool showEjection = now < ejectionUntil && !resultsShowing;
-            if (showEjection && !ejectionShown) {
-                ejectionShown = true;
-                bool murderer = ejectionResult.ejected && ejectionResult.role == MM_Role.Murderer;
-                string title = !ejectionResult.ejected ? "NO ONE WAS EJECTED" : murderer ? "MURDERER CAUGHT" : "WRONG PERSON";
-                Sprite icon = !ejectionResult.ejected ? nobodyIcon : murderer ? caughtIcon : wrongIcon;
-                Color color = !ejectionResult.ejected ? Muted : murderer ? MM_Text.RoleColor(MM_Role.Innocent) : Alarm;
-                ejection.Show(icon, color, title, ejectionResult.headline, Mathf.Max(0.5f, ejectionUntil - now));
-            } else if (!showEjection && ejection.Visible) {
-                ejection.Hide();
-            }
-
-            results.SetVisible(now < resultsUntil);
+        void FillMeeting() {
+            meetingBody.text = $"<b>{meeting.reporterName}</b> found the body of <b>{meeting.victimName}</b>.";
+            string suspects = meeting.suspects == null || meeting.suspects.Length == 0
+                ? "nobody"
+                : "<color=#F4F6FA>" + string.Join("</color>,  <color=#F4F6FA>", meeting.suspects) + "</color>";
+            meetingSuspects.text = $"Seen nearby:  {suspects}";
         }
 
         void FillResults() {
-            bool murderersWon = lastResults.winner.StartsWith("Murder");
+            bool murderersWon = MM_Text.IsMurdererWin(lastResults.winner);
             Color color = murderersWon ? Alarm : MM_Text.RoleColor(MM_Role.Innocent);
-            resultsTitle.text = $"{lastResults.winner.ToUpperInvariant()} WIN";
+            resultsTitle.text = (lastResults.winner ?? string.Empty).ToUpperInvariant();
             resultsTitle.color = Color.Lerp(color, Color.white, 0.2f);
             resultsDisc.color = color;
             resultsStripe.color = color;
@@ -435,7 +505,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
             for (int i = 0; i < gavelKnocks; i++) {
                 GameSfx.Play(gavelSound);
                 if (meetingCard.Visible)
-                    Punch.Scale(meetingCard.transform, 0.04f, 0.15f);
+                    Punch.Scale(meetingCard.transform, gavelPunchScale, gavelPunchSeconds);
                 yield return new WaitForSecondsRealtime(gavelSpacing);
             }
             gavel = null;
@@ -471,7 +541,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 // The callout invites the living to race for it; the sheriff who just dropped it is reading
                 // "YOU WERE KILLED" in the same spot.
                 if (state.alive)
-                    FloatingText.Callout(state.gunPosition + Vector3.up * gunCalloutHeight, "SHERIFF'S GUN", MM_Text.RoleColor(MM_Role.Sheriff));
+                    FloatingText.Callout(state.gunPosition + Vector3.up * gunCalloutHeight, "SHERIFF'S GUN", MM_Text.RoleColor(MM_Role.Sheriff), gunCalloutSize);
                 GameSfx.PlayAt(SfxCue.Whoosh, state.gunPosition);
             } else if (dropped && gunPosition != state.gunPosition) {
                 gunBeacon.SetPosition(state.gunPosition);

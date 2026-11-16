@@ -62,6 +62,7 @@ namespace Universes.murder_mystery.Server {
         bool ejecting;
         UniTaskCompletionSource<Body> reportSignal = new();
         MM_KillClock killClock;
+        readonly Dictionary<GameCharacter, float> sheriffExposedUntil = new();
         FloatingToolShared droppedGun;
 
         public int Round { get; private set; }
@@ -69,6 +70,9 @@ namespace Universes.murder_mystery.Server {
         public bool Active { get; private set; }
         public int SecondsLeft { get; set; }
         public int MeetingsLeft => Mathf.Max(0, tuning.meetingsPerRound - meetingsHeld);
+        /// <summary>Innocents who took a dead sheriff's gun / a dead murderer's dagger this round.</summary>
+        public int GunTakeovers { get; private set; }
+        public int DaggerTakeovers { get; private set; }
 
         public MM_ClassicRound(MM_ServerRunner runner, MM_ClassicTuning tuning) {
             this.runner = runner;
@@ -84,6 +88,9 @@ namespace Universes.murder_mystery.Server {
             bodies.Clear();
             participants.Clear();
             kills.Clear();
+            sheriffExposedUntil.Clear();
+            GunTakeovers = 0;
+            DaggerTakeovers = 0;
             nextBodyId = 0;
             meetingsHeld = 0;
             ejecting = false;
@@ -143,6 +150,13 @@ namespace Universes.murder_mystery.Server {
         static int KillerId(GameCharacter character) => character.NetworkObject.ObjectId;
 
         /// <summary>
+        /// A sheriff who just shot someone gave themselves away: NPC murderers notice them from further off
+        /// for <see cref="MM_ClassicTuning.sheriffExposedSeconds"/>.
+        /// </summary>
+        public bool IsSheriffExposed(GameCharacter sheriff) =>
+            sheriff != null && sheriffExposedUntil.TryGetValue(sheriff, out float until) && Time.time < until;
+
+        /// <summary>
         /// Puts every living player murderer's dagger on the server cooldown the kill clock dictates, so their
         /// client shows it and refuses to swing early. NPC murderers are held back through <see cref="CanKill"/>
         /// before they swing; <see cref="OnCharacterDied"/> also locks their dagger after a kill.
@@ -173,9 +187,12 @@ namespace Universes.murder_mystery.Server {
             if (killer != null && killer != victim) {
                 kills[killer] = kills.TryGetValue(killer, out int k) ? k + 1 : 1;
                 MM_SaveData.RecordKill(killer, victim);
-                if (RoleOf(killer.GetTeam().realTeam) == MM_Role.Murderer) {
+                MM_Role killerRole = RoleOf(killer.GetTeam().realTeam);
+                if (killerRole == MM_Role.Murderer) {
                     killClock.RecordKill(KillerId(killer), Time.time);
                     SyncDagger(killer);
+                } else if (killerRole == MM_Role.Sheriff) {
+                    sheriffExposedUntil[killer] = Time.time + tuning.sheriffExposedSeconds;
                 }
             }
             if (ejecting)
@@ -220,7 +237,7 @@ namespace Universes.murder_mystery.Server {
         public void DropWeapons(GameCharacter character) {
             if (!Active || character == null)
                 return;
-            MM_DroppedWeapon weapon = MM_DropRules.WeaponLeftBy(RoleOf(character.GetTeam().realTeam), tuning.dropDaggerOnMurdererDeath);
+            MM_DroppedWeapon weapon = MM_DropRules.WeaponLeftBy(RoleOf(character.GetTeam().realTeam), tuning.dropDaggerOnMurdererDeath, ejecting);
             if (weapon == MM_DroppedWeapon.None)
                 return;
             Vector3 position = character.transform.position + character.transform.lossyScale.y * DropHeightFraction * Vector3.up;
@@ -246,20 +263,27 @@ namespace Universes.murder_mystery.Server {
                 return false;
             MM_DroppedWeapon weapon = WeaponOf(tool);
             MM_Role current = RoleOf(character.GetTeam().realTeam);
-            if (weapon == MM_DroppedWeapon.None || !MM_DropRules.CanPickUp(current, IsAlive(character), character.Tools.Length))
+            if (weapon == MM_DroppedWeapon.None
+                || !MM_DropRules.CanPickUp(current, IsAlive(character), character.Tools.Length, character.Owner.IsValid))
                 return false;
 
+            // Weapon first: if it cannot be given, the collector keeps their old role and the pickup stays.
+            if (ServerTool.Instance.SpawnTool(character.NetworkObject, tool) == null) {
+                Debug.LogError($"[MM] Could not give {tool} to {character.name}; the dropped weapon stays on the floor.", character);
+                return false;
+            }
             MM_Role role = MM_DropRules.RoleFor(weapon);
             // The display team stays hidden, exactly like a role dealt at the start of the round.
             character.SetTeam(new TeamConfig(TeamOf(role), TeamColor.None));
-            if (ServerTool.Instance.SpawnTool(character.NetworkObject, tool) == null)
-                return false;
             Participant participant = participants.FirstOrDefault(p => p.character == character);
             if (participant != null)
                 participant.role = role;
             if (weapon == MM_DroppedWeapon.Gun) {
                 droppedGun = null;
+                GunTakeovers++;
                 MM_SaveData.RecordGunPickup(character);
+            } else {
+                DaggerTakeovers++;
             }
             if (role == MM_Role.Murderer)
                 SyncDagger(character);
@@ -407,10 +431,10 @@ namespace Universes.murder_mystery.Server {
             }
         }
 
-        public async UniTask RunResults(string winner, string summary, int seconds, CancellationToken token) {
+        public async UniTask RunResults(string headline, string summary, int seconds, CancellationToken token) {
             Phase = MM_Phase.Results;
             MM_ResultEntry[] entries = participants
-                .Where(p => p.player != null || p.role == MM_Role.Murderer)
+                .Where(p => p.player != null || p.role == MM_Role.Murderer || p.role == MM_Role.Sheriff)
                 .OrderBy(p => p.player == null)
                 .ThenBy(p => p.role == MM_Role.Murderer ? 0 : p.role == MM_Role.Sheriff ? 1 : 2)
                 .Select(p => new MM_ResultEntry {
@@ -426,9 +450,9 @@ namespace Universes.murder_mystery.Server {
             for (int i = seconds; i > 0; i--) {
                 SecondsLeft = i;
                 InstanceFinder.ServerManager.Broadcast(new MM_ResultsBroadcast {
-                    round = Round, winner = winner, summary = summary, entries = entries, secondsLeft = i,
+                    round = Round, winner = headline, summary = summary, entries = entries, secondsLeft = i,
                 });
-                ServerRunner.SetTopMessage($"{winner} win! Next round in {i}");
+                ServerRunner.SetTopMessage($"{headline}! Next round in {i}");
                 if (await runner.AwaitTime(1000, token))
                     break;
             }
@@ -453,7 +477,10 @@ namespace Universes.murder_mystery.Server {
             bool alive = TryGetLivingCharacter(player.Owner, out GameCharacter character);
             state.alive = alive;
             // Death recolours the character, so prefer the role the player was dealt this round.
-            Participant dealt = Active ? participants.FirstOrDefault(p => p.player == player) : null;
+            Participant dealt = null;
+            if (Active)
+                foreach (Participant p in participants)
+                    if (p.player == player) { dealt = p; break; }
             MM_Role role = dealt != null ? dealt.role : RoleOf(player.team.Value.realTeam);
             state.role = Active && classic && role == MM_Role.None ? MM_Role.Spectator : role;
             if (!Active || !classic || !alive)
@@ -463,7 +490,8 @@ namespace Universes.murder_mystery.Server {
                 state.killCooldown = Mathf.CeilToInt(killClock.SecondsUntilReady(KillerId(character), Time.time));
 
             Vector3 at = character.transform.position;
-            List<Vector3> markers = new();
+            List<Vector3> markers = markerScratch;
+            markers.Clear();
             float best = float.MaxValue;
             foreach (Body body in bodies) {
                 if (body.reported)
@@ -477,9 +505,13 @@ namespace Universes.murder_mystery.Server {
                     state.reportableBodyName = body.victimName;
                 }
             }
-            state.nearbyBodies = markers.ToArray();
+            if (markers.Count > 0)
+                state.nearbyBodies = markers.ToArray();
             return state;
         }
+
+        // Reused by BuildState, which runs for every player twice a second.
+        readonly List<Vector3> markerScratch = new();
 
         // ---------- helpers ----------
 

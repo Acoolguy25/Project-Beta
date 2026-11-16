@@ -30,7 +30,8 @@ namespace Universes.UniverseData.murder_mystery.Server {
         [Tooltip("Sheriffs never exceed this fraction of the player pool.")]
         [SerializeField] public static float sheriffMaxRatio = 0.34f;
 
-        public void AssignRoles(int npcCount, int playerCount, out List<TeamColor> NPCRoles, out List<TeamColor> PlayerRoles, out int startMurd, out int startSheriff, out int startInnocent) {
+        /// <param name="npcSheriff">Deal the sheriff to an NPC instead of a player (the editor-only solo play-test switch).</param>
+        public void AssignRoles(int npcCount, int playerCount, bool npcSheriff, out List<TeamColor> NPCRoles, out List<TeamColor> PlayerRoles, out int startMurd, out int startSheriff, out int startInnocent) {
             NPCRoles = Enumerable.Repeat(TeamColor.Green, npcCount).ToList();
             PlayerRoles = Enumerable.Repeat(TeamColor.Green, playerCount).ToList();
 
@@ -42,7 +43,10 @@ namespace Universes.UniverseData.murder_mystery.Server {
             if (totalCount <= 0) return;
 
             // --- Sheriff: must be a player, so pick from PlayerRoles indices only ---
-            if (playerCount > 0) {
+            if (npcSheriff && npcCount > 0) {
+                NPCRoles[Random.Range(0, npcCount)] = TeamColor.Blue;
+            }
+            else if (playerCount > 0) {
                 int sheriffTarget = Mathf.RoundToInt(playerCount * sheriffBaseChance);
                 sheriffTarget = Mathf.Max(sheriffTarget, minSheriffs);
                 sheriffTarget = Mathf.Min(sheriffTarget, Mathf.FloorToInt(playerCount * sheriffMaxRatio));
@@ -66,7 +70,9 @@ namespace Universes.UniverseData.murder_mystery.Server {
 
             // Build a combined pool of (isPlayer, index), excluding players already made Sheriff
             List<(bool isPlayer, int index)> eligible = new List<(bool, int)>(totalCount);
-            for (int i = 0; i < npcCount; i++) eligible.Add((false, i));
+            for (int i = 0; i < npcCount; i++) {
+                if (NPCRoles[i] != TeamColor.Blue) eligible.Add((false, i));
+            }
             for (int i = 0; i < playerCount; i++) {
                 if (PlayerRoles[i] != TeamColor.Blue) eligible.Add((true, i));
             }
@@ -80,7 +86,7 @@ namespace Universes.UniverseData.murder_mystery.Server {
             }
 
             startMurd = NPCRoles.Count(r => r == TeamColor.Red) + PlayerRoles.Count(r => r == TeamColor.Red);
-            startSheriff = PlayerRoles.Count(r => r == TeamColor.Blue);
+            startSheriff = NPCRoles.Count(r => r == TeamColor.Blue) + PlayerRoles.Count(r => r == TeamColor.Blue);
             startInnocent = totalCount - startMurd - startSheriff;
         }
 

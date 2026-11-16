@@ -12,7 +12,7 @@ round (`MM_VoteMode`): NPCs vs Players, Classic, or Infection.
 | Meeting | 15 s | A living player presses **E** (Interact) within 6 m of an unreported body. Everyone freezes and is invulnerable. The notice names the reporter, the victim, and who was seen near the body. |
 | Accusation vote | up to 25 s | Living players vote among the suspects (the 3 living characters closest to the body when it happened, padded with whoever is near it now). Most votes is ejected; a tie or no votes ejects nobody. Ends early once everyone voted. |
 | Ejection | 6 s | The ejected character dies and their role is revealed. The hunt resumes with the time it had left. |
-| Results | 12 s | Every player's role, fate and kill count plus the NPC murderers are revealed, then the next round starts. |
+| Results | 12 s | "Murderers win" or "The town wins" (sheriffs and innocents win together). Every player's role, fate and kill count plus the NPC murderers and sheriffs are revealed, then the next round starts. An innocent who took a dropped weapon is listed and counted with the role they ended with, so the summary adds up to everyone dealt in. |
 
 Limits: 3 meetings per round, no report in the first 10 s of the hunt or within 20 s of the last meeting.
 If every player is eliminated while a murderer is still alive, the murderers win.
@@ -28,6 +28,28 @@ So a lone sheriff is not dead within seconds of the hunt starting (`MM_KillClock
 - **Kill cooldown** (25 s): after a kill, that murderer waits before the next one.
 - **Post-meeting cooldown** (10 s): when a meeting ends, every murderer waits at least this long.
 
+The kill cooldown keeps running through meetings (it is wall-clock time, as in Among Us): a murderer who
+killed just before a 40 s meeting usually comes out of it with only the 10 s post-meeting wait left. That
+is deliberate, so a meeting is never a safe way for a murderer to bank time; the post-meeting cooldown is
+the floor.
+
+### Balance: how hard NPC murderers hunt the sheriff
+
+`MM_NPC` lets NPC murderers prefer an armed sheriff over other targets. The **NPC murderers and the
+sheriff** block of Classic Tuning sets how hard:
+
+- `sheriffNoticeDistance` (45 m): an NPC murderer only goes for a sheriff it can see this close.
+- `sheriffExposedSeconds` (8 s) and `exposedSheriffNoticeDistance` (60 m): a sheriff who just fired is
+  exposed, and murderers notice them from much further for that long.
+- `sheriffDetectionMultiplier` (1.5) and `sheriffTargetPriority` (1): range multiplier and priority bonus
+  for a sheriff target over a plain innocent.
+
+Measured on 2026-11-16 (solo, the human is the sheriff, 28 NPC innocents, 2 NPC murderers), 45 m:
+an AFK sheriff died at 144 s and 86 s and survived once (2-1 murderers; at 100 m they died within 30-55 s);
+a sheriff who shoots back at murderers coming for them (server probe, 50 % hit chance inside 10 m) won
+5 of 5. At 12 m no murderer ever came for a sheriff who stood still. A near-even fight-back split is not
+reached yet; `sheriffExposedSeconds` (so the second murderer comes after a shot) is the next knob.
+
 NPC murderers ask `MM_ClassicRound.CanKill` before every attack and holster while they may not kill (they
 wander like townsfolk instead of stalking). A player murderer's dagger is put on the matching server
 cooldown, which their client shows and respects, and their role chip counts the seconds down.
@@ -35,10 +57,17 @@ cooldown, which their client shows and respects, and their role chip counts the 
 ### The sheriff's gun drops
 
 When the sheriff dies (shot, stabbed or voted out) their gun drops where they fell, with a beam over it
-for everyone to see. The first living, empty-handed innocent **player** to touch it takes it and secretly
-becomes the Sheriff (their role card says so; nobody else is told). Optionally (`dropDaggerOnMurdererDeath`,
-on by default) a dead murderer's dagger drops the same way and turns an innocent into a murderer. Dropped
-weapons are cleared when the round ends. Rules: `MM_DropRules`.
+and a small "SHERIFF'S GUN" label (`gunCalloutSize`, `gunCalloutHeight` on the HUD) for the living to
+see. The first living, empty-handed innocent **player** to touch it takes it and secretly becomes the
+Sheriff: their takeover card appears at the top of the screen (not over their own character), nobody else
+is told. NPCs never pick weapons up. Optionally (`dropDaggerOnMurdererDeath`, **off** by default) a dead
+murderer's dagger drops the same way and turns an innocent into a murderer; a murderer the town voted
+out never drops one, so a correct vote cannot be undone by whoever walks over the dagger. Dropped weapons
+are cleared when the round ends. Rules: `MM_DropRules` (unit-tested).
+
+Editor-only switch **DebugSoloNpcSheriff** on `MM_ServerRunner`: with a single player, the sheriff is
+dealt to an NPC (which carries the pistol but does not shoot), so one person can test the gun drop and
+takeover as an innocent. It does nothing in builds.
 
 ## Presentation and feel (client)
 
@@ -47,7 +76,7 @@ weapons are cleared when the round ends. Rules: `MM_DropRules`.
 | Moment | Feedback |
 |---|---|
 | Role reveal | Pizzicato sting and a flash in the role's colour; again when a role is taken over mid-round. |
-| Kill | Sparks and a kill sting where it happened, camera shake by distance. Only players within earshot (`killAudibleDistance`, 45 m) are told. The victim gets a red flash and "YOU WERE KILLED". |
+| Kill | Sparks, a shockwave ring under the victim and a kill sting where it happened, camera shake by distance (1.5x for the killer). Only players within earshot (`killAudibleDistance`, 45 m, in Classic Tuning) are told. The victim gets a red flash and "YOU WERE KILLED". |
 | Body found | Alarm and horn, red flash and a jolt, then three gavel knocks call the meeting. |
 | Accusation vote | A drumroll that speeds up and swells until the result. |
 | Ejection | A bell toll, then a win or lose sting and a flash in the outcome's colour. |
@@ -61,13 +90,28 @@ Sounds are Kenney CC0 (see `CREDITS.md`) in `Audio/`, wired by the authoring men
 
 ## Atmosphere
 
-**Ryan > Murder Mystery > Apply Atmosphere** sets warm dark fog and ambient light in
-`murder_mystery_start.unity`, turns the fill and ceiling lights tungsten (ceiling lights cast soft
-shadows) and dims the white "Global Visibility Fill" to faint warm moonlight. It also puts the
+**Ryan > Murder Mystery > Apply Atmosphere** lights `murder_mystery_start.unity` as a house at night with
+two hues:
+
+- **Cool moonlight** for everything that is not near a lamp: blue-grey fog and trilight ambient, and the
+  directional "Global Visibility Fill" tinted moon blue. It is the main light and the only one that casts
+  (soft) shadows, so characters and lamps throw a shadow.
+- **Warm tungsten only from lamps**: a standing lamp (`Prefabs/MM_StandingLamp.prefab`, KayKit model with
+  an emissive shade `Materials/MM_LampGlow.mat` and a point light in the shade) is placed against the
+  nearest wall under each ceiling light, under `MM_Lamps` in the scene. Seven rooms get one; the Upper
+  Hall and Secret Room have no floor under their ceiling light and are lit by the fills.
+- The 56 room fills are a short-range (13 m), nearly white bounce, so light pools stay separate and
+  characters keep their own colours; the ceiling lights are a dim top light (24 m).
+
+Pipeline limits (shared `StarterAssetsURPAsset`, not changed): Forward, 8 additional lights per object,
+no additional-light shadows, so point lights are authored with shadows off. The tool also puts the
 "Dense Warm Fill Lights" and "Additional Warm Lights" containers back to an identity transform under
-`Map`: they had a transform cancelling the Map's offset and 3x scale, which left all 56 room lights near
-the world origin, outside the house. Re-running it is safe. The post-processing look
-(`MoodPreset.WarmIndoor`) is applied at runtime by the HUD; judge the result in Play mode (ACES tonemapping).
+`Map` (they had a transform that left all 56 lights near the world origin). Re-running it is safe and
+rebuilds the lamp prefab and the lamps. Known issue: in Editor Play mode the client clears the shade
+material's `_EMISSION` keyword about 15 s after the map loads (not from this game's code, cause not found
+yet), so the shade is then lit by its bulb only; if the Editor saves assets afterwards the .mat loses the
+keyword too, and re-running Apply Atmosphere restores it. The post-processing look (`MoodPreset.WarmIndoor`) is applied at
+runtime by the HUD; judge the result in Play mode.
 
 ## Saved progress
 

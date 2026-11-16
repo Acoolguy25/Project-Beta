@@ -36,36 +36,67 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
         // ---------- atmosphere ----------
 
-        // A lamp-lit mansion at night rather than grey concrete under white light: warm, dark fog that hides
-        // the void outside the walls, a warm ambient, and tungsten-coloured fill lights. The post-processing
-        // look (MoodPreset.WarmIndoor) is applied at runtime by MM_ClientHUD.
-        static readonly Color FogColor = new(0.085f, 0.066f, 0.052f);
-        const float FogDensity = 0.012f;
-        static readonly Color AmbientSky = new(0.22f, 0.175f, 0.13f);
-        static readonly Color AmbientEquator = new(0.18f, 0.137f, 0.098f);
-        static readonly Color AmbientGround = new(0.058f, 0.045f, 0.036f);
-        static readonly Color TungstenLight = new(1f, 0.78f, 0.55f);
+        // A lamp-lit house at night rather than grey concrete under white light. Two hues: cool moonlight
+        // (the directional "Global Visibility Fill", the ambient and the fog) for the shadows, and warm
+        // tungsten only from the standing lamps, one per room, so each room has a visible light source
+        // with a pool of light around it and darker gaps between. The room fills stay a dim, nearly white
+        // bounce with a short range, so they lift the corners without washing the pools out.
+        // The post-processing look (MoodPreset.WarmIndoor; Night was tried and crushed the rooms to black) is
+        // applied at runtime by MM_ClientHUD; judge all of this in Play mode. Values were tuned by eye in Play
+        // mode from the hall and entrance camera spots in the README.
+        //
+        // Rendering limits (StarterAssetsURPAsset, the pipeline every game uses): Forward, 8 additional lights
+        // per object and no additional-light shadows. So point lights cast no shadows (they are set to None
+        // rather than claiming soft shadows that never render), each room keeps only a few lights, and the
+        // only shadows come from the directional moonlight.
+        static readonly Color FogColor = new(0.045f, 0.052f, 0.07f);
+        const float FogDensity = 0.011f;
+        static readonly Color AmbientSky = new(0.21f, 0.24f, 0.32f);
+        static readonly Color AmbientEquator = new(0.176f, 0.184f, 0.208f);
+        static readonly Color AmbientGround = new(0.096f, 0.096f, 0.112f);
+        static readonly Color TungstenLight = new(1f, 0.74f, 0.45f);
+        // The fills are a bounce, not a source: almost white, so characters keep their own colours.
+        static readonly Color FillLight = new(1f, 0.93f, 0.84f);
         const string FillLightPrefix = "Warm Fill";
         const string CeilingLightPrefix = "Ceiling Light";
         // Room lights authored in map-local coordinates. An earlier pass gave their containers a transform
         // that cancelled the Map's offset and scale, which parked every one of them near the world origin,
         // far outside the house; ApplyAtmosphere puts them back in the rooms.
-        // Each container's fills get one intensity: the dense grid is many small pools, the additional
-        // lights are the few brighter ones at doorways and halls.
-        static readonly (string container, float intensity)[] RoomLightContainers = {
-            ("Dense Warm Fill Lights", 37.5f),
-            ("Additional Warm Lights", 62.5f),
-        };
-        // Light range is not scaled by the Map's 3x transform, so fills authored for the unscaled map need
-        // a world-space range that reaches across a room.
-        const float RoomFillRange = 34f;
+        static readonly string[] RoomLightContainers = { "Dense Warm Fill Lights", "Additional Warm Lights" };
+        // About one room across (the map is 3x scale, so a 4 m plan room is 12 m): the pools stay separate.
+        const float RoomFillRange = 13f;
+        const float RoomFillIntensity = 24f;
+        // The ceiling lights were 80 / 50 m, one per room, flooding it; now a soft top light over each lamp.
+        const float CeilingLightRange = 24f;
+        const float CeilingLightIntensity = 18f;
         const string VisibilityFillName = "Global Visibility Fill";
-        // Faint warm moonlight: keeps corners readable without washing out the lamps.
-        static readonly Color VisibilityFillColor = new(0.85f, 0.72f, 0.6f);
-        const float VisibilityFillIntensity = 0.5f;
+        // Cool moonlight. It is the one light that can cast shadows here (the main light).
+        static readonly Color VisibilityFillColor = new(0.62f, 0.72f, 0.95f);
+        const float VisibilityFillIntensity = 0.8f;
+
+        // Standing lamps: one beside the nearest wall under each ceiling light.
+        const string LampModelPath = "Assets/ThirdParty/KayKit/FurnitureBits/Models/lamp_standing.fbx";
+        const string LampPrefabPath = Root + "/Prefabs/MM_StandingLamp.prefab";
+        const string LampGlowMaterialPath = Root + "/Materials/MM_LampGlow.mat";
+        const string LampsRoot = "MM_Lamps";
+        // The model is 2.5 m tall; the robots are 5.6 m, so a lamp at 2.2x stands at about head height.
+        const float LampScale = 2.2f;
+        // The bulb sits inside the shade, near the top of the 2.5 m model (model units).
+        const float LampBulbHeight = 2.15f;
+        const float LampLightRange = 22f;
+        const float LampLightIntensity = 90f;
+        // The shade glows: emission is the model's own palette texture tinted tungsten, so the light shade
+        // glows brightly and the dark pole barely at all.
+        const float LampGlowStrength = 3.5f;
+        // Lamps stand this far from the wall they are put against, and look for one within this distance.
+        const float LampWallGap = 2.5f;
+        const float LampWallSearch = 60f;
+        const float LampFloorSearch = 80f;
 
         [MenuItem("Ryan/Murder Mystery/Apply Atmosphere")]
         public static void ApplyAtmosphere() {
+            EnsureFolders();
+            GameObject lampPrefab = BuildLampPrefab();
             EditInStartScene(scene => {
                 RenderSettings.fog = true;
                 RenderSettings.fogMode = FogMode.ExponentialSquared;
@@ -76,38 +107,125 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 RenderSettings.ambientEquatorColor = AmbientEquator;
                 RenderSettings.ambientGroundColor = AmbientGround;
                 foreach (GameObject rootObject in scene.GetRootGameObjects()) {
-                    foreach (Transform container in rootObject.GetComponentsInChildren<Transform>(true))
-                        foreach ((string containerName, float intensity) in RoomLightContainers) {
-                            if (container.name != containerName)
-                                continue;
-                            Undo.RecordObject(container, "Move murder mystery room lights");
-                            container.localPosition = Vector3.zero;
-                            container.localRotation = Quaternion.identity;
-                            container.localScale = Vector3.one;
-                            foreach (Light fill in container.GetComponentsInChildren<Light>(true)) {
-                                Undo.RecordObject(fill, "Warm murder mystery lights");
-                                fill.range = RoomFillRange;
-                                fill.intensity = intensity;
-                                fill.color = TungstenLight;
-                            }
+                    foreach (Transform container in rootObject.GetComponentsInChildren<Transform>(true)) {
+                        if (System.Array.IndexOf(RoomLightContainers, container.name) < 0)
+                            continue;
+                        Undo.RecordObject(container, "Move murder mystery room lights");
+                        container.localPosition = Vector3.zero;
+                        container.localRotation = Quaternion.identity;
+                        container.localScale = Vector3.one;
+                        foreach (Light fill in container.GetComponentsInChildren<Light>(true)) {
+                            Undo.RecordObject(fill, "Murder mystery room fills");
+                            fill.range = RoomFillRange;
+                            fill.intensity = RoomFillIntensity;
+                            fill.color = FillLight;
+                            fill.shadows = LightShadows.None;
                         }
+                    }
                     foreach (Light light in rootObject.GetComponentsInChildren<Light>(true)) {
                         string name = light.gameObject.name;
                         if (name == VisibilityFillName) {
-                            Undo.RecordObject(light, "Dim murder mystery visibility fill");
+                            Undo.RecordObject(light, "Murder mystery moonlight");
                             light.color = VisibilityFillColor;
                             light.intensity = VisibilityFillIntensity;
-                        } else if (name.StartsWith(FillLightPrefix) || name.StartsWith(CeilingLightPrefix)) {
-                            Undo.RecordObject(light, "Warm murder mystery lights");
-                            light.color = TungstenLight;
-                        }
-                        // The few ceiling lights cast soft shadows so rooms read as lit by real fixtures.
-                        if (name.StartsWith(CeilingLightPrefix))
+                            // The main light is the one that can cast shadows: characters and lamps get one.
                             light.shadows = LightShadows.Soft;
+                        } else if (name.StartsWith(CeilingLightPrefix)) {
+                            Undo.RecordObject(light, "Murder mystery ceiling lights");
+                            light.color = FillLight;
+                            light.range = CeilingLightRange;
+                            light.intensity = CeilingLightIntensity;
+                            // Additional lights cannot cast shadows in this pipeline (see above).
+                            light.shadows = LightShadows.None;
+                        }
                     }
                 }
+                PlaceLamps(scene, lampPrefab);
                 return true;
             });
+        }
+
+        /// <summary>The standing lamp: KayKit model with a glowing shade and its tungsten bulb.</summary>
+        static GameObject BuildLampPrefab() {
+            GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(LampModelPath);
+            if (model == null)
+                throw new System.InvalidOperationException("Missing lamp model: " + LampModelPath);
+            Material source = model.GetComponentInChildren<MeshRenderer>().sharedMaterial;
+
+            Material glow = AssetDatabase.LoadAssetAtPath<Material>(LampGlowMaterialPath);
+            if (glow == null) {
+                glow = new Material(source);
+                AssetDatabase.CreateAsset(glow, LampGlowMaterialPath);
+            } else {
+                glow.CopyPropertiesFromMaterial(source);
+            }
+            // Colour and map first, keyword last: URP turns _EMISSION off for a material whose emission is
+            // black, and CopyPropertiesFromMaterial brings the source's (non-emissive) keywords along.
+            glow.SetTexture("_EmissionMap", source.mainTexture);
+            glow.SetColor("_EmissionColor", TungstenLight * LampGlowStrength);
+            glow.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            glow.SetKeyword(new UnityEngine.Rendering.LocalKeyword(glow.shader, "_EMISSION"), true);
+            EditorUtility.SetDirty(glow);
+            AssetDatabase.SaveAssetIfDirty(glow);
+
+            GameObject root = new("MM_StandingLamp");
+            try {
+                GameObject body = (GameObject)PrefabUtility.InstantiatePrefab(model, root.transform);
+                body.name = "Model";
+                body.transform.localScale = Vector3.one * LampScale;
+                foreach (MeshRenderer renderer in body.GetComponentsInChildren<MeshRenderer>())
+                    renderer.sharedMaterial = glow;
+
+                GameObject bulb = new("Bulb");
+                bulb.transform.SetParent(root.transform, false);
+                bulb.transform.localPosition = Vector3.up * (LampBulbHeight * LampScale);
+                Light light = bulb.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = TungstenLight;
+                light.range = LampLightRange;
+                light.intensity = LampLightIntensity;
+                light.shadows = LightShadows.None;
+                return PrefabUtility.SaveAsPrefabAsset(root, LampPrefabPath);
+            } finally {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        /// <summary>
+        /// One lamp per ceiling light: straight down to the floor, then against the nearest wall, so it
+        /// stands at the edge of the room instead of in the walkway. Re-running replaces the set.
+        /// </summary>
+        static void PlaceLamps(UnityEngine.SceneManagement.Scene scene, GameObject lampPrefab) {
+            foreach (GameObject rootObject in scene.GetRootGameObjects())
+                if (rootObject.name == LampsRoot)
+                    Undo.DestroyObjectImmediate(rootObject);
+            GameObject lamps = new(LampsRoot);
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(lamps, scene);
+            Physics.SyncTransforms();
+            PhysicsScene physics = scene.GetPhysicsScene();
+            foreach (GameObject rootObject in scene.GetRootGameObjects())
+                foreach (Light light in rootObject.GetComponentsInChildren<Light>(true)) {
+                    if (!light.gameObject.name.StartsWith(CeilingLightPrefix))
+                        continue;
+                    if (!physics.Raycast(light.transform.position, Vector3.down, out RaycastHit floor, LampFloorSearch)) {
+                        Debug.LogWarning($"[MM] No floor under {light.name}; no lamp placed there.", light);
+                        continue;
+                    }
+                    Vector3 probe = floor.point + Vector3.up * (LampBulbHeight * LampScale * 0.5f);
+                    Vector3 spot = floor.point;
+                    float nearest = LampWallSearch;
+                    for (int i = 0; i < 8; i++) {
+                        Vector3 direction = Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward;
+                        if (physics.Raycast(probe, direction, out RaycastHit wall, nearest) && wall.distance > LampWallGap) {
+                            nearest = wall.distance;
+                            spot = floor.point + direction * (wall.distance - LampWallGap);
+                        }
+                    }
+                    GameObject lamp = (GameObject)PrefabUtility.InstantiatePrefab(lampPrefab, lamps.transform);
+                    lamp.name = "Lamp - " + light.name.Substring(CeilingLightPrefix.Length).TrimStart(' ', '-');
+                    lamp.transform.position = spot;
+                }
+            Undo.RegisterCreatedObjectUndo(lamps, "Place murder mystery lamps");
         }
 
         /// <summary>Runs <paramref name="edit"/> on the start scene (opening it if needed) and saves it when the edit says so.</summary>

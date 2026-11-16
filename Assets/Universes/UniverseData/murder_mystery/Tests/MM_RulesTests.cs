@@ -94,31 +94,49 @@ namespace Universes.UniverseData.murder_mystery.Tests {
     public sealed class MM_DropRulesTests {
         [Test]
         public void SheriffAlwaysDropsTheGun() {
-            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Sheriff, dropDaggers: false), Is.EqualTo(MM_DroppedWeapon.Gun));
-            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Sheriff, dropDaggers: true), Is.EqualTo(MM_DroppedWeapon.Gun));
+            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Sheriff, dropDaggers: false, ejected: false), Is.EqualTo(MM_DroppedWeapon.Gun));
+            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Sheriff, dropDaggers: true, ejected: false), Is.EqualTo(MM_DroppedWeapon.Gun));
         }
 
         [Test]
+        public void AnEjectedSheriffStillLeavesTheGunForTheTown() =>
+            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Sheriff, dropDaggers: false, ejected: true), Is.EqualTo(MM_DroppedWeapon.Gun));
+
+        [Test]
         public void DaggerDropsOnlyWhenEnabled() {
-            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Murderer, dropDaggers: true), Is.EqualTo(MM_DroppedWeapon.Dagger));
-            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Murderer, dropDaggers: false), Is.EqualTo(MM_DroppedWeapon.None));
+            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Murderer, dropDaggers: true, ejected: false), Is.EqualTo(MM_DroppedWeapon.Dagger));
+            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Murderer, dropDaggers: false, ejected: false), Is.EqualTo(MM_DroppedWeapon.None));
         }
+
+        [Test]
+        public void AVotedOutMurdererNeverLeavesADagger() {
+            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Murderer, dropDaggers: true, ejected: true), Is.EqualTo(MM_DroppedWeapon.None));
+            Assert.That(MM_DropRules.WeaponLeftBy(MM_Role.Murderer, dropDaggers: false, ejected: true), Is.EqualTo(MM_DroppedWeapon.None));
+        }
+
+        [Test]
+        public void DaggersStayWithTheDeadByDefault() =>
+            Assert.That(new MM_ClassicTuning().dropDaggerOnMurdererDeath, Is.False);
 
         [TestCase(MM_Role.Innocent)]
         [TestCase(MM_Role.Spectator)]
         [TestCase(MM_Role.None)]
         public void UnarmedRolesDropNothing(MM_Role role) =>
-            Assert.That(MM_DropRules.WeaponLeftBy(role, dropDaggers: true), Is.EqualTo(MM_DroppedWeapon.None));
+            Assert.That(MM_DropRules.WeaponLeftBy(role, dropDaggers: true, ejected: false), Is.EqualTo(MM_DroppedWeapon.None));
 
         [Test]
         public void OnlyALivingEmptyHandedInnocentMayPickUp() {
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 0), Is.True);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: false, toolsHeld: 0), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 1), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Murderer, alive: true, toolsHeld: 0), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Sheriff, alive: true, toolsHeld: 0), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Spectator, alive: true, toolsHeld: 0), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 0, isPlayer: true), Is.True);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: false, toolsHeld: 0, isPlayer: true), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 1, isPlayer: true), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Murderer, alive: true, toolsHeld: 0, isPlayer: true), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Sheriff, alive: true, toolsHeld: 0, isPlayer: true), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Spectator, alive: true, toolsHeld: 0, isPlayer: true), Is.False);
         }
+
+        [Test]
+        public void NpcsNeverPickUpAWeapon() =>
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 0, isPlayer: false), Is.False);
 
         [Test]
         public void TheGunMakesASheriffAndTheDaggerAMurderer() {

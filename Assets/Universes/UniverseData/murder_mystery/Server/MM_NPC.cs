@@ -13,11 +13,14 @@ namespace Universes.murder_mystery.Server {
     /// </summary>
     [RequireComponent(typeof(LocalNPC), typeof(GameCharacter))]
     public sealed class MM_NPC : MonoBehaviour {
-        // LocalNPC's default detection radius is 10. The pistol reaches 60, so use a sixfold
-        // multiplier to make an armed sheriff visible across their full firing distance.
-        private const float ArmedSheriffRangeMultiplier = 6f;
-        private const float ArmedSheriffPriority = 1f;
-        private const float ArmedSheriffSightRadius = 100f;
+        // LocalNPC's default detection radius is 10. The pistol reaches 60, so by default a sixfold
+        // multiplier makes an armed sheriff visible across their full firing distance. Classic replaces
+        // these through Configure (MM_ClassicTuning), so a sheriff is only rushed once noticed.
+        private float sheriffRangeMultiplier = 6f;
+        private float sheriffPriority = 1f;
+        private float sheriffSightRadius = 100f;
+        private float exposedSheriffSightRadius = 100f;
+        private System.Func<GameCharacter, bool> isSheriffExposed;
 
         private LocalNPC localNPC;
         private GameCharacter gameCharacter;
@@ -31,6 +34,20 @@ namespace Universes.murder_mystery.Server {
             localNPC.AttackTargetRangeMultiplier = GetAttackRangeMultiplier;
             localNPC.AttackTargetPriority = GetAttackPriority;
             gameCharacter.OnDamage += HandleDamage;
+        }
+
+        /// <summary>
+        /// How hard this NPC goes after an armed sheriff: <paramref name="sightRadius"/> is how close a
+        /// quiet sheriff must be before it is rushed, <paramref name="exposedSightRadius"/> applies while
+        /// <paramref name="isExposed"/> says the sheriff has just shot someone.
+        /// </summary>
+        public void ConfigureSheriffHunting(float sightRadius, float exposedSightRadius, float rangeMultiplier, float priority,
+            System.Func<GameCharacter, bool> isExposed) {
+            sheriffSightRadius = sightRadius;
+            exposedSheriffSightRadius = exposedSightRadius;
+            sheriffRangeMultiplier = rangeMultiplier;
+            sheriffPriority = priority;
+            isSheriffExposed = isExposed;
         }
 
         /// <summary>Forced targeting only applies while this NPC may actually kill (not during a grace period or cooldown).</summary>
@@ -60,12 +77,12 @@ namespace Universes.murder_mystery.Server {
             }
         }
 
-        private static float GetAttackRangeMultiplier(GameCharacter target) {
-            return IsArmedSheriff(target) ? ArmedSheriffRangeMultiplier : 1f;
+        private float GetAttackRangeMultiplier(GameCharacter target) {
+            return IsArmedSheriff(target) ? sheriffRangeMultiplier : 1f;
         }
 
-        private static float GetAttackPriority(GameCharacter target) {
-            return IsArmedSheriff(target) ? ArmedSheriffPriority : 0f;
+        private float GetAttackPriority(GameCharacter target) {
+            return IsArmedSheriff(target) ? sheriffPriority : 0f;
         }
 
         private void HandleDamage(DamageType source, IEntity attacker) {
@@ -80,12 +97,13 @@ namespace Universes.murder_mystery.Server {
                 return null;
 
             GameCharacter nearest = null;
-            float nearestDistanceSquared = ArmedSheriffSightRadius * ArmedSheriffSightRadius;
+            float nearestDistanceSquared = float.MaxValue;
             foreach (GameCharacter sheriff in sheriffs) {
                 if (!IsArmedSheriff(sheriff)) continue;
 
+                float sight = isSheriffExposed != null && isSheriffExposed(sheriff) ? exposedSheriffSightRadius : sheriffSightRadius;
                 float distanceSquared = (sheriff.transform.position - transform.position).sqrMagnitude;
-                if (distanceSquared >= nearestDistanceSquared) continue;
+                if (distanceSquared >= sight * sight || distanceSquared >= nearestDistanceSquared) continue;
 
                 nearest = sheriff;
                 nearestDistanceSquared = distanceSquared;

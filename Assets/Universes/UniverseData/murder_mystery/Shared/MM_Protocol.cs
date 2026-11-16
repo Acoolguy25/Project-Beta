@@ -88,6 +88,7 @@ namespace Universes.UniverseData.murder_mystery {
     /// <summary>End-of-round reveal of every role.</summary>
     public struct MM_ResultsBroadcast : IBroadcast {
         public int round;
+        /// <summary>The headline, <see cref="MM_Text.ClassicHeadline"/>.</summary>
         public string winner;
         public string summary;
         public MM_ResultEntry[] entries;
@@ -110,6 +111,15 @@ namespace Universes.UniverseData.murder_mystery {
             MM_Role.Spectator => "You joined mid-round. Watch, and play next round.",
             _ => "",
         };
+
+        /// <summary>
+        /// The Classic end-of-round line. Sheriffs and innocents win together, so a town win never names
+        /// the sheriffs (who may all be dead by then).
+        /// </summary>
+        public static string ClassicHeadline(bool murderersWon) => murderersWon ? "Murderers win" : "The town wins";
+
+        /// <summary>Whether a <see cref="MM_ResultsBroadcast.winner"/> line is a murderer win.</summary>
+        public static bool IsMurdererWin(string headline) => headline == ClassicHeadline(true);
 
         public static Color RoleColor(MM_Role role) => role switch {
             MM_Role.Innocent => new Color(0.35f, 0.85f, 0.45f),
