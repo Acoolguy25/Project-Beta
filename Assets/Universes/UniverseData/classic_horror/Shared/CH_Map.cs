@@ -12,6 +12,9 @@ namespace Universes.UniverseData.classic_horror {
         public CH_StoryLibrary storyLibrary;
         public GameObject clueViewPrefab;
         public GameObject sourceViewPrefab;
+        [Tooltip("What each offering looks like, in CH_Case.Offerings order (salt, bell, lantern): where it is recovered "
+            + "in Chapter II and where it is placed at the source. Empty slots use clueViewPrefab.")]
+        public GameObject[] offeringViewPrefabs = new GameObject[0];
         public GameObject clientPrefab;
         public Light[] practicalLights;
         [Tooltip("The emissive part of each practical lamp, in the same order as practicalLights (may hold nulls). Flickers with its light.")]

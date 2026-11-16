@@ -168,5 +168,45 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.Throws<ArgumentException>(() => library.Generate(1, 8, 3));
             Assert.Throws<ArgumentException>(() => library.Generate(1, 16, 0));
         }
+
+        // Encounter scares and the Presence's tuning (CH_ScareRules, CH_ScareRation, CH_MonsterTuning).
+        const float Strike = 1.85f, ScareDistance = 6f;
+
+        [Test] public void WarningNeverPlaysInsideStrikeRange() {
+            Assert.IsFalse(CH_ScareRules.ShouldWarn(true, 0.5f, Strike, ScareDistance), "A strike is due: the fatal scare plays, not a warning.");
+            Assert.IsFalse(CH_ScareRules.ShouldWarn(true, Strike - 0.01f, Strike, ScareDistance));
+            Assert.IsTrue(CH_ScareRules.ShouldWarn(true, Strike, Strike, ScareDistance));
+            Assert.IsTrue(CH_ScareRules.ShouldWarn(true, 4f, Strike, ScareDistance));
+        }
+
+        [Test] public void WarningNeedsSightAndCloseRange() {
+            Assert.IsFalse(CH_ScareRules.ShouldWarn(false, 4f, Strike, ScareDistance), "Heard but not seen: no face.");
+            Assert.IsFalse(CH_ScareRules.ShouldWarn(true, ScareDistance, Strike, ScareDistance));
+            Assert.IsFalse(CH_ScareRules.ShouldWarn(true, 30f, Strike, ScareDistance));
+        }
+
+        [Test] public void NonFatalScaresAreRationedPerCaseWithACooldown() {
+            var ration = new CH_ScareRation();
+            Assert.IsTrue(ration.TryTake(10f, 2, 90f), "The first scare always plays.");
+            Assert.IsFalse(ration.TryTake(50f, 2, 90f), "Inside the cooldown.");
+            Assert.AreEqual(1, ration.Shown);
+            Assert.IsTrue(ration.TryTake(100f, 2, 90f), "Cooldown over.");
+            Assert.IsFalse(ration.TryTake(500f, 2, 90f), "Only two per case.");
+            Assert.AreEqual(2, ration.Shown);
+            Assert.AreEqual(100f, ration.LastShown);
+            Assert.IsFalse(new CH_ScareRation().TryTake(0f, 0, 0f), "Zero per case turns them off.");
+        }
+
+        [Test] public void ALoneInvestigatorCanOutrunEveryHunt() {
+            var tuning = new CH_MonsterTuning();
+            const float sprint = 9.5f;
+            foreach (bool ritual in new[] { false, true })
+                foreach (bool enraged in new[] { false, true })
+                    Assert.Less(tuning.HuntSpeed(ritual, enraged, 1), sprint, $"ritual {ritual}, enraged {enraged}");
+            Assert.AreEqual(tuning.enragedHuntSpeed, tuning.HuntSpeed(false, true, 3), "Teams face the full enraged speed.");
+            Assert.Greater(tuning.HuntSpeed(true, false, 2), tuning.HuntSpeed(false, false, 2), "Chapter II hunts harder than Chapter I.");
+            Assert.Less(tuning.strikeDistance, 6f, "The strike range must sit inside the warning range.");
+            Assert.Less(tuning.PursuitMemory(1), tuning.PursuitMemory(2), "Breaking sight shakes it off sooner for a lone investigator.");
+        }
     }
 }

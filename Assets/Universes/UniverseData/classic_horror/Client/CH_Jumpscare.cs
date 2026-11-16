@@ -35,8 +35,9 @@ namespace Universes.UniverseData.classic_horror.Client {
         [Tooltip("When the lens effect is gone, as a multiple of the encounter's length. It holds at its peak while the face is up, "
             + "so the world comes back through it as the face fades, and eases out after.")]
         [Range(1f, 3f)] public float lensRecoveryFraction = 1.6f;
-        [SerializeField] Vector2 faceScale = new(0.8f, 1.35f);
-        [SerializeField, Min(0f)] float faceWobbleDegrees = 5f;
+        [Tooltip("Scale of the full-screen face when it appears and when it starts to fade: it lunges at the camera.")]
+        [SerializeField] Vector2 faceScale = new(1f, 1.22f);
+        [SerializeField, Min(0f)] float faceWobbleDegrees = 2.5f;
         [SerializeField, Min(0f)] float faceWobbleSpeed = 7f;
 
         int lastSequence;

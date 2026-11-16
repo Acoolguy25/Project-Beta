@@ -21,6 +21,8 @@ namespace Universes.UniverseData.classic_horror.Client {
     /// </summary>
     public sealed class CH_ClientController : MonoBehaviour {
         [Header("Case status")]
+        [Tooltip("The case card; hidden on the ending card, which has its own countdown.")]
+        public GameObject caseStatusCard;
         public TMP_Text chapterLabel;
         public TMP_Text objectiveLabel;
         public UnityEngine.UI.Image caseIcon;
@@ -37,6 +39,8 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Range(0f, 1f)] float focusAlignment = 0.9f;
         [SerializeField, Min(0.02f)] float focusInterval = 0.08f;
         [SerializeField, Min(0.5f)] float feedbackSeconds = 2.5f;
+        [Tooltip("After E is pressed the record's prompt hides at once; it may come back if the server has not answered within this many seconds.")]
+        [SerializeField, Min(0.1f)] float pendingInteractionSeconds = 2f;
         [Tooltip("Offerings placed at the source are smaller than the records found around the map.")]
         [SerializeField, Range(0.1f, 1f)] float offeringViewScale = 0.65f;
         [Tooltip("Case points sit above the ground for focus and the compass; their props are set down on whatever is below within this distance.")]
@@ -98,7 +102,11 @@ namespace Universes.UniverseData.classic_horror.Client {
         bool shownStatus, shownInvestigating;
         int shownProgress, shownSeconds = -1;
         bool endingShown;
-        int endingSecondsShown = -1;
+        int endingSecondsShown = -1, endingSolvedShown = -1;
+        string shownObjective;
+        // The point E was last pressed on, hidden from focus until the server answers.
+        int pendingId = -1;
+        float pendingUntil;
 
         bool CaseOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
 
@@ -189,6 +197,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (!hasState || result.seed != state.seed) return;
             interactionFeedback = result.accepted ? "" : result.message;
             feedbackUntil = result.accepted ? 0 : Time.unscaledTime + feedbackSeconds;
+            pendingId = -1;
             if (result.accepted && result.playObjectiveCollect) PlayPickupSting();
             nextFocus = 0;
         }
@@ -233,12 +242,19 @@ namespace Universes.UniverseData.classic_horror.Client {
             lastDialogue = -1;
             feedbackUntil = 0;
             endingShown = false;
+            endingSolvedShown = -1;
+            pendingId = -1;
+            shownObjective = null;
         }
 
         void UpdateCaseStatus(CH_StateBroadcast next) {
-            chapterLabel.text = ChapterName(next.phase);
-            int split = next.objective.IndexOf('|');
-            objectiveLabel.text = split >= 0 ? next.objective.Substring(split + 1).Trim() : next.objective;
+            if (caseStatusCard != null && caseStatusCard.activeSelf == CaseOver) caseStatusCard.SetActive(!CaseOver);
+            if (next.objective != shownObjective) {
+                shownObjective = next.objective;
+                chapterLabel.text = ChapterName(next.phase);
+                int split = next.objective.IndexOf('|');
+                objectiveLabel.text = split >= 0 ? next.objective.Substring(split + 1).Trim() : next.objective;
+            }
             bool investigating = next.phase == CH_Phase.Investigation;
             int progress = investigating ? next.evidenceCount : next.relicCount;
             if (!shownStatus || investigating != shownInvestigating || progress != shownProgress) {
@@ -274,7 +290,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             foreach (var view in pointViews.Values) if (view != null) view.SetActive(false);
             foreach (var point in next.points) {
                 if (!pointViews.TryGetValue(point.id, out var view)) {
-                    view = Instantiate(point.id == CH_Case.SourceId ? map.sourceViewPrefab : map.clueViewPrefab, map.transform);
+                    view = Instantiate(ViewPrefab(point.id), map.transform);
                     view.name = $"{point.title} / {point.area}";
                     view.transform.position = GroundBelow(point.position);
                     if (CH_Case.IsOfferingId(point.id)) view.transform.localScale = Vector3.one * offeringViewScale;
@@ -286,6 +302,15 @@ namespace Universes.UniverseData.classic_horror.Client {
                 if (point.collected && collectedPoints.Add(point.id) && !fresh && IsRecord(point.id))
                     GameFx.Play(FxKind.Sparks, point.position, collectBurstTint, collectBurstScale);
             }
+        }
+
+        /// <summary>The source's altar, the offering's own prop, or the record table.</summary>
+        GameObject ViewPrefab(int id) {
+            if (id == CH_Case.SourceId) return map.sourceViewPrefab;
+            int offering = CH_Case.IsOfferingId(id) ? id - CH_Case.OfferingFirstId
+                : id is >= CH_Case.EvidenceRecordCount and < CH_Case.RequiredLocations ? id - CH_Case.EvidenceRecordCount : -1;
+            return offering >= 0 && offering < map.offeringViewPrefabs.Length && map.offeringViewPrefabs[offering] != null
+                ? map.offeringViewPrefabs[offering] : map.clueViewPrefab;
         }
 
         /// <summary>The first solid surface under a case point, so a record's table stands on the floor instead of floating at the point's height.</summary>
@@ -306,6 +331,10 @@ namespace Universes.UniverseData.classic_horror.Client {
                 endingSecondsShown = next.secondsLeft;
                 endingNextCase.Text = $"Next case in {next.secondsLeft}s";
             }
+            if (next.completedCases != endingSolvedShown) {
+                endingSolvedShown = next.completedCases;
+                endingSolved.Text = $"Cases solved: {next.completedCases}";
+            }
             // The epilogue and the case in numbers are fixed once the case is over.
             if (endingShown) return;
             endingShown = true;
@@ -321,7 +350,6 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (endingSummary != null) endingSummary.text = CaseSummary(next);
             endingDisc.color = endingStripe.color = accent;
             endingIcon.sprite = solved ? solvedIcon : failedIcon;
-            endingSolved.Text = $"Cases solved: {next.completedCases}";
         }
 
         static string CaseSummary(CH_StateBroadcast next) {
@@ -344,8 +372,9 @@ namespace Universes.UniverseData.classic_horror.Client {
                 return;
             }
             float best = focusAlignment;
+            if (pendingId >= 0 && Time.unscaledTime > pendingUntil) pendingId = -1;
             foreach (var point in state.points) {
-                if (point.collected || point.id == CH_Case.SourceId && state.relicCount == CH_Case.OfferingCount) continue;
+                if (point.collected || point.id == pendingId || point.id == CH_Case.SourceId && state.relicCount == CH_Case.OfferingCount) continue;
                 Vector3 direction = point.position - camera.transform.position;
                 float distance = direction.magnitude;
                 float alignment = distance < 0.1f ? 1 : Vector3.Dot(camera.transform.forward, direction / distance);
@@ -396,12 +425,18 @@ namespace Universes.UniverseData.classic_horror.Client {
         void Interact() {
             // Input can arrive between focus scans, especially while turning.
             UpdateFocus();
-            if (focusedId >= 0 && focusedId != CH_Case.SourceId) SendInteraction(focusedId, -1);
+            if (focusedId < 0 || focusedId == CH_Case.SourceId || !SendInteraction(focusedId, -1)) return;
+            // Hide the prompt now rather than when the server's answer arrives: a taken record
+            // should not keep offering itself for the length of a round trip.
+            pendingId = focusedId;
+            pendingUntil = Time.unscaledTime + pendingInteractionSeconds;
+            UpdateFocus();
         }
 
-        void SendInteraction(int point, int option) {
-            if (manager == null || !manager.Started || journal.IsOpen) return;
+        bool SendInteraction(int point, int option) {
+            if (manager == null || !manager.Started || journal.IsOpen) return false;
             manager.Broadcast(new CH_InteractRequest { seed = state.seed, targetId = point, option = option });
+            return true;
         }
 
         void OpenJournal() {

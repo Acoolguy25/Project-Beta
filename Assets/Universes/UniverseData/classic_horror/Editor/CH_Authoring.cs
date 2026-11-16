@@ -103,7 +103,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const string SearchLanternPath = Root + "/Prefabs/SearchLantern.prefab";
         const string LanternPostName = "Lantern post";
         // Where the lantern stands next to its search spot, and how much room the post needs.
-        const float LanternOffset = 1.6f, LanternClearance = 0.35f, LanternProbeHeight = 6f, LanternRange = 11f;
+        const float LanternOffset = 2.1f, LanternClearance = 0.35f, LanternProbeHeight = 6f, LanternRange = 11f;
+        // The KayKit atlas is a light beige; the posts take a dark, weathered copy so they don't glow in the flashlight.
+        static readonly Color LanternPostTint = new(0.3f, 0.25f, 0.21f);
         static readonly Color LanternGlow = new Color(1f, 0.58f, 0.24f) * 2.4f;
 
         /// <summary>
@@ -121,12 +123,26 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 foreach (var renderer in visual.GetComponentsInChildren<Renderer>())
                     if (renderer.name.EndsWith("_lantern")) glass = renderer;
                 if (glass == null) throw new System.InvalidOperationException("post_lantern.fbx has no lantern mesh.");
-                glass.sharedMaterial = LanternGlassMaterial(glass.sharedMaterial);
+                Material atlas = glass.sharedMaterial;
+                foreach (var renderer in visual.GetComponentsInChildren<Renderer>())
+                    if (renderer != glass) renderer.sharedMaterial = LanternPostMaterial(atlas);
+                glass.sharedMaterial = LanternGlassMaterial(atlas);
                 glass.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 var post = root.AddComponent<CapsuleCollider>();
                 post.radius = 0.12f; post.height = 3.2f; post.center = new Vector3(0f, 1.6f, 0f);
                 return PrefabUtility.SaveAsPrefabAsset(root, SearchLanternPath);
             } finally { Object.DestroyImmediate(root); }
+        }
+
+        static Material LanternPostMaterial(Material atlas) {
+            string path = Root + "/Materials/SearchLanternPost.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) { material = new Material(atlas) { name = "SearchLanternPost" }; AssetDatabase.CreateAsset(material, path); }
+            else material.CopyPropertiesFromMaterial(atlas);
+            material.SetColor("_BaseColor", LanternPostTint);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.05f);
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         /// <summary>The KayKit atlas with itself as emission map: the amber glass glows, the dark iron barely does.</summary>
@@ -168,7 +184,10 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 Vector3 ground = LanternGround(spot, post);
                 post.gameObject.SetActive(true);
                 Vector3 toSpot = spot.position - ground; toSpot.y = 0f;
-                post.SetPositionAndRotation(ground, toSpot.sqrMagnitude > 0.01f ? Quaternion.LookRotation(toSpot) : spot.rotation);
+                // The gallows arm points along the post's forward. Turned sideways to the record, the
+                // lantern hangs beside it instead of over it, out of the top of the view while reading.
+                Vector3 arm = toSpot.sqrMagnitude > 0.01f ? Vector3.Cross(Vector3.up, toSpot) : spot.right;
+                post.SetPositionAndRotation(ground, Quaternion.LookRotation(arm));
                 Renderer glass = null;
                 foreach (var renderer in post.GetComponentsInChildren<Renderer>())
                     if (renderer.name.EndsWith("_lantern")) glass = renderer;
@@ -181,6 +200,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 lamp.renderMode = LightRenderMode.ForcePixel;
             }
             map.practicalGlows = glows;
+            var offerings = new GameObject[CH_Case.OfferingCount];
+            for (int i = 0; i < offerings.Length; i++) offerings[i] = AssetDatabase.LoadAssetAtPath<GameObject>(OfferingViewPath(i));
+            map.offeringViewPrefabs = offerings;
             EditorUtility.SetDirty(map);
         }
 
@@ -473,7 +495,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
             var clue = PrefabUtility.LoadPrefabContents(cluePath);
             try {
                 ClearVisualChildren(clue);
-                PlaceVisual(FloodedProps + "Prop_SmallTable_B.prefab", clue.transform, Vector3.zero, Vector3.one);
+                var table = PlaceVisual(FloodedProps + "Prop_SmallTable_B.prefab", clue.transform, Vector3.zero, Vector3.one);
+                UseMaterial(table, RecordWoodMaterial(table));
                 PlaceVisual(FloodedProps + "Prop_Lamp_A.prefab", clue.transform, new Vector3(0.32f, 0.70f, 0.19f), Vector3.one * 0.68f);
                 var notes = Shape("Field Notes", PrimitiveType.Quad, clue.transform, new Vector3(-0.16f, 0.735f, -0.04f), new Vector3(0.48f, 0.34f, 1f), paper, new Vector3(90f, 18f, 0f));
                 Shape("Case Heading", PrimitiveType.Quad, notes.transform, new Vector3(-0.06f, 0.28f, -0.004f), new Vector3(0.68f, 0.09f, 1f), ink);
@@ -482,14 +505,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
                         new Vector3(-0.08f, 0.06f - i * 0.17f, -0.004f), new Vector3(0.55f - i * 0.08f, 0.025f, 1f), ink);
                 Shape("Wax Seal", PrimitiveType.Sphere, clue.transform, new Vector3(-0.34f, 0.745f, -0.15f), new Vector3(0.065f, 0.012f, 0.065f), rune);
                 PlaceEffect(QuickEffects + "vfx_Portal_01.prefab", clue.transform, new Vector3(-0.16f, 0.76f, 0f), 0.1f, new Color(0.95f, 0.62f, 0.3f, 0.35f));
-                var light = clue.GetComponent<Light>();
-                light.color = Amber; light.range = 4f; light.intensity = 0.85f;
-                var glow = clue.GetComponent<CH_EvidenceGlow>();
-                if (glow == null) glow = clue.AddComponent<CH_EvidenceGlow>();
-                glow.glowLight = light;
-                glow.rimRenderers = AddRim(clue, RimMaterial());
+                AddGlow(clue, RecordLightRange);
                 PrefabUtility.SaveAsPrefabAsset(clue, cluePath);
             } finally { PrefabUtility.UnloadPrefabContents(clue); }
+
+            for (int i = 0; i < CH_Case.OfferingCount; i++) BuildOfferingView(i);
 
             string sourcePath = Root + "/Prefabs/HauntingSource.prefab";
             var source = PrefabUtility.LoadPrefabContents(sourcePath);
@@ -511,6 +531,124 @@ namespace Universes.UniverseData.classic_horror.Editor {
             AssetDatabase.SaveAssets();
         }
 
+        const float RecordLightRange = 4f;
+        // The pack's small-props atlas reads almost white under a flashlight; records use a darker, warmer copy.
+        static readonly Color RecordWoodTint = new(0.58f, 0.46f, 0.36f);
+
+        /// <summary>The amber glow light and CH_EvidenceGlow (with its code defaults) on a record or offering.</summary>
+        static void AddGlow(GameObject root, float range) {
+            var light = root.GetComponent<Light>();
+            if (light == null) light = root.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = Amber; light.range = range; light.shadows = LightShadows.None;
+            // Re-added so the prefab takes the glow's current defaults (a faint idle edge, a strong focus).
+            var old = root.GetComponent<CH_EvidenceGlow>();
+            if (old != null) Object.DestroyImmediate(old, true);
+            var glow = root.AddComponent<CH_EvidenceGlow>();
+            glow.glowLight = light;
+            light.intensity = glow.IdleLight;
+            glow.rimRenderers = AddRim(root, RimMaterial());
+        }
+
+        static Material RecordWoodMaterial(GameObject table) {
+            var source = table.GetComponentInChildren<Renderer>().sharedMaterial;
+            string path = Root + "/Materials/EvidenceTable.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) { material = new Material(source) { name = "EvidenceTable" }; AssetDatabase.CreateAsset(material, path); }
+            else material.CopyPropertiesFromMaterial(source);
+            material.SetColor("_BaseColor", RecordWoodTint);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.1f);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        static void UseMaterial(GameObject root, Material material) {
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) {
+                var materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++) materials[i] = material;
+                renderer.sharedMaterials = materials;
+            }
+        }
+
+        public const string OfferingViewFolder = Root + "/Prefabs/";
+        static readonly string[] OfferingViewNames = { "OfferingSalt", "OfferingBell", "OfferingLantern" };
+        public static string OfferingViewPath(int offering) => OfferingViewFolder + OfferingViewNames[offering] + ".prefab";
+        // Offerings stand on the pack's other small table (records use Prop_SmallTable_B), each with its own object on top.
+        const string OfferingStand = FloodedProps + "Prop_SmallTable_A.prefab";
+        const float OfferingLightRange = 3f;
+        static readonly float[] OfferingHeights = { 0.32f, 0.3f, 0.5f };
+        static readonly Color BronzeColour = new(0.36f, 0.24f, 0.1f), SaltColour = new(0.86f, 0.84f, 0.78f);
+
+        /// <summary>
+        /// The salt canister, the hand bell and the keeper's lantern: each its own object on a small table,
+        /// with the record glow, so the ritual's three offerings can be told apart at a glance.
+        /// </summary>
+        static void BuildOfferingView(int offering) {
+            var root = new GameObject(OfferingViewNames[offering]);
+            try {
+                var stand = PlaceVisual(OfferingStand, root.transform, Vector3.zero, Vector3.one);
+                UseMaterial(stand, RecordWoodMaterial(stand));
+                float top = TopOf(stand);
+                var item = new GameObject("Item");
+                item.transform.SetParent(root.transform, false);
+                switch (offering) {
+                    case 0: {
+                        var jar = PlaceVisual(FloodedProps + "Prop_Vase_B.prefab", item.transform, Vector3.zero, Vector3.one);
+                        Shape("Salt", PrimitiveType.Cylinder, item.transform, Vector3.zero, Vector3.one, Material("OfferingSalt", SaltColour));
+                        FitHeight(jar, OfferingHeights[0]);
+                        var salt = item.transform.Find("Salt");
+                        Bounds rim = BoundsOf(jar);
+                        salt.localScale = new Vector3(rim.size.x * 0.55f, 0.01f, rim.size.z * 0.55f);
+                        salt.localPosition = new Vector3(0f, rim.max.y - item.transform.position.y - 0.02f, 0f);
+                        break;
+                    }
+                    case 1: {
+                        var bronze = Material("OfferingBronze", BronzeColour);
+                        bronze.SetFloat("_Metallic", 0.85f); bronze.SetFloat("_Smoothness", 0.55f);
+                        var bell = new GameObject("Bell"); bell.transform.SetParent(item.transform, false);
+                        Shape("Mouth", PrimitiveType.Cylinder, bell.transform, new Vector3(0f, 0.035f, 0f), new Vector3(0.26f, 0.035f, 0.26f), bronze);
+                        Shape("Waist", PrimitiveType.Cylinder, bell.transform, new Vector3(0f, 0.12f, 0f), new Vector3(0.2f, 0.08f, 0.2f), bronze);
+                        Shape("Crown", PrimitiveType.Sphere, bell.transform, new Vector3(0f, 0.2f, 0f), new Vector3(0.2f, 0.14f, 0.2f), bronze);
+                        Shape("Handle", PrimitiveType.Cylinder, bell.transform, new Vector3(0f, 0.32f, 0f), new Vector3(0.04f, 0.08f, 0.04f), Material("OfferingHandle", new Color(0.2f, 0.12f, 0.07f)));
+                        FitHeight(bell, OfferingHeights[1]);
+                        break;
+                    }
+                    default: {
+                        var model = AssetDatabase.LoadAssetAtPath<GameObject>(KayKitHalloween + "lantern_standing.fbx");
+                        if (model == null) throw new System.InvalidOperationException("KayKit lantern_standing.fbx is missing.");
+                        var lantern = (GameObject)PrefabUtility.InstantiatePrefab(model, item.transform);
+                        var atlas = lantern.GetComponentInChildren<Renderer>().sharedMaterial;
+                        foreach (var renderer in lantern.GetComponentsInChildren<Renderer>())
+                            renderer.sharedMaterial = LanternPostMaterial(atlas);
+                        // The KayKit lantern is one mesh; its glow is the record light, not its glass.
+                        FitHeight(lantern, OfferingHeights[2]);
+                        break;
+                    }
+                }
+                item.transform.localPosition = new Vector3(0f, top - root.transform.position.y, 0f);
+                AddGlow(root, OfferingLightRange);
+                PrefabUtility.SaveAsPrefabAsset(root, OfferingViewPath(offering));
+            } finally { Object.DestroyImmediate(root); }
+        }
+
+        static Bounds BoundsOf(GameObject root) {
+            var renderers = root.GetComponentsInChildren<Renderer>();
+            Bounds bounds = renderers[0].bounds;
+            foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
+            return bounds;
+        }
+
+        /// <summary>The height of a stand's top surface above its parent's origin.</summary>
+        static float TopOf(GameObject stand) => BoundsOf(stand).max.y - stand.transform.parent.position.y;
+
+        /// <summary>Scales a visual so it is <paramref name="height"/> tall, standing on its parent's origin.</summary>
+        static void FitHeight(GameObject visual, float height) {
+            Bounds before = BoundsOf(visual);
+            visual.transform.localScale *= height / Mathf.Max(0.001f, before.size.y);
+            Bounds after = BoundsOf(visual);
+            visual.transform.position += Vector3.up * (visual.transform.parent.position.y - after.min.y);
+        }
+
         /// <summary>The additive amber edge glow that makes a record readable as "something to inspect" in the dark.</summary>
         static Material RimMaterial() {
             string path = Root + "/Materials/EvidenceRim.mat";
@@ -522,9 +660,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 AssetDatabase.CreateAsset(material, path);
             }
             material.shader = shader;
+            // A thin amber outline and only a hint of fresnel: the prop keeps its own material.
+            material.SetColor("_RimColor", RimColour);
+            material.SetFloat("_RimPower", RimPower);
+            material.SetFloat("_OutlineWidth", OutlineWidth);
+            material.SetFloat("_OutlineStrength", OutlineStrength);
             EditorUtility.SetDirty(material);
             return material;
         }
+        static readonly Color RimColour = new(1.5f, 0.9f, 0.35f);
+        const float RimPower = 5f, OutlineWidth = 0.008f, OutlineStrength = 0.55f;
 
         /// <summary>Appends <paramref name="rim"/> as an extra material slot on every mesh of the record, so the rim draws over the whole prop.</summary>
         static Renderer[] AddRim(GameObject root, Material rim) {
@@ -655,17 +800,30 @@ namespace Universes.UniverseData.classic_horror.Editor {
             atmosphere.dustMotesPrefab = BuildDustMotes();
         }
 
+        // Above every shared HUD canvas (top bar, player list, chat).
+        const int EncounterSortingOrder = 900;
+
         /// <summary>The priest's face, the jumpscare sting and the lens burst (chromatic aberration, vignette, distortion).</summary>
         static void BuildEncounter(GameObject root, CH_ClientController client) {
             var scare = root.AddComponent<CH_Jumpscare>();
             client.jumpscare = scare;
-            var scarePanel = Panel("Encounter", root.transform, Vector2.zero, Vector2.one, new Color(0.002f, 0, 0, 0.98f));
+            var scarePanel = Panel("Encounter", root.transform, Vector2.zero, Vector2.one, Color.black);
+            // Its own canvas, sorted above the shared top bar and player list, so nothing of the
+            // everyday HUD (coins, chat, the case card) is drawn over the face.
+            var scareCanvas = scarePanel.gameObject.AddComponent<Canvas>();
+            scareCanvas.overrideSorting = true;
+            scareCanvas.sortingOrder = EncounterSortingOrder;
             scare.overlay = scarePanel.gameObject.AddComponent<CanvasGroup>();
             scare.overlay.alpha = 0; scare.overlay.blocksRaycasts = false; scare.overlay.interactable = false;
-            var face = Rect("The face", scarePanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-650, -650), new Vector2(650, 650));
+            // The picture fills the screen (EncounterFace.png: the face cropped under the chin over a red glow),
+            // keeping its aspect and overflowing the shorter side rather than letterboxing.
+            var face = Rect("The face", scarePanel.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             scare.face = face;
             var portrait = face.gameObject.AddComponent<UnityEngine.UI.RawImage>();
-            portrait.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(RyanAssets.Editor.NPCCharacterAuthoring.Root + "/Data/PresencePortrait.png"); portrait.raycastTarget = false;
+            portrait.texture = CH_EncounterFace.Build(); portrait.raycastTarget = false;
+            var fit = face.gameObject.AddComponent<UnityEngine.UI.AspectRatioFitter>();
+            fit.aspectMode = UnityEngine.UI.AspectRatioFitter.AspectMode.EnvelopeParent;
+            fit.aspectRatio = (float)portrait.texture.width / portrait.texture.height;
             scare.sting = scarePanel.gameObject.AddComponent<AudioSource>();
             scare.sting.clip = Clip("Packages/com.ryan.ui/Runtime/Client/ClientAudio/JumpscareAudio/jumpscare.mp3");
             scare.sting.playOnAwake = false; scare.sting.volume = 0.75f; scare.sting.spatialBlend = 0;
@@ -777,6 +935,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         /// <summary>Top centre: chapter, the current objective, case progress and the clock.</summary>
         static void BuildCaseStatus(RectTransform canvas, CH_ClientController client) {
             RectTransform card = UIKit.Pinned(canvas, "CaseStatus", new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(560f, 100f));
+            client.caseStatusCard = card.gameObject;
             HudKit.Glass(card, 16f);
             UIKit.Row(card.gameObject, 14f, new RectOffset(14, 20, 12, 12), TextAnchor.MiddleLeft);
             UIKit.FitContent(card.gameObject, false, true);
@@ -884,6 +1043,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         /// <summary>The case ending: how it ended, the epilogue, and when the next case starts.</summary>
+        const float EndingSummarySize = 18f;
+
         static void BuildEnding(RectTransform canvas, CH_ClientController client) {
             RectTransform card = HudKit.Card(canvas, "CaseEnding", new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(860f, 420f));
             client.endingStripe = HudKit.AccentStripe(card, Amber, 5f);
@@ -897,7 +1058,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.endingLabel.fontSize = 20f;
             client.endingLabel.lineSpacing = 8f;
             client.endingLabel.textWrappingMode = TextWrappingModes.Normal;
-            client.endingSummary = UIKit.Text(card, "Summary", string.Empty, UIText.Small, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            // The case in numbers: readable body text, not muted small print.
+            client.endingSummary = UIKit.Text(card, "Summary", string.Empty, UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            client.endingSummary.fontSize = EndingSummarySize;
             client.endingSummary.textWrappingMode = TextWrappingModes.Normal;
             client.endingSummary.lineSpacing = 6f;
             RectTransform chips = UIKit.Node(card, "Chips");

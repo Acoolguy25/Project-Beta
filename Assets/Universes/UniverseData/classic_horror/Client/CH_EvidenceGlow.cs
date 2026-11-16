@@ -12,12 +12,12 @@ namespace Universes.UniverseData.classic_horror.Client {
         [Tooltip("Renderers that carry the Evidence Rim material as an extra material slot.")]
         public Renderer[] rimRenderers = new Renderer[0];
         public Light glowLight;
-        [SerializeField, Min(0f)] float idleRim = 0.55f;
-        [SerializeField, Min(0f)] float focusedRim = 1.8f;
-        [SerializeField, Range(0f, 1f)] float pulseDepth = 0.45f;
+        [SerializeField, Min(0f)] float idleRim = 0.22f;
+        [SerializeField, Min(0f)] float focusedRim = 1.25f;
+        [SerializeField, Range(0f, 1f)] float pulseDepth = 0.4f;
         [SerializeField, Min(0.01f)] float pulseSeconds = 2.4f;
-        [SerializeField, Min(0f)] float idleLight = 0.85f;
-        [SerializeField, Min(0f)] float focusedLight = 1.6f;
+        [SerializeField, Min(0f)] float idleLight = 0.3f;
+        [SerializeField, Min(0f)] float focusedLight = 1.1f;
         [Tooltip("How quickly the glow follows focus changes (per second).")]
         [SerializeField, Min(0.1f)] float focusBlendRate = 6f;
 
@@ -26,6 +26,8 @@ namespace Universes.UniverseData.classic_horror.Client {
         bool focused;
 
         public void SetFocused(bool value) => focused = value;
+        /// <summary>The glow light's resting intensity, for authoring.</summary>
+        public float IdleLight => idleLight;
 
         void Awake() {
             block = new MaterialPropertyBlock();

@@ -25,4 +25,11 @@ kenney.nl is not reachable from the cloud environment. Credit is not required by
   kit in `Packages/com.ryan.gameframework/Runtime/GameFeel` (see its `Audio/CREDITS.md`).
 - Lantern posts (`Prefabs/SearchLantern.prefab`) use `post_lantern.fbx` from Kay Lousberg's *KayKit Halloween Bits*
   (CC0 1.0), already in the project; `Materials/SearchLanternGlass.mat` is a copy of its atlas material with emission.
+- The evidence tables and the offering stands are Flooded Grounds furniture (`Prop_SmallTable_A`); the tables use
+  `Materials/EvidenceTable.mat`, a darker tinted copy of the pack's table material. The salt offering is the pack's
+  `Prop_Vase_B` with a salt disc, the bell is built from Unity primitives (`OfferingBronze.mat`, `OfferingHandle.mat`),
+  and the lantern offering is `lantern_standing.fbx` from *KayKit Halloween Bits* (CC0 1.0).
+- Lantern post wood uses `Materials/SearchLanternPost.mat`, a darker, matte copy of the KayKit atlas material.
+- `Data/EncounterFace.png` is rendered in the Editor (`Editor/CH_EncounterFace.cs`) from the shared `PresenceFace`
+  prefab (the Cursed Priest model above); no outside image.
 - `Materials/Particles/` are copies of Flooded Grounds particle materials, fixed for URP alpha blending.

@@ -13,15 +13,6 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float FootstepPaceMultiplier = 3f;
         const float NavigationRadius = 0.1f;
         const float NavigationHeight = 1.05f;
-        const float PursuitMemorySeconds = 30f;
-        // Preserve the relative urgency of each authored state while giving
-        // investigators about 12.5% more room to evade.
-        const float MovementSpeedMultiplier = 0.875f;
-        const float InvestigationHuntSpeed = 10f;
-        const float RitualHuntSpeed = 11.5f;
-        const float EnragedHuntSpeed = 13f;
-        /// <summary>How close the monster must be to strike, and its reach past obstacles when it does.</summary>
-        const float StrikeDistance = 1.85f, StrikeReach = 2.2f;
         const float UnreachableGiveUpSeconds = 10f;
         const float UnreachableRetrySeconds = 12f;
         const float ReachableApproachRadius = 3f;
@@ -34,6 +25,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         };
 
         CH_ServerRunner runner;
+        CH_MonsterTuning tuning;
         LocalNPC locomotion;
         GameCharacter entity;
         CH_Temperament temperament;
@@ -47,15 +39,17 @@ namespace Universes.UniverseData.classic_horror.Server {
         LocalCharacter pursued;
         float lastProgress;
         public int AbandonedChases { get; private set; }
-        public bool IsChasing => !suspended && pursued != null && Time.time - lastSeen < PursuitMemorySeconds;
+        public bool IsChasing => !suspended && pursued != null && Time.time - lastSeen < tuning.PursuitMemory(LivingInvestigators());
+        /// <summary>True while a scare holds it in place.</summary>
+        public bool IsStaggered => Time.time < staggeredUntil;
         public string State { get; private set; } = "Emerging";
         Vector3 patrolPoint, progressPosition;
-        float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, lightHeldUntil, enragedUntil, nextWhisper, nextPatrol;
+        float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, lightHeldUntil, enragedUntil, nextWhisper, nextPatrol, staggeredUntil;
         float unreachableSince = -1f;
         Vector3 committedPursuitDestination;
         float nextPursuitRepath;
         bool hasCommittedPursuitDestination;
-        bool suspended;
+        bool suspended, staggered;
         int warningIndex;
         int obstacleMask;
 
@@ -83,8 +77,8 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
         }
 
-        public void Initialize(CH_ServerRunner owner, LocalNPC npc, CH_Temperament behavior, int seed) {
-            runner = owner; locomotion = npc; temperament = behavior;
+        public void Initialize(CH_ServerRunner owner, LocalNPC npc, CH_Temperament behavior, int seed, CH_MonsterTuning hunt) {
+            runner = owner; locomotion = npc; temperament = behavior; tuning = hunt;
             if (TryGetComponent(out CharacterAnimator characterAnimator))
                 characterAnimator.FootstepPaceMultiplier = FootstepPaceMultiplier;
             reachPath = new UnityEngine.AI.NavMeshPath();
@@ -121,8 +115,42 @@ namespace Universes.UniverseData.classic_horror.Server {
         public void Repel(float seconds) { repelledUntil = Time.time + seconds; nextPatrol = 0; pursued = null; lastSeen = -100; unreachableSince = -1f; hasCommittedPursuitDestination = false; }
         public void Suspend() { suspended = true; locomotion.SetTargetingType(NPCTargetingType.None); }
 
+        /// <summary>
+        /// Freezes it where it stands for <paramref name="seconds"/>: a scare that fills an
+        /// investigator's screen also holds the Presence, so they can still run when the face fades.
+        /// It keeps its pursuit and resumes the hunt afterwards; a strike is never due during it.
+        /// </summary>
+        public void Stagger(float seconds) {
+            if (seconds <= 0f) return;
+            staggeredUntil = Mathf.Max(staggeredUntil, Time.time + seconds);
+            nextAttack = Mathf.Max(nextAttack, staggeredUntil);
+            staggered = true;
+            var agent = locomotion.agent;
+            if (agent.enabled && agent.isOnNavMesh) { agent.isStopped = true; agent.velocity = Vector3.zero; }
+            State = "Staggered";
+        }
+
+        /// <summary>Lets the agent move again once a stagger is over.</summary>
+        void EndStagger() {
+            staggered = false;
+            lastProgress = Time.time;
+            var agent = locomotion.agent;
+            if (agent.enabled && agent.isOnNavMesh) agent.isStopped = false;
+        }
+
+        static int LivingInvestigators() {
+            int living = 0;
+            foreach (var character in LocalCharacter.Characters.Values)
+                if (character != null && !character.IsDead) living++;
+            return living;
+        }
+
         void Update() {
             if (runner == null || suspended || !runner.CaseActive || Time.time < nextThink) return;
+            if (staggered) {
+                if (IsStaggered) return;
+                EndStagger();
+            }
             float elapsed = Mathf.Max(0.01f, Time.time - lastThink);
             lastThink = Time.time;
             nextThink = Time.time + 0.15f;
@@ -226,32 +254,29 @@ namespace Universes.UniverseData.classic_horror.Server {
                     runner.OnMonsterChaseStarted();
                 }
                 lastSeen = Time.time;
-                float speed = runner.CurrentCase.Phase == CH_Phase.Investigation ? InvestigationHuntSpeed : RitualHuntSpeed;
-                if (Time.time < enragedUntil) speed = EnragedHuntSpeed;
-                NavigatePursued(speed);
+                NavigatePursued(tuning.HuntSpeed(runner.CurrentCase.Phase != CH_Phase.Investigation, Time.time < enragedUntil, LivingInvestigators()));
                 Vector3 sensedEye = sensed.CharacterCamera != null ? sensed.CharacterCamera.position : sensed.transform.position + Vector3.up * 2f;
-                bool inStrikeRange = closest < StrikeDistance;
-                if (inStrikeRange && Time.time >= nextAttack && WorldInteraction.CanReach(eye, sensedEye, StrikeReach, obstacleMask)) {
-                    nextAttack = Time.time + 2f;
+                if (closest < tuning.strikeDistance && Time.time >= nextAttack && WorldInteraction.CanReach(eye, sensedEye, tuning.strikeReach, obstacleMask)) {
+                    nextAttack = Time.time + tuning.attackInterval;
                     // Use the health contract so a successful hit is lethal at any
                     // player health, while still respecting spawn protection.
                     sensed.TakeDamage(System.Math.Max(1L, sensed.Health.Value), DamageType.Melee, (IEntity)entity);
                 }
-                // Face to face in the dark: the runner rations these so they stay rare. Inside strike
-                // range the fatal scare is the one that plays, so a warning would only stack on it.
-                if (sensedVisible && !inStrikeRange && closest < runner.ProximityScareDistance)
+                // Face to face in the dark: the runner rations these so they stay rare, and holds the
+                // Presence while the face is up (Stagger).
+                if (CH_ScareRules.ShouldWarn(sensedVisible, closest, tuning.strikeDistance, runner.ProximityScareDistance))
                     runner.TryEncounterScare(sensed.Owner, CH_ScareKind.Warning);
-                if (closest < 38f && Time.time > nextWhisper
+                if (closest < tuning.whisperDistance && Time.time > nextWhisper
                     && runner.TrySpeakWarning(runner.CurrentCase.Warnings[warningIndex % runner.CurrentCase.Warnings.Length])) {
                     warningIndex++;
-                    nextWhisper = Time.time + 35f;
+                    nextWhisper = Time.time + tuning.whisperInterval;
                 }
-            } else if (Time.time - lastSeen < PursuitMemorySeconds && IsEligibleTarget(pursued)) {
+            } else if (Time.time - lastSeen < tuning.PursuitMemory(LivingInvestigators()) && IsEligibleTarget(pursued)) {
                 State = "Searching";
                 // Once acquired, keep tracking the investigator through cover. This
                 // lets the monster commit to entering a house instead of stopping at
                 // the doorway where line of sight was lost.
-                NavigatePursued(10f);
+                NavigatePursued(Mathf.Min(tuning.searchSpeed, tuning.HuntSpeed(true, false, LivingInvestigators())));
             } else {
                 if (pursued != null) GiveUp(pursued);
                 State = "Roaming"; Roam(false);
@@ -348,13 +373,13 @@ namespace Universes.UniverseData.classic_horror.Server {
                     Vector3 candidate = runner.Map.searchLocations[random.Next(runner.Map.searchLocations.Length)].position;
                     if ((candidate - transform.position).sqrMagnitude < 36f) continue;
                     if (retreat && i < runner.Map.searchLocations.Length && NearestInvestigator(candidate) < NearestInvestigator(transform.position) + 4f) continue;
-                    if (!locomotion.MoveTo(candidate, 7f)) continue;
+                    if (!locomotion.MoveTo(candidate, tuning.patrolSpeed)) continue;
                     patrolPoint = candidate; nextPatrol = Time.time + 25f;
                     lastProgress = Time.time; progressPosition = transform.position;
                     break;
                 }
             }
-            if (nextPatrol > 0 && !Navigate(patrolPoint, 7f)) nextPatrol = 0;
+            if (nextPatrol > 0 && !Navigate(patrolPoint, tuning.patrolSpeed)) nextPatrol = 0;
         }
 
         bool NavigatePursued(float speed) {
@@ -362,7 +387,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (!agent.enabled || !agent.isOnNavMesh || pursued == null) return false;
             agent.autoBraking = true;
             locomotion.SetTargetingType(NPCTargetingType.External);
-            agent.speed = speed * MovementSpeedMultiplier;
+            agent.speed = speed;
 
             // Use the reachable projection selected for this investigator. MoveTo
             // samples a second time with a wider radius, which can select an
@@ -404,7 +429,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if ((transform.position - progressPosition).sqrMagnitude > 0.09f) {
                 lastProgress = Time.time; progressPosition = transform.position;
             }
-            bool accepted = locomotion.MoveTo(destination, speed * MovementSpeedMultiplier);
+            bool accepted = locomotion.MoveTo(destination, speed);
             var agent = locomotion.agent;
             bool usablePath = agent.hasPath && !agent.isPathStale
                 && agent.pathStatus != UnityEngine.AI.NavMeshPathStatus.PathInvalid;

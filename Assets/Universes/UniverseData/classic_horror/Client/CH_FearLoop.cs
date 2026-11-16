@@ -63,6 +63,14 @@ namespace Universes.UniverseData.classic_horror.Client {
         [Tooltip("Share of the time the beam is out at peak fear.")]
         [SerializeField, Range(0f, 1f)] float flashlightDropout = 0.6f;
 
+        [Tooltip("A surface closer to the beam than this (metres) dims it, so a wall at arm's length is not blown out to white.")]
+        [SerializeField, Min(0.1f)] float closeRangeDistance = 2.5f;
+        [Tooltip("Beam strength (fraction of normal) against a surface right at the lens. Between the lens and the close-range "
+            + "distance the strength follows the square of the distance, as the light on the surface grows with it.")]
+        [SerializeField, Range(0.01f, 1f)] float closeRangeFloor = 0.04f;
+        [Tooltip("How fast the beam follows the close-range dimming (per second).")]
+        [SerializeField, Min(0.5f)] float closeRangeRate = 6f;
+
         [Header("Chase hand-off")]
         [Tooltip("Played once when the chase music starts; the music itself crossfades in.")]
         public SfxSound chaseSting = new();
@@ -84,9 +92,13 @@ namespace Universes.UniverseData.classic_horror.Client {
         // The flashlight spawns a moment after the character; look for it at most this often.
         const float BeamSearchInterval = 1f;
         float sentDanger, sentDangerPulse;
+        const float BeamProbeRadius = 0.15f;
+        float closeRange = 1f;
+        int beamMask;
 
         void Awake() {
             atmosphere = GetComponent<CH_Atmosphere>();
+            beamMask = ~LayerMask.GetMask("Character", "LocalCharacter", "UI", "Ignore Raycast", "Water");
             if (breathingSource != null) { breathingSource.loop = true; breathingSource.volume = 0f; }
             if (droneSource != null) { droneSource.loop = true; droneSource.volume = 0f; }
         }
@@ -182,7 +194,18 @@ namespace Universes.UniverseData.classic_horror.Client {
                 if (noise < flicker * flashlightDropout) stutter = flashlightFlickerFloor;
             }
             float lightsOut = atmosphere != null ? atmosphere.LightsOutAmount : 0f;
-            localBeam.intensity = localBeamIntensity * Mathf.Min(stutter, 1f - lightsOut);
+            closeRange = Mathf.MoveTowards(closeRange, CloseRangeScale(), closeRangeRate * Time.deltaTime);
+            localBeam.intensity = localBeamIntensity * closeRange * Mathf.Min(stutter, 1f - lightsOut);
+        }
+
+        /// <summary>Less light the closer the surface the beam is pointed at: one short ray along the beam.</summary>
+        float CloseRangeScale() {
+            Transform beam = localBeam.transform;
+            // A thin sphere rather than a ray, so a post or a door frame right in front of the lens counts too.
+            if (!Physics.SphereCast(beam.position, BeamProbeRadius, beam.forward, out RaycastHit hit, closeRangeDistance, beamMask, QueryTriggerInteraction.Ignore))
+                return 1f;
+            float t = hit.distance / closeRangeDistance;
+            return Mathf.Max(closeRangeFloor, t * t);
         }
 
         /// <summary>Caches the beam of the local investigator's flashlight; it changes when they respawn.</summary>
