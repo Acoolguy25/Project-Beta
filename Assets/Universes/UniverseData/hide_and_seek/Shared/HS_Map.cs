@@ -27,6 +27,10 @@ namespace Universes.UniverseData.hide_and_seek {
         [Header("Client presentation")]
         public GameObject pingPrefab;
         public GameObject clientPrefab;
+        [Tooltip("Candle and lantern lights that flicker on clients (HS_LightFlicker animates them).")]
+        public Light[] flickerLights;
+        [Tooltip("Where the grandfather clock ticks (world space), for the ambience.")]
+        public Vector3 clockPosition;
 
         public bool IsConfigured => hidePoints != null && hidePoints.Length > 0 && seekerSpawn != null && lobbySpawn != null;
 
@@ -42,11 +46,17 @@ namespace Universes.UniverseData.hide_and_seek {
         }
 
         /// <summary>The name of the area containing <paramref name="position"/>, or an empty string.</summary>
-        public string AreaAt(Vector3 position) {
-            if (areas == null) return "";
-            foreach (var area in areas)
-                if (area.bounds.Contains(position)) return area.name;
-            return "";
+        public string AreaAt(Vector3 position) => TryGetArea(position, out HS_MapArea area) ? area.name : "";
+
+        /// <summary>Whether <paramref name="position"/> is inside a room (not a yard or off the map).</summary>
+        public bool IsIndoors(Vector3 position) => TryGetArea(position, out HS_MapArea area) && area.indoor;
+
+        public bool TryGetArea(Vector3 position, out HS_MapArea area) {
+            if (areas != null)
+                foreach (var candidate in areas)
+                    if (candidate.bounds.Contains(position)) { area = candidate; return true; }
+            area = default;
+            return false;
         }
     }
 }

@@ -66,3 +66,6 @@ MonoBehaviour:
   surviveXP: 40
   surviveGold: 15
   seekerWinXP: 20
+  tauntXP: 3
+  braveTauntXP: 10
+  braveTauntRange: 40

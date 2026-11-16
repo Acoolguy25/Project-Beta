@@ -50,4 +50,31 @@ namespace Universes.UniverseData.hide_and_seek {
         public bool accepted;
         public string message;
     }
+
+    /// <summary>A hider asks to taunt: a sound plays at their spot for everyone, and it earns XP.</summary>
+    public struct HS_TauntRequest : IBroadcast {
+        public int round;
+    }
+
+    /// <summary>Someone taunted (sent to everyone, so seekers can hear where from).</summary>
+    public struct HS_TauntBroadcast : IBroadcast {
+        public int clientId;
+        public UnityEngine.Vector3 position;
+        /// <summary>XP the taunter earned; more when a seeker was close (see <see cref="HS_Rules.TauntReward"/>).</summary>
+        public int xp;
+        public bool brave;
+    }
+
+    /// <summary>Where a hider who was never found spent the end of the round.</summary>
+    public struct HS_HidingSpot {
+        public int clientId;
+        public string name;
+        public UnityEngine.Vector3 position;
+    }
+
+    /// <summary>Sent when a round ends: every survivor's hiding spot, for the results screen.</summary>
+    public struct HS_RevealBroadcast : IBroadcast {
+        public int round;
+        public HS_HidingSpot[] spots;
+    }
 }

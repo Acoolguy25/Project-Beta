@@ -21,6 +21,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         static readonly UniverseAuthoringKit Kit = new(Root);
         const string ServerPrefab = Root + "/Server/HS_ServerRunner.prefab";
         const string ManorMaterials = Root + "/Materials/Manor";
+        const string ManorPostProfile = Root + "/Materials/ManorPost.asset";
 
         /// <summary>Height of the player character in world units (RobotPlayer's body).</summary>
         public const float CharacterHeight = 5.6f;
@@ -73,12 +74,13 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             var hud = HS_HudAuthoring.Build();
             var ping = BuildPing();
-            // Late autumn afternoon: low warm sun, hazy sky.
-            Kit.NewLitScene(new Color(0.62f, 0.64f, 0.78f), new Color(0.78f, 0.7f, 0.62f), 260f, 900f, new Vector3(38f, -50f, 0f), 1.35f)
-                .color = new Color(1f, 0.88f, 0.72f);
-            RenderSettings.ambientSkyColor = new Color(0.72f, 0.74f, 0.86f);
-            RenderSettings.ambientEquatorColor = new Color(0.66f, 0.6f, 0.55f);
-            RenderSettings.ambientGroundColor = new Color(0.38f, 0.33f, 0.28f);
+            // Autumn dusk: low warm sun, dim ambient, light fog; the lamps do the rest (HS_ManorLighting).
+            Kit.NewLitScene(HS_ManorLighting.SkyTint, HS_ManorLighting.FogColor, HS_ManorLighting.FogStart, HS_ManorLighting.FogEnd,
+                HS_ManorLighting.SunEuler, HS_ManorLighting.SunIntensity).color = HS_ManorLighting.SunColor;
+            RenderSettings.ambientSkyColor = HS_ManorLighting.AmbientSky;
+            RenderSettings.ambientEquatorColor = HS_ManorLighting.AmbientEquator;
+            RenderSettings.ambientGroundColor = HS_ManorLighting.AmbientGround;
+            HS_ManorPost.AddVolume(HS_ManorPost.BuildProfile(ManorPostProfile));
 
             var builder = new HS_ManorBuilder(new HS_ManorMaterials(ManorMaterials), MapScale, "PumpkinHollowManor");
             Transform manor = builder.Build();
@@ -97,8 +99,10 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             map.killY = -20f;
             map.pingPrefab = ping;
             map.clientPrefab = hud;
+            map.flickerLights = builder.FlickerLights.ToArray();
+            map.clockPosition = HS_ManorPlan.ClockAt * MapScale;
             EditorUtility.SetDirty(map);
-            Debug.Log($"[HideAndSeek] {HS_ManorPlan.MapName}: scale {MapScale:0.##}, {candidates.Count} floor points, {map.hidePoints.Length} hide points, {map.areas.Length} areas.");
+            Debug.Log($"[HideAndSeek] {HS_ManorPlan.MapName}: scale {MapScale:0.##}, {candidates.Count} floor points, {map.hidePoints.Length} hide points, {map.areas.Length} areas, {builder.LightCount} lights ({map.flickerLights.Length} flicker).");
             Kit.SaveActiveScene(Kit.StartScene(Universe));
         }
 

@@ -51,16 +51,22 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public float Length => Vector2.Distance(a, b);
     }
 
-    /// <summary>A named floor area. Rooms get a slab, a ceiling and a light, and appear in the HUD as "where am I".</summary>
+    /// <summary>
+    /// A named floor area. Rooms get a slab and a ceiling and appear in the HUD as "where am I". Most
+    /// rooms are lit by their lamps and candles (lit props); a room with no light of its own can have a
+    /// dim ceiling <see cref="fill"/> light instead, and a room with neither stays dark (good hiding).
+    /// </summary>
     public readonly struct RoomSpec {
         public readonly string name;
         public readonly Rect area;
         public readonly int level;
         public readonly Surface floor;
         public readonly bool indoor;
+        /// <summary>Ceiling fill light strength, as a multiple of <see cref="HS_ManorLighting.FillIntensity"/>; 0 = none.</summary>
+        public readonly float fill;
 
-        public RoomSpec(string name, int level, float x0, float z0, float x1, float z1, Surface floor, bool indoor = true) {
-            this.name = name; this.level = level; this.floor = floor; this.indoor = indoor;
+        public RoomSpec(string name, int level, float x0, float z0, float x1, float z1, Surface floor, bool indoor = true, float fill = 0f) {
+            this.name = name; this.level = level; this.floor = floor; this.indoor = indoor; this.fill = fill;
             area = Rect.MinMaxRect(Mathf.Min(x0, x1), Mathf.Min(z0, z1), Mathf.Max(x0, x1), Mathf.Max(z0, z1));
         }
     }
@@ -71,9 +77,11 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public readonly Vector3 at;
         public readonly float yaw, scale;
         public readonly bool solid;
+        /// <summary>The prop gives off light (a lamp, candle or lantern; see <see cref="HS_ManorLighting.PropLightFor"/>).</summary>
+        public readonly bool lit;
 
-        public PropSpec(string model, Vector3 at, float yaw, float scale, bool solid) {
-            this.model = model; this.at = at; this.yaw = yaw; this.scale = scale; this.solid = solid;
+        public PropSpec(string model, Vector3 at, float yaw, float scale, bool solid, bool lit = false) {
+            this.model = model; this.at = at; this.yaw = yaw; this.scale = scale; this.solid = solid; this.lit = lit;
         }
     }
 
@@ -125,6 +133,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         // ---- gameplay anchors
         public static readonly Vector3 SeekerSpawn = new(0f, 0f, -4.2f);
         public static readonly Vector3 LobbySpawn = new(0f, 0f, -22f);
+        /// <summary>Where the grandfather clock ticks: the tall case by the foyer stairs.</summary>
+        public static readonly Vector3 ClockAt = new(2.55f, 1.8f, -6.1f);
 
         static Vector2 V(float x, float z) => new(x, z);
 
@@ -137,8 +147,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             new("Library", 0, -12f, 3.4f, -4f, 8f, Surface.Parquet),
             new("Stairs", 0, -4f, 3.4f, 0.2f, 5.4f, Surface.Laminate),
             new("Pantry", 0, -4f, 5.4f, 0.2f, 8f, Surface.DarkPlanks),
-            new("Bathroom", 0, 0.2f, 3.4f, 4f, 8f, Surface.Tiles),
-            new("Kitchen", 0, 4f, 3.4f, 12f, 8f, Surface.Tiles),
+            new("Bathroom", 0, 0.2f, 3.4f, 4f, 8f, Surface.Tiles, fill: 0.7f),
+            new("Kitchen", 0, 4f, 3.4f, 12f, 8f, Surface.Tiles, fill: 1f),
             // upstairs
             new("Master Bedroom", 1, -12f, -8f, -2f, 1f, Surface.Laminate),
             new("Upstairs Bathroom", 1, -2f, -8f, 2f, 1f, Surface.Tiles),
@@ -233,12 +243,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         static float Floor(int level) => level * StoreyHeight;
 
         /// <summary>Places a model with its base on the floor of <paramref name="level"/>.</summary>
-        static void P(string model, int level, float x, float z, float yaw = 0f, float scale = 1f, bool solid = true, float lift = 0f) =>
-            props.Add(new PropSpec(model, new Vector3(x, Floor(level) + lift, z), yaw, scale, solid));
+        static void P(string model, int level, float x, float z, float yaw = 0f, float scale = 1f, bool solid = true, float lift = 0f, bool lit = false) =>
+            props.Add(new PropSpec(model, new Vector3(x, Floor(level) + lift, z), yaw, scale, solid, lit));
 
         /// <summary>A model that sits on top of a block or another piece of furniture.</summary>
-        static void On(string model, int level, float x, float height, float z, float yaw = 0f, float scale = 1f) =>
-            props.Add(new PropSpec(model, new Vector3(x, Floor(level) + height, z), yaw, scale, false));
+        static void On(string model, int level, float x, float height, float z, float yaw = 0f, float scale = 1f, bool lit = false) =>
+            props.Add(new PropSpec(model, new Vector3(x, Floor(level) + height, z), yaw, scale, false, lit));
 
         /// <summary>A box of joinery; <paramref name="bottom"/> raises it off the floor (decks, shelves).</summary>
         static void Block(string name, int level, float x, float z, float sx, float sy, float sz, Surface surface = Surface.Trim, float bottom = 0f) =>
@@ -293,7 +303,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("furniture/cabinet_medium_decorated", 0, -2.2f, -6.8f, 90f);
             P("furniture/cactus_medium_A", 0, 2.3f, -7.55f, scale: 0.9f);
             P("furniture/cactus_medium_B", 0, 2.3f, -1.5f);
-            P("furniture/lamp_standing", 0, -2.5f, 0.45f);
+            P("furniture/lamp_standing", 0, -2.5f, 0.45f, lit: true);
+            // The tall case clock (its tick comes from ClockAt).
             Wardrobe(0, 2.55f, -6.1f, alongX: false, width: 1.6f);
 
             // Living room: sofas around a low table, TV cabinet, reading corner, bookcase.
@@ -304,8 +315,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("furniture/table_low", 0, -7.5f, -4.2f);
             On("furniture/cactus_small_A", 0, -7.2f, 0.38f, -4.1f);
             P("furniture/cabinet_medium", 0, -7.5f, 0.4f, 180f);
-            On("furniture/lamp_table", 0, -6.6f, 0.75f, 0.4f, 180f, 0.8f);
-            P("furniture/lamp_standing", 0, -11.3f, -7.3f);
+            On("furniture/lamp_table", 0, -6.6f, 0.75f, 0.4f, 180f, 0.8f, lit: true);
+            P("furniture/lamp_standing", 0, -11.3f, -7.3f, lit: true);
             Bookcase(0, -11.65f, 0f, 90f, 1.8f);
             P("furniture/pictureframe_large_B", 0, -7.5f, -7.78f, 0f, solid: false, lift: 1.9f);
 
@@ -318,6 +329,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             }
             P("furniture/chair_B_wood", 0, 5.4f, -3.6f, 90f);
             P("furniture/chair_B_wood", 0, 9.6f, -3.6f, 270f);
+            On("halloween/candle_triple", 0, 7.5f, 0.75f, -3.6f, 0f, 0.8f, lit: true);
             P("furniture/cabinet_medium_decorated", 0, 7.5f, 0.45f, 180f);
             Wardrobe(0, 11.55f, -6.8f, alongX: false, width: 1.6f);
             P("furniture/cactus_medium_B", 0, 11.4f, -1.2f);
@@ -325,7 +337,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             // Hallway: console tables and coat racks along the walls.
             P("furniture/cabinet_small_decorated", 0, -10.5f, 3.0f, 180f);
             P("furniture/cabinet_small_decorated", 0, 10.6f, 1.4f, 0f);
-            P("furniture/lamp_standing", 0, 4.8f, 1.5f);
+            P("furniture/lamp_standing", 0, 4.8f, 1.5f, lit: true);
             P("furniture/rug_rectangle_B", 0, -7.5f, 2.2f, 0f, 1f, solid: false);
 
             // Library: bookcases on every wall, desk, armchairs.
@@ -334,7 +346,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             Bookcase(0, -4.4f, 5.2f, 270f, 2f);
             P("furniture/table_medium", 0, -8.2f, 5.4f, 90f);
             P("furniture/chair_C", 0, -9.4f, 5.4f, 90f);
-            On("furniture/lamp_table", 0, -8f, 0.75f, 5.9f, 0f, 0.7f);
+            On("furniture/lamp_table", 0, -8f, 0.75f, 5.9f, 0f, 0.7f, lit: true);
             P("furniture/armchair", 0, -10.8f, 3.9f, 135f);
             P("furniture/rug_oval_B", 0, -8f, 5.4f, 90f, solid: false);
 
@@ -367,7 +379,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("furniture/rug_rectangle_stripes_B", 1, -5.8f, -4.2f, 90f, 1.1f, solid: false);
             P("furniture/bed_double_A", 1, -5.6f, -2.6f, 180f);
             P("furniture/cabinet_small", 1, -7.6f, 0.35f, 180f);
-            On("furniture/lamp_table", 1, -7.6f, 0.75f, 0.35f, 180f, 0.8f);
+            On("furniture/lamp_table", 1, -7.6f, 0.75f, 0.35f, 180f, 0.8f, lit: true);
             P("furniture/cabinet_small", 1, -3.6f, 0.35f, 180f);
             Wardrobe(1, -2.45f, -5.2f, alongX: false, width: 2f);
             P("furniture/cabinet_medium_decorated", 1, -11.55f, -1.5f, 90f);
@@ -403,7 +415,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             // Upstairs hall.
             P("furniture/cabinet_small_decorated", 1, -10.6f, 1.4f, 0f);
             P("furniture/rug_rectangle_A", 1, 7f, 2.2f, 0f, 1f, solid: false);
-            P("furniture/lamp_standing", 1, 11.4f, 2.9f);
+            P("furniture/lamp_standing", 1, 11.4f, 2.9f, lit: true);
 
             // Guest room: single bed, dresser, wardrobe, desk.
             P("furniture/bed_single_A", 1, -10.9f, 6.7f, 270f);
@@ -424,6 +436,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             };
             foreach (var c in crates) CrateStack(1, c.x, c.z, c.yaw, c.stack);
             P("halloween/coffin", 1, 6.5f, 6f, 80f, 0.85f);
+            // The attic's only light: a guttering candle by the coffin.
+            P("halloween/candle_melted", 1, 7.7f, 5.1f, 0f, 1f, solid: false, lit: true);
             P("furniture/armchair", 1, 3.2f, 3.9f, 160f);
             Wardrobe(1, 6.2f, 7.6f, alongX: true, width: 1.6f);
         }
@@ -436,11 +450,13 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             CrateStack(0, 22.5f, -5.4f, 10f, 3);
             CrateStack(0, 18.4f, -12.6f, -10f, 2);
             On("restaurant/pot_large", 0, 25.3f, 0.95f, -10f, 90f, 0.6f);
+            On("halloween/lantern_standing", 0, 25.3f, 0.95f, -7.6f, 0f, 0.8f, lit: true);
 
             // Shed: crates, tools, pumpkins in storage.
             CrateStack(0, -26.8f, 15.8f, 10f, 3);
             P("restaurant/crate_potatoes", 0, -24.8f, 16f, -5f, 0.75f);
             Block("PottingBench", 0, -27.4f, 12f, 0.9f, 0.95f, 3f, Surface.Planks);
+            On("halloween/lantern_standing", 0, -27.4f, 0.95f, 13f, 0f, 0.8f, lit: true);
             P("halloween/pumpkin_yellow", 0, -22.6f, 16.1f);
             P("halloween/pumpkin_orange_small", 0, -21.8f, 16.3f);
             Block("ToolCupboard", 0, -22.3f, 10.45f, 2.4f, 2.2f, 0.7f, Surface.DarkPlanks);
@@ -448,9 +464,11 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
 
         static void FurnishGarden() {
             // Front path lanterns and a pumpkin patch.
+            // Only the pair by the door is lit: a handful of lights keeps the frame rate up.
             for (float z = -26f; z <= -12f; z += 4.6f) {
-                P("halloween/lantern_standing", 0, -1.7f, z, 0f, 1.2f);
-                P("halloween/lantern_standing", 0, 1.7f, z, 0f, 1.2f);
+                bool byTheDoor = z > -14f;
+                P("halloween/lantern_standing", 0, -1.7f, z, 0f, 1.2f, lit: byTheDoor);
+                P("halloween/lantern_standing", 0, 1.7f, z, 0f, 1.2f, lit: byTheDoor);
             }
             var random = new System.Random(7);
             string[] pumpkins = { "pumpkin_orange", "pumpkin_yellow", "pumpkin_orange_small", "pumpkin_yellow_small", "pumpkin_orange_jackolantern", "pumpkin_yellow_jackolantern" };
@@ -458,7 +476,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
                 float x = -14f + (float)random.NextDouble() * 9f, z = -25f + (float)random.NextDouble() * 9f;
                 P("halloween/" + pumpkins[random.Next(pumpkins.Length)], 0, x, z, random.Next(360), 0.9f + (float)random.NextDouble() * 0.5f, solid: i % 3 == 0);
             }
-            P("halloween/post_lantern", 0, -9.5f, -15.5f, 90f, 1.2f);
+            P("halloween/post_lantern", 0, -9.5f, -15.5f, 90f, 1.2f, lit: true);
+            P("halloween/pumpkin_orange_jackolantern", 0, -9.6f, -20.2f, 160f, 1.3f, lit: true);
 
             // Trees: rows along the fence and clumps that make hiding pockets.
             (float x, float z, string tree, float scale)[] trees = {
@@ -478,7 +497,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("furniture/table_medium_long", 0, -3f, 16f, 90f);
             P("halloween/bench", 0, -4.6f, 16f, 90f, 1.1f);
             P("halloween/bench", 0, -1.4f, 16f, 270f, 1.1f);
-            P("halloween/post_lantern", 0, 1.5f, 12f, 180f, 1.2f);
+            P("halloween/post_lantern", 0, 1.5f, 12f, 180f, 1.2f, lit: true);
             CrateStack(0, -9f, 22f, 15f, 2);
             CrateStack(0, -7.3f, 22.6f, -5f, 1);
 
@@ -490,7 +509,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             Hedge(12f, -17f, 12f, -22f);
             Hedge(6f, -25f, 10f, -25f);
             P("halloween/bench_decorated", 0, 9f, -21f, 90f);
-            P("halloween/shrine_candles", 0, 10.8f, -23.6f, 270f);
+            P("halloween/shrine_candles", 0, 10.8f, -23.6f, 270f, lit: true);
             Hedge(16.5f, -16f, 16.5f, -28f, 1.7f);
             Hedge(25.5f, -16f, 25.5f, -28f, 1.7f);
             Hedge(-30f, 3f, -22f, 3f);
@@ -503,7 +522,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             Block("FortWallNorth", 0, -26f, 26.4f, 5f, 1.1f, 0.15f, Surface.Planks, bottom: 2.225f);
             Block("FortWallWest", 0, -28.4f, 24f, 0.15f, 1.1f, 5f, Surface.Planks, bottom: 2.225f);
             CrateStack(0, -22.4f, 21.6f, 20f, 1);
-            P("halloween/pumpkin_orange_jackolantern", 0, -27.2f, 25.2f, 150f, 0.8f, lift: 2.22f);
+            P("halloween/pumpkin_orange_jackolantern", 0, -27.2f, 25.2f, 150f, 0.8f, lift: 2.22f, lit: true);
             P("halloween/tree_dead_large", 0, 3f, 21f, 30f, 1.5f);
 
             // Graveyard: rows of graves, a crypt and dead trees behind an old iron fence.
@@ -516,7 +535,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             }
             P("halloween/tree_dead_large_decorated", 0, 31f, 14f, 120f, 1.5f);
             P("halloween/tree_dead_medium", 0, 15f, 27f, 10f, 1.6f);
-            P("halloween/shrine_candles", 0, 22f, 27.5f, 180f);
+            P("halloween/shrine_candles", 0, 22f, 27.5f, 180f, lit: true);
             P("halloween/coffin_decorated", 0, 30.5f, 19f, 90f);
             P("halloween/bench_decorated", 0, 21f, 13.6f, 180f);
             for (float x = 12.5f; x < 34f; x += 3f) P("halloween/fence_seperate", 0, x + 1.5f, 12f, 0f, 1f);

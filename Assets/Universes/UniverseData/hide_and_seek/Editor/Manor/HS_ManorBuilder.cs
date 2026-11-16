@@ -9,13 +9,15 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
     /// Builds <see cref="HS_ManorPlan"/> into the open scene. Everything is built in plan metres under
     /// one root that is then scaled up to the game's character size, so the plan reads like a real
     /// floor plan. Walls are split around their doors and windows, exterior walls get brick outside and
-    /// plaster inside, rooms get floors, ceilings and a lamp, and props get simple box colliders.
+    /// plaster inside, rooms get floors and ceilings, props get simple box colliders, and lit props
+    /// (lamps, candles, lanterns) and fill-lit rooms get shadowless point lights (see <see cref="HS_ManorLighting"/>).
     /// </summary>
     public sealed class HS_ManorBuilder {
         readonly HS_ManorMaterials materials;
         readonly Transform root;
         readonly float scale;
         Transform structure, glazing, furniture, lighting, garden;
+        readonly List<Light> flickerLights = new();
 
         /// <param name="scale">World units per plan metre.</param>
         public HS_ManorBuilder(HS_ManorMaterials materials, float scale, string name = "Manor") {
@@ -25,6 +27,10 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         }
 
         public Transform Root => root;
+        /// <summary>Candle and lantern lights, for <see cref="HS_Map.flickerLights"/> (valid after <see cref="Build"/>).</summary>
+        public IReadOnlyList<Light> FlickerLights => flickerLights;
+        /// <summary>Every light the manor got (valid after <see cref="Build"/>).</summary>
+        public int LightCount => lighting.childCount;
 
         public Transform Build() {
             structure = Group("Structure");
@@ -99,24 +105,45 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             float ceiling = room.level == 0 && !IsOutbuilding(room) ? FloorY(1) - HS_ManorPlan.SlabThickness : wallTop;
             if (!openAbove)
                 Box("Ceiling", group, new Vector3(a.center.x, ceiling - 0.02f, a.center.y), new Vector3(a.width, 0.04f, a.height), Surface.Plaster, collider: room.level > 0 || IsOutbuilding(room), shadows: false);
-            AddLight(room, ceiling);
+            if (room.fill > 0f) AddFill(room, ceiling);
         }
 
         static bool IsOutbuilding(RoomSpec room) => !HS_ManorPlan.House.Overlaps(room.area);
 
         static float WallHeight(RoomSpec room) => IsOutbuilding(room) ? room.name.Contains("Shed") ? 2.7f : 3.3f : HS_ManorPlan.StoreyHeight;
 
-        void AddLight(RoomSpec room, float ceiling) {
-            var go = new GameObject(room.name + " Light", typeof(Light));
+        /// <summary>A dim ceiling light for a room that has no lamp of its own.</summary>
+        void AddFill(RoomSpec room, float ceiling) {
+            float reach = Mathf.Max(room.area.width, room.area.height) * HS_ManorLighting.FillRangeFactor;
+            PointLight(room.name + " Fill", new Vector3(room.area.center.x, ceiling - HS_ManorLighting.FillDrop, room.area.center.y),
+                HS_ManorLighting.FillColor, Mathf.Clamp(reach, HS_ManorLighting.FillRange.x, HS_ManorLighting.FillRange.y),
+                HS_ManorLighting.FillIntensity * room.fill);
+        }
+
+        /// <summary>A shadowless point light in plan metres (its range is scaled with the map at the end of <see cref="Build"/>).</summary>
+        Light PointLight(string name, Vector3 at, Color color, float range, float intensity) {
+            var go = new GameObject(name, typeof(Light));
             go.transform.SetParent(lighting, false);
-            go.transform.localPosition = new Vector3(room.area.center.x, ceiling - 0.6f, room.area.center.y);
+            go.transform.localPosition = at;
             var light = go.GetComponent<Light>();
             light.type = LightType.Point;
-            light.color = new Color(1f, 0.87f, 0.7f);
-            float reach = Mathf.Max(room.area.width, room.area.height);
-            light.range = Mathf.Clamp(reach * 0.85f, 4f, 11f);
-            light.intensity = 1.6f;
+            light.color = color;
+            light.range = range;
+            light.intensity = intensity;
             light.shadows = LightShadows.None;
+            return light;
+        }
+
+        /// <summary>The glow of a lamp, candle or lantern, placed inside the model.</summary>
+        void AddPropLight(PropSpec spec, GameObject model, Transform parent) {
+            PropLight preset = HS_ManorLighting.PropLightFor(spec.model);
+            Bounds b = LocalBounds(model.transform, parent);
+            Vector3 at = new(b.center.x, b.min.y + b.size.y * preset.height, b.center.z);
+            // Props parented to the garden or fence groups share the root's plan space with the lights.
+            at = lighting.InverseTransformPoint(parent.TransformPoint(at));
+            string name = spec.model[(spec.model.IndexOf('/') + 1)..];
+            Light light = PointLight(name + " Light", at, preset.color, preset.range, preset.intensity);
+            if (preset.flicker) flickerLights.Add(light);
         }
 
         // ---------------------------------------------------------------- walls
@@ -367,6 +394,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             go.transform.localPosition += spec.at - new Vector3(local.center.x, local.min.y, local.center.z);
             if (spec.solid) AddBoxCollider(go);
             GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic);
+            if (spec.lit) AddPropLight(spec, go, parent);
         }
 
         /// <summary>Bounds of a model's meshes in <paramref name="space"/>'s local coordinates.</summary>

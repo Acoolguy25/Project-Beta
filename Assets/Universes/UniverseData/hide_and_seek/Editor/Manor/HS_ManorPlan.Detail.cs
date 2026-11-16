@@ -122,7 +122,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             Picture("pictureframe_large_A", 0, -11.88f, -3.8f, 90f, 1.7f);
             Clutter(0, -7.5f, 0.38f, -4.2f, 0.6f, 11, "furniture/book_single", "dungeon/candle_triple");
             P("furniture/armchair_pillows", 0, -4.4f, -6.5f, 300f);
-            P("furniture/lamp_standing", 0, -5.4f, -7.5f);
+            P("furniture/lamp_standing", 0, -5.4f, -7.5f, lit: true);
             P("furniture/rug_rectangle_stripes_B", 0, -9.4f, -1.4f, 0f, 0.9f, solid: false);
             P("furniture/cactus_medium_B", 0, -11.4f, -5.2f);
 
@@ -137,14 +137,14 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("furniture/shelf_B_large_decorated", 0, 9.6f, 0.6f, 180f);
             P("dungeon/table_small_decorated_A", 0, 11.3f, -3.4f, 90f, 0.8f);
             P("furniture/cactus_medium_A", 0, 5.8f, -7.5f);
-            P("furniture/lamp_standing", 0, 9.6f, -7.5f);
+            P("furniture/lamp_standing", 0, 9.6f, -7.5f, lit: true);
 
             // Hallway
             Picture("pictureframe_medium", 0, -4.6f, 1.12f, 0f);
             Picture("pictureframe_small_B", 0, 4.4f, 3.28f, 180f);
             Picture("pictureframe_small_C", 0, -10.4f, 3.28f, 180f, 1.9f);
             P("furniture/cactus_small_A", 0, 11.5f, 3.0f);
-            On("furniture/lamp_table", 0, -10.5f, 0.75f, 3.0f, 180f, 0.7f);
+            On("furniture/lamp_table", 0, -10.5f, 0.75f, 3.0f, 180f, 0.7f, lit: true);
             P("halloween/bench", 0, -10f, 1.35f, 0f, 0.9f);
             P("furniture/cactus_medium_B", 0, -5.4f, 1.4f);
             P("dungeon/barrel_small", 0, 2.6f, 1.35f, 0f, 0.7f);
@@ -198,10 +198,10 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             On("furniture/pictureframe_standing_A", 1, -11.5f, 0.75f, -4.2f, 90f);
             P("furniture/armchair", 1, -10.2f, -2.2f, 120f);
             P("furniture/rug_oval_A", 1, -9.6f, -2.6f, 90f, 1f, solid: false);
-            P("furniture/lamp_standing", 1, -11.4f, 0.5f);
+            P("furniture/lamp_standing", 1, -11.4f, 0.5f, lit: true);
 
             // Balcony
-            P("halloween/lantern_standing", 1, -3.5f, -10.5f, 0f, 0.9f);
+            P("halloween/lantern_standing", 1, -3.5f, -10.5f, 0f, 0.9f, lit: true);
             P("halloween/pumpkin_yellow_small", 1, -9.5f, -9.7f, 40f);
 
             // Upstairs bathroom
@@ -216,9 +216,9 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             Picture("pictureframe_small_A", 1, 7f, -7.86f, 0f, 1.7f);
             Picture("pictureframe_small_B", 1, 9f, -7.86f, 0f, 1.5f);
             Clutter(1, 7f, 0.75f, -6.8f, 0.5f, 71, "furniture/book_single", "dungeon/bottle_B_brown");
-            P("furniture/lamp_standing", 1, 2.5f, -7.5f);
+            P("furniture/lamp_standing", 1, 2.5f, -7.5f, lit: true);
             P("furniture/cabinet_small", 1, 9.6f, -7.5f, 0f);
-            On("furniture/lamp_table", 1, 9.6f, 0.75f, -7.5f, 0f, 0.7f);
+            On("furniture/lamp_table", 1, 9.6f, 0.75f, -7.5f, 0f, 0.7f, lit: true);
             P("furniture/shelf_B_small_decorated", 1, 8f, 0.7f, 180f);
             P("furniture/table_small", 1, 8.6f, -3.4f);
             P("furniture/chair_stool_wood", 1, 8.6f, -2.6f);
@@ -242,11 +242,11 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
 
             // Guest room
             P("dungeon/trunk_medium_B", 1, -9.3f, 6.7f, 90f);
-            P("furniture/lamp_standing", 1, -5.2f, 7.5f);
+            P("furniture/lamp_standing", 1, -5.2f, 7.5f, lit: true);
             P("furniture/rug_oval_A", 1, -8f, 5.6f, 0f, 0.9f, solid: false);
             Clutter(1, -6.4f, 0.75f, 4.1f, 0.5f, 81, "furniture/book_single", "dungeon/candle_melted");
             P("furniture/armchair", 1, -6.2f, 6.2f, 200f);
-            On("furniture/lamp_table", 1, -7.6f, 0.75f, 7.55f, 180f, 0.7f);
+            On("furniture/lamp_table", 1, -7.6f, 0.75f, 7.55f, 180f, 0.7f, lit: true);
 
             // Linen closet
             P("dungeon/box_stacked", 1, -3.3f, 6.2f, 5f, 0.55f);
@@ -259,7 +259,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             P("dungeon/shelves", 1, 8.1f, 5.5f, 90f, 0.85f);
             Clutter(1, 6.5f, 0.75f, 6f, 0.6f, 91, "dungeon/candle_triple", "halloween/skull_candle");
             P("dungeon/candle_melted", 1, 5f, 4.3f, 0f, SmallDungeonScale, solid: false);
-            P("halloween/lantern_hanging", 1, 7f, 5.5f, 0f, solid: false, lift: 2.2f);
+            P("halloween/lantern_hanging", 1, 7f, 5.5f, 0f, solid: false, lift: 2.2f, lit: true);
         }
 
         static void DetailOutbuildings() {
@@ -327,7 +327,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
 
             // A second car on the drive and a street lamp by the gate
             P("city/car_sedan", 0, 21f, -21f, 180f, 0.95f);
-            P("city/streetlight", 0, 3f, -28.6f, 180f);
+            P("city/streetlight", 0, 3f, -28.6f, 180f, lit: true);
             P("city/firehydrant", 0, -3f, -28.8f, 0f);
 
             // Picnic lawn and backyard

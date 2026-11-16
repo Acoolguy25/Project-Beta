@@ -13,7 +13,10 @@
         "Unity.TextMeshPro",
         "Unity.ugui",
         "RyanAssets.UI",
-        "RyanAssets.UI.Editor"
+        "RyanAssets.UI.Editor",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "RyanAssets.GameFeel"
     ],
     "includePlatforms": [
         "Editor"

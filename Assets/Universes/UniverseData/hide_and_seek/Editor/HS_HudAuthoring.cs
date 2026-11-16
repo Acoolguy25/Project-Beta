@@ -1,8 +1,12 @@
 using UnityEngine;
 #if !UNITY_SERVER
+using System.IO;
+using System.Linq;
+using RyanAssets.GameFeel;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using TMPro;
+using UnityEditor;
 using UnityEngine.UI;
 using Universes.UniverseData.hide_and_seek.Client;
 using static RyanAssets.UI.Editor.UIKit;
@@ -15,9 +19,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
     /// <list type="bullet">
     /// <item>top centre: round card with phase, timer and countdown bar between hiders and seekers left;</item>
     /// <item>bottom left: role card (icon, role, what to do now) and the room you're in;</item>
-    /// <item>bottom centre: tag prompt; right: tag feed; centre: toasts and the results banner;</item>
-    /// <item>full screen: the seekers' blindfold countdown.</item>
+    /// <item>bottom centre: tag prompt (seekers) or taunt prompt (hiders); right: tag feed; centre: toasts
+    /// and the results banner with every survivor's hiding spot;</item>
+    /// <item>full screen: the hider's heartbeat vignette and the seekers' blindfold countdown.</item>
     /// </list>
+    /// The prefab also carries the game's client-side feel: sounds (Audio/, credited in CREDITS.md), the
+    /// heartbeat, seeker footsteps, the manor ambience and the candle flicker.
     /// Edit this script, not the prefab, then run Ryan > Hide and Seek > Build Client Assets.
     /// </summary>
     public static class HS_HudAuthoring {
@@ -26,7 +33,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         // Icon names (Packages/com.ryan.ui/Runtime/UI/Theme/Icons/icon_<name>.png).
         const string HiderIcon = "directions_run", SeekerIcon = "search", CaughtIcon = "pan_tool", SpectatorIcon = "visibility",
             WaitingIcon = "groups", HidingIcon = "visibility_off", SeekingIcon = "search", ResultsIcon = "emoji_events",
-            PingIcon = "my_location", TagIcon = "pan_tool", InfoIcon = "timer", LocationIcon = "home", TimerIcon = "timer";
+            PingIcon = "my_location", TagIcon = "pan_tool", InfoIcon = "timer", LocationIcon = "home", TimerIcon = "timer",
+            TauntIcon = "campaign";
+
+        const string AudioFolder = HS_Authoring.Root + "/Audio";
+        const string KitAudioFolder = "Packages/com.ryan.gameframework/Runtime/GameFeel/Audio";
+        const string VignetteSprite = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Textures/screen_vignette.png";
 
         public static GameObject Build() {
 #if UNITY_SERVER
@@ -34,10 +46,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
 #else
             RectTransform canvas = Canvas("HideAndSeekHUD", 25);
             var hud = canvas.gameObject.AddComponent<HS_ClientController>();
+            BuildHeartbeat(canvas, hud);
             BuildBlindfold(canvas, hud);
             BuildRoundCard(canvas, hud);
             BuildRoleCard(canvas, hud);
             BuildTagPrompt(canvas, hud);
+            BuildTauntPrompt(canvas, hud);
             BuildFeed(canvas, hud);
             BuildToast(canvas, hud);
             BuildBanner(canvas, hud);
@@ -52,17 +66,104 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.pingIcon = UIThemeAssets.Icon(PingIcon);
             hud.tagIcon = UIThemeAssets.Icon(TagIcon);
             hud.infoIcon = UIThemeAssets.Icon(InfoIcon);
-            var sfx = canvas.gameObject.AddComponent<AudioSource>();
-            sfx.playOnAwake = false;
-            sfx.spatialBlend = 0f;
-            hud.sfx = sfx;
-            hud.tagClip = RyanAssets.Authoring.UniverseAuthoringKit.Clip(RyanAssets.Authoring.UniverseAuthoringKit.LandClip);
-            hud.pingClip = hud.startClip = RyanAssets.Authoring.UniverseAuthoringKit.Clip(RyanAssets.Authoring.UniverseAuthoringKit.CoinClip);
+            hud.tauntIcon = UIThemeAssets.Icon(TauntIcon);
+            AssignSounds(hud);
+            BuildFootsteps(canvas, hud);
+            BuildAmbience(canvas);
+            canvas.gameObject.AddComponent<HS_LightFlicker>();
             return SavePrefab(canvas.gameObject, PrefabPath);
 #endif
         }
 
 #if !UNITY_SERVER
+        // ---------------------------------------------------------------- sounds
+        static AudioClip Clip(string folder, string name) {
+            string path = $"{folder}/{name}.ogg";
+            return AssetDatabase.LoadAssetAtPath<AudioClip>(path) ?? throw new FileNotFoundException($"[HideAndSeek] Missing sound {path}.");
+        }
+
+        /// <summary>A game sound from this game's Audio folder. Distances are world units (0 = the kit's default).</summary>
+        static SfxSound Sound(float volume, float pitchJitter, float minInterval, float minDistance, float maxDistance, params string[] clips) =>
+            Sound(AudioFolder, volume, pitchJitter, minInterval, minDistance, maxDistance, clips);
+
+        static SfxSound Sound(string folder, float volume, float pitchJitter, float minInterval, float minDistance, float maxDistance, params string[] clips) => new() {
+            clips = clips.Select(c => Clip(folder, c)).ToArray(),
+            volume = volume,
+            volumeJitter = 0.1f,
+            pitchJitterSemitones = pitchJitter,
+            minInterval = minInterval,
+            minDistance = minDistance,
+            maxDistance = maxDistance,
+        };
+
+        static void AssignSounds(HS_ClientController hud) {
+            hud.startSound = Sound(KitAudioFolder, 0.7f, 0.5f, 0.1f, 0f, 0f, "whoosh_1", "whoosh_2");
+            hud.pingSound = Sound(KitAudioFolder, 0.6f, 0.3f, 0.2f, 0f, 0f, "alarm");
+            // The tag sting is heard in 3D by bystanders, across a couple of rooms.
+            hud.tagSting = Sound(0.85f, 0f, 0.15f, 12f, 120f, "sting_tag");
+            hud.lastHiderSting = Sound(0.9f, 0f, 0.5f, 0f, 0f, "sting_last_hider");
+            hud.lastHiderVoice = Sound(0.9f, 0f, 0.5f, 0f, 0f, "voice_hurry_up");
+            // Taunts must carry: a seeker anywhere in the house hears roughly where it came from.
+            hud.tauntSound = Sound(1f, 1.5f, 0.3f, 15f, 170f, "taunt_1", "taunt_2", "taunt_3");
+            hud.blindTick = Sound(0.55f, 0.2f, 0.2f, 0f, 0f, "tick");
+        }
+
+        /// <summary>Sets serialized fields (private ones included) on a component the prefab is built with.</summary>
+        static void Wire(Object target, params (string field, object value)[] fields) {
+            var so = new SerializedObject(target);
+            foreach (var (field, value) in fields) {
+                SerializedProperty property = so.FindProperty(field) ?? throw new System.ArgumentException($"{target.GetType().Name} has no serialized field '{field}'.");
+                if (value is Object reference) property.objectReferenceValue = reference;
+                else property.boxedValue = value;
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static AudioSource Loop(RectTransform canvas, string name, string clip, float volume, float spatialBlend, float minDistance = 1f, float maxDistance = 500f) {
+            var go = new GameObject(name, typeof(AudioSource));
+            go.transform.SetParent(canvas, false);
+            var source = go.GetComponent<AudioSource>();
+            source.clip = Clip(AudioFolder, clip);
+            source.loop = true;
+            source.playOnAwake = false;
+            source.volume = volume;
+            source.spatialBlend = spatialBlend;
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = minDistance;
+            source.maxDistance = maxDistance;
+            source.dopplerLevel = 0f;
+            source.outputAudioMixerGroup = UITheme.Active.soundGroup;
+            return source;
+        }
+
+        static void BuildAmbience(RectTransform canvas) {
+            var ambience = canvas.gameObject.AddComponent<HS_Ambience>();
+            AudioSource wind = Loop(canvas, "Wind", "wind_loop", 0.5f, 0f);
+            // The clock is heard through the foyer and the rooms beside it (world units).
+            AudioSource clock = Loop(canvas, "Clock", "clock_loop", 0.7f, 1f, 8f, 70f);
+            Wire(ambience, ("wind", wind), ("clock", clock),
+                ("creaks", Sound(0.55f, 2f, 1f, 6f, 60f, "creak_1", "creak_2", "creak_3", "door_creak_1", "door_creak_2")));
+        }
+
+        static void BuildFootsteps(RectTransform canvas, HS_ClientController hud) {
+            var footsteps = canvas.gameObject.AddComponent<HS_SeekerFootsteps>();
+            // Heavy wooden thuds that carry through floors and walls.
+            Wire(footsteps, ("controller", hud), ("step", Sound(0.9f, 1.5f, 0.05f, 10f, 90f, "seeker_step_1", "seeker_step_2", "seeker_step_3", "seeker_step_4", "seeker_step_5")));
+        }
+
+        /// <summary>A full-screen vignette under the HUD that pulses with the hider's heartbeat.</summary>
+        static void BuildHeartbeat(RectTransform canvas, HS_ClientController hud) {
+            RectTransform layer = Fill(canvas, "HeartbeatVignette");
+            var image = layer.gameObject.AddComponent<Image>();
+            image.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(VignetteSprite)
+                ?? throw new FileNotFoundException($"[HideAndSeek] Missing {VignetteSprite}. Run Ryan > Game Feel > Rebuild.");
+            image.color = new Color(0f, 0f, 0f, 0f);
+            image.raycastTarget = false;
+            image.enabled = false;
+            var heartbeat = canvas.gameObject.AddComponent<HS_Heartbeat>();
+            Wire(heartbeat, ("controller", hud), ("vignette", image), ("beat", Sound(0.9f, 0f, 0.15f, 0f, 0f, "heartbeat")));
+        }
+
         /// <summary>Graphics whose colour the controller sets at runtime must not follow a theme slot.</summary>
         static T Free<T>(T graphic) where T : Graphic {
             if (graphic.TryGetComponent(out UIThemeColor themeColor)) Object.DestroyImmediate(themeColor);
@@ -187,6 +288,29 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.tagPrompt = Fader(layer, false);
         }
 
+        /// <summary>Hiders' taunt prompt, in the tag prompt's place (nobody sees both): key, label and a recharge bar.</summary>
+        static void BuildTauntPrompt(RectTransform canvas, HS_ClientController hud) {
+            RectTransform layer = Layer(canvas, "Taunt");
+            RectTransform prompt = Pinned(layer, "TauntPrompt", new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(300f, 52f));
+            Shadow(prompt, 20f, 6f, 0.4f);
+            Rounded(prompt, UIColorRole.SurfaceRaised, 26f, raycast: false);
+            RectTransform row = Fill(prompt, "Row", 16f, 0f, 16f, 6f);
+            Row(row.gameObject, 10f, Pad(0), TextAnchor.MiddleCenter);
+            KeyHint(row, "R", UIColorRole.TextPrimary);
+            Icon(row, TauntIcon, 22f, UIColorRole.Warning);
+            hud.tauntLabel = Text(row, "Label", "Taunt", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.MidlineLeft);
+            hud.tauntLabel.fontSize = 17f;
+            RectTransform track = Pinned(prompt, "RechargeTrack", new Vector2(0.5f, 0f), new Vector2(0f, 6f), new Vector2(220f, 4f));
+            Rounded(track, UIColorRole.SurfaceInset, 2f, raycast: false);
+            var fill = Rounded(Fill(track, "Fill"), UIColorRole.Warning, 2f, raycast: false);
+            fill.type = Image.Type.Filled;
+            fill.fillMethod = Image.FillMethod.Horizontal;
+            fill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            fill.fillAmount = 1f;
+            hud.tauntFill = fill;
+            hud.tauntPrompt = Fader(layer, false);
+        }
+
         static void BuildFeed(RectTransform canvas, HS_ClientController hud) {
             RectTransform list = Pinned(canvas, "TagFeed", new Vector2(1f, 0.5f), new Vector2(-16f, -40f), new Vector2(360f, 200f));
             var column = Column(list.gameObject, 6f, Pad(0), TextAnchor.UpperRight);
@@ -218,14 +342,18 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
 
         static void BuildBanner(RectTransform canvas, HS_ClientController hud) {
             RectTransform layer = Layer(canvas, "Results");
-            RectTransform banner = Card(layer, "ResultsBanner", new Vector2(0.5f, 0.58f), Vector2.zero, new Vector2(620f, 180f), UIColorRole.SurfaceRaised, 24f);
+            RectTransform banner = Card(layer, "ResultsBanner", new Vector2(0.5f, 0.58f), Vector2.zero, new Vector2(620f, 260f), UIColorRole.SurfaceRaised, 24f);
             RectTransform accent = Pinned(banner, "Accent", new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(560f, 6f));
             hud.bannerAccent = Free(Rounded(accent, UIColorRole.Success, 3f, raycast: false));
             hud.bannerIcon = Free(PlaceIcon(banner, ResultsIcon, 56f, new Vector2(0.5f, 1f), new Vector2(0f, -26f)));
-            hud.bannerTitle = Label(banner, "Title", "HIDERS WIN", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center, new Vector2(0f, 0.22f), new Vector2(1f, 0.56f));
+            hud.bannerTitle = Label(banner, "Title", "HIDERS WIN", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center, new Vector2(0f, 0.44f), new Vector2(1f, 0.66f));
             hud.bannerTitle.fontSize = 44f;
-            hud.bannerSubtitle = Label(banner, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center, new Vector2(0f, 0.04f), new Vector2(1f, 0.24f));
+            hud.bannerSubtitle = Label(banner, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center, new Vector2(0f, 0.32f), new Vector2(1f, 0.44f));
             hud.bannerSubtitle.fontSize = 18f;
+            // Where the survivors hid: one line each (HS_ClientController.bannerSpotLines).
+            hud.bannerSpots = Label(banner, "HidingSpots", "", UIText.Small, UIColorRole.TextPrimary, TextAlignmentOptions.Top, new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.31f));
+            hud.bannerSpots.textWrappingMode = TextWrappingModes.NoWrap;
+            hud.bannerSpots.overflowMode = TextOverflowModes.Overflow;
             hud.banner = Fader(layer, false);
         }
 

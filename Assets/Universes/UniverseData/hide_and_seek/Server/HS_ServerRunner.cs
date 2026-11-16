@@ -37,6 +37,13 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         [SerializeField] float hiderWalk = 13f, hiderSprint = 20f, seekerWalk = 14.5f, seekerSprint = 22f;
         [Header("Rewards (account XP/gold)")]
         [SerializeField] ulong tagXP = 15, surviveXP = 40, surviveGold = 15, seekerWinXP = 20;
+        [Header("Taunts (cooldown and allowance: HS_Rules)")]
+        [Tooltip("XP for a taunt with no seeker near.")]
+        [SerializeField, Min(0)] int tauntXP = 3;
+        [Tooltip("XP for a brave taunt: a seeker within Brave Taunt Range.")]
+        [SerializeField, Min(0)] int braveTauntXP = 10;
+        [Tooltip("World units; a seeker this close makes a taunt brave.")]
+        [SerializeField, Min(0f)] float braveTauntRange = 40f;
 
         const string TagsColumn = "Tags";
         const string SurvivedColumn = "Survived";
@@ -45,6 +52,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         readonly Dictionary<NetworkConnection, int> timesSeeker = new();
         readonly Dictionary<NetworkConnection, float> lastTag = new();
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
+        readonly Dictionary<NetworkConnection, float> lastTaunt = new();
+        readonly Dictionary<NetworkConnection, int> tauntsThisRound = new();
         readonly System.Random random = new();
         HS_Map map;
         HS_Phase phase;
@@ -64,6 +73,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             var server = InstanceFinder.ServerManager;
             server.RegisterBroadcast<HS_TagRequest>(OnTagRequest);
             server.RegisterBroadcast<HS_StateRequest>(OnStateRequest);
+            server.RegisterBroadcast<HS_TauntRequest>(OnTauntRequest);
         }
 
         HS_Role RoleOf(NetworkConnection c) => roles.TryGetValue(c, out var r) ? r : HS_Role.None;
@@ -101,6 +111,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             roles.Remove(player.Owner);
             lastTag.Remove(player.Owner);
             requestTimes.Remove(player.Owner);
+            lastTaunt.Remove(player.Owner);
+            tauntsThisRound.Remove(player.Owner);
             MarkDirty();
         }
 
@@ -172,6 +184,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             }
             foreach (var player in PlayerData.Players.Values) if (!roles.ContainsKey(player.Owner)) roles[player.Owner] = HS_Role.Seeker;
             hidersAtStart = HidersLeft;
+            lastTaunt.Clear();
+            tauntsThisRound.Clear();
 
             // ---- hide
             phase = HS_Phase.Hiding;
@@ -212,6 +226,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             int survivors = HidersLeft;
             bool hidersWin = survivors > 0;
             headline = hidersWin ? $"HIDERS WIN! {survivors} stayed hidden." : "SEEKERS WIN! Everyone was found.";
+            RevealHidingSpots();
             SetMusic(MusicSelection.VictoryMusic);
             foreach (var pair in roles.Where(r => r.Key.IsActive)) {
                 bool survived = pair.Value == HS_Role.Hider;
@@ -264,6 +279,39 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             });
             ServerChat.SendSystemMessage(new($"{seekerName} found {hiderName}! {HidersLeft} left.", SystemMessageSource.CustomMessage));
             MarkDirty();
+        }
+
+        // ---------------------------------------------------------------- taunts and reveal
+        void OnTauntRequest(NetworkConnection connection, HS_TauntRequest request, Channel channel) {
+            if (!connection.IsAuthenticated || request.round != round) return;
+            float since = lastTaunt.TryGetValue(connection, out float at) ? Time.time - at : float.MaxValue;
+            int used = tauntsThisRound.TryGetValue(connection, out int n) ? n : 0;
+            if (!HS_Rules.CanTaunt(phase, RoleOf(connection), since, used)) return;
+            if (!LocalCharacter.Characters.TryGetValue(connection, out var hider) || hider == null || hider.IsDead) return;
+            lastTaunt[connection] = Time.time;
+            tauntsThisRound[connection] = used + 1;
+            Vector3 position = hider.transform.position;
+            int xp = HS_Rules.TauntReward(NearestSeekerDistance(position), braveTauntRange, tauntXP, braveTauntXP, out bool brave);
+            Award(connection, (ulong)xp, 0);
+            PlayerProgress.Modify<HS_SaveData>(connection, save => save.RecordTaunt(brave));
+            InstanceFinder.ServerManager.Broadcast(new HS_TauntBroadcast { clientId = connection.ClientId, position = position, xp = xp, brave = brave });
+        }
+
+        float NearestSeekerDistance(Vector3 position) {
+            float best = float.MaxValue;
+            foreach (var pair in roles) {
+                if (!Seeks(pair.Value) || !LocalCharacter.Characters.TryGetValue(pair.Key, out var seeker) || seeker == null || seeker.IsDead) continue;
+                best = Mathf.Min(best, Vector3.Distance(position, seeker.transform.position));
+            }
+            return best;
+        }
+
+        /// <summary>Everyone sees where the survivors hid once the round is over.</summary>
+        void RevealHidingSpots() {
+            var spots = roles.Where(r => r.Value == HS_Role.Hider && r.Key.IsActive && LocalCharacter.Characters.TryGetValue(r.Key, out var c) && c != null)
+                .Select(r => new HS_HidingSpot { clientId = r.Key.ClientId, name = PlayerData.GetPlayerName(r.Key), position = LocalCharacter.Characters[r.Key].transform.position })
+                .ToArray();
+            InstanceFinder.ServerManager.Broadcast(new HS_RevealBroadcast { round = round, spots = spots });
         }
 
         void Ping() {
@@ -332,6 +380,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (server != null) {
                 server.UnregisterBroadcast<HS_TagRequest>(OnTagRequest);
                 server.UnregisterBroadcast<HS_StateRequest>(OnStateRequest);
+                server.UnregisterBroadcast<HS_TauntRequest>(OnTauntRequest);
             }
             base.OnDestroy();
         }
