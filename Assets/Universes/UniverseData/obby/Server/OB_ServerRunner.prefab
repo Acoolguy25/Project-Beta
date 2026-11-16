@@ -64,3 +64,9 @@ MonoBehaviour:
   finishXP: 60
   finishGold: 25
   podiumGold: 1e000000000000000f000000000000000500000000000000q
+  coinTimeBonus: 0.5
+  medalTimes:
+    goldPerStage: 10
+    silverPerStage: 15
+    bronzePerStage: 22
+  standingsInterval: 0.5

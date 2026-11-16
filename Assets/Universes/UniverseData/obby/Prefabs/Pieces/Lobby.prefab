@@ -556,7 +556,7 @@ MonoBehaviour:
       m_Calls: []
   m_text: 'SKY OBBY
 
-    <size=45%>A new course every race. Reach the finish first!</size>'
+    <size=45%>A new course every race. Every coin takes time off your finish!</size>'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 4151c602c59eba322938f2fb2c9c578c, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: a979b81bbcd47cc3fb6b95c342883923, type: 2}

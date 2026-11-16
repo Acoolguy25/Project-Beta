@@ -24,25 +24,28 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _DetailMap:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 321c0c7c03ca7c6deaf439da218f1c16, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
     - _BevelLight: 0.4
-    - _BevelWidth: 0.14
+    - _BevelWidth: 0.26
     - _CapDepth: 0
-    - _DetailStrength: 0
+    - _DetailStrength: 0.55
     - _EmissionStrength: 0.35
     - _GlowSeams: 0
     - _GlowWidth: 0.09
     - _GridSize: 2
     - _GridStrength: 0.08
+    - _RimPower: 3
     - _SideShade: 0.82
     - _Smoothness: 0.42
     m_Colors:
     - _BaseColor: {r: 1, g: 0.30980393, b: 0.42745098, a: 1}
+    - _DetailFlow: {r: 1.6, g: 0, b: 0, a: 0}
     - _GlowColor: {r: 0, g: 0, b: 0, a: 1}
+    - _RimColor: {r: 0.6509804, g: 0.8235294, b: 1, a: 0.3}
     - _SideColor: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

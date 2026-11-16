@@ -29,8 +29,8 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BevelLight: 0.35
-    - _BevelWidth: 0.14
+    - _BevelLight: 0.42
+    - _BevelWidth: 0.26
     - _CapDepth: 0
     - _DetailStrength: 0
     - _EmissionStrength: 0
@@ -38,11 +38,14 @@ Material:
     - _GlowWidth: 0.09
     - _GridSize: 2
     - _GridStrength: 0.1
+    - _RimPower: 3
     - _SideShade: 0.82
     - _Smoothness: 0.42
     m_Colors:
     - _BaseColor: {r: 1, g: 0.43529412, b: 0.70980394, a: 1}
+    - _DetailFlow: {r: 0, g: 0, b: 0, a: 0}
     - _GlowColor: {r: 0, g: 0, b: 0, a: 1}
+    - _RimColor: {r: 0.6509804, g: 0.8235294, b: 1, a: 0.3}
     - _SideColor: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

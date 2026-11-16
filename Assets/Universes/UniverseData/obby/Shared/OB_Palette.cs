@@ -30,6 +30,16 @@ namespace Universes.UniverseData.obby {
         public static readonly Color Lava = Hex(0xFF4D2E);
         public static readonly Color Gravity = Hex(0x43E0FF);
         public static readonly Color Go = Hex(0x5BE38A);
+        public static readonly Color Silver = Hex(0xD3DCEF);
+        public static readonly Color Bronze = Hex(0xE89A5E);
+
+        /// <summary>The colour of a medal (gold, silver, bronze), or soft ink for none.</summary>
+        public static Color Medal(OB_Medal medal) => medal switch {
+            OB_Medal.Gold => Gold,
+            OB_Medal.Silver => Silver,
+            OB_Medal.Bronze => Bronze,
+            _ => InkSoft
+        };
 
         // Course blocks, cycled per stage
         public static readonly Color[] Blocks = {

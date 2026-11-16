@@ -5,7 +5,9 @@
 //  * a world-scaled stud grid on faces, instead of a texture stretched by the object's scale;
 //  * side faces a little darker and more saturated than tops, so walkable surfaces pop, or an
 //    explicit side colour with the top colour capping the sides (grass over earth, snow over ice);
-//  * optional glowing edges and seams (lava cracks in basalt, neon in the void).
+//  * optional glowing edges and seams (lava cracks in basalt, neon in the void);
+//  * a soft sky-coloured rim light on side faces, so blocks separate from the sky behind them;
+//  * an optional scrolling detail map (hazard stripes crawling along a sweeper bar).
 Shader "Universes/Obby/Block"
 {
     Properties
@@ -25,6 +27,9 @@ Shader "Universes/Obby/Block"
         _EmissionStrength("Emission", Range(0,4)) = 0
         [NoScaleOffset] _DetailMap("Detail (optional, world tiled)", 2D) = "white" {}
         _DetailStrength("Detail Strength", Range(0,1)) = 0
+        _DetailFlow("Detail Flow (m/s along the face; xy)", Vector) = (0,0,0,0)
+        _RimColor("Rim Light (alpha = strength)", Color) = (1,1,1,0)
+        _RimPower("Rim Power", Range(0.5,8)) = 3
     }
 
     SubShader
@@ -48,6 +53,9 @@ Shader "Universes/Obby/Block"
             half _Smoothness;
             half _EmissionStrength;
             half _DetailStrength;
+            float4 _DetailFlow;
+            half4 _RimColor;
+            half _RimPower;
         CBUFFER_END
         ENDHLSL
 
@@ -151,7 +159,7 @@ Shader "Universes/Obby/Block"
                 // World-scaled grid on the face plane.
                 half grid = Grid(faceUV);
                 albedo *= 1.0 - grid * _GridStrength;
-                half3 detail = SAMPLE_TEXTURE2D(_DetailMap, sampler_DetailMap, faceUV / _GridSize).rgb;
+                half3 detail = SAMPLE_TEXTURE2D(_DetailMap, sampler_DetailMap, (faceUV - _DetailFlow.xy * _Time.y) / _GridSize).rgb;
                 albedo *= lerp(1.0h, detail, _DetailStrength);
 
                 // Bevel band: a lighter rim around each face.
@@ -165,6 +173,8 @@ Shader "Universes/Obby/Block"
                 inputData.positionWS = input.positionWS;
                 inputData.normalWS = normalWS;
                 inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+                // Rim light on the sides only: tops are seen at grazing angles all the time and would wash out.
+                half rim = pow(1.0h - saturate(dot(normalWS, inputData.viewDirectionWS)), _RimPower) * _RimColor.a * (1.0h - isTop);
                 inputData.shadowCoord = TransformWorldToShadowCoord(input.positionWS);
                 inputData.fogCoord = input.fogFactor;
                 inputData.bakedGI = SampleSH(normalWS);
@@ -177,7 +187,7 @@ Shader "Universes/Obby/Block"
                 surface.occlusion = 1;
                 half edgeGlow = 1.0 - smoothstep(0.0, _GlowWidth, edge);
                 half glow = max(edgeGlow, grid * _GlowSeams);
-                surface.emission = _BaseColor.rgb * _EmissionStrength + _GlowColor.rgb * glow;
+                surface.emission = _BaseColor.rgb * _EmissionStrength + _GlowColor.rgb * glow + _RimColor.rgb * rim;
                 surface.alpha = 1;
 
                 half4 color = UniversalFragmentPBR(inputData, surface);

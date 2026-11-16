@@ -49,7 +49,7 @@ namespace Universes.UniverseData.obby.Editor {
             BuildTextures();
             var fx = BuildEffects();
             var prefabs = BuildPieces(fx);
-            var client = BuildClient(fx);
+            var client = BuildClient();
             BuildStartScene(prefabs, client);
             RegisterScenes();
             // Assets from the earlier look that nothing references any more.
@@ -57,7 +57,10 @@ namespace Universes.UniverseData.obby.Editor {
                 Root + "/Prefabs/ObbyHUD.prefab", Root + "/Textures/Tile.png",
                 Backdrop + "/Island0.prefab", Backdrop + "/Island1.prefab",
                 Root + "/Materials/IslandGrass.mat", Root + "/Materials/IslandEarth.mat", Root + "/Materials/IslandTrunk.mat",
-                Root + "/Materials/IslandLeaves.mat", Root + "/Materials/IslandLeavesWarm.mat"
+                Root + "/Materials/IslandLeaves.mat", Root + "/Materials/IslandLeavesWarm.mat",
+                // One-shot effects now come from the shared game-feel kit (OB_Fx), jump and landing puffs from its character feel.
+                Fx + "/CoinBurst.prefab", Fx + "/FinishConfetti.prefab", Fx + "/RespawnPoof.prefab", Fx + "/JumpPuff.prefab", Fx + "/LandPuff.prefab",
+                Root + "/Materials/FxSparkle.mat", Root + "/Materials/FxPuff.mat", Root + "/Textures/FxSparkle.png", Root + "/Textures/FxPuff.png"
             })
                 if (AssetDatabase.LoadMainAssetAtPath(retired) != null) AssetDatabase.DeleteAsset(retired);
             AssetDatabase.SaveAssets();
@@ -218,21 +221,6 @@ namespace Universes.UniverseData.obby.Editor {
                 float a = Mathf.Pow(1f - r, 2.2f);
                 return new Color(1f, 1f, 1f, a);
             }, 64, TextureUse.Particle);
-            SaveTexture("FxSparkle", (u, v) => {
-                float x = Mathf.Abs(u - 0.5f) * 2f, y = Mathf.Abs(v - 0.5f) * 2f;
-                float r = Mathf.Sqrt(x * x + y * y);
-                float rays = Mathf.Max(Mathf.Clamp01(1f - x * 9f) * (1f - y), Mathf.Clamp01(1f - y * 9f) * (1f - x));
-                float core = Mathf.Pow(Mathf.Clamp01(1f - r * 2.2f), 2f);
-                return new Color(1f, 1f, 1f, Mathf.Clamp01(rays * rays + core));
-            }, 64, TextureUse.Particle);
-            SaveTexture("FxPuff", (u, v) => {
-                float angle = Mathf.Atan2(v - 0.5f, u - 0.5f);
-                float edge = 0.86f + 0.08f * Mathf.Sin(angle * 5f) + 0.05f * Mathf.Sin(angle * 9f + 1.3f);
-                float r = new Vector2(u - 0.5f, v - 0.5f).magnitude * 2f / edge;
-                float a = 1f - Smooth(0.55f, 1f, r);
-                float shade = Mathf.Lerp(0.9f, 1f, Mathf.Clamp01(v * 1.2f));
-                return new Color(shade, shade, shade, a);
-            }, 64, TextureUse.Particle);
         }
 
         // ---------------------------------------------------------------- materials
@@ -285,17 +273,30 @@ namespace Universes.UniverseData.obby.Editor {
             return mat;
         }
 
-        /// <summary>A toy-block material (bevelled edges and a world-scaled grid, see OB_Block.shader).</summary>
+        /// <summary>Width (m) of the lighter bevel band along block edges; wide enough to read at the robot's scale.</summary>
+        const float BevelWidth = 0.26f;
+        /// <summary>Strength of the sky-coloured rim light on block sides (OB_Block.shader).</summary>
+        const float RimStrength = 0.3f;
+        const float RimPower = 3f;
+
+        /// <summary>
+        /// A toy-block material (bevelled edges, rim light and a world-scaled grid, see OB_Block.shader).
+        /// <paramref name="detailFlow"/> scrolls the detail map along the faces in metres per second.
+        /// </summary>
         static Material BlockMat(string name, Color color, float grid = 0.1f, float emission = 0f, float smoothness = 0.42f,
-            Texture2D detail = null, float detailStrength = 0f, float bevel = 0.35f) {
+            Texture2D detail = null, float detailStrength = 0f, float bevel = 0.42f, Vector2 detailFlow = default) {
             var mat = MaterialAsset(Root + "/Materials/" + name + ".mat", FindShader("Universes/Obby/Block"));
             mat.SetColor("_BaseColor", color);
             mat.SetFloat("_GridStrength", grid);
             mat.SetFloat("_EmissionStrength", emission);
             mat.SetFloat("_Smoothness", smoothness);
             mat.SetFloat("_BevelLight", bevel);
+            mat.SetFloat("_BevelWidth", BevelWidth);
+            mat.SetColor("_RimColor", OB_Palette.SkyHorizon.WithAlpha(RimStrength));
+            mat.SetFloat("_RimPower", RimPower);
             mat.SetTexture("_DetailMap", detail);
             mat.SetFloat("_DetailStrength", detail != null ? detailStrength : 0f);
+            mat.SetVector("_DetailFlow", detailFlow);
             mat.SetColor("_SideColor", Color.clear);
             mat.SetFloat("_CapDepth", 0f);
             mat.SetColor("_GlowColor", Color.black);
@@ -306,7 +307,7 @@ namespace Universes.UniverseData.obby.Editor {
         }
 
         /// <summary>A toy-block material painted in a tier's style: own side colour, top cap, glowing edges and seams.</summary>
-        static Material ThemeMat(string name, in OB_BlockStyle style, float bevel = 0.3f) {
+        static Material ThemeMat(string name, in OB_BlockStyle style, float bevel = 0.38f) {
             var mat = BlockMat(name, style.top, style.grid, smoothness: style.smoothness, bevel: bevel);
             mat.SetColor("_SideColor", style.side.WithAlpha(1f));
             mat.SetFloat("_CapDepth", style.cap);
@@ -351,7 +352,7 @@ namespace Universes.UniverseData.obby.Editor {
 
         // ---------------------------------------------------------------- effects
         sealed class FxPrefabs {
-            public ParticleSystem coinBurst, checkpointBurst, finishBurst, respawnPoof, jumpPuff, landPuff, lavaEmbers, gravityDrift;
+            public ParticleSystem checkpointBurst, lavaEmbers, gravityDrift;
         }
 
         static Gradient Fade(Color color, float fadeInEnd = 0.05f, float fadeOutStart = 0.6f) => new() {
@@ -384,7 +385,7 @@ namespace Universes.UniverseData.obby.Editor {
             var main = ps.main;
             main.duration = duration;
             main.loop = loop;
-            main.playOnAwake = false;   // one-shots are played by OB_Fx, ambient loops by OB_Course on clients only
+            main.playOnAwake = false;   // the checkpoint burst is played by CheckpointMarker, ambient loops by OB_Course on clients only
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.scalingMode = ParticleSystemScalingMode.Shape;
             main.maxParticles = maxParticles;
@@ -423,7 +424,7 @@ namespace Universes.UniverseData.obby.Editor {
         }
 
         /// <summary>Confetti: palette-coloured paper squares tumbling down.</summary>
-        static ParticleSystem Confetti(string name, Material paper, int count, Vector2 speed, float spread, bool secondWave) {
+        static ParticleSystem Confetti(string name, Material paper, int count, Vector2 speed, float spread) {
             var ps = NewParticles(name, null, paper, 0.6f, false, count * 2 + 20);
             var main = ps.main;
             main.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 2.8f);
@@ -435,7 +436,7 @@ namespace Universes.UniverseData.obby.Editor {
             main.startRotationZ = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
             main.startColor = PaletteColors();
             main.gravityModifier = 0.55f;
-            Burst(ps, secondWave ? new[] { (0f, count), (0.35f, count / 2) } : new[] { (0f, count) });
+            Burst(ps, (0f, count));
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
             shape.angle = spread;
@@ -475,94 +476,22 @@ namespace Universes.UniverseData.obby.Editor {
             FadeOver(ps, Fade(Color.white, 0.02f, 0.3f));
         }
 
+        /// <summary>
+        /// The obby's own particle prefabs: the checkpoint pad's confetti and the ambient loops on lava and
+        /// gravity fields. One-shot race effects come from the shared game-feel kit (see OB_Fx).
+        /// </summary>
         static FxPrefabs BuildEffects() {
             var glow = FxMat("FxGlow", Tex("FxGlow"), true);
-            // Sparkles and drifting motes are alpha-blended: additive would vanish against the bright sky.
-            var sparkle = FxMat("FxSparkle", Tex("FxSparkle"), false);
+            // Drifting motes are alpha-blended: additive would vanish against the bright sky.
             var mote = FxMat("FxMote", Tex("FxGlow"), false);
-            var puff = FxMat("FxPuff", Tex("FxPuff"), false);
             var paper = FxMat("FxConfetti", null, false);
             var fx = new FxPrefabs();
 
-            {   // Coin: a gold flash and a ring of sparkles.
-                var ps = NewParticles("CoinBurst", null, sparkle, 0.5f, false, 40);
-                var main = ps.main;
-                main.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.8f);
-                main.startSpeed = new ParticleSystem.MinMaxCurve(5f, 11f);
-                main.startSize = new ParticleSystem.MinMaxCurve(1.4f, 2.4f);
-                main.startColor = new ParticleSystem.MinMaxGradient(OB_Palette.Gold, OB_Palette.Hex(0xFF9F1C));
-                main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI);
-                main.gravityModifier = 0.4f;
-                Burst(ps, (0f, 22));
-                var shape = ps.shape;
-                shape.shapeType = ParticleSystemShapeType.Sphere;
-                shape.radius = 0.4f;
-                var drag = ps.limitVelocityOverLifetime;
-                drag.enabled = true;
-                drag.limit = 1.5f;
-                drag.dampen = 0.15f;
-                SizeOver(ps, Curve(0f, 1f, 1f, 0f));
-                FadeOver(ps, Fade(Color.white, 0.02f, 0.5f));
-                Flash(ps.transform, glow, OB_Palette.Gold, 5f, 0.3f);
-                fx.coinBurst = SaveFx(ps);
-            }
             {   // Checkpoint: confetti fountain from the pad plus a green flash.
-                var ps = Confetti("CheckpointConfetti", paper, 70, new Vector2(12f, 20f), 22f, false);
+                var ps = Confetti("CheckpointConfetti", paper, 70, new Vector2(12f, 20f), 22f);
                 Flash(ps.transform, glow, OB_Palette.Go, 10f, 0.4f);
                 fx.checkpointBurst = SaveFx(ps);
             }
-            {   // Finish: a bigger confetti blast in two waves with gold sparkles.
-                var ps = Confetti("FinishConfetti", paper, 150, new Vector2(18f, 30f), 35f, true);
-                var sparks = NewParticles("Sparkles", ps.transform, sparkle, 0.5f, false, 60);
-                var main = sparks.main;
-                main.startLifetime = new ParticleSystem.MinMaxCurve(0.8f, 1.4f);
-                main.startSpeed = new ParticleSystem.MinMaxCurve(10f, 22f);
-                main.startSize = new ParticleSystem.MinMaxCurve(0.8f, 1.8f);
-                main.startColor = OB_Palette.Gold;
-                Burst(sparks, (0f, 40));
-                var shape = sparks.shape;
-                shape.shapeType = ParticleSystemShapeType.Hemisphere;
-                shape.radius = 1f;
-                shape.rotation = new Vector3(-90f, 0f, 0f);
-                SizeOver(sparks, Curve(0f, 1f, 1f, 0f));
-                Flash(ps.transform, glow, OB_Palette.Gold, 16f, 0.5f);
-                fx.finishBurst = SaveFx(ps);
-            }
-            {   // Respawn: a cloud poof with cyan sparkles.
-                var ps = NewParticles("RespawnPoof", null, puff, 0.3f, false, 30);
-                var main = ps.main;
-                main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.85f);
-                main.startSpeed = new ParticleSystem.MinMaxCurve(3f, 7f);
-                main.startSize = new ParticleSystem.MinMaxCurve(2.2f, 3.6f);
-                main.startColor = OB_Palette.Cloud;
-                main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-                Burst(ps, (0f, 16));
-                var shape = ps.shape;
-                shape.shapeType = ParticleSystemShapeType.Sphere;
-                shape.radius = 1.2f;
-                shape.position = new Vector3(0f, 2.5f, 0f);
-                var drag = ps.limitVelocityOverLifetime;
-                drag.enabled = true;
-                drag.limit = 0.5f;
-                drag.dampen = 0.2f;
-                SizeOver(ps, Curve(0f, 0.6f, 0.4f, 1f, 1f, 1.1f));
-                FadeOver(ps, Fade(Color.white, 0.05f, 0.45f));
-                var sparks = NewParticles("Sparkles", ps.transform, sparkle, 0.3f, false, 20);
-                var sm = sparks.main;
-                sm.startLifetime = new ParticleSystem.MinMaxCurve(0.4f, 0.7f);
-                sm.startSpeed = new ParticleSystem.MinMaxCurve(4f, 9f);
-                sm.startSize = new ParticleSystem.MinMaxCurve(0.6f, 1.1f);
-                sm.startColor = OB_Palette.Gravity;
-                Burst(sparks, (0f, 12));
-                var ss = sparks.shape;
-                ss.shapeType = ParticleSystemShapeType.Sphere;
-                ss.radius = 1f;
-                ss.position = new Vector3(0f, 2.5f, 0f);
-                SizeOver(sparks, Curve(0f, 1f, 1f, 0f));
-                fx.respawnPoof = SaveFx(ps);
-            }
-            fx.jumpPuff = SaveFx(DustRing("JumpPuff", puff, 7, new Vector2(2f, 4f), new Vector2(1.2f, 2f), 0.4f));
-            fx.landPuff = SaveFx(DustRing("LandPuff", puff, 12, new Vector2(4f, 8f), new Vector2(1.8f, 3.2f), 0.55f));
             {   // Lava embers: rise from the lava's top face. OB_Course sets the rate and drift per piece.
                 var ps = NewParticles("LavaEmbers", null, mote, 2f, true, 80);
                 var main = ps.main;
@@ -602,37 +531,6 @@ namespace Universes.UniverseData.obby.Editor {
                 fx.gravityDrift = SaveFx(ps);
             }
             return fx;
-        }
-
-        /// <summary>A flat ring of dust puffs at the feet, oriented by the effect's up axis.</summary>
-        static ParticleSystem DustRing(string name, Material puff, int count, Vector2 speed, Vector2 size, float life) {
-            var ps = NewParticles(name, null, puff, 0.2f, false, count * 3);
-            var main = ps.main;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(life * 0.7f, life);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(speed.x, speed.y);
-            main.startSize = new ParticleSystem.MinMaxCurve(size.x, size.y);
-            main.startColor = OB_Palette.Cloud;
-            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-            Burst(ps, (0f, count));
-            var shape = ps.shape;
-            shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = 0.9f;
-            shape.radiusThickness = 0f;
-            shape.rotation = new Vector3(90f, 0f, 0f);
-            shape.position = new Vector3(0f, 0.3f, 0f);
-            var drag = ps.limitVelocityOverLifetime;
-            drag.enabled = true;
-            drag.limit = 0.5f;
-            drag.dampen = 0.25f;
-            var lift = ps.velocityOverLifetime;
-            lift.enabled = true;
-            lift.space = ParticleSystemSimulationSpace.Local;
-            lift.x = 0f;
-            lift.y = 1.2f;
-            lift.z = 0f;
-            SizeOver(ps, Curve(0f, 0.5f, 0.35f, 1f, 1f, 1.15f));
-            FadeOver(ps, Fade(Color.white, 0.05f, 0.35f));
-            return ps;
         }
 
         // ---------------------------------------------------------------- prefab helpers
@@ -688,7 +586,18 @@ namespace Universes.UniverseData.obby.Editor {
                 beatSolidB = BlockMat("BeatBlue", blue, 0.06f, 0.35f),
                 beatGhostB = Mat("BeatBlueGhost", blue, emission: 0.2f, alpha: 0.22f)
             };
-            var lavaMat = Mat("Lava", OB_Palette.Lava, Tex("Lava"), 1.6f, smoothness: 0.6f);
+            // Flowing, glowing lava (OB_Lava.shader); HazardVolume pulses its glow colour.
+            var lavaMat = SimpleMat("Lava", "Universes/Obby/Lava", m => {
+                m.SetColor("_BaseColor", Color.white);
+                m.SetTexture("_BaseMap", Tex("Lava"));
+                m.SetFloat("_Brightness", 1.1f);
+                m.SetFloat("_TileMetres", 4f);
+                m.SetVector("_Flow", new Vector4(0.35f, 0f, 0.12f, 0f));
+                m.SetFloat("_PourSpeed", 0.8f);
+                m.SetColor("_EmissionColor", OB_Palette.Lava);
+                m.SetFloat("_Glow", 1.2f);
+                m.enableInstancing = true;
+            });
             var grey = BlockMat("PadGrey", OB_Palette.Stone, 0.08f);
             var pole = Mat("Pole", OB_Palette.Paper, smoothness: 0.6f, metallic: 0.5f);
             var flagIdle = Mat("FlagIdle", OB_Palette.Blocks[3], emission: 0.2f);
@@ -711,10 +620,16 @@ namespace Universes.UniverseData.obby.Editor {
             p.platform = Save(Cube("Platform", null, Vector3.zero, Vector3.one, p.palette[0]), "Platform");
 
             {   // Checkpoint pad: authored at its generated size (6 x 1 x 6), origin at the box centre.
+                // The flag waits at the foot of the pole and runs up it once the checkpoint is reached.
+                const float poleBase = 0.5f, poleHeight = 3f, flagHeight = 0.75f;
                 var root = new GameObject("CheckpointPad");
                 Cube("Floor", root.transform, Vector3.zero, new Vector3(6f, 1f, 6f), grey);
-                Primitive(PrimitiveType.Cylinder, "Pole", root.transform, new Vector3(2.5f, 2f, 2.5f), new Vector3(0.15f, 1.5f, 0.15f), pole, false);
-                var flag = Cube("Flag", root.transform, new Vector3(3.15f, 3.05f, 2.5f), new Vector3(1.2f, 0.75f, 0.06f), flagIdle, false);
+                Primitive(PrimitiveType.Cylinder, "Pole", root.transform, new Vector3(2.5f, poleBase + poleHeight * 0.5f, 2.5f), new Vector3(0.15f, poleHeight * 0.5f, 0.15f), pole, false);
+                var raise = root.AddComponent<OB_CheckpointFlag>();
+                raise.loweredHeight = poleBase + flagHeight * 0.5f + 0.1f;
+                raise.raisedHeight = poleBase + poleHeight - flagHeight * 0.5f - 0.07f;
+                var flag = Cube("Flag", root.transform, new Vector3(3.15f, raise.loweredHeight, 2.5f), new Vector3(1.2f, flagHeight, 0.06f), flagIdle, false);
+                raise.flag = flag.transform;
                 var marker = root.AddComponent<CheckpointMarker>();
                 marker.flagRenderers = new[] { flag.GetComponent<Renderer>() };
                 marker.idleMaterial = flagIdle;
@@ -819,7 +734,9 @@ namespace Universes.UniverseData.obby.Editor {
                 p.mover = Save(go, "Mover");
             }
             // Sweeper bars are bumpers, not lava: a hit knocks the player flying (KnockbackSurface).
-            var sweeper = BlockMat("Sweeper", OB_Palette.Hex(0xFF4F6D), 0.08f, 0.35f, bevel: 0.4f);
+            // Hazard stripes crawl along them so the sweep reads even when the bar is end-on.
+            var sweeper = BlockMat("Sweeper", OB_Palette.Hex(0xFF4F6D), 0.08f, 0.35f, detail: Tex("Stripes"), detailStrength: 0.55f,
+                bevel: 0.4f, detailFlow: new Vector2(1.6f, 0f));
             p.spinnerBar = Spinner("SpinnerBar", sweeper, pole, false);
             p.spinnerCross = Spinner("SpinnerCross", sweeper, pole, true);
             p.coin = BuildCoin(gold);
@@ -843,7 +760,7 @@ namespace Universes.UniverseData.obby.Editor {
                 sign.transform.SetParent(root.transform, false);
                 sign.transform.localPosition = new Vector3(0f, 3.2f, LobbySize * 0.5f - 0.6f);
                 var tmp = sign.GetComponent<TextMeshPro>();
-                tmp.text = "SKY OBBY\n<size=45%>A new course every race. Reach the finish first!</size>";
+                tmp.text = "SKY OBBY\n<size=45%>A new course every race. Every coin takes time off your finish!</size>";
                 tmp.font = font.asset;
                 tmp.fontSharedMaterial = font.outline;
                 tmp.fontSize = 5f;
@@ -1054,7 +971,7 @@ namespace Universes.UniverseData.obby.Editor {
             return text;
         }
 
-        static GameObject BuildClient(FxPrefabs fx) {
+        static GameObject BuildClient() {
 #if UNITY_SERVER
             // The client assembly is not compiled in the server profile; keep the prefab authored by a client Editor.
             return AssetDatabase.LoadAssetAtPath<GameObject>(ClientPrefab);
@@ -1064,20 +981,18 @@ namespace Universes.UniverseData.obby.Editor {
             var root = new GameObject("ObbyClient");
             var client = root.AddComponent<OB_ClientController>();
 
-            // Post-processing for the whole obby (the client camera already renders post effects).
+            // Post-processing for the whole obby. The shared camera renders without post effects, so
+            // OB_PlayerFeel turns them on for it while the obby is shown.
             var volume = root.AddComponent<Volume>();
             volume.isGlobal = true;
             volume.priority = 10f;
             volume.sharedProfile = BuildPostProfile();
 
+            // Race moments and movement feel, both on the shared game-feel kit; tune them on these components.
             var fxRoot = new GameObject("Fx");
             fxRoot.transform.SetParent(root.transform, false);
             client.fx = fxRoot.AddComponent<OB_Fx>();
-            client.fx.coinBurst = fx.coinBurst;
-            client.fx.finishBurst = fx.finishBurst;
-            client.fx.respawnPoof = fx.respawnPoof;
-            client.fx.jumpPuff = fx.jumpPuff;
-            client.fx.landPuff = fx.landPuff;
+            client.feel = fxRoot.AddComponent<OB_PlayerFeel>();
 
             var skyRoot = new GameObject("Backdrop");
             skyRoot.transform.SetParent(root.transform, false);
@@ -1119,13 +1034,21 @@ namespace Universes.UniverseData.obby.Editor {
                 client.tierLabel = Label(Stretch("Tier", chip, Vector2.zero, Vector2.one), bold, bold.asset.material, 16, OB_Palette.Ink, TextAlignmentOptions.Center);
                 client.tierLabel.characterSpacing = 2f;
                 client.tierLabel.textWrappingMode = TextWrappingModes.NoWrap;
-                client.stageNameLabel = Label(Box("StageName", body, topLeft, topLeft, new Vector2(20f, -42f), new Vector2(340f, 44f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
+                client.stageNameLabel = Label(Box("StageName", body, topLeft, topLeft, new Vector2(20f, -42f), new Vector2(250f, 44f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
                 client.stageNameLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                client.stageNameLabel.overflowMode = TextOverflowModes.Ellipsis;
+                // Your place in the race, right of the stage name; empty when racing alone.
+                client.placeLabel = Label(Box("Place", body, topRight, topRight, new Vector2(-20f, -42f), new Vector2(90f, 44f)), bold, bold.shadow, 30, OB_Palette.Gold, TextAlignmentOptions.MidlineRight);
+                client.placeLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                // Course progress; the other racers ride on the same track as small dots (the race strip).
                 var track = Box("Progress", body, topLeft, topLeft, new Vector2(20f, -94f), new Vector2(340f, 6f));
                 Panel(track, OB_Palette.InkSoft, 3f);
                 var fill = Stretch("Fill", track, Vector2.zero, new Vector2(0.3f, 1f));
                 Panel(fill, OB_Palette.Gold, 3f);
                 client.progressFill = fill;
+                client.racerTrack = track;
+                var dot = Box("RacerDot", track, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.one * 12f);
+                client.racerDotTemplate = Panel(dot, OB_Palette.Paper, 6f);
             }
             {   // Stage hint: plain outlined text above the card that fades out once read.
                 client.hintLabel = Label(Box("Hint", hud, bottomLeft, bottomLeft, new Vector2(30f, 146f), new Vector2(560f, 60f)), semi, semi.outline, 20, muted, TextAlignmentOptions.BottomLeft);
@@ -1137,7 +1060,8 @@ namespace Universes.UniverseData.obby.Editor {
                 Icon("Clock", body, "icon_schedule", new Vector2(0f, 0.5f), new Vector2(32f, 0f), 30f, OB_Palette.Gold);
                 client.timerLabel = Label(Stretch("Timer", body, Vector2.zero, Vector2.one, new Vector2(56f, 0f), new Vector2(-14f, 0f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
                 client.timerLabel.textWrappingMode = TextWrappingModes.NoWrap;
-                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-85f, clockTop - 60f), new Vector2(210f, 24f)), semi, semi.outline, 17, OB_Palette.Paper, TextAlignmentOptions.Center);
+                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-85f, clockTop - 60f), new Vector2(210f, 26f)), bold, bold.outline, 18, OB_Palette.Paper, TextAlignmentOptions.Center);
+                // Only the race result is written here; during the race the strip on the stage card shows the field.
                 client.leaderLabel = Label(Box("Leader", hud, top, top, new Vector2(0f, clockTop - 86f), new Vector2(900f, 30f)), bold, bold.outline, 20, OB_Palette.Paper, TextAlignmentOptions.Center);
             }
             {   // Coins, beside the clock.
@@ -1149,15 +1073,19 @@ namespace Universes.UniverseData.obby.Editor {
                 client.coinsLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
             {   // Toast: a small coloured pill, high above the player so it never hides the next jump.
-                var toast = Box("Toast", hud, new Vector2(0.5f, 0.68f), centre, Vector2.zero, new Vector2(560f, 60f));
+                var toast = Box("Toast", hud, new Vector2(0.5f, 0.7f), centre, Vector2.zero, new Vector2(500f, 50f));
                 client.toast = toast;
                 client.toastGroup = toast.gameObject.AddComponent<CanvasGroup>();
                 client.toastGroup.interactable = client.toastGroup.blocksRaycasts = false;
-                Shadow(toast, 30f, shadow);
+                Shadow(toast, 25f, shadow);
                 var body = Stretch("Body", toast, Vector2.zero, Vector2.one);
-                client.toastBackground = Panel(body, OB_Palette.Gold, 30f);
-                client.toastLabel = Label(Stretch("Label", body, Vector2.zero, Vector2.one, new Vector2(22f, 0f), new Vector2(-22f, 0f)), bold, bold.asset.material, 28, OB_Palette.Ink, TextAlignmentOptions.Center);
+                client.toastBackground = Panel(body, OB_Palette.Gold, 25f);
+                client.toastLabel = Label(Stretch("Label", body, Vector2.zero, Vector2.one, new Vector2(20f, 0f), new Vector2(-20f, 0f)), bold, bold.asset.material, 24, OB_Palette.Ink, TextAlignmentOptions.Center);
                 client.toastLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                // Long finish lines (medal, time, coin bonus, new best) shrink to fit the pill instead of spilling out.
+                client.toastLabel.enableAutoSizing = true;
+                client.toastLabel.fontSizeMin = 16f;
+                client.toastLabel.fontSizeMax = 24f;
             }
             {   // Countdown and GO!
                 client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.55f), centre, Vector2.zero, new Vector2(700f, 220f)), bold, bold.outline, 150, OB_Palette.Paper, TextAlignmentOptions.Center);
@@ -1171,21 +1099,14 @@ namespace Universes.UniverseData.obby.Editor {
                 Panel(header, OB_Palette.Gold, 36f);
                 Icon("Medal", header, "icon_military_tech", new Vector2(0f, 0.5f), new Vector2(64f, 0f), 60f, OB_Palette.Ink);
                 Label(Stretch("Title", header, Vector2.zero, Vector2.one, new Vector2(110f, 0f), new Vector2(-40f, 0f)), bold, bold.asset.material, 52, OB_Palette.Ink, TextAlignmentOptions.MidlineLeft).text = "RACE RESULTS";
-                client.resultsBody = Label(Stretch("Rows", body, Vector2.zero, Vector2.one, new Vector2(56f, 36f), new Vector2(-48f, -130f)), semi, semi.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.TopLeft);
+                client.resultsBody = Label(Stretch("Rows", body, Vector2.zero, Vector2.one, new Vector2(56f, 84f), new Vector2(-48f, -130f)), semi, semi.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.TopLeft);
                 client.resultsBody.lineSpacing = 24f;
                 client.resultsBody.textWrappingMode = TextWrappingModes.NoWrap;
+                // Medal targets for this course and the coin bonus, along the bottom.
+                client.resultsFooter = Label(Stretch("Footer", body, Vector2.zero, new Vector2(1f, 0f), new Vector2(56f, 24f), new Vector2(-48f, 64f)), semi, semi.shadow, 22, muted, TextAlignmentOptions.MidlineLeft);
+                client.resultsFooter.textWrappingMode = TextWrappingModes.NoWrap;
             }
 
-            var audio = new GameObject("Sfx");
-            audio.transform.SetParent(root.transform, false);
-            client.sfx = audio.AddComponent<AudioSource>();
-            client.sfx.playOnAwake = false;
-            client.sfx.spatialBlend = 0f;
-            var coinClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Packages/com.ryan.gameframework/Runtime/Items/Coin/freesound_gamestudio-drop-coin-384921.mp3");
-            client.coinClip = coinClip;
-            client.checkpointClip = coinClip;
-            client.finishClip = coinClip;
-            client.fallClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/UnityTechnologies/SpaceRobotKyle/Sfx/Player_Land.wav");
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, ClientPrefab);
             Object.DestroyImmediate(root);
             return prefab;

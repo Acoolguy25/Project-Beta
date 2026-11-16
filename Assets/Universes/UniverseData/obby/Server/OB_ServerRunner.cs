@@ -43,8 +43,15 @@ namespace Universes.UniverseData.obby.Server {
         [SerializeField] ulong coinGold = 3;
         [SerializeField] ulong finishXP = 60;
         [SerializeField] ulong finishGold = 25;
-        [Tooltip("Extra gold for the first three finishers.")]
+        [Tooltip("Extra gold for the top three of the final results.")]
         [SerializeField] ulong[] podiumGold = { 30, 15, 5 };
+        [Header("Scoring")]
+        [Tooltip("Seconds each collected coin takes off a finish time. Results are ranked by this scored time.")]
+        [SerializeField, Min(0f)] float coinTimeBonus = 0.5f;
+        [Tooltip("Scored seconds per stage for each medal.")]
+        [SerializeField] OB_MedalTimes medalTimes = OB_MedalTimes.Default;
+        [Tooltip("Shortest gap between standings updates (the race strip on every client).")]
+        [SerializeField, Min(0.05f)] float standingsInterval = 0.5f;
 
         const string StageColumn = "Stage";
         const string CoinColumn = "Coins";
@@ -56,7 +63,14 @@ namespace Universes.UniverseData.obby.Server {
             public ulong coins;
             public bool finished;
             public float finishTime;
+            /// <summary>Finish time minus the coin bonus.</summary>
+            public float scoredTime;
+            public OB_Medal medal;
+            public bool personalBest;
+            /// <summary>Provisional rank among finishers when this runner finished.</summary>
             public int place;
+            /// <summary>Race time of the last checkpoint, coin or finish (the split clients compare).</summary>
+            public float lastEventTime;
             public float graceUntil;
             /// <summary>When a pending hazard respawn happens (0 when none is pending).</summary>
             public float respawnAt;
@@ -72,6 +86,8 @@ namespace Universes.UniverseData.obby.Server {
         float raceStart, raceDeadline;
         string headline = "";
         float previousRespawnTime;
+        bool standingsDirty;
+        float nextStandings;
 
         public OB_CourseLayout Layout => layout;
         public OB_Phase Phase => phase;
@@ -111,6 +127,7 @@ namespace Universes.UniverseData.obby.Server {
             RunnerFor(player.Owner);
             PreparePlayer(player);
             SendCourse(player.Owner);
+            standingsDirty = true;
             PlayerProgress.Load<OB_SaveData>(player, OB_SaveData.Universe).Forget();
         }
 
@@ -124,6 +141,7 @@ namespace Universes.UniverseData.obby.Server {
         void OnPlayerLeft(PlayerData player) {
             runners.Remove(player.Owner);
             requestTimes.Remove(player.Owner);
+            standingsDirty = true;
         }
 
         Vector3 SpawnPosition(NetworkConnection connection) {
@@ -159,11 +177,12 @@ namespace Universes.UniverseData.obby.Server {
             course.SetGateClosed(true);
             finishCount = 0;
             headline = "";
-            foreach (var runner in runners.Values) { runner.checkpoint = 0; runner.coins = 0; runner.finished = false; runner.place = 0; }
+            foreach (var runner in runners.Values) ResetRunner(runner);
             foreach (var player in PlayerData.Players.Values) { RunnerFor(player.Owner); WriteLeaderboard(player); }
             InstanceFinder.ServerManager.Broadcast(MakeCourse());
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
             foreach (var connection in runners.Keys) SendProgress(connection, OB_ProgressReason.Sync);
+            SendStandings();
 
             phase = OB_Phase.Countdown;
             for (int i = countdownSeconds; i > 0; i--) {
@@ -183,8 +202,8 @@ namespace Universes.UniverseData.obby.Server {
                 secondsLeft = Mathf.Max(0, Mathf.CeilToInt(raceDeadline - Time.time));
                 if (secondsLeft == 0 || AllActiveFinished()) break;
                 SetTopMessage(phase == OB_Phase.Closing
-                    ? $"{finishCount} finished. Course closes in {Clock(secondsLeft)}"
-                    : $"Course #{round}: {Clock(secondsLeft)} left");
+                    ? $"{finishCount} finished. Course closes in {OB_Scoring.Clock(secondsLeft)}"
+                    : $"Course #{round}: {OB_Scoring.Clock(secondsLeft)} left");
                 BroadcastRound();
                 await AwaitTime(1000, token);
             }
@@ -192,10 +211,12 @@ namespace Universes.UniverseData.obby.Server {
             phase = OB_Phase.Results;
             course.SetGateClosed(true);
             SetMusic(MusicSelection.VictoryMusic);
-            InstanceFinder.ServerManager.Broadcast(MakeResults());
-            var winner = runners.Where(r => r.Value.finished).OrderBy(r => r.Value.finishTime).FirstOrDefault();
+            var final = FinalOrder();
+            AwardPodium(final);
+            InstanceFinder.ServerManager.Broadcast(MakeResults(final));
+            var winner = final.Count > 0 && final[0].Value.finished ? final[0] : default;
             headline = winner.Key != null
-                ? $"{PlayerData.GetPlayerName(winner.Key)} wins in {Clock(winner.Value.finishTime, true)}!"
+                ? $"{PlayerData.GetPlayerName(winner.Key)} wins in {OB_Scoring.Clock(winner.Value.scoredTime, true)}!"
                 : "Nobody finished this one. New course next!";
             for (int i = resultsSeconds; i > 0; i--) {
                 secondsLeft = i;
@@ -214,6 +235,7 @@ namespace Universes.UniverseData.obby.Server {
         // ---------------------------------------------------------------- authority checks
         void FixedUpdate() {
             if (layout == null) return;
+            if (standingsDirty && Time.unscaledTime >= nextStandings) SendStandings();
             PhysicsScene scene = course.gameObject.scene.GetPhysicsScene();
             foreach (var pair in LocalCharacter.Characters) {
                 LocalCharacter character = pair.Value;
@@ -240,6 +262,7 @@ namespace Universes.UniverseData.obby.Server {
                         ulong bit = 1UL << s;
                         if ((runner.coins & bit) != 0 || (centre - layout.stages[s].coin).sqrMagnitude > CoinRadius * CoinRadius) continue;
                         runner.coins |= bit;
+                        runner.lastEventTime = RaceTime;
                         Award(pair.Key, 0, coinGold, "a coin");
                         PlayerProgress.Modify<OB_SaveData>(pair.Key, save => save.totalCoins++);
                         if (PlayerData.TryGetPlayerData(pair.Key, out var player)) WriteLeaderboard(player);
@@ -261,6 +284,8 @@ namespace Universes.UniverseData.obby.Server {
         void ReachCheckpoint(NetworkConnection connection, Runner runner, int checkpoint) {
             int gained = checkpoint - runner.checkpoint;
             runner.checkpoint = checkpoint;
+            runner.lastEventTime = RaceTime;
+            standingsDirty = true;
             Award(connection, checkpointXP * (ulong)gained, 0, "a checkpoint");
             PlayerProgress.Modify<OB_SaveData>(connection, save => save.RecordStage(checkpoint));
             if (PlayerData.TryGetPlayerData(connection, out var player)) WriteLeaderboard(player);
@@ -269,17 +294,25 @@ namespace Universes.UniverseData.obby.Server {
 
         void Finish(NetworkConnection connection, Runner runner) {
             runner.finished = true;
-            runner.finishTime = Time.time - raceStart;
-            runner.place = ++finishCount;
+            runner.finishTime = RaceTime;
+            runner.lastEventTime = runner.finishTime;
             runner.checkpoint = layout.StageCount;
-            ulong gold = finishGold + (runner.place <= podiumGold.Length ? podiumGold[runner.place - 1] : 0);
-            Award(connection, finishXP, gold, "finishing");
-            float finishTime = runner.finishTime;
             int stages = layout.StageCount;
-            PlayerProgress.Modify<OB_SaveData>(connection, save => save.RecordFinish(finishTime, stages));
+            runner.scoredTime = OB_Scoring.ScoredTime(runner.finishTime, OB_Scoring.CountCoins(runner.coins), coinTimeBonus);
+            runner.medal = medalTimes.Award(runner.scoredTime, stages);
+            // Provisional: a later finisher with more coins can still beat this scored time.
+            runner.place = 1 + runners.Values.Count(r => r != runner && r.finished && r.scoredTime < runner.scoredTime);
+            bool firstFinisher = ++finishCount == 1;
+            Award(connection, finishXP, finishGold, "finishing");
+            float finishTime = runner.finishTime, scoredTime = runner.scoredTime;
+            OB_Medal medal = runner.medal;
+            bool personalBest = false;
+            PlayerProgress.Modify<OB_SaveData>(connection, save => personalBest = save.RecordFinish(finishTime, scoredTime, medal, stages));
+            runner.personalBest = personalBest;
             string name = PlayerData.GetPlayerName(connection);
-            headline = $"{name} finished {Ordinal(runner.place)} in {Clock(runner.finishTime, true)}!";
-            if (runner.place == 1 && phase == OB_Phase.Racing) {
+            headline = $"{name} finished in {OB_Scoring.Clock(runner.scoredTime, true)}" + (runner.place == 1 ? ", the best time so far!" : "!");
+            standingsDirty = true;
+            if (firstFinisher && phase == OB_Phase.Racing) {
                 phase = OB_Phase.Closing;
                 raceDeadline = Mathf.Min(raceDeadline, Time.time + closingSeconds);
             }
@@ -304,8 +337,46 @@ namespace Universes.UniverseData.obby.Server {
             character.TeleportTo(SpawnPosition(character.Owner));
         }
 
+        // ---------------------------------------------------------------- scoring
+        float RaceTime => phase is OB_Phase.Racing or OB_Phase.Closing ? Time.time - raceStart : 0f;
+
+        static void ResetRunner(Runner runner) {
+            runner.checkpoint = 0;
+            runner.coins = 0;
+            runner.finished = false;
+            runner.finishTime = runner.scoredTime = runner.lastEventTime = 0f;
+            runner.medal = OB_Medal.None;
+            runner.personalBest = false;
+            runner.place = 0;
+        }
+
+        OB_Standing StandingOf(NetworkConnection connection, Runner runner) => new() {
+            clientId = connection.ClientId, name = PlayerData.GetPlayerName(connection), stage = runner.checkpoint,
+            finished = runner.finished, scoredTime = runner.scoredTime
+        };
+
+        /// <summary>Active racers ranked for the results: finishers by scored time, then the furthest checkpoint.</summary>
+        List<KeyValuePair<NetworkConnection, Runner>> FinalOrder() {
+            var order = runners.Where(r => r.Key.IsActive).ToList();
+            order.Sort((a, b) => OB_Scoring.Compare(StandingOf(a.Key, a.Value), StandingOf(b.Key, b.Value)));
+            return order;
+        }
+
+        /// <summary>Podium gold, wins and podiums go by the final results, after every coin bonus is known.</summary>
+        void AwardPodium(List<KeyValuePair<NetworkConnection, Runner>> final) {
+            for (int i = 0; i < final.Count; i++) {
+                if (!final[i].Value.finished) break;
+                int place = i + 1;
+                final[i].Value.place = place;
+                if (i < podiumGold.Length) Award(final[i].Key, 0, podiumGold[i], "a podium place");
+                PlayerProgress.Modify<OB_SaveData>(final[i].Key, save => save.RecordPlace(place));
+            }
+        }
+
         // ---------------------------------------------------------------- messages
-        OB_CourseBroadcast MakeCourse() => new() { seed = layout?.seed ?? 0, stageCount = layout?.StageCount ?? 0, round = round };
+        OB_CourseBroadcast MakeCourse() => new() {
+            seed = layout?.seed ?? 0, stageCount = layout?.StageCount ?? 0, round = round, coinBonus = coinTimeBonus
+        };
 
         void SendCourse(NetworkConnection connection) {
             if (layout == null || connection == null || !connection.IsActive) return;
@@ -324,49 +395,56 @@ namespace Universes.UniverseData.obby.Server {
             if (layout == null || !runners.TryGetValue(connection, out Runner runner) || !connection.IsActive) return;
             InstanceFinder.ServerManager.Broadcast(connection, new OB_ProgressBroadcast {
                 seed = layout.seed, checkpoint = runner.checkpoint, coins = runner.coins, finished = runner.finished,
-                finishTime = runner.finishTime, place = runner.place, reason = reason
+                finishTime = runner.finishTime, place = runner.place, reason = reason,
+                raceTime = runner.lastEventTime, scoredTime = runner.scoredTime, medal = runner.medal,
+                personalBest = runner.personalBest
+            });
+        }
+
+        void SendStandings() {
+            standingsDirty = false;
+            nextStandings = Time.unscaledTime + standingsInterval;
+            if (layout == null) return;
+            InstanceFinder.ServerManager.Broadcast(new OB_StandingsBroadcast {
+                seed = layout.seed,
+                racers = runners.Where(r => r.Key.IsActive).Select(r => StandingOf(r.Key, r.Value)).ToArray()
             });
         }
 
         void BroadcastRound() {
             if (layout == null) return;
-            var leader = runners.OrderByDescending(r => r.Value.finished ? int.MaxValue - r.Value.place : r.Value.checkpoint).FirstOrDefault();
+            var leader = FinalOrder().FirstOrDefault();
             InstanceFinder.ServerManager.Broadcast(new OB_RoundBroadcast {
-                seed = layout.seed, phase = phase, secondsLeft = secondsLeft,
-                raceTime = phase is OB_Phase.Racing or OB_Phase.Closing ? Time.time - raceStart : 0f,
+                seed = layout.seed, phase = phase, secondsLeft = secondsLeft, raceTime = RaceTime,
                 leaderName = leader.Key != null ? PlayerData.GetPlayerName(leader.Key) : "",
                 leaderStage = leader.Value?.checkpoint ?? 0, finishedCount = finishCount,
                 playerCount = PlayerData.Players.Count, headline = headline
             });
         }
 
-        OB_ResultsBroadcast MakeResults() => new() {
+        OB_ResultsBroadcast MakeResults(List<KeyValuePair<NetworkConnection, Runner>> final) => new() {
             seed = layout.seed,
-            entries = runners.Where(r => r.Key.IsActive)
-                .OrderByDescending(r => r.Value.finished).ThenBy(r => r.Value.finished ? r.Value.finishTime : 0f)
-                .ThenByDescending(r => r.Value.checkpoint)
-                .Select(r => new OB_ResultEntry {
-                    name = PlayerData.GetPlayerName(r.Key), finished = r.Value.finished, time = r.Value.finishTime,
-                    stage = r.Value.checkpoint, coins = CountBits(r.Value.coins)
-                }).ToArray()
+            entries = final.Select(r => new OB_ResultEntry {
+                name = PlayerData.GetPlayerName(r.Key), finished = r.Value.finished, time = r.Value.finishTime,
+                stage = r.Value.checkpoint, coins = OB_Scoring.CountCoins(r.Value.coins),
+                scoredTime = r.Value.scoredTime, medal = r.Value.medal
+            }).ToArray(),
+            goldTime = medalTimes.Target(OB_Medal.Gold, layout.StageCount),
+            silverTime = medalTimes.Target(OB_Medal.Silver, layout.StageCount),
+            bronzeTime = medalTimes.Target(OB_Medal.Bronze, layout.StageCount),
+            coinBonus = coinTimeBonus
         };
 
         void WriteLeaderboard(PlayerData player) {
             if (!runners.TryGetValue(player.Owner, out Runner runner)) return;
             SetLeaderboardValue(player, StageColumn, runner.checkpoint);
-            SetLeaderboardValue(player, CoinColumn, CountBits(runner.coins));
+            SetLeaderboardValue(player, CoinColumn, OB_Scoring.CountCoins(runner.coins));
         }
 
         static void SetLeaderboardValue(PlayerData player, string column, int value) {
             int index = SharedGlobalEvents.GetLeaderboardIndex(column);
             if (index >= 0 && index < player.leaderboard.Count && player.leaderboard[index] != value)
                 player.leaderboard[index] = value;
-        }
-
-        static int CountBits(ulong value) {
-            int count = 0;
-            for (; value != 0; value &= value - 1) count++;
-            return count;
         }
 
         static void Award(NetworkConnection connection, ulong xp, ulong gold, string reason) {
@@ -379,15 +457,6 @@ namespace Universes.UniverseData.obby.Server {
             if (SharedGlobalEvents.Instance != null && SharedGlobalEvents.Instance.MusicTrack.Value != selection)
                 SharedGlobalEvents.Instance.MusicTrack.Value = selection;
         }
-
-        public static string Clock(float seconds, bool tenths = false) {
-            seconds = Mathf.Max(0f, seconds);
-            int minutes = (int)(seconds / 60f);
-            float rest = seconds - minutes * 60f;
-            return tenths ? $"{minutes}:{rest:00.0}" : $"{minutes}:{(int)rest:00}";
-        }
-
-        static string Ordinal(int n) => n + (n % 100 is 11 or 12 or 13 ? "th" : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
 
         protected override void Reset() {
             if (!Application.isPlaying) return;
