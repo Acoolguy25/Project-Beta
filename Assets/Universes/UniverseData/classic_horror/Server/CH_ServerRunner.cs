@@ -47,8 +47,35 @@ namespace Universes.UniverseData.classic_horror.Server {
         [SerializeField] ulong winXPReward = 100;
         [Tooltip("Credits (stored as gold) granted to every investigator who survives a completed case.")]
         [SerializeField] ulong winCreditReward = 50;
+        [Tooltip("Seconds into Chapter I before the first strange voice on the radio.")]
+        [SerializeField, Min(5)] float earlyStoryBeatSeconds = 55f;
+        [Header("Encounter Scares")]
+        [Tooltip("Warning and discovery scares an investigator can see per case. Fatal scares are not limited.")]
+        [SerializeField, Min(0)] int nonFatalScaresPerInvestigator = 2;
+        [Tooltip("Seconds between two non-fatal scares for the same investigator.")]
+        [SerializeField, Min(0)] float nonFatalScareCooldown = 90f;
+        [Tooltip("The Presence shows itself when it is hunting an investigator it can see within this distance.")]
+        [SerializeField, Min(1)] float proximityScareDistance = 6f;
+        [Header("Ambient Scares")]
+        [Tooltip("Door slams, distant cries, failing lights and the chapel bell on a timer.")]
+        [SerializeField] bool ambientScares = true;
+        [Tooltip("Quiet time after a case starts before the first ambient scare.")]
+        [SerializeField, Min(0)] float ambientScareGrace = 60f;
+        [SerializeField, Min(5)] float ambientScareMinInterval = 70f;
+        [SerializeField, Min(5)] float ambientScareMaxInterval = 140f;
+        [Tooltip("An ambient scare due during a chase waits this long and tries again; the chase is scary enough.")]
+        [SerializeField, Min(1)] float ambientScareChaseRetry = 12f;
+        [SerializeField, Min(0.5f)] float lightsOutSeconds = 3f;
+        [Tooltip("A door slams at a search location this far from the investigator it is meant for.")]
+        [SerializeField] Vector2 doorSlamDistance = new(10f, 28f);
+        [Tooltip("Chance that the radio comments on an ambient scare.")]
+        [SerializeField, Range(0, 1)] float ambientRadioChance = 0.5f;
+        [Header("Equipment")]
+        [Tooltip("Investigators spawn with the flashlight switched on, so nobody starts the case in total darkness.")]
+        [SerializeField] bool flashlightStartsOn = true;
         [Tooltip("Zero creates a fresh case every round. Nonzero reproduces a case for authoring.")]
         [SerializeField] int fixedSeed;
+        readonly Dictionary<NetworkConnection, (int count, float last)> encounterScares = new();
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
         readonly Dictionary<NetworkConnection, float> snapshotTimes = new();
         readonly HashSet<NetworkConnection> eliminated = new();
@@ -59,9 +86,10 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly HashSet<string> eliminatedAccounts = new();
         readonly List<(float at, string text)> pendingSpeech = new();
         readonly List<Vector3> spawnTeammates = new();
+        readonly List<Vector3> livingInvestigators = new();
         readonly List<(Transform anchor, float score)> spawnOrder = new();
         bool caseStartSpawn, beatEarly, beatHalfway;
-        float caseStarted, lastSpeech;
+        float caseStarted, caseEnded, lastSpeech, nextAmbientScare;
         int scareSequence;
         CH_Map map;
         CH_Case current;
@@ -74,6 +102,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         public CH_Case CurrentCase => current;
         public CH_Map Map => map;
         public bool CaseActive => current != null && current.Phase is CH_Phase.Investigation or CH_Phase.Descent or CH_Phase.Escape;
+        public float ProximityScareDistance => proximityScareDistance;
+        // The clock stops when the case is closed, so the ending card shows how long it took.
+        int CaseSeconds => current == null ? 0 : Mathf.Max(0, Mathf.RoundToInt((CaseActive ? Time.time : caseEnded) - caseStarted));
         const float PlayerSpawnClearance = 1.25f;
         // Standing room checked around a spawn: the investigator's capsule at scale 1.05.
         const float SpawnCapsuleRadius = 0.4f, SpawnCapsuleHeight = 2.1f;
@@ -236,9 +267,21 @@ namespace Universes.UniverseData.classic_horror.Server {
             character.CanSpectate.Value = true;
             if (PlayerData.TryGetPlayerData(character.Owner, out var player)) PreparePlayer(player);
             // The character event may precede this runner's player event on join.
-            ServerTool.Instance.SpawnTool(character.NetworkObject, ToolEnum.Flashlight);
+            ServerTool.Instance.SpawnTool(character.NetworkObject, ToolEnum.Flashlight, PrepareFlashlight);
         }
-        void OnPlayerLeft(PlayerData player) { requestTimes.Remove(player.Owner); snapshotTimes.Remove(player.Owner); eliminated.Remove(player.Owner); reviving.Remove(player.Owner); }
+
+        /// <summary>Runs before the tool is spawned, so clients receive it already lit.</summary>
+        void PrepareFlashlight(ToolBaseShared tool) {
+            if (flashlightStartsOn && tool is ToolFlashlightShared flashlight) flashlight.LightOn.Value = true;
+        }
+
+        void OnPlayerLeft(PlayerData player) {
+            requestTimes.Remove(player.Owner);
+            snapshotTimes.Remove(player.Owner);
+            eliminated.Remove(player.Owner);
+            reviving.Remove(player.Owner);
+            encounterScares.Remove(player.Owner);
+        }
 
         protected override async UniTask StartAsync(CancellationToken token) {
             acceptingPlayers = false;
@@ -252,14 +295,13 @@ namespace Universes.UniverseData.classic_horror.Server {
             do { seed = fixedSeed != 0 ? fixedSeed : Guid.NewGuid().GetHashCode(); } while (fixedSeed == 0 && seed == lastSeed);
             lastSeed = seed;
             current = map.storyLibrary.Generate(seed, map.searchLocations.Length, map.sourceLocations.Length);
-            string sourceName = map.sourceLocations[current.SourceIndex].name;
-            for (int i = 0; i < current.Evidence.Length; i++) current.Evidence[i] = current.Evidence[i].Replace("{source}", sourceName);
-            current.ChapterTwoLine = current.ChapterTwoLine.Replace("{source}", sourceName);
+            current.BindSource(map.sourceLocations[current.SourceIndex].name);
             livesLost = 0;
             eliminated.Clear();
             reviving.Clear();
             accountLives.Clear();
             eliminatedAccounts.Clear();
+            encounterScares.Clear();
             pendingSpeech.Clear();
             beatEarly = beatHalfway = false;
             scareSequence = 0;
@@ -285,17 +327,21 @@ namespace Universes.UniverseData.classic_horror.Server {
             SetHorrorMusic(MusicSelection.HorrorAmbientMusic);
             deadline = Time.time + investigationSeconds;
             caseStarted = Time.time;
+            nextAmbientScare = caseStarted + ambientScareGrace;
             Speak(current.Introduction);
             while (CaseActive) {
                 token.ThrowIfCancellationRequested();
                 secondsLeft = Mathf.Max(0, Mathf.CeilToInt(deadline - Time.time));
                 if (secondsLeft == 0 || EveryoneOut()) {
                     current.Fail();
-                    ending = $"STILL MISSING\nThe radio repeats your last call. {current.Witness} waits on the jetty until dark. The settlement keeps another name.";
+                    caseEnded = Time.time;
+                    Debug.Log($"[Classic Horror] case failed ({(secondsLeft == 0 ? "out of time" : "everyone caught")}) at {CaseSeconds}s, evidence {current.EvidenceCount}, lives lost {livesLost}");
+                    ending = current.Ending();
                     pendingSpeech.Clear();
                     Speak("DISPATCH / We have lost the signal. A new investigation will begin shortly.");
                 }
                 UpdateStoryBeats();
+                UpdateAmbientScares();
                 SetTopMessage(Objective());
                 if (monster != null && monster.IsChasing)
                     chaseMusicUntil = Time.time + ChaseMusicReleaseDelay;
@@ -322,6 +368,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (!CaseActive || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
             livesLost++;
+            Debug.Log($"[Classic Horror] investigator {character.Owner.ClientId} lost a life ({damage}) at case {CaseSeconds}s; lives lost {livesLost}");
             string account = AccountKey(character.Owner);
             if (monster != null && source == monster.GetComponent<GameCharacter>()) ScareCaughtByMonster(character);
             character.CanSpectate.Value = false;
@@ -354,9 +401,29 @@ namespace Universes.UniverseData.classic_horror.Server {
         /// <summary>Plays the scare only after the monster has killed this investigator.</summary>
         void ScareCaughtByMonster(LocalCharacter character) {
             if (character == null || !character.Owner.IsAuthenticated || !CaseActive) return;
-            InstanceFinder.ServerManager.Broadcast(character.Owner, new CH_ScareBroadcast {
-                seed = current.Seed, sequence = ++scareSequence, kind = 2
+            SendScare(character.Owner, CH_ScareKind.Fatal);
+        }
+
+        /// <summary>
+        /// Shows the Presence to one investigator for a warning or discovery encounter, at most
+        /// <see cref="nonFatalScaresPerInvestigator"/> times per case and never twice within
+        /// <see cref="nonFatalScareCooldown"/> seconds, so scares stay rare enough to land.
+        /// </summary>
+        public bool TryEncounterScare(NetworkConnection connection, CH_ScareKind kind) {
+            if (kind == CH_ScareKind.Fatal || connection == null || !connection.IsAuthenticated || !CaseActive) return false;
+            encounterScares.TryGetValue(connection, out var record);
+            if (record.count >= nonFatalScaresPerInvestigator) return false;
+            if (record.count > 0 && Time.time - record.last < nonFatalScareCooldown) return false;
+            encounterScares[connection] = (record.count + 1, Time.time);
+            SendScare(connection, kind);
+            return true;
+        }
+
+        void SendScare(NetworkConnection connection, CH_ScareKind kind) {
+            InstanceFinder.ServerManager.Broadcast(connection, new CH_ScareBroadcast {
+                seed = current.Seed, sequence = ++scareSequence, kind = (byte)kind
             });
+            Debug.Log($"[Classic Horror] {kind} encounter for client {connection.ClientId} at case {CaseSeconds}s");
         }
 
         void OnStateRequest(NetworkConnection connection, CH_StateRequest request, Channel channel) {
@@ -381,64 +448,18 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (!WorldInteraction.CanReach(eye, point, interactionReach + 0.35f, mask)) { RejectInteraction(connection, "Something blocks your reach. Try the other side."); return; }
 
             CH_Phase oldPhase = current.Phase;
-            bool itemCollected = false;
-            if (request.targetId >= CH_Case.DiaryFirstId) {
-                int page = request.targetId - CH_Case.DiaryFirstId;
-                if (!current.CollectDiary(page)) { RejectInteraction(connection, "This page has already been read."); return; }
-                itemCollected = true;
-                AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
-                Speak(current.Diary[page]);
-                // Reading his own words aloud makes the priest falter.
-                monster?.Repel(6f);
-                if (current.DiaryComplete)
-                    QueueSpeak($"RADIO / The knocking stops. For a moment the whole settlement holds its breath. You know his name now: {current.Priest}. Speak it at the source.", 0f);
-            } else if (request.targetId < 9) {
-                if (!current.Collect(request.targetId)) { RejectInteraction(connection, "This record has already been secured."); return; }
-                itemCollected = true;
-                AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
-                Speak(request.targetId < 6 ? current.Evidence[request.targetId]
-                    : $"Recovered the {CH_Case.Offerings[request.targetId - 6]}. {current.RelicCount}/3 offerings secured. Check the ritual order in your journal.");
-                if (request.targetId < 4 && current.EvidenceCount < 4) QueueSpeak(current.EvidenceReplies[request.targetId], 0f);
-                if (request.targetId < 4 && current.EvidenceCount == 2 && !beatHalfway) { beatHalfway = true; QueueSpeak(current.StoryBeats[1], 0f); monster?.Enrage(4f); }
-            } else if (request.targetId >= 11 && request.targetId <= 13 && current.Phase == CH_Phase.Descent) {
-                if (current.RelicCount < 3) { Speak("The source refuses you. Recover all three offerings first."); return; }
-                int offering = request.targetId - 11;
-                if (current.Offer(offering)) {
-                    Speak(current.Phase == CH_Phase.Escape
-                        ? "The water falls silent. RUN to the extraction radio. You have two minutes before it wakes again."
-                        : $"The {CH_Case.Offerings[offering]} is accepted. {current.RitualStep}/3. Read the next step carefully.");
-                } else {
-                    monster?.Enrage(14f);
-                    Speak("That was the wrong order. The seal has broken; begin again. Consult the keeper's instructions in your journal.");
-                }
-            } else if (request.targetId == 10 && current.Extract()) {
-                AwardVictoryRewards();
-                pendingSpeech.Clear();
-                ending = Ending();
-                Speak(current.MemoryCount == 2
-                    ? $"{current.Witness} / You found them. You actually found them. Thank you for bringing {current.Missing} home."
-                    : "DISPATCH / Signal received. You are coming home. Every new case has different evidence, rules and a different ritual.");
+            bool itemCollected;
+            if (request.targetId >= CH_Case.DiaryFirstId) itemCollected = ReadDiaryPage(connection, request.targetId - CH_Case.DiaryFirstId);
+            else if (request.targetId < CH_Case.RequiredLocations) itemCollected = CollectItem(connection, request.targetId);
+            else if (CH_Case.IsOfferingId(request.targetId) && current.Phase == CH_Phase.Descent) {
+                OfferAtSource(connection, request.targetId - CH_Case.OfferingFirstId);
+                itemCollected = false;
+            } else if (request.targetId == CH_Case.ExtractionId && current.Extract()) {
+                Escape();
+                itemCollected = false;
             } else return;
-
             if (itemCollected) PlayerProgress.Modify<CH_SaveData>(connection, save => save.evidenceFound++);
-            if (oldPhase != current.Phase) {
-                if (current.Phase == CH_Phase.Descent) {
-                    // Chapter I is closed for everyone still in the case.
-                    foreach (var player in PlayerData.Players.Values)
-                        if (player != null && !eliminated.Contains(player.Owner)) PlayerProgress.Modify<CH_SaveData>(player, save => save.chaptersCompleted++);
-                    deadline = Time.time + descentSeconds;
-                    // Let the final record be read before the chapter turns.
-                    pendingSpeech.Clear();
-                    QueueSpeak(current.ChapterTwoLine, 0f);
-                    QueueSpeak(current.StoryBeats[2], 25f);
-                    monster?.Enrage(6f);
-                } else if (current.Phase == CH_Phase.Escape) {
-                    deadline = Time.time + escapeSeconds;
-                    pendingSpeech.Clear();
-                    QueueSpeak(current.StoryBeats[3], 20f);
-                    monster?.Repel(12f);
-                }
-            }
+            if (oldPhase != current.Phase) OnPhaseChanged();
             BroadcastState();
             // The collector receives the cue only after the server has accepted the pickup.
             InstanceFinder.ServerManager.Broadcast(connection, new CH_InteractionResult {
@@ -446,11 +467,90 @@ namespace Universes.UniverseData.classic_horror.Server {
             });
         }
 
+        bool ReadDiaryPage(NetworkConnection connection, int page) {
+            if (!current.CollectDiary(page)) { RejectInteraction(connection, "This page has already been read."); return false; }
+            AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
+            PlayerProgress.Modify<CH_SaveData>(connection, save => save.diaryPagesRead++);
+            Speak(current.Diary[page]);
+            // Reading his own words aloud makes the priest falter.
+            monster?.Repel(6f);
+            if (current.DiaryComplete) {
+                QueueSpeak($"RADIO / The knocking stops. For a moment the whole settlement holds its breath. You know his name now: {current.Priest}. Speak it at the source.", 0f);
+                // He answers to his name: the reader glimpses him once.
+                TryEncounterScare(connection, CH_ScareKind.Discovery);
+            }
+            return true;
+        }
+
+        bool CollectItem(NetworkConnection connection, int id) {
+            if (!current.Collect(id)) { RejectInteraction(connection, "This record has already been secured."); return false; }
+            AwardReward(connection, itemXPReward, itemCreditReward, "securing an item");
+            bool memory = id >= CH_Case.RequiredEvidence && id < CH_Case.EvidenceRecordCount;
+            if (memory) PlayerProgress.Modify<CH_SaveData>(connection, save => save.memoriesRecovered++);
+            Speak(id < CH_Case.EvidenceRecordCount ? current.Evidence[id]
+                : $"Recovered the {CH_Case.Offerings[id - 6]}. {current.RelicCount}/3 offerings secured. Check the ritual order in your journal.");
+            if (id < CH_Case.RequiredEvidence && current.EvidenceCount < CH_Case.RequiredEvidence) QueueSpeak(current.EvidenceReplies[id], 0f);
+            if (id < CH_Case.RequiredEvidence && current.EvidenceCount == 2 && !beatHalfway) {
+                beatHalfway = true;
+                QueueSpeak(current.StoryBeats[1], 0f);
+                monster?.Enrage(4f);
+            }
+            return true;
+        }
+
+        void OfferAtSource(NetworkConnection connection, int offering) {
+            if (current.RelicCount < CH_Case.OfferingCount) { Speak("The source refuses you. Recover all three offerings first."); return; }
+            if (current.Offer(offering)) {
+                Speak(current.Phase == CH_Phase.Escape
+                    ? $"The water falls silent. RUN to the extraction radio. You have {FormatDuration(escapeSeconds)} before it wakes again."
+                    : $"{current.OfferingLines[offering]} The {CH_Case.Offerings[offering]} is accepted. {current.RitualStep}/3. Read the next step carefully.");
+                return;
+            }
+            monster?.Enrage(14f);
+            Speak("That was the wrong order. The seal has broken; begin again. Consult the keeper's instructions in your journal.");
+            if (current.MistakeLines.Length > 0) QueueSpeak(current.MistakeLines[(current.Mistakes - 1) % current.MistakeLines.Length], 0f);
+            TryEncounterScare(connection, CH_ScareKind.Discovery);
+        }
+
+        void Escape() {
+            caseEnded = Time.time;
+            ending = current.Ending();
+            AwardVictoryRewards();
+            pendingSpeech.Clear();
+            Speak(current.AllMemories
+                ? $"{current.Witness} / You found them. You actually found them. Thank you for bringing {current.Missing} home."
+                : "DISPATCH / Signal received. You are coming home. Every new case has different evidence, rules and a different ritual.");
+        }
+
+        void OnPhaseChanged() {
+            if (current.Phase == CH_Phase.Descent) {
+                // Chapter I is closed for everyone still in the case.
+                foreach (var player in PlayerData.Players.Values)
+                    if (player != null && !eliminated.Contains(player.Owner)) PlayerProgress.Modify<CH_SaveData>(player, save => save.chaptersCompleted++);
+                deadline = Time.time + descentSeconds;
+                // Let the final record be read before the chapter turns.
+                pendingSpeech.Clear();
+                QueueSpeak(current.ChapterTwoLine, 0f);
+                QueueSpeak(current.StoryBeats[2], 25f);
+                monster?.Enrage(6f);
+            } else if (current.Phase == CH_Phase.Escape) {
+                deadline = Time.time + escapeSeconds;
+                pendingSpeech.Clear();
+                QueueSpeak(current.StoryBeats[3], 20f);
+                monster?.Repel(12f);
+            }
+        }
+
+        static string FormatDuration(int seconds) =>
+            seconds % 60 == 0 ? $"{seconds / 60} minute{(seconds == 60 ? "" : "s")}" : $"{seconds} seconds";
+
         void AwardVictoryRewards() {
+            int endingIndex = current.EndingIndex(), caseSeconds = CaseSeconds;
+            Debug.Log($"[Classic Horror] case closed: ending {endingIndex} in {caseSeconds}s, evidence {current.EvidenceCount}, memories {current.MemoryCount}, lives lost {livesLost}");
             foreach (var player in PlayerData.Players.Values) {
                 if (player == null || eliminated.Contains(player.Owner)) continue;
                 AwardReward(player.Owner, winXPReward, winCreditReward, "surviving the case");
-                PlayerProgress.Modify<CH_SaveData>(player, save => save.RecordCaseClosed());
+                PlayerProgress.Modify<CH_SaveData>(player, save => save.RecordCaseClosed(endingIndex, caseSeconds));
             }
         }
 
@@ -486,14 +586,14 @@ namespace Universes.UniverseData.classic_horror.Server {
                 position = map.searchLocations[current.LocationIndices[9 + page]].position + Vector3.up * 1.3f;
                 return true;
             }
-            if (id >= 0 && id < 9) {
-                if (id >= 6 && current.Phase != CH_Phase.Descent || current.Collected(id)) return false;
+            if (id >= 0 && id < CH_Case.RequiredLocations) {
+                if (id >= CH_Case.EvidenceRecordCount && current.Phase != CH_Phase.Descent || current.Collected(id)) return false;
                 position = map.searchLocations[current.LocationIndices[id]].position + Vector3.up * 1.3f;
                 return true;
             }
-            if (id >= 11 && id <= 13 && current.Phase == CH_Phase.Descent && current.RelicCount == 3) position = OfferingPosition(id - 11);
-            else if (id == 9 && current.Phase == CH_Phase.Descent) position = map.sourceLocations[current.SourceIndex].position + Vector3.up * 1.3f;
-            else if (id == 10 && current.Phase == CH_Phase.Escape) position = map.extraction.position + Vector3.up * 1.3f;
+            if (CH_Case.IsOfferingId(id) && current.Phase == CH_Phase.Descent && current.RelicCount == CH_Case.OfferingCount) position = OfferingPosition(id - CH_Case.OfferingFirstId);
+            else if (id == CH_Case.SourceId && current.Phase == CH_Phase.Descent) position = map.sourceLocations[current.SourceIndex].position + Vector3.up * 1.3f;
+            else if (id == CH_Case.ExtractionId && current.Phase == CH_Phase.Escape) position = map.extraction.position + Vector3.up * 1.3f;
             else return false;
             return true;
         }
@@ -503,7 +603,7 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         string Objective() => current?.Phase switch {
             CH_Phase.Investigation => $"CHAPTER I / THE LAST CALL   |   Evidence {current.EvidenceCount}/4",
-            CH_Phase.Descent when current.RelicCount < 3 => $"CHAPTER II / WHAT ANSWERED   |   Offerings {current.RelicCount}/3",
+            CH_Phase.Descent when current.RelicCount < CH_Case.OfferingCount => $"CHAPTER II / WHAT ANSWERED   |   Offerings {current.RelicCount}/{CH_Case.OfferingCount}",
             CH_Phase.Descent => $"CHAPTER II / WHAT ANSWERED   |   Seal {map.sourceLocations[current.SourceIndex].name} ({current.RitualStep}/3)",
             CH_Phase.Escape => "CHAPTER II / WHAT ANSWERED   |   Return to the extraction radio",
             CH_Phase.Complete => "CASE CLOSED / YOU ESCAPED",
@@ -513,6 +613,16 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         public void Speak(string text) { dialogue = text; dialogueRevision++; lastSpeech = Time.time; }
 
+        /// <summary>
+        /// A flavour line from the Presence. It never cuts off a story line that is still being
+        /// read; if the radio is busy the warning is simply dropped. Returns whether it played.
+        /// </summary>
+        public bool TrySpeakWarning(string text) {
+            if (Time.time - lastSpeech < SpeechSpacing || pendingSpeech.Count > 0) return false;
+            Speak(text);
+            return true;
+        }
+
         /// <summary>Plays a radio line after <paramref name="delay"/>, once the current one has been readable.</summary>
         void QueueSpeak(string text, float delay) {
             if (!string.IsNullOrEmpty(text)) pendingSpeech.Add((Time.time + delay, text));
@@ -520,7 +630,7 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         void UpdateStoryBeats() {
             if (!CaseActive) return;
-            if (!beatEarly && current.Phase == CH_Phase.Investigation && Time.time - caseStarted > 55f) {
+            if (!beatEarly && current.Phase == CH_Phase.Investigation && Time.time - caseStarted > earlyStoryBeatSeconds) {
                 beatEarly = true;
                 QueueSpeak(current.StoryBeats[0], 0f);
             }
@@ -534,19 +644,53 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
         }
 
-        string Ending() {
-            string missing = Capitalize(current.Missing);
-            bool memories = current.MemoryCount == 2, diary = current.DiaryComplete;
-            if (memories && diary)
-                return $"LAST RITES\nYou brought {current.Missing} home and spoke {current.Priest}'s name at the source. The water gives back every name it took. At dawn the chapel bell rings once, and never again.";
-            if (memories)
-                return $"THE WATER REMEMBERS\n{missing} is remembered. At dawn, the settlement's windows reflect the sky again. Somewhere below, {current.Priest} is still walking.";
-            if (diary)
-                return $"A NAME FOR A NAME\n{current.Priest} finally rests. But the memories of {current.Missing} stayed under the water, and {current.Witness} still leaves the porch light on.";
-            return "BORROWED SILENCE\nYou escaped and sealed the source. But the names you left behind still whisper beneath the water, and it will be hungry again.";
+        /// <summary>
+        /// Schedules door slams, distant cries, failing lights and the chapel bell between
+        /// <see cref="ambientScareMinInterval"/> and <see cref="ambientScareMaxInterval"/> seconds.
+        /// Everyone hears the same event at the same place; clients only present it.
+        /// </summary>
+        void UpdateAmbientScares() {
+            if (!ambientScares || !CaseActive || Time.time < nextAmbientScare) return;
+            if (monster != null && monster.IsChasing) { nextAmbientScare = Time.time + ambientScareChaseRetry; return; }
+            nextAmbientScare = Time.time + UnityEngine.Random.Range(ambientScareMinInterval, Mathf.Max(ambientScareMinInterval, ambientScareMaxInterval));
+            var kind = (CH_AmbientScare)UnityEngine.Random.Range(0, CH_Case.AmbientScareCount);
+            if (!TryAmbientScarePosition(kind, out Vector3 position)) return;
+            InstanceFinder.ServerManager.Broadcast(new CH_AmbientScareBroadcast {
+                seed = current.Seed, kind = kind, position = position,
+                seconds = kind == CH_AmbientScare.LightsOut ? lightsOutSeconds : 0f
+            });
+            if (UnityEngine.Random.value < ambientRadioChance) QueueSpeak(current.AmbientLines[(int)kind], 0f);
+            Debug.Log($"[Classic Horror] ambient scare {kind} at case {CaseSeconds}s; next in {nextAmbientScare - Time.time:0}s");
         }
 
-        static string Capitalize(string text) => string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text.Substring(1);
+        /// <summary>
+        /// The bell rings at the source's chapel; a cry comes from the search location furthest from
+        /// the team; a door slams at a location within <see cref="doorSlamDistance"/> of one investigator.
+        /// </summary>
+        bool TryAmbientScarePosition(CH_AmbientScare kind, out Vector3 position) {
+            position = map.sourceLocations[current.SourceIndex].position;
+            if (kind is CH_AmbientScare.ChapelBell or CH_AmbientScare.LightsOut) return true;
+            livingInvestigators.Clear();
+            foreach (var character in LocalCharacter.Characters.Values)
+                if (character != null && !character.IsDead) livingInvestigators.Add(character.transform.position);
+            if (livingInvestigators.Count == 0) return false;
+            Vector3 listener = livingInvestigators[UnityEngine.Random.Range(0, livingInvestigators.Count)];
+            float bestScore = float.MinValue;
+            foreach (Transform location in map.searchLocations) {
+                if (location == null) continue;
+                float nearestTeammate = float.MaxValue;
+                foreach (Vector3 mate in livingInvestigators) nearestTeammate = Mathf.Min(nearestTeammate, Vector3.Distance(mate, location.position));
+                float score = kind == CH_AmbientScare.DistantCry
+                    ? nearestTeammate
+                    : -Mathf.Abs(Vector3.Distance(listener, location.position) - Mathf.Lerp(doorSlamDistance.x, doorSlamDistance.y, 0.5f))
+                        - (nearestTeammate < doorSlamDistance.x ? 1000f : 0f);
+                if (score <= bestScore) continue;
+                bestScore = score;
+                position = location.position;
+            }
+            return true;
+        }
+
         CH_StateBroadcast MakeState() {
             var points = new List<CH_PointState>();
             string[] labels = { "Witness testimony", "Light observation", "Keeper's instructions", "Survey map", "Lost memory", "Lost memory", "Salt canister", "Hand bell", "Keeper's lantern" };
@@ -568,18 +712,18 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (current.Phase != CH_Phase.Investigation) {
                 Transform source = map.sourceLocations[current.SourceIndex];
                 points.Add(new CH_PointState {
-                    id = 9, position = source.position + Vector3.up * 1.3f, title = "The source", area = source.name,
+                    id = CH_Case.SourceId, position = source.position + Vector3.up * 1.3f, title = "The source", area = source.name,
                     collected = current.Phase != CH_Phase.Descent, navigationTarget = false
                 });
             }
-            if (current.Phase == CH_Phase.Descent && current.RelicCount == 3)
-                for (int i = 0; i < 3; i++) points.Add(new CH_PointState {
-                    id = 11 + i, position = OfferingPosition(i), title = "Offer " + CH_Case.Offerings[i],
+            if (current.Phase == CH_Phase.Descent && current.RelicCount == CH_Case.OfferingCount)
+                for (int i = 0; i < CH_Case.OfferingCount; i++) points.Add(new CH_PointState {
+                    id = CH_Case.OfferingFirstId + i, position = OfferingPosition(i), title = "Offer " + CH_Case.Offerings[i],
                     area = map.sourceLocations[current.SourceIndex].name, collected = false,
                     navigationTarget = i == current.Order[current.RitualStep]
                 });
             points.Add(new CH_PointState {
-                id = 10, position = map.extraction.position + Vector3.up * 1.3f, title = "Extraction radio", area = "Arrival jetty",
+                id = CH_Case.ExtractionId, position = map.extraction.position + Vector3.up * 1.3f, title = "Extraction radio", area = "Arrival jetty",
                 collected = current.Phase != CH_Phase.Escape, navigationTarget = current.Phase == CH_Phase.Escape
             });
             var journal = new List<string> { current.Introduction };
@@ -590,7 +734,9 @@ namespace Universes.UniverseData.classic_horror.Server {
                 dialogue = dialogue, dialogueRevision = dialogueRevision, journal = journal.ToArray(), points = points.ToArray(),
                 evidenceCount = current.EvidenceCount, relicCount = current.RelicCount, ritualStep = current.RitualStep,
                 livesLost = livesLost, livesPerPlayer = livesPerPlayer, secondsLeft = secondsLeft, completedCases = completedCases,
-                monsterId = monster != null ? monster.GetComponent<GameCharacter>().ObjectId : -1, ending = ending
+                monsterId = monster != null ? monster.GetComponent<GameCharacter>().ObjectId : -1, ending = ending,
+                memoryCount = current.MemoryCount, diaryCount = current.DiaryCount, diaryTotal = current.Diary.Length,
+                ritualMistakes = current.Mistakes, caseSeconds = CaseSeconds, temperament = current.Temperament
             };
         }
         void BroadcastState() { if (current != null) InstanceFinder.ServerManager.Broadcast(MakeState()); }

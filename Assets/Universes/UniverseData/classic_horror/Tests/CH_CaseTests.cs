@@ -91,6 +91,79 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.AreEqual(CH_Phase.Failed, c.Phase);
         }
 
+        [Test] public void EveryCaseTextIsFullyExpanded() {
+            for (int seed = 1; seed <= 256; seed++) {
+                var c = library.Generate(unchecked(seed * 104729), 16, 3);
+                c.BindSource("the drowned chapel");
+                foreach (string text in AllTexts(c))
+                    Assert.IsFalse(text.Contains("{"), $"Seed {seed} left a token in: {text}");
+                Assert.AreEqual(CH_Case.StoryBeatCount, c.StoryBeats.Length);
+                Assert.AreEqual(CH_Case.AmbientScareCount, c.AmbientLines.Length);
+                Assert.AreEqual(CH_Case.Offerings.Length, c.OfferingLines.Length);
+            }
+        }
+
+        [Test] public void SourceIsBoundIntoTheStory() {
+            var c = library.Generate(77, 16, 3);
+            c.BindSource("the flooded mill");
+            StringAssert.Contains("the flooded mill", c.Evidence[3]);
+            StringAssert.Contains("the flooded mill", c.StoryBeats[2]);
+        }
+
+        [Test] public void EditingStoryTextNeverMovesTheLayout() {
+            var a = library.Generate(9001, 16, 3);
+            var edited = ScriptableObject.CreateInstance<CH_StoryLibrary>();
+            try {
+                edited.witnesses = new[] { "Only Witness" };
+                edited.dispatch = new[] { "DISPATCH / One line." };
+                edited.memories = new[] { "m1", "m2", "m3" };
+                var b = edited.Generate(9001, 16, 3);
+                Assert.AreEqual(a.Temperament, b.Temperament);
+                Assert.AreEqual(a.SourceIndex, b.SourceIndex);
+                CollectionAssert.AreEqual(a.Order, b.Order);
+                CollectionAssert.AreEqual(a.LocationIndices, b.LocationIndices);
+            } finally { UnityEngine.Object.DestroyImmediate(edited); }
+        }
+
+        [Test] public void EndingsFollowMemoriesAndDiary() {
+            CH_Case Solved(bool memories, bool diary) {
+                var c = library.Generate(4242, 16, 3);
+                if (memories) { c.Collect(4); c.Collect(5); }
+                if (diary) for (int page = 0; page < c.Diary.Length; page++) c.CollectDiary(page);
+                for (int id = 0; id < 4; id++) c.Collect(id);
+                for (int id = 6; id <= 8; id++) c.Collect(id);
+                foreach (int offering in c.Order) c.Offer(offering);
+                Assert.IsTrue(c.Extract());
+                return c;
+            }
+            Assert.AreEqual(CH_Case.EndingLastRites, Solved(true, true).EndingIndex());
+            Assert.AreEqual(CH_Case.EndingWaterRemembers, Solved(true, false).EndingIndex());
+            Assert.AreEqual(CH_Case.EndingNameForName, Solved(false, true).EndingIndex());
+            Assert.AreEqual(CH_Case.EndingBorrowedSilence, Solved(false, false).EndingIndex());
+            var failed = library.Generate(4242, 16, 3);
+            failed.Fail();
+            Assert.AreEqual(CH_Case.EndingStillMissing, failed.EndingIndex());
+            StringAssert.StartsWith("STILL MISSING\n", failed.Ending());
+            StringAssert.Contains(failed.Witness, failed.Ending());
+        }
+
+        [Test] public void StoryLinesSplitIntoSpeakerAndBody() {
+            CH_StoryText.Split("DISPATCH / Find four records.", out string speaker, out string body);
+            Assert.AreEqual("DISPATCH", speaker);
+            Assert.AreEqual("Find four records.", body);
+            CH_StoryText.Split("No speaker here.", out speaker, out body);
+            Assert.AreEqual("", speaker);
+            Assert.AreEqual("No speaker here.", body);
+        }
+
+        static IEnumerable<string> AllTexts(CH_Case c) {
+            yield return c.Title;
+            yield return c.Introduction;
+            yield return c.ChapterTwoLine;
+            foreach (var group in new[] { c.Evidence, c.Warnings, c.Diary, c.EvidenceReplies, c.StoryBeats, c.OfferingLines, c.MistakeLines, c.AmbientLines, c.Endings })
+                foreach (string text in group) yield return text;
+        }
+
         [Test] public void IncompleteMapsFailExplicitly() {
             Assert.Throws<ArgumentException>(() => library.Generate(1, 8, 3));
             Assert.Throws<ArgumentException>(() => library.Generate(1, 16, 0));

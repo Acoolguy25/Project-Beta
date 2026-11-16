@@ -20,6 +20,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float InvestigationHuntSpeed = 10f;
         const float RitualHuntSpeed = 11.5f;
         const float EnragedHuntSpeed = 13f;
+        /// <summary>How close the monster must be to strike, and its reach past obstacles when it does.</summary>
+        const float StrikeDistance = 1.85f, StrikeReach = 2.2f;
         const float UnreachableGiveUpSeconds = 10f;
         const float UnreachableRetrySeconds = 12f;
         const float ReachableApproachRadius = 3f;
@@ -60,9 +62,11 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly struct SensedCandidate {
             public readonly LocalCharacter Character;
             public readonly float Distance;
-            public SensedCandidate(LocalCharacter character, float distance) {
+            public readonly bool Visible;
+            public SensedCandidate(LocalCharacter character, float distance, bool visible) {
                 Character = character;
                 Distance = distance;
+                Visible = visible;
             }
         }
 
@@ -124,6 +128,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             nextThink = Time.time + 0.15f;
             LocalCharacter sensed = null;
             float closest = float.MaxValue;
+            bool sensedVisible = false;
             bool heldByLight = false;
             sensedCandidates.Clear();
             Vector3 eye = entity.CharacterCamera != null ? entity.CharacterCamera.position : transform.position + Vector3.up * 1.75f;
@@ -159,7 +164,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                         : 0f;
                 bool heard = distance < hearingRange;
                 if ((sight && distance < sightRange) || heard)
-                    sensedCandidates.Add(new SensedCandidate(character, distance));
+                    sensedCandidates.Add(new SensedCandidate(character, distance, sight));
             }
             staleCharacters.Clear();
             foreach (var pair in previousPositions) if (pair.Key == null || !pair.Key.IsSpawned) staleCharacters.Add(pair.Key);
@@ -208,6 +213,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 }
                 sensed = candidate.Character;
                 closest = candidate.Distance;
+                sensedVisible = candidate.Visible;
                 break;
             }
             if (sensed != null) {
@@ -224,15 +230,21 @@ namespace Universes.UniverseData.classic_horror.Server {
                 if (Time.time < enragedUntil) speed = EnragedHuntSpeed;
                 NavigatePursued(speed);
                 Vector3 sensedEye = sensed.CharacterCamera != null ? sensed.CharacterCamera.position : sensed.transform.position + Vector3.up * 2f;
-                if (closest < 1.85f && Time.time >= nextAttack && WorldInteraction.CanReach(eye, sensedEye, 2.2f, obstacleMask)) {
+                bool inStrikeRange = closest < StrikeDistance;
+                if (inStrikeRange && Time.time >= nextAttack && WorldInteraction.CanReach(eye, sensedEye, StrikeReach, obstacleMask)) {
                     nextAttack = Time.time + 2f;
                     // Use the health contract so a successful hit is lethal at any
                     // player health, while still respecting spawn protection.
                     sensed.TakeDamage(System.Math.Max(1L, sensed.Health.Value), DamageType.Melee, (IEntity)entity);
                 }
-                if (closest < 38f && Time.time > nextWhisper) {
+                // Face to face in the dark: the runner rations these so they stay rare. Inside strike
+                // range the fatal scare is the one that plays, so a warning would only stack on it.
+                if (sensedVisible && !inStrikeRange && closest < runner.ProximityScareDistance)
+                    runner.TryEncounterScare(sensed.Owner, CH_ScareKind.Warning);
+                if (closest < 38f && Time.time > nextWhisper
+                    && runner.TrySpeakWarning(runner.CurrentCase.Warnings[warningIndex % runner.CurrentCase.Warnings.Length])) {
+                    warningIndex++;
                     nextWhisper = Time.time + 35f;
-                    runner.Speak(runner.CurrentCase.Warnings[warningIndex++ % runner.CurrentCase.Warnings.Length]);
                 }
             } else if (Time.time - lastSeen < PursuitMemorySeconds && IsEligibleTarget(pursued)) {
                 State = "Searching";

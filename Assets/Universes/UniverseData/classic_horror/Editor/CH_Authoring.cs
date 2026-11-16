@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FishNet.Managing.Object;
 using FishNet.Object;
 using RyanAssets.Characters.Shared;
+using RyanAssets.GameFeel;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Tools.Client;
 using RyanAssets.Tools.Shared;
@@ -11,6 +12,8 @@ using RyanAssets.UI.Editor;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using Universes.UniverseData.classic_horror.Client;
 
 namespace Universes.UniverseData.classic_horror.Editor {
@@ -66,23 +69,14 @@ namespace Universes.UniverseData.classic_horror.Editor {
                     sky = new Material(skyShader) { name = "NightSky" };
                     AssetDatabase.CreateAsset(sky, skyPath);
                 }
-                RenderSettings.skybox = sky;
-                RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-                RenderSettings.ambientLight = new Color(0.009f, 0.013f, 0.02f);
-                RenderSettings.ambientIntensity = 1f;
-                // The imported daylight cubemap makes wet surfaces shine even at night.
-                RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Skybox;
-                RenderSettings.customReflectionTexture = null;
-                RenderSettings.reflectionIntensity = 0.1f;
-                RenderSettings.fog = true;
-                RenderSettings.fogMode = FogMode.ExponentialSquared;
-                RenderSettings.fogColor = new Color(0.018f, 0.028f, 0.045f);
-                RenderSettings.fogDensity = 0.014f;
-                if (RenderSettings.sun != null) {
-                    RenderSettings.sun.color = new Color(0.47f, 0.6f, 0.78f);
-                    RenderSettings.sun.intensity = 0.025f;
-                    EditorUtility.SetDirty(RenderSettings.sun);
-                }
+                // The running client re-applies the same values (CH_Atmosphere), so edit them there.
+                PlaceSearchLanterns(scene, AuthoredLampIntensity());
+                BuildNightGrade(scene);
+                FixPackParticleBlending(scene);
+                CH_NightLighting lighting = AuthoredNightLighting();
+                lighting.Apply();
+                RenderSettings.skybox = lighting.skybox != null ? lighting.skybox : sky;
+                if (RenderSettings.sun != null) EditorUtility.SetDirty(RenderSettings.sun);
                 // FishNet creates unsaved holding scenes during loading. Baking here opens a
                 // save dialog for those scenes, even with both GI options disabled.
                 Lightmapping.bakeOnSceneLoad = Lightmapping.BakeOnSceneLoadMode.Never;
@@ -105,6 +99,234 @@ namespace Universes.UniverseData.classic_horror.Editor {
             }
         }
 
+        const string KayKitHalloween = "Assets/ThirdParty/KayKit/HalloweenBits/Models/";
+        const string SearchLanternPath = Root + "/Prefabs/SearchLantern.prefab";
+        const string LanternPostName = "Lantern post";
+        // Where the lantern stands next to its search spot, and how much room the post needs.
+        const float LanternOffset = 1.6f, LanternClearance = 0.35f, LanternProbeHeight = 6f, LanternRange = 11f;
+        static readonly Color LanternGlow = new Color(1f, 0.58f, 0.24f) * 2.4f;
+
+        /// <summary>
+        /// A gallows post with a hanging lantern (KayKit Halloween Bits, CC0) whose glass is emissive,
+        /// so each search spot's warm light has a visible source that flickers with it (CH_Atmosphere).
+        /// </summary>
+        static GameObject BuildSearchLantern() {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(KayKitHalloween + "post_lantern.fbx");
+            if (model == null) throw new System.InvalidOperationException("KayKit post_lantern.fbx is missing.");
+            var root = new GameObject("SearchLantern");
+            try {
+                var visual = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                visual.transform.SetParent(root.transform, false);
+                Renderer glass = null;
+                foreach (var renderer in visual.GetComponentsInChildren<Renderer>())
+                    if (renderer.name.EndsWith("_lantern")) glass = renderer;
+                if (glass == null) throw new System.InvalidOperationException("post_lantern.fbx has no lantern mesh.");
+                glass.sharedMaterial = LanternGlassMaterial(glass.sharedMaterial);
+                glass.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var post = root.AddComponent<CapsuleCollider>();
+                post.radius = 0.12f; post.height = 3.2f; post.center = new Vector3(0f, 1.6f, 0f);
+                return PrefabUtility.SaveAsPrefabAsset(root, SearchLanternPath);
+            } finally { Object.DestroyImmediate(root); }
+        }
+
+        /// <summary>The KayKit atlas with itself as emission map: the amber glass glows, the dark iron barely does.</summary>
+        static Material LanternGlassMaterial(Material atlas) {
+            string path = Root + "/Materials/SearchLanternGlass.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) { material = new Material(atlas) { name = "SearchLanternGlass" }; AssetDatabase.CreateAsset(material, path); }
+            else material.CopyPropertiesFromMaterial(atlas);
+            material.EnableKeyword("_EMISSION");
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            material.SetTexture("_EmissionMap", atlas.GetTexture("_BaseMap"));
+            material.SetColor("_EmissionColor", LanternGlow);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        /// <summary>
+        /// Stands a lantern post beside every practical light's search spot, on the ground and clear of
+        /// walls, hangs the light inside its glass and records the glass in CH_Map.practicalGlows.
+        /// Re-running moves the existing posts instead of adding more.
+        /// </summary>
+        static void PlaceSearchLanterns(UnityEngine.SceneManagement.Scene scene, float intensity) {
+            CH_Map map = null;
+            foreach (var root in scene.GetRootGameObjects()) if ((map = root.GetComponentInChildren<CH_Map>(true)) != null) break;
+            if (map == null || map.practicalLights == null) throw new System.InvalidOperationException("The horror map has no CH_Map with practical lights.");
+            var prefab = BuildSearchLantern();
+            Physics.SyncTransforms();
+            var glows = new Renderer[map.practicalLights.Length];
+            for (int i = 0; i < glows.Length; i++) {
+                Light lamp = map.practicalLights[i];
+                if (lamp == null) continue;
+                Transform spot = lamp.transform.parent;
+                Transform post = spot.Find(LanternPostName);
+                if (post == null) {
+                    post = ((GameObject)PrefabUtility.InstantiatePrefab(prefab, spot)).transform;
+                    post.name = LanternPostName;
+                }
+                post.gameObject.SetActive(false); // keep its own collider out of the clearance checks
+                Vector3 ground = LanternGround(spot, post);
+                post.gameObject.SetActive(true);
+                Vector3 toSpot = spot.position - ground; toSpot.y = 0f;
+                post.SetPositionAndRotation(ground, toSpot.sqrMagnitude > 0.01f ? Quaternion.LookRotation(toSpot) : spot.rotation);
+                Renderer glass = null;
+                foreach (var renderer in post.GetComponentsInChildren<Renderer>())
+                    if (renderer.name.EndsWith("_lantern")) glass = renderer;
+                glows[i] = glass;
+                if (glass != null) lamp.transform.position = glass.bounds.center;
+                lamp.range = LanternRange;
+                lamp.intensity = intensity;
+                lamp.shadows = LightShadows.None;
+                // Important, so the huge terrain's eight per-object light slots go to lamps before the pack's dim bounce lights.
+                lamp.renderMode = LightRenderMode.ForcePixel;
+            }
+            map.practicalGlows = glows;
+            EditorUtility.SetDirty(map);
+        }
+
+        /// <summary>The first spot around the search point, LanternOffset away, with open ground and room for the post.</summary>
+        static Vector3 LanternGround(Transform spot, Transform post) {
+            Vector3[] directions = { spot.right, -spot.right, -spot.forward, spot.forward, (spot.right - spot.forward).normalized, (-spot.right - spot.forward).normalized };
+            Vector3 fallback = spot.position;
+            foreach (Vector3 direction in directions) {
+                Vector3 flat = new Vector3(direction.x, 0f, direction.z).normalized * LanternOffset;
+                Vector3 top = spot.position + flat + Vector3.up * LanternProbeHeight;
+                if (!Physics.Raycast(top, Vector3.down, out RaycastHit hit, LanternProbeHeight * 2f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                if (Mathf.Abs(hit.point.y - spot.position.y) > 1.5f) continue;
+                Vector3 bottom = hit.point + Vector3.up * (LanternClearance + 0.3f), head = hit.point + Vector3.up * 3f;
+                if (Physics.CheckCapsule(bottom, head, LanternClearance, ~0, QueryTriggerInteraction.Ignore)) {
+                    if (fallback == spot.position) fallback = hit.point;
+                    continue;
+                }
+                return hit.point;
+            }
+            Debug.LogWarning($"Classic Horror: no clear ground for the lantern at {spot.name}; it may touch a wall.", spot);
+            return fallback;
+        }
+
+        const string NightGradePath = Root + "/Data/HorrorAtmosphere.asset";
+        // Above the shared mood volume (20): the kit's Horror preset keeps its film grain, vignette and
+        // bloom, and this grade replaces its ACES tonemapping and -0.45 exposure, which crushed this
+        // moonlit map to black in the live Game view.
+        const float NightGradePriority = 25f;
+
+        /// <summary>The map's own colour grade, layered over the shared Horror mood the client applies.</summary>
+        static void BuildNightGrade(UnityEngine.SceneManagement.Scene scene) {
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(NightGradePath);
+            if (profile == null) throw new System.InvalidOperationException("Missing " + NightGradePath);
+            Override<Tonemapping>(profile).mode.Override(TonemappingMode.Neutral);
+            var color = Override<ColorAdjustments>(profile);
+            color.postExposure.Override(1.3f);
+            color.contrast.Override(6f);
+            color.saturation.Override(-20f);
+            color.colorFilter.Override(Color.white);
+            EditorUtility.SetDirty(profile);
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var volume in root.GetComponentsInChildren<Volume>(true))
+                    if (volume.sharedProfile == profile) { volume.priority = NightGradePriority; EditorUtility.SetDirty(volume); }
+        }
+
+        const string ParticleMaterialFolder = Root + "/Materials/Particles";
+
+        /// <summary>
+        /// Two things made the Flooded Grounds particles (falling leaves, dust, halo rings) draw as
+        /// squares at night: the leaf material samples the pack's alpha-less .tif, and URP's
+        /// "preserve specular" alpha mode adds the flashlight's specular highlight across the whole
+        /// quad, transparent corners included. The scene's particle renderers get copies of those
+        /// materials, kept in this game's folder, that use the pack's "_Transparent.png" twin where
+        /// there is one and plain alpha blending. The pack's own materials stay untouched; re-running
+        /// refreshes the copies.
+        /// </summary>
+        static void FixPackParticleBlending(UnityEngine.SceneManagement.Scene scene) {
+            if (!AssetDatabase.IsValidFolder(ParticleMaterialFolder)) AssetDatabase.CreateFolder(Root + "/Materials", "Particles");
+            var copies = new Dictionary<Material, Material>();
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var renderer in root.GetComponentsInChildren<ParticleSystemRenderer>(true)) {
+                    Material material = renderer.sharedMaterial;
+                    if (material == null || !material.HasProperty("_Surface") || material.GetFloat("_Surface") < 1f) continue;
+                    string path = AssetDatabase.GetAssetPath(material);
+                    bool packMaterial = path.StartsWith(Root + "/Flooded_Grounds/"), ourCopy = path.StartsWith(ParticleMaterialFolder + "/");
+                    if (!packMaterial && !ourCopy) continue;
+                    if (!copies.TryGetValue(material, out Material copy)) {
+                        copy = material;
+                        if (packMaterial) {
+                            string copyPath = ParticleMaterialFolder + "/" + material.name + ".mat";
+                            copy = AssetDatabase.LoadAssetAtPath<Material>(copyPath);
+                            if (copy == null) { copy = new Material(material); AssetDatabase.CreateAsset(copy, copyPath); }
+                            else copy.CopyPropertiesFromMaterial(material);
+                        }
+                        Texture alphaTwin = TransparentTwin(copy.GetTexture("_BaseMap"));
+                        if (alphaTwin != null) {
+                            copy.SetTexture("_BaseMap", alphaTwin);
+                            copy.SetTexture("_MainTex", alphaTwin);
+                        }
+                        UsePlainAlphaBlending(copy);
+                        copies.Add(material, copy);
+                    }
+                    renderer.sharedMaterial = copy;
+                    EditorUtility.SetDirty(renderer);
+                }
+        }
+
+        /// <summary>
+        /// Straight alpha blending for a transparent URP material, without "preserve specular" (which
+        /// lights the transparent part of a particle quad) and without a glossy highlight.
+        /// </summary>
+        static void UsePlainAlphaBlending(Material material) {
+            if (material.HasProperty("_BlendModePreserveSpecular")) material.SetFloat("_BlendModePreserveSpecular", 0f);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            material.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
+            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            EditorUtility.SetDirty(material);
+        }
+
+        /// <summary>The pack's "&lt;name&gt;_Transparent.png" beside an alpha-less texture, or null when there is none (or it is already that).</summary>
+        static Texture TransparentTwin(Texture texture) {
+            if (texture == null || texture.name.EndsWith("_Transparent")) return null;
+            string path = AssetDatabase.GetAssetPath(texture);
+            string twin = System.IO.Path.GetDirectoryName(path).Replace('\\', '/') + "/" + texture.name + "_Transparent.png";
+            return AssetDatabase.LoadAssetAtPath<Texture>(twin);
+        }
+
+        static float AuthoredLampIntensity() {
+            var hud = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/InvestigationHUD.prefab");
+            var atmosphere = hud != null ? hud.GetComponent<CH_Atmosphere>() : null;
+            if (atmosphere == null) throw new System.InvalidOperationException("Rebuild the Investigation HUD before configuring the map lighting.");
+            return atmosphere.LampIntensity;
+        }
+
+        /// <summary>The night lighting authored on the investigation HUD's CH_Atmosphere (its defaults if the HUD is not built yet).</summary>
+        static CH_NightLighting AuthoredNightLighting() {
+            var hud = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/InvestigationHUD.prefab");
+            var atmosphere = hud != null ? hud.GetComponent<CH_Atmosphere>() : null;
+            return atmosphere != null && atmosphere.lighting != null ? atmosphere.lighting : new CH_NightLighting();
+        }
+
+        /// <summary>
+        /// Overwrites Data/StoryLibrary.asset with the text authored in CH_StoryLibrary's field
+        /// defaults. The asset otherwise keeps whatever it was first saved with, so new story
+        /// text in code only reaches the game through this.
+        /// </summary>
+        [MenuItem("Ryan/Classic Horror/Reset Story Library To Authored Text")]
+        public static void ResetStoryLibrary() {
+            string path = Root + "/Data/StoryLibrary.asset";
+            var authored = ScriptableObject.CreateInstance<CH_StoryLibrary>();
+            var library = AssetDatabase.LoadAssetAtPath<CH_StoryLibrary>(path);
+            if (library == null) {
+                AssetDatabase.CreateAsset(authored, path);
+            } else {
+                EditorUtility.CopySerialized(authored, library);
+                library.name = "StoryLibrary";
+                EditorUtility.SetDirty(library);
+                Object.DestroyImmediate(authored);
+            }
+            AssetDatabase.SaveAssets();
+        }
+
         [MenuItem("Ryan/Classic Horror/Rebuild Presentation Prefabs")]
         public static void BuildPresentation() {
             EnsureFolders();
@@ -114,6 +336,17 @@ namespace Universes.UniverseData.classic_horror.Editor {
             BuildHud();
             var library = AssetDatabase.LoadAssetAtPath<CH_StoryLibrary>(Root + "/Data/StoryLibrary.asset");
             if (library == null) AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<CH_StoryLibrary>(), Root + "/Data/StoryLibrary.asset");
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// Rebuilds only this game's HUD prefab (and the dust and lens assets it uses), without
+        /// touching the shared flashlight or monster prefabs that Rebuild Presentation Prefabs also writes.
+        /// </summary>
+        [MenuItem("Ryan/Classic Horror/Rebuild Investigation HUD")]
+        public static void RebuildHud() {
+            EnsureFolders();
+            BuildHud();
             AssetDatabase.SaveAssets();
         }
 
@@ -165,7 +398,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
 
 
 
-        const string FloodedProps = "Assets/Flooded_Grounds/Prefabs/Props/";
+        const string FloodedProps = Root + "/Flooded_Grounds/Prefabs/Props/";
         const string QuickEffects = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs/";
 
         static GameObject PlaceVisual(string path, Transform parent, Vector3 position, Vector3 scale, Vector3 angles = default) {
@@ -251,6 +484,10 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 PlaceEffect(QuickEffects + "vfx_Portal_01.prefab", clue.transform, new Vector3(-0.16f, 0.76f, 0f), 0.1f, new Color(0.95f, 0.62f, 0.3f, 0.35f));
                 var light = clue.GetComponent<Light>();
                 light.color = Amber; light.range = 4f; light.intensity = 0.85f;
+                var glow = clue.GetComponent<CH_EvidenceGlow>();
+                if (glow == null) glow = clue.AddComponent<CH_EvidenceGlow>();
+                glow.glowLight = light;
+                glow.rimRenderers = AddRim(clue, RimMaterial());
                 PrefabUtility.SaveAsPrefabAsset(clue, cluePath);
             } finally { PrefabUtility.UnloadPrefabContents(clue); }
 
@@ -274,6 +511,33 @@ namespace Universes.UniverseData.classic_horror.Editor {
             AssetDatabase.SaveAssets();
         }
 
+        /// <summary>The additive amber edge glow that makes a record readable as "something to inspect" in the dark.</summary>
+        static Material RimMaterial() {
+            string path = Root + "/Materials/EvidenceRim.mat";
+            var shader = Shader.Find("Classic Horror/Evidence Rim");
+            if (shader == null) throw new System.InvalidOperationException("Classic Horror evidence rim shader is missing.");
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) {
+                material = new Material(shader) { name = "EvidenceRim" };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.shader = shader;
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        /// <summary>Appends <paramref name="rim"/> as an extra material slot on every mesh of the record, so the rim draws over the whole prop.</summary>
+        static Renderer[] AddRim(GameObject root, Material rim) {
+            var renderers = new List<Renderer>();
+            foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true)) {
+                var materials = new List<Material>(renderer.sharedMaterials);
+                if (!materials.Contains(rim)) materials.Add(rim);
+                renderer.sharedMaterials = materials.ToArray();
+                renderers.Add(renderer);
+            }
+            return renderers.ToArray();
+        }
+
         static RectTransform Rect(string name, Transform parent, Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax) {
             var go = new GameObject(name, typeof(RectTransform)); go.transform.SetParent(parent, false);
             var rect = (RectTransform)go.transform; rect.anchorMin = min; rect.anchorMax = max; rect.offsetMin = offsetMin; rect.offsetMax = offsetMax;
@@ -288,13 +552,18 @@ namespace Universes.UniverseData.classic_horror.Editor {
         /// The investigation HUD, made from the shared HudKit so it matches the rest of the game, in a
         /// horror key: dark glass, one amber accent, and nothing on screen that the case doesn't need
         /// right now. Case status top centre, compass under it, prompts low, radio transcript at the
-        /// bottom, journal and ending as cards.
+        /// bottom, journal and ending as cards. The same prefab carries the client's presenters:
+        /// radio, journal, fear loop, ambient scares, encounter scares and the map's atmosphere.
         /// </summary>
         static void BuildHud() {
             RectTransform canvas = HudKit.Canvas("InvestigationHUD", 40);
             var root = canvas.gameObject;
             var client = root.AddComponent<CH_ClientController>();
-            client.dangerOverlay = Panel("Danger", root.transform, Vector2.zero, Vector2.one, new Color(0.3f, 0.035f, 0.025f, 0));
+            var atmosphere = root.AddComponent<CH_Atmosphere>();
+            client.fearLoop = root.AddComponent<CH_FearLoop>();
+            client.ambientScares = root.AddComponent<CH_AmbientScares>();
+            client.radio = root.AddComponent<CH_RadioFeed>();
+            client.journal = root.AddComponent<CH_Journal>();
             client.evidenceIcon = HudKit.Icon("magnifier");
             client.offeringIcon = HudKit.Icon("candle");
             client.solvedIcon = HudKit.Icon("laurels_trophy");
@@ -312,29 +581,197 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.interactionKey = key.gameObject;
             client.interactionPrompt = HudKit.Popup(interaction, false);
 
-            BuildRadio(canvas, client);
-            BuildJournal(canvas, client);
+            BuildRadio(canvas, client.radio);
+            BuildJournal(canvas, client.journal);
             BuildEnding(canvas, client);
-            var radio = new GameObject("RadioAudio"); radio.transform.SetParent(root.transform, false); client.radioAudio = radio.AddComponent<AudioSource>(); client.radioAudio.playOnAwake = false;
-            client.radioCue = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Flooded_Grounds/Content/Sounds/Taps.mp3");
-            var objectiveCollect = new GameObject("ObjectiveCollectAudio"); objectiveCollect.transform.SetParent(root.transform, false); client.objectiveCollectAudio = objectiveCollect.AddComponent<AudioSource>();
-            client.objectiveCollectAudio.playOnAwake = false; client.objectiveCollectAudio.spatialBlend = 0;
-            client.objectiveCollectCue = AssetDatabase.LoadAssetAtPath<AudioClip>(Root + "/Audio/objective-collect.mp3");
-            var danger = new GameObject("PresenceAudio"); danger.transform.SetParent(root.transform, false); client.dangerAudio = danger.AddComponent<AudioSource>();
-            client.dangerAudio.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Flooded_Grounds/Content/Sounds/DeepRattle.mp3"); client.dangerAudio.loop = true; client.dangerAudio.volume = 0;
-            client.dangerAudio.playOnAwake = true;
+            BuildAudio(root, client);
+            BuildAtmosphere(atmosphere);
+            BuildEncounter(root, client);
+            UIKit.SavePrefab(root, Root + "/Prefabs/InvestigationHUD.prefab");
+        }
+
+        const string AudioFolder = Root + "/Audio/";
+        const string FloodedSounds = Root + "/Flooded_Grounds/Content/Sounds/";
+
+        static AudioClip Clip(string path) {
+            var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+            if (clip == null) throw new System.InvalidOperationException("Missing Classic Horror audio: " + path);
+            return clip;
+        }
+
+        /// <summary>A 2D source routed through the SFX mixer group, so the player's SFX volume applies.</summary>
+        static AudioSource Source(Transform parent, string name, AudioClip clip = null, bool loop = false) {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var source = go.AddComponent<AudioSource>();
+            source.playOnAwake = false;
+            source.spatialBlend = 0f;
+            source.clip = clip;
+            source.loop = loop;
+            source.outputAudioMixerGroup = GameFeelSettings.Active != null ? GameFeelSettings.Active.audio.mixerGroup : null;
+            return source;
+        }
+
+        static SfxSound Sound(float volume, float pitch, float minDistance, float maxDistance, params string[] clips) => new() {
+            clips = System.Array.ConvertAll(clips, Clip), volume = volume, pitch = pitch,
+            pitchJitterSemitones = 0.8f, minDistance = minDistance, maxDistance = maxDistance
+        };
+
+        /// <summary>Radio static, the pickup sting, the fear loop's body sounds and the ambient scares.</summary>
+        static void BuildAudio(GameObject root, CH_ClientController client) {
+            client.radio.staticSource = Source(root.transform, "RadioAudio");
+            client.radio.staticClip = Clip(AudioFolder + "radio-static.ogg");
+            client.objectiveCollectAudio = Source(root.transform, "ObjectiveCollectAudio");
+            client.objectiveCollectCue = Clip(AudioFolder + "objective-collect.mp3");
+
+            CH_FearLoop fear = client.fearLoop;
+            fear.heartbeatSource = Source(root.transform, "HeartbeatAudio");
+            fear.heartbeatClip = Clip(AudioFolder + "heartbeat.ogg");
+            fear.breathingSource = Source(root.transform, "BreathingAudio", Clip(AudioFolder + "breathing.ogg"), loop: true);
+            fear.droneSource = Source(root.transform, "PresenceAudio", Clip(FloodedSounds + "DeepRattle.mp3"), loop: true);
+            fear.droneSource.volume = 0f;
+            fear.droneSource.playOnAwake = true;
+            // A soft accent under the music's own 0.6 s crossfade, not a cover for a hard cut.
+            fear.chaseSting = Sound(0.5f, 0.62f, 0f, 0f, AudioFolder + "wood-thud.ogg");
+
+            CH_AmbientScares ambient = client.ambientScares;
+            ambient.doorSlam = Sound(1f, 0.9f, 4f, 70f, AudioFolder + "door-slam-1.ogg", AudioFolder + "door-slam-2.ogg");
+            // A distant, pitched-up wind howl reads as a cry carried over the water.
+            ambient.distantCry = Sound(0.75f, 1.35f, 25f, 220f, FloodedSounds + "WindHowl.mp3");
+            ambient.lightsOut = Sound(0.7f, 0.8f, 0f, 0f, "Packages/com.ryan.gameframework/Runtime/Tools/Flashlight/flashlight_off.mp3",
+                AudioFolder + "creak-1.ogg");
+            ambient.chapelBell = Sound(0.9f, 0.55f, 30f, 280f, AudioFolder + "chapel-bell-1.ogg", AudioFolder + "chapel-bell-2.ogg");
+
+            CH_Journal journal = client.journal;
+            journal.openSound = Clip(AudioFolder + "journal-open.ogg");
+            journal.closeSound = Clip(AudioFolder + "journal-close.ogg");
+            journal.pageSounds = new[] { Clip(AudioFolder + "journal-page-1.ogg"), Clip(AudioFolder + "journal-page-2.ogg") };
+        }
+
+        static void BuildAtmosphere(CH_Atmosphere atmosphere) {
+            atmosphere.lighting = new CH_NightLighting { skybox = AssetDatabase.LoadAssetAtPath<Material>(Root + "/Materials/NightSky.mat") };
+            if (atmosphere.lighting.skybox == null)
+                Debug.LogWarning("Classic Horror: NightSky.mat is missing; run Ryan > Classic Horror > Configure Realtime Map Lighting.");
+            atmosphere.dustMotesPrefab = BuildDustMotes();
+        }
+
+        /// <summary>The priest's face, the jumpscare sting and the lens burst (chromatic aberration, vignette, distortion).</summary>
+        static void BuildEncounter(GameObject root, CH_ClientController client) {
             var scare = root.AddComponent<CH_Jumpscare>();
-            var scarePanel = Panel("Encounter", root.transform, Vector2.zero, Vector2.one, new Color(0.002f,0,0,0.98f));
+            client.jumpscare = scare;
+            var scarePanel = Panel("Encounter", root.transform, Vector2.zero, Vector2.one, new Color(0.002f, 0, 0, 0.98f));
             scare.overlay = scarePanel.gameObject.AddComponent<CanvasGroup>();
             scare.overlay.alpha = 0; scare.overlay.blocksRaycasts = false; scare.overlay.interactable = false;
-            var face = Rect("The face", scarePanel.transform, new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f), new Vector2(-650,-650), new Vector2(650,650));
+            var face = Rect("The face", scarePanel.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-650, -650), new Vector2(650, 650));
             scare.face = face;
             var portrait = face.gameObject.AddComponent<UnityEngine.UI.RawImage>();
             portrait.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(RyanAssets.Editor.NPCCharacterAuthoring.Root + "/Data/PresencePortrait.png"); portrait.raycastTarget = false;
             scare.sting = scarePanel.gameObject.AddComponent<AudioSource>();
-            scare.sting.clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Packages/com.ryan.ui/Runtime/Client/ClientAudio/JumpscareAudio/jumpscare.mp3");
+            scare.sting.clip = Clip("Packages/com.ryan.ui/Runtime/Client/ClientAudio/JumpscareAudio/jumpscare.mp3");
             scare.sting.playOnAwake = false; scare.sting.volume = 0.75f; scare.sting.spatialBlend = 0;
-            UIKit.SavePrefab(root, Root + "/Prefabs/InvestigationHUD.prefab");
+            scare.sting.outputAudioMixerGroup = GameFeelSettings.Active != null ? GameFeelSettings.Active.audio.mixerGroup : null;
+
+            var lens = new GameObject("EncounterLens");
+            lens.transform.SetParent(root.transform, false);
+            scare.lensVolume = lens.AddComponent<Volume>();
+            scare.lensVolume.isGlobal = true;
+            // Above the shared mood (20) so the burst wins while it lasts.
+            scare.lensVolume.priority = 50f;
+            scare.lensVolume.weight = 0f;
+            scare.lensVolume.sharedProfile = BuildEncounterProfile();
+        }
+
+        static VolumeProfile BuildEncounterProfile() {
+            string path = Root + "/Data/EncounterLens.asset";
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
+            if (profile == null) {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, path);
+            }
+            var aberration = Override<ChromaticAberration>(profile);
+            aberration.intensity.Override(1f);
+            var vignette = Override<Vignette>(profile);
+            vignette.color.Override(new Color(0.22f, 0f, 0.01f));
+            vignette.intensity.Override(0.6f);
+            vignette.smoothness.Override(0.45f);
+            var distortion = Override<LensDistortion>(profile);
+            distortion.intensity.Override(-0.3f);
+            EditorUtility.SetDirty(profile);
+            return profile;
+        }
+
+        static T Override<T>(VolumeProfile profile) where T : VolumeComponent {
+            if (!profile.TryGet(out T component)) {
+                component = profile.Add<T>(true);
+                component.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
+                AssetDatabase.AddObjectToAsset(component, profile);
+            }
+            component.active = true;
+            return component;
+        }
+
+        /// <summary>Lit dust that hangs around the camera: invisible in the dark, drifting specks inside the flashlight beam.</summary>
+        static ParticleSystem BuildDustMotes() {
+            string path = Root + "/Prefabs/FlashlightDust.prefab";
+            var root = new GameObject("FlashlightDust");
+            try {
+                var particles = root.AddComponent<ParticleSystem>();
+                var main = particles.main;
+                main.loop = true;
+                main.prewarm = true;
+                main.playOnAwake = true;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(6f, 10f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(0.01f, 0.06f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.012f, 0.03f);
+                main.startColor = new Color(0.92f, 0.9f, 0.82f, 0.6f);
+                main.gravityModifier = -0.003f;
+                main.maxParticles = 450;
+                var emission = particles.emission;
+                emission.rateOverTime = 55f;
+                var shape = particles.shape;
+                shape.shapeType = ParticleSystemShapeType.Box;
+                shape.scale = new Vector3(7f, 4f, 9f);
+                var noise = particles.noise;
+                noise.enabled = true;
+                noise.strength = 0.06f;
+                noise.frequency = 0.2f;
+                noise.scrollSpeed = 0.05f;
+                var fade = particles.colorOverLifetime;
+                fade.enabled = true;
+                var gradient = new Gradient();
+                gradient.SetKeys(
+                    new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.2f), new GradientAlphaKey(1f, 0.8f), new GradientAlphaKey(0f, 1f) });
+                fade.color = gradient;
+                var renderer = root.GetComponent<ParticleSystemRenderer>();
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = DustMaterial();
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                return PrefabUtility.SaveAsPrefabAsset(root, path).GetComponent<ParticleSystem>();
+            } finally { Object.DestroyImmediate(root); }
+        }
+
+        static Material DustMaterial() {
+            string path = Root + "/Materials/FlashlightDust.mat";
+            var shader = Shader.Find("Universal Render Pipeline/Particles/Lit");
+            if (shader == null) throw new System.InvalidOperationException("URP lit particle shader is missing.");
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) {
+                material = new Material(shader) { name = "FlashlightDust" };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.shader = shader;
+            material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Textures/fx_soft_dot.png"));
+            material.SetColor("_BaseColor", Color.white);
+            // Alpha blended and lit: only light that reaches a speck makes it visible.
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_ZWrite", 0f);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            UsePlainAlphaBlending(material);
+            return material;
         }
 
         /// <summary>Top centre: chapter, the current objective, case progress and the clock.</summary>
@@ -363,6 +800,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
             UIKit.Row(journal.gameObject, 6f, new RectOffset(6, 0, 0, 0), TextAnchor.MiddleLeft);
             HudKit.KeyCap(journal, "F");
             UIKit.Text(journal, "Label", "Journal", UIText.Small, UIColorRole.TextSecondary);
+            client.journal.hint = journal;
+            RyanAssets.UI.GameHud.HudChip badge = HudKit.Chip(chips, "NewEntry", "notebook", "New entry", Amber, 28f, UIText.Small);
+            client.journal.newEntryBadge = HudKit.Popup(badge, false);
         }
 
         /// <summary>Under the case status: an arrow towards the nearest lead and how far it is.</summary>
@@ -381,7 +821,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         /// <summary>Bottom centre: the radio transcript, as a card that fades in for each new message.</summary>
-        static void BuildRadio(RectTransform canvas, CH_ClientController client) {
+        static void BuildRadio(RectTransform canvas, CH_RadioFeed radio) {
             RectTransform card = HudKit.Card(canvas, "RadioTranscript", new Vector2(0.5f, 0f), new Vector2(0f, 120f), new Vector2(820f, 120f));
             HudKit.AccentStripe(card, Amber, 4f, left: true);
             UIKit.Row(card.gameObject, 16f, new RectOffset(22, 26, 18, 18), TextAnchor.UpperLeft);
@@ -390,20 +830,20 @@ namespace Universes.UniverseData.classic_horror.Editor {
             RectTransform text = UIKit.Node(card, "Text");
             UIKit.Size(text, -1f, -1f, 1f);
             UIKit.Column(text.gameObject, 4f, null, TextAnchor.UpperLeft);
-            var caption = UIKit.Text(text, "Caption", "Radio", UIText.Caption, UIColorRole.TextMuted);
-            caption.color = Amber;
-            Object.DestroyImmediate(caption.GetComponent<UIThemeColor>());
-            client.dialogueLabel = UIKit.Text(text, "Transcript", string.Empty, UIText.Body);
-            client.dialogueLabel.fontSize = 19f;
-            client.dialogueLabel.textWrappingMode = TextWrappingModes.Normal;
-            client.dialogueLabel.richText = true;
-            client.dialoguePopup = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
+            radio.caption = UIKit.Text(text, "Caption", "Radio", UIText.Caption, UIColorRole.TextMuted);
+            radio.caption.color = Amber;
+            Object.DestroyImmediate(radio.caption.GetComponent<UIThemeColor>());
+            radio.transcript = UIKit.Text(text, "Transcript", string.Empty, UIText.Body);
+            radio.transcript.fontSize = 19f;
+            radio.transcript.textWrappingMode = TextWrappingModes.Normal;
+            radio.transcript.richText = true;
+            radio.popup = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
         }
 
         /// <summary>The field journal: a readable card with page buttons; the world keeps running behind it.</summary>
-        static void BuildJournal(RectTransform canvas, CH_ClientController client) {
+        static void BuildJournal(RectTransform canvas, CH_Journal journal) {
             RectTransform card = HudKit.Card(canvas, "FieldJournal", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1040f, 700f));
-            client.journalPanel = card.gameObject;
+            journal.panel = card.gameObject;
             card.GetComponentInChildren<UnityEngine.UI.Image>().raycastTarget = true;
             HudKit.AccentStripe(card, Amber, 5f);
             UIKit.Column(card.gameObject, 14f, new RectOffset(40, 40, 30, 30), TextAnchor.UpperLeft);
@@ -415,27 +855,27 @@ namespace Universes.UniverseData.classic_horror.Editor {
             UIKit.Size(titles, -1f, -1f, 1f);
             UIKit.Column(titles.gameObject, 0f, null, TextAnchor.MiddleLeft);
             UIKit.Text(titles, "Title", "Field notes", UIText.Title);
-            client.journalPageLabel = UIKit.Text(titles, "Page", "Page 1 / 1", UIText.Small, UIColorRole.TextMuted);
-            client.journalClose = UIKit.IconButton(header, "Close", "close", 40f, UIColorRole.SurfaceInset, 20f, out _, out _);
+            journal.pageLabel = UIKit.Text(titles, "Page", "Page 1 / 1", UIText.Small, UIColorRole.TextMuted);
+            journal.close = UIKit.IconButton(header, "Close", "close", 40f, UIColorRole.SurfaceInset, 20f, out _, out _);
             UIKit.Divider(card);
 
-            client.journalBody = UIKit.Text(card, "Entry", string.Empty, UIText.Body, UIColorRole.TextPrimary, TextAlignmentOptions.TopLeft);
-            client.journalBody.fontSize = 23f;
-            client.journalBody.lineSpacing = 12f;
-            client.journalBody.textWrappingMode = TextWrappingModes.Normal;
-            client.journalBody.overflowMode = TextOverflowModes.Overflow;
-            client.journalBody.richText = true;
-            UIKit.Size(client.journalBody, -1f, 440f);
+            journal.body = UIKit.Text(card, "Entry", string.Empty, UIText.Body, UIColorRole.TextPrimary, TextAlignmentOptions.TopLeft);
+            journal.body.fontSize = 23f;
+            journal.body.lineSpacing = 12f;
+            journal.body.textWrappingMode = TextWrappingModes.Normal;
+            journal.body.overflowMode = TextOverflowModes.Overflow;
+            journal.body.richText = true;
+            UIKit.Size(journal.body, -1f, 440f);
 
             RectTransform footer = UIKit.Node(card, "Footer");
             UIKit.Row(footer.gameObject, 10f, null, TextAnchor.MiddleLeft);
             UnityEngine.UI.Image warn = HudKit.Icon(footer, "warning", 20f, Amber);
             var note = UIKit.Text(footer, "Warning", "The settlement does not pause while you read.", UIText.Small, UIColorRole.TextSecondary);
             UIKit.Size(note, -1f, -1f, 1f);
-            client.journalPrevious = UIKit.TextButton(footer, "Previous", "Previous", "arrow_back", UIColorRole.SurfaceInset, UIColorRole.TextPrimary, 42f);
-            UIKit.Size(client.journalPrevious, 150f, 42f);
-            client.journalNext = UIKit.TextButton(footer, "Next", "Next", "arrow_forward", UIColorRole.Accent, UIColorRole.OnAccent, 42f);
-            UIKit.Size(client.journalNext, 150f, 42f);
+            journal.previous = UIKit.TextButton(footer, "Previous", "Previous", "arrow_back", UIColorRole.SurfaceInset, UIColorRole.TextPrimary, 42f);
+            UIKit.Size(journal.previous, 150f, 42f);
+            journal.next = UIKit.TextButton(footer, "Next", "Next", "arrow_forward", UIColorRole.Accent, UIColorRole.OnAccent, 42f);
+            UIKit.Size(journal.next, 150f, 42f);
             warn.raycastTarget = false;
             card.gameObject.SetActive(false);
             // The journal opens and closes by script, not through HudPopup.
@@ -457,6 +897,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.endingLabel.fontSize = 20f;
             client.endingLabel.lineSpacing = 8f;
             client.endingLabel.textWrappingMode = TextWrappingModes.Normal;
+            client.endingSummary = UIKit.Text(card, "Summary", string.Empty, UIText.Small, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            client.endingSummary.textWrappingMode = TextWrappingModes.Normal;
+            client.endingSummary.lineSpacing = 6f;
             RectTransform chips = UIKit.Node(card, "Chips");
             UIKit.Row(chips.gameObject, 10f, new RectOffset(0, 0, 10, 0), TextAnchor.MiddleCenter);
             client.endingNextCase = HudKit.Chip(chips, "NextCase", "hourglass_bottom", "Next case in 20s", Amber, 32f, UIText.Small);

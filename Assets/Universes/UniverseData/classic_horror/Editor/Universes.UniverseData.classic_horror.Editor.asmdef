@@ -16,7 +16,9 @@
         "Unity.RenderPipelines.Universal.Runtime",
         "RyanAssets.Editor",
         "RyanAssets.UI",
-        "RyanAssets.UI.Editor"
+        "RyanAssets.UI.Editor",
+        "RyanAssets.GameFeel",
+        "Unity.RenderPipelines.Core.Runtime"
     ],
     "includePlatforms": [
         "Editor"

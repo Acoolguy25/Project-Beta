@@ -4,6 +4,11 @@ using UnityEngine;
 namespace Universes.UniverseData.classic_horror {
     public enum CH_Phase : byte { Waiting, Investigation, Descent, Escape, Complete, Failed }
     public enum CH_Temperament : byte { LightSeeker, LightShy, Listener }
+    /// <summary>Encounter scares shown to one investigator (<see cref="CH_ScareBroadcast.kind"/>).</summary>
+    public enum CH_ScareKind : byte { Warning = 0, Discovery = 1, Fatal = 2 }
+    /// <summary>Atmospheric events the server schedules for everyone (<see cref="CH_AmbientScareBroadcast"/>).</summary>
+    public enum CH_AmbientScare : byte { DoorSlam = 0, DistantCry = 1, LightsOut = 2, ChapelBell = 3 }
+
     public struct CH_InteractRequest : IBroadcast {
         public int seed;
         public int targetId;
@@ -38,5 +43,19 @@ namespace Universes.UniverseData.classic_horror {
         public int monsterId;
         public int completedCases;
         public string ending;
+        // Appended for the case summary on the ending card.
+        public int memoryCount;
+        public int diaryCount;
+        public int diaryTotal;
+        public int ritualMistakes;
+        public int caseSeconds;
+        public CH_Temperament temperament;
+    }
+    /// <summary>A scripted scare everyone hears: a door slamming, a cry, the lights failing, the chapel bell.</summary>
+    public struct CH_AmbientScareBroadcast : IBroadcast {
+        public int seed;
+        public CH_AmbientScare kind;
+        public Vector3 position;
+        public float seconds;
     }
 }

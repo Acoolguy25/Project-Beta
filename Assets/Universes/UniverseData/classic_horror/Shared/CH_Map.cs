@@ -14,6 +14,8 @@ namespace Universes.UniverseData.classic_horror {
         public GameObject sourceViewPrefab;
         public GameObject clientPrefab;
         public Light[] practicalLights;
+        [Tooltip("The emissive part of each practical lamp, in the same order as practicalLights (may hold nulls). Flickers with its light.")]
+        public Renderer[] practicalGlows;
         [Tooltip("Height of the flooded ground's water surface. Matches the top of the map's deep-water "
             + "navigation exclusion volume. Investigators are never spawned at or below this line.")]
         public float waterLevel = 16.5f;
