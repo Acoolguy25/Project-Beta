@@ -39,6 +39,43 @@ namespace Universes.UniverseData.tower_defense.Tests {
         }
 
         [Test]
+        public void SellingRefundsPartOfEverythingSpent() {
+            foreach (TD_TowerKind kind in System.Enum.GetValues(typeof(TD_TowerKind))) {
+                int built = TD_Rules.Tower(kind).cost;
+                Assert.AreEqual(built, TD_Rules.Invested(kind, 1));
+                Assert.AreEqual(built + TD_Rules.UpgradeCost(kind, 1) + TD_Rules.UpgradeCost(kind, 2), TD_Rules.Invested(kind, TD_Rules.MaxLevel));
+                for (int level = 1; level <= TD_Rules.MaxLevel; level++) {
+                    int refund = TD_Rules.SellRefund(kind, level);
+                    Assert.Less(refund, TD_Rules.Invested(kind, level), $"{kind} L{level} must not refund everything");
+                    Assert.Greater(refund, 0);
+                    if (level > 1) Assert.Greater(refund, TD_Rules.SellRefund(kind, level - 1), "upgrades raise the sale value");
+                }
+            }
+        }
+
+        [Test]
+        public void CallingAWaveEarlyPaysPerSecondSkipped() {
+            Assert.AreEqual(0, TD_Rules.EarlyStartBonus(0));
+            Assert.AreEqual(0, TD_Rules.EarlyStartBonus(-3));
+            Assert.AreEqual(10 * TD_Rules.EarlyStartBonusPerSecond, TD_Rules.EarlyStartBonus(10));
+        }
+
+        [Test]
+        public void FastForwardNeedsAMajority() {
+            Assert.IsFalse(TD_Rules.FastVotePasses(0, 0));
+            Assert.IsTrue(TD_Rules.FastVotePasses(1, 1));
+            Assert.IsFalse(TD_Rules.FastVotePasses(1, 2));
+            Assert.IsTrue(TD_Rules.FastVotePasses(2, 3));
+        }
+
+        [Test]
+        public void BossWavesAreKnown() {
+            Assert.IsTrue(TD_Rules.HasBoss(10));
+            Assert.IsTrue(TD_Rules.HasBoss(TD_Rules.WaveCount));
+            Assert.IsFalse(TD_Rules.HasBoss(1));
+        }
+
+        [Test]
         public void ChoppersFlyAboveTheRoad() {
             Vector3 ground = TD_Rules.EnemyPosition(TD_EnemyKind.Tank, 30f, out _);
             Vector3 air = TD_Rules.EnemyPosition(TD_EnemyKind.Chopper, 30f, out _);

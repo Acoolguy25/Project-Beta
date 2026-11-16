@@ -55,6 +55,7 @@ MonoBehaviour:
   resultsSeconds: 12
   waveCount: 20
   snapshotInterval: 0.1
+  allowFastForward: 1
   waveXP: 6
   victoryXP: 120
   victoryGold: 60

@@ -12,9 +12,10 @@ using static RyanAssets.Authoring.UniverseAuthoringKit;
 
 namespace Universes.UniverseData.tower_defense.Editor {
     /// <summary>
-    /// Rebuilds Tower Defense: materials, tower / enemy / pad / effect prefabs (Cartoon Military
-    /// models on military helipads), the HUD (<see cref="TD_HudAuthoring"/>), the map
-    /// (<see cref="TD_MapAuthoring"/>) and the start scene. Safe to re-run.
+    /// Rebuilds Tower Defense: materials, tower (one model per level) / placement ghost / enemy / pad /
+    /// effect prefabs (Cartoon Military models on military helipads), the HUD
+    /// (<see cref="TD_HudAuthoring"/>), the map (<see cref="TD_MapAuthoring"/>) and the start scene.
+    /// Safe to re-run.
     /// Server runner: run BuildServerAssets from the Linux Server profile.
     /// </summary>
     public static class TD_Authoring {
@@ -24,13 +25,26 @@ namespace Universes.UniverseData.tower_defense.Editor {
         internal static readonly UniverseAuthoringKit Kit = new(Root);
         const string ServerPrefab = Root + "/Server/TD_ServerRunner.prefab";
         const string Military = "Assets/CartoonMilitaryModelPack/Prefebs/";
-        const string Effects = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs/";
-        const string FireClip = "Packages/com.ryan.gameframework/Runtime/Tools/Audio/pistol-gun-shot.mp3";
+        public const string AudioFolder = Root + "/Audio";
+        public const string FireClip = "Packages/com.ryan.gameframework/Runtime/Tools/Audio/pistol-gun-shot.mp3";
+        const string Turrets = Military + "CustomPart_Prefebs/Turrets_Prefebs/";
 
-        /// <summary>Turret model and plinth-relative size per tower, index-aligned with <see cref="TD_TowerKind"/>.</summary>
-        static readonly (string model, float size)[] TowerModels = {
-            ("Turret_01_Prefeb.prefab", 4.2f), ("Turret_05_Prefeb.prefab", 4.8f), ("Turret_08_Prefeb.prefab", 4.4f), ("Turret_10_Prefeb.prefab", 5.2f),
+        /// <summary>
+        /// Turret model per level (index 0 = level 1) and plinth-relative size per tower, index-aligned
+        /// with <see cref="TD_TowerKind"/>. An upgrade swaps to the next model, so level 3 reads as a
+        /// different, heavier gun; repeat a name to keep the model and only repaint and grow it.
+        /// </summary>
+        static readonly (string[] models, float size)[] TowerModels = {
+            (new[] { "Turret_01_Prefeb", "Turret_01_Prefeb", "Turret_02_Prefeb" }, 4.2f),
+            (new[] { "Turret_05_Prefeb", "Turret_06_Prefeb", "Turret_12_Prefeb" }, 4.8f),
+            (new[] { "Turret_08_Prefeb", "Turret_08_Prefeb", "Turret_07_Prefeb" }, 4.4f),
+            (new[] { "Turret_10_Prefeb", "Turret_10_Prefeb", "Turret_11_Prefeb" }, 5.2f),
         };
+
+        /// <summary>How far each level's paint leans toward the tower's colour (index 0 = level 1; 0 = the model's own colours).</summary>
+        static readonly float[] LevelPaint = { 0f, 0.25f, 0.45f };
+        /// <summary>Uniform tower scale per level (index 0 = level 1).</summary>
+        static readonly float[] LevelScale = { 1f, 1.12f, 1.24f };
 
         /// <summary>Vehicle model and size per enemy, index-aligned with <see cref="TD_EnemyKind"/>.</summary>
         static readonly (string model, float size)[] EnemyModels = {
@@ -44,7 +58,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         [MenuItem("Ryan/Tower Defense/Build Client Assets")]
         public static void BuildClientAssets() {
             if (Application.isPlaying) throw new System.InvalidOperationException("Stop play mode first.");
-            Kit.EnsureFolders("Prefabs", "Prefabs/Towers", "Prefabs/Enemies", "Prefabs/Fx", "Materials", "Textures", "Meshes", "Server", "UI", "UI/Portraits");
+            Kit.EnsureFolders("Prefabs", "Prefabs/Towers", "Prefabs/Ghosts", "Prefabs/Enemies", "Prefabs/Fx", "Materials", "Materials/Tiers", "Textures", "Meshes", "Server", "UI", "UI/Portraits", "Audio");
             TD_HudAuthoring.ImportIcons();
             BuildTextures();
             BuildScene();
@@ -131,7 +145,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         }
 
         internal sealed class Materials {
-            public Material barBack, barFill, frost, blob, star, marker, ring, tracer, projectile;
+            public Material barBack, barFill, frost, blob, star, marker, ring, tracer, projectile, ghost;
             public Material[] trims;
         }
 
@@ -139,13 +153,14 @@ namespace Universes.UniverseData.tower_defense.Editor {
             return new Materials {
                 barBack = Unlit("BarBack", new Color(0.06f, 0.07f, 0.1f, 0.85f), transparent: true),
                 barFill = Unlit("BarFill", Color.white),
-                frost = Kit.Mat("FrostShell", new Color(0.6f, 0.88f, 1f), emission: 0.8f, alpha: 0.35f, smoothness: 0.9f),
+                frost = Kit.Mat("FrostShell", new Color(0.6f, 0.88f, 1f), emission: 0.35f, alpha: 0.2f, smoothness: 0.9f),
                 blob = Unlit("ShadowBlob", Color.white, Kit.Tex("Blob"), transparent: true),
                 star = Unlit("Star", new Color(1f, 0.82f, 0.25f), TD_HudAuthoring.IconTexture("star"), transparent: true),
                 marker = Unlit("BuildMarker", new Color(1f, 1f, 1f, 0.9f), TD_HudAuthoring.IconTexture("build"), transparent: true),
                 ring = Unlit("RangeRing", Color.white, additive: true),
                 tracer = Unlit("Tracer", Color.white, additive: true),
                 projectile = Kit.Mat("Projectile", Color.white, emission: 2f),
+                ghost = Unlit("Ghost", new Color(1f, 1f, 1f, 0.45f), transparent: true),
                 trims = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>()
                     .Select(k => Kit.Mat("Trim" + k, TD_Palette.Tower(k), emission: 0.6f, smoothness: 0.5f)).ToArray(),
             };
@@ -158,8 +173,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             return quad;
         }
 
-        static LineRenderer Ring(Transform parent, Material material) {
-            var go = Empty("RangeRing", parent);
+        static LineRenderer Ring(Transform parent, Material material, string name = "RangeRing") {
+            var go = Empty(name, parent);
             var ring = go.AddComponent<LineRenderer>();
             ring.useWorldSpace = true;
             ring.loop = true;
@@ -217,23 +232,33 @@ namespace Universes.UniverseData.tower_defense.Editor {
             return Kit.Save(root, "", "TowerSlot");
         }
 
-        /// <summary>A Cartoon Military turret (placed on a pad's top by the client), level stars, owner label and range ring.</summary>
+        /// <summary>
+        /// A Cartoon Military turret per level (placed on a pad's top by the client; only the current
+        /// level's model is active), level stars, owner label and the current / next-level range rings.
+        /// </summary>
         static GameObject Tower(TD_TowerKind kind, Materials m) {
             var stats = TD_Rules.Tower(kind);
-            var (model, size) = TowerModels[(int)kind];
+            var (models, size) = TowerModels[(int)kind];
             var root = new GameObject(stats.name);
             var view = root.AddComponent<TD_TowerView>();
             var head = Empty("Head", root.transform);
             view.head = head.transform;
-            var turret = Model(Military + "CustomPart_Prefebs/Turrets_Prefebs/" + model, head.transform, size);
-            if (turret == null) Debug.LogWarning($"[TowerDefense] Turret model {model} missing; {stats.name} has no model.");
-            else if (kind == TD_TowerKind.Frost)
-                foreach (var r in turret.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => m.trims[(int)kind]).ToArray();
-            if (turret != null) {
-                var b = RendererBounds(turret);
-                var box = root.AddComponent<BoxCollider>();
-                box.center = b.center;
-                box.size = b.size;
+            view.tiers = new GameObject[TD_Rules.MaxLevel];
+            view.levelScale = LevelScale.ToArray();
+            for (int level = 1; level <= TD_Rules.MaxLevel; level++) {
+                var tier = Empty($"Tier{level}", head.transform);
+                view.tiers[level - 1] = tier;
+                string model = models[Mathf.Min(level, models.Length) - 1];
+                var turret = TurretModel(kind, model, tier.transform, size, m);
+                if (turret == null) continue;
+                if (level > 1) Paint(turret, kind, level);
+                if (level == 1) {
+                    var b = RendererBounds(turret);
+                    var box = root.AddComponent<BoxCollider>();
+                    box.center = b.center;
+                    box.size = b.size;
+                }
+                tier.SetActive(level == 1);
             }
             view.muzzle = Empty("Muzzle", head.transform, new Vector3(0f, size * 0.45f, size * 0.55f)).transform;
 
@@ -245,15 +270,59 @@ namespace Universes.UniverseData.tower_defense.Editor {
             view.label = Label(badge.transform, new Vector3(0f, 0.8f, 0f), "", 2.4f, Color.white);
 
             view.rangeRing = Ring(root.transform, m.ring);
-            var audio = Empty("FireSound", root.transform, new Vector3(0f, 2f, 0f)).AddComponent<AudioSource>();
-            audio.playOnAwake = false;
-            audio.spatialBlend = 1f;
-            audio.maxDistance = 60f;
-            audio.volume = kind == TD_TowerKind.Gunner ? 0.25f : 0.5f;
-            audio.pitch = kind switch { TD_TowerKind.Cannon => 0.6f, TD_TowerKind.Frost => 1.4f, TD_TowerKind.Sniper => 0.8f, _ => 1f };
-            audio.clip = Clip(FireClip);
-            view.fireSound = audio;
+            view.nextRangeRing = Ring(root.transform, m.ring, "NextRangeRing");
+            view.nextRangeRing.widthMultiplier = 0.18f;
             return Kit.Save(root, "Towers", stats.name);
+        }
+
+        /// <summary>The turret model for one level; frost turrets are cast in the frost trim.</summary>
+        static GameObject TurretModel(TD_TowerKind kind, string model, Transform parent, float size, Materials m) {
+            var turret = Model(Turrets + model + ".prefab", parent, size);
+            if (turret == null) {
+                Debug.LogWarning($"[TowerDefense] Turret model {model} missing; {TD_Rules.Tower(kind).name} has no model at this level.");
+                return null;
+            }
+            if (kind == TD_TowerKind.Frost)
+                foreach (var r in turret.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => m.trims[(int)kind]).ToArray();
+            return turret;
+        }
+
+        /// <summary>Repaints an upgraded turret: each material's colour leans toward the tower's colour (copies in Materials/Tiers).</summary>
+        static void Paint(GameObject turret, TD_TowerKind kind, int level) {
+            Color paint = Color.Lerp(Color.white, TD_Palette.Tower(kind), LevelPaint[level - 1]);
+            foreach (var r in turret.GetComponentsInChildren<Renderer>())
+                r.sharedMaterials = r.sharedMaterials.Select(source => source == null ? null : Painted(source, $"{kind}_L{level}_{source.name}", paint)).ToArray();
+        }
+
+        static Material Painted(Material source, string name, Color paint) {
+            string path = $"{Root}/Materials/Tiers/{name}.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) {
+                mat = new Material(source);
+                AssetDatabase.CreateAsset(mat, path);
+            } else {
+                mat.shader = source.shader;
+                mat.CopyPropertiesFromMaterial(source);
+            }
+            foreach (string property in new[] { "_BaseColor", "_Color" })
+                if (source.HasProperty(property)) {
+                    mat.SetColor(property, source.GetColor(property) * paint);
+                    break;
+                }
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        /// <summary>A see-through copy of a tower's level-1 model, previewed on a pad before building (tinted by the client).</summary>
+        static GameObject Ghost(TD_TowerKind kind, Materials m) {
+            var (models, size) = TowerModels[(int)kind];
+            var root = new GameObject(TD_Rules.Tower(kind).name + " Ghost");
+            var turret = TurretModel(kind, models[0], root.transform, size, m);
+            if (turret != null) {
+                foreach (var r in turret.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => m.ghost).ToArray();
+                NoShadows(turret);
+            }
+            return Kit.Save(root, "Ghosts");
         }
 
         static GameObject Enemy(TD_EnemyKind kind, Materials m) {
@@ -266,6 +335,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             if (Model(Military + model, body.transform, size) == null)
                 Cube("Hull", body.transform, new Vector3(0f, size * 0.25f, 0f), new Vector3(size * 0.5f, size * 0.4f, size), m.barFill, false);
             NoShadows(body);
+            view.bodyRenderers = body.GetComponentsInChildren<Renderer>();
 
             // Soft contact shadow (on the ground even for flying enemies).
             var blob = Primitive(PrimitiveType.Quad, "Shadow", root.transform, new Vector3(0f, (stats.flying ? -TD_Rules.FlyHeight : 0f) + 0.06f, 0f), new Vector3(size * 0.8f, size * 0.8f, 1f), m.blob, false);
@@ -310,26 +380,9 @@ namespace Universes.UniverseData.tower_defense.Editor {
             trail.shadowCastingMode = ShadowCastingMode.Off;
             trail.minVertexDistance = 0.2f;
 
-            var popup = new GameObject("RewardPopup");
-            var text = popup.AddComponent<TextMeshPro>();
-            text.text = "+$0";
-            text.fontSize = 6f;
-            text.fontStyle = FontStyles.Bold;
-            text.alignment = TextAlignmentOptions.Center;
-            text.color = new Color(1f, 0.83f, 0.25f);
-            text.outlineWidth = 0.3f;
-            text.outlineColor = new Color32(40, 24, 0, 255);
-            text.rectTransform.sizeDelta = new Vector2(8f, 2f);
-            popup.AddComponent<Billboard>();
-
             return new TD_EffectSet {
                 tracer = Kit.Save(tracer, "Fx", "Tracer"),
                 projectile = Kit.Save(projectile, "Fx", "Projectile"),
-                rewardPopup = Kit.Save(popup, "Fx", "RewardPopup"),
-                muzzleFlash = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_MuzzleFlash_01.prefab"),
-                impact = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_Sparks_01.prefab"),
-                frostImpact = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_Shockwave_01.prefab"),
-                explosion = AssetDatabase.LoadAssetAtPath<GameObject>(Effects + "vfx_Explosion_01.prefab"),
             };
         }
 
@@ -339,6 +392,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             var m = BuildMaterials();
             var slot = Slot(m);
             var towers = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>().Select(k => Tower(k, m)).ToArray();
+            var ghosts = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>().Select(k => Ghost(k, m)).ToArray();
             var enemies = System.Enum.GetValues(typeof(TD_EnemyKind)).Cast<TD_EnemyKind>().Select(k => Enemy(k, m)).ToArray();
             var effects = BuildEffects(m);
             var hud = TD_HudAuthoring.Build();
@@ -347,13 +401,15 @@ namespace Universes.UniverseData.tower_defense.Editor {
             RenderSettings.ambientEquatorColor = new Color(0.62f, 0.66f, 0.62f);
             RenderSettings.ambientGroundColor = new Color(0.36f, 0.4f, 0.3f);
             AddPostProcessing();
-            TD_MapAuthoring.Build(m);
+            var baseModel = TD_MapAuthoring.Build(m);
 
             var mapGo = new GameObject("TowerDefenseMap");
             var map = mapGo.AddComponent<TD_Map>();
             Vector3 end = TD_Rules.Lane[^1];
             map.playerSpawn = Empty("PlayerSpawn", mapGo.transform, end + new Vector3(-8f, 0f, -12f)).transform;
             map.towerPrefabs = towers;
+            map.ghostPrefabs = ghosts;
+            map.baseModel = baseModel;
             map.enemyPrefabs = enemies;
             map.slotPrefab = slot;
             map.effects = effects;
@@ -419,7 +475,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 slot.marker.gameObject.SetActive(false);
                 var tower = ((GameObject)PrefabUtility.InstantiatePrefab(map.towerPrefabs[k % map.towerPrefabs.Length], map.transform)).GetComponent<TD_TowerView>();
                 tower.transform.position = TD_Rules.Slots[i] + Vector3.up * slot.topHeight;
-                for (int s = 0; s < tower.levelStars.Length; s++) tower.levelStars[s].SetActive(s < 1 + k % 3);
+                tower.ShowLevel(1 + k % TD_Rules.MaxLevel);
             }
             var kinds = new[] { TD_EnemyKind.Scout, TD_EnemyKind.Scout, TD_EnemyKind.Apc, TD_EnemyKind.Tank, TD_EnemyKind.Chopper, TD_EnemyKind.Apc, TD_EnemyKind.Boss, TD_EnemyKind.Scout };
             for (int i = 0; i < kinds.Length; i++) {

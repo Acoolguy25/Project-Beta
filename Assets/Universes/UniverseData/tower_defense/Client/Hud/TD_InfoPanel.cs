@@ -11,6 +11,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         public TD_Fader fader;
         public Image portrait, accentBar, actionBack;
         public TMP_Text title, subtitle, damageValue, rangeValue, rateValue, actionLabel, tagsLabel;
+        [Tooltip("What selling the focused tower pays back (hidden on an empty pad).")]
+        public TMP_Text sellLabel;
         public Image[] stars;
         public Color starOn = new(1f, 0.8f, 0.24f), starOff = new(1f, 1f, 1f, 0.15f);
         public Color actionReady = new(0.2f, 0.78f, 0.48f), actionBlocked = new(0.95f, 0.33f, 0.36f), actionDone = new(1f, 1f, 1f, 0.12f);
@@ -23,11 +25,12 @@ namespace Universes.UniverseData.tower_defense.Client {
             Header(kind, towerPortrait, $"Build {t.name}", t.blurb, 0);
             Stats(kind, 1, false);
             Action($"Build  ${t.cost}", cash >= t.cost ? actionReady : actionBlocked);
+            sellLabel.gameObject.SetActive(false);
             fader.Set(true);
         }
 
-        /// <summary>Shows a built tower and its upgrade.</summary>
-        public void ShowTower(TD_TowerSnap tower, Sprite towerPortrait, int cash) {
+        /// <summary>Shows a built tower, its upgrade and its sale value.</summary>
+        public void ShowTower(TD_TowerSnap tower, Sprite towerPortrait, int cash, string sellKey) {
             var t = TD_Rules.Tower(tower.kind);
             string owner = string.IsNullOrEmpty(tower.owner) ? "Unclaimed" : $"Built by {tower.owner}";
             Header(tower.kind, towerPortrait, t.name, owner, tower.level);
@@ -38,6 +41,8 @@ namespace Universes.UniverseData.tower_defense.Client {
                 int cost = TD_Rules.UpgradeCost(tower.kind, tower.level);
                 Action($"Upgrade to Lv {tower.level + 1}  ${cost}", cash >= cost ? actionReady : actionBlocked);
             }
+            sellLabel.gameObject.SetActive(true);
+            sellLabel.text = $"<b>{sellKey}</b> ×2  Sell for ${TD_Rules.SellRefund(tower.kind, tower.level)}  <color=#B4BCC8>({Mathf.RoundToInt(TD_Rules.SellRefundRate * 100f)}% back)</color>";
             fader.Set(true);
         }
 

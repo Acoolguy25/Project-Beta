@@ -55,6 +55,17 @@ namespace Universes.UniverseData.tower_defense {
         public const float FlyHeight = 7f;
         public const float SlotReach = 6f;
         public const float SlowSeconds = 1.6f;
+        /// <summary>Share of everything spent on a tower (build plus upgrades) paid back when it is sold.</summary>
+        public const float SellRefundRate = 0.7f;
+        /// <summary>Cash per build-phase second skipped when every player votes to start the next wave early.</summary>
+        public const int EarlyStartBonusPerSecond = 4;
+        /// <summary>The base counts as critical (alarm, heartbeat) at or below this many health points.</summary>
+        public const int BaseCriticalHealth = 30;
+        /// <summary>Simulation speed while fast forward is voted on.</summary>
+        public const float FastSpeed = 2f;
+
+        /// <summary>Fast forward runs while more than half of the players vote for it.</summary>
+        public static bool FastVotePasses(int votes, int players) => players > 0 && votes * 2 > players;
 
         /// <summary>Lane from the enemy hangar to the base, on flat ground (y = 0).</summary>
         public static readonly Vector3[] Lane = {
@@ -96,6 +107,20 @@ namespace Universes.UniverseData.tower_defense {
         public static float FireRate(TD_TowerKind kind, int level) => Tower(kind).fireRate * (1f + 0.1f * (level - 1));
         public static int UpgradeCost(TD_TowerKind kind, int level) => Mathf.RoundToInt(Tower(kind).cost * 0.8f * level);
 
+        /// <summary>Everything spent on a tower of <paramref name="level"/>: its price plus every upgrade.</summary>
+        public static int Invested(TD_TowerKind kind, int level) {
+            int total = Tower(kind).cost;
+            for (int l = 1; l < Mathf.Min(level, MaxLevel); l++) total += UpgradeCost(kind, l);
+            return total;
+        }
+
+        public static int SellRefund(TD_TowerKind kind, int level) => Mathf.RoundToInt(Invested(kind, level) * SellRefundRate);
+
+        /// <summary>Bonus for starting the next wave with <paramref name="secondsLeft"/> of the build phase unused.</summary>
+        public static int EarlyStartBonus(int secondsLeft) => Mathf.Max(0, secondsLeft) * EarlyStartBonusPerSecond;
+
+        public static bool IsBoss(TD_EnemyKind kind) => kind == TD_EnemyKind.Boss;
+
         /// <summary>Damage one hit does after armour (snipers ignore it); never less than 1.</summary>
         public static float HitDamage(TD_TowerKind kind, int level, TD_EnemyKind target) {
             float armor = kind == TD_TowerKind.Sniper ? 0f : Enemy(target).armor;
@@ -134,6 +159,11 @@ namespace Universes.UniverseData.tower_defense {
             int n = 0;
             foreach (var g in Wave(wave)) n += g.count;
             return n;
+        }
+
+        public static bool HasBoss(int wave) {
+            foreach (var g in Wave(wave)) if (IsBoss(g.kind)) return true;
+            return false;
         }
     }
 }

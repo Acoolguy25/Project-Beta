@@ -14,6 +14,7 @@
         "Unity.ugui",
         "RyanAssets.UI",
         "RyanAssets.UI.Editor",
+        "RyanAssets.GameFeel",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime"
     ],

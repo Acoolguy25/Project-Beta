@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 #if !UNITY_SERVER
+using RyanAssets.GameFeel;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using static RyanAssets.UI.Editor.UIKit;
@@ -14,7 +15,8 @@ using Universes.UniverseData.tower_defense.Client;
 namespace Universes.UniverseData.tower_defense.Editor {
     /// <summary>
     /// Generates TowerDefenseHUD.prefab on the shared <see cref="UITheme"/> (UIKit): status bar (cash,
-    /// wave, base), next-wave preview, tower shop, focus card, prompt, toasts, wave banner and result.
+    /// wave, base), next-wave preview, fast-forward pill, boss bar, tower shop, focus card, prompt,
+    /// toasts, wave banner and result; plus the client controller's sounds and effect tuning.
     /// Edit this script, not the prefab, then run Ryan > Tower Defense > Build Client Assets.
     /// </summary>
     static class TD_HudAuthoring {
@@ -25,6 +27,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const float CardRadius = 14f;
         static readonly Vector2 CardSize = new(200f, 196f);
         const float StatusTop = -60f;
+        const string KitAudio = "Packages/com.ryan.gameframework/Runtime/GameFeel/Audio/";
 
         // ---------------------------------------------------------------- assets
         /// <summary>Imports every icon in UI/Icons as a UI sprite.</summary>
@@ -71,6 +74,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
             StatusBar(root, hud);
             NextWave(root, hud);
+            SpeedPill(root, hud);
+            BossBar(root, hud);
             Shop(root, hud);
             Info(root, hud);
             PromptPill(root, hud);
@@ -78,15 +83,50 @@ namespace Universes.UniverseData.tower_defense.Editor {
             WaveBanner(root, hud);
             Result(root, hud);
 
-            client.sfx = UniverseSfx(root);
-            client.buildClip = client.waveClip = RyanAssets.Authoring.UniverseAuthoringKit.Clip(RyanAssets.Authoring.UniverseAuthoringKit.CoinClip);
-            client.deniedClip = client.leakClip = RyanAssets.Authoring.UniverseAuthoringKit.Clip(RyanAssets.Authoring.UniverseAuthoringKit.LandClip);
+            client.tuning = Tuning();
             return SavePrefab(root.gameObject, PrefabPath);
 #endif
         }
 
 #if !UNITY_SERVER
-        static AudioSource UniverseSfx(Transform parent) => RyanAssets.Authoring.UniverseAuthoringKit.Sfx(parent);
+        // ---------------------------------------------------------------- feel
+        /// <summary>A sound from asset paths; missing clips are reported, not silently dropped.</summary>
+        static SfxSound Sound(float volume, float pitch, float pitchJitterSemitones, float minInterval, params string[] paths) {
+            var clips = paths.Select(path => (path, clip: AssetDatabase.LoadAssetAtPath<AudioClip>(path))).ToArray();
+            foreach (var missing in clips.Where(c => c.clip == null)) Debug.LogWarning("[TowerDefense] Missing sound " + missing.path);
+            return new SfxSound {
+                clips = clips.Where(c => c.clip != null).Select(c => c.clip).ToArray(),
+                volume = volume, pitch = pitch, pitchJitterSemitones = pitchJitterSemitones, minInterval = minInterval,
+            };
+        }
+
+        static string[] Numbered(string folder, string stem, int count) => Enumerable.Range(1, count).Select(i => $"{folder}{stem}_{i}.ogg").ToArray();
+
+        /// <summary>Shot sounds per tower (index-aligned with TD_TowerKind) and death blasts per enemy (TD_EnemyKind).</summary>
+        static TD_FxTuning Tuning() {
+            string game = TD_Authoring.AudioFolder + "/";
+            var tuning = new TD_FxTuning {
+                towers = new[] {
+                    // Gunner: quick light pops; several towers fire 5 times a second, so it stays quiet.
+                    new TD_FxTuning.TowerFx { fire = Sound(0.22f, 1.2f, 1f, 0.06f, TD_Authoring.FireClip), impact = new SfxSound(), muzzleSparks = 0.22f },
+                    // Cannon: heavy metal thump out, small blast where the shell lands.
+                    new TD_FxTuning.TowerFx { fire = Sound(0.6f, 0.85f, 1f, 0.08f, Numbered(game, "cannon", 3)), impact = Sound(0.45f, 1.1f, 1.5f, 0.1f, Numbered(KitAudio, "explosion", 5)), muzzleSparks = 0.45f },
+                    // Frost: a soft laser zap.
+                    new TD_FxTuning.TowerFx { fire = Sound(0.28f, 1.3f, 1f, 0.1f, Numbered(game, "frost", 3)), impact = new SfxSound(), muzzleSparks = 0.3f },
+                    // Sniper: a deep crack and a solid hit.
+                    new TD_FxTuning.TowerFx { fire = Sound(0.6f, 0.7f, 0.5f, 0.12f, TD_Authoring.FireClip), impact = Sound(0.5f, 1f, 1f, 0.1f, Numbered(KitAudio, "hit", 5)), muzzleSparks = 0.6f },
+                },
+                enemies = new[] {
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 0.8f, shake = 0.12f, debrisScale = 0.7f }, // Scout
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 1.1f, shake = 0.2f, debrisScale = 1f },    // APC
+                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 0.8f, shake = 0.4f, debrisScale = 1.3f },   // Tank
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 1.3f, shake = 0.3f, debrisScale = 1.2f },  // Chopper
+                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 1.7f, shake = 0.9f, debrisScale = 2.2f },   // Heavy Tank (boss)
+                },
+            };
+            Debug.Assert(tuning.towers.Length == TD_Rules.Towers.Length && tuning.enemies.Length == TD_Rules.Enemies.Length, "[TowerDefense] Fx tuning arrays must match the tower and enemy kinds.");
+            return tuning;
+        }
 
         // ---------------------------------------------------------------- pieces
         static Image TdIcon(Transform parent, string icon, float size, Color color) {
@@ -196,8 +236,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
             Row(panel.gameObject, 10f, Pad(16, 6), TextAnchor.MiddleCenter);
             FitContent(panel.gameObject, true, false);
-            hud.nextWave = panel.gameObject.AddComponent<TD_Fader>();
             panel.gameObject.AddComponent<CanvasGroup>();
+            hud.nextWave = panel.gameObject.AddComponent<TD_Fader>();
 
             TdIcon(panel, "wave", 18f, Theme.textSecondary);
             Label(panel, "Caption", "Next wave", UIText.Caption, UIColorRole.TextSecondary);
@@ -221,6 +261,40 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Size(ready, -1f, 36f, 0f);
             TdIcon(ready, "ready", 16f, Color.white);
             hud.readyLabel = Label(ready, "Label", "[R]  Start now", UIText.Strong, UIColorRole.TextPrimary);
+        }
+
+        // ---------------------------------------------------------------- fast forward (shown during waves, where the next-wave preview sits in build phases)
+        static void SpeedPill(RectTransform root, TD_Hud hud) {
+            RectTransform panel = Pinned(root, "FastForward", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 112f), new Vector2(0f, 48f));
+            Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
+            Row(panel.gameObject, 10f, Pad(6, 6), TextAnchor.MiddleCenter);
+            FitContent(panel.gameObject, true, false);
+            panel.gameObject.AddComponent<CanvasGroup>();
+            hud.speedPill = panel.gameObject.AddComponent<TD_Fader>();
+
+            RectTransform back = Node(panel, "Back");
+            hud.speedBack = Rounded(back, UIColorRole.SurfaceHover, 18f, raycast: false);
+            Object.DestroyImmediate(back.GetComponent<UIThemeColor>()); // coloured by state at runtime
+            Row(back.gameObject, 6f, Pad(12, 2), TextAnchor.MiddleCenter);
+            Size(back, -1f, 36f, 0f);
+            TdIcon(back, "rate", 16f, Color.white);
+            hud.speedLabel = Label(back, "Label", "[G]  Fast forward", UIText.Strong, UIColorRole.TextPrimary);
+        }
+
+        // ---------------------------------------------------------------- boss bar
+        static void BossBar(RectTransform root, TD_Hud hud) {
+            // The fader sits on a holder so the card's drop shadow (a sibling of the card) fades with it.
+            RectTransform holder = Pinned(root, "Boss", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 236f), new Vector2(460f, 66f));
+            holder.gameObject.AddComponent<CanvasGroup>();
+            hud.bossPanel = holder.gameObject.AddComponent<TD_Fader>();
+            RectTransform panel = Fill(holder, "Card");
+            Shadow(panel, 22f, 6f, 0.35f);
+            Rounded(panel, UIColorRole.Surface, CardRadius, raycast: false);
+            Column(panel.gameObject, 6f, Pad(18, 10), TextAnchor.MiddleCenter);
+            RectTransform head = Group(panel, "Head", false, 8f, TextAnchor.MiddleCenter);
+            TdIcon(head, "enemy_boss", 22f, Theme.danger);
+            hud.bossLabel = Label(head, "Name", "HEAVY TANK", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            hud.bossFill = Track(panel, "Health", 12f, Theme.danger);
         }
 
         // ---------------------------------------------------------------- shop
@@ -306,7 +380,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         // ---------------------------------------------------------------- focus card
         static void Info(RectTransform root, TD_Hud hud) {
-            RectTransform holder = Pinned(root, "TowerInfo", new Vector2(1f, 0f), new Vector2(-18f, 18f), new Vector2(360f, 262f));
+            RectTransform holder = Pinned(root, "TowerInfo", new Vector2(1f, 0f), new Vector2(-18f, 18f), new Vector2(360f, 290f));
             holder.gameObject.AddComponent<CanvasGroup>();
             var info = holder.gameObject.AddComponent<TD_InfoPanel>();
             info.fader = holder.gameObject.AddComponent<TD_Fader>();
@@ -348,6 +422,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             info.damageValue = StatRow(content, "damage", "Damage");
             info.rangeValue = StatRow(content, "range", "Range");
             info.rateValue = StatRow(content, "rate", "Fire rate");
+            info.sellLabel = Label(content, "Sell", "", UIText.Small, UIColorRole.TextSecondary);
 
             RectTransform action = Node(content, "Action");
             Size(action, -1f, 38f, 1f);
@@ -398,7 +473,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             hud.banner.duration = 0.25f;
             Column(banner.gameObject, 2f, null, TextAnchor.MiddleCenter);
             RectTransform head = Group(banner, "Head", false, 16f, TextAnchor.MiddleCenter);
-            TdIcon(head, "wave", 56f, Theme.warning);
+            hud.bannerIcon = TdIcon(head, "wave", 56f, Theme.warning);
             hud.bannerTitle = Overlay(Label(head, "Title", "WAVE 1", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
             hud.bannerTitle.fontSize = 76f;
             hud.bannerTitle.characterSpacing = 4f;
@@ -413,13 +488,14 @@ namespace Universes.UniverseData.tower_defense.Editor {
             scrimRect.gameObject.AddComponent<CanvasGroup>();
             hud.result = scrimRect.gameObject.AddComponent<TD_Fader>();
 
-            RectTransform card = Panel(scrimRect, "Card", new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(560f, 300f), UIColorRole.SurfaceRaised, 18f);
+            RectTransform card = Panel(scrimRect, "Card", new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(560f, 330f), UIColorRole.SurfaceRaised, 18f);
             Column(card.gameObject, 10f, Pad(32, 28), TextAnchor.MiddleCenter);
             hud.resultIcon = TdIcon(card, "trophy", 84f, Theme.currency);
             hud.resultTitle = Label(card, "Title", "VICTORY", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
             hud.resultTitle.fontSize = 44f;
             hud.resultSubtitle = Label(card, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             hud.resultSubtitle.fontSize = 18f;
+            hud.resultRecord = Label(card, "Record", "", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             hud.resultCountdown = Label(card, "Countdown", "", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
         }
 #endif

@@ -13,7 +13,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
     public static class TD_Portraits {
         const int Size = 256;
         /// <summary>Children hidden while rendering (labels, bars, rings, shadows).</summary>
-        static readonly string[] Hidden = { "Badge", "RangeRing", "HealthBar", "FrostShell", "Shadow", "FireSound" };
+        static readonly string[] Hidden = { "Badge", "RangeRing", "NextRangeRing", "HealthBar", "FrostShell", "Shadow" };
 
         [MenuItem("Ryan/Tower Defense/Render Portraits")]
         public static void RenderAll() {

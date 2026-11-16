@@ -1,13 +1,14 @@
 using System.Collections.Generic;
-using TMPro;
+using RyanAssets.GameFeel;
 using UnityEngine;
 
 namespace Universes.UniverseData.tower_defense.Client {
     /// <summary>
-    /// Shot and reward effects for Tower Defense, pooled: bullet tracers and sniper beams (line
-    /// renderers), cannon shells and frost bolts (projectiles that fly to the target and burst), muzzle
-    /// flashes, impacts and "+$" popups over destroyed enemies. Purely cosmetic; the server already
-    /// applied the damage.
+    /// Tower Defense's world effects. Its own, pooled: bullet tracers and sniper beams (line
+    /// renderers) and cannon shells and frost bolts (projectiles that fly to the target). Everything
+    /// else (muzzle sparks, blasts, wrecks, "+$" popups, sounds, shake) goes through the shared game
+    /// feel kit, tuned by <see cref="TD_FxTuning"/>. Purely cosmetic; the server already applied
+    /// the damage.
     /// </summary>
     public sealed class TD_WorldFx {
         struct Flight {
@@ -24,63 +25,120 @@ namespace Universes.UniverseData.tower_defense.Client {
             public float start, until, width;
         }
 
-        struct Popup {
-            public TMP_Text text;
-            public Vector3 origin;
-            public float start;
-        }
-
-        const float PopupSeconds = 1.1f;
+        /// <summary>Shot shapes per tower kind: flight time and arc for shells, width and life for lines.</summary>
+        const float CannonFlight = 0.45f, CannonArc = 3.5f, CannonShellScale = 0.7f;
+        const float FrostFlight = 0.3f, FrostArc = 0.6f, FrostBoltScale = 0.5f;
+        const float SniperBeamWidth = 0.22f, SniperBeamSeconds = 0.22f, TracerWidth = 0.09f, TracerSeconds = 0.06f;
+        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
         readonly TD_EffectSet set;
+        readonly TD_FxTuning tuning;
         readonly Transform parent;
         readonly Stack<LineRenderer> linePool = new();
         readonly Stack<Transform> projectilePool = new();
-        readonly Stack<TMP_Text> popupPool = new();
         readonly List<Line> lines = new();
         readonly List<Flight> flights = new();
-        readonly List<Popup> popups = new();
-        readonly MaterialPropertyBlock block;
+        readonly MaterialPropertyBlock block = new();
+        readonly SfxLadder coinLadder;
 
-        public TD_WorldFx(TD_EffectSet set, Transform parent) {
+        public TD_WorldFx(TD_EffectSet set, TD_FxTuning tuning, Transform parent) {
             this.set = set;
+            this.tuning = tuning;
             this.parent = parent;
-            block = new MaterialPropertyBlock();
+            coinLadder = new SfxLadder(SfxCue.Coin, tuning.coinLadderStep, tuning.coinLadderSteps);
         }
 
+        // ---------------------------------------------------------------- shots
         /// <summary>Plays one shot from <paramref name="muzzle"/> at <paramref name="target"/>.</summary>
         public void Shot(TD_TowerKind kind, Vector3 muzzle, Transform target, Vector3 aim) {
-            Burst(set.muzzleFlash, muzzle, Quaternion.LookRotation(aim - muzzle), kind == TD_TowerKind.Gunner ? 0.6f : 1f);
+            var fx = tuning.Tower(kind);
+            Color color = TD_Palette.Tower(kind);
+            if (fx.muzzleSparks > 0f) GameFx.Play(FxKind.Sparks, muzzle, aim - muzzle, color, fx.muzzleSparks);
+            GameSfx.PlayAt(fx.fire, muzzle);
             switch (kind) {
                 case TD_TowerKind.Cannon:
-                    Launch(kind, muzzle, target, aim, 0.45f, 3.5f);
+                    Launch(kind, muzzle, target, aim, CannonFlight, CannonArc, CannonShellScale);
                     break;
                 case TD_TowerKind.Frost:
-                    Launch(kind, muzzle, target, aim, 0.3f, 0.6f);
+                    Launch(kind, muzzle, target, aim, FrostFlight, FrostArc, FrostBoltScale);
                     break;
                 case TD_TowerKind.Sniper:
-                    Trace(muzzle, aim, TD_Palette.Tower(kind), 0.22f, 0.22f);
-                    Burst(set.impact, aim, Quaternion.identity, 1f);
+                    Trace(muzzle, aim, color, SniperBeamWidth, SniperBeamSeconds);
+                    Land(kind, aim);
                     break;
                 default:
-                    Trace(muzzle, aim, TD_Palette.Tower(kind), 0.09f, 0.06f);
+                    Trace(muzzle, aim, color, TracerWidth, TracerSeconds);
                     break;
             }
         }
 
-        /// <summary>A destroyed enemy: explosion and a rising reward popup.</summary>
-        public void Destroyed(Vector3 position, int reward) {
-            Burst(set.explosion, position, Quaternion.identity, 1f);
-            if (set.rewardPopup == null) return;
-            var text = popupPool.Count > 0 ? popupPool.Pop() : Object.Instantiate(set.rewardPopup, parent).GetComponent<TMP_Text>();
-            if (text == null) return;
-            text.gameObject.SetActive(true);
-            text.text = $"+${reward}";
-            var origin = position + Vector3.up * 3f;
-            text.transform.position = origin;
-            popups.Add(new Popup { text = text, origin = origin, start = Time.time });
+        /// <summary>Where a shell, bolt or round lands.</summary>
+        void Land(TD_TowerKind kind, Vector3 at) {
+            Color color = TD_Palette.Tower(kind);
+            switch (kind) {
+                case TD_TowerKind.Cannon:
+                    GameFx.Play(FxKind.ExplosionSmall, at, tuning.cannonBlastScale);
+                    break;
+                case TD_TowerKind.Frost:
+                    GameFx.Play(FxKind.ShockwaveRing, at, color, tuning.frostBurstScale);
+                    break;
+                default:
+                    GameFx.Play(FxKind.Sparks, at, color, tuning.sniperHitScale);
+                    break;
+            }
+            GameSfx.PlayAt(tuning.Tower(kind).impact, at);
         }
 
+        // ---------------------------------------------------------------- enemies
+        /// <summary>An enemy destroyed by the towers: blast, debris, shake, coin and a "+$" popup.</summary>
+        public void Destroyed(TD_EnemyKind kind, Vector3 position, int reward) {
+            var fx = tuning.Enemy(kind);
+            GameFx.Play(fx.largeExplosion ? FxKind.ExplosionLarge : FxKind.ExplosionSmall, position, fx.explosionScale);
+            if (fx.debrisScale > 0f) {
+                GameFx.Play(FxKind.Sparks, position, tuning.debrisTint, fx.debrisScale);
+                GameFx.Play(FxKind.Smoke, position, fx.debrisScale);
+            }
+            GameSfx.PlayAt(fx.largeExplosion ? SfxCue.ExplosionLarge : SfxCue.Explosion, position);
+            if (fx.shake > 0f) CameraShake.Explosion(position, tuning.shakeRadius, fx.shake);
+            Vector2 spread = Random.insideUnitCircle * tuning.rewardPopupSpread;
+            Vector3 popup = position + new Vector3(spread.x, tuning.rewardPopupHeight + Random.value * tuning.rewardPopupSpread * 0.5f, spread.y);
+            FloatingText.Money(popup, reward, tuning.rewardPopupSize);
+            coinLadder.PlayAt(popup);
+        }
+
+        /// <summary>An enemy that reached the base: it blows up against the walls, costing health, not paying.</summary>
+        public void Leaked(TD_EnemyKind kind, Vector3 position) {
+            var fx = tuning.Enemy(kind);
+            GameFx.Play(fx.largeExplosion ? FxKind.ExplosionLarge : FxKind.ExplosionSmall, position, fx.explosionScale);
+            GameSfx.PlayAt(SfxCue.Explosion, position);
+            CameraShake.Kick(tuning.leakShake);
+        }
+
+        // ---------------------------------------------------------------- towers
+        public void Built(Transform tower, Vector3 pad, TD_TowerKind kind) {
+            GameFx.Play(FxKind.DustPuff, pad, tuning.buildDustScale);
+            // Lifted a little so the pad's own top doesn't swallow the flat ring.
+            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * 0.25f, TD_Palette.Tower(kind), tuning.buildDustScale);
+            GameSfx.PlayAt(SfxCue.Build, pad);
+            if (tower != null) Punch.Pop(tower);
+        }
+
+        public void Upgraded(Transform tower, Vector3 pad) {
+            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * 0.25f, tuning.levelUpColor, tuning.levelUpScale);
+            GameFx.Play(FxKind.Sparks, pad + Vector3.up * 2f, tuning.levelUpColor, tuning.levelUpScale);
+            GameSfx.PlayAt(SfxCue.LevelUp, pad);
+            if (tower != null) Punch.Squash(tower, -0.2f);
+        }
+
+        public void Sold(Vector3 pad, int refund) {
+            GameFx.Play(FxKind.DustPuff, pad, tuning.buildDustScale);
+            GameFx.Play(FxKind.CoinBurst, pad + Vector3.up, tuning.sellBurstScale);
+            GameSfx.PlayAt(SfxCue.Purchase, pad);
+            FloatingText.Money(pad + Vector3.up * tuning.rewardPopupHeight, refund, tuning.sellPopupSize);
+        }
+
+        // ---------------------------------------------------------------- per frame
         public void Update() {
             float now = Time.time;
             for (int i = lines.Count - 1; i >= 0; i--) {
@@ -102,22 +160,10 @@ namespace Universes.UniverseData.tower_defense.Client {
                     flights[i] = f;
                     continue;
                 }
-                Burst(f.kind == TD_TowerKind.Frost ? set.frostImpact : set.explosion, f.lastTarget, Quaternion.identity, f.kind == TD_TowerKind.Cannon ? 0.7f : 1f);
+                Land(f.kind, f.lastTarget);
                 f.projectile.gameObject.SetActive(false);
                 projectilePool.Push(f.projectile);
                 flights.RemoveAt(i);
-            }
-            for (int i = popups.Count - 1; i >= 0; i--) {
-                var p = popups[i];
-                float t = (now - p.start) / PopupSeconds;
-                if (t >= 1f) {
-                    p.text.gameObject.SetActive(false);
-                    popupPool.Push(p.text);
-                    popups.RemoveAt(i);
-                    continue;
-                }
-                p.text.transform.position = p.origin + Vector3.up * (2.5f * t);
-                p.text.alpha = t < 0.7f ? 1f : 1f - (t - 0.7f) / 0.3f;
             }
         }
 
@@ -133,20 +179,20 @@ namespace Universes.UniverseData.tower_defense.Client {
             lines.Add(new Line { line = line, start = Time.time, until = Time.time + seconds, width = width });
         }
 
-        void Launch(TD_TowerKind kind, Vector3 from, Transform target, Vector3 aim, float seconds, float arc) {
+        void Launch(TD_TowerKind kind, Vector3 from, Transform target, Vector3 aim, float seconds, float arc, float scale) {
             if (set.projectile == null) {
-                Burst(kind == TD_TowerKind.Frost ? set.frostImpact : set.explosion, aim, Quaternion.identity, 1f);
+                Land(kind, aim);
                 return;
             }
             var projectile = projectilePool.Count > 0 ? projectilePool.Pop() : Object.Instantiate(set.projectile, parent).transform;
             projectile.gameObject.SetActive(true);
             projectile.position = from;
-            projectile.localScale = Vector3.one * (kind == TD_TowerKind.Cannon ? 0.7f : 0.5f);
+            projectile.localScale = Vector3.one * scale;
             Color color = TD_Palette.Tower(kind);
             foreach (var r in projectile.GetComponentsInChildren<Renderer>()) {
                 r.GetPropertyBlock(block);
-                block.SetColor("_BaseColor", color);
-                block.SetColor("_EmissionColor", color * 2f);
+                block.SetColor(BaseColorId, color);
+                block.SetColor(EmissionColorId, color * 2f);
                 r.SetPropertyBlock(block);
                 if (r is TrailRenderer trail) {
                     trail.Clear();
@@ -155,13 +201,6 @@ namespace Universes.UniverseData.tower_defense.Client {
                 }
             }
             flights.Add(new Flight { projectile = projectile, from = from, target = target, lastTarget = aim, start = Time.time, duration = seconds, arc = arc, kind = kind });
-        }
-
-        void Burst(GameObject prefab, Vector3 position, Quaternion rotation, float scale) {
-            if (prefab == null) return;
-            var go = Object.Instantiate(prefab, position, rotation, parent);
-            go.transform.localScale *= scale;
-            Object.Destroy(go, set.effectLifetime);
         }
     }
 }

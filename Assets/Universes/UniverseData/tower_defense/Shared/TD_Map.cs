@@ -11,6 +11,10 @@ namespace Universes.UniverseData.tower_defense {
         [Tooltip("Index-aligned with TD_EnemyKind.")]
         public GameObject[] enemyPrefabs;
         public GameObject slotPrefab;
+        [Tooltip("See-through tower models previewed on a pad before building. Index-aligned with TD_TowerKind.")]
+        public GameObject[] ghostPrefabs;
+        [Tooltip("The defended base model: flashes when enemies get through.")]
+        public Transform baseModel;
         public TD_EffectSet effects = new();
         [Tooltip("Client-only HUD.")]
         public GameObject clientPrefab;

@@ -26,14 +26,16 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const float RoadWidth = 9f;
         const int Seed = 1337;
 
-        public static void Build(TD_Authoring.Materials m) {
+        /// <summary>Builds the map into the open scene and returns the defended base (it flashes when hit).</summary>
+        public static Transform Build(TD_Authoring.Materials m) {
             var world = new GameObject("World");
             var random = new System.Random(Seed);
             Ground(world.transform, random);
             Road(world.transform);
-            Landmarks(world.transform);
+            var baseModel = Landmarks(world.transform);
             Scenery(world.transform, random);
             Boundary(world.transform);
+            return baseModel;
         }
 
         // ---------------------------------------------------------------- ground
@@ -145,11 +147,14 @@ namespace Universes.UniverseData.tower_defense.Editor {
         static Vector3 HangarSpot => TD_Rules.Lane[0] - (TD_Rules.Lane[1] - TD_Rules.Lane[0]).normalized * 10f;
         static Vector3 BaseSpot => TD_Rules.Lane[^1] + (TD_Rules.Lane[^1] - TD_Rules.Lane[^2]).normalized * 12f;
 
-        static void Landmarks(Transform world) {
+        static Transform Landmarks(Transform world) {
             var lane = TD_Rules.Lane;
             var parent = Empty("Landmarks", world).transform;
             MilitaryModel(parent, "VehicleHangar_01_Prefeb", HangarSpot, 16f, Yaw(lane[1] - lane[0]));
-            MilitaryModel(parent, "MilitaryBase_Prefeb", BaseSpot, 22f, Yaw(lane[^2] - lane[^1]));
+            var baseModel = MilitaryModel(parent, "MilitaryBase_Prefeb", BaseSpot, 22f, Yaw(lane[^2] - lane[^1]));
+#if !UNITY_SERVER
+            baseModel.AddComponent<RyanAssets.GameFeel.HitFlash>(); // flashed by the client when enemies get through
+#endif
             var sign = WorldText("BaseSign", parent, BaseSpot + Vector3.up * 16f, "DEFEND THE BASE", 8f, new Color(1f, 0.85f, 0.3f), new Vector2(24f, 3f));
             sign.fontStyle = TMPro.FontStyles.Bold;
             sign.gameObject.AddComponent<RyanAssets.Rounds.Billboard>();
@@ -174,11 +179,13 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Kay(Props + "sack", parent, b + new Vector3(-16.5f, 0f, -12f), 1.4f, 0f);
             Kay(Props + "resource_stone", parent, b + new Vector3(16f, 0f, -14f), 3f, 40f);
             Kay(Props + "wheelbarrow", parent, b + new Vector3(19f, 0f, -9f), 2.4f, 210f);
+            return baseModel.transform;
         }
 
-        static void MilitaryModel(Transform parent, string model, Vector3 position, float size, float yaw) {
+        static GameObject MilitaryModel(Transform parent, string model, Vector3 position, float size, float yaw) {
             var anchor = Empty(model, parent, position);
             Model(Military + model + ".prefab", anchor.transform, size, yaw: yaw, keepColliders: true);
+            return anchor;
         }
 
         static float Yaw(Vector3 dir) => Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
