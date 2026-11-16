@@ -8,6 +8,7 @@
         "RyanAssets.Characters.Shared",
         "RyanAssets.Shared.Component",
         "RyanAssets.Characters.Client",
+        "RyanAssets.GameFeel",
         "FishNet.Runtime",
         "Unity.TextMeshPro",
         "Unity.ugui",

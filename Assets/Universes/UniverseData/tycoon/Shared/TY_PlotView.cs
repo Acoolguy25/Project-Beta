@@ -9,5 +9,7 @@ namespace Universes.UniverseData.tycoon {
         public GameObject claimPad;
         [Tooltip("Bought items and buttons are spawned under this.")]
         public Transform itemRoot;
+        [Tooltip("The conveyor belt; clients scroll its texture while the plot is running.")]
+        public Renderer belt;
     }
 }

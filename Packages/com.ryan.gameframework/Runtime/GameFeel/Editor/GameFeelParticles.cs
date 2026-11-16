@@ -304,7 +304,10 @@ namespace RyanAssets.GameFeel.Editor {
             shape.scale = Vector3.zero;
             shape.position = new Vector3(0f, BeamHeight * 0.5f, 0f);
             FadeOver(ps, Fade(Color.white, 0.3f, 0.6f));
-            ps.GetComponent<ParticleSystemRenderer>().renderMode = ParticleSystemRenderMode.VerticalBillboard;
+            var beamRenderer = ps.GetComponent<ParticleSystemRenderer>();
+            beamRenderer.renderMode = ParticleSystemRenderMode.VerticalBillboard;
+            // The default cap (half the screen) would shrink the tall pillar to a stub when seen up close.
+            beamRenderer.maxParticleSize = 100f;
             // Prewarm so the beam is already full when it appears.
             main.prewarm = true;
 

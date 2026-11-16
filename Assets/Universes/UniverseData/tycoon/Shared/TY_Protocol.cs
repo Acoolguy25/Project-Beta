@@ -2,7 +2,8 @@ using FishNet.Broadcast;
 using UnityEngine;
 
 namespace Universes.UniverseData.tycoon {
-    public enum TY_EventKind : byte { Claimed, Bought, TooPoor, Collected, Rebirth, Released, Info, GoldenBrick, Perk, CollectorFull }
+    // Append only: values travel over the wire.
+    public enum TY_EventKind : byte { Claimed, Bought, TooPoor, Collected, Rebirth, Released, Info, GoldenBrick, Perk, CollectorFull, RushHour, RushHourOver }
 
     public struct TY_PlotState {
         public byte plot;
@@ -36,6 +37,10 @@ namespace Universes.UniverseData.tycoon {
         public TY_PerkLevels perks;
         /// <summary>Total cash earned this session, for the stats line.</summary>
         public long lifetime;
+        /// <summary>Seconds left of the server's rush hour, 0 when none runs (appended field).</summary>
+        public float rushSeconds;
+        /// <summary>The rush hour's income multiplier (already part of <see cref="multiplier"/> and <see cref="income"/>).</summary>
+        public float rushMultiplier;
     }
 
     /// <summary>Something happened to this player (purchase, collection, refusal).</summary>

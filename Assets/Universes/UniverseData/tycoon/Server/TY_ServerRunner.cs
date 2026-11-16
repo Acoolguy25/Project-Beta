@@ -42,6 +42,10 @@ namespace Universes.UniverseData.tycoon.Server {
         [SerializeField, Min(1f)] float goldenIncomeSeconds = 25f;
         [SerializeField, Min(0)] long goldenMinimum = 50;
 
+        [Header("Rush hour")]
+        [Tooltip("Timed server event: every few minutes every tycoon earns more for a short while.")]
+        [SerializeField] TY_RushHour rushHour = new();
+
         [Header("Rewards (account XP/gold)")]
         [SerializeField] ulong purchaseXP = 4;
         [SerializeField] ulong rebirthXP = 150;
@@ -93,7 +97,10 @@ namespace Universes.UniverseData.tycoon.Server {
             PlayerData.OnPlayerRemoved += OnPlayerLeft;
             InstanceFinder.ServerManager.RegisterBroadcast<TY_StateRequest>(OnStateRequest);
             InstanceFinder.ServerManager.RegisterBroadcast<TY_PerkRequest>(OnPerkRequest);
+            rushHour.Validate();
         }
+
+        void OnValidate() => rushHour?.Validate();
 
         Tycooner For(NetworkConnection connection) {
             if (!players.TryGetValue(connection, out var t)) players[connection] = t = new Tycooner { cash = startingCash };
@@ -137,7 +144,10 @@ namespace Universes.UniverseData.tycoon.Server {
             player.sprintSpeed.Value = sprintSpeed * m;
         }
 
-        double IncomeOf(Plot plot, Tycooner t) => TY_Catalog.Income(plot.purchased, t.rebirths, t.perks) * incomeScale;
+        /// <summary>Everything on top of the catalog's own multipliers: the tuning scale and a running rush hour.</summary>
+        double EventScale => incomeScale * rushHour.Multiplier(Time.time);
+
+        double IncomeOf(Plot plot, Tycooner t) => TY_Catalog.Income(plot.purchased, t.rebirths, t.perks) * EventScale;
 
         // ---------------------------------------------------------------- lifecycle
         protected override async UniTask StartAsync(CancellationToken token) {
@@ -155,16 +165,46 @@ namespace Universes.UniverseData.tycoon.Server {
 
             // A tycoon has no rounds: earn and report forever, until the server restarts the runner.
             float last = Time.time;
+            rushHour.Schedule(last, Random.value);
             while (!token.IsCancellationRequested) {
                 float now = Time.time, dt = now - last;
                 last = now;
+                UpdateRushHour(now);
                 for (int i = 0; i < plots.Length; i++) Earn(plots[i], dt, now);
-                int free = plots.Count(p => p.owner == null);
-                SetTopMessage(free > 0 ? $"Brick Tycoon: claim a free plot! ({free} left)" : "Brick Tycoon: every plot is taken");
+                SetTopMessage(TopMessage(now));
                 BroadcastPlots();
                 foreach (var connection in players.Keys.ToList()) SendWallet(connection);
                 await AwaitTime(1000, token);
             }
+        }
+
+        string TopMessage(float now) {
+            if (rushHour.IsActive(now))
+                return $"RUSH HOUR: every tycoon earns x{rushHour.multiplier:0.#} for {Mathf.CeilToInt(rushHour.Remaining(now))} s!";
+            int free = plots.Count(p => p.owner == null);
+            return free > 0 ? $"Brick Tycoon: claim a free plot! ({free} left)" : "Brick Tycoon: every plot is taken";
+        }
+
+        // ---------------------------------------------------------------- rush hour
+        void UpdateRushHour(float now) {
+            bool anyOwner = false;
+            foreach (Plot plot in plots) anyOwner |= plot.owner != null;
+            switch (rushHour.Tick(now, Random.value, anyOwner)) {
+                case TY_RushChange.Started: AnnounceRush(true); break;
+                case TY_RushChange.Ended: AnnounceRush(false); break;
+            }
+        }
+
+        /// <summary>Tells the whole server (chat and every player's HUD) that a rush hour started or ended.</summary>
+        void AnnounceRush(bool started) {
+            string text = started
+                ? $"RUSH HOUR! Every tycoon earns x{rushHour.multiplier:0.#} for {rushHour.duration:0} seconds."
+                : "Rush hour is over. Income is back to normal.";
+            ServerChat.SendSystemMessage(new(text, SystemMessageSource.CustomMessage));
+            TY_EventKind kind = started ? TY_EventKind.RushHour : TY_EventKind.RushHourOver;
+            long seconds = started ? (long)Math.Ceiling(rushHour.duration) : 0;
+            foreach (var pair in players) Event(pair.Key, kind, pair.Value.plot, -1, seconds, text);
+            plotsDirty = true;
         }
 
         void Earn(Plot plot, float dt, float now) {
@@ -370,8 +410,9 @@ namespace Universes.UniverseData.tycoon.Server {
             InstanceFinder.ServerManager.Broadcast(connection, new TY_WalletBroadcast {
                 cash = (long)Math.Floor(t.cash), plot = t.plot, rebirths = t.rebirths,
                 income = t.plot >= 0 ? (float)IncomeOf(plots[t.plot], t) : 0f,
-                multiplier = (float)(TY_Catalog.Multiplier(purchased, t.rebirths, t.perks) * incomeScale),
+                multiplier = (float)(TY_Catalog.Multiplier(purchased, t.rebirths, t.perks) * EventScale),
                 tokens = t.tokens, perks = t.perks, lifetime = (long)t.lifetime,
+                rushSeconds = rushHour.Remaining(Time.time), rushMultiplier = rushHour.multiplier,
             });
         }
 
@@ -402,6 +443,13 @@ namespace Universes.UniverseData.tycoon.Server {
         public void GrantTokens(NetworkConnection connection, int amount) {
             For(connection).tokens += amount;
             SendWallet(connection);
+        }
+
+        /// <summary>Starts a rush hour now (server console and probes).</summary>
+        public void StartRushHour() {
+            rushHour.Begin(Time.time);
+            AnnounceRush(true);
+            foreach (var connection in players.Keys) SendWallet(connection);
         }
 
         protected override void OnDestroy() {

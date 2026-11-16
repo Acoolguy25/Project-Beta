@@ -134,12 +134,12 @@ namespace Universes.UniverseData.tycoon.Editor {
             var tile = Kit.Tex("Tile");
             var p = new Prefabs {
                 plotMats = PlotColors.Select((c, i) => Kit.Mat($"Plot{i}", c, tile, smoothness: 0.35f)).ToArray(),
-                // Raw clay -> polished -> washed -> glazed gold, one stage per upgrader.
+                // Raw clay -> polished -> washed -> glazed gold, one stage per upgrader; each stage glows brighter.
                 oreMats = new[] {
                     Kit.Mat("Ore0", new Color(0.62f, 0.33f, 0.24f), Kit.Tex("BrickFace"), smoothness: 0.15f),
-                    Kit.Mat("Ore1", new Color(0.92f, 0.32f, 0.24f), Kit.Tex("BrickFace"), 0.2f, smoothness: 0.55f),
-                    Kit.Mat("Ore2", new Color(0.55f, 0.85f, 1f), Kit.Tex("BrickFace"), 0.5f, smoothness: 0.8f),
-                    Kit.Mat("Ore3", new Color(1f, 0.8f, 0.2f), Kit.Tex("BrickFace"), 0.9f, smoothness: 0.9f, metallic: 0.7f),
+                    Kit.Mat("Ore1", new Color(0.92f, 0.32f, 0.24f), Kit.Tex("BrickFace"), 0.6f, smoothness: 0.55f),
+                    Kit.Mat("Ore2", new Color(0.55f, 0.85f, 1f), Kit.Tex("BrickFace"), 1.1f, smoothness: 0.8f),
+                    Kit.Mat("Ore3", new Color(1f, 0.8f, 0.2f), Kit.Tex("BrickFace"), 1.8f, smoothness: 0.9f, metallic: 0.7f),
                 },
                 grass = Tiled(Kit.Mat("Grass", Color.white, Kit.Tex("Grass"), smoothness: 0.1f), 8f, 8f),
                 plaza = Tiled(Kit.Mat("Plaza", new Color(0.86f, 0.88f, 0.92f), tile, smoothness: 0.3f), 8f, 8f),
@@ -216,7 +216,7 @@ namespace Universes.UniverseData.tycoon.Editor {
 
             float len = TY_Catalog.BeltEndX - TY_Catalog.BeltStartX + 2f;
             float mid = (TY_Catalog.BeltEndX + TY_Catalog.BeltStartX) * 0.5f + 1f;
-            Cube("Belt", root.transform, new Vector3(mid, TY_Catalog.BeltTop * 0.5f, TY_Catalog.BeltZ), new Vector3(len, TY_Catalog.BeltTop, 1.6f), m.belt);
+            view.belt = Cube("Belt", root.transform, new Vector3(mid, TY_Catalog.BeltTop * 0.5f, TY_Catalog.BeltZ), new Vector3(len, TY_Catalog.BeltTop, 1.6f), m.belt).GetComponent<Renderer>();
             for (int s = -1; s <= 1; s += 2)
                 Cube($"Rail{s}", root.transform, new Vector3(mid, TY_Catalog.BeltTop + 0.15f, TY_Catalog.BeltZ + s * 0.9f), new Vector3(len, 0.3f, 0.2f), m.steel);
 
@@ -274,8 +274,22 @@ namespace Universes.UniverseData.tycoon.Editor {
             SpriteChild("LaneIcon", sign.transform, new Vector3(1.9f, 0.82f, -0.01f), TY_HudAuthoring.IconSprite(TY_Lanes.Icon(kind)), laneColor, 2).transform.localScale = Vector3.one * 0.32f;
             view.title = SignText("Title", sign.transform, new Vector3(0.75f, 0.52f, -0.02f), 2.6f, Color.white, FontStyles.Bold, new Vector2(2.6f, 0.6f));
             view.effect = SignText("Effect", sign.transform, new Vector3(0.75f, 0.02f, -0.02f), 1.9f, laneColor, FontStyles.Normal, new Vector2(2.6f, 0.5f));
-            view.price = SignText("Price", sign.transform, new Vector3(0.75f, -0.58f, -0.02f), 3.2f, new Color(0.45f, 1f, 0.55f), FontStyles.Bold, new Vector2(2.6f, 0.7f));
+            view.price = SignText("Price", sign.transform, new Vector3(0.75f, -0.58f, -0.02f), 3.2f, view.affordablePrice, FontStyles.Bold, new Vector2(2.6f, 0.7f));
+            SaveBar(view, sign.transform, laneColor);
             return Kit.Save(root, "Pads", $"Pad{kind}");
+        }
+
+        /// <summary>A thin bar along the sign's bottom edge that fills as the owner saves up for the item.</summary>
+        static void SaveBar(TY_ButtonView view, Transform sign, Color laneColor) {
+            const float width = 3.9f, height = 0.16f, y = -0.97f;
+            var bar = Empty("SaveBar", sign, new Vector3(0f, y, -0.015f));
+            SpriteChild("Track", bar.transform, Vector3.zero, TY_HudAuthoring.WhiteSprite(), new Color(1f, 1f, 1f, 0.22f), 2).transform.localScale = new Vector3(width, height, 1f);
+            // The fill's parent sits on the bar's left end, so scaling it along X grows the bar to the right.
+            var fill = Empty("Fill", bar.transform, new Vector3(-width * 0.5f, 0f, -0.005f));
+            SpriteChild("Bar", fill.transform, new Vector3(width * 0.5f, 0f, 0f), TY_HudAuthoring.WhiteSprite(), laneColor, 3).transform.localScale = new Vector3(width, height, 1f);
+            fill.transform.localScale = new Vector3(0.4f, 1f, 1f);
+            view.saveBar = bar;
+            view.saveFill = fill.transform;
         }
 
         static SpriteRenderer SpriteChild(string name, Transform parent, Vector3 position, Sprite sprite, Color color, int order) {
@@ -549,7 +563,8 @@ namespace Universes.UniverseData.tycoon.Editor {
                         int next = TY_Catalog.Items.Select((item, i) => (item, i)).First(x => x.item.kind == kind && x.item.price > 2500).i;
                         var pad = (GameObject)PrefabUtility.InstantiatePrefab(map.padPrefabs[(int)kind], view.itemRoot);
                         pad.transform.localPosition = TY_Catalog.LanePosition(kind);
-                        pad.GetComponent<TY_ButtonView>().Show(TY_Catalog.Items[next], map.Picture(next), kind == TY_ItemKind.Building ? TY_ButtonLook.Affordable : TY_ButtonLook.Expensive, "");
+                        bool affordable = kind == TY_ItemKind.Building;
+                        pad.GetComponent<TY_ButtonView>().Show(TY_Catalog.Items[next], map.Picture(next), affordable ? TY_ButtonLook.Affordable : TY_ButtonLook.Expensive, "", affordable ? 1f : 0.45f);
                     }
                 }
             }

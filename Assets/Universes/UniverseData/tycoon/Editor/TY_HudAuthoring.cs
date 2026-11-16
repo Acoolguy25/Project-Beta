@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using RyanAssets.Authoring;
 #if !UNITY_SERVER
+using RyanAssets.GameFeel;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using TMPro;
@@ -27,6 +28,8 @@ namespace Universes.UniverseData.tycoon.Editor {
         const string PrefabPath = TY_Authoring.Root + "/Prefabs/TycoonHUD.prefab";
 
         static readonly Color Pink = new(1f, 0.42f, 0.84f);
+        static readonly Color Rush = new(1f, 0.62f, 0.15f);
+        const string Kenney = "Assets/ThirdParty/Kenney/Sounds";
 
         // ---------------------------------------------------------------- sprites
         /// <summary>Imports the tycoon's Material icons (white, tinted at runtime) as sprites.</summary>
@@ -165,6 +168,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             var controller = root.gameObject.AddComponent<TY_ClientController>();
             var hud = root.gameObject.AddComponent<TY_Hud>();
             controller.hud = hud;
+            controller.feedback = BuildFeedback(root);
             float m = theme.screenMargin + 4f;
 
             BuildWallet(root, hud, m, theme);
@@ -173,13 +177,22 @@ namespace Universes.UniverseData.tycoon.Editor {
             BuildToast(root, hud);
             BuildPerkShop(root, hud);
 
-            hud.sfx = UniverseAuthoringKit.Sfx(root);
-            hud.buyClip = UniverseAuthoringKit.Clip("Assets/ThirdParty/Kenney/Sounds/placement-a.ogg");
-            hud.collectClip = UniverseAuthoringKit.Clip(UniverseAuthoringKit.CoinClip);
-            hud.deniedClip = UniverseAuthoringKit.Clip("Assets/ThirdParty/Kenney/Sounds/removal-a.ogg");
-            hud.rebirthClip = UniverseAuthoringKit.Clip("Assets/ThirdParty/Kenney/Sounds/break.ogg");
-            hud.goldenClip = UniverseAuthoringKit.Clip("Assets/ThirdParty/Kenney/Sounds/coin.ogg");
             return UIKit.SavePrefab(root.gameObject, PrefabPath);
+        }
+
+        /// <summary>
+        /// The game feel component. Shared moments use the kit's cues; the dropper tick is the tycoon's
+        /// own (Kenney "toggle", quiet and 3D so only your own belt is heard).
+        /// </summary>
+        static TY_Feedback BuildFeedback(RectTransform root) {
+            var feedback = root.gameObject.AddComponent<TY_Feedback>();
+            AudioClip tick = UniverseAuthoringKit.Clip(Kenney + "/toggle.ogg");
+            if (tick == null) throw new FileNotFoundException($"Dropper tick sound missing: {Kenney}/toggle.ogg");
+            feedback.dropperTick = new SfxSound {
+                clips = new[] { tick }, volume = 0.35f, volumeJitter = 0.15f, pitch = 1.25f, pitchJitterSemitones = 1.5f,
+                minInterval = 0.05f, minDistance = 4f, maxDistance = 32f,
+            };
+            return feedback;
         }
 
         static void BuildWallet(RectTransform root, TY_Hud hud, float margin, UITheme theme) {
@@ -189,6 +202,8 @@ namespace Universes.UniverseData.tycoon.Editor {
             TyIcon(header, "factory", 20f, theme.accent);
             hud.plotTitle = Label(header, "PlotTitle", "BRICK TYCOON", UIText.Caption, UIColorRole.TextSecondary);
             Spacer(header);
+            hud.rushText = Pill(header, "RushPill", "local_fire_department", "RUSH x2  30s", Rush * new Color(1f, 1f, 1f, 0.22f), Rush, out RectTransform rush);
+            hud.rushPill = rush.gameObject;
             hud.rebirthText = Pill(header, "RebirthBadge", "autorenew", "x1.5", Pink * new Color(1f, 1f, 1f, 0.22f), Pink, out RectTransform badge);
             hud.rebirthBadge = badge.gameObject;
 
@@ -355,6 +370,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             hud.iconPerk = IconSprite("star");
             hud.iconInfo = IconSprite("auto_awesome");
             hud.iconFull = IconSprite("savings");
+            hud.iconRush = IconSprite("local_fire_department");
         }
 
         static void BuildPerkShop(RectTransform root, TY_Hud hud) {
@@ -371,7 +387,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             Spacer(header);
             hud.perksTokens = Pill(header, "Tokens", "star", "0 tokens", theme.currency * new Color(1f, 1f, 1f, 0.2f), theme.currency, out _, 28f);
             hud.perksClose = UIKit.IconButton(header, "Close", "close", 34f, UIColorRole.SurfaceInset, 10f, out _, out _);
-            Label(panel, "Subtitle", "Every rebirth earns a token. Perks are permanent for this session.", UIText.Small, UIColorRole.TextSecondary)
+            Label(panel, "Subtitle", "Every rebirth earns a token. Perks are permanent and saved with your tycoon.", UIText.Small, UIColorRole.TextSecondary)
                 .textWrappingMode = TextWrappingModes.Normal;
 
             hud.perkRows = TY_Perks.All.Select(perk => PerkRow(panel, perk)).ToArray();

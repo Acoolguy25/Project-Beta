@@ -1071,6 +1071,7 @@ MonoBehaviour:
   bankLabel: {fileID: 1894697745310475053}
   claimPad: {fileID: 4450197404818729538}
   itemRoot: {fileID: 8477169926971826566}
+  belt: {fileID: 929716258797199255}
 --- !u!1 &4450197404818729538
 GameObject:
   m_ObjectHideFlags: 0

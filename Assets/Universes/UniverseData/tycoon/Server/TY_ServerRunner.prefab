@@ -52,7 +52,18 @@ MonoBehaviour:
     _editor_value: 10
   incomeScale: 1
   startingCash: 0
+  walkSpeed: 14
+  sprintSpeed: 22
+  goldenInterval: {x: 45, y: 90}
+  goldenLifetime: 30
+  goldenIncomeSeconds: 25
+  goldenMinimum: 50
+  rushHour:
+    interval: {x: 240, y: 420}
+    duration: 30
+    multiplier: 2
   purchaseXP: 4
   rebirthXP: 150
   rebirthGold: 75
-  tooPoorCooldown: 2.5
+  refusalCooldown: 2.5
+  fullReminder: 25
