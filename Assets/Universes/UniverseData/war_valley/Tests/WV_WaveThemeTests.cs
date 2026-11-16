@@ -56,7 +56,8 @@ namespace Universes.UniverseData.war_valley.Tests {
         [Test]
         public void Themes_NeverRepeatBackToBack() {
             WV_WaveTuning tuning = RotationOnly();
-            for (int wave = 3; wave <= 80; wave++)
+            // Before the first themed wave every wave is a plain assault on purpose.
+            for (int wave = tuning.FirstThemedWave + 1; wave <= 80; wave++)
                 Assert.That(WV_WavePlan.GetTheme(wave, tuning), Is.Not.EqualTo(WV_WavePlan.GetTheme(wave - 1, tuning)),
                     $"wave {wave}");
         }

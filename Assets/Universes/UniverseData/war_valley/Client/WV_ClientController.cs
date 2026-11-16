@@ -183,7 +183,7 @@ namespace Universes.UniverseData.war_valley.Client {
         /// </summary>
         void BindBattlefieldHud() {
             if (hud.HealthBars != null)
-                hud.HealthBars.Bind(IsSelected, IsOwnEntity, () => selection.Count);
+                hud.HealthBars.Bind(IsSelected, IsOwnEntity, () => selection.Count, IsPointerOverHud);
             if (hud.WaveDrama != null)
                 hud.WaveDrama.Bind(hud.SetHint);
             if (hud.HealthBars == null || hud.WaveDrama == null)
@@ -198,11 +198,11 @@ namespace Universes.UniverseData.war_valley.Client {
             _ => false
         };
 
-        /// <summary>True for a troop or vehicle the local commander owns.</summary>
+        /// <summary>True for a troop, vehicle or building the local commander owns.</summary>
         bool IsOwnEntity(EntityBase entity) => entity switch {
             GameCharacter troop => selection.IsCommandableTroop(troop),
             WV_Unit unit => unit.Owned != null && unit.Owned.IsOwnedBy(LocalClientId),
-            _ => false
+            _ => entity.TryGetComponent(out WV_Owned owned) && owned.IsOwnedBy(LocalClientId)
         };
 
         void UnbindCommandMenu() {
@@ -367,7 +367,6 @@ namespace Universes.UniverseData.war_valley.Client {
             HandleCommandKeys();
             HandlePointer();
             alerts.Tick(LocalClientId);
-            battle.Tick();
             postProcessing.Tick();
         }
 

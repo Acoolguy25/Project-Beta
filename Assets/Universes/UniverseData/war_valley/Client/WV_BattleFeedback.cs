@@ -49,16 +49,24 @@ namespace Universes.UniverseData.war_valley.Client {
         [Range(0f, 1f)] public float tankReportVolume = 0.7f;
 
         [Header("Construction")]
-        [Tooltip("Size of each puff in the dust cloud a new site or finished building throws up.")]
-        [Min(0.1f)] public float constructionDustScale = 1.6f;
-        [Tooltip("Height of that dust cloud per grid cell of the footprint (m); a hangar raises a taller " +
-                 "cloud than a watchtower.")]
-        [Min(0.5f)] public float constructionDustHeight = 4f;
-        [Tooltip("Pale, so the cloud reads against the valley's brown dirt rather than vanishing into it.")]
-        public Color constructionDustTint = new(1f, 0.96f, 0.88f, 1f);
+        [Tooltip("Size of each dust puff kicked up along the footprint's edge.")]
+        [Min(0.1f)] public float constructionDustScale = 3f;
+        [Tooltip("Puffs along each side of the footprint per grid cell it spans; a hangar kicks up a " +
+                 "longer skirt of dust than a watchtower.")]
+        [Min(1)] public int constructionDustPerCell = 2;
+        [Tooltip("How far outside the footprint's edge the dust rises (m), so it frames the building " +
+                 "rather than hiding it.")]
+        [Min(0f)] public float constructionDustSpread = 1f;
+        [Tooltip("Dirt-toned, a step lighter than the valley floor, so it reads as dust thrown up from " +
+                 "the ground rather than cloud.")]
+        public Color constructionDustTint = new(0.86f, 0.76f, 0.6f, 1f);
         [Tooltip("How hard a finished building settles: a squash on its model, as a fraction of its height.")]
         [Range(0f, 0.5f)] public float finishSquash = 0.12f;
         [Min(0.05f)] public float finishSquashSeconds = 0.4f;
+
+        [Header("Fallbacks")]
+        [Tooltip("Height used for the top of something with no collider to measure (m).")]
+        [Min(0f)] public float fallbackHeight = 2f;
     }
 
     /// <summary>
@@ -74,8 +82,6 @@ namespace Universes.UniverseData.war_valley.Client {
     /// </para>
     /// </summary>
     public sealed class WV_BattleFeedback {
-        /// <summary>Seconds between sweeps for finished buildings.</summary>
-        const float ConstructionSweepSeconds = 0.25f;
         /// <summary>A finished building's build sound, pitched down so it reads as a settling thud.</summary>
         const float FinishedPitchSemitones = -3f;
 
@@ -84,16 +90,9 @@ namespace Universes.UniverseData.war_valley.Client {
             public Action Unbind;
         }
 
-        sealed class Site {
-            public WV_Constructable Constructable;
-            public bool WasOperational;
-        }
-
         readonly WV_BattleFeedbackTuning tuning;
         readonly WV_CommanderSelection selection;
         readonly Dictionary<EntityBase, Tracked> tracked = new();
-        readonly List<Site> sites = new();
-        float nextSweep;
         bool enabled;
 
         public WV_BattleFeedback(WV_BattleFeedbackTuning tuning, WV_CommanderSelection selection) {
@@ -107,11 +106,18 @@ namespace Universes.UniverseData.war_valley.Client {
             enabled = true;
             EntityBase.EntityAdded += HandleEntityAdded;
             EntityBase.EntityRemoved += HandleEntityRemoved;
+            // Soldiers are not in the entity registry: characters publish their own roster.
+            GameCharacter.GameCharacterAdded += HandleCharacterAdded;
+            GameCharacter.GameCharacterRemoved += HandleEntityRemoved;
             WV_UnitAnimation.ShotShown += HandleShotShown;
             // Whatever already stands is adopted silently, so joining a round in progress does not
             // set off a dust storm over every building on the map.
             foreach (EntityBase entity in EntityBase.All)
                 Track(entity, announce: false);
+            foreach (List<GameCharacter> team in GameCharacter.TeamToCharacter.Values) {
+                foreach (GameCharacter character in team)
+                    Track(character, announce: false);
+            }
         }
 
         public void Disable() {
@@ -120,35 +126,19 @@ namespace Universes.UniverseData.war_valley.Client {
             enabled = false;
             EntityBase.EntityAdded -= HandleEntityAdded;
             EntityBase.EntityRemoved -= HandleEntityRemoved;
+            GameCharacter.GameCharacterAdded -= HandleCharacterAdded;
+            GameCharacter.GameCharacterRemoved -= HandleEntityRemoved;
             WV_UnitAnimation.ShotShown -= HandleShotShown;
             foreach (Tracked entry in tracked.Values)
                 entry.Unbind?.Invoke();
             tracked.Clear();
-            sites.Clear();
-        }
-
-        /// <summary>Notices finished buildings. Called every frame; sweeps a few times a second.</summary>
-        public void Tick() {
-            float now = Time.unscaledTime;
-            if (now < nextSweep)
-                return;
-            nextSweep = now + ConstructionSweepSeconds;
-            for (int i = sites.Count - 1; i >= 0; i--) {
-                Site site = sites[i];
-                if (site.Constructable == null) {
-                    sites.RemoveAt(i);
-                    continue;
-                }
-                bool operational = site.Constructable.IsOperational;
-                if (operational && !site.WasOperational)
-                    PlayFinished(site.Constructable);
-                site.WasOperational = operational;
-            }
         }
 
         // --- Tracking -----------------------------------------------------------
 
         void HandleEntityAdded(EntityBase entity) => Track(entity, announce: true);
+
+        void HandleCharacterAdded(GameCharacter character) => Track(character, announce: false);
 
         void HandleEntityRemoved(EntityBase entity) {
             if (entity != null && tracked.Remove(entity, out Tracked entry))
@@ -170,9 +160,14 @@ namespace Universes.UniverseData.war_valley.Client {
 
             entity.Health.OnChange += OnHealthChanged;
             entity.OnDied += OnDied;
+            entity.TryGetComponent(out WV_Constructable constructable);
+            if (constructable != null)
+                constructable.Completed += PlayFinished;
             tracked.Add(entity, new Tracked {
                 Entity = entity,
                 Unbind = () => {
+                    if (constructable != null)
+                        constructable.Completed -= PlayFinished;
                     if (entity == null || entity.HealthComponent == null)
                         return;
                     entity.Health.OnChange -= OnHealthChanged;
@@ -180,11 +175,8 @@ namespace Universes.UniverseData.war_valley.Client {
                 }
             });
 
-            if (entity.TryGetComponent(out WV_Constructable constructable)) {
-                sites.Add(new Site { Constructable = constructable, WasOperational = constructable.IsOperational });
-                if (announce && !constructable.IsOperational)
-                    PlayPlaced(constructable);
-            }
+            if (announce && constructable != null && !constructable.IsOperational)
+                PlayPlaced(constructable);
         }
 
         // --- Hits and deaths -----------------------------------------------------
@@ -277,12 +269,14 @@ namespace Universes.UniverseData.war_valley.Client {
                    && (camera.transform.position - position).sqrMagnitude <= tuning.effectsDistance * tuning.effectsDistance;
         }
 
-        static Vector3 GetCentre(Component entity) =>
-            entity.TryGetComponent(out Collider body) ? body.bounds.center : entity.transform.position + Vector3.up;
+        Vector3 GetCentre(Component entity) =>
+            entity.TryGetComponent(out Collider body)
+                ? body.bounds.center
+                : entity.transform.position + Vector3.up * (tuning.fallbackHeight * 0.5f);
 
-        static Vector3 GetTop(Component entity) {
+        Vector3 GetTop(Component entity) {
             if (!entity.TryGetComponent(out Collider body))
-                return entity.transform.position + Vector3.up * 2f;
+                return entity.transform.position + Vector3.up * tuning.fallbackHeight;
             Bounds bounds = body.bounds;
             return new Vector3(bounds.center.x, bounds.max.y, bounds.center.z);
         }
@@ -297,10 +291,36 @@ namespace Universes.UniverseData.war_valley.Client {
             GameSfx.PlayAt(SfxCue.Build, position);
         }
 
-        /// <summary>A cloud of dust over the whole footprint, as tall as the building is wide.</summary>
+        /// <summary>
+        /// A skirt of dust kicked up at ground level all around the footprint's edge: more puffs the
+        /// more cells the building covers, and the building itself left in view.
+        /// </summary>
         void PlayDust(WV_Constructable site) {
-            float height = tuning.constructionDustHeight * Mathf.Max(1, site.FootprintCells);
-            GameFx.Poof(site.transform.position, height, tuning.constructionDustTint, tuning.constructionDustScale);
+            Transform root = site.transform;
+            Bounds local = site.LocalPlacementBounds;
+            Vector3 lossy = root.lossyScale;
+            float halfX = Mathf.Abs(local.extents.x * lossy.x) + tuning.constructionDustSpread;
+            float halfZ = Mathf.Abs(local.extents.z * lossy.z) + tuning.constructionDustSpread;
+            Vector3 centre = root.TransformPoint(new Vector3(local.center.x, 0f, local.center.z));
+            centre.y = root.position.y;
+            int perSide = Mathf.Max(1, site.FootprintCells) * tuning.constructionDustPerCell;
+            Vector3 right = root.right;
+            Vector3 forward = root.forward;
+            // Walk the four sides corner to corner; each side starts at its own corner, so the
+            // corners are covered once.
+            for (int side = 0; side < 4; side++) {
+                for (int i = 0; i < perSide; i++) {
+                    float t = Mathf.Lerp(-1f, 1f, i / (float)perSide);
+                    Vector2 edge = side switch {
+                        0 => new Vector2(t, -1f),
+                        1 => new Vector2(1f, t),
+                        2 => new Vector2(-t, 1f),
+                        _ => new Vector2(-1f, -t)
+                    };
+                    Vector3 point = centre + right * (edge.x * halfX) + forward * (edge.y * halfZ);
+                    GameFx.Play(FxKind.DustPuff, point, tuning.constructionDustTint, tuning.constructionDustScale);
+                }
+            }
         }
 
         /// <summary>A finished building settles into place in a cloud of dust.</summary>

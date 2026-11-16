@@ -1,0 +1,3 @@
+# Terrain data is serialized in binary even with Force Text; as text it loses CR bytes and
+# Unity can no longer load it (see the root .gitattributes for the other terrains).
+start_map/Backdrop/*.asset binary

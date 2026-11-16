@@ -196,7 +196,6 @@ namespace Universes.UniverseData.war_valley.Editor {
             audioSource.minDistance = UnitReportMinDistance;
             audioSource.maxDistance = UnitReportMaxDistance;
 
-            SetPrivateField(animation, "muzzle", muzzle);
             SetPrivateField(animation, "muzzleFlash", flash.GetComponent<ParticleSystem>());
             SetPrivateField(animation, "audioSource", audioSource);
             // The pistol report turrets already use; heavier weapon audio can replace it here.

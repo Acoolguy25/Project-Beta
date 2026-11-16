@@ -224,7 +224,7 @@ namespace Universes.UniverseData.war_valley.Server
                 case WV_ActiveGameState.AdvanceWave:
                     SetTopMessage(WaveNumber + 2 > WaveTuning.WaveCount
                         ? $"Final wave - hold for {durationLeft} seconds"
-                        : $"Wave {WaveNumber + 2}/{WaveTuning.WaveCount} will start in {durationLeft} seconds");
+                        : $"Next wave in {durationLeft} s");
                     break;
                 case WV_ActiveGameState.FinishEnemiesOff:
                     int npcs = GameCharacter.TeamCount(WV_Alliances.GetWaveSide());

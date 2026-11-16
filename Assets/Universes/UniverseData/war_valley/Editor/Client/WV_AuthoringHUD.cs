@@ -71,7 +71,10 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         const float HealthBarHeight = 6f;
         const float ArrowSize = 64f;
         const float ArrowCaptionSize = 18f;
-        const float BannerWidth = 620f;
+        const float BannerWidth = 460f;
+        const float BannerEmblemSize = 48f;
+        /// <summary>The banner hangs this far below the top edge, under the shared top bar's message pill.</summary>
+        const float BannerTopOffset = 58f;
 
         static WV_AuthoringHUD() {
             // Deferred: asset operations are not allowed while the domain is still loading.
@@ -301,11 +304,10 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             }
             RectTransform flagArrow = BuildArrow(layerObject.transform, "FlagArrow", "FLAG", FlagArrowColor);
 
-            HudBanner banner = HudKit.Banner(layerObject.transform, "WaveBanner", new Vector2(0.5f, 0.5f),
-                new Vector2(0f, 210f), BannerWidth, "crossed_swords", WaveAccent, 72f);
-            // Under the arrows: an approach straight ahead pins its arrow to the top edge, right where
-            // the banner shows, and the arrow is the part that has to stay readable.
-            banner.transform.SetAsFirstSibling();
+            // Hung from the top, under the top bar, so the middle of the field - and the flag - stays in
+            // view while it shows. WV_WaveDrama keeps the arrows below it.
+            HudBanner banner = HudKit.Banner(layerObject.transform, "WaveBanner", new Vector2(0.5f, 1f),
+                new Vector2(0f, -BannerTopOffset), BannerWidth, "crossed_swords", WaveAccent, BannerEmblemSize);
 
             WireArray(drama, "approachArrows", arrows);
             Wire(drama, ("banner", banner), ("flagArrow", flagArrow),

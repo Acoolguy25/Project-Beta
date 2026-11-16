@@ -44,7 +44,12 @@ namespace Universes.UniverseData.war_valley.Shared {
         [Tooltip("The opening waves that ease new commanders in: smaller and slower than the curve " +
                  "would make them, rising to the full curve on the wave after the last of them. 0 " +
                  "turns the easing off.")]
-        [Min(0)] public int EarlyWaves = 2;
+        [Min(0)] public int EarlyWaves = 4;
+
+        [Tooltip("The first wave that may be themed or a surge. Every wave before it is a plain assault " +
+                 "from at most two sides, so a new commander learns the basics before a swarm or a " +
+                 "pincer tests them.")]
+        [Min(1)] public int FirstThemedWave = 6;
 
         [Tooltip("Wave 1's strength as a fraction of the curve. Each opening wave after it closes the " +
                  "gap to the full curve evenly.")]
@@ -270,8 +275,14 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// <summary>Share of a themed wave's budget spent on the theme's featured kinds.</summary>
         const float FeaturedShare = 0.65f;
 
-        /// <summary>A Swarm brings this much more strength, paid for in its cheapest soldiers.</summary>
+        /// <summary>
+        /// A Swarm brings this much more strength, paid for in its cheapest soldiers - except the
+        /// round's first Swarm, which only shows the commander what one looks like.
+        /// </summary>
         const float SwarmStrengthBonus = 1.25f;
+
+        /// <summary>The first two waves are always plain assaults, whatever the tuning says.</summary>
+        const int MinimumFirstThemedWave = 3;
 
         /// <summary>Themes that rotate through ordinary waves, in the order they first become possible.</summary>
         static readonly WV_WaveTheme[] RotatingThemes = {
@@ -289,7 +300,7 @@ namespace Universes.UniverseData.war_valley.Shared {
             WV_WaveTheme theme = GetTheme(waveNumber, tuning);
 
             float strength = GetStrength(waveNumber, tuning);
-            if (theme == WV_WaveTheme.Swarm)
+            if (theme == WV_WaveTheme.Swarm && !IsFirstSwarm(waveNumber, tuning))
                 strength *= SwarmStrengthBonus;
             List<WV_WaveGroup> groups = Compose(waveNumber, strength, GetFeaturedKinds(theme));
             groups = CapCount(groups, Mathf.Max(1, tuning.MaxEnemiesPerWave - (boss ? 1 : 0)));
@@ -316,24 +327,34 @@ namespace Universes.UniverseData.war_valley.Shared {
             return Mathf.Lerp(first, 1f, Mathf.Max(0, waveNumber - 1) / (float)earlyWaves);
         }
 
+        /// <summary>True when no wave before <paramref name="waveNumber"/> was a Swarm.</summary>
+        public static bool IsFirstSwarm(int waveNumber, WV_WaveTuning tuning) {
+            for (int wave = 1; wave < waveNumber; wave++) {
+                if (GetTheme(wave, tuning) == WV_WaveTheme.Swarm)
+                    return false;
+            }
+            return true;
+        }
+
         public static bool IsSurge(int waveNumber, WV_WaveTuning tuning) =>
-            tuning.SurgeEvery > 0 && waveNumber % tuning.SurgeEvery == 0;
+            tuning.SurgeEvery > 0 && waveNumber >= tuning.FirstThemedWave && waveNumber % tuning.SurgeEvery == 0;
 
         /// <summary>Whether a Warlord comes with this wave: every <see cref="WV_WaveTuning.BossEvery"/>th wave, and the last.</summary>
         public static bool IsBossWave(int waveNumber, WV_WaveTuning tuning) =>
             waveNumber == tuning.WaveCount || (tuning.BossEvery > 0 && waveNumber % tuning.BossEvery == 0);
 
         /// <summary>
-        /// The theme of a wave. Boss waves are sieges and surges are pincers; the first two waves are
-        /// always standard so new commanders meet the basics first; every other wave rotates through
-        /// the themes whose troops have already joined the waves, never repeating the wave before.
+        /// The theme of a wave. Boss waves are sieges and surges are pincers; every wave before
+        /// <see cref="WV_WaveTuning.FirstThemedWave"/> (and always the first two) is standard so new
+        /// commanders meet the basics first; every other wave rotates through the themes whose troops
+        /// have already joined the waves, never repeating the wave before.
         /// </summary>
         public static WV_WaveTheme GetTheme(int waveNumber, WV_WaveTuning tuning) {
             if (IsBossWave(waveNumber, tuning))
                 return WV_WaveTheme.Siege;
             if (IsSurge(waveNumber, tuning))
                 return WV_WaveTheme.Pincer;
-            if (waveNumber <= 2)
+            if (waveNumber < Mathf.Max(MinimumFirstThemedWave, tuning.FirstThemedWave))
                 return WV_WaveTheme.Standard;
 
             var available = new List<WV_WaveTheme>();
@@ -445,7 +466,9 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static string Describe(WV_Wave wave, int waveCount) {
             string header = $"Wave {wave.Number}/{waveCount} - {GetThemeName(wave.Theme)}";
             string boss = wave.Boss != null ? $", led by a {wave.Boss.DisplayName}" : string.Empty;
-            return $"{header}: {wave.EnemyCount} enemies from {DescribeApproaches(wave)}{boss} ({GetThemeHint(wave.Theme)})";
+            // A plain assault needs no advice; a themed wave's hint tells the commander how to answer it.
+            string hint = wave.Theme == WV_WaveTheme.Standard ? string.Empty : $" ({GetThemeHint(wave.Theme)})";
+            return $"{header}: {wave.EnemyCount} {(wave.EnemyCount == 1 ? "enemy" : "enemies")} from {DescribeApproaches(wave)}{boss}{hint}";
         }
 
         /// <summary>The wave's strength budget, in knifemen, eased for the opening waves.</summary>

@@ -56,7 +56,7 @@ namespace Universes.UniverseData.war_valley.Tests {
 
         [Test]
         public void SurgeWaves_AreStrongerThanTheWaveBefore() {
-            var tuning = new WV_WaveTuning { SurgeEvery = 5, SurgeMultiplier = 1.5f };
+            var tuning = new WV_WaveTuning { SurgeEvery = 5, SurgeMultiplier = 1.5f, FirstThemedWave = 1 };
             Assert.That(WV_WavePlan.Build(5, tuning).IsSurge, Is.True);
             Assert.That(WV_WavePlan.GetStrength(5, tuning), Is.GreaterThan(WV_WavePlan.GetStrength(4, tuning) * 1.3f));
         }

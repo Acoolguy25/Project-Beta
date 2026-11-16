@@ -298,7 +298,6 @@ MonoBehaviour:
   - {fileID: 2402264254797149755}
   rotorAxis: {x: 0, y: 1, z: 0}
   rotorDegreesPerSecond: 1440
-  muzzle: {fileID: 1029554308473857899}
   muzzleFlash: {fileID: 5905054558663040857}
   audioSource: {fileID: 9056352714326871838}
   fireAudio: {fileID: 8300000, guid: 9b91af91e8298e44293cdfaf2e7c71d7, type: 3}

@@ -11,7 +11,6 @@ namespace Universes.UniverseData.war_valley.Editor {
     /// The valley's light and colour, in one place. Every value the atmosphere pass writes comes from
     /// here, so the look is tuned by editing this recipe and re-running the menu.
     /// </summary>
-    [Serializable]
     public sealed class WV_AtmosphereRecipe {
         [Header("Sun")]
         public Color SunColor = new(1f, 0.9f, 0.74f, 1f);
@@ -24,25 +23,31 @@ namespace Universes.UniverseData.war_valley.Editor {
         [Header("Ambient")]
         public Color AmbientSky = new(0.6f, 0.68f, 0.78f, 1f);
         public Color AmbientEquator = new(0.6f, 0.58f, 0.5f, 1f);
-        public Color AmbientGround = new(0.3f, 0.27f, 0.21f, 1f);
+        [Tooltip("Lit from below by sunlit grass: lifts the units' and buildings' undersides out of black.")]
+        public Color AmbientGround = new(0.4f, 0.4f, 0.34f, 1f);
 
         [Header("Fog")]
-        [Tooltip("A light, warm haze: near fights stay crisp while the far side of the valley and the " +
-                 "mountains fall back into depth.")]
+        [Tooltip("A light, warm haze: fights within the commander camera's 40-150 m stay crisp while the " +
+                 "far side of the valley and the mountains fall back into depth.")]
         public Color FogColor = new(0.79f, 0.79f, 0.74f, 1f);
-        [Min(0f)] public float FogStart = 200f;
-        [Min(1f)] public float FogEnd = 1500f;
+        [Min(0f)] public float FogStart = 160f;
+        [Min(1f)] public float FogEnd = 1400f;
 
         [Header("Grading")]
         [Tooltip("Neutral keeps the grass green and the units' team colours true; ACES pushed the whole " +
                  "valley to rust orange when judged in the live Game view.")]
         public TonemappingMode Tonemapping = TonemappingMode.Neutral;
-        public float PostExposure = 0.15f;
-        [Range(-100f, 100f)] public float Contrast = 12f;
-        [Range(-100f, 100f)] public float Saturation = 10f;
+        public float PostExposure = 0.3f;
+        [Range(-100f, 100f)] public float Contrast = 20f;
+        [Tooltip("Strong enough that the meadow reads green and the team colours pop from the commander's height.")]
+        [Range(-100f, 100f)] public float Saturation = 35f;
         public Color ColorFilter = Color.white;
-        [Range(-100f, 100f)] public float Temperature = 5f;
-        [Range(-100f, 100f)] public float Tint;
+        [Range(-100f, 100f)] public float Temperature = -2f;
+        [Tooltip("Slightly toward green, away from the olive-brown cast of the raw ground.")]
+        [Range(-100f, 100f)] public float Tint = -6f;
+        [Tooltip("Lifts the shadows so units in a building's shade stay readable.")]
+        [Range(-1f, 1f)] public float ShadowLift = 0.08f;
+        [Range(-1f, 1f)] public float MidtoneGamma = 0.04f;
         [Min(0f)] public float BloomThreshold = 1.1f;
         [Min(0f)] public float BloomIntensity = 0.35f;
         [Range(0f, 1f)] public float BloomScatter = 0.65f;
@@ -84,6 +89,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 VolumeProfile profile = RebuildProfile(recipe);
                 ApplySun(scene, recipe);
                 ApplyLighting(recipe);
+                WV_MapAuthoring.ConfigureGroundLayers();
                 BindVolume(scene, profile);
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
@@ -166,6 +172,10 @@ namespace Universes.UniverseData.war_valley.Editor {
             color.contrast.Override(recipe.Contrast);
             color.saturation.Override(recipe.Saturation);
             color.colorFilter.Override(recipe.ColorFilter);
+
+            LiftGammaGain liftGammaGain = AddOverride<LiftGammaGain>(profile);
+            liftGammaGain.lift.Override(new Vector4(1f, 1f, 1f, recipe.ShadowLift));
+            liftGammaGain.gamma.Override(new Vector4(1f, 1f, 1f, recipe.MidtoneGamma));
 
             WhiteBalance balance = AddOverride<WhiteBalance>(profile);
             balance.temperature.Override(recipe.Temperature);

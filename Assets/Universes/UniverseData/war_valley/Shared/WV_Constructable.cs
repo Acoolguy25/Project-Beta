@@ -1,3 +1,4 @@
+using System;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using RyanAssets.Core;
@@ -84,6 +85,12 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>True once the build timer has elapsed. Every gameplay behaviour checks this first.</summary>
         public bool IsOperational => complete.Value;
+
+        /// <summary>
+        /// Raised on each client the moment this site finishes building, so presentation can react
+        /// to the replicated flag instead of polling it.
+        /// </summary>
+        public event Action<WV_Constructable> Completed;
 
         /// <summary>The replicated deadline, as a <see cref="NetworkHelper.ServerTime"/> reading.</summary>
         public float CompletionServerTime => completionTime.Value;
@@ -182,7 +189,11 @@ namespace Universes.UniverseData.war_valley.Shared {
             base.OnStopNetwork();
         }
 
-        void HandleCompleteChanged(bool previous, bool next, bool asServer) => ApplyPresentation();
+        void HandleCompleteChanged(bool previous, bool next, bool asServer) {
+            ApplyPresentation();
+            if (next && !previous && !asServer)
+                Completed?.Invoke(this);
+        }
 
         void HandleDeadlineChanged(float previous, float next, bool asServer) => ApplyPresentation();
 

@@ -20,12 +20,13 @@ namespace Universes.UniverseData.war_valley.Tests {
         const float PreviousUndefendedSeconds = 110f;
 
         [Test]
-        public void FirstWaves_AreSmallerThanTheCurve_AndCatchUpByWaveThree() {
+        public void FirstWaves_AreSmallerThanTheCurve_AndCatchUpAfterTheOpening() {
             var tuning = new WV_WaveTuning();
             var plain = new WV_WaveTuning { EarlyWaves = 0 };
-            Assert.That(WV_WavePlan.GetStrength(1, tuning), Is.LessThan(WV_WavePlan.GetStrength(1, plain)));
-            Assert.That(WV_WavePlan.GetStrength(2, tuning), Is.LessThan(WV_WavePlan.GetStrength(2, plain)));
-            Assert.That(WV_WavePlan.GetStrength(3, tuning), Is.EqualTo(WV_WavePlan.GetStrength(3, plain)));
+            for (int wave = 1; wave <= tuning.EarlyWaves; wave++)
+                Assert.That(WV_WavePlan.GetStrength(wave, tuning), Is.LessThan(WV_WavePlan.GetStrength(wave, plain)), $"wave {wave}");
+            int caughtUp = tuning.EarlyWaves + 1;
+            Assert.That(WV_WavePlan.GetStrength(caughtUp, tuning), Is.EqualTo(WV_WavePlan.GetStrength(caughtUp, plain)));
             Assert.That(WV_WavePlan.Build(1, tuning).TotalCount, Is.LessThan(WV_WavePlan.Build(1, plain).TotalCount));
         }
 
@@ -38,6 +39,52 @@ namespace Universes.UniverseData.war_valley.Tests {
             Assert.That(second, Is.GreaterThan(first).And.LessThan(1f));
             for (int wave = tuning.EarlyWaves + 1; wave <= tuning.WaveCount; wave++)
                 Assert.That(WV_WavePlan.Build(wave, tuning).MarchSpeedMultiplier, Is.EqualTo(1f), $"wave {wave}");
+        }
+
+        /// <summary>No wave in the opening is more than about half again the size of the one before.</summary>
+        const float MaxOpeningGrowth = 1.6f;
+        const int OpeningWaves = 6;
+
+        [Test]
+        public void OpeningWaves_GrowInSteps_NotCliffs() {
+            var tuning = new WV_WaveTuning();
+            int previous = WV_WavePlan.Build(1, tuning).EnemyCount;
+            for (int wave = 2; wave <= OpeningWaves; wave++) {
+                int count = WV_WavePlan.Build(wave, tuning).EnemyCount;
+                Assert.That(count, Is.LessThanOrEqualTo(Mathf.CeilToInt(previous * MaxOpeningGrowth)),
+                    $"wave {wave}: {count} enemies after {previous}");
+                previous = count;
+            }
+        }
+
+        [Test]
+        public void WavesBeforeTheFirstThemedWave_ArePlainAssaultsFromAtMostTwoSides() {
+            var tuning = new WV_WaveTuning();
+            Assert.That(tuning.FirstThemedWave, Is.GreaterThan(tuning.SurgeEvery), "the first surge should wait for the opening to end");
+            for (int wave = 1; wave < tuning.FirstThemedWave; wave++) {
+                WV_Wave built = WV_WavePlan.Build(wave, tuning);
+                Assert.That(built.Theme, Is.EqualTo(WV_WaveTheme.Standard), $"wave {wave}");
+                Assert.That(built.IsSurge, Is.False, $"wave {wave}");
+                Assert.That(built.DistinctApproaches.Count, Is.LessThanOrEqualTo(2), $"wave {wave}");
+            }
+        }
+
+        [Test]
+        public void FirstSwarm_BringsNoExtraStrength_LaterSwarmsDo() {
+            var tuning = new WV_WaveTuning { WaveCount = 60, BossEvery = 0, SurgeEvery = 0 };
+            int first = 0, second = 0;
+            for (int wave = 1; wave <= tuning.WaveCount && second == 0; wave++) {
+                if (WV_WavePlan.GetTheme(wave, tuning) != WV_WaveTheme.Swarm)
+                    continue;
+                if (first == 0)
+                    first = wave;
+                else
+                    second = wave;
+            }
+            Assert.That(first, Is.GreaterThanOrEqualTo(tuning.FirstThemedWave));
+            Assert.That(second, Is.GreaterThan(first));
+            Assert.That(WV_WavePlan.IsFirstSwarm(first, tuning), Is.True);
+            Assert.That(WV_WavePlan.IsFirstSwarm(second, tuning), Is.False);
         }
 
         [Test]

@@ -78,7 +78,8 @@ MonoBehaviour:
     MaxEnemiesPerWave: 40
     MaxActiveEnemies: 60
     PreparationSeconds: 90
-    EarlyWaves: 2
+    EarlyWaves: 4
+    FirstThemedWave: 6
     FirstWaveStrengthScale: 0.7
     FirstWaveSpeedScale: 0.6
     FirstIntermissionSeconds: 95

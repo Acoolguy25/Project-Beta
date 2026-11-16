@@ -33,8 +33,6 @@ namespace Universes.UniverseData.war_valley.Shared {
         [SerializeField] float rotorDegreesPerSecond = 1440f;
 
         [Header("Weapon")]
-        [Tooltip("Where shots leave the unit. Falls back to this transform when unset.")]
-        [SerializeField] Transform muzzle;
         [Tooltip("Optional. Particle effect played at the muzzle on each shot.")]
         [SerializeField] ParticleSystem muzzleFlash;
         [Tooltip("Optional. Spatial settings the report is played with.")]
@@ -56,9 +54,13 @@ namespace Universes.UniverseData.war_valley.Shared {
         float smoothedSpeed;
         float gunFireReleaseTime;
         bool hasAnimator;
+        // Shots leave from the muzzle the server aims from (WV_Unit.WeaponMuzzle), so the tracer and
+        // the hit always agree.
+        Transform muzzle;
 
         void Awake() {
             hasAnimator = animator != null;
+            muzzle = TryGetComponent(out WV_Unit unit) ? unit.WeaponMuzzle : transform;
             lastPosition = transform.position;
             if (hasAnimator) {
                 animator.SetBool(GroundedId, true);
@@ -118,7 +120,7 @@ namespace Universes.UniverseData.war_valley.Shared {
                 animator.SetBool(GunFireId, true);
                 gunFireReleaseTime = Time.time + GunFireHoldSeconds;
             }
-            Vector3 origin = (muzzle != null ? muzzle : transform).position;
+            Vector3 origin = muzzle.position;
             Vector3 normal = origin - impactPoint;
             normal = normal.sqrMagnitude > 0.0001f ? normal.normalized : Vector3.up;
             // The same tracer, flash, and report a handheld gun and a turret use. Compiled to nothing

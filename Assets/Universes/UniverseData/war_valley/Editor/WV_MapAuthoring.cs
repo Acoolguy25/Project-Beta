@@ -680,15 +680,59 @@ namespace Universes.UniverseData.war_valley.Editor {
             }
         }
 
+        /// <summary>Tint of the main meadow layer: pulls the olive albedo toward a fresh green.</summary>
+        static readonly Color MeadowTint = new(0.78f, 1.12f, 0.6f);
+        /// <summary>Tint of the dry meadow layer: a lighter, sun-dried green rather than straw.</summary>
+        static readonly Color DryMeadowTint = new(1f, 1.05f, 0.66f);
+        /// <summary>Tint of the dirt tracks: a step lighter and warmer than the raw albedo.</summary>
+        static readonly Color DirtTint = new(1.08f, 1.02f, 0.92f);
+
+        [MenuItem("Ryan/War Valley/Rebuild Backdrop")]
+        public static void RebuildBackdrop() => RebuildBackdrop(new WV_MapRecipe());
+
+        /// <summary>
+        /// Rebuilds only the eight backdrop terrains around the map, from the same recipe as
+        /// <see cref="Rebuild"/>, leaving the playable terrain and its navmesh alone.
+        /// </summary>
+        public static void RebuildBackdrop(WV_MapRecipe recipe) {
+            TerrainData data = AssetDatabase.LoadAssetAtPath<TerrainData>(TerrainDataPath);
+            if (data == null)
+                throw new InvalidOperationException($"No terrain data at {TerrainDataPath}.");
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.path != ScenePath)
+                scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            GameObject map = FindRoot(scene, MapRootName);
+            Terrain terrain = map.GetComponentInChildren<Terrain>(true);
+            var shape = new MapShape(recipe, data.size);
+            float floorHeight = data.GetInterpolatedHeight(0.5f, 0.5f);
+            int trees = BuildBackdrop(map, terrain, data, floorHeight, shape, recipe);
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log($"War Valley backdrop rebuilt with {trees} trees.");
+        }
+
+        /// <summary>
+        /// Sets the four ground layers' textures, tiling and tints. Also run by the atmosphere pass,
+        /// since a colour grade cannot make a brown albedo green.
+        /// </summary>
+        internal static void ConfigureGroundLayers() {
+            TerrainData data = AssetDatabase.LoadAssetAtPath<TerrainData>(TerrainDataPath);
+            if (data == null)
+                throw new InvalidOperationException($"No terrain data at {TerrainDataPath}.");
+            ConfigureGroundLayers(data);
+            AssetDatabase.SaveAssets();
+        }
+
         static void ConfigureGroundLayers(TerrainData data) {
             TerrainLayer[] layers = data.terrainLayers;
             if (layers.Length != 4)
                 throw new InvalidOperationException("WarValleyTerrain should have four layers: meadow, dry meadow, dirt, rock.");
-            // Two meadow layers share textures; the dry one is tinted straw-yellow and tiled differently
+            // Two meadow layers share textures; the dry one is tinted lighter and tiled differently
             // so large patches of it break up the green without a visible repeat.
-            SetLayer(layers[(int)Layer.Meadow], "WV_Meadow", 24f, Vector2.zero, Color.white, 0.05f);
-            SetLayer(layers[(int)Layer.DryMeadow], "WV_Meadow", 31f, new Vector2(7f, 3f), new Color(1.18f, 1.06f, 0.72f), 0.05f);
-            SetLayer(layers[(int)Layer.Dirt], "WV_Dirt", 13f, Vector2.zero, Color.white, 0.1f);
+            SetLayer(layers[(int)Layer.Meadow], "WV_Meadow", 24f, Vector2.zero, MeadowTint, 0.05f);
+            SetLayer(layers[(int)Layer.DryMeadow], "WV_Meadow", 31f, new Vector2(7f, 3f), DryMeadowTint, 0.05f);
+            SetLayer(layers[(int)Layer.Dirt], "WV_Dirt", 13f, Vector2.zero, DirtTint, 0.1f);
             SetLayer(layers[(int)Layer.Rock], "WV_Rock", 22f, Vector2.zero, new Color(1.08f, 1.02f, 0.94f), 0.15f);
         }
 
