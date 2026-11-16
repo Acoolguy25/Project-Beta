@@ -2,10 +2,16 @@ using UnityEngine;
 using System.Collections.Generic;
 
 namespace Universes.UniverseData.dot_invaders.Client {
+    /// <summary>One moving troop: follows the server's snapshots and glows in its team colour.</summary>
     public sealed class DI_DotView : MonoBehaviour {
 #if !UNITY_SERVER
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int ColorId = Shader.PropertyToID("_Color");
+        static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+
+        [Tooltip("Emission as a multiple of the team colour; above 1 blooms. Needs _EMISSION on the material (DI_Authoring).")]
+        [SerializeField, Min(0f)] float glow = 1.8f;
+
         // Keep a small snapshot buffer instead of repeatedly easing to each
         // packet, which made troops accelerate and brake ten times a second.
         const double InterpolationDelay = 0.15;
@@ -30,6 +36,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 dotRenderer.GetPropertyBlock(colorBlock);
                 colorBlock.SetColor(BaseColorId, color);
                 colorBlock.SetColor(ColorId, color);
+                colorBlock.SetColor(EmissionColorId, color * glow);
                 dotRenderer.SetPropertyBlock(colorBlock);
             }
         }

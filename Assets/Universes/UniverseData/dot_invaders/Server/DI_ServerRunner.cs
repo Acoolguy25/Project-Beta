@@ -56,13 +56,22 @@ namespace Universes.UniverseData.dot_invaders {
         // Exposed legs cost up to this many times their length when a fully
         // intelligent team plans a route, so smart NPCs walk around turrets.
         const float NpcTurretAvoidance = 2.5f;
+        // Target priority a factory (doubled training) and a fortress (doubled defence) add.
+        const float NpcFactoryPriority = 48f;
+        const float NpcFortressPriority = 16f;
         // Speed base configuration
         const string BasesColumn = "Bases";
         const string TroopsColumn = "Troops";
         const int SpeedBaseCount = 4; // Number of speed bases on the map
+        // Clash positions sent per snapshot; a huge brawl only needs a sample to look busy.
+        const int MaxClashEventsPerSnapshot = 48;
 
         [SerializeField, Min(30)] int matchDurationSeconds = 300;
         [SerializeField, Range(1, 2)] int turretBaseCount = 2;
+        [Tooltip("Factories train troops at DI_Rules.FactoryProductionMultiplier times the normal rate.")]
+        [SerializeField, Range(0, 4)] int factoryBaseCount = 2;
+        [Tooltip("Fortresses need DI_Rules.FortressDefenceMultiplier attackers per defender.")]
+        [SerializeField, Range(0, 4)] int fortressBaseCount = 2;
         [SerializeField, Range(3, 8)] int nearbyPathsPerBase = 6;
         [SerializeField, Min(12f)] float maximumLocalPathLength = 65f;
         [SerializeField, Range(0.1f, 1f)] float npcSuperLaunchCapacityFraction = 0.85f;
@@ -82,6 +91,8 @@ namespace Universes.UniverseData.dot_invaders {
             public bool isTurret;
             public bool isSuperProducer;
             public bool isSpeedBase;
+            public bool isFactory;
+            public bool isFortress;
             public float uninterruptedSeconds;
             public float turretCooldown;
             public int shotSequence;
@@ -124,6 +135,10 @@ namespace Universes.UniverseData.dot_invaders {
         readonly Dictionary<int, float> playerProductionMultipliers = new();
         readonly List<Vector2> previousDotPositions = new();
         readonly HashSet<int> destroyedDots = new();
+        // Where troops clashed since the last snapshot; sent once, then cleared.
+        readonly List<Vector2> clashPositions = new();
+        // Bases each player captured this match, and the most they held at once.
+        readonly Dictionary<int, MatchRecord> matchRecords = new();
 
         float snapshotTimer;
         float simulationAccumulator;
@@ -229,6 +244,8 @@ namespace Universes.UniverseData.dot_invaders {
             playerProductionMultipliers.Clear();
             dotInvadersTeams.Clear();
             announcedEliminations.Clear();
+            clashPositions.Clear();
+            matchRecords.Clear();
             base.Reset();
         }
 

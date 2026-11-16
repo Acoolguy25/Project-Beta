@@ -195,6 +195,8 @@ namespace Universes.UniverseData.dot_invaders {
                 state.yourTeamId = playerTeams.TryGetValue(connection.ClientId, out int teamId) ? teamId : -1;
                 InstanceFinder.ServerManager.Broadcast(connection, state);
             }
+            // Clashes are events, not state: each one is sent in exactly one snapshot.
+            clashPositions.Clear();
         }
 
         DI_StateBroadcast CreateState() {
@@ -237,7 +239,10 @@ namespace Universes.UniverseData.dot_invaders {
                 turretShotSequences = new int[baseCount],
                 turretShotPositions = new Vector2[baseCount],
                 baseRoutes = new DI_Route[baseCount],
-                baseSpeedBases = new bool[baseCount]
+                baseSpeedBases = new bool[baseCount],
+                baseFactories = new bool[baseCount],
+                baseFortresses = new bool[baseCount],
+                clashPositions = clashPositions.ToArray()
             };
 
             for (int i = 0; i < baseCount; i++) {
@@ -249,6 +254,8 @@ namespace Universes.UniverseData.dot_invaders {
                 state.baseTurrets[i] = bases[i].isTurret;
                 state.baseSuperProducers[i] = bases[i].isSuperProducer;
                 state.baseSpeedBases[i] = bases[i].isSpeedBase;
+                state.baseFactories[i] = bases[i].isFactory;
+                state.baseFortresses[i] = bases[i].isFortress;
                 state.baseProductionCharge[i] = Mathf.Clamp01(bases[i].uninterruptedSeconds / superSpeedupSeconds);
                 BaseState production = bases[i];
                 state.baseProductionRates[i] = production.teamId >= 0 && !production.isTurret &&

@@ -81,7 +81,9 @@ namespace Universes.UniverseData.dot_invaders {
                             EstimateThirdPartyDamage(targetId, npcTeam.teamId, travelTime), intelligence);
                         int interception = ScaleForecast(
                             EstimateInterceptionLosses(route, npcTeam.teamId), intelligence);
-                        int defense = Mathf.Max(0, target.troops + growth + reinforcements - thirdParty);
+                        // A fortress garrison takes more attackers per defender to empty.
+                        int defense = DI_Rules.AttackersToDefeat(
+                            target.troops + growth + reinforcements - thirdParty, target.isFortress);
                         int committed = CountIncomingTroops(targetId, npcTeam.teamId);
                         // A cautious team insists on a wider margin than an aggressive one.
                         int margin = Mathf.RoundToInt(Mathf.Lerp(6f, 1f, aggression));
@@ -138,12 +140,12 @@ namespace Universes.UniverseData.dot_invaders {
                 BaseState target = bases[i];
                 if (target.teamId != teamId)
                     continue;
-                int hostile = CountHostileIncomingTroops(i, teamId);
+                int hostile = HostileThreat(i, teamId);
                 if (hostile <= 0)
                     continue;
                 int friendly = CountIncomingTroops(i, teamId);
                 float urgency = hostile - friendly - Mathf.Max(0, target.troops - target.pendingTroops) +
-                    (target.isSuperProducer ? 14f : target.isSpeedBase ? 10f : 4f);
+                    (target.isSuperProducer ? 14f : target.isSpeedBase || target.isFactory ? 10f : 4f);
                 if (urgency > greatestUrgency) {
                     greatestUrgency = urgency;
                     threatenedBase = i;
@@ -153,10 +155,10 @@ namespace Universes.UniverseData.dot_invaders {
                 return false;
 
             BaseState threatened = bases[threatenedBase];
-            if (threatened.pendingTroops > 0 && CountHostileIncomingTroops(threatenedBase, teamId) >
+            if (threatened.pendingTroops > 0 && HostileThreat(threatenedBase, teamId) >
                 threatened.troops - threatened.pendingTroops + CountIncomingTroops(threatenedBase, teamId)) {
                 ClearSend(threatened);
-                if (CountHostileIncomingTroops(threatenedBase, teamId) <=
+                if (HostileThreat(threatenedBase, teamId) <=
                     threatened.troops + CountIncomingTroops(threatenedBase, teamId))
                     return true;
             }
@@ -164,7 +166,7 @@ namespace Universes.UniverseData.dot_invaders {
             int bestSource = -1;
             int[] bestRoute = null;
             float bestScore = float.MinValue;
-            int needed = Mathf.Max(1, CountHostileIncomingTroops(threatenedBase, teamId) -
+            int needed = Mathf.Max(1, HostileThreat(threatenedBase, teamId) -
                 CountIncomingTroops(threatenedBase, teamId) - bases[threatenedBase].troops + NpcFrontlineReserve);
             for (int i = 0; i < bases.Count; i++) {
                 BaseState source = bases[i];
@@ -193,6 +195,10 @@ namespace Universes.UniverseData.dot_invaders {
             reinforcement.pendingRoute = bestRoute;
             return true;
         }
+
+        /// <summary>Defenders the hostile troops heading for this base can defeat; fortresses halve the threat.</summary>
+        int HostileThreat(int baseId, int teamId) =>
+            DI_Rules.DefendersDefeatedBy(CountHostileIncomingTroops(baseId, teamId), bases[baseId].isFortress);
 
         int NpcReserveForBase(int baseId, int teamId) {
             BaseState state = bases[baseId];
@@ -234,6 +240,11 @@ namespace Universes.UniverseData.dot_invaders {
                 // first one is worth far more than a duplicate.
                 priority += (target.teamId < 0 ? 70f : 56f) / (1 + TeamSpeedBaseCount(teamId));
             }
+            // A factory doubles a base's output for good; a fortress is a strong point to hold.
+            if (target.isFactory)
+                priority += target.teamId < 0 ? NpcFactoryPriority : NpcFactoryPriority * 0.8f;
+            if (target.isFortress)
+                priority += NpcFortressPriority;
             foreach (Vector2Int link in links) {
                 int neighbor = link.x == targetId ? link.y : link.y == targetId ? link.x : -1;
                 if (neighbor >= 0 && bases[neighbor].teamId == teamId && bases[neighbor].isSuperProducer) {
@@ -252,7 +263,7 @@ namespace Universes.UniverseData.dot_invaders {
             float production = target.isSuperProducer
                 ? DI_Rules.SuperProductionOverInterval(target.uninterruptedSeconds, productiveTime,
                     superProductionSpeed, superSpeedupSeconds)
-                : productiveTime * productionSpeed;
+                : productiveTime * DI_Rules.BaseProductionRate(productionSpeed, target.isFactory);
             return Mathf.Min(Mathf.Max(0, Capacity(target) - target.troops), Mathf.CeilToInt(production));
         }
 
@@ -303,7 +314,7 @@ namespace Universes.UniverseData.dot_invaders {
             }
             // Past emptying the garrison the rival takes the base itself, which is a
             // different fight; never plan on more than the defenders actually there.
-            return Mathf.Min(damage, Mathf.Max(0, target.troops));
+            return Mathf.Min(DI_Rules.DefendersDefeatedBy(damage, target.isFortress), Mathf.Max(0, target.troops));
         }
 
         /// <summary>
@@ -403,8 +414,10 @@ namespace Universes.UniverseData.dot_invaders {
                 float travelTime = (source.pendingRoute != null
                     ? RouteDistance(source.pendingRoute)
                     : Vector2.Distance(source.position, bases[targetId].position)) / TeamMoveSpeed(teamId);
-                int defense = bases[targetId].troops + EstimateDefenderGrowth(targetId, travelTime) +
-                    ScaleForecast(EstimateDefenderReinforcements(targetId, travelTime), intelligence * 0.5f);
+                int defense = DI_Rules.AttackersToDefeat(bases[targetId].troops +
+                    EstimateDefenderGrowth(targetId, travelTime) +
+                    ScaleForecast(EstimateDefenderReinforcements(targetId, travelTime), intelligence * 0.5f),
+                    bases[targetId].isFortress);
                 if (CountIncomingTroops(targetId, teamId) >= Mathf.CeilToInt(defense * NpcAbandonThreshold))
                     continue;
 
@@ -590,7 +603,7 @@ namespace Universes.UniverseData.dot_invaders {
                     if (!onFront)
                         continue;
                     float score = sending + (target.isSuperProducer ? 30f : 0f) +
-                        (target.isSpeedBase ? 12f : 0f) - losses * 4f -
+                        (target.isSpeedBase ? 12f : 0f) + (target.isFortress ? 10f : 0f) - losses * 4f -
                         Vector2.Distance(source.position, target.position) * 0.1f;
                     if (score > bestScore) { bestScore = score; bestSource = i; bestTarget = targetId; }
                 }

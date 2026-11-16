@@ -60,7 +60,7 @@ namespace Universes.UniverseData.dot_invaders {
                 float production = state.isSuperProducer
                     ? DI_Rules.SuperProductionOverInterval(state.uninterruptedSeconds, deltaTime,
                         superProductionSpeed, superSpeedupSeconds)
-                    : deltaTime * productionSpeed;
+                    : deltaTime * DI_Rules.BaseProductionRate(productionSpeed, state.isFactory);
                 production *= GetPlayerProductionMultiplier(state.ownerClientId);
                 state.uninterruptedSeconds = Mathf.Min(superSpeedupSeconds, state.uninterruptedSeconds + deltaTime);
                 if (state.troops >= Capacity(state)) {
@@ -161,6 +161,7 @@ namespace Universes.UniverseData.dot_invaders {
                     float closestTime = relativeTravel.sqrMagnitude > 0f
                         ? Mathf.Clamp01(-Vector2.Dot(relativeStart, relativeTravel) / relativeTravel.sqrMagnitude) : 0f;
                     if ((relativeStart + relativeTravel * closestTime).sqrMagnitude <= collisionDistanceSquared) {
+                        RecordClash((firstPosition + GetDotPosition(dots[j])) * 0.5f);
                         float firstDamage = GetPlayerDamageMultiplier(dots[i].ownerClientId);
                         float secondDamage = GetPlayerDamageMultiplier(dots[j].ownerClientId);
                         float exchange = Mathf.Min(dots[i].health / secondDamage, dots[j].health / firstDamage);
@@ -264,7 +265,8 @@ namespace Universes.UniverseData.dot_invaders {
             }
 
             if (target.troops > 0) {
-                target.damageTaken += GetPlayerDamageMultiplier(dot.ownerClientId) * dot.health;
+                target.damageTaken += DI_Rules.ArrivalDamage(
+                    GetPlayerDamageMultiplier(dot.ownerClientId) * dot.health, target.isFortress);
                 int defeated = Mathf.Min(target.troops, Mathf.FloorToInt(target.damageTaken + 0.00001f));
                 target.troops -= defeated;
                 target.damageTaken -= defeated;
@@ -279,6 +281,13 @@ namespace Universes.UniverseData.dot_invaders {
             target.damageTaken = 0f;
             target.turretCooldown = turretFireRate;
             ClearSend(target);
+            RecordCapture(dot.ownerClientId, dot.teamId);
+        }
+
+        /// <summary>Queues a clash for the next snapshot's effects; presentation only.</summary>
+        void RecordClash(Vector2 position) {
+            if (clashPositions.Count < MaxClashEventsPerSnapshot)
+                clashPositions.Add(position);
         }
     }
 }

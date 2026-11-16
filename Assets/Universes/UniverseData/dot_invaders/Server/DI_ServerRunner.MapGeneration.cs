@@ -28,6 +28,8 @@ namespace Universes.UniverseData.dot_invaders {
             playerTeams.Clear();
             dotInvadersTeams.Clear();
             announcedEliminations.Clear();
+            clashPositions.Clear();
+            matchRecords.Clear();
             nextTeamId = 0;
             nextDotId = 0;
             revision = 0;
@@ -40,6 +42,7 @@ namespace Universes.UniverseData.dot_invaders {
             AssignTurrets();
             AssignSuperBases();
             AssignSpeedBases();
+            AssignFactoriesAndFortresses();
             initialized = true;
 
             foreach (PlayerData player in PlayerData.Players.Values)
@@ -144,20 +147,16 @@ namespace Universes.UniverseData.dot_invaders {
             return false;
         }
 
+        // Special bases are spread over fixed objectives so every board has the same
+        // shape of contest; each objective takes the nearest base that is still plain.
+        static readonly Vector2[] FactoryObjectives = { new(-62f, 42f), new(62f, -42f), new(-62f, -42f), new(62f, 42f) };
+        static readonly Vector2[] FortressObjectives = { new(-62f, -42f), new(62f, 42f), new(0f, 60f), new(0f, -60f) };
+
         void AssignTurrets() {
             // Two separated objectives near the middle of each half of the board.
             int count = Mathf.Clamp(turretBaseCount, 1, 2);
             for (int t = 0; t < count; t++) {
-                Vector2 objective = new Vector2(count == 1 ? 0f : (t == 0 ? -35f : 35f), 0f);
-                int best = -1;
-                float distance = float.MaxValue;
-                for (int i = 0; i < bases.Count; i++) {
-                    float candidate = (bases[i].position - objective).sqrMagnitude;
-                    if (!bases[i].isTurret && candidate < distance) {
-                        best = i;
-                        distance = candidate;
-                    }
-                }
+                int best = NearestPlainBase(new Vector2(count == 1 ? 0f : (t == 0 ? -35f : 35f), 0f));
                 if (best >= 0)
                     bases[best].isTurret = true;
             }
@@ -165,51 +164,61 @@ namespace Universes.UniverseData.dot_invaders {
 
         void AssignSuperBases() {
             for (int t = 0; t < 2; t++) {
-                Vector2 objective = new Vector2(0f, t == 0 ? -35f : 35f);
-                int best = -1;
-                float distance = float.MaxValue;
-                for (int i = 0; i < bases.Count; i++) {
-                    float candidate = (bases[i].position - objective).sqrMagnitude;
-                    if (!bases[i].isTurret && !bases[i].isSuperProducer && !bases[i].isSpeedBase && candidate < distance) {
-                        best = i;
-                        distance = candidate;
-                    }
-                }
+                int best = NearestPlainBase(new Vector2(0f, t == 0 ? -35f : 35f));
                 if (best >= 0)
                     bases[best].isSuperProducer = true;
             }
         }
 
         void AssignSpeedBases() {
-            // Distribute speed bases across the map
+            // Distributed along the board's middle line.
             for (int i = 0; i < SpeedBaseCount; i++) {
-                float xPos = 0f;
-                if (SpeedBaseCount > 1) {
-                    xPos = Mathf.Lerp(-ArenaHalfWidth + 20f, ArenaHalfWidth - 20f, (float)i / (SpeedBaseCount - 1));
-                }
-                Vector2 objective = new Vector2(xPos, 0f);
-                int best = -1;
-                float distance = float.MaxValue;
-                for (int b = 0; b < bases.Count; b++) {
-                    // Skip bases that are already turrets, super producers, or other speed bases
-                    if (!bases[b].isTurret && !bases[b].isSuperProducer && !bases[b].isSpeedBase) {
-                        float candidate = (bases[b].position - objective).sqrMagnitude;
-                        if (candidate < distance) {
-                            best = b;
-                            distance = candidate;
-                        }
-                    }
-                }
+                float xPos = SpeedBaseCount > 1
+                    ? Mathf.Lerp(-ArenaHalfWidth + 20f, ArenaHalfWidth - 20f, (float)i / (SpeedBaseCount - 1))
+                    : 0f;
+                int best = NearestPlainBase(new Vector2(xPos, 0f));
                 if (best >= 0)
                     bases[best].isSpeedBase = true;
             }
         }
 
+        void AssignFactoriesAndFortresses() {
+            // Factories and fortresses sit on opposite corners, so neither side of the
+            // board starts next to both.
+            for (int i = 0; i < Mathf.Min(factoryBaseCount, FactoryObjectives.Length); i++) {
+                int best = NearestPlainBase(FactoryObjectives[i]);
+                if (best >= 0)
+                    bases[best].isFactory = true;
+            }
+            for (int i = 0; i < Mathf.Min(fortressBaseCount, FortressObjectives.Length); i++) {
+                int best = NearestPlainBase(FortressObjectives[i]);
+                if (best >= 0)
+                    bases[best].isFortress = true;
+            }
+        }
+
+        /// <summary>The base nearest <paramref name="objective"/> that has no special role yet, or -1.</summary>
+        int NearestPlainBase(Vector2 objective) {
+            int best = -1;
+            float distance = float.MaxValue;
+            for (int i = 0; i < bases.Count; i++) {
+                float candidate = (bases[i].position - objective).sqrMagnitude;
+                if (!IsSpecial(bases[i]) && candidate < distance) {
+                    best = i;
+                    distance = candidate;
+                }
+            }
+            return best;
+        }
+
+        static bool IsSpecial(BaseState state) =>
+            state.isTurret || state.isSuperProducer || state.isSpeedBase || state.isFactory || state.isFortress;
+
         int Capacity(BaseState state) => state.isSuperProducer ? superMaxCapacity : maxCapacity;
 
         float ProductionRate(BaseState state) => state.isSuperProducer
             ? DI_Rules.SuperProductionRate(state.uninterruptedSeconds, superProductionSpeed, superSpeedupSeconds)
-            : productionSpeed;
+            : DI_Rules.BaseProductionRate(productionSpeed, state.isFactory);
 
         static void InterruptProduction(BaseState state) {
             state.uninterruptedSeconds = 0f;

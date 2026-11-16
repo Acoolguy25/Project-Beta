@@ -32,6 +32,11 @@ namespace Universes.UniverseData.dot_invaders {
         public const float DefaultSuperSpeedupSeconds = 12f;
         public const int BasePower = 25;
 
+        // Special dots placed by the map generator. A factory trains this many times
+        // faster than a normal base; a fortress needs this many attackers per defender.
+        public const float FactoryProductionMultiplier = 2f;
+        public const float FortressDefenceMultiplier = 2f;
+
         // MoveSpeed and SendInterval are tuned as multipliers of their defaults.
         public const float MinMoveSpeedMultiplier = 0.05f;
         public const float MaxMoveSpeedMultiplier = 10f;
@@ -66,6 +71,22 @@ namespace Universes.UniverseData.dot_invaders {
         // simulation must agree on this or an NPC mis-times every attack it makes.
         public static float TeamMoveSpeed(float moveSpeed, int speedBases, float speedBaseBonus) =>
             moveSpeed * (1f + Mathf.Max(0, speedBases) * Mathf.Max(0f, speedBaseBonus));
+
+        /// <summary>Troops per second a normal (non-super) base trains; factories train faster.</summary>
+        public static float BaseProductionRate(float productionSpeed, bool factory) =>
+            productionSpeed * (factory ? FactoryProductionMultiplier : 1f);
+
+        /// <summary>Garrison damage one arriving troop deals; a fortress shrugs off part of it.</summary>
+        public static float ArrivalDamage(float attackDamage, bool fortress) =>
+            fortress ? attackDamage / FortressDefenceMultiplier : attackDamage;
+
+        /// <summary>Attackers it takes to empty a garrison of <paramref name="defenders"/>.</summary>
+        public static int AttackersToDefeat(int defenders, bool fortress) =>
+            fortress ? Mathf.CeilToInt(Mathf.Max(0, defenders) * FortressDefenceMultiplier) : Mathf.Max(0, defenders);
+
+        /// <summary>Defenders that <paramref name="attackers"/> plain troops are sure to defeat.</summary>
+        public static int DefendersDefeatedBy(int attackers, bool fortress) =>
+            fortress ? Mathf.FloorToInt(Mathf.Max(0, attackers) / FortressDefenceMultiplier) : Mathf.Max(0, attackers);
 
         public static float SuperProductionRate(float uninterruptedSeconds, float peakRate, float speedupSeconds) {
             float startRate = Mathf.Min(1.25f, peakRate);
@@ -208,5 +229,9 @@ namespace Universes.UniverseData.dot_invaders {
         public float sendInterval;
         public float speedBaseBonus;
         public float npcAggression;
+        // Appended: special dots, and where troops clashed since the previous snapshot.
+        public bool[] baseFactories;
+        public bool[] baseFortresses;
+        public Vector2[] clashPositions;
     }
 }

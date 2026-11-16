@@ -19,6 +19,12 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField] GameObject dotPrefab;
         [SerializeField] GameObject linkPrefab;
 
+        [Header("Look and Feel")]
+        [Tooltip("Sounds and effects for board events, on the board prefab (DI_Authoring).")]
+        [SerializeField] DI_BoardFx boardFx;
+        [Tooltip("Territory tint and border glow of the board surface (DI_Authoring).")]
+        [SerializeField] DI_BoardBackdrop backdrop;
+
         [Header("Pointer Assistance")]
         [SerializeField, Min(1f)] float minimumPickRadiusPixels = 24f;
         [SerializeField, Min(0f)] float pickPaddingPixels = 8f;
@@ -28,6 +34,17 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Header("Road Visibility")]
         [SerializeField] Color roadColor = new Color(0.35f, 0.45f, 0.6f);
         [SerializeField, Min(0.05f)] float roadWidth = 0.3f;
+        [Tooltip("Brightness of the team-coloured pulses that run along roads troops are routed down.")]
+        [SerializeField, Min(0f)] float routePulseStrength = 1f;
+
+        [Header("Order Arrow")]
+        [SerializeField, Min(0.05f)] float orderArrowWidth = 0.3f;
+        [SerializeField, Min(0.05f)] float aimingLineWidth = 0.18f;
+        [SerializeField] Color aimingLineColor = new(0.75f, 0.8f, 0.9f);
+        [Tooltip("Brightness of the chevrons marching toward the target while you drag an order.")]
+        [SerializeField, Min(0f)] float orderArrowPulseStrength = 1.6f;
+        [SerializeField, Range(0f, 1f)] float orderArrowChevrons = 1f;
+        [SerializeField, Min(0f)] float orderArrowHeight = 0.22f;
 
         readonly List<DI_BaseView> baseViews = new();
         readonly List<DI_LinkView> linkViews = new();
@@ -37,6 +54,13 @@ namespace Universes.UniverseData.dot_invaders.Client {
         readonly HashSet<int> selectedBases = new();
         readonly List<int> prunedSelection = new();
         readonly Vector3[] marqueeCorners = new Vector3[4];
+        readonly Dictionary<long, int> linkLookup = new();
+        static readonly System.Func<int, Color> TeamColorOf = GetTeamColor;
+
+        // Per road: the team colour and direction of the route pulse it carries, if any.
+        Color[] linkPulseColors = System.Array.Empty<Color>();
+        float[] linkPulseDirections = System.Array.Empty<float>();
+        bool[] linkPulsing = System.Array.Empty<bool>();
 
         DI_StateBroadcast state;
         Transform runtimeRoot;
@@ -78,6 +102,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 Debug.LogError("Dot Invaders board is missing one or more view prefabs.", this);
                 enabled = false;
             }
+            if (boardFx == null || backdrop == null)
+                Debug.LogError("Dot Invaders board is missing its effects or backdrop. Run Ryan/Dot Invaders/Rebuild HUD and Board.", this);
         }
 
         void Update() {
@@ -103,10 +129,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 homeBaseTeleporter?.BeginMatch();
             }
 
+            DI_StateBroadcast previous = state;
             state = next;
             routeTarget = -1;
             SynchronizeViews();
             hud?.SetState(state, GetTeamColor, GetTeamName);
+            if (boardFx != null)
+                boardFx.Present(previous, state, baseViews, TeamColorOf);
+            if (backdrop != null)
+                backdrop.SetState(state, TeamColorOf);
 
             PruneSelection();
 
@@ -126,17 +157,14 @@ namespace Universes.UniverseData.dot_invaders.Client {
         void SynchronizeViews() {
             ResizeViews(baseViews, state.basePositions.Length, basePrefab);
             for (int i = 0; i < baseViews.Count; i++) {
-                int pending = state.basePendingTroops != null && i < state.basePendingTroops.Length
-                    ? state.basePendingTroops[i]
-                    : 0;
                 baseViews[i].SetState(
                     i,
                     ToWorld(state.basePositions[i], 0f),
                     state.baseTroops[i],
-                    pending,
                     state.baseOwners[i] == state.yourClientId,
+                    state.baseTeams[i] < 0,
                     GetTeamColor(state.baseTeams[i]),
-                    state.baseSpeedBases != null && i < state.baseSpeedBases.Length && state.baseSpeedBases[i]);
+                    RoleOf(i));
                 bool isTurret = state.baseTurrets != null && i < state.baseTurrets.Length && state.baseTurrets[i];
                 int shot = state.turretShotSequences != null && i < state.turretShotSequences.Length
                     ? state.turretShotSequences[i] : 0;
@@ -172,6 +200,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     roadColor,
                     roadWidth);
             }
+            UpdateRoutePulses(linkCount);
 
             int dotCount = state.dotIds == null || state.dotPositions == null || state.dotTeams == null
                 ? 0
@@ -179,6 +208,47 @@ namespace Universes.UniverseData.dot_invaders.Client {
             SynchronizeDots(dotCount);
             RefreshInteraction();
         }
+
+        DI_BaseRole RoleOf(int baseId) =>
+            Flag(state.baseFactories, baseId) ? DI_BaseRole.Factory :
+            Flag(state.baseFortresses, baseId) ? DI_BaseRole.Fortress :
+            Flag(state.baseSpeedBases, baseId) ? DI_BaseRole.Speed : DI_BaseRole.Plain;
+
+        static bool Flag(bool[] flags, int index) => flags != null && index >= 0 && index < flags.Length && flags[index];
+
+        /// <summary>Marks every road on an active route with a pulse in the routing team's colour, heading its way.</summary>
+        void UpdateRoutePulses(int linkCount) {
+            if (linkPulsing.Length != linkCount) {
+                linkPulseColors = new Color[linkCount];
+                linkPulseDirections = new float[linkCount];
+                linkPulsing = new bool[linkCount];
+            }
+            System.Array.Clear(linkPulsing, 0, linkCount);
+            linkLookup.Clear();
+            for (int i = 0; i < linkCount; i++)
+                linkLookup[LinkKey(state.linkSources[i], state.linkTargets[i])] = i;
+
+            if (state.baseRoutes == null)
+                return;
+            int count = Mathf.Min(state.baseRoutes.Length, state.baseTeams.Length);
+            for (int baseId = 0; baseId < count; baseId++) {
+                int[] route = state.baseRoutes[baseId].baseIds;
+                int team = state.baseTeams[baseId];
+                if (route == null || route.Length < 2 || team < 0)
+                    continue;
+                Color color = GetTeamColor(team);
+                for (int leg = 1; leg < route.Length; leg++) {
+                    if (!linkLookup.TryGetValue(LinkKey(route[leg - 1], route[leg]), out int link) || linkPulsing[link])
+                        continue;
+                    linkPulsing[link] = true;
+                    linkPulseColors[link] = color;
+                    // Roads are drawn from their source base to their target base.
+                    linkPulseDirections[link] = state.linkSources[link] == route[leg - 1] ? 1f : -1f;
+                }
+            }
+        }
+
+        static long LinkKey(int a, int b) => ((long)Mathf.Min(a, b) << 32) | (uint)Mathf.Max(a, b);
 
         void SynchronizeDots(int dotCount) {
             activeDotIds.Clear();
@@ -321,10 +391,17 @@ namespace Universes.UniverseData.dot_invaders.Client {
             hoveredBase = validTarget ? previewRoute[previewRoute.Length - 1] : -1;
             RefreshInteraction();
 
-            if (validTarget)
-                dragLink?.SetRoute(state.basePositions, previewRoute, Color.Lerp(GetTeamColor(state.baseTeams[dragSource]), Color.white, 0.4f), 0.3f);
-            else
-                dragLink?.SetLine(start, end, new Color(0.75f, 0.8f, 0.9f), 0.18f);
+            if (dragLink != null) {
+                // A valid order shows chevrons marching to the target; aiming shows a plain line.
+                Color team = GetTeamColor(state.baseTeams[dragSource]);
+                if (validTarget)
+                    dragLink.SetRoute(state.basePositions, previewRoute, Color.Lerp(team, Color.white, 0.4f),
+                        orderArrowWidth, orderArrowHeight);
+                else
+                    dragLink.SetLine(start, end, aimingLineColor, aimingLineWidth);
+                dragLink.SetPulse(Color.Lerp(team, Color.white, 0.6f), 1f, validTarget ? orderArrowPulseStrength : 0f);
+                dragLink.SetChevrons(validTarget ? orderArrowChevrons : 0f);
+            }
 
             if (!mouse.leftButton.wasReleasedThisFrame) {
                 if (!mouse.leftButton.isPressed)
@@ -410,14 +487,19 @@ namespace Universes.UniverseData.dot_invaders.Client {
         /// <summary>Routes every selected base to the target; the drag source keeps its previewed route.</summary>
         void SendGroupRequest(int targetBaseId) {
             SendRequest(dragSource, targetBaseId, previewRoute);
+            int troops = state.baseTroops[dragSource];
             foreach (int baseId in selectedBases) {
                 if (baseId == dragSource || !IsValidBase(baseId) || baseId >= state.baseOwners.Length ||
                     state.baseOwners[baseId] != state.yourClientId)
                     continue;
                 int[] route = DI_Rules.FindRoute(state.basePositions, state.linkSources, state.linkTargets, baseId, targetBaseId);
-                if (route.Length >= 2)
+                if (route.Length >= 2) {
                     SendRequest(baseId, targetBaseId, route);
+                    troops += state.baseTroops[baseId];
+                }
             }
+            if (boardFx != null)
+                boardFx.PlayOrder(troops);
         }
 
         void PruneSelection() {
@@ -558,6 +640,9 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     onRoute ? Color.white : queued ? new Color(0.3f, 0.85f, 1f) :
                         highlighted ? new Color(0.9f, 0.7f, 0.2f) : roadColor,
                     roadWidth * (onRoute || queued ? 1.6f : highlighted ? 1.3f : 1f));
+                bool pulsing = i < linkPulsing.Length && linkPulsing[i];
+                linkViews[i].SetPulse(pulsing ? linkPulseColors[i] : Color.white,
+                    pulsing ? linkPulseDirections[i] : 1f, pulsing ? routePulseStrength : 0f);
             }
         }
 

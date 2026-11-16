@@ -192,6 +192,9 @@ GameObject:
   - component: {fileID: 4583222241009846999}
   - component: {fileID: 3074514017627796893}
   - component: {fileID: 2449247910536649020}
+  - component: {fileID: 8799650261344167751}
+  - component: {fileID: 853092653313331591}
+  - component: {fileID: 5617957021403870758}
   m_Layer: 0
   m_Name: DI_Board
   m_TagString: Untagged
@@ -217,6 +220,7 @@ Transform:
   - {fileID: 1617449571261278499}
   - {fileID: 3811218654843553957}
   - {fileID: 5344120433797495469}
+  - {fileID: 6427369907824173854}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4583222241009846999
@@ -235,12 +239,21 @@ MonoBehaviour:
   basePrefab: {fileID: 1227341139883262616, guid: 2e858148db7402e4fb217db333a91445, type: 3}
   dotPrefab: {fileID: 1141363471160665555, guid: d9cf004f57e48d3478bc2264b93837d8, type: 3}
   linkPrefab: {fileID: 2865798720731803667, guid: 776eb25c2aabbff4c9381dc2b6528ca3, type: 3}
+  boardFx: {fileID: 5617957021403870758}
+  backdrop: {fileID: 853092653313331591}
   minimumPickRadiusPixels: 24
   pickPaddingPixels: 8
   neighborSnapRadiusPixels: 38
   dragSelectMinimumPixels: 8
   roadColor: {r: 0.35, g: 0.45, b: 0.6, a: 1}
   roadWidth: 0.3
+  routePulseStrength: 1
+  orderArrowWidth: 0.3
+  aimingLineWidth: 0.18
+  aimingLineColor: {r: 0.75, g: 0.8, b: 0.9, a: 1}
+  orderArrowPulseStrength: 1.6
+  orderArrowChevrons: 1
+  orderArrowHeight: 0.22
 --- !u!114 &3074514017627796893
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -267,6 +280,131 @@ MultiplayerRolesData:
     m_RolesMask: 1
   - m_Object: {fileID: 4583222241009846999}
     m_RolesMask: 1
+--- !u!114 &8799650261344167751
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1876968901638892953}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9bb89026fb054da6be0d291728510ffa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.Client.DI_NeonLook
+  volume: {fileID: 4198586239829199537}
+--- !u!114 &853092653313331591
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1876968901638892953}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3fc81cba3af4ee0afff8a9d6d76eeec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.Client.DI_BoardBackdrop
+  territoryRadius: 18
+  tintFadeSeconds: 0.6
+  borders:
+  - {fileID: 2401101230862174612}
+  - {fileID: 1442063080665036009}
+  - {fileID: 2361754916912650440}
+  - {fileID: 2292971112436496086}
+  borderColor: {r: 0.1, g: 0.2, b: 0.35, a: 1}
+  borderGlow: {r: 0.25, g: 0.65, b: 1.4, a: 1}
+--- !u!114 &5617957021403870758
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1876968901638892953}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bfbfc5e599454d82a6fa1a2a4f124a34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.Client.DI_BoardFx
+  sendSound:
+    clips:
+    - {fileID: 8300000, guid: 6f953c74884e55e41927fc4be4a763d3, type: 3}
+    - {fileID: 8300000, guid: 7f8976067d147f18284f76e4a831d00c, type: 3}
+    - {fileID: 8300000, guid: c5b81fc9ce89337acafa586d5f76cbe7, type: 3}
+    volume: 0.55
+    volumeJitter: 0.1
+    pitch: 1
+    pitchJitterSemitones: 0.3
+    minInterval: 0.05
+    minDistance: 0
+    maxDistance: 0
+  captureSound:
+    clips:
+    - {fileID: 8300000, guid: 9c6639a49e4cf69ee9859fc3c33f9cbe, type: 3}
+    volume: 0.8
+    volumeJitter: 0.1
+    pitch: 1
+    pitchJitterSemitones: 0.5
+    minInterval: 0.08
+    minDistance: 0
+    maxDistance: 0
+  baseLostSound:
+    clips:
+    - {fileID: 8300000, guid: 60e4390d684cb7d7892015d56bbfa300, type: 3}
+    volume: 0.85
+    volumeJitter: 0.1
+    pitch: 1
+    pitchJitterSemitones: 0.3
+    minInterval: 0.15
+    minDistance: 0
+    maxDistance: 0
+  clashSound:
+    clips:
+    - {fileID: 8300000, guid: 2a56dba3096a26daa802fab50986b5ff, type: 3}
+    - {fileID: 8300000, guid: ca29a1e29d7e4f69dbc2f74ba4dc4409, type: 3}
+    volume: 0.5
+    volumeJitter: 0.1
+    pitch: 1
+    pitchJitterSemitones: 1.5
+    minInterval: 0.09
+    minDistance: 0
+    maxDistance: 0
+  eliminationSound:
+    clips:
+    - {fileID: 8300000, guid: c12a13a6caa4acb5caf9d9618ae2500a, type: 3}
+    volume: 0.9
+    volumeJitter: 0.1
+    pitch: 1
+    pitchJitterSemitones: 0.3
+    minInterval: 0.3
+    minDistance: 0
+    maxDistance: 0
+  smallWavePitch: 1.4
+  largeWavePitch: 0.7
+  largeWave: 120
+  otherCaptureVolume: 0.25
+  clashVolume: 0.3
+  otherEliminationVolume: 0.6
+  captureRingScale: 10
+  capturePunch: 0.25
+  capturePunchSeconds: 0.35
+  baseLostShake: 0.15
+  clashSparkScale: 6
+  clashRingScale: 3
+  clashSparkColor: {r: 1, g: 0.92, b: 0.7, a: 1}
+  maxClashSparksPerSnapshot: 12
+  arrivalRadius: 5
+  arrivalPunch: 0.22
+  arrivalPunchSeconds: 0.22
+  eliminationRingScale: 24
+  eliminationShakeRadius: 120
+  eliminationShake: 0.35
+  localEliminationFlash: {r: 1, g: 0.2, b: 0.25, a: 0.35}
+  localEliminationText: ELIMINATED
+  confettiScale: 8
+  maxConfettiBursts: 8
+  victoryFlash: {r: 1, g: 1, b: 1, a: 0.25}
+  effectHeight: 0.6
 --- !u!1 &5060468652190620228
 GameObject:
   m_ObjectHideFlags: 0
@@ -445,7 +583,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 4c1552f116492714aadcc9e0e7cc81fb, type: 2}
+  - {fileID: 2100000, guid: 87c40669e920208ad827de5eb9446b36, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -469,6 +607,55 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &7727685214028785566
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6427369907824173854}
+  - component: {fileID: 4198586239829199537}
+  m_Layer: 0
+  m_Name: NeonVolume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6427369907824173854
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7727685214028785566}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6318334348915651464}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4198586239829199537
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7727685214028785566}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 5
+  blendDistance: 0
+  weight: 1
+  sharedProfile: {fileID: 11400000, guid: b47015907267a95579c4c6ca1267d8d0, type: 2}
 --- !u!1 &8079679750065307202
 GameObject:
   m_ObjectHideFlags: 0

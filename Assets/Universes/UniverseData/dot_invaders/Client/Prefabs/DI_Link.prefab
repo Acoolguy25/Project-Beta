@@ -59,7 +59,7 @@ LineRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 1ed4f8e2b9f23794999683541f1b86c7, type: 2}
+  - {fileID: 2100000, guid: 2ff3c0ca51528d80386b2866a1d2cccf, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -143,7 +143,7 @@ LineRenderer:
       m_NumColorKeys: 2
       m_NumAlphaKeys: 2
     numCornerVertices: 0
-    numCapVertices: 3
+    numCapVertices: 4
     alignment: 0
     textureMode: 0
     textureScale: {x: 1, y: 1}
@@ -164,3 +164,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 52d782a8f27657a4a932b8dab889fc69, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.DI_LinkView
+  glow: 1.5
+  pulseGlow: 3
+  pulseSpeed: 14
+  pulseSpacing: 9

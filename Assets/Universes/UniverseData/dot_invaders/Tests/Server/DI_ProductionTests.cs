@@ -36,11 +36,13 @@ namespace Universes.UniverseData.dot_invaders.Tests {
         object Call(string method, params object[] args) => typeof(DI_ServerRunner).GetMethod(method, Members).Invoke(runner, args);
 
         object AddBase(bool super = false, int troops = 0, int team = 0, Vector2? position = null,
-            bool turret = false, bool speed = false) {
+            bool turret = false, bool speed = false, bool factory = false, bool fortress = false) {
             object state = Activator.CreateInstance(typeof(DI_ServerRunner).GetNestedType("BaseState", Members), true);
             Set(state, "isSuperProducer", super);
             Set(state, "isTurret", turret);
             Set(state, "isSpeedBase", speed);
+            Set(state, "isFactory", factory);
+            Set(state, "isFortress", fortress);
             Set(state, "teamId", team);
             Set(state, "troops", troops);
             Set(state, "position", position ?? new Vector2(bases.Count * 10f, 0f));
@@ -672,6 +674,122 @@ namespace Universes.UniverseData.dot_invaders.Tests {
 
             Assert.That((int)Call("NpcReserveForBase", 0, 100), Is.EqualTo(dullAgainstStack));
             Assert.That(dullAgainstStack, Is.LessThan(threatened));
+        }
+
+        [Test]
+        public void FactoryTrainsTwiceAsFastAsANormalBase() {
+            object normal = AddBase();
+            object factory = AddBase(factory: true);
+            Advance(10f);
+            Assert.That(Get(normal, "troops"), Is.EqualTo(12));
+            Assert.That(Get(factory, "troops"), Is.EqualTo(25));
+        }
+
+        [Test]
+        public void FactoryStillStopsAtTheNormalCapacity() {
+            object factory = AddBase(factory: true, troops: DI_Rules.DefaultMaxCapacity - 1);
+            Advance(10f);
+            Assert.That(Get(factory, "troops"), Is.EqualTo(DI_Rules.DefaultMaxCapacity));
+        }
+
+        [Test]
+        public void FortressNeedsTwoAttackersPerDefenderBeforeItFalls() {
+            AddBase();
+            object fortress = AddBase(team: 1, troops: 3, fortress: true);
+            object dot = AddDot(0, 0, 1);
+            Call("ResolveArrival", dot);
+            Assert.That(Get(fortress, "troops"), Is.EqualTo(3));
+            Call("ResolveArrival", dot);
+            Assert.That(Get(fortress, "troops"), Is.EqualTo(2));
+            for (int i = 0; i < 4; i++) Call("ResolveArrival", dot);
+            Assert.That(Get(fortress, "troops"), Is.Zero);
+            Assert.That(Get(fortress, "teamId"), Is.EqualTo(1));
+            Call("ResolveArrival", dot);
+            Assert.That(Get(fortress, "teamId"), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MapGeneratorPlacesFactoriesAndFortressesOnSeparatePlainBases() {
+            Call("GenerateBases");
+            Call("AssignTurrets");
+            Call("AssignSuperBases");
+            Call("AssignSpeedBases");
+            Call("AssignFactoriesAndFortresses");
+            int factories = 0, fortresses = 0;
+            foreach (object state in bases) {
+                bool factory = (bool)Get(state, "isFactory"), fortress = (bool)Get(state, "isFortress");
+                int roles = (factory ? 1 : 0) + (fortress ? 1 : 0) + ((bool)Get(state, "isTurret") ? 1 : 0) +
+                    ((bool)Get(state, "isSuperProducer") ? 1 : 0) + ((bool)Get(state, "isSpeedBase") ? 1 : 0);
+                Assert.That(roles, Is.LessThanOrEqualTo(1));
+                if (factory) factories++;
+                if (fortress) fortresses++;
+            }
+            Assert.That(factories, Is.EqualTo(2));
+            Assert.That(fortresses, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void PlayersNeverSpawnOnAFactoryOrFortress() {
+            AddBase(team: -1, factory: true, position: new Vector2(-50f, 0f));
+            AddBase(team: -1, fortress: true, position: new Vector2(50f, 0f));
+            AddBase(team: -1, position: Vector2.zero);
+            Assert.That(Call("FindSpawnBase"), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void NpcSendsAboutTwiceAsManyTroopsAgainstAFortress() {
+            Set(runner, "npcIntelligence", 100f);
+            object source = AddBase(troops: 60, team: 100);
+            AddBase(troops: 10, team: -1);
+            AddLink(0, 1);
+            AddNpcTeam(100);
+            Call("UpdateNpcTeams", 1f);
+            int plain = (int)Get(source, "pendingTroops");
+
+            bases.Clear();
+            links.Clear();
+            npcTeams.Clear();
+            source = AddBase(troops: 60, team: 100);
+            AddBase(troops: 10, team: -1, fortress: true);
+            AddLink(0, 1);
+            AddNpcTeam(100);
+            Call("UpdateNpcTeams", 1f);
+            int fortress = (int)Get(source, "pendingTroops");
+
+            Assert.That(plain, Is.GreaterThan(10));
+            Assert.That(fortress, Is.GreaterThan(20));
+            Assert.That(fortress, Is.GreaterThan(plain + 8));
+        }
+
+        [Test]
+        public void ClashesAreQueuedForTheNextSnapshot() {
+            AddBase(position: Vector2.zero);
+            AddBase(team: 1, position: new Vector2(10f, 0f));
+            AddDot(0, 0, 1);
+            AddDot(1, 1, 0, team: 1);
+            Call("UpdateDots", 1f);
+            var clashes = (System.Collections.Generic.List<Vector2>)Get(runner, "clashPositions");
+            Assert.That(clashes.Count, Is.EqualTo(1));
+            Assert.That(clashes[0].x, Is.EqualTo(5f).Within(0.5f));
+        }
+
+        [Test]
+        public void CapturesCountForThePlayerWhoTookTheBaseButNotForNpcs() {
+            AddBase(team: 0);
+            AddBase(team: -1, troops: 0);
+            object dot = AddDot(0, 0, 1);
+            Set(dot, "ownerClientId", 7);
+            Call("ResolveArrival", dot);
+
+            AddBase(team: -1, troops: 0);
+            object npcDot = AddDot(0, 0, 2, team: 100);
+            Set(npcDot, "ownerClientId", -2);
+            Call("ResolveArrival", npcDot);
+
+            var records = (IDictionary)Get(runner, "matchRecords");
+            Assert.That(records.Count, Is.EqualTo(1));
+            Assert.That(Get(records[7], "captures"), Is.EqualTo(1));
+            Assert.That(Get(records[7], "mostBasesHeld"), Is.EqualTo(2));
         }
     }
 }

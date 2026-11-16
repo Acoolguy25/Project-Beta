@@ -1,36 +1,232 @@
-using RyanAssets.UI;
+﻿using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using RyanAssets.UI.GameHud;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 using Universes.UniverseData.dot_invaders.Client;
 
 namespace Universes.UniverseData.dot_invaders.Editor {
     /// <summary>
-    /// Generates the Dot Invaders screen HUD (DI_HUD prefab) from the shared HudKit and plugs it into
-    /// the board prefab. Run from Ryan/Dot Invaders in a client (non-server) Editor; safe to re-run.
+    /// Generates the Dot Invaders screen HUD (DI_HUD prefab) from the shared HudKit and the board's
+    /// neon look (road and backdrop materials, bloom volume profile, emission on the base material),
+    /// then wires the HUD, look, effects and sounds into the board and road prefabs. Run from
+    /// Ryan/Dot Invaders in a client (non-server) Editor, or batchmode
+    /// <c>-executeMethod Universes.UniverseData.dot_invaders.Editor.DI_Authoring.BuildAll</c>; safe to re-run.
     /// </summary>
     public static class DI_Authoring {
         const string Root = "Assets/Universes/UniverseData/dot_invaders";
-        const string HudPath = Root + "/Client/Prefabs/DI_HUD.prefab";
-        const string BoardPath = Root + "/Client/Prefabs/DI_Board.prefab";
+        const string Prefabs = Root + "/Client/Prefabs";
+        const string Audio = Root + "/Client/Audio";
+        const string HudPath = Prefabs + "/DI_HUD.prefab";
+        const string BoardPath = Prefabs + "/DI_Board.prefab";
+        const string LinkPath = Prefabs + "/DI_Link.prefab";
+        const string BaseMaterialPath = Prefabs + "/DI_Base.mat";
+        const string RoadMaterialPath = Prefabs + "/DI_Road.mat";
+        const string BackdropMaterialPath = Prefabs + "/DI_Backdrop.mat";
+        const string NeonProfilePath = Prefabs + "/DI_NeonProfile.asset";
+        const string NeonLineShader = "Dot Invaders/Neon Line";
+        const string BackdropShader = "Dot Invaders/Backdrop";
+        const string NeonVolumeName = "NeonVolume";
+        // Below the kit's moods (20), so a MoodVolume.Apply still takes over.
+        const float NeonVolumePriority = 5f;
         static readonly Color Muted = new(0.71f, 0.74f, 0.78f);
 
-        [MenuItem("Ryan/Dot Invaders/Rebuild HUD")]
+        [MenuItem("Ryan/Dot Invaders/Rebuild HUD and Board")]
         public static void BuildAll() {
             DI_HUD hud = BuildHud();
+            EnableBaseEmission();
+            Material road = BuildMaterial(RoadMaterialPath, NeonLineShader);
+            Material backdrop = BuildMaterial(BackdropMaterialPath, BackdropShader);
+            VolumeProfile neon = BuildNeonProfile();
+            ConfigureLink(road);
+
             GameObject board = PrefabUtility.LoadPrefabContents(BoardPath);
             try {
-                Set(board.GetComponent<DI_ClientController>(), "hudPrefab", hud);
+                DI_ClientController controller = board.GetComponent<DI_ClientController>();
+                Set(controller, "hudPrefab", hud);
+                Set(controller, "backdrop", ConfigureBackdrop(board, backdrop));
+                Set(controller, "boardFx", ConfigureEffects(board));
+                ConfigureNeonLook(board, neon);
                 PrefabUtility.SaveAsPrefabAsset(board, BoardPath);
             } finally {
                 PrefabUtility.UnloadPrefabContents(board);
             }
             AssetDatabase.SaveAssets();
-            Debug.Log("Dot Invaders: rebuilt the HUD.");
+            Debug.Log("Dot Invaders: rebuilt the HUD and the board's look.");
         }
+
+        // --- Board look ---------------------------------------------------------------------
+
+        /// <summary>Bases, troops and the border share DI_Base.mat; their views drive emission per renderer.</summary>
+        static void EnableBaseEmission() {
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath)
+                ?? throw new System.IO.FileNotFoundException("Dot Invaders base material is missing.", BaseMaterialPath);
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", Color.black);
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            EditorUtility.SetDirty(material);
+        }
+
+        static Material BuildMaterial(string path, string shaderName) {
+            Shader shader = Shader.Find(shaderName)
+                ?? throw new System.InvalidOperationException($"Shader '{shaderName}' was not found; check its compile errors.");
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, path);
+            } else {
+                // The shader's property defaults are the tuning source: a rebuild resets the
+                // generated material to them, keeping its GUID and references.
+                var defaults = new Material(shader) { name = material.name };
+                EditorUtility.CopySerialized(defaults, material);
+                Object.DestroyImmediate(defaults);
+            }
+            material.enableInstancing = true;
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        /// <summary>
+        /// The game's own post-processing: a dark board with bright HDR lines wants far more bloom
+        /// intensity than the kit's general moods (Night is the closest), and neutral tonemapping
+        /// so team colours stay saturated instead of washing to white.
+        /// </summary>
+        static VolumeProfile BuildNeonProfile() {
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(NeonProfilePath);
+            if (profile == null) {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, NeonProfilePath);
+            }
+            SetOverride<Bloom>(profile, b => {
+                // Above 1 plain white (troop counts, labels) stays crisp; only HDR neon blooms.
+                b.threshold.Override(1.1f);
+                b.intensity.Override(1.3f);
+                // A tight glow: wide scatter turned every white base into a grey haze.
+                b.scatter.Override(0.55f);
+                b.highQualityFiltering.Override(true);
+            });
+            SetOverride<Tonemapping>(profile, t => t.mode.Override(TonemappingMode.Neutral));
+            SetOverride<ColorAdjustments>(profile, c => {
+                c.contrast.Override(8f);
+                c.saturation.Override(12f);
+            });
+            SetOverride<Vignette>(profile, v => {
+                v.intensity.Override(0.28f);
+                v.smoothness.Override(0.5f);
+            });
+            EditorUtility.SetDirty(profile);
+            return profile;
+        }
+
+        static void SetOverride<T>(VolumeProfile profile, System.Action<T> edit) where T : VolumeComponent {
+            if (!profile.TryGet(out T component)) {
+                component = profile.Add<T>();
+                component.name = typeof(T).Name;
+                AssetDatabase.AddObjectToAsset(component, profile);
+            }
+            component.active = true;
+            edit(component);
+            EditorUtility.SetDirty(component);
+        }
+
+        /// <summary>Roads, routes and the order arrow draw with the neon line shader (uv.x along the whole line).</summary>
+        static void ConfigureLink(Material road) {
+            GameObject link = PrefabUtility.LoadPrefabContents(LinkPath);
+            try {
+                LineRenderer line = link.GetComponent<LineRenderer>()
+                    ?? throw new MissingComponentException("DI_Link has no LineRenderer.");
+                line.sharedMaterial = road;
+                line.textureMode = LineTextureMode.Stretch;
+                line.numCapVertices = 4;
+                line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                line.receiveShadows = false;
+                PrefabUtility.SaveAsPrefabAsset(link, LinkPath);
+            } finally {
+                PrefabUtility.UnloadPrefabContents(link);
+            }
+        }
+
+        static DI_BoardBackdrop ConfigureBackdrop(GameObject board, Material backdrop) {
+            Transform surface = board.transform.Find("Surface")
+                ?? throw new MissingReferenceException("DI_Board has no Surface child.");
+            surface.GetComponent<Renderer>().sharedMaterial = backdrop;
+
+            var borders = new System.Collections.Generic.List<Renderer>();
+            foreach (Transform child in board.transform)
+                if (child.name.StartsWith("Border_") && child.TryGetComponent(out Renderer border))
+                    borders.Add(border);
+
+            DI_BoardBackdrop component = Fresh<DI_BoardBackdrop>(board);
+            var serialized = new SerializedObject(component);
+            SerializedProperty list = serialized.FindProperty("borders");
+            list.arraySize = borders.Count;
+            for (int i = 0; i < borders.Count; i++)
+                list.GetArrayElementAtIndex(i).objectReferenceValue = borders[i];
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return component;
+        }
+
+        static void ConfigureNeonLook(GameObject board, VolumeProfile profile) {
+            Transform child = board.transform.Find(NeonVolumeName);
+            if (child == null) {
+                child = new GameObject(NeonVolumeName).transform;
+                child.SetParent(board.transform, false);
+            }
+            Volume volume = GetOrAdd<Volume>(child.gameObject);
+            volume.isGlobal = true;
+            volume.priority = NeonVolumePriority;
+            volume.weight = 1f;
+            volume.sharedProfile = profile;
+            Set(GetOrAdd<DI_NeonLook>(board), "volume", volume);
+        }
+
+        /// <summary>Game sounds (Kenney Digital Audio, CC0; see CREDITS.md) on the board's effects component.</summary>
+        static DI_BoardFx ConfigureEffects(GameObject board) {
+            DI_BoardFx fx = Fresh<DI_BoardFx>(board);
+            var serialized = new SerializedObject(fx);
+            Sound(serialized, "sendSound", 0.55f, 0.3f, 0.05f, "di_send_1", "di_send_2", "di_send_3");
+            Sound(serialized, "captureSound", 0.8f, 0.5f, 0.08f, "di_capture");
+            Sound(serialized, "baseLostSound", 0.85f, 0.3f, 0.15f, "di_base_lost");
+            Sound(serialized, "clashSound", 0.5f, 1.5f, 0.09f, "di_clash_1", "di_clash_2");
+            Sound(serialized, "eliminationSound", 0.9f, 0.3f, 0.3f, "di_elimination");
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return fx;
+        }
+
+        static void Sound(SerializedObject owner, string field, float volume, float pitchJitterSemitones,
+            float minInterval, params string[] clipNames) {
+            SerializedProperty sound = owner.FindProperty(field)
+                ?? throw new System.MissingFieldException(owner.targetObject.GetType().Name, field);
+            SerializedProperty clips = sound.FindPropertyRelative("clips");
+            clips.arraySize = clipNames.Length;
+            for (int i = 0; i < clipNames.Length; i++) {
+                string path = $"{Audio}/{clipNames[i]}.ogg";
+                clips.GetArrayElementAtIndex(i).objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>(path)
+                    ?? throw new System.IO.FileNotFoundException("Dot Invaders sound is missing.", path);
+            }
+            sound.FindPropertyRelative("volume").floatValue = volume;
+            sound.FindPropertyRelative("pitchJitterSemitones").floatValue = pitchJitterSemitones;
+            sound.FindPropertyRelative("minInterval").floatValue = minInterval;
+        }
+
+        static T GetOrAdd<T>(GameObject target) where T : Component =>
+            target.TryGetComponent(out T existing) ? existing : target.AddComponent<T>();
+
+        /// <summary>
+        /// A generated component with its script's field defaults, which are the tuning source;
+        /// the caller rewires every reference to it (the controller's fields are set in BuildAll).
+        /// </summary>
+        static T Fresh<T>(GameObject target) where T : Component {
+            if (target.TryGetComponent(out T existing))
+                Object.DestroyImmediate(existing, true);
+            return target.AddComponent<T>();
+        }
+
+        // --- HUD ----------------------------------------------------------------------------
 
         static DI_HUD BuildHud() {
             // Below the shared top bar (50); the board is the game, so the HUD stays thin.

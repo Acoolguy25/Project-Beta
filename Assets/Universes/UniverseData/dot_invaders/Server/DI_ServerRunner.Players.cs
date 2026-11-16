@@ -85,7 +85,8 @@ namespace Universes.UniverseData.dot_invaders {
             float bestDistance = float.MinValue;
 
             for (int i = 0; i < bases.Count; i++) {
-                if (bases[i].teamId >= 0 || bases[i].isTurret || bases[i].isSuperProducer || bases[i].isSpeedBase)
+                // Nobody starts on a special base.
+                if (bases[i].teamId >= 0 || IsSpecial(bases[i]))
                     continue;
 
                 float nearestOwnedDistance = float.MaxValue;
@@ -110,6 +111,7 @@ namespace Universes.UniverseData.dot_invaders {
                 return;
 
             int clientId = player.Owner.ClientId;
+            RecordLeavingPlayerProgress(player);
             playerTeams.Remove(clientId);
             playerDamageMultipliers.Remove(clientId);
             playerProductionMultipliers.Remove(clientId);
