@@ -59,6 +59,9 @@ namespace RyanAssets.GameFeel.Editor {
             main.gravityModifier = -0.04f;
             Burst(ps, (0f, 10));
             Cone(ps, 80f, 0.3f);
+            // Emit a little above the ground so the camera-facing quads do not cut into the floor.
+            var lift = ps.shape;
+            lift.position = new Vector3(0f, 0.3f, 0f);
             Drag(ps, 0.6f, 0.25f);
             Spin(ps, -1.2f, 1.2f);
             SizeOver(ps, Curve(0f, 0.55f, 1f, 1.5f));

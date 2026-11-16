@@ -7,14 +7,17 @@ namespace RyanAssets.GameFeel {
     /// <summary>
     /// The full-screen overlay behind <see cref="ScreenFx"/>: colour flash, damage and low-health
     /// vignettes, speed lines and the big centre text used by the countdown. Generated as a prefab by
-    /// Ryan &gt; Game Feel &gt; Rebuild and created the first time an effect needs it. Its canvas sits
-    /// under the HUD; the centre text has its own canvas above it.
+    /// Ryan &gt; Game Feel &gt; Rebuild and created the first time an effect needs it. Its canvas sorts
+    /// below every HUD canvas (order -10), so vignettes never tint the HUD; the centre text has its own
+    /// canvas above it.
     /// </summary>
     public sealed class ScreenFxOverlay : MonoBehaviour {
         [Header("Parts")]
         [SerializeField] Image flash;
         [SerializeField] Image damageVignette;
         [SerializeField] Image lowHealthVignette;
+        [Tooltip("Edge-only vignette behind SetDanger / DangerFlash (the centre ~60% stays clear).")]
+        [SerializeField] Image dangerVignette;
         [SerializeField] RectTransform speedLines;
         [SerializeField] Graphic speedLinesGraphic;
         [SerializeField] TMP_Text centerText;
@@ -31,6 +34,13 @@ namespace RyanAssets.GameFeel {
         [SerializeField] Vector2 lowHealthRate = new(0.8f, 1.8f);
         [Tooltip("Vignette alpha between pulses (fraction of the pulse peak).")]
         [SerializeField, Range(0f, 1f)] float lowHealthFloor = 0.35f;
+
+        [Header("Danger")]
+        [SerializeField] Color dangerColor = new(0.85f, 0.05f, 0.05f, 1f);
+        [Tooltip("Seconds for the danger vignette to follow a new strength.")]
+        [SerializeField, Min(0.01f)] float dangerFollow = 0.25f;
+        [Tooltip("Alpha between pulses as a fraction of the pulse peak.")]
+        [SerializeField, Range(0f, 1f)] float dangerPulseFloor = 0.45f;
 
         [Header("Speed lines")]
         [SerializeField] Color speedLinesColor = new(1f, 1f, 1f, 0.75f);
@@ -53,11 +63,20 @@ namespace RyanAssets.GameFeel {
         [SerializeField, Min(0.2f)] float countdownStep = 1f;
         [Tooltip("Seconds \"GO!\" stays up.")]
         [SerializeField, Min(0.2f)] float goSeconds = 0.9f;
+        [Tooltip("Widest share of the screen the centre text may span; longer text auto-sizes down.")]
+        [SerializeField, Range(0.2f, 1f)] float centerMaxWidth = 0.6f;
+        [Tooltip("Smallest font size auto-sizing may use.")]
+        [SerializeField, Min(8f)] float centerMinFontSize = 48f;
 
         Color flashColor;
         float flashAge = float.PositiveInfinity, flashDuration = 1f;
         float damageAge = float.PositiveInfinity, damageStrength;
-        float lowHealth01 = 1f, lowHealthPhase;
+        float lowHealth01 = 1f, lowHealthPhase, lowHealthCap = 1f;
+        float dangerTarget, dangerCurrent, dangerMaxAlpha = 0.55f, dangerRate, dangerPhase;
+        Color dangerTint;
+        float dangerFlashAge = float.PositiveInfinity, dangerFlashSeconds = 1f, dangerFlashAlpha;
+        Color dangerFlashColor;
+        float centerBaseFontSize;
         float speedTarget, speedCurrent, speedNextRoll;
 
         // Centre text: either a single message or a running countdown.
@@ -71,9 +90,24 @@ namespace RyanAssets.GameFeel {
             SetAlpha(flash, 0f);
             SetAlpha(damageVignette, 0f);
             SetAlpha(lowHealthVignette, 0f);
+            SetAlpha(dangerVignette, 0f);
             SetAlpha(speedLinesGraphic, 0f);
-            if (centerText != null)
+            dangerTint = dangerColor;
+            if (centerText != null) {
+                // Long banners shrink to fit instead of spanning the whole screen.
+                centerBaseFontSize = centerText.fontSize;
+                RectTransform rect = centerText.rectTransform;
+                float side = (1f - centerMaxWidth) * 0.5f;
+                rect.anchorMin = new Vector2(side, rect.anchorMin.y);
+                rect.anchorMax = new Vector2(1f - side, rect.anchorMax.y);
+                rect.offsetMin = new Vector2(0f, rect.offsetMin.y);
+                rect.offsetMax = new Vector2(0f, rect.offsetMax.y);
+                centerText.textWrappingMode = TextWrappingModes.NoWrap;
+                centerText.enableAutoSizing = true;
+                centerText.fontSizeMin = Mathf.Min(centerMinFontSize, centerBaseFontSize);
+                centerText.fontSizeMax = centerBaseFontSize;
                 centerText.gameObject.SetActive(false);
+            }
         }
 
         public void Flash(Color color, float seconds) {
@@ -87,17 +121,57 @@ namespace RyanAssets.GameFeel {
             damageAge = 0f;
         }
 
-        public void SetLowHealth(float health01) => lowHealth01 = Mathf.Clamp01(health01);
+        public void SetLowHealth(float health01) => SetLowHealth(health01, 1f);
+
+        public void SetLowHealth(float health01, float intensityCap) {
+            lowHealth01 = Mathf.Clamp01(health01);
+            lowHealthCap = Mathf.Clamp01(intensityCap);
+        }
+
+        public void SetDanger(float strength, Color color, float maxAlpha, float pulsesPerSecond) {
+            dangerTarget = Mathf.Clamp01(strength);
+            dangerTint = color;
+            dangerMaxAlpha = Mathf.Clamp01(maxAlpha);
+            dangerRate = Mathf.Max(0f, pulsesPerSecond);
+        }
+
+        public void SetDanger(float strength) => SetDanger(strength, dangerColor, dangerMaxAlpha, dangerRate);
+
+        public void DangerFlash(Color color, float seconds, float maxAlpha) {
+            dangerFlashColor = color;
+            dangerFlashSeconds = Mathf.Max(0.05f, seconds);
+            dangerFlashAlpha = Mathf.Clamp01(maxAlpha);
+            dangerFlashAge = 0f;
+        }
+
+        public void ClearDanger() {
+            dangerTarget = 0f;
+            dangerFlashAge = float.PositiveInfinity;
+        }
 
         public void SetSpeedLines(float intensity) => speedTarget = Mathf.Clamp01(intensity);
 
-        public void ShowText(string text, Color color, float seconds) {
+        public void ShowText(string text, Color color, float seconds) => ShowText(text, color, seconds, 1f);
+
+        /// <param name="size">Multiplier on the largest font size (1 = the countdown's size); long text still shrinks to fit.</param>
+        public void ShowText(string text, Color color, float seconds, float size) {
             CancelCountdown();
+            SetCenterSize(size);
             StartCenter(text, color, seconds);
+        }
+
+        void SetCenterSize(float size) {
+            if (centerText == null || centerBaseFontSize <= 0f)
+                return;
+            float max = centerBaseFontSize * Mathf.Clamp(size, 0.1f, 2f);
+            centerText.fontSizeMax = max;
+            centerText.fontSizeMin = Mathf.Min(centerMinFontSize, max);
+            centerText.fontSize = max;
         }
 
         public void Countdown(int from, string goText, Action onGo) {
             CancelCountdown();
+            SetCenterSize(1f);
             countdownValue = Mathf.Max(1, from);
             countdownGo = goText;
             countdownDone = onGo;
@@ -151,6 +225,7 @@ namespace RyanAssets.GameFeel {
             UpdateFlash(dt);
             UpdateDamage(dt);
             UpdateLowHealth(dt);
+            UpdateDanger(dt);
             UpdateSpeedLines(dt);
             UpdateCenter(dt);
         }
@@ -205,8 +280,40 @@ namespace RyanAssets.GameFeel {
             lowHealthPhase += dt * Mathf.Lerp(lowHealthRate.x, lowHealthRate.y, severity);
             float beat = 0.5f + 0.5f * Mathf.Sin(lowHealthPhase * Mathf.PI * 2f);
             Color c = lowHealthColor;
-            c.a *= Mathf.Lerp(lowHealthFloor, 1f, beat) * Mathf.Lerp(0.6f, 1f, severity);
+            c.a *= Mathf.Lerp(lowHealthFloor, 1f, beat) * Mathf.Lerp(0.6f, 1f, severity) * lowHealthCap;
             lowHealthVignette.color = c;
+        }
+
+        void UpdateDanger(float dt) {
+            if (dangerVignette == null)
+                return;
+            bool flashing = !float.IsPositiveInfinity(dangerFlashAge);
+            if (!flashing && dangerCurrent == 0f && dangerTarget == 0f)
+                return;
+            dangerCurrent = Mathf.MoveTowards(dangerCurrent, dangerTarget, dt / dangerFollow);
+            float sustained = dangerCurrent * dangerMaxAlpha;
+            if (dangerRate > 0f) {
+                dangerPhase += dt * dangerRate;
+                float beat = 0.5f + 0.5f * Mathf.Sin(dangerPhase * Mathf.PI * 2f);
+                sustained *= Mathf.Lerp(dangerPulseFloor, 1f, beat);
+            } else {
+                dangerPhase = 0f;
+            }
+            float flashAlpha = 0f;
+            if (flashing) {
+                dangerFlashAge += dt;
+                float t = dangerFlashAge / dangerFlashSeconds;
+                if (t >= 1f) {
+                    dangerFlashAge = float.PositiveInfinity;
+                } else {
+                    // Quick rise, hold, then ease out: a moment, not a wash.
+                    float envelope = t < 0.12f ? t / 0.12f : 1f - Mathf.SmoothStep(0f, 1f, (t - 0.12f) / 0.88f);
+                    flashAlpha = dangerFlashAlpha * envelope;
+                }
+            }
+            Color c = flashAlpha > sustained ? dangerFlashColor : dangerTint;
+            c.a = Mathf.Max(sustained, flashAlpha);
+            dangerVignette.color = c;
         }
 
         void UpdateSpeedLines(float dt) {

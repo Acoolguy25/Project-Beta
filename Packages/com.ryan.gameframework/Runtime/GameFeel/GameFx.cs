@@ -68,6 +68,43 @@ namespace RyanAssets.GameFeel {
             CameraShake.Explosion(position, radius, large ? 1f : 0.6f);
         }
 
+        /// <summary>
+        /// A full-body poof (spawn, vanish, tag) for a character <paramref name="height"/> units tall
+        /// standing at <paramref name="feet"/>: several <see cref="FxKind.DustPuff"/>s layered from the
+        /// feet to the head instead of one stretched puff, so a 5.6-unit robot gets a full cloud at
+        /// normal texture detail. <paramref name="scale"/> scales every puff (1 = as designed).
+        /// </summary>
+        public static void Poof(Vector3 feet, float height, Color tint, float scale = 1f) =>
+            Poof(feet, Vector3.up, height, tint, scale);
+
+        /// <summary>As <see cref="Poof(Vector3, float, Color, float)"/>, white.</summary>
+        public static void Poof(Vector3 feet, float height, float scale = 1f) =>
+            Poof(feet, Vector3.up, height, Color.white, scale);
+
+        /// <summary>As <see cref="Poof(Vector3, float, Color, float)"/> for a character whose up axis is <paramref name="up"/>.</summary>
+        public static void Poof(Vector3 feet, Vector3 up, float height, Color tint, float scale = 1f) {
+            if (GameFeelRunner.Get() == null)
+                return;
+            up = up.sqrMagnitude > 1e-6f ? up.normalized : Vector3.up;
+            height = Mathf.Max(0.2f, height);
+            scale = Mathf.Max(0.01f, scale);
+            // Puffs grow with the body only up to 1.6x; taller bodies get more layers instead.
+            float puff = Mathf.Clamp(height / 2.4f, 0.6f, 1.6f) * scale;
+            int layers = Mathf.Clamp(Mathf.CeilToInt(height / 1.1f), 1, 8);
+            Quaternion rotation = UpRotation(up);
+            Vector3 side = Vector3.Cross(up, Mathf.Abs(Vector3.Dot(up, Vector3.forward)) < 0.9f ? Vector3.forward : Vector3.right).normalized;
+            Vector3 side2 = Vector3.Cross(up, side);
+            for (int i = 0; i < layers; i++) {
+                float along = layers == 1 ? 0.4f : (float)i / (layers - 1);
+                // Widest at the feet and waist, a little smaller at the head.
+                float size = puff * Mathf.Lerp(1.1f, 0.8f, along);
+                float angle = i * 2.39996f; // golden angle spreads the layers around the body
+                Vector3 jitter = (side * Mathf.Cos(angle) + side2 * Mathf.Sin(angle)) * (0.12f * height * (i == 0 ? 0f : 1f));
+                Vector3 position = feet + up * (along * height * 0.85f) + jitter;
+                Run(FxKind.DustPuff, position, rotation, tint, size, false, null, default);
+            }
+        }
+
         static Quaternion UpRotation(Vector3 up) =>
             up.sqrMagnitude > 1e-6f ? Quaternion.FromToRotation(Vector3.up, up) : Quaternion.identity;
 

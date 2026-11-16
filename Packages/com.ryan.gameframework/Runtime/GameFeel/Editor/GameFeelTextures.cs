@@ -20,6 +20,7 @@ namespace RyanAssets.GameFeel.Editor {
         public static Texture2D Coin => Load("fx_coin");
         public static Texture2D Beam => Load("fx_beam");
         public static Sprite Vignette => AssetDatabase.LoadAssetAtPath<Sprite>(Folder + "/screen_vignette.png");
+        public static Sprite DangerVignette => AssetDatabase.LoadAssetAtPath<Sprite>(Folder + "/screen_danger_vignette.png");
         public static Sprite SpeedLines => AssetDatabase.LoadAssetAtPath<Sprite>(Folder + "/screen_speed_lines.png");
 
         public static void BuildAll() {
@@ -76,6 +77,13 @@ namespace RyanAssets.GameFeel.Editor {
                 // Nearly full at the middle of each screen edge, clear over the centre ~60%.
                 float r = Radius(u, v) / Mathf.Sqrt(2f) * 1.35f;
                 float a = Mathf.Pow(Mathf.Clamp01((r - 0.38f) / 0.62f), 1.4f);
+                return White(a);
+            }, sprite: true);
+            Write("screen_danger_vignette", 256, 256, (u, v) => {
+                // Edge-only: a rounded-rectangle falloff, fully clear over the centre 60% of each axis.
+                float x = Mathf.Abs(u * 2f - 1f), y = Mathf.Abs(v * 2f - 1f);
+                float d = Mathf.Pow(Mathf.Pow(x, 5f) + Mathf.Pow(y, 5f), 0.2f);
+                float a = Mathf.Pow(Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((d - 0.6f) / 0.4f)), 1.2f);
                 return White(a);
             }, sprite: true);
             BuildSpeedLines();

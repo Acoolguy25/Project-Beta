@@ -34,6 +34,13 @@ namespace RyanAssets.GameFeel {
             return copy;
         }
 
+        /// <summary>This style living <paramref name="seconds"/> instead of its own duration.</summary>
+        public FloatingTextStyle WithDuration(float seconds) {
+            FloatingTextStyle copy = this;
+            copy.duration = Mathf.Max(0.05f, seconds);
+            return copy;
+        }
+
         /// <summary>This style scaled by <paramref name="factor"/>.</summary>
         public FloatingTextStyle Scaled(float factor) {
             FloatingTextStyle copy = this;

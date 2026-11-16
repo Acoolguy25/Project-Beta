@@ -34,7 +34,7 @@ namespace RyanAssets.GameFeel.Editor {
 
         // Under the shared HUD panels (10) and top bar (50), so effects never hide the UI; the
         // countdown text has its own canvas above them.
-        const int OverlaySortingOrder = 5;
+        const int OverlaySortingOrder = -10; // below every HUD canvas (the lowest is 0)
         const int CenterTextSortingOrder = 60;
         const float CenterFontSize = 220f;
         const float SpeedLinesSize = 2600f; // covers a 1920x1080 reference screen at any rotation
@@ -82,7 +82,7 @@ namespace RyanAssets.GameFeel.Editor {
         }
 
         static int DefaultPool(FxKind kind) => kind switch {
-            FxKind.DustPuff => 16,
+            FxKind.DustPuff => 24,
             FxKind.Sparks => 12,
             FxKind.CoinBurst => 10,
             FxKind.ExplosionLarge => 4,
@@ -239,6 +239,7 @@ namespace RyanAssets.GameFeel.Editor {
             RectTransform lines = UIKit.Pinned(root, "SpeedLines", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(SpeedLinesSize, SpeedLinesSize));
             Image linesImage = FullImage(lines, GameFeelTextures.SpeedLines);
             Image lowHealth = FullImage(UIKit.Fill(root, "LowHealthVignette"), GameFeelTextures.Vignette);
+            Image danger = FullImage(UIKit.Fill(root, "DangerVignette"), GameFeelTextures.DangerVignette);
             Image damage = FullImage(UIKit.Fill(root, "DamageVignette"), GameFeelTextures.Vignette);
             Image flash = FullImage(UIKit.Fill(root, "Flash"), null);
 
@@ -247,10 +248,16 @@ namespace RyanAssets.GameFeel.Editor {
             centerCanvas.overrideSorting = true;
             centerCanvas.sortingOrder = CenterTextSortingOrder;
             RectTransform centerRect = UIKit.Fill(centerRoot, "CenterText");
+            // 60% of the screen width at most; the overlay auto-sizes longer text down.
+            centerRect.anchorMin = new Vector2(0.2f, 0f);
+            centerRect.anchorMax = new Vector2(0.8f, 1f);
             var center = centerRect.gameObject.AddComponent<TextMeshProUGUI>();
             center.font = theme.boldFont;
             center.fontSharedMaterial = UIThemeAssets.ShadowMaterial(theme.boldFont);
             center.fontSize = CenterFontSize;
+            center.enableAutoSizing = true;
+            center.fontSizeMin = 48f;
+            center.fontSizeMax = CenterFontSize;
             center.alignment = TextAlignmentOptions.Center;
             center.textWrappingMode = TextWrappingModes.NoWrap;
             center.overflowMode = TextOverflowModes.Overflow;
@@ -262,6 +269,7 @@ namespace RyanAssets.GameFeel.Editor {
             SerializedFields.Set(overlay, "flash", flash);
             SerializedFields.Set(overlay, "damageVignette", damage);
             SerializedFields.Set(overlay, "lowHealthVignette", lowHealth);
+            SerializedFields.Set(overlay, "dangerVignette", danger);
             SerializedFields.Set(overlay, "speedLines", lines);
             SerializedFields.Set(overlay, "speedLinesGraphic", linesImage);
             SerializedFields.Set(overlay, "centerText", center);

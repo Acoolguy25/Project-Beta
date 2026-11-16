@@ -15,7 +15,7 @@ MonoBehaviour:
   entries:
   - kind: 0
     prefab: {fileID: 8501946374381946002, guid: e9d9c03dcacaa518e89d687ae34f9dfb, type: 3}
-    poolSize: 16
+    poolSize: 24
   - kind: 1
     prefab: {fileID: 7579023043457248833, guid: 3f6252fe6162c6bf4a3568323ffa6ad0, type: 3}
     poolSize: 12

@@ -87,6 +87,13 @@ namespace RyanAssets.GameFeel {
                 Spawn(position, text, settings.floatingText.callout.WithColor(color).Scaled(size));
         }
 
+        /// <summary>A callout in another colour that stays up for <paramref name="seconds"/> (rise and fade stretch with it).</summary>
+        public static void Callout(Vector3 position, string text, Color color, float size, float seconds) {
+            GameFeelSettings settings = GameFeelSettings.Active;
+            if (settings != null)
+                Spawn(position, text, settings.floatingText.callout.WithColor(color).Scaled(size).WithDuration(seconds));
+        }
+
         static void Styled(Vector3 position, string format, float value, System.Func<GameFeelSettings.FloatingTextTuning, FloatingTextStyle> pick, float size) {
             GameFeelSettings settings = GameFeelSettings.Active;
             if (settings == null)

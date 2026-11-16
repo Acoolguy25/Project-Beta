@@ -17,6 +17,7 @@ namespace RyanAssets.GameFeel {
         internal GameFeelSettings Settings { get; private set; }
         internal SfxPlayer Sfx { get; private set; }
         internal CameraShaker Shake { get; private set; }
+        internal CameraFovKicker Fov { get; private set; }
         internal FxPool Fx { get; private set; }
         internal FloatingTextPool Texts { get; private set; }
         internal PunchAnimator Punches { get; private set; }
@@ -68,6 +69,7 @@ namespace RyanAssets.GameFeel {
             Settings = settings;
             Sfx = new SfxPlayer(transform, settings.audio);
             Shake = new CameraShaker(settings.cameraShake);
+            Fov = new CameraFovKicker(settings.cameraFov ?? new GameFeelSettings.CameraFovTuning());
             Fx = new FxPool(transform, settings.effects);
             Texts = new FloatingTextPool(transform, settings.floatingText);
             Punches = new PunchAnimator();
@@ -101,6 +103,7 @@ namespace RyanAssets.GameFeel {
             MainCamera = Camera.main;
             float dt = Time.unscaledDeltaTime;
             Shake.Update(dt);
+            Fov.Update(dt);
             Fx.Update();
             Characters.LateUpdate(MainCamera);
             Texts.LateUpdate(MainCamera);
@@ -108,11 +111,16 @@ namespace RyanAssets.GameFeel {
         }
 
         void OnBeginCamera(ScriptableRenderContext context, Camera camera) {
-            if (camera == MainCamera)
+            if (camera == MainCamera) {
                 Shake.Apply(camera);
+                Fov.Apply(camera);
+            }
         }
 
-        void OnEndCamera(ScriptableRenderContext context, Camera camera) => Shake.Restore(camera);
+        void OnEndCamera(ScriptableRenderContext context, Camera camera) {
+            Fov.Restore(camera);
+            Shake.Restore(camera);
+        }
 
         void OnDestroy() {
             RenderPipelineManager.beginCameraRendering -= OnBeginCamera;

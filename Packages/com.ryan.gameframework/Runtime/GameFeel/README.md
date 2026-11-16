@@ -55,6 +55,23 @@ while the main camera renders, so aiming and raycasts never see it. Strength is 
 `Explosion` measures distance to the local character, else to the camera, else (overhead cameras)
 to the camera's line of sight.
 
+## Camera FOV: `CameraFov`
+
+Extra field-of-view degrees added only while the main camera renders (like the shake), so it stacks
+on any rig: a Cinemachine brain that is not on `Camera.main`, a game writing `Camera.fieldOfView`, or a
+fixed camera. Orthographic cameras are left alone. Caps and easing: GameFeelSettings > Camera FOV.
+
+| Call | Example |
+|---|---|
+| `CameraFov.Kick(float extraDegrees, float seconds = 0.35f)` | `CameraFov.Kick(6f);` (launch pad, dash) |
+| `CameraFov.SetBoost(float amount01)` | `CameraFov.SetBoost(sprinting ? 1f : 0f);` (eased; 1 = `boostDegrees`, 8 by default) |
+| `CameraFov.SetBoostDegrees(float extraDegrees)` | `CameraFov.SetBoostDegrees(speed01 * 12f);` |
+| `CameraFov.CurrentExtraDegrees` | what is being added this frame |
+| `CameraFov.Clear()` | before a cutscene |
+
+`Camera.main.fieldOfView` keeps reading the rig's own value; a game that writes it directly keeps
+working, with the kit's degrees added on top.
+
 ## Floating text: `FloatingText`
 
 Pooled world-space TextMeshPro popups that pop, rise and fade, face the camera, draw over the world
@@ -67,9 +84,20 @@ and stay readable at any distance. Styles live in GameFeelSettings > Floating Te
 | `FloatingText.Money(Vector3 pos, double amount, Func<double, string> format, float size = 1)` | `FloatingText.Money(pos, gems, g => g.ToString("N0"));` your own number text, "+$"/"-$" prefixed |
 | `FloatingText.Heal(pos, amount, size = 1)` | `FloatingText.Heal(pos, 25);` |
 | `FloatingText.Callout(pos, string text, [Color color], size = 1)` | `FloatingText.Callout(flag, "CHECKPOINT");` |
+| `FloatingText.Callout(pos, string text, Color color, float size, float seconds)` | `FloatingText.Callout(boss, "THE WARDEN", Color.red, 1.2f, 3f);` (stays up longer) |
 | `FloatingText.Spawn(pos, string text, Color color, float size = 1)` | `FloatingText.Spawn(pos, "COMBO x3", Color.cyan);` |
 | `FloatingText.Spawn(pos, string text, in FloatingTextStyle style)` | full control (colour, size, rise, duration, pop, scatter) |
 | `FloatingText.Number(pos, string format, float value, Color color, float size = 1)` | `FloatingText.Number(pos, "+{0} XP", xp, Color.green);` (no allocation; TMP format, `{0:1}` = 1 decimal) |
+| `FloatingTextStyle.WithDuration(float seconds)` | `FloatingText.Spawn(pos, "SAVED", style.WithDuration(2.5f));` |
+
+Popups grow with distance to stay readable, but never cover more than
+`GameFeelSettings > Floating Text > maxScreenHeight` of the screen height (9% by default), so a callout
+right next to the camera no longer fills the screen.
+
+For your own world-space labels, `RyanAssets.Rounds.Billboard` now has `facing = Facing.CameraPlane`
+(align with the camera plane: no skew near the screen edges; the default `LookAtCamera` is the old
+behaviour) and `maxScreenHeight` (0..1 of the screen height, 0 = off) with `referenceHeight` (the label's
+world height at its authored scale), which scales the label down at close range, never up.
 
 ## Hit flash and punch: `HitFlash`, `Punch`
 
@@ -90,17 +118,29 @@ RectTransforms too and never compound (a second punch restarts from the original
 
 ## Screen effects: `ScreenFx`
 
-One overlay canvas, created on first use, under the HUD (the centre text sits above it).
+One overlay canvas, created on first use, sorted at -10: below every HUD canvas (the shared HUD and
+the games' HUD canvases sort at 0 or above), so vignettes and flashes never tint the HUD. The centre
+text has its own canvas above the HUD (60).
 
 | Call | Example |
 |---|---|
 | `ScreenFx.Flash(Color color, float seconds = 0.25f)` | `ScreenFx.Flash(new Color(1,1,1,0.6f));` (alpha = peak) |
 | `ScreenFx.DamagePulse(float strength = 1)` | on every hit the local player takes |
 | `ScreenFx.SetLowHealth(float health01)` | call on health change; red heartbeat at 30% and below, 1 = off |
+| `ScreenFx.SetLowHealth(float health01, float intensityCap)` | `ScreenFx.SetLowHealth(hp01, 0.5f);` (half-strength vignette, for already dark games) |
+| `ScreenFx.SetDanger(float strength, Color color, float maxAlpha = 0.55f, float pulsesPerSecond = 0)` | `ScreenFx.SetDanger(seekerNear01, Color.red, 0.45f, 1.3f);` (heartbeat); 0 fades it out |
+| `ScreenFx.SetDanger(float strength)` | keeps the last colour, alpha and pulse |
+| `ScreenFx.DangerFlash(Color color, float seconds = 1.2f, float maxAlpha = 0.55f)` | `ScreenFx.DangerFlash(Color.red);` ("base critical": a moment, not a permanent wash) |
+| `ScreenFx.ClearDanger()` | |
 | `ScreenFx.SetSpeedLines(float intensity)` | `ScreenFx.SetSpeedLines(boosting ? 1f : 0f);` |
 | `ScreenFx.Countdown(int from = 3, string goText = "GO!", Action onGo = null)` | `ScreenFx.Countdown(3, "GO!", StartRace);` (beeps + "go" voice) |
 | `ScreenFx.ShowText(string text, Color color, float seconds = 1.6f)` | `ScreenFx.ShowText("ROUND 2", Color.yellow);` |
+| `ScreenFx.ShowText(string text, Color color, float seconds, float size)` | `ScreenFx.ShowText("REBIRTH 1!", Color.white, 1.6f, 0.6f);` (size multiplies the largest font size) |
 | `ScreenFx.CancelCountdown()` | |
+
+The danger vignette is edge-only (a rounded-rectangle falloff; the centre 60% of each axis stays
+clear); the colour's alpha is ignored, `maxAlpha` is the peak. Centre text never spans more than 60% of
+the screen width (`centerMaxWidth`): longer text auto-sizes down to `centerMinFontSize`.
 
 Colours and timings are serialized on `Generated/Prefabs/ScreenFxOverlay.prefab` (set them in
 `Editor/GameFeelAuthoring.cs` so they survive a rebuild).
@@ -119,13 +159,15 @@ them to a surface or a custom gravity.
 | `FxHandle GameFx.Start(kind, pos, Color tint, float scale = 1)` (looping) | `beacon = GameFx.Start(FxKind.BeaconBeam, zone, teamColor);` ... `beacon.Stop();` |
 | `FxHandle GameFx.Attach(kind, Transform target, Vector3 localOffset, Color tint, float scale = 1)` | `trail = GameFx.Attach(FxKind.Trail, rocket, Vector3.zero, Color.yellow);` (stops itself if the target is destroyed) |
 | `GameFx.Explosion(Vector3 pos, bool large = false, float radius = 30)` | effect + sound + camera shake in one call |
+| `GameFx.Poof(Vector3 feet, float height, Color tint, float scale = 1)` (also `Poof(feet, height, scale)` and `Poof(feet, Vector3 up, height, tint, scale)`) | `GameFx.Poof(robot.position, 5.6f, Color.white);` a full-body poof: up to 8 dust puffs layered from feet to head, each at most 1.6x, instead of one stretched puff |
 | `handle.Stop(bool clear = false)`, `handle.IsPlaying`, `handle.SetPosition(pos)`, `handle.SetTint(color)` | a default/stale handle is safe to use |
 | `GameFx.ExplosionEffectFeedback` (bool, default true) | shared `ExplosionEffect` blasts get camera shake, plus `SfxCue.Explosion`/`ExplosionLarge` when the prefab authors no sound (GameFeelSettings > Shared Explosions). Set false for a game with its own blast feedback. |
 
 Kinds: `DustPuff, Sparks, Confetti, CoinBurst, ExplosionSmall, ExplosionLarge, Smoke, Heal,
 ShockwaveRing, BeaconBeam (looping), Trail (looping)`. Sizes at scale 1 suit a 1-3 m object; the
 robot is about 5.6 m tall (scale 3), so scale effects on characters up (the character feel uses
-`0.22 * character scale` for dust).
+`0.22 * character scale` for dust), or use `GameFx.Poof` for whole-body smoke. Dust puffs emit 0.3 m
+(times scale) above their position so the camera-facing quads do not cut into the floor.
 
 ## Moods: `MoodVolume`, `MoodPreset`
 
@@ -174,6 +216,10 @@ over 25 m in a frame are detected, and code that warps a character can say so.
   `view.Dispose()` restores the previous values. The newest override wins.
 - `NameTagManager.EntityTagFilter` (`Func<EntityBase, bool>`, null = show all) hides shared entity tags
   (vehicles, structures, objectives) like `CharacterTagFilter` does for characters.
+- Music (`MusicService`, on the Client prefab): a track change with no time to fade out and in (a track
+  list whose `minDelay` is 0, e.g. the horror chase music) now crossfades the two tracks over
+  `switchCrossfade` (0.6 s, serialized; 0 = the old hard cut). Lists with a delay keep their fade-out,
+  silence, fade-in.
 
 ## Other shared client hooks (outside the kit)
 
@@ -187,6 +233,21 @@ over 25 m in a frame are detected, and code that warps a character can say so.
 Server side, tool hits are now dropped while a server lockout (`ToolBaseShared.UpdateServerCooldown`,
 e.g. a jammed pistol or a kill cooldown) is running, less `ToolBaseShared.serverCooldownTolerance`
 (0.15 s, serialized) for latency; `ToolBaseShared.ServerCooldownBlocksHits` reports it.
+
+## Shared rendering settings (URP)
+
+Every game and the server use `Assets/UnityTechnologies/Settings/StarterAssetsURPAsset.asset` (the
+Graphics default; the quality levels point at no asset of their own and the build profiles do not
+override it), with `StarterAssetsURPRenderer.asset` (Forward). It has:
+
+- Screen Space Ambient Occlusion: Depth source, half resolution, 8 samples (Medium), Gaussian blur,
+  After Opaque (applied to all opaque shaders, custom ones included; never to transparents, UI or
+  world-space text), intensity 1.2, radius 0.2, falloff 60 m. Larger radii halo around near objects in
+  first person (hide_and_seek), so keep it small.
+- Soft shadows (medium), 2 cascades (split 25%), 80 m shadow distance, 2048 shadow atlas.
+- Forward rendering with 8 additional lights per object (was 4). Forward+ was considered but not used:
+  the scenes need at most a handful of lights per object, Forward is cheaper on low-end GPUs, and
+  switching changes every shader's variants and light lists for all games at once.
 
 ## Gotchas
 

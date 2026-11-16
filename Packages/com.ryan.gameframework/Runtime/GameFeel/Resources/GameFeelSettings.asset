@@ -26,6 +26,7 @@ MonoBehaviour:
     referenceDistance: 14
     minDistanceScale: 0.5
     maxDistanceScale: 4
+    maxScreenHeight: 0.09
     normal:
       color: {r: 1, g: 1, b: 1, a: 1}
       size: 0.9
@@ -70,6 +71,11 @@ MonoBehaviour:
     decayExponent: 2
     falloffExponent: 1.5
     maxKicks: 8
+  cameraFov:
+    maxExtraDegrees: 20
+    boostDegrees: 8
+    boostFollowSeconds: 0.3
+    kickRiseShare: 0.15
   explosions:
     enabled: 1
     shakeStrength: 0.7

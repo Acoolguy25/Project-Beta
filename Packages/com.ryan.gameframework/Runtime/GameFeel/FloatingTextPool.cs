@@ -104,6 +104,7 @@ namespace RyanAssets.GameFeel {
                 if (view != null) {
                     float distance = Vector3.Distance(view.position, position);
                     size *= Mathf.Clamp(distance / tuning.referenceDistance, tuning.minDistanceScale, tuning.maxDistanceScale);
+                    size = CapToScreen(popup, size, distance, camera);
                     popup.transform.rotation = view.rotation;
                 }
                 float pop = t < PopInShare
@@ -116,6 +117,21 @@ namespace RyanAssets.GameFeel {
                 color.a *= t < FadeOutStart ? 1f : 1f - (t - FadeOutStart) / (1f - FadeOutStart);
                 popup.text.color = color;
             }
+        }
+
+        /// <summary>
+        /// Shrinks a popup whose text would cover more than <c>maxScreenHeight</c> of the view. Uses the
+        /// text's own height at scale 1 (from its last mesh), so multi-line text is measured as a whole.
+        /// </summary>
+        float CapToScreen(in Popup popup, float size, float distance, Camera camera) {
+            float textHeight = popup.text.textBounds.size.y;
+            if (textHeight <= 0f || tuning.maxScreenHeight <= 0f)
+                return size;
+            float viewHeight = camera.orthographic
+                ? camera.orthographicSize * 2f
+                : 2f * distance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float maxWorld = tuning.maxScreenHeight * viewHeight;
+            return textHeight * size > maxWorld ? maxWorld / textHeight : size;
         }
 
         static float EaseOutCubic(float t) {

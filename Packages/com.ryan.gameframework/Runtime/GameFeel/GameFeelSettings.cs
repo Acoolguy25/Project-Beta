@@ -46,6 +46,18 @@ namespace RyanAssets.GameFeel {
         }
 
         [Serializable]
+        public sealed class CameraFovTuning {
+            [Tooltip("Most extra degrees all kicks and the boost may add together.")]
+            [Range(0f, 40f)] public float maxExtraDegrees = 20f;
+            [Tooltip("Extra degrees at CameraFov.SetBoost(1).")]
+            [Range(0f, 30f)] public float boostDegrees = 8f;
+            [Tooltip("Seconds for the boost to follow a new value.")]
+            [Range(0.01f, 2f)] public float boostFollowSeconds = 0.3f;
+            [Tooltip("Share of a kick spent widening before it eases back.")]
+            [Range(0.01f, 0.9f)] public float kickRiseShare = 0.15f;
+        }
+
+        [Serializable]
         public sealed class FloatingTextTuning {
             [Tooltip("Pooled popup prefab (a world-space TextMeshPro).")]
             public FloatingTextLabel prefab;
@@ -56,6 +68,8 @@ namespace RyanAssets.GameFeel {
             [Range(0.1f, 1f)] public float minDistanceScale = 0.5f;
             [Tooltip("Popups further than the reference grow to stay readable, up to this factor.")]
             [Range(1f, 10f)] public float maxDistanceScale = 4f;
+            [Tooltip("Largest share of the screen height one popup may cover; closer popups shrink to it, so a callout at the player's feet never fills the view.")]
+            [Range(0.02f, 0.5f)] public float maxScreenHeight = 0.09f;
             public FloatingTextStyle normal = new(Color.white, 0.9f, 2.2f, 1.1f, 1.5f, 0.6f);
             public FloatingTextStyle damage = new(new Color(1f, 0.32f, 0.28f), 0.8f, 1.8f, 0.8f, 1.8f, 0.8f);
             public FloatingTextStyle money = new(new Color(1f, 0.79f, 0.24f), 0.9f, 2.4f, 1.2f, 1.6f, 0.5f);
@@ -149,6 +163,9 @@ namespace RyanAssets.GameFeel {
 
         [Header("Camera shake")]
         public CameraShakeTuning cameraShake = new();
+
+        [Header("Camera FOV")]
+        public CameraFovTuning cameraFov = new();
 
         [Header("Shared explosions")]
         public ExplosionTuning explosions = new();

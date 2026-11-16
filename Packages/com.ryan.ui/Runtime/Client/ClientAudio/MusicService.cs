@@ -40,6 +40,9 @@ namespace RyanAssets.Client.ClientAudio {
         private AudioMixer audioMixer;
         [SerializeField, Min(0f)]
         private float fadeDuration = 1f;
+        [SerializeField, Min(0f)]
+        [Tooltip("Seconds to crossfade when a track change leaves no time to fade out and in (a track list with no delay); 0 = hard cut.")]
+        private float switchCrossfade = 0.6f;
 
         private CancellationTokenSource musicCTS;
         private CancellationTokenSource fadeCTS;
@@ -244,6 +247,22 @@ namespace RyanAssets.Client.ClientAudio {
             fadeCTS = CancellationTokenSource.CreateLinkedTokenSource(loopToken);
             CancellationToken token = fadeCTS.Token;
 
+            // A switch with (almost) no delay would cut hard; overlap the two tracks instead.
+            if (hasOutgoingTrack && switchCrossfade > 0f && delay < switchCrossfade) {
+                AudioSource next = StartIncoming(clip, startTime, mixerGroup, selection);
+                if (!object.ReferenceEquals(next, outgoingSource)) {
+                    await UniTask.WhenAll(
+                        FadeSource(outgoingSource, outgoingSource.volume, 0f, switchCrossfade, token),
+                        FadeSource(next, 0f, musicSourceVolume, switchCrossfade, token));
+                    outgoingSource.Stop();
+                    outgoingSource.volume = musicSourceVolume;
+                    return;
+                }
+                // One source only: fall back to fading in over the cut.
+                await FadeSource(next, 0f, musicSourceVolume, switchCrossfade, token);
+                return;
+            }
+
             if (hasOutgoingTrack)
                 await FadeSource(outgoingSource, outgoingSource.volume, 0f, fadeOutDuration, token);
 
@@ -253,6 +272,10 @@ namespace RyanAssets.Client.ClientAudio {
             if (silenceDuration > 0f)
                 await UniTask.Delay(System.TimeSpan.FromSeconds(silenceDuration), ignoreTimeScale: true, cancellationToken: token);
 
+            AudioSource incomingSource = StartIncoming(clip, startTime, mixerGroup, selection);
+            await FadeSource(incomingSource, 0f, musicSourceVolume, fadeInDuration, token);
+        }
+        AudioSource StartIncoming(AudioClip clip, float startTime, AudioMixerGroup mixerGroup, MusicSelection selection) {
             AudioSource incomingSource = object.ReferenceEquals(audioSource, secondaryAudioSource)
                 ? GetComponent<AudioSource>()
                 : secondaryAudioSource;
@@ -265,7 +288,7 @@ namespace RyanAssets.Client.ClientAudio {
             incomingSource.Play();
             audioSource = incomingSource;
             playingSelection = selection;
-            await FadeSource(incomingSource, 0f, musicSourceVolume, fadeInDuration, token);
+            return incomingSource;
         }
         static async UniTask FadeSource(AudioSource source, float from, float to, float duration, CancellationToken token) {
             if (duration <= 0f) {
