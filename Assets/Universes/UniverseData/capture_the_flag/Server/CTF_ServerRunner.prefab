@@ -56,8 +56,15 @@ MonoBehaviour:
   resultsSeconds: 10
   capturesToWin: 3
   respawnSeconds: 4
+  characterHealth: 200
   walkSpeed: 14
   sprintSpeed: 21
+  jumpHeight: 1.6
+  powerUpRespawnSeconds: 20
+  healAmount: 100
+  speedBoostMultiplier: 1.35
+  speedBoostSeconds: 8
+  snapshotsPerSecond: 10
   killXP: 10
   captureXP: 50
   captureGold: 20

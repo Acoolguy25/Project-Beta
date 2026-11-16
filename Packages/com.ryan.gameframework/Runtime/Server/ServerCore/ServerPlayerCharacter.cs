@@ -22,6 +22,8 @@ namespace RyanAssets.Server.ServerCore {
         public static event Action<LocalCharacter> CharacterAdded;
         public static Func<NetworkConnection, bool> CanSpawnFunction;
         public static Func<NetworkConnection, Vector3> SpawnLocationFunction;
+        /// <summary>Optional facing for a new character (the first-person camera starts looking this way); the prefab's when unset.</summary>
+        public static Func<NetworkConnection, Quaternion> SpawnRotationFunction;
         public static float RespawnTime = 5f;
         public static ServerPlayerCharacter Instance { get; private set; }
         public LocalCharacter SpawnPlayerCharacter(NetworkConnection player, long health = 100, bool overideCanSpawnFunction = false) {
@@ -37,6 +39,7 @@ namespace RyanAssets.Server.ServerCore {
             localChar.OnDied += (_, _) => OnPlayerCharacterDie(player, newCharacter.transform);
             ClientToCharacter[player] = localChar;
             newCharacter.transform.position = SpawnLocationFunction?.Invoke(player) ?? Vector3.zero;
+            if (SpawnRotationFunction != null) newCharacter.transform.rotation = SpawnRotationFunction(player);
             InstanceFinder.ServerManager.Spawn(newCharacter, ownerConnection: player);
             // SyncVars must be written after FishNet initializes the NetworkObject.
             // Set the account name as the baseline; game modes may deliberately

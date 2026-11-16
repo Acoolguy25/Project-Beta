@@ -12,7 +12,11 @@
         "Unity.TextMeshPro",
         "Unity.ugui",
         "RyanAssets.Input",
-        "RyanAssets.UI"
+        "RyanAssets.UI",
+        "RyanAssets.GameFeel",
+        "RyanAssets.Tools.Shared",
+        "RyanAssets.Tools.Client",
+        "RyanAssets.Shared.Combat"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

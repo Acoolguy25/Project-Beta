@@ -1,33 +1,42 @@
-using System.Collections.Generic;
 using System.IO;
 using RyanAssets.Authoring;
 using RyanAssets.Rounds;
-using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using static RyanAssets.Authoring.UniverseAuthoringKit;
 #if !UNITY_SERVER
-using RyanAssets.UI;
 using RyanAssets.UI.Editor;
-using UnityEngine.UI;
-using Universes.UniverseData.capture_the_flag.Client;
 #endif
 
 namespace Universes.UniverseData.capture_the_flag.Editor {
     /// <summary>
-    /// Builds Flag Wars: a mirrored military arena (Cartoon Military pack), two bases with flag
-    /// stands, flag prefabs and HUD. Safe to re-run. Server runner: run
+    /// Builds Flag Wars: the three-lane arena (<see cref="CTF_ArenaAuthoring"/>), flag and power-up
+    /// prefabs, and the HUD (<see cref="CTF_HudAuthoring"/>). Safe to re-run. Server runner: run
     /// <c>Universes.UniverseData.capture_the_flag.Editor.CTF_Authoring.BuildServerAssets</c> in the Linux Server profile.
     /// </summary>
     public static class CTF_Authoring {
         public const string Universe = "capture_the_flag";
         public const string Root = "Assets/Universes/UniverseData/capture_the_flag";
-        static readonly UniverseAuthoringKit Kit = new(Root);
+        internal static readonly UniverseAuthoringKit Kit = new(Root);
         const string ServerPrefab = Root + "/Server/CTF_ServerRunner.prefab";
-        const string Military = "Assets/CartoonMilitaryModelPack/Prefebs/";
-        const float BaseX = 82f;
-        const float BaseHeight = 1.2f;
+        static readonly Vector2 FlagLabelBox = new(8f, 2f);
+        /// <summary>Largest share of the screen height the flag label may cover up close.</summary>
+        const float FlagLabelMaxScreen = 0.08f;
+        const string KayKitSpace = "Assets/ThirdParty/KayKit/SpaceBaseBits/Models/";
+
+        /// <summary>
+        /// Makes a world label face the camera plane (no skew near the screen edges), stay upright and
+        /// shrink at close range so it never covers more than <paramref name="maxScreen"/> of the screen.
+        /// </summary>
+        internal static Billboard FacingLabel(TMPro.TMP_Text label, float boxHeight, float maxScreen) {
+            var billboard = label.gameObject.AddComponent<Billboard>();
+            billboard.facing = Billboard.Facing.CameraPlane;
+            billboard.yawOnly = true;
+            billboard.referenceHeight = boxHeight;
+            billboard.maxScreenHeight = maxScreen;
+            return billboard;
+        }
 
         [MenuItem("Ryan/Flag Wars/Build Client Assets")]
         public static void BuildClientAssets() {
@@ -57,6 +66,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
 #endif
         }
 
+        /// <summary>Generated fallbacks and the textures no free pack covers (sandbags, base concrete).</summary>
         static void BuildTextures() {
             Kit.SaveTexture("Grass", (u, v) => {
                 float n = Hash(Mathf.Floor(u * 64f), Mathf.Floor(v * 64f));
@@ -67,12 +77,6 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
                 float n = 0.86f + 0.14f * Hash(Mathf.Floor(u * 32f), Mathf.Floor(v * 32f));
                 bool seam = Mathf.Repeat(u * 2f, 1f) < 0.02f || Mathf.Repeat(v * 2f, 1f) < 0.02f;
                 return seam ? new Color(0.45f, 0.46f, 0.48f) : new Color(0.72f, 0.72f, 0.7f) * n;
-            });
-            Kit.SaveTexture("Crate", (u, v) => {
-                float edge = Mathf.Min(Mathf.Min(u, 1f - u), Mathf.Min(v, 1f - v));
-                float grain = 0.85f + 0.15f * Hash(Mathf.Floor(u * 48f), Mathf.Floor(v * 6f));
-                bool brace = Mathf.Abs(u - v) < 0.06f || edge < 0.08f;
-                return brace ? new Color(0.36f, 0.3f, 0.16f) : new Color(0.5f, 0.45f, 0.26f) * grain;
             });
             Kit.SaveTexture("Sandbag", (u, v) => {
                 float row = Mathf.Floor(v * 4f);
@@ -97,254 +101,69 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             var ring = Primitive(PrimitiveType.Cylinder, "HomeGlow", root.transform, new Vector3(0f, 0.04f, 0f), new Vector3(CTF_Rules.PickupRange * 2f, 0.03f, CTF_Rules.PickupRange * 2f), glow, false);
             NoShadows(ring);
             view.homeGlow = ring;
-            view.label = WorldText("Label", root.transform, new Vector3(0f, 5.6f, 0f), CTF_Rules.Name(team) + " FLAG", 3f, Color.white, new Vector2(8f, 2f));
-            view.label.gameObject.AddComponent<Billboard>();
+            view.label = WorldText("Label", root.transform, new Vector3(0f, 5.6f, 0f), CTF_Rules.Name(team) + " FLAG", 3f, Color.white, FlagLabelBox);
+            FacingLabel(view.label, FlagLabelBox.y, FlagLabelMaxScreen);
             return Kit.Save(root, "", root.name);
         }
 
-        static GameObject BuildHud() {
-#if UNITY_SERVER
-            return AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/FlagWarsHUD.prefab");
-#else
-            RectTransform root = HudKit.Canvas("FlagWarsHUD", 30);
-            var hud = root.gameObject.AddComponent<CTF_ClientController>();
-            hud.flagIcon = HudKit.Icon("flying_flag");
-            hud.homeIcon = HudKit.Icon("home");
-            hud.carriedIcon = HudKit.Icon("run");
-            hud.droppedIcon = HudKit.Icon("place");
-            hud.attackIcon = HudKit.Icon("crossed_swords");
-            hud.defendIcon = HudKit.Icon("templar_shield");
-            hud.victoryIcon = HudKit.Icon("laurels_trophy");
-            hud.defeatIcon = HudKit.Icon("tombstone");
+        /// <summary>Colour of each power-up's icon and ring (matches the HUD colours in CTF_ClientController).</summary>
+        static Color PowerUpColor(CTF_PowerUpKind kind) => kind == CTF_PowerUpKind.Health ? new Color(0.35f, 1f, 0.45f) : new Color(1f, 0.85f, 0.25f);
 
-            BuildScoreboard(root, hud);
-            BuildTeamCard(root, hud);
+        /// <summary>Icon size and height over the pad, in metres (the robot is about 5.6 m tall).</summary>
+        const float PowerUpIconScale = 3.4f, PowerUpIconHeight = 3f;
+        /// <summary>Ring glow: bright enough to read in daylight, low enough that bloom keeps its colour.</summary>
+        const float PowerUpRingEmission = 0.9f, PowerUpRingAlpha = 0.3f;
 
-            // Objective, lower centre: what to do right now and how far away it is.
-            RectTransform objective = UIKit.Pinned(root, "Objective", new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(520f, 48f));
-            HudKit.Glass(objective, 24f);
-            UIKit.Row(objective.gameObject, 10f, new RectOffset(10, 20, 0, 0), TextAnchor.MiddleLeft);
-            UIKit.FitContent(objective.gameObject, true, false);
-            HudKit.Emblem(objective, "Emblem", "flying_flag", 36f, CTF_Rules.Color(CTF_Team.Red), out hud.objectiveDisc, out hud.objectiveIcon);
-            hud.objectiveLabel = UIKit.Text(objective, "Text", "Grab their flag", UIText.Strong);
-            hud.objectiveLabel.richText = true;
-            hud.objectiveLabel.fontSize = 18f;
-            hud.objectiveDistance = HudKit.Chip(objective, "Distance", "navigation", "40 m", UIKit.Theme.textSecondary, 28f, UIText.Small);
-            hud.objectiveDistance.background.enabled = false;
-            hud.objective = HudKit.Popup(objective, false);
+        static string PowerUpIcon(CTF_PowerUpKind kind) => kind == CTF_PowerUpKind.Health ? "favorite" : "bolt";
 
-            hud.toasts = HudKit.ToastFeed(root, "Feed", new Vector2(1f, 0.66f), new Vector2(-20f, 0f), 420f);
-            hud.banner = HudKit.Banner(root, "Banner", new Vector2(0.5f, 0.5f), new Vector2(0f, 120f), 600f, "flying_flag", new Color(1f, 0.79f, 0.24f), 84f);
-
-            hud.sfx = Sfx(root);
-            hud.takenClip = hud.returnedClip = Clip(LandClip);
-            hud.capturedClip = Clip(CoinClip);
-            return Kit.Save(root.gameObject, "", "FlagWarsHUD");
-#endif
-        }
-
-#if !UNITY_SERVER
         /// <summary>
-        /// Top centre, under the shared top bar: both scores on their team colour, the clock between
-        /// them, and where each flag is right now.
+        /// A power-up: a small landing pad, a glowing ring as wide as the pickup reach, and the
+        /// spinning, bobbing icon that hides while it recharges.
         /// </summary>
-        static void BuildScoreboard(RectTransform root, CTF_ClientController hud) {
-            RectTransform board = UIKit.Pinned(root, "Scoreboard", new Vector2(0.5f, 1f), new Vector2(0f, -62f), new Vector2(420f, 64f));
-            HudKit.Glass(board, 18f);
-            UIKit.Row(board.gameObject, 0f, new RectOffset(6, 6, 6, 6), TextAnchor.MiddleCenter);
-
-            hud.redScoreLabel = TeamScore(board, CTF_Team.Red);
-            RectTransform clock = UIKit.Node(board, "Clock");
-            UIKit.Size(clock, 156f, 52f);
-            UIKit.Column(clock.gameObject, -2f, null, TextAnchor.MiddleCenter);
-            hud.timerLabel = UIKit.Text(clock, "Time", "5:00", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
-            hud.timerLabel.fontSize = 26f;
-            hud.phaseLabel = UIKit.Text(clock, "Phase", $"First to {CTF_Rules.CapturesToWin}", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
-            hud.blueScoreLabel = TeamScore(board, CTF_Team.Blue);
-
-            // Where each flag is: one chip centred under each team's score.
-            hud.redFlagStatus = FlagChip(root, CTF_Team.Red, -138f);
-            hud.blueFlagStatus = FlagChip(root, CTF_Team.Blue, 138f);
-        }
-
-        static RyanAssets.UI.GameHud.HudChip FlagChip(RectTransform root, CTF_Team team, float x) {
-            var chip = HudKit.Chip(root, CTF_Rules.Name(team) + "Flag", "home", "Home", CTF_Rules.Color(team), 28f, UIText.Small);
-            RectTransform rect = (RectTransform)chip.transform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(x, -132f);
-            return chip;
-        }
-
-        static TMP_Text TeamScore(RectTransform board, CTF_Team team) {
-            RectTransform block = UIKit.Node(board, CTF_Rules.Name(team) + "Score");
-            UIKit.Size(block, 120f, 52f);
-            Image fill = UIKit.Rounded(block, UIColorRole.Accent, 13f, raycast: false);
-            Object.DestroyImmediate(fill.GetComponent<UIThemeColor>());
-            fill.color = CTF_Rules.Color(team) * new Color(1f, 1f, 1f, 0.92f);
-            bool red = team == CTF_Team.Red;
-            UIKit.Row(block.gameObject, 8f, new RectOffset(14, 14, 0, 0), red ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight);
-            Image flag = HudKit.Icon(block, "flying_flag", 26f, Color.white);
-            TMP_Text score = UIKit.Text(block, "Score", "0", UIText.Display, UIColorRole.OnAccent, red ? TextAlignmentOptions.MidlineRight : TextAlignmentOptions.MidlineLeft);
-            score.fontSize = 34f;
-            UIKit.Size(score, -1f, -1f, 1f);
-            if (!red) {
-                score.transform.SetAsFirstSibling();
-                flag.rectTransform.localScale = new Vector3(-1f, 1f, 1f);
+        static GameObject BuildPowerUp(CTF_PowerUpKind kind) {
+            var root = new GameObject($"{kind}PowerUp");
+            var spot = root.AddComponent<CTF_PowerUp>();
+            spot.kind = kind;
+            Color color = PowerUpColor(kind);
+            var pad = Model(KayKitSpace + "landingpad_small.fbx", root.transform, CTF_Rules.PowerUpRange * 1.6f);
+            if (pad != null) {
+                var atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(KayKitSpace + "spacebits_texture.png");
+                var padMat = Kit.Mat("KayKitSpace", Color.white, atlas, smoothness: 0.3f);
+                foreach (var r in pad.GetComponentsInChildren<Renderer>()) r.sharedMaterial = padMat;
+            } else {
+                Debug.LogWarning("[FlagWars] KayKit Space Base Bits missing: power-up pads have no base model.");
             }
-            return score;
-        }
-
-        /// <summary>Bottom-left: your team, and the two weapon keys.</summary>
-        static void BuildTeamCard(RectTransform root, CTF_ClientController hud) {
-            RectTransform card = UIKit.Pinned(root, "TeamCard", Vector2.zero, new Vector2(20f, 200f), new Vector2(260f, 64f));
-            HudKit.Glass(card, 16f);
-            UIKit.Row(card.gameObject, 12f, new RectOffset(10, 18, 0, 0), TextAnchor.MiddleLeft);
-            UIKit.FitContent(card.gameObject, true, false);
-            HudKit.Emblem(card, "Emblem", "templar_shield", 46f, CTF_Rules.Color(CTF_Team.Red), out hud.teamDisc, out _);
-            RectTransform text = UIKit.Node(card, "Text");
-            UIKit.Column(text.gameObject, 0f, null, TextAnchor.MiddleLeft);
-            UIKit.Text(text, "Caption", "Your team", UIText.Caption, UIColorRole.TextMuted);
-            hud.teamLabel = UIKit.Text(text, "Team", "Red", UIText.Title);
-            hud.teamLabel.fontSize = 20f;
-
-            RectTransform divider = UIKit.Node(card, "Divider");
-            UIKit.Size(divider, 1f, 36f);
-            UIKit.Paint(divider.gameObject.AddComponent<Image>(), UIColorRole.Stroke).raycastTarget = false;
-            WeaponKey(card, "1", "pistol");
-            WeaponKey(card, "2", "dagger");
-            hud.teamCard = HudKit.Popup(card, false);
-        }
-
-        static void WeaponKey(RectTransform parent, string key, string icon) {
-            RectTransform slot = UIKit.Node(parent, "Weapon" + key);
-            UIKit.Row(slot.gameObject, 4f, null, TextAnchor.MiddleLeft);
-            HudKit.KeyCap(slot, key);
-            UIKit.Icon(slot, icon, 26f, UIColorRole.TextSecondary);
-        }
+            var visual = Empty("Visual", root.transform);
+            spot.visual = visual;
+            var ring = Primitive(PrimitiveType.Cylinder, "Ring", visual.transform, new Vector3(0f, 0.12f, 0f),
+                new Vector3(CTF_Rules.PowerUpRange * 2f, 0.02f, CTF_Rules.PowerUpRange * 2f), Kit.Mat($"Glow{kind}", color, emission: PowerUpRingEmission, alpha: PowerUpRingAlpha), false);
+            NoShadows(ring);
+            var spinner = Empty("Spinner", visual.transform, new Vector3(0f, PowerUpIconHeight, 0f));
+            spot.spinner = spinner.transform;
+            var icon = new GameObject("Icon", typeof(SpriteRenderer));
+            icon.transform.SetParent(spinner.transform, false);
+            icon.transform.localScale = Vector3.one * PowerUpIconScale;
+            var sprite = icon.GetComponent<SpriteRenderer>();
+            sprite.color = color;
+            sprite.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+#if !UNITY_SERVER
+            sprite.sprite = UIThemeAssets.Icon(PowerUpIcon(kind));
 #endif
+            return Kit.Save(root, "", root.name);
+        }
 
         // ---------------------------------------------------------------- scene
-        /// <summary>A pack model with a box collider over it, so it works as cover.</summary>
-        static GameObject Cover(string model, Transform parent, Vector3 position, float size, float yaw, Material fallback) {
-            var anchor = Empty(Path.GetFileNameWithoutExtension(model), parent, position);
-            var go = Model(Military + model, anchor.transform, size);
-            if (go == null) go = Cube("Box", anchor.transform, Vector3.up * size * 0.25f, new Vector3(size, size * 0.5f, size * 0.5f), fallback, false);
-            var bounds = RendererBounds(anchor);
-            var box = anchor.AddComponent<BoxCollider>();
-            box.center = bounds.center - anchor.transform.position;
-            box.size = bounds.size;
-            anchor.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-            return anchor;
-        }
-
-        /// <summary>Places the same thing on both halves, mirrored through the centre (point symmetry).</summary>
-        static void Mirrored(System.Action<Vector3, float> place, Vector3 position, float yaw) {
-            place(position, yaw);
-            place(new Vector3(-position.x, position.y, -position.z), yaw + 180f);
-        }
-
         static void BuildStartScene() {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            var hud = BuildHud();
+            var hud = CTF_HudAuthoring.Build();
             var flags = new[] { BuildFlag(CTF_Team.Red), BuildFlag(CTF_Team.Blue) };
-            var grass = Tiled(Kit.Mat("Grass", Color.white, Kit.Tex("Grass"), smoothness: 0.05f), 24f, 14f);
-            var concrete = Tiled(Kit.Mat("Concrete", Color.white, Kit.Tex("Concrete"), smoothness: 0.15f), 6f, 6f);
-            var road = Tiled(Kit.Mat("Road", new Color(0.55f, 0.55f, 0.57f), Kit.Tex("Concrete"), smoothness: 0.1f), 30f, 1f);
-            var crate = Kit.Mat("Crate", Color.white, Kit.Tex("Crate"), smoothness: 0.1f);
-            var sandbag = Tiled(Kit.Mat("Sandbag", Color.white, Kit.Tex("Sandbag"), smoothness: 0.05f), 2f, 1f);
-            var red = Kit.Mat("TeamRed", CTF_Rules.Color(CTF_Team.Red), emission: 0.2f);
-            var blue = Kit.Mat("TeamBlue", CTF_Rules.Color(CTF_Team.Blue), emission: 0.2f);
-            var wall = Tiled(Kit.Mat("Wall", new Color(0.62f, 0.6f, 0.55f), Kit.Tex("Concrete")), 20f, 1f);
-            Kit.NewLitScene(new Color(0.5f, 0.7f, 1f), new Color(0.75f, 0.84f, 0.95f), 160f, 460f, new Vector3(48f, -40f, 0f));
-
-            var world = new GameObject("World");
-            Cube("Ground", world.transform, new Vector3(0f, -0.5f, 0f), new Vector3(220f, 1f, 120f), grass);
-            Cube("Road", world.transform, new Vector3(0f, 0.01f, 0f), new Vector3(150f, 0.04f, 6f), road, false);
-            // Perimeter walls.
-            Cube("WallN", world.transform, new Vector3(0f, 3f, 60f), new Vector3(220f, 6f, 1.5f), wall);
-            Cube("WallS", world.transform, new Vector3(0f, 3f, -60f), new Vector3(220f, 6f, 1.5f), wall);
-            Cube("WallE", world.transform, new Vector3(110f, 3f, 0f), new Vector3(1.5f, 6f, 120f), wall);
-            Cube("WallW", world.transform, new Vector3(-110f, 3f, 0f), new Vector3(1.5f, 6f, 120f), wall);
-
-            var mapGo = new GameObject("FlagWarsMap");
-            var map = mapGo.AddComponent<CTF_Map>();
-            map.flagStands = new Transform[2];
-            var spawns = new List<Transform>[] { new(), new() };
-            for (int t = 0; t < 2; t++) {
-                var team = (CTF_Team)t;
-                float side = team == CTF_Team.Red ? -1f : 1f;
-                var teamMat = team == CTF_Team.Red ? red : blue;
-                Vector3 baseAt = new(side * BaseX, 0f, 0f);
-                var b = Empty($"{CTF_Rules.Name(team)}Base", world.transform);
-                // Raised base with ramps on three sides.
-                Cube("Platform", b.transform, baseAt + new Vector3(0f, BaseHeight * 0.5f, 0f), new Vector3(30f, BaseHeight, 34f), concrete);
-                for (int k = -1; k <= 1; k += 2) {
-                    var ramp = Cube($"RampZ{k}", b.transform, baseAt + new Vector3(0f, BaseHeight * 0.5f - 0.3f, k * 19.2f), new Vector3(10f, 0.6f, 5f), concrete);
-                    ramp.transform.rotation = Quaternion.Euler(k * 12f, 0f, 0f);
-                }
-                var front = Cube("RampFront", b.transform, baseAt + new Vector3(-side * 17.3f, BaseHeight * 0.5f - 0.3f, 0f), new Vector3(5f, 0.6f, 12f), concrete);
-                front.transform.rotation = Quaternion.Euler(0f, 0f, side * 12f);
-                Cube("Trim", b.transform, baseAt + new Vector3(0f, BaseHeight + 0.02f, 0f), new Vector3(30.2f, 0.06f, 1f), teamMat, false);
-                // Flag stand.
-                Vector3 standAt = baseAt + new Vector3(side * 4f, BaseHeight, 0f);
-                Primitive(PrimitiveType.Cylinder, "FlagStand", b.transform, standAt + Vector3.up * 0.15f, new Vector3(3.4f, 0.15f, 3.4f), teamMat);
-                var stand = Empty("FlagPoint", mapGo.transform, standAt + Vector3.up * 0.3f);
-                map.flagStands[t] = stand.transform;
-                var sign = WorldText("BaseSign", b.transform, baseAt + new Vector3(side * 12f, 9f, 0f), $"{CTF_Rules.Name(team)} BASE", 8f, CTF_Rules.Color(team), new Vector2(26f, 5f), team == CTF_Team.Red ? 90f : -90f);
-                sign.fontStyle = FontStyles.Bold;
-                sign.gameObject.AddComponent<Billboard>().yawOnly = true;
-                // Buildings behind the flag, guard posts at the corners.
-                Cover("Building_Prefebs/MilitaryBase_Prefeb.prefab", b.transform, baseAt + new Vector3(side * 12.5f, BaseHeight, 10f), 11f, team == CTF_Team.Red ? 90f : -90f, concrete);
-                Cover("Building_Prefebs/Radar_Prefeb.prefab", b.transform, baseAt + new Vector3(side * 12f, BaseHeight, -11f), 7f, 0f, concrete);
-                Cover("Building_Prefebs/GuardPoint_01_Prefeb.prefab", b.transform, baseAt + new Vector3(-side * 12f, BaseHeight, 14f), 5f, team == CTF_Team.Red ? 90f : -90f, concrete);
-                Cover("Building_Prefebs/GuardPoint_01_Prefeb.prefab", b.transform, baseAt + new Vector3(-side * 12f, BaseHeight, -14f), 5f, team == CTF_Team.Red ? 90f : -90f, concrete);
-                for (int k = 0; k < 6; k++) {
-                    var s = Empty($"{CTF_Rules.Name(team)}Spawn{k}", mapGo.transform, baseAt + new Vector3(side * 8f, BaseHeight, -10f + k * 4f));
-                    spawns[t].Add(s.transform);
-                }
-            }
-            map.redSpawns = spawns[0].ToArray();
-            map.blueSpawns = spawns[1].ToArray();
-            map.lobbySpawn = Empty("LobbySpawn", mapGo.transform, new Vector3(0f, 0.5f, -3f)).transform;
-            map.killY = -15f;
+            var powerUps = new[] { BuildPowerUp(CTF_PowerUpKind.Health), BuildPowerUp(CTF_PowerUpKind.Speed) };
+            var mapGo = CTF_ArenaAuthoring.Build(powerUps);
+            var map = mapGo.GetComponent<CTF_Map>();
             map.flagPrefabs = flags;
             map.clientPrefab = hud;
-
-            // ---- midfield cover, point-symmetric so neither side is favoured
-            var mid = Empty("Midfield", world.transform);
-            Cover("Building_Prefebs/ControlTower_Prefeb.prefab", mid.transform, new Vector3(0f, 0f, 22f), 14f, 0f, concrete);
-            Cover("Building_Prefebs/ControlTower_Prefeb.prefab", mid.transform, new Vector3(0f, 0f, -22f), 14f, 180f, concrete);
-            Mirrored((p, y) => Cover("Building_Prefebs/VehicleHangar_01_Prefeb.prefab", mid.transform, p, 16f, y, concrete), new Vector3(-40f, 0f, 34f), 0f);
-            Mirrored((p, y) => Cover("Building_Prefebs/OilTank_Prefeb.prefab", mid.transform, p, 8f, y, concrete), new Vector3(-24f, 0f, -36f), 0f);
-            Mirrored((p, y) => Cover("Tank_Prefebs/Tank_01_Prefeb.prefab", mid.transform, p, 8f, y, concrete), new Vector3(-14f, 0f, 8f), 30f);
-            Mirrored((p, y) => Cover("APC_Prefebs/APC_01_Prefeb.prefab", mid.transform, p, 7f, y, concrete), new Vector3(-50f, 0f, -12f), 70f);
-            Mirrored((p, y) => Cover("Building_Prefebs/GuardPoint_02_Prefeb.prefab", mid.transform, p, 6f, y, concrete), new Vector3(-58f, 0f, 22f), 90f);
-            // Sandbag walls and crate stacks.
-            var cover = new (Vector3 p, Vector3 s, float yaw)[] {
-                (new(-30f, 0f, 0f), new(8f, 1.4f, 1.6f), 90f), (new(-20f, 0f, -14f), new(7f, 1.4f, 1.6f), 20f),
-                (new(-44f, 0f, 10f), new(6f, 1.4f, 1.6f), 0f), (new(-62f, 0f, -26f), new(7f, 1.4f, 1.6f), 70f),
-                (new(-8f, 0f, -6f), new(5f, 1.4f, 1.6f), 0f), (new(-36f, 0f, -28f), new(6f, 1.4f, 1.6f), 45f),
-                (new(-66f, 0f, 6f), new(6f, 1.4f, 1.6f), 90f),
-            };
-            foreach (var c in cover)
-                Mirrored((p, y) => Cube("Sandbags", mid.transform, p + Vector3.up * c.s.y * 0.5f, c.s, sandbag).transform.rotation = Quaternion.Euler(0f, y, 0f), c.p, c.yaw);
-            var crates = new[] { new Vector3(-26f, 0f, 16f), new Vector3(-12f, 0f, 30f), new Vector3(-54f, 0f, 40f), new Vector3(-46f, 0f, -40f), new Vector3(-6f, 0f, -40f), new Vector3(-70f, 0f, -44f) };
-            var rnd = new System.Random(7);
-            foreach (var at in crates)
-                Mirrored((p, y) => {
-                    var stack = Empty("Crates", mid.transform, p);
-                    for (int k = 0; k < 3; k++) {
-                        float s = 2.2f;
-                        Vector3 o = k < 2 ? new Vector3(k * 2.4f, s * 0.5f, 0f) : new Vector3(1.2f, s * 1.5f, 0f);
-                        Cube("Crate", stack.transform, Quaternion.Euler(0f, y, 0f) * o, Vector3.one * s, crate).transform.rotation = Quaternion.Euler(0f, y + (float)rnd.NextDouble() * 10f, 0f);
-                    }
-                }, at, 0f);
-            Mirrored((p, y) => Cover("Building_Prefebs/LightTower_Prefeb.prefab", mid.transform, p, 12f, y, concrete), new Vector3(-100f, 0f, 52f), 0f);
-            Mirrored((p, y) => Cover("Building_Prefebs/LightTower_Prefeb.prefab", mid.transform, p, 12f, y, concrete), new Vector3(-100f, 0f, -52f), 0f);
-            var title = WorldText("Title", world.transform, new Vector3(0f, 18f, 0f), "FLAG WARS\n<size=45%>Take their flag. Bring it home. First to 3.</size>", 9f, new Color(1f, 0.85f, 0.25f), new Vector2(30f, 7f));
-            title.gameObject.AddComponent<Billboard>();
             EditorUtility.SetDirty(map);
+            if (!map.IsConfigured) throw new System.InvalidOperationException("[FlagWars] The generated CTF_Map is not configured; see CTF_ArenaAuthoring.");
             Kit.SaveActiveScene(Kit.StartScene(Universe));
         }
 
@@ -357,16 +176,19 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             EditorSceneManager.OpenScene(Kit.StartScene(Universe), OpenSceneMode.Single);
             var map = Object.FindAnyObjectByType<CTF_Map>();
-            for (int i = 0; i < 2; i++) PrefabUtility.InstantiatePrefab(map.flagPrefabs[i], map.transform).GetType();
-            var placed = map.GetComponentsInChildren<CTF_FlagView>();
-            for (int i = 0; i < placed.Length && i < 2; i++) placed[i].transform.position = map.flagStands[i].position;
+            for (int i = 0; i < 2; i++) {
+                var flag = (GameObject)PrefabUtility.InstantiatePrefab(map.flagPrefabs[i], map.transform);
+                flag.transform.position = map.flagStands[i].position;
+            }
             string dir = PreviewDir(Universe);
             var cam = PreviewCamera();
-            Shoot(cam, new Vector3(0f, 110f, -120f), Vector3.zero, Path.Combine(dir, "overview.png"), 1600, 900);
-            Vector3 blue = map.flagStands[1].position;
-            Shoot(cam, blue + new Vector3(-26f, 9f, -18f), blue + Vector3.up * 2f, Path.Combine(dir, "base.png"), 1600, 900);
-            Shoot(cam, new Vector3(-30f, 6f, -12f), new Vector3(20f, 2f, 6f), Path.Combine(dir, "midfield.png"), 1600, 900);
-            Shoot(cam, blue + new Vector3(-30f, 14f, -26f), blue + new Vector3(-8f, 0f, 0f), Path.Combine(dir, "thumbnail.png"), 640, 360);
+            Vector3 red = map.flagStands[0].position, blue = map.flagStands[1].position;
+            Shoot(cam, new Vector3(0f, 150f, -165f), Vector3.zero, Path.Combine(dir, "overview.png"), 1600, 900);
+            Shoot(cam, blue + new Vector3(-30f, 12f, -22f), blue + Vector3.up * 2f, Path.Combine(dir, "base.png"), 1600, 900);
+            Shoot(cam, red + new Vector3(30f, 12f, 22f), red + Vector3.up * 2f, Path.Combine(dir, "base-red.png"), 1600, 900);
+            Shoot(cam, new Vector3(-40f, 9f, -14f), new Vector3(10f, 3f, 4f), Path.Combine(dir, "midfield.png"), 1600, 900);
+            Shoot(cam, new Vector3(-70f, 10f, 30f), new Vector3(0f, 2f, 48f), Path.Combine(dir, "north-lane.png"), 1600, 900);
+            Shoot(cam, blue + new Vector3(-40f, 18f, -34f), blue + new Vector3(-10f, 0f, 0f), Path.Combine(dir, "thumbnail.png"), 640, 360);
             Object.DestroyImmediate(cam.gameObject);
             Kit.PublishThumbnail(Universe, Path.Combine(dir, "thumbnail.png"));
             EditorSceneManager.OpenScene(Kit.StartScene(Universe), OpenSceneMode.Single);

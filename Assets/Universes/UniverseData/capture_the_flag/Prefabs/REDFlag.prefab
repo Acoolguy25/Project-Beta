@@ -406,7 +406,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d0db3631ae66601fa15a44ba9a2cc37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Rounds::RyanAssets.Rounds.Billboard
+  facing: 1
   yawOnly: 1
+  maxScreenHeight: 0.08
+  referenceHeight: 2
 --- !u!1 &5292465264523632128
 GameObject:
   m_ObjectHideFlags: 0
@@ -549,6 +552,10 @@ MonoBehaviour:
   cloth: {fileID: 7543349473962280195}
   label: {fileID: 9204594790759362619}
   homeGlow: {fileID: 1730955652271348281}
+  waveSpeed: 3
+  waveStretch: 0.08
+  waveSwing: 8
+  swingRate: 0.7
 --- !u!1 &5719383588035118045
 GameObject:
   m_ObjectHideFlags: 0

@@ -20,11 +20,15 @@ namespace RyanAssets.UI {
                 return;
             if (rect == null)
                 rect = (RectTransform)transform;
+            // A shadow may also be a child of its panel (HudKit cards, so it fades and hides with them):
+            // then it is placed on the panel's own pivot, not at the panel's position in its parent.
+            bool child = rect.parent == target;
             Vector2 size = target.rect.size + Vector2.one * (blur * 2f);
-            Vector2 position = target.anchoredPosition + new Vector2(0f, -offsetY);
-            if (rect.sizeDelta == size && rect.anchoredPosition == position && rect.anchorMin == target.anchorMin)
+            Vector2 position = (child ? Vector2.zero : target.anchoredPosition) + new Vector2(0f, -offsetY);
+            Vector2 anchor = child ? target.pivot : target.anchorMin == target.anchorMax ? target.anchorMin : new Vector2(0.5f, 0.5f);
+            if (rect.sizeDelta == size && rect.anchoredPosition == position && rect.anchorMin == anchor)
                 return;
-            rect.anchorMin = rect.anchorMax = target.anchorMin == target.anchorMax ? target.anchorMin : new Vector2(0.5f, 0.5f);
+            rect.anchorMin = rect.anchorMax = anchor;
             rect.pivot = target.pivot;
             rect.sizeDelta = size;
             rect.anchoredPosition = position;
