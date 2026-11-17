@@ -31,6 +31,8 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField] Color bossAccent = new(0.95f, 0.25f, 0.2f, 1f);
         [SerializeField] Color victoryAccent = new(0.45f, 0.9f, 0.5f, 1f);
         [SerializeField] Color defeatAccent = new(0.85f, 0.25f, 0.22f, 1f);
+        [Tooltip("Size of the banner's second line (theme, advice, boss), as a percentage of the subtitle's.")]
+        [SerializeField, Range(50, 100)] int detailTextPercent = 85;
         [Tooltip("Size of the confetti burst over the flag when the round is won.")]
         [SerializeField, Min(0.1f)] float victoryConfettiScale = 4f;
 
@@ -93,6 +95,7 @@ namespace Universes.UniverseData.war_valley.Client {
         long lastFlagHealth = -1;
         WV_Flag watchedFlag;
         float lastDanger;
+        bool alarmOnHint;
         readonly Vector3[] bannerCorners = new Vector3[4];
 
         /// <summary>Where alarm text goes: the HUD's hint line, given by the controller.</summary>
@@ -125,15 +128,15 @@ namespace Universes.UniverseData.war_valley.Client {
             string title = wave.waveNumber >= wave.waveCount
                 ? "FINAL WAVE"
                 : $"WAVE {wave.waveNumber}/{wave.waveCount}";
-            bool themed = theme != WV_WaveTheme.Standard;
-            string themeLead = themed ? $"{WV_WavePlan.GetThemeName(theme).ToUpperInvariant()} - " : string.Empty;
-            // A plain assault needs no advice; a themed wave's hint is what tells the commander how
-            // to answer it.
-            string hint = themed ? $"\n<size=85%>{WV_WavePlan.GetThemeHint(theme)}</size>" : string.Empty;
-            string subtitle = themeLead
-                              + $"{wave.enemyCount} {(wave.enemyCount == 1 ? "enemy" : "enemies")} from {DescribeSides()}"
-                              + (wave.hasBoss ? $", led by a {WV_WaveBoss.DefaultName}" : string.Empty)
-                              + hint;
+            // The subtitle is broken on purpose into at most two lines that each fit the banner:
+            // who comes and from where, then what kind of wave it is. A plain assault needs no
+            // second line; a boss wave names its boss there instead of the theme's advice.
+            string subtitle = $"{wave.enemyCount} {(wave.enemyCount == 1 ? "enemy" : "enemies")} from {DescribeSides()}";
+            string themeName = WV_WavePlan.GetThemeName(theme).ToUpperInvariant();
+            if (wave.hasBoss)
+                subtitle += $"\n<size={detailTextPercent}%>{themeName} - led by a {WV_WaveBoss.DefaultName}</size>";
+            else if (theme != WV_WaveTheme.Standard)
+                subtitle += $"\n<size={detailTextPercent}%>{themeName} - {WV_WavePlan.GetThemeHint(theme)}</size>";
             if (banner != null)
                 banner.Show(wave.hasBoss ? bossIcon : waveIcon, accent, title, subtitle, waveBannerSeconds);
 
@@ -145,9 +148,14 @@ namespace Universes.UniverseData.war_valley.Client {
         public void ShowRoundEnd(WV_RoundEnded result) {
             HideArrows();
             arrowsUntil = 0f;
+            // The round is over, so an alarm still on the hint line no longer applies.
+            if (alarmOnHint)
+                showHint?.Invoke(string.Empty);
+            alarmOnHint = false;
+            // One fact per line, so neither wraps and leaves a word alone.
             string subtitle = result.victory
-                ? $"All {result.wavesHeld} waves held  ·  {result.enemiesDefeated:N0} enemies defeated"
-                : $"Fell on wave {result.waveReached} after holding {result.wavesHeld}  ·  {result.enemiesDefeated:N0} enemies defeated";
+                ? $"All {result.wavesHeld} waves held\n{result.enemiesDefeated:N0} enemies defeated"
+                : $"Fell on wave {result.waveReached} after holding {result.wavesHeld}\n{result.enemiesDefeated:N0} enemies defeated";
             if (banner != null)
                 banner.Show(result.victory ? victoryIcon : defeatIcon,
                     result.victory ? victoryAccent : defeatAccent,
@@ -313,6 +321,7 @@ namespace Universes.UniverseData.war_valley.Client {
             GameSfx.Play(SfxCue.Alarm);
             ScreenFx.DangerFlash(flagDangerColor, flagFlashSeconds, flagFlashAlpha);
             showHint?.Invoke(string.Format(flagAlarmMessage, Mathf.RoundToInt(fraction * 100f)));
+            alarmOnHint = true;
         }
 
         /// <summary>Forwards the heartbeat strength to the screen edges, only when it changes.</summary>

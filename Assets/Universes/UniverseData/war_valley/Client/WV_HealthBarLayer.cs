@@ -20,8 +20,8 @@ namespace Universes.UniverseData.war_valley.Client {
     /// vehicle shows its bar once it is hurt, while it is selected, or while the pointer is over it,
     /// and its name only on hover or over a small selection; the commander's own are named by kind
     /// alone ("Gunner"), an ally's with the owner ("Sam's Gunner"). A building's bar is larger and
-    /// shows while it is hurt or still being built; the flag's bar always shows. Both are named only
-    /// on hover or while damaged, so the labels stay off a quiet base.
+    /// shows while it is hurt or still being built, named on hover or while damaged; the flag's bar
+    /// always shows, its name only on hover, so the labels stay off the fight around it.
     /// Player characters keep their shared tag, since knowing who is who among the commanders still
     /// matters.
     /// </para>
@@ -63,7 +63,7 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("A name is left off when it would land closer than this to a name already drawn this " +
                  "frame (canvas pixels, horizontal and vertical), so a squad standing together shows " +
                  "one label instead of a stack.")]
-        [SerializeField] Vector2 nameSpacing = new(120f, 18f);
+        [SerializeField] Vector2 nameSpacing = new(120f, 30f);
         [Tooltip("Gap between the top of a body and its bar (m).")]
         [SerializeField, Min(0f)] float headroom = 0.6f;
         [Tooltip("Height of the bar above an entity that has no collider to measure (m).")]
@@ -227,8 +227,10 @@ namespace Universes.UniverseData.war_valley.Client {
 
         /// <summary>
         /// Everything read from the entity's name: whether it is a boss, and its bare kind name. The
-        /// server names a spawned troop after it reaches the client, so this is re-read whenever the
-        /// name is no longer the one last read: a string comparison per frame, not a parse.
+        /// server names a spawned troop after it reaches the client, and EntityBase.DisplayNameChanged
+        /// was not raised for that first name on clients (troops were labelled "Anonymous"), so the
+        /// name is re-read whenever it differs from the one last read: a string comparison per frame,
+        /// not a parse.
         /// </summary>
         static void RefreshNames(Entry entry) {
             EntityBase entity = entry.Entity;
@@ -313,7 +315,9 @@ namespace Universes.UniverseData.war_valley.Client {
             switch (entry.Kind) {
                 case Kind.Flag:
                     show = true;
-                    named = isHovered || damaged;
+                    // Its bar and the alarm already say it is under attack; a name over the melee
+                    // around it would only be crossed by the attackers' bars.
+                    named = isHovered;
                     size = flagBarScale;
                     break;
                 case Kind.Structure:

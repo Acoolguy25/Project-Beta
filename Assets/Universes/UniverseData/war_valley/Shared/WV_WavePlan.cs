@@ -454,11 +454,11 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>One line of advice per theme, so a commander knows how to answer it.</summary>
         public static string GetThemeHint(WV_WaveTheme theme) => theme switch {
-            WV_WaveTheme.Swarm => "masses of small melee troops - turrets and gunners mow them down",
-            WV_WaveTheme.Blitz => "fast runners streaming in - wall the gaps before they reach the flag",
-            WV_WaveTheme.Marksmen => "ranged troops - close in with vehicles, they out-shoot melee",
-            WV_WaveTheme.Siege => "heavy bruisers on one side - mass everything there",
-            WV_WaveTheme.Pincer => "attacks from every side at once - spread your defence",
+            WV_WaveTheme.Swarm => "melee hordes - turrets and gunners mow them down",
+            WV_WaveTheme.Blitz => "fast runners - wall the gaps before they reach the flag",
+            WV_WaveTheme.Marksmen => "ranged troops - close in with vehicles",
+            WV_WaveTheme.Siege => "heavy bruisers on one side - mass your army there",
+            WV_WaveTheme.Pincer => "every side at once - spread your defence",
             _ => "a mixed assault"
         };
 

@@ -299,7 +299,6 @@ namespace Universes.UniverseData.war_valley.Server
             WV_WaveBoss boss = wave.Boss;
             SpawnNpc(boss.Kind, boss.DisplayName, WithMarchSpeed(boss.Build, wave), center,
                 wave.HealthMultiplier * boss.HealthMultiplier);
-            WV_ServerCommand.NotifyAll($"A {boss.DisplayName} has entered the valley!");
         }
 
         /// <summary>The build with its speed scaled by the wave's march multiplier (1 after the opening waves).</summary>

@@ -542,7 +542,7 @@ MonoBehaviour:
   markWaveEnemies: 1
   namedSelectionLimit: 3
   fullHealthSelectionLimit: 6
-  nameSpacing: {x: 120, y: 18}
+  nameSpacing: {x: 120, y: 30}
   headroom: 0.6
   fallbackHeight: 2
   hoverRayDistance: 600
@@ -3449,7 +3449,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
   m_AnchoredPosition: {x: 0, y: -58}
-  m_SizeDelta: {x: 460, y: 200}
+  m_SizeDelta: {x: 640, y: 200}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!225 &1546846048255376452
 CanvasGroup:
@@ -5608,6 +5608,7 @@ MonoBehaviour:
   bossAccent: {r: 0.95, g: 0.25, b: 0.2, a: 1}
   victoryAccent: {r: 0.45, g: 0.9, b: 0.5, a: 1}
   defeatAccent: {r: 0.85, g: 0.25, b: 0.22, a: 1}
+  detailTextPercent: 85
   victoryConfettiScale: 4
   hornVolume: 1
   bossHornDrop: 3

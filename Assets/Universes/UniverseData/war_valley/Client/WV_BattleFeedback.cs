@@ -16,8 +16,11 @@ namespace Universes.UniverseData.war_valley.Client {
         [Min(10f)] public float effectsDistance = 240f;
 
         [Header("Hits")]
-        [Tooltip("Flash colour on a soldier that is hit.")]
-        public Color hitFlashColor = new(1f, 0.82f, 0.68f, 1f);
+        [Tooltip("Flash colour on a soldier that is hit. HitFlash triples it, so a pale colour turns a " +
+                 "soldier under fire white; a deep orange reads as a hit and keeps the body coloured.")]
+        public Color hitFlashColor = new(0.6f, 0.3f, 0.18f, 1f);
+        [Tooltip("How long a hit soldier glows (s). Short, so a soldier hit several times keeps its shape and colour.")]
+        [Min(0.01f)] public float hitFlashSeconds = 0.08f;
         [Tooltip("Damage numbers show over the commander's selected units and troops, and over enemies " +
                  "within this distance of one of them (m), so the fight being watched reads in numbers " +
                  "while the rest of the valley stays quiet.")]
@@ -25,16 +28,18 @@ namespace Universes.UniverseData.war_valley.Client {
         [Min(0.1f)] public float damageNumberSize = 1f;
 
         [Header("Deaths")]
-        [Tooltip("Size of the dust a soldier goes down in. Kept small: a whole wave falling at once " +
-                 "must not whiten the fight.")]
-        [Min(0.1f)] public float soldierBurstScale = 0.7f;
+        [Tooltip("Size of the dust a soldier goes down in: big enough to catch at the commander's zoom " +
+                 "during a fight (at 1 it was gone before you saw it), dark so a whole wave falling never " +
+                 "whitens the fight.")]
+        [Min(0.1f)] public float soldierBurstScale = 1.4f;
         [Tooltip("How much of the soldier's height the dust rises over, from the feet (the robots are " +
                  "about 5.6 m tall).")]
-        [Range(0.1f, 1f)] public float soldierBurstHeight = 0.5f;
-        [Tooltip("Colour of that dust: the valley's grey-brown, so it reads as dirt kicked up, not cloud.")]
-        public Color soldierBurstTint = new(0.66f, 0.6f, 0.52f, 1f);
+        [Range(0.1f, 1f)] public float soldierBurstHeight = 0.6f;
+        [Tooltip("Colour of that dust: a near-black earth brown, much darker than the dirt lane and " +
+                 "the grass so it separates from both, and never white.")]
+        public Color soldierBurstTint = new(0.22f, 0.19f, 0.16f, 1f);
         [Tooltip("Size of the sparks thrown from a falling soldier's chest.")]
-        [Min(0.1f)] public float soldierSparkScale = 1.4f;
+        [Min(0.1f)] public float soldierSparkScale = 2.4f;
         [Tooltip("Spark colour when a wave enemy falls.")]
         public Color enemyDeathTint = new(1f, 0.45f, 0.35f, 1f);
         [Tooltip("Spark colour when one of the defenders' soldiers falls.")]
@@ -191,7 +196,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 return;
             // Vehicles and buildings flash through their own owner colour; the robot soldiers do not.
             if (entity is GameCharacter character)
-                HitFlash.On(character, tuning.hitFlashColor);
+                HitFlash.On(character, tuning.hitFlashColor, tuning.hitFlashSeconds);
             if (IsInWatchedFight(entity))
                 FloatingText.Damage(GetTop(entity), amount, tuning.damageNumberSize);
         }

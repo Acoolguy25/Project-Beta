@@ -71,7 +71,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         const float HealthBarHeight = 6f;
         const float ArrowSize = 64f;
         const float ArrowCaptionSize = 18f;
-        const float BannerWidth = 460f;
+        const float BannerWidth = 640f;
         const float BannerEmblemSize = 48f;
         /// <summary>The banner hangs this far below the top edge, under the shared top bar's message pill.</summary>
         const float BannerTopOffset = 58f;

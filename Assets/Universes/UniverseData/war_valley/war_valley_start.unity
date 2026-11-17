@@ -153,13 +153,14 @@ MonoBehaviour:
   maxSelection: 120
   battleFeedback:
     effectsDistance: 240
-    hitFlashColor: {r: 1, g: 0.82, b: 0.68, a: 1}
+    hitFlashColor: {r: 0.6, g: 0.3, b: 0.18, a: 1}
+    hitFlashSeconds: 0.08
     selectedFightRadius: 32
     damageNumberSize: 1
-    soldierBurstScale: 0.7
-    soldierBurstHeight: 0.5
-    soldierBurstTint: {r: 0.66, g: 0.6, b: 0.52, a: 1}
-    soldierSparkScale: 1.4
+    soldierBurstScale: 1.4
+    soldierBurstHeight: 0.6
+    soldierBurstTint: {r: 0.22, g: 0.19, b: 0.16, a: 1}
+    soldierSparkScale: 2.4
     enemyDeathTint: {r: 1, g: 0.45, b: 0.35, a: 1}
     defenderDeathTint: {r: 0.6, g: 0.9, b: 1, a: 1}
     vehicleExplosionRadius: 50
