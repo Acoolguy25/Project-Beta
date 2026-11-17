@@ -445,7 +445,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             phase = phase, wave = Mathf.Max(1, Mathf.Min(wave, waveCount)), secondsLeft = secondsLeft, cash = cash, baseHealth = baseHealth,
             enemiesLeft = spawnsPending + enemies.Count, headline = headline,
             readyPlayers = (byte)Mathf.Min(255, ReadyCount()), activePlayers = (byte)Mathf.Min(255, GetActivePlayers().Length),
-            towers = towers.Values.Select(t => new TD_TowerSnap { slot = t.slot, kind = t.kind, level = (byte)t.level, owner = t.ownerName }).ToArray(),
+            towers = towers.Values.Select(t => new TD_TowerSnap { slot = t.slot, kind = t.kind, level = (byte)t.level, owner = t.ownerName, ownerId = t.owner != null && t.owner.IsActive ? t.owner.ClientId : -1 }).ToArray(),
             earlyBonus = earlyBonus, speed = speed, fastPlayers = (byte)Mathf.Min(255, FastCount()), fastForwardAllowed = allowFastForward
         };
 

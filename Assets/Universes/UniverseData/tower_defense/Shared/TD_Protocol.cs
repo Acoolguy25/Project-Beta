@@ -9,6 +9,7 @@ namespace Universes.UniverseData.tower_defense {
         public float distance;
         /// <summary>Health fraction 0..255.</summary>
         public byte health;
+        /// <summary>Kept on the wire for older clients; <see cref="slow"/> says the same and more.</summary>
         public bool slowed;
         /// <summary>Current speed multiplier 0..255 (255 = not slowed), from <see cref="TD_Rules.SlowFactor"/>.</summary>
         public byte slow;
@@ -18,7 +19,10 @@ namespace Universes.UniverseData.tower_defense {
         public byte slot;
         public TD_TowerKind kind;
         public byte level;
+        /// <summary>The builder's display name (not unique; for showing only).</summary>
         public string owner;
+        /// <summary>The builder's connection id while that player is still here; -1 when anyone may sell the tower.</summary>
+        public int ownerId;
     }
 
     public struct TD_Shot {

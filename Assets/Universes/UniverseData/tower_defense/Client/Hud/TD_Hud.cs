@@ -24,6 +24,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         public Image baseIconImage;
         [Min(0.1f)] public float criticalPulsesPerSecond = 1.4f;
         [Range(0f, 0.5f)] public float criticalPulseScale = 0.16f;
+        [Tooltip("How far the critical base icon pulses from red toward white.")]
+        [Range(0f, 1f)] public float criticalPulseWhiten = 0.35f;
 
         [Header("Next wave")]
         public TD_Fader nextWave;
@@ -77,7 +79,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         // Key labels come from TD_ClientController (SetKeys), which reads the keys.
         string readyKey = "R", fastForwardKey = "G", interactKey = "E";
 
-        int shownCash = -1, shownBase = -1, shownBosses = -1, shownChipWave = -1;
+        int shownCash = -1, shownBase = -1, shownBosses = -1, shownChipWave = -1, shownTitleWave = -1;
         float toastUntil, bannerUntil, cashKick, baseKick;
         bool baseCritical, speedBesideBoss;
         Color baseIconColor;
@@ -126,7 +128,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         void PulseBaseIcon() {
             if (baseIconImage == null || !baseCritical) return;
             float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * criticalPulsesPerSecond * Mathf.PI * 2f);
-            baseIconImage.color = Color.Lerp(theme.danger, Color.white, pulse * 0.35f);
+            baseIconImage.color = Color.Lerp(theme.danger, Color.white, pulse * criticalPulseWhiten);
             if (baseKick <= 0f && basePunch != null) basePunch.localScale = Vector3.one * (1f + criticalPulseScale * pulse);
         }
 
@@ -148,19 +150,27 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         // ---------------------------------------------------------------- state
         public void ShowState(in TD_StateBroadcast state, bool ready, bool fastVote) {
-            if (shownCash >= 0 && state.cash != shownCash) cashKick = 1f;
-            if (shownBase >= 0 && state.baseHealth < shownBase) baseKick = 1f;
-            shownCash = state.cash;
-            shownBase = state.baseHealth;
-
-            cashLabel.text = $"${state.cash:N0}";
-            float baseFraction = Mathf.Clamp01(state.baseHealth / (float)TD_Rules.BaseHealth);
-            Bar(baseFill, baseFraction);
-            baseFill.color = TD_Palette.Health(baseFraction);
-            baseLabel.text = $"{Mathf.Max(0, state.baseHealth)}<size=70%><color=#B4BCC8> / {TD_Rules.BaseHealth}</color></size>";
+            // The state arrives on every kill: rebuild a label only when its value changed.
+            if (state.cash != shownCash) {
+                if (shownCash >= 0) cashKick = 1f;
+                shownCash = state.cash;
+                cashLabel.text = $"${state.cash:N0}";
+            }
+            if (state.baseHealth != shownBase) {
+                if (shownBase >= 0 && state.baseHealth < shownBase) baseKick = 1f;
+                shownBase = state.baseHealth;
+                float baseFraction = Mathf.Clamp01(state.baseHealth / (float)TD_Rules.BaseHealth);
+                Bar(baseFill, baseFraction);
+                baseFill.color = TD_Palette.Health(baseFraction);
+                baseLabel.text = $"{Mathf.Max(0, state.baseHealth)}<size=70%><color=#B4BCC8> / {TD_Rules.BaseHealth}</color></size>";
+            }
             SetBaseCritical(state.baseHealth > 0 && state.baseHealth <= TD_Rules.BaseCriticalHealth && state.phase is TD_Phase.Build or TD_Phase.Wave);
 
-            waveTitle.text = state.phase == TD_Phase.Waiting ? "TOWER DEFENSE" : $"WAVE {state.wave}<size=65%><color=#B4BCC8> / {TD_Rules.WaveCount}</color></size>";
+            int titleWave = state.phase == TD_Phase.Waiting ? 0 : state.wave;
+            if (titleWave != shownTitleWave) {
+                shownTitleWave = titleWave;
+                waveTitle.text = titleWave == 0 ? "TOWER DEFENSE" : $"WAVE {state.wave}<size=65%><color=#B4BCC8> / {TD_Rules.WaveCount}</color></size>";
+            }
             int total = Mathf.Max(1, TD_Rules.EnemyCount(state.wave));
             switch (state.phase) {
                 case TD_Phase.Waiting:
@@ -286,9 +296,10 @@ namespace Universes.UniverseData.tower_defense.Client {
             Prompt($"{action}     <color=#B4BCC8><b>1-4</b>  Change tower</color>");
         }
 
-        public void ShowFocusTower(in TD_TowerSnap tower, int cash, string sellKey) {
-            info.ShowTower(tower, Portrait(tower.kind), cash, sellKey);
-            string sell = $"<b>{sellKey}</b>  Sell +${TD_Rules.SellRefund(tower.kind, tower.level)}";
+        /// <param name="canSell">False for another player's tower: no sell offer, the card says who can sell it.</param>
+        public void ShowFocusTower(in TD_TowerSnap tower, int cash, string sellKey, bool canSell) {
+            info.ShowTower(tower, Portrait(tower.kind), cash, sellKey, canSell);
+            string sell = canSell ? $"<b>{sellKey}</b>  Sell +${TD_Rules.SellRefund(tower.kind, tower.level)}" : "";
             if (tower.level >= TD_Rules.MaxLevel) {
                 Prompt(sell);
                 return;
@@ -297,7 +308,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             string upgrade = cash >= cost
                 ? $"<b>{interactKey}</b>  Upgrade {TD_Rules.Tower(tower.kind).name}"
                 : $"<color=#{ColorUtility.ToHtmlStringRGB(theme.danger)}>Need ${cost - cash} more for Lv {tower.level + 1}</color>";
-            Prompt($"{upgrade}     <color=#B4BCC8>{sell}</color>");
+            Prompt(canSell ? $"{upgrade}     <color=#B4BCC8>{sell}</color>" : upgrade);
         }
 
         public void ClearFocus() {

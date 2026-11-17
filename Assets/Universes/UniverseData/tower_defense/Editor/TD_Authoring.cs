@@ -36,8 +36,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// trim band, see <see cref="TrimBands"/>), so each level reads at a glance.
         /// </summary>
         static readonly (string[] models, float size)[] TowerModels = {
-            (new[] { "Turret_09_Prefeb", "Turret_08_Prefeb", "Turret_07_Prefeb" }, 4.4f), // Gunner: rifle, gatling, armoured gatling
-            (new[] { "Turret_06_Prefeb", "Turret_01_Prefeb", "Turret_12_Prefeb" }, 4.8f), // Cannon: armoured gun, twin pods, triple gun
+            (new[] { "Turret_08_Prefeb", "Turret_09_Prefeb", "Turret_07_Prefeb" }, 4.4f), // Gunner: gatling, rifle, armoured gatling
+            (new[] { "Turret_12_Prefeb", "Turret_06_Prefeb", "Turret_01_Prefeb" }, 4.8f), // Cannon: low triple gun, armoured gun, twin pods
             (new[] { "Turret_10_Prefeb", "Turret_13_Prefeb", "Turret_11_Prefeb" }, 4.6f), // Frost: emitter, twin prong, cryo tank
             (new[] { "Turret_04_Prefeb", "Turret_02_Prefeb", "Turret_03_Prefeb" }, 5.2f), // Sniper: long gun, sensor gun, heavy battery
         };
@@ -51,7 +51,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// <summary>Glowing trim bands in the tower's colour around the turret's base, per level (index 0 = level 1): the colour says which tower, the count which level.</summary>
         static readonly int[] TrimBands = { 1, 2, 3 };
         /// <summary>Extra fit size for models whose long barrel makes them read small at the tower's size.</summary>
-        static readonly Dictionary<string, float> ModelFit = new() { ["Turret_04_Prefeb"] = 1.4f };
+        static readonly Dictionary<string, float> ModelFit = new() { ["Turret_04_Prefeb"] = 1.4f, ["Turret_01_Prefeb"] = 1.1f };
         /// <summary>Gap in metres between a turret's top and its level stars.</summary>
         const float BadgeGap = 1f;
         /// <summary>Uniform tower scale per level (index 0 = level 1).</summary>
@@ -253,6 +253,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             view.tiers = new GameObject[TD_Rules.MaxLevel];
             view.levelScale = LevelScale.ToArray();
             view.badgeHeight = new float[TD_Rules.MaxLevel];
+            var tierBounds = new Vector3[TD_Rules.MaxLevel];
             for (int level = 1; level <= TD_Rules.MaxLevel; level++) {
                 var tier = Empty($"Tier{level}", head.transform);
                 view.tiers[level - 1] = tier;
@@ -261,6 +262,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 if (turret == null) continue;
                 // Stars sit just above this level's own model, not at a height shared by all levels.
                 view.badgeHeight[level - 1] = RendererBounds(turret).max.y - root.transform.position.y + BadgeGap;
+                tierBounds[level - 1] = RendererBounds(turret).size * LevelScale[level - 1];
                 Paint(turret, kind, level);
                 Bands(turret, tier.transform, kind, level, m);
                 if (level == 1) {
@@ -271,6 +273,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 }
                 tier.SetActive(level == 1);
             }
+            CheckTiers(kind, tierBounds);
             view.muzzle = Empty("Muzzle", head.transform, new Vector3(0f, size * 0.45f, size * 0.55f)).transform;
 
             // Level stars only (the builder's name is on the info card): flat to the camera plane and
@@ -289,8 +292,21 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
             view.rangeRing = Ring(root.transform, m.rangeRing);
             view.nextRangeRing = Ring(root.transform, m.rangeRing, "NextRangeRing");
-            view.nextRangeRing.widthMultiplier = 0.18f;
+            view.nextRangeRing.widthMultiplier = 0.3f;
             return Kit.Save(root, "Towers", stats.name);
+        }
+
+        /// <summary>
+        /// An upgrade must never look like a downgrade: each level's turret (with its level scale) must be at
+        /// least as tall and as big (bounds volume) as the level below. Logs every tier's size; an error names
+        /// the offending level so a model swap in <see cref="TowerModels"/> cannot slip through.
+        /// </summary>
+        static void CheckTiers(TD_TowerKind kind, Vector3[] sizes) {
+            static float Volume(Vector3 s) => s.x * s.y * s.z;
+            Debug.Log($"[TowerDefense] {kind} tier bounds: " + string.Join(", ", sizes.Select((s, i) => $"L{i + 1} height {s.y:0.00} m, volume {Volume(s):0} m3")));
+            for (int i = 1; i < sizes.Length; i++)
+                if (sizes[i].y < sizes[i - 1].y || Volume(sizes[i]) < Volume(sizes[i - 1]))
+                    Debug.LogError($"[TowerDefense] {kind} level {i + 1} turret is smaller than level {i} (height {sizes[i].y:0.00} vs {sizes[i - 1].y:0.00} m, volume {Volume(sizes[i]):0} vs {Volume(sizes[i - 1]):0} m3). Pick a bigger model or add a ModelFit entry.");
         }
 
         /// <summary>The turret model for one level, with the pack's own textured materials.</summary>
@@ -318,7 +334,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 r.sharedMaterials = r.sharedMaterials.Select(source => source == null ? null : Painted(source, $"{kind}_L{level}_{source.name}", paint, emission)).ToArray();
         }
 
-        /// <summary>Glowing bands in the tower's colour stacked around the turret's base: one at level 2, two at level 3.</summary>
+        /// <summary>Glowing bands in the tower's colour stacked around the turret's base, <see cref="TrimBands"/> per level (1/2/3).</summary>
         static void Bands(GameObject turret, Transform tier, TD_TowerKind kind, int level, Materials m) {
             int count = TrimBands[level - 1];
             if (count <= 0) return;

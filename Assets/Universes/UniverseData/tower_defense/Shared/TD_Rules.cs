@@ -103,7 +103,10 @@ namespace Universes.UniverseData.tower_defense {
         public static TD_TowerStats Tower(TD_TowerKind kind) => Towers[(int)kind];
 
         public static float Damage(TD_TowerKind kind, int level) => Tower(kind).damage * Mathf.Pow(1.65f, level - 1);
-        public static float Range(TD_TowerKind kind, int level) => Tower(kind).range * (1f + 0.15f * (level - 1));
+        /// <summary>Range and slow both grow by this fraction per level above 1.</summary>
+        public const float PerLevelGrowth = 0.15f;
+
+        public static float Range(TD_TowerKind kind, int level) => Tower(kind).range * (1f + PerLevelGrowth * (level - 1));
         public static float FireRate(TD_TowerKind kind, int level) => Tower(kind).fireRate * (1f + 0.1f * (level - 1));
         public static int UpgradeCost(TD_TowerKind kind, int level) => Mathf.RoundToInt(Tower(kind).cost * 0.8f * level);
 
@@ -126,7 +129,7 @@ namespace Universes.UniverseData.tower_defense {
         public static int EarlyStartBonus(int wave, int secondsLeft) => wave <= 1 ? 0 : EarlyStartBonus(secondsLeft);
 
         /// <summary>Speed multiplier on an enemy hit by a <paramref name="kind"/> tower of <paramref name="level"/> (1 = no slow).</summary>
-        public static float SlowFactor(TD_TowerKind kind, int level) => Mathf.Clamp01(1f - Tower(kind).slow * (1f + 0.15f * (level - 1)));
+        public static float SlowFactor(TD_TowerKind kind, int level) => Mathf.Clamp01(1f - Tower(kind).slow * (1f + PerLevelGrowth * (level - 1)));
 
         /// <summary>The slow of <see cref="SlowFactor"/> as a whole percentage, for cards ("Slows 45%").</summary>
         public static int SlowPercent(TD_TowerKind kind, int level) => Mathf.RoundToInt((1f - SlowFactor(kind, level)) * 100f);

@@ -64,12 +64,27 @@ namespace Universes.UniverseData.tower_defense.Client {
         public Color smokeTint = new(0.32f, 0.3f, 0.29f);
         [Tooltip("Height above a wreck at which the \"+$\" popup appears.")]
         [Min(0f)] public float rewardPopupHeight = 3f;
-        [Min(0.1f)] public float rewardPopupSize = 1f;
+        [Tooltip("Popup size for the smallest reward (rewardPopupSmallReward); rewards in between scale up to rewardPopupLargeSize.")]
+        [Min(0.1f)] public float rewardPopupSmallSize = 0.5f;
+        [Min(1)] public int rewardPopupSmallReward = 6;
+        [Tooltip("Popup size for rewardPopupLargeReward and above (a boss).")]
+        [Min(0.1f)] public float rewardPopupLargeSize = 1.05f;
+        [Min(1)] public int rewardPopupLargeReward = 250;
+        [Tooltip("Kills this close together (metres) within rewardMergeSeconds share one popup that shows the sum.")]
+        [Min(0f)] public float rewardMergeRadius = 6f;
+        [Tooltip("How long a popup waits for more kills nearby before it shows the summed reward.")]
+        [Min(0f)] public float rewardMergeSeconds = 0.35f;
         [Tooltip("Random sideways spread of kill popups, so kills in a tight group stay readable.")]
         [Min(0f)] public float rewardPopupSpread = 1.2f;
         [Tooltip("Kill coins in quick succession climb this many semitones each.")]
         [Min(0f)] public float coinLadderStep = 1f;
         [Min(1)] public int coinLadderSteps = 10;
+
+        /// <summary>Kill popup size for <paramref name="reward"/>: small for a Scout, large for a boss (log scale between).</summary>
+        public float RewardPopupSize(int reward) {
+            float t = Mathf.InverseLerp(Mathf.Log(rewardPopupSmallReward), Mathf.Log(Mathf.Max(rewardPopupSmallReward + 1, rewardPopupLargeReward)), Mathf.Log(Mathf.Max(1, reward)));
+            return Mathf.Lerp(rewardPopupSmallSize, rewardPopupLargeSize, t);
+        }
 
         [Header("Enemies")]
         [Tooltip("Enemy health bars are always red (enemy colour), darkening as they empty; friendly bars use the green-to-red health ramp.")]
@@ -90,7 +105,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Tooltip("Edge flash (ScreenFx.DangerFlash) on a leak: a moment, never a standing wash. The HUD's red base bar and pulsing base icon are the standing warning.")]
         public Color leakFlashColor = new(1f, 0.12f, 0.08f);
         [Min(0.1f)] public float leakFlashSeconds = 0.7f;
-        [Range(0f, 1f)] public float leakFlashAlpha = 0.22f;
+        [Range(0f, 1f)] public float leakFlashAlpha = 0.32f;
         [Tooltip("The same flash once the base is critical: longer and stronger.")]
         [Min(0.1f)] public float criticalFlashSeconds = 1.4f;
         [Range(0f, 1f)] public float criticalFlashAlpha = 0.5f;
@@ -115,7 +130,16 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Min(0.1f)] public float markerLiftSpeed = 12f;
 
         [Header("Game over")]
+        [Tooltip("Confetti burst at the base on victory.")]
         [Min(0f)] public float victoryConfettiScale = 8f;
+        [Tooltip("Bursts in front of the camera on victory, beside the result card, so the celebration is seen from any camera.")]
+        [Min(0)] public int victoryScreenBursts = 6;
+        [Min(0f)] public float victoryScreenBurstInterval = 0.35f;
+        [Tooltip("Distance in front of the camera of those bursts (metres).")]
+        [Min(1f)] public float victoryScreenBurstDepth = 9f;
+        [Min(0f)] public float victoryScreenBurstScale = 1.6f;
+        [Tooltip("Viewport points (x, y) of the bursts, used in turn; keep them clear of the card in the middle and the status bar on top.")]
+        public Vector2[] victoryScreenBurstPoints = { new(0.2f, 0.42f), new(0.8f, 0.42f), new(0.3f, 0.25f), new(0.7f, 0.25f), new(0.12f, 0.6f), new(0.88f, 0.6f) };
         [Tooltip("Shake radius of the base's final explosion.")]
         [Min(1f)] public float defeatShakeRadius = 90f;
 

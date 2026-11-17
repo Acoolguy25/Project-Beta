@@ -27,6 +27,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const float CardRadius = 14f;
         static readonly Vector2 CardSize = new(200f, 196f);
         const float StatusTop = -60f;
+        /// <summary>Top of the pill row under the status bar (next wave, fast forward, boss).</summary>
+        const float PillRowTop = StatusTop - 112f;
         const string KitAudio = "Packages/com.ryan.gameframework/Runtime/GameFeel/Audio/";
 
         // ---------------------------------------------------------------- assets
@@ -234,7 +236,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         // ---------------------------------------------------------------- next wave
         static void NextWave(RectTransform root, TD_Hud hud) {
-            RectTransform panel = Pinned(root, "NextWave", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 112f), new Vector2(0f, 48f));
+            RectTransform panel = Pinned(root, "NextWave", new Vector2(0.5f, 1f), new Vector2(0f, PillRowTop), new Vector2(0f, 48f));
             Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
             Row(panel.gameObject, 10f, Pad(16, 6), TextAnchor.MiddleCenter);
             FitContent(panel.gameObject, true, false);
@@ -267,7 +269,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         // ---------------------------------------------------------------- fast forward (shown during waves, where the next-wave preview sits in build phases)
         static void SpeedPill(RectTransform root, TD_Hud hud) {
-            RectTransform panel = Pinned(root, "FastForward", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 112f), new Vector2(0f, 48f));
+            RectTransform panel = Pinned(root, "FastForward", new Vector2(0.5f, 1f), new Vector2(0f, PillRowTop), new Vector2(0f, 48f));
             Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
             Row(panel.gameObject, 10f, Pad(6, 6), TextAnchor.MiddleCenter);
             FitContent(panel.gameObject, true, false);
@@ -290,9 +292,9 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// </summary>
         static void BossBar(RectTransform root, TD_Hud hud) {
             const float width = 360f;
-            RectTransform holder = Pinned(root, "Boss", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 112f), new Vector2(width, 48f));
+            RectTransform holder = Pinned(root, "Boss", new Vector2(0.5f, 1f), new Vector2(0f, PillRowTop), new Vector2(width, 48f));
             holder.pivot = new Vector2(1f, 1f);
-            holder.anchoredPosition = new Vector2(-hud.bossPillGap, StatusTop - 112f);
+            holder.anchoredPosition = new Vector2(-hud.bossPillGap, PillRowTop);
             holder.gameObject.AddComponent<CanvasGroup>();
             hud.bossPanel = holder.gameObject.AddComponent<TD_Fader>();
             RectTransform panel = Fill(holder, "Card");
@@ -475,17 +477,17 @@ namespace Universes.UniverseData.tower_defense.Editor {
         }
 
         static void WaveBanner(RectTransform root, TD_Hud hud) {
-            // Low enough that the toast row under the status bar never touches it.
-            RectTransform banner = Pinned(root, "WaveBanner", new Vector2(0.5f, 0.5f), new Vector2(0f, 100f), new Vector2(900f, 150f));
+            // Upper third, just under the toast row (so the two never touch), small enough to leave the road clear.
+            RectTransform banner = Pinned(root, "WaveBanner", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 228f), new Vector2(720f, 104f));
             banner.gameObject.AddComponent<CanvasGroup>();
             hud.banner = banner.gameObject.AddComponent<TD_Fader>();
             hud.banner.popScale = 0.8f;
             hud.banner.duration = 0.25f;
             Column(banner.gameObject, 2f, null, TextAnchor.MiddleCenter);
             RectTransform head = Group(banner, "Head", false, 16f, TextAnchor.MiddleCenter);
-            hud.bannerIcon = TdIcon(head, "wave", 56f, Theme.warning);
+            hud.bannerIcon = TdIcon(head, "wave", 40f, Theme.warning);
             hud.bannerTitle = Overlay(Label(head, "Title", "WAVE 1", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
-            hud.bannerTitle.fontSize = 76f;
+            hud.bannerTitle.fontSize = 52f;
             hud.bannerTitle.characterSpacing = 4f;
             hud.bannerSubtitle = Overlay(Label(banner, "Subtitle", "", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
         }

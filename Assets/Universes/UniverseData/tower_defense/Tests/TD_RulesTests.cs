@@ -107,8 +107,8 @@ namespace Universes.UniverseData.tower_defense.Tests {
             for (int w = 2; w <= TD_Rules.WaveCount; w++) {
                 float Ground(int wave) => TD_Rules.Wave(wave).Where(g => g.kind is TD_EnemyKind.Scout or TD_EnemyKind.Apc or TD_EnemyKind.Tank).Sum(g => g.count * TD_Rules.Enemy(g.kind).health) * TD_Rules.HealthScale(wave);
                 if (w >= 3) Assert.LessOrEqual(Ground(w) / Ground(w - 1), 2f, $"wave {w} is a cliff");
-                int Ground_count(int wave) => TD_Rules.Wave(wave).Where(g => g.kind is TD_EnemyKind.Scout or TD_EnemyKind.Apc or TD_EnemyKind.Tank).Sum(g => g.count);
-                Assert.LessOrEqual(Ground_count(w) - Ground_count(w - 1), 10, $"wave {w} adds too many enemies at once");
+                int GroundCount(int wave) => TD_Rules.Wave(wave).Where(g => g.kind is TD_EnemyKind.Scout or TD_EnemyKind.Apc or TD_EnemyKind.Tank).Sum(g => g.count);
+                Assert.LessOrEqual(GroundCount(w) - GroundCount(w - 1), 10, $"wave {w} adds too many enemies at once");
             }
         }
 

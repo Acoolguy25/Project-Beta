@@ -20,6 +20,13 @@ namespace Universes.UniverseData.tower_defense.Client {
             public TD_TowerKind kind;
         }
 
+        /// <summary>A kill reward waiting briefly for nearby kills, so a rush shows one summed "+$" popup.</summary>
+        struct Reward {
+            public Vector3 position;
+            public int amount;
+            public float showAt;
+        }
+
         struct Line {
             public LineRenderer line;
             public float start, until, width;
@@ -42,6 +49,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         readonly Stack<Projectile> projectilePool = new();
         readonly List<Line> lines = new();
         readonly List<Flight> flights = new();
+        readonly List<Reward> rewards = new();
         readonly MaterialPropertyBlock block = new();
         readonly SfxLadder coinLadder;
 
@@ -104,10 +112,34 @@ namespace Universes.UniverseData.tower_defense.Client {
             }
             GameSfx.PlayAt(fx.largeExplosion ? SfxCue.ExplosionLarge : SfxCue.Explosion, position);
             if (fx.shake > 0f) CameraShake.Explosion(position, tuning.shakeRadius, fx.shake);
-            Vector2 spread = Random.insideUnitCircle * tuning.rewardPopupSpread;
-            Vector3 popup = position + new Vector3(spread.x, tuning.rewardPopupHeight + Random.value * tuning.rewardPopupSpread * 0.5f, spread.y);
-            FloatingText.Money(popup, reward, tuning.rewardPopupSize);
-            coinLadder.PlayAt(popup);
+            coinLadder.PlayAt(position);
+            AddReward(position, reward);
+        }
+
+        /// <summary>Adds to a pending popup nearby, or starts one; <see cref="ShowRewards"/> shows it when its window ends.</summary>
+        void AddReward(Vector3 position, int reward) {
+            float radius2 = tuning.rewardMergeRadius * tuning.rewardMergeRadius;
+            for (int i = 0; i < rewards.Count; i++) {
+                var r = rewards[i];
+                if ((r.position - position).sqrMagnitude > radius2) continue;
+                r.amount += reward;
+                r.position = Vector3.Lerp(r.position, position, 0.5f);
+                rewards[i] = r;
+                return;
+            }
+            rewards.Add(new Reward { position = position, amount = reward, showAt = Time.unscaledTime + tuning.rewardMergeSeconds });
+        }
+
+        void ShowRewards() {
+            float now = Time.unscaledTime;
+            for (int i = rewards.Count - 1; i >= 0; i--) {
+                var r = rewards[i];
+                if (now < r.showAt) continue;
+                Vector2 spread = Random.insideUnitCircle * tuning.rewardPopupSpread;
+                Vector3 popup = r.position + new Vector3(spread.x, tuning.rewardPopupHeight, spread.y);
+                FloatingText.Money(popup, r.amount, tuning.RewardPopupSize(r.amount));
+                rewards.RemoveAt(i);
+            }
         }
 
         /// <summary>An enemy that reached the base: it blows up against the walls, costing health, not paying.</summary>
@@ -142,6 +174,7 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         // ---------------------------------------------------------------- per frame
         public void Update() {
+            ShowRewards();
             float now = Time.time;
             for (int i = lines.Count - 1; i >= 0; i--) {
                 var l = lines[i];

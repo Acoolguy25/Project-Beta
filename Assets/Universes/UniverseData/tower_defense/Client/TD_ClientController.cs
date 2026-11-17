@@ -61,7 +61,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         ClientManager manager;
         TD_StateBroadcast state;
         bool hasState, ready, fastVote, toldRecord;
-        int selected, focusedSlot = -1, sellSlot = -1, ghostKind = -1;
+        int selected, focusedSlot = -1, sellSlot = -1, ghostKind = -1, confettiLeft;
+        float nextConfetti;
         float nextRequest, snapshotAt, sellConfirmUntil, lastAlarm = float.NegativeInfinity;
         readonly Dictionary<ushort, TD_EnemyView> enemyViews = new();
         readonly Dictionary<ushort, TD_EnemyKind> enemyKinds = new();
@@ -157,6 +158,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             TurnTowers(Time.deltaTime);
             BobMarkers();
             UpdateBadges();
+            ScreenConfetti();
             fx.Update();
             UpdateFocus();
             UpdateGhost();
@@ -202,6 +204,11 @@ namespace Universes.UniverseData.tower_defense.Client {
             UpdateFocus();
             if (focusedSlot < 0 || towerViews[focusedSlot] == null || manager == null || !manager.Started) return;
             var tower = towerSnaps[focusedSlot];
+            if (!CanSell(tower)) {
+                // The server refuses it too; say so at once instead of asking for a second press.
+                hud.Toast($"Only {tower.owner} can sell this {TD_Rules.Tower(tower.kind).name}.", TD_Hud.ToastKind.Bad, tuning.shortToastSeconds);
+                return;
+            }
             if (sellSlot == focusedSlot && Time.unscaledTime < sellConfirmUntil) {
                 manager.Broadcast(new TD_SellRequest { slot = (byte)focusedSlot });
                 sellSlot = -1;
@@ -211,6 +218,9 @@ namespace Universes.UniverseData.tower_defense.Client {
             sellConfirmUntil = Time.unscaledTime + sellConfirmSeconds;
             hud.Toast($"Press {sellKey} again to sell the {TD_Rules.Tower(tower.kind).name} for ${TD_Rules.SellRefund(tower.kind, tower.level)}", TD_Hud.ToastKind.Money, sellConfirmSeconds);
         }
+
+        /// <summary>Whether this client may sell <paramref name="tower"/>: unclaimed, or built by this player (same rule as the server).</summary>
+        bool CanSell(in TD_TowerSnap tower) => tower.ownerId < 0 || (manager != null && manager.Connection != null && tower.ownerId == manager.Connection.ClientId);
 
         void ToggleFastForward() {
             if (manager == null || !manager.Started || !hasState || !state.fastForwardAllowed) return;
@@ -312,7 +322,7 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         void RefreshFocusCard() {
             if (focusedSlot < 0 || !hasState) hud.ClearFocus();
-            else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString());
+            else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), CanSell(towerSnaps[focusedSlot]));
             else hud.ShowFocusPad((TD_TowerKind)selected, state.cash);
         }
 
@@ -385,11 +395,28 @@ namespace Universes.UniverseData.tower_defense.Client {
             Vector3 at = map.baseModel != null ? map.baseModel.position : TD_Rules.Lane[^1];
             if (won) {
                 GameFx.Play(FxKind.Confetti, at, tuning.victoryConfettiScale);
+                confettiLeft = tuning.victoryScreenBursts;
+                nextConfetti = Time.unscaledTime;
                 GameSfx.Play(SfxCue.Win);
             } else {
                 GameFx.Explosion(at, true, tuning.defeatShakeRadius);
                 GameSfx.Play(SfxCue.Lose);
             }
+        }
+
+        /// <summary>Victory bursts in front of the camera, one every interval, at the tuning's viewport points beside the card.</summary>
+        void ScreenConfetti() {
+            if (confettiLeft <= 0 || Time.unscaledTime < nextConfetti) return;
+            var cam = Camera.main;
+            var points = tuning.victoryScreenBurstPoints;
+            if (cam == null || points == null || points.Length == 0) {
+                confettiLeft = 0;
+                return;
+            }
+            Vector2 p = points[(tuning.victoryScreenBursts - confettiLeft) % points.Length];
+            GameFx.Play(FxKind.Confetti, cam.ViewportToWorldPoint(new Vector3(p.x, p.y, tuning.victoryScreenBurstDepth)), tuning.victoryScreenBurstScale);
+            confettiLeft--;
+            nextConfetti = Time.unscaledTime + tuning.victoryScreenBurstInterval;
         }
 
         static string Describe(int wave) {

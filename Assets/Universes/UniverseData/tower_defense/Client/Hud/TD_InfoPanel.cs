@@ -30,7 +30,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         /// <summary>Shows a built tower, its upgrade and its sale value.</summary>
-        public void ShowTower(TD_TowerSnap tower, Sprite towerPortrait, int cash, string sellKey) {
+        public void ShowTower(TD_TowerSnap tower, Sprite towerPortrait, int cash, string sellKey, bool canSell) {
             var t = TD_Rules.Tower(tower.kind);
             string owner = string.IsNullOrEmpty(tower.owner) ? "Unclaimed" : $"Built by {tower.owner}";
             Header(tower.kind, towerPortrait, t.name, owner, tower.level);
@@ -42,7 +42,9 @@ namespace Universes.UniverseData.tower_defense.Client {
                 Action($"Upgrade to Lv {tower.level + 1}  ${cost}", cash >= cost ? actionReady : actionBlocked);
             }
             sellLabel.gameObject.SetActive(true);
-            sellLabel.text = $"<b>{sellKey}</b> ×2  Sell for ${TD_Rules.SellRefund(tower.kind, tower.level)}  <color=#B4BCC8>({Mathf.RoundToInt(TD_Rules.SellRefundRate * 100f)}% back)</color>";
+            sellLabel.text = canSell
+                ? $"<b>{sellKey}</b> ×2  Sell for ${TD_Rules.SellRefund(tower.kind, tower.level)}  <color=#B4BCC8>({Mathf.RoundToInt(TD_Rules.SellRefundRate * 100f)}% back)</color>"
+                : $"<color=#B4BCC8>Only {tower.owner} can sell this tower</color>";
             fader.Set(true);
         }
 

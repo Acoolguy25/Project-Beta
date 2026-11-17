@@ -41,10 +41,11 @@ namespace Universes.UniverseData.tower_defense {
         /// </summary>
         public static int Damage(List<TD_SimEnemy> enemies, TD_SimEnemy e, float amount, List<ushort> killed) {
             // Gone already (leaked or killed): a late hit must not pay a reward.
-            if (e.health <= 0f || !enemies.Contains(e)) return 0;
+            int index = e.health > 0f ? enemies.IndexOf(e) : -1;
+            if (index < 0) return 0;
             e.health -= amount;
             if (e.health > 0f) return 0;
-            enemies.Remove(e);
+            enemies.RemoveAt(index);
             killed.Add(e.id);
             return TD_Rules.Enemy(e.kind).reward;
         }
