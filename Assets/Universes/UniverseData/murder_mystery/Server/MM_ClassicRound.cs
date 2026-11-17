@@ -87,6 +87,7 @@ namespace Universes.murder_mystery.Server {
             Active = true;
             bodies.Clear();
             participants.Clear();
+            manhuntRanksStale = true;
             kills.Clear();
             sheriffExposedUntil.Clear();
             GunTakeovers = 0;
@@ -115,6 +116,7 @@ namespace Universes.murder_mystery.Server {
         public void AddParticipant(GameCharacter character, PlayerData player, TeamColor team) {
             if (character == null)
                 return;
+            manhuntRanksStale = true;
             participants.Add(new Participant {
                 character = character,
                 player = player,
@@ -162,15 +164,19 @@ namespace Universes.murder_mystery.Server {
 
         /// <summary>The murderer's place in the manhunt: living murderers dealt before it this round.</summary>
         int ManhuntRank(GameCharacter hunter) {
-            int rank = 0;
-            foreach (Participant participant in participants) {
-                if (participant.character == hunter)
-                    return rank;
-                if (participant.role == MM_Role.Murderer && IsAlive(participant.character))
-                    rank++;
+            // Asked every frame by every NPC murderer; the order only changes when someone dies or takes a role.
+            if (manhuntRanksStale) {
+                manhuntRanks.Clear();
+                int rank = 0;
+                foreach (Participant participant in participants)
+                    if (participant.role == MM_Role.Murderer && IsAlive(participant.character))
+                        manhuntRanks[participant.character] = rank++;
+                manhuntRanksStale = false;
             }
-            return rank;
+            return manhuntRanks.TryGetValue(hunter, out int cached) ? cached : manhuntRanks.Count;
         }
+        readonly Dictionary<GameCharacter, int> manhuntRanks = new();
+        bool manhuntRanksStale = true;
 
         /// <summary>Seconds of hunt played so far this round; meetings do not count.</summary>
         public float HuntSecondsElapsed => Phase == MM_Phase.Hunt ? huntLength - SecondsLeft : 0f;
@@ -204,6 +210,7 @@ namespace Universes.murder_mystery.Server {
         public void OnCharacterDied(GameCharacter victim, GameCharacter killer) {
             if (!Active || victim == null)
                 return;
+            manhuntRanksStale = true;
             if (killer != null && killer != victim) {
                 kills[killer] = kills.TryGetValue(killer, out int k) ? k + 1 : 1;
                 MM_SaveData.RecordKill(killer, victim);
@@ -298,6 +305,7 @@ namespace Universes.murder_mystery.Server {
             Participant participant = participants.FirstOrDefault(p => p.character == character);
             if (participant != null)
                 participant.role = role;
+            manhuntRanksStale = true;
             if (weapon == MM_DroppedWeapon.Gun) {
                 droppedGun = null;
                 GunTakeovers++;

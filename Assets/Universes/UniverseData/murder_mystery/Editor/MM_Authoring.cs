@@ -55,10 +55,12 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         static readonly Color FogColor = new(0.045f, 0.052f, 0.07f);
         const float FogDensity = 0.011f;
         // The ground term keeps the darkest walls a deep blue rather than black (black walls showed the
-        // renderer's banding as blotches).
-        static readonly Color AmbientSky = new(0.21f, 0.24f, 0.32f);
-        static readonly Color AmbientEquator = new(0.19f, 0.2f, 0.235f);
-        static readonly Color AmbientGround = new(0.13f, 0.14f, 0.18f);
+        // renderer's banding as blotches). The ambient is the only light most of a wall gets: the map's walls
+        // and floors are a few huge meshes, and URP gives each object only its 8 most important lights, so a
+        // wall far from those reads black (it looked like a hole in the house) unless the ambient lifts it.
+        static readonly Color AmbientSky = new(0.32f, 0.36f, 0.48f);
+        static readonly Color AmbientEquator = new(0.28f, 0.3f, 0.35f);
+        static readonly Color AmbientGround = new(0.2f, 0.21f, 0.27f);
         static readonly Color TungstenLight = new(1f, 0.74f, 0.45f);
         // The fills are a bounce, not a source: almost white, so characters keep their own colours.
         static readonly Color FillLight = new(1f, 0.93f, 0.84f);
@@ -95,8 +97,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         const float FurnitureScale = 2.2f;
         // The bulb sits inside the shade, near the top of the 2.5 m model (model units).
         const float LampBulbHeight = 2.15f;
-        const float LampLightRange = 22f;
-        const float LampLightIntensity = 90f;
+        // At 90 the armchair, the rug and anyone beside the lamp clipped to flat yellow-white under the
+        // WarmIndoor grade; at this intensity they keep their own colour and shading 2-3 m from the bulb.
+        const float LampLightRange = 24f;
+        const float LampLightIntensity = 50f;
         // A thin pole and base: characters walk round the lamp, not through it (metres, after scaling).
         const float LampColliderRadius = 0.55f;
         // The shade glows: emission is the model's own palette texture tinted tungsten, so the light shade
@@ -108,6 +112,9 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         const float LampFloorSearch = 80f;
         // The wall is looked for in this many directions, from this fraction of the lamp's height.
         const int WallProbeDirections = 8;
+        // A lamp's wall is at least this wide (metres): a pillar or a post in a hall does not count, so a lamp
+        // does not end up in the middle of the floor next to one.
+        const float LampWallMinWidth = 4f;
         const float WallProbeHeightFraction = 0.5f;
         // No two lamps on the same storey closer than this (metres), so each keeps its own pool.
         const float LampSpacing = 15f;
@@ -120,11 +127,39 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         // 5 m of floor in front of it, so a group never narrows a corridor or a doorway.
         static readonly Vector3 CornerFootprintCentre = new(0f, 1.8f, 2f);
         static readonly Vector3 CornerFootprintHalfSize = new(4.6f, 1.4f, 4.5f);
-        // Walkable spots with no room light above them (world positions, a little above the floor): the
-        // landing at the top of the Secret Room stairs, whose room behind is not built and has no lights.
-        static readonly Vector3[] ExtraLampAnchors = { new(969.5f, 43f, 1124f) };
+        // Walkable spots with no room light above them (world positions, a little above the floor) and how far
+        // from the wall that lamp stands: the landing at the top of the Secret Room stairs, whose room behind is
+        // not built and has no lights, and the 30 m ramp corridor between Workshop 1 and the room south of it
+        // (far end and middle; Lamp 01 stands at its north end). The corridor is 5 m wide, so its lamps stand
+        // close to the side wall and come without the corner group.
+        static readonly (Vector3 position, float wallGap)[] ExtraLampAnchors = {
+            (new(969.5f, 43f, 1124f), LampWallGap),
+            (new(959.2f, 30f, 924.5f), CorridorLampWallGap),
+            (new(959.2f, 27.5f, 939.5f), CorridorLampWallGap),
+        };
+        const float CorridorLampWallGap = 1f;
         // After moving towards the wall there must be floor under the lamp within this height of the anchor's floor.
         const float MaxFloorStep = 1f;
+        // Rooms the map has no light in at all: a room fill there (world position, range, intensity). The Secret
+        // Room round the stair landing is a 27 x 14 m shaft, 30 m tall; without it its walls were black behind the
+        // landing lamp. Its walls are part of one mesh that spans the house, which gets only 8 lights of its own,
+        // so this fill is marked Important (picked before the others for that mesh).
+        static readonly (Vector3 position, float range, float intensity)[] ExtraFills = { (new(966f, 38f, 1123f), 28f, 30f) };
+
+        // Backdrop panels where the map shows the void: faces the map has only from the other side, so from a
+        // playable spot the camera looks through them at nothing. The step down at the north end of the Lower
+        // Hall (z 1192, 3 m high) is seen from behind from the lower floor and from the hall camera. Each is a
+        // quad facing +Z after its yaw, in the map's own Cement2 look (MM_Backdrop.mat), with no collider (the
+        // map's own collider is there).
+        const string BackdropRoot = "MM_Backdrop";
+        const string BackdropMaterialPath = Root + "/Materials/MM_Backdrop.mat";
+        const string MapModelPath = Root + "/map1/Map.fbx";
+        const string BackdropSourceMaterial = "Cement2";
+        // Metres of wall per repeat of the Cement2 texture.
+        const float BackdropTextureMetres = 3f;
+        static readonly (Vector3 centre, Vector2 size, float yaw)[] BackdropPanels = {
+            (new(1000.5f, 18.5f, 1192.2f), new(52f, 3.2f), 0f),
+        };
 
         [MenuItem("Ryan/Murder Mystery/Apply Atmosphere")]
         public static void ApplyAtmosphere() {
@@ -185,6 +220,8 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 }
                 List<Transform> lamps = PlaceLamps(scene, physics, lampPrefab, cornerPrefab, ceilingLights, fills);
                 ReplaceNearestFills(lamps, fills);
+                AddExtraFills(scene.GetRootGameObjects().First(o => o.name == LampsRoot).transform);
+                PlaceBackdrop(scene);
                 Debug.Log($"[MM] Atmosphere: {lamps.Count} lamps, {fills.Count(f => !f.enabled)} of {fills.Count} room fills replaced by a lamp.");
                 return true;
             });
@@ -249,15 +286,33 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             return glow;
         }
 
+        /// <summary>One piece of the corner group: KayKit model name, position next to the lamp (local +Z faces into
+        /// the room, the wall is LampWallGap behind the lamp), yaw in degrees, and whether it gets a collider.</summary>
+        readonly struct CornerPiece {
+            public readonly string model;
+            public readonly Vector3 position;
+            public readonly float yaw;
+            public readonly bool solid;
+            public CornerPiece(string model, Vector3 position, float yaw, bool solid) {
+                this.model = model; this.position = position; this.yaw = yaw; this.solid = solid;
+            }
+        }
+
+        // Armchair to the lamp's right, turned a little towards the room; a cabinet to its left, back to the
+        // wall; a rug in front (walkable, no collider).
+        static readonly CornerPiece[] CornerPieces = {
+            new("armchair_pillows", new Vector3(2.7f, 0f, -0.6f), -25f, true),
+            new("cabinet_medium_decorated", new Vector3(-2.9f, 0f, -1.4f), 0f, true),
+            new("rug_oval_A", new Vector3(0.6f, 0.02f, 1.2f), 0f, false),
+        };
+
         /// <summary>A lamp between an armchair and a cabinet, with a rug in front: a lived-in corner of a room.</summary>
         static GameObject BuildLampCornerPrefab(GameObject lampPrefab) {
             GameObject root = new("MM_LampCorner");
             try {
                 PrefabUtility.InstantiatePrefab(lampPrefab, root.transform);
-                // Local +Z faces into the room; the wall is LampWallGap behind the lamp.
-                AddFurniture(root.transform, "armchair_pillows", new Vector3(2.7f, 0f, -0.6f), -25f, true);
-                AddFurniture(root.transform, "cabinet_medium_decorated", new Vector3(-2.9f, 0f, -1.4f), 0f, true);
-                AddFurniture(root.transform, "rug_oval_A", new Vector3(0.6f, 0.02f, 1.2f), 0f, false);
+                foreach (CornerPiece piece in CornerPieces)
+                    AddFurniture(root.transform, piece.model, piece.position, piece.yaw, piece.solid);
                 return PrefabUtility.SaveAsPrefabAsset(root, LampCornerPrefabPath);
             } finally {
                 Object.DestroyImmediate(root);
@@ -332,8 +387,9 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             List<Transform> lamps = new();
             Collider[] footprintHits = new Collider[1];
             int corners = 0;
-            var anchors = ceilingLights.Concat(fills).Select(l => (name: l.name, position: l.transform.position, context: (Object)l))
-                .Concat(ExtraLampAnchors.Select(p => (name: $"Anchor {p}", position: p, context: (Object)null)));
+            var anchors = ceilingLights.Concat(fills).Select(l => (name: l.name, position: l.transform.position, wallGap: LampWallGap, context: (Object)l))
+                .Concat(ExtraLampAnchors.Select(a => (name: $"Anchor {a.position}", a.position, a.wallGap, context: (Object)null)));
+            int skipped = 0;
             foreach (var anchor in anchors) {
                 Vector3 from = anchor.position;
                 if (!physics.Raycast(from, Vector3.down, out RaycastHit floor, LampFloorSearch)) {
@@ -345,18 +401,21 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 }
                 float probeHeight = LampBulbHeight * FurnitureScale * WallProbeHeightFraction;
                 // Closer than the lamp gap is the lamp's own spot against a pillar or doorframe: not a wall to use.
-                float wallDistance = NearestWall(physics, floor.point + Vector3.up * probeHeight, LampWallSearch, LampWallGap, out Vector3 towardWall);
-                Vector3 spot = towardWall == Vector3.zero ? floor.point : floor.point + towardWall * (wallDistance - LampWallGap);
+                float wallDistance = NearestWall(physics, floor.point + Vector3.up * probeHeight, LampWallSearch, anchor.wallGap, out Vector3 towardWall, LampWallMinWidth);
+                Vector3 spot = floor.point + towardWall * (wallDistance - anchor.wallGap);
+                // No wall in reach with floor under the lamp (a hall centre, a stair): a lamp there would stand in
+                // the walkway, so there is none; the neighbouring lamps and the room's own lights cover the spot.
                 // Moving to the wall must not walk the lamp off a landing or onto a step.
-                if (towardWall != Vector3.zero && !physics.Raycast(spot + Vector3.up * MaxFloorStep, Vector3.down, 2f * MaxFloorStep)) {
-                    spot = floor.point;
-                    towardWall = Vector3.zero;
+                if (towardWall == Vector3.zero || !physics.Raycast(spot + Vector3.up * MaxFloorStep, Vector3.down, 2f * MaxFloorStep)) {
+                    Debug.Log($"[MM] No wall with floor in reach of {anchor.name}; no lamp there.", anchor.context);
+                    skipped++;
+                    continue;
                 }
                 if (lamps.Any(l => SameStorey(l.position, spot) && HorizontalDistance(l.position, spot) < LampSpacing))
                     continue;
 
-                Quaternion facing = towardWall == Vector3.zero ? Quaternion.identity : Quaternion.LookRotation(-towardWall);
-                bool roomForCorner = towardWall != Vector3.zero
+                Quaternion facing = Quaternion.LookRotation(-towardWall);
+                bool roomForCorner = anchor.wallGap >= LampWallGap
                     && physics.OverlapBox(spot + facing * CornerFootprintCentre, CornerFootprintHalfSize, footprintHits, facing, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) == 0;
                 GameObject lamp = (GameObject)PrefabUtility.InstantiatePrefab(roomForCorner ? cornerPrefab : lampPrefab, lampsRoot.transform);
                 lamp.name = $"Lamp {lamps.Count + 1:00} - {anchor.name}";
@@ -368,8 +427,65 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 Physics.SyncTransforms();
             }
             Undo.RegisterCreatedObjectUndo(lampsRoot, "Place murder mystery lamps");
-            Debug.Log($"[MM] {lamps.Count} lamps placed, {corners} with corner furniture.");
+            Debug.Log($"[MM] {lamps.Count} lamps placed, {corners} with corner furniture; {skipped} spots without a wall skipped.");
             return lamps;
+        }
+
+        static void AddExtraFills(Transform lampsRoot) {
+            foreach (var extra in ExtraFills) {
+                GameObject fill = new($"Extra Fill {extra.position}");
+                fill.transform.SetParent(lampsRoot, false);
+                fill.transform.position = extra.position;
+                Light light = fill.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = FillLight;
+                light.range = extra.range;
+                light.intensity = extra.intensity;
+                light.renderMode = LightRenderMode.ForcePixel;
+                light.shadows = LightShadows.None;
+            }
+        }
+
+        static void PlaceBackdrop(UnityEngine.SceneManagement.Scene scene) {
+            foreach (GameObject rootObject in scene.GetRootGameObjects())
+                if (rootObject.name == BackdropRoot)
+                    Undo.DestroyObjectImmediate(rootObject);
+            GameObject root = new(BackdropRoot);
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, scene);
+            Material material = BuildBackdropMaterial();
+            Mesh quad = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            foreach (var panel in BackdropPanels) {
+                GameObject piece = new($"Backdrop {panel.centre}");
+                piece.transform.SetParent(root.transform, false);
+                // The built-in quad faces -Z; turn it round so it faces +Z before the panel's own yaw.
+                piece.transform.SetPositionAndRotation(panel.centre, Quaternion.Euler(0f, panel.yaw + 180f, 0f));
+                piece.transform.localScale = new Vector3(panel.size.x, panel.size.y, 1f);
+                piece.AddComponent<MeshFilter>().sharedMesh = quad;
+                MeshRenderer renderer = piece.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            Undo.RegisterCreatedObjectUndo(root, "Murder mystery backdrop");
+        }
+
+        /// <summary>The map's Cement2 wall material, tiled for the first backdrop panel (there is one; a panel of
+        /// another size would want its own material).</summary>
+        static Material BuildBackdropMaterial() {
+            Material source = AssetDatabase.LoadAllAssetsAtPath(MapModelPath).OfType<Material>().FirstOrDefault(m => m.name == BackdropSourceMaterial);
+            if (source == null)
+                throw new System.InvalidOperationException($"Missing material {BackdropSourceMaterial} in {MapModelPath}");
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(BackdropMaterialPath);
+            if (material == null) {
+                material = new Material(source);
+                AssetDatabase.CreateAsset(material, BackdropMaterialPath);
+            } else {
+                material.CopyPropertiesFromMaterial(source);
+            }
+            Vector2 size = BackdropPanels[0].size;
+            material.SetTextureScale("_BaseMap", size / BackdropTextureMetres);
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssetIfDirty(material);
+            return material;
         }
 
         /// <summary>Switches off the room fill nearest each lamp, so the lamp is that spot's light instead of another one on top.</summary>
@@ -386,19 +502,29 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
         /// <summary>
         /// Distance to the nearest wall around <paramref name="from"/> (at most <paramref name="search"/>), and its
-        /// direction (zero if none). Hits closer than <paramref name="ignoreCloserThan"/> are skipped.
+        /// direction (zero if none). Hits closer than <paramref name="ignoreCloserThan"/> are skipped, and with
+        /// <paramref name="minWidth"/> so is anything narrower than that (two rays that far apart, either side of
+        /// the first, must hit it at about the same distance).
         /// </summary>
-        static float NearestWall(PhysicsScene physics, Vector3 from, float search, float ignoreCloserThan, out Vector3 direction) {
+        static float NearestWall(PhysicsScene physics, Vector3 from, float search, float ignoreCloserThan, out Vector3 direction, float minWidth = 0f) {
             float nearest = search;
             direction = Vector3.zero;
             for (int i = 0; i < WallProbeDirections; i++) {
                 Vector3 probe = Quaternion.Euler(0f, i * 360f / WallProbeDirections, 0f) * Vector3.forward;
-                if (physics.Raycast(from, probe, out RaycastHit wall, nearest) && wall.distance > ignoreCloserThan) {
+                if (physics.Raycast(from, probe, out RaycastHit wall, nearest) && wall.distance > ignoreCloserThan
+                    && (minWidth <= 0f || IsWide(physics, from, probe, wall.distance, minWidth))) {
                     nearest = wall.distance;
                     direction = probe;
                 }
             }
             return nearest;
+        }
+
+        static bool IsWide(PhysicsScene physics, Vector3 from, Vector3 probe, float distance, float width) {
+            Vector3 side = Vector3.Cross(Vector3.up, probe) * (width * 0.5f);
+            float tolerance = width * 0.5f;
+            return physics.Raycast(from + side, probe, out RaycastHit right, distance + tolerance) && Mathf.Abs(right.distance - distance) <= tolerance
+                && physics.Raycast(from - side, probe, out RaycastHit left, distance + tolerance) && Mathf.Abs(left.distance - distance) <= tolerance;
         }
 
         static bool SameStorey(Vector3 a, Vector3 b) => Mathf.Abs(a.y - b.y) < StoreyHeight;

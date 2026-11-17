@@ -17,8 +17,11 @@ round (`MM_VoteMode`): NPCs vs Players, Classic, or Infection.
 Limits: 3 meetings per round, no report in the first 10 s of the hunt or within 20 s of the last meeting.
 If every player is eliminated while a murderer is still alive, the murderers win.
 
-All of these numbers live in one serialized block, **Classic Tuning** (`MM_ClassicTuning`) on the
-`MM_ServerRunner` component, so they can be tuned in the Inspector without code changes.
+All of these numbers live in one serializable block, **Classic Tuning** (`MM_ClassicTuning`) on the
+`MM_ServerRunner` component, so they can be tuned in the Inspector without code changes. What ships today
+is the code defaults in `MM_ClassicTuning`: `MM_ServerRunner.prefab` (folder root) was last saved before the
+block existed and has no `classicTuning` values in it. The prefab only saves from an Editor in the Linux
+Server build profile; once it is saved there, the values in the prefab win over the code defaults.
 
 ### Balance: grace period and kill cooldown
 
@@ -111,25 +114,39 @@ two hues:
   (soft) shadows, so characters and lamps throw a shadow.
 - **Warm tungsten from lamps** spread through the house, so a warm source is in view from anywhere you
   stand: a standing lamp (`Prefabs/MM_StandingLamp.prefab`, KayKit model with an emissive shade
-  `Materials/MM_LampGlow.mat`, a point light in the shade, a thin capsule collider and a carving
-  NavMeshObstacle) goes against the nearest wall at each ceiling light and room fill, skipping any spot
-  within 15 m of a lamp on the same storey. 24 lamps (3 in the Lower Hall, one on the landing at the top of
-  the Secret Room stairs, from `ExtraLampAnchors`). Where the wall has room, the lamp comes as
-  `Prefabs/MM_LampCorner.prefab`: an armchair, a cabinet and a rug round it (KayKit Furniture Bits, box
-  colliders and carving obstacles); 11 corners. A ceiling light with no floor under it uses its nearest
-  fill's floor instead.
+  `Materials/MM_LampGlow.mat`, a point light in the shade at intensity 50 and range 24 m, a thin capsule
+  collider and a NavMeshObstacle) goes against the nearest wall at each ceiling light and room fill,
+  skipping any spot within 15 m of a lamp on the same storey. A "wall" is at least 4 m wide, so a pillar
+  does not count, and a spot with no wall in reach (the middle of the Lower Hall, the stair at its north
+  end) gets no lamp rather than one in the walkway. A ceiling light with no floor under it uses its
+  nearest fill's floor instead. `ExtraLampAnchors` adds lamps where the map has no light: the landing at
+  the top of the Secret Room stairs and two in the 30 m ramp corridor south of Workshop 1 (1 m from the
+  side wall, without furniture, since the corridor is 5 m wide). Where the wall has room, the lamp comes
+  as `Prefabs/MM_LampCorner.prefab`: an armchair, a cabinet and a rug round it (KayKit Furniture Bits,
+  box colliders and NavMeshObstacles). The scene has 26 lamps, 7 of them corners. The obstacles do not
+  carve (`m_Carve: 0`): NPCs steer round them, because a hole carved in the NavMesh at runtime cut the
+  Control Room off in an earlier pass.
 - The room fill nearest each lamp (within 10 m) is switched off: the lamp replaces it, so the floors do
   not stack more lights against the 8-per-object limit. The other fills are a short-range (13 m), nearly
   white bounce, so pools stay separate and characters keep their own colours; a fill within 3 m of a wall
   is dimmed in proportion (down to 25 %), so it does not paint a hard disc on the wall. The ceiling lights
   are a dim top light (24 m).
-- The ambient ground term is a deep blue, so the darkest walls are blue rather than black.
+- The ambient is a cool blue strong enough that a wall no lamp reaches is dark blue rather than black. The
+  map's walls and floors are a few meshes that span the whole house, and URP lights each object with only
+  its 8 most important lights, so far from those a wall gets the ambient and nothing else.
+- The Secret Room round the stair landing (no lights in the map) gets one extra room fill
+  (`ExtraFills`), marked Important so the house-wide wall mesh picks it.
+- `MM_Backdrop` (scene root, rebuilt by the tool): a panel in the map's Cement2 look
+  (`Materials/MM_Backdrop.mat`) on the step down at the north end of the Lower Hall. The map has that face
+  only from the other side, so the lower floor and the hall camera looked through it at the void.
 
 The Upper Hall's floor and walls are inactive in the map (only the balcony edge is visible from the Lower
-Hall) and the Secret Room behind the stair landing is not built, so neither gets a room of lamps.
+Hall), so it gets no lamps.
 
 Pipeline limits (shared `StarterAssetsURPAsset`, not changed): Forward, 8 additional lights per object,
-no additional-light shadows, so point lights are authored with shadows off. The tool also puts the
+no additional-light shadows, so point lights are authored with shadows off. On the cloud test machine
+(OpenGL Core) URP also keeps only 32 additional lights per camera (256 on DirectX/Vulkan/Metal), so
+frames taken there can be darker than the game on a player's PC. The tool also puts the
 "Dense Warm Fill Lights" and "Additional Warm Lights" containers back to an identity transform under
 `Map` (they had a transform that left all 56 lights near the world origin). Re-running it is safe and
 rebuilds the lamp prefabs and the lamps.
@@ -157,6 +174,6 @@ murderers shot as sheriff, and sheriff guns picked up.
 - `Client/MM_ClientHUD.cs` role card and badge, report prompt, body markers, meeting notice, ejection banner, results, sounds and effects.
 - `Editor/MM_Authoring.cs` (menu **Ryan > Murder Mystery > Rebuild HUD and Markers**) rebuilds `Prefabs/MM_HUD.prefab`
   and `Prefabs/MM_BodyMarker.prefab` and makes sure the HUD is in `murder_mystery_start.unity`. Run it from a client Editor.
-  The same menu has **Apply Atmosphere** for the scene.
+  The same menu has **Apply Atmosphere** for the scene (lighting, lamps, backdrop); it does not touch the HUD.
 - Accusations use the shared vote window through `ServerVote.StartDynamicVote` (runtime options, voter filter,
   tie-aware result), so other games can run the same kind of vote.
