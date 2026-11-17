@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using RyanAssets.GameFeel;
 using UnityEngine;
 
@@ -30,6 +31,9 @@ namespace Universes.UniverseData.tycoon.Client {
         [Min(0.1f)] public float popupSize = 1.4f;
         [Tooltip("Size of the small popups an auto-collector shows.")]
         [Min(0.1f)] public float autoPopupSize = 0.9f;
+        [Tooltip("An auto-collector's popup rings the register only every this many popups, so the late game does not nag.")]
+        [Min(1)] public int autoRegisterEvery = 3;
+        [Range(0f, 1f)] public float autoRegisterVolume = 0.35f;
         [Tooltip("Tint of the coin burst at the collector (the '+$' popups use the kit's money style).")]
         public Color cashColor = new(0.45f, 1f, 0.55f);
         [Min(0f)] public float collectBurstScale = 1.2f;
@@ -43,8 +47,10 @@ namespace Universes.UniverseData.tycoon.Client {
         [Min(0f)] public float dropStagger = 0.12f;
         [Range(0f, 1f)] public float landingSquash = 0.28f;
         [Min(0.05f)] public float landingSquashSeconds = 0.4f;
-        [Tooltip("Dust and confetti size for a 4 m item; scaled by the item's footprint.")]
+        [Tooltip("Dust and confetti size for an item as wide as the reference size below; scaled by the item's footprint.")]
         [Min(0f)] public float landingFxScale = 2f;
+        [Tooltip("Footprint width, in metres, at which landing effects play at landingFxScale.")]
+        [Min(0.1f)] public float landingFxReferenceSize = 4f;
         [Tooltip("Limits of the footprint scaling of landing effects.")]
         public Vector2 landingFxScaleRange = new(0.6f, 2.5f);
         [Tooltip("Camera shake on landing (0..1), felt within the radius below.")]
@@ -52,15 +58,26 @@ namespace Universes.UniverseData.tycoon.Client {
         [Min(1f)] public float landingShakeRadius = 35f;
         [Min(0.05f)] public float landingShakeSeconds = 0.3f;
         public Color dustColor = new(0.85f, 0.8f, 0.72f);
+        [Tooltip("Confetti tint (multiplies the kit's colours); white keeps them as designed.")]
+        public Color confettiColor = Color.white;
+        [Tooltip("Height above the ground where the landing confetti bursts.")]
+        [Min(0f)] public float confettiHeight = 1f;
 
         [Header("Gold coin")]
         [Tooltip("Tint of the light pillar over your gold coin, so you can find it.")]
         public Color beaconColor = new(1f, 0.68f, 0.12f);
         [Min(0f)] public float beaconScale = 1.6f;
         [Min(0f)] public float coinBurstScale = 1.8f;
+        [Tooltip("Size of the sparkle when a coin appears.")]
+        [Min(0f)] public float coinAppearBurstScale = 0.9f;
+        [Range(0f, 1f)] public float coinAppearVolume = 0.8f;
         public Color goldColor = new(1f, 0.85f, 0.3f);
         [Tooltip("Pitch of the sparkle when a coin appears, in semitones above the pickup cue.")]
         public float coinAppearSemitones = 7f;
+        [Tooltip("Size of the '+$' popup of a grabbed coin, relative to popupSize.")]
+        [Min(0.1f)] public float coinPopupScale = 1.2f;
+        [Tooltip("Coins of the cash-register run when a gold coin is grabbed.")]
+        [Range(1, 12)] public int coinRegisterCoins = 3;
 
         [Header("Rebirth")]
         [Tooltip("Screen flash colour; alpha is the peak opacity.")]
@@ -69,13 +86,21 @@ namespace Universes.UniverseData.tycoon.Client {
         [Min(0.05f)] public float rebirthFlashSeconds = 0.6f;
         [Tooltip("Size of the shockwave ring over the plot.")]
         [Min(0f)] public float shockwaveScale = 9f;
+        [Min(0f)] public float rebirthConfettiScale = 4f;
+        [Tooltip("Height above the plot centre where the rebirth confetti bursts.")]
+        [Min(0f)] public float rebirthConfettiHeight = 2f;
         [Range(0f, 1f)] public float rebirthShake = 0.8f;
         [Min(1f)] public float rebirthShakeRadius = 60f;
         [Tooltip("Seconds over which the old build is torn down, one item after another.")]
-        [Min(0f)] public float teardownSpread = 0.8f;
-        [Min(0.05f)] public float teardownSeconds = 0.35f;
-        [Tooltip("Delay after the rebirth before the kept items drop back in.")]
-        [Min(0f)] public float rebuildDelay = 1.1f;
+        [Min(0f)] public float teardownSpread = 1.2f;
+        [Tooltip("Seconds one item takes to sink or shrink away.")]
+        [Min(0.05f)] public float teardownSeconds = 0.5f;
+        [Tooltip("Items wider than this (metres) sink flat into the floor; smaller ones shrink about their own centre.")]
+        [Min(0.5f)] public float teardownFlattenSize = 6f;
+        [Tooltip("Most dust or smoke puffs one item makes when it lands or collapses, one per part (a wall run puffs along its length).")]
+        [Range(1, 16)] public int maxPartPuffs = 8;
+        [Tooltip("Delay after the rebirth before the kept items drop back in (after the whole build has collapsed).")]
+        [Min(0f)] public float rebuildDelay = 1.9f;
 
         [Header("Other moments")]
         [Tooltip("Screen flash when a perk is bought; alpha is the peak opacity.")]
@@ -84,12 +109,43 @@ namespace Universes.UniverseData.tycoon.Client {
         [Tooltip("Screen flash when a rush hour starts; alpha is the peak opacity.")]
         public Color rushFlash = new(1f, 0.62f, 0.15f, 0.3f);
         [Min(0.5f)] public float bannerSeconds = 2.2f;
+        [Tooltip("Size of the centre banners (rebirth, rush hour), as a fraction of the kit's largest size.")]
+        [Range(0.2f, 1f)] public float bannerSize = 0.6f;
         [Tooltip("Punch on a pad that has just become affordable.")]
         [Range(0f, 1f)] public float affordablePunch = 0.2f;
 
+        [Header("Volumes")]
+        [Range(0f, 1f)] public float deniedVolume = 0.7f;
+        [Range(0f, 1f)] public float collectorFullVolume = 0.5f;
+        [Tooltip("Pitch of the 'collector full' buzz, in semitones (negative = lower).")]
+        public float collectorFullSemitones = -3f;
+        [Range(0f, 1f)] public float rushEndVolume = 0.6f;
+
         SfxLadder register;
+        int autoPopups;
+        // Animations in flight, finished at once if this object is disabled mid-animation (see OnDisable).
+        readonly Dictionary<Transform, Vector3> pendingDrops = new();
+        readonly HashSet<GameObject> pendingTeardowns = new();
+        static readonly List<Renderer> RendererBuffer = new();
 
         void Awake() => register = new SfxLadder(SfxCue.Coin, registerSemitoneStep, maxRegisterCoins * 2, registerResetSeconds);
+
+        /// <summary>
+        /// Coroutines stop with this object: put dropping items where they belong and remove the ones
+        /// being torn down, so nothing stays hidden, floating or half-shrunk.
+        /// </summary>
+        void OnDisable() {
+            StopAllCoroutines();
+            foreach (var pair in pendingDrops) {
+                if (pair.Key == null) continue;
+                Punch.Cancel(pair.Key);
+                pair.Key.gameObject.SetActive(true);
+                pair.Key.localPosition = pair.Value;
+            }
+            pendingDrops.Clear();
+            foreach (var item in pendingTeardowns) if (item != null) Destroy(item);
+            pendingTeardowns.Clear();
+        }
 
         // ---------------------------------------------------------------- belt
         public void BrickDropped(Vector3 dropper) => GameSfx.PlayAt(dropperTick, dropper);
@@ -108,7 +164,7 @@ namespace Universes.UniverseData.tycoon.Client {
         /// <summary>An auto-collector banked <paramref name="amount"/> since the last popup.</summary>
         public void Earned(Vector3 collector, long amount) {
             MoneyPopup(collector, amount, autoPopupSize);
-            register.PlayAt(collector, 0.5f);
+            if (autoPopups++ % autoRegisterEvery == 0) register.PlayAt(collector, autoRegisterVolume);
         }
 
         void MoneyPopup(Vector3 at, long amount, float size) => FloatingText.Money(at + Vector3.up * popupHeight, amount, size);
@@ -122,18 +178,18 @@ namespace Universes.UniverseData.tycoon.Client {
         }
 
         public void CoinAppeared(Vector3 coin) {
-            GameSfx.PlayAt(SfxCue.Pickup, coin, 0.8f, GameSfx.Semitones(coinAppearSemitones));
-            GameFx.Play(FxKind.CoinBurst, coin + Vector3.up, goldColor, coinBurstScale * 0.5f);
+            GameSfx.PlayAt(SfxCue.Pickup, coin, coinAppearVolume, GameSfx.Semitones(coinAppearSemitones));
+            GameFx.Play(FxKind.CoinBurst, coin + Vector3.up, goldColor, coinAppearBurstScale);
         }
 
         /// <summary>A light pillar that follows the coin; stop the handle when the coin goes.</summary>
         public FxHandle StartBeacon(Transform coin) => GameFx.Attach(FxKind.BeaconBeam, coin, Vector3.zero, beaconColor, beaconScale);
 
         public void CoinGrabbed(Vector3 coin, long amount) {
-            FloatingText.Money(coin + Vector3.up * popupHeight, amount, popupSize * 1.2f);
+            MoneyPopup(coin, amount, popupSize * coinPopupScale);
             GameFx.Play(FxKind.CoinBurst, coin + Vector3.up, goldColor, coinBurstScale);
             GameSfx.PlayAt(SfxCue.Pickup, coin);
-            StartCoroutine(RegisterRun(coin, 3));
+            StartCoroutine(RegisterRun(coin, coinRegisterCoins));
         }
 
         // ---------------------------------------------------------------- building
@@ -142,12 +198,12 @@ namespace Universes.UniverseData.tycoon.Client {
 
         public void Claimed(Vector3 pad) {
             GameSfx.Play(SfxCue.LevelUp);
-            GameFx.Play(FxKind.Confetti, pad + Vector3.up, Color.white, landingFxScale);
+            GameFx.Play(FxKind.Confetti, pad + Vector3.up * confettiHeight, confettiColor, landingFxScale);
         }
 
-        public void Denied() => GameSfx.Play(SfxCue.Error, 0.7f);
+        public void Denied() => GameSfx.Play(SfxCue.Error, deniedVolume);
 
-        public void CollectorFull() => GameSfx.Play(SfxCue.Error, 0.5f, GameSfx.Semitones(-3f));
+        public void CollectorFull() => GameSfx.Play(SfxCue.Error, collectorFullVolume, GameSfx.Semitones(collectorFullSemitones));
 
         public void Perk() {
             GameSfx.Play(SfxCue.LevelUp);
@@ -165,14 +221,37 @@ namespace Universes.UniverseData.tycoon.Client {
         /// <summary>Drops a freshly placed item in from above; it lands with a squash, dust, confetti and a shake.</summary>
         /// <param name="rest">Where the item stands once landed (its parent's space).</param>
         /// <param name="shake">Shake the camera on landing (the local player's own plot).</param>
-        public void DropIn(Transform item, Vector3 rest, float delay, bool shake) => StartCoroutine(DropRoutine(item, rest, delay, shake));
+        public void DropIn(Transform item, Vector3 rest, float delay, bool shake) => Begin(item, rest, DropRoutine(item, rest, delay, shake, false));
 
-        IEnumerator DropRoutine(Transform item, Vector3 rest, float delay, bool shake) {
+        /// <summary>
+        /// A kept item on rebirth: it collapses with the rest of the build, then drops back in after
+        /// <paramref name="delay"/>.
+        /// </summary>
+        public void Rebuild(Transform item, Vector3 rest, float vanishDelay, float delay, bool shake) =>
+            Begin(item, rest, DropRoutine(item, rest, delay, shake, true, vanishDelay));
+
+        void Begin(Transform item, Vector3 rest, IEnumerator routine) {
+            pendingDrops[item] = rest;
+            StartCoroutine(routine);
+        }
+
+        IEnumerator DropRoutine(Transform item, Vector3 rest, float delay, bool shake, bool vanishFirst, float vanishDelay = 0f) {
             Punch.Cancel(item);
             Vector3 up = item.parent != null ? item.parent.InverseTransformDirection(Vector3.up) : Vector3.up;
-            if (delay > 0f) {
+            float wait = delay;
+            if (vanishFirst) {
+                Vector3 scale = item.localScale;
+                if (vanishDelay > 0f) yield return new WaitForSeconds(vanishDelay);
+                if (item == null) yield break;
+                yield return Collapse(item);
+                if (item == null) yield break;
+                item.localScale = scale;
+                item.localPosition = rest;
+                wait -= vanishDelay + teardownSeconds;
+            }
+            if (wait > 0f) {
                 item.gameObject.SetActive(false);
-                yield return new WaitForSeconds(delay);
+                yield return new WaitForSeconds(wait);
                 if (item == null) yield break;
                 item.gameObject.SetActive(true);
             }
@@ -183,54 +262,89 @@ namespace Universes.UniverseData.tycoon.Client {
             }
             if (item == null) yield break;
             item.localPosition = rest;
+            pendingDrops.Remove(item);
             Landed(item, shake);
         }
 
         void Landed(Transform item, bool shake) {
             Punch.Squash(item, landingSquash, landingSquashSeconds);
-            (Vector3 centre, float scale) = Footprint(item);
-            GameFx.Play(FxKind.DustPuff, centre, dustColor, scale);
-            GameFx.Play(FxKind.Confetti, centre + Vector3.up, Color.white, scale);
+            (Vector3 centre, float scale, _) = Footprint(item);
+            PuffAlongParts(FxKind.DustPuff, item);
+            GameFx.Play(FxKind.Confetti, centre + Vector3.up * confettiHeight, confettiColor, scale);
             GameSfx.PlayAt(SfxCue.Build, centre);
             if (shake) CameraShake.Explosion(centre, landingShakeRadius, landingShake, landingShakeSeconds);
         }
 
-        /// <summary>Ground point under the item's visible centre and an effect scale for its size.</summary>
-        (Vector3 centre, float scale) Footprint(Transform item) {
-            var renderers = item.GetComponentsInChildren<Renderer>();
-            if (renderers.Length == 0) return (item.position, landingFxScale);
-            Bounds bounds = renderers[0].bounds;
-            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+        /// <summary>Ground point under the item's visible centre, an effect scale for its size, and its width.</summary>
+        (Vector3 centre, float scale, float size) Footprint(Transform item) {
+            item.GetComponentsInChildren(RendererBuffer);
+            if (RendererBuffer.Count == 0) return (item.position, landingFxScale, 0f);
+            Bounds bounds = RendererBuffer[0].bounds;
+            for (int i = 1; i < RendererBuffer.Count; i++) bounds.Encapsulate(RendererBuffer[i].bounds);
             float size = Mathf.Max(bounds.size.x, bounds.size.z);
-            float scale = landingFxScale * Mathf.Clamp(size / 4f, landingFxScaleRange.x, landingFxScaleRange.y);
-            return (new Vector3(bounds.center.x, item.position.y, bounds.center.z), scale);
+            return (new Vector3(bounds.center.x, item.position.y, bounds.center.z), EffectScale(size), size);
         }
 
-        /// <summary>Shrinks an item away in a puff of smoke, then destroys it.</summary>
-        public void TearDown(GameObject item, float delay) => StartCoroutine(TearDownRoutine(item, delay));
+        /// <summary>
+        /// One puff on the ground under each part of the item (up to <see cref="maxPartPuffs"/>, spread
+        /// evenly), sized to that part: a wall run puffs along its whole length, not in the plot's middle.
+        /// </summary>
+        void PuffAlongParts(FxKind kind, Transform item) {
+            item.GetComponentsInChildren(RendererBuffer);
+            int parts = RendererBuffer.Count, puffs = Mathf.Min(parts, maxPartPuffs);
+            for (int i = 0; i < puffs; i++) {
+                Bounds part = RendererBuffer[parts * i / puffs].bounds;
+                Vector3 ground = new(part.center.x, item.position.y, part.center.z);
+                GameFx.Play(kind, ground, dustColor, EffectScale(Mathf.Max(part.size.x, part.size.z)));
+            }
+        }
+
+        float EffectScale(float size) => landingFxScale * Mathf.Clamp(size / landingFxReferenceSize, landingFxScaleRange.x, landingFxScaleRange.y);
+
+        /// <summary>Collapses an item in a puff of smoke, then destroys it.</summary>
+        public void TearDown(GameObject item, float delay) {
+            pendingTeardowns.Add(item);
+            StartCoroutine(TearDownRoutine(item, delay));
+        }
 
         IEnumerator TearDownRoutine(GameObject item, float delay) {
             if (delay > 0f) yield return new WaitForSeconds(delay);
             if (item == null) yield break;
-            Transform t = item.transform;
+            yield return Collapse(item.transform);
+            pendingTeardowns.Remove(item);
+            if (item != null) Destroy(item);
+        }
+
+        /// <summary>
+        /// Smoke along the item's parts, then a wide item (a wall run, a building row) sinks flat into
+        /// the floor while a small one shrinks about its own centre, so nothing slides across the plot.
+        /// </summary>
+        IEnumerator Collapse(Transform t) {
             Punch.Cancel(t);
-            (Vector3 centre, float scale) = Footprint(t);
-            GameFx.Play(FxKind.Smoke, centre, dustColor, scale);
-            GameFx.Play(FxKind.DustPuff, centre, dustColor, scale);
-            Vector3 start = t.localScale;
+            (Vector3 centre, _, float size) = Footprint(t);
+            PuffAlongParts(FxKind.DustPuff, t);
+            PuffAlongParts(FxKind.Smoke, t);
+            bool flatten = size > teardownFlattenSize;
+            Vector3 startScale = t.localScale, startPosition = t.position;
             for (float a = 0f; a < 1f; a += Time.deltaTime / teardownSeconds) {
-                if (item == null) yield break;
-                t.localScale = start * (1f - a * a);
+                if (t == null) yield break;
+                float keep = 1f - a * a;
+                if (flatten) {
+                    t.localScale = new Vector3(startScale.x, startScale.y * keep, startScale.z);
+                } else {
+                    t.localScale = startScale * keep;
+                    t.position = centre + (startPosition - centre) * keep;
+                }
                 yield return null;
             }
-            if (item != null) Destroy(item);
+            if (t != null) t.localScale = Vector3.zero;
         }
 
         // ---------------------------------------------------------------- rebirth and events
         /// <summary>What everyone nearby sees when a plot rebirths: shockwave, confetti, a boom and a shake.</summary>
         public void RebirthWorld(Vector3 plotCentre) {
             GameFx.Play(FxKind.ShockwaveRing, plotCentre, rebirthColor, shockwaveScale);
-            GameFx.Play(FxKind.Confetti, plotCentre + Vector3.up * 2f, rebirthColor, landingFxScale * 2f);
+            GameFx.Play(FxKind.Confetti, plotCentre + Vector3.up * rebirthConfettiHeight, rebirthColor, rebirthConfettiScale);
             GameSfx.PlayAt(SfxCue.ExplosionLarge, plotCentre);
             CameraShake.Explosion(plotCentre, rebirthShakeRadius, rebirthShake);
         }
@@ -238,16 +352,17 @@ namespace Universes.UniverseData.tycoon.Client {
         /// <summary>The rebirthing player's own screen: flash, banner and fanfare.</summary>
         public void RebirthScreen(int rebirths) {
             ScreenFx.Flash(rebirthFlash, rebirthFlashSeconds);
-            ScreenFx.ShowText($"REBIRTH {rebirths}!", rebirthColor, bannerSeconds);
+            ScreenFx.ShowText($"REBIRTH {rebirths}!", rebirthColor, bannerSeconds, bannerSize);
             GameSfx.Play(SfxCue.Win);
         }
 
+        /// <param name="multiplier">The server's rush multiplier, or 0 when not known yet (the banner then leaves it out).</param>
         public void RushStarted(float multiplier) {
             ScreenFx.Flash(rushFlash);
-            ScreenFx.ShowText($"RUSH HOUR x{multiplier:0.#}", rushColor, bannerSeconds);
-            GameSfx.Play(SfxCue.Go);
+            ScreenFx.ShowText(multiplier > 1f ? $"RUSH x{multiplier:0.#}" : "RUSH HOUR", rushColor, bannerSeconds, bannerSize);
+            GameSfx.Play(SfxCue.Horn);
         }
 
-        public void RushEnded() => GameSfx.Play(SfxCue.Whoosh, 0.6f);
+        public void RushEnded() => GameSfx.Play(SfxCue.Whoosh, rushEndVolume);
     }
 }

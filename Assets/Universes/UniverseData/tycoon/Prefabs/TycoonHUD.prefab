@@ -13821,7 +13821,12 @@ MonoBehaviour:
   maxBricksPerBelt: 80
   brickDropHeight: 2.2
   brickRideHeight: 0.2
-  brickGrowthPerStage: 0.1
+  brickGrowthPerStage: 0.12
+  brickGlowStrength:
+  - 0
+  - 0.6
+  - 0.75
+  - 0.95
   beltScrollDirection: 1
   autoPopupSeconds: 3
 --- !u!114 &7523678133117142180
@@ -13871,6 +13876,16 @@ MonoBehaviour:
   hintCollect: {fileID: 21300000, guid: 76337178ee538b340930181b3db9430a, type: 3}
   hintWait: {fileID: 21300000, guid: e7eca289a98603832a89e8c56af7b5fa, type: 3}
   toast: {fileID: 897909765658302684}
+  toastFadeSpeed: 6
+  toastBoughtSeconds: 2.5
+  toastCollectedSeconds: 2
+  toastDeniedSeconds: 2.5
+  toastRebirthSeconds: 5
+  toastGoldSeconds: 3
+  toastPerkSeconds: 3
+  toastFullSeconds: 3.5
+  toastRushOverSeconds: 3
+  toastDefaultSeconds: 3
   toastAccent: {fileID: 1688147906082138513}
   toastIcon: {fileID: 8006817021900072972}
   toastText: {fileID: 1175364616113368903}
@@ -13931,6 +13946,8 @@ MonoBehaviour:
   popupHeight: 2.4
   popupSize: 1.4
   autoPopupSize: 0.9
+  autoRegisterEvery: 3
+  autoRegisterVolume: 0.35
   cashColor: {r: 0.45, g: 1, b: 0.55, a: 1}
   collectBurstScale: 1.2
   dropHeight: 9
@@ -13939,30 +13956,46 @@ MonoBehaviour:
   landingSquash: 0.28
   landingSquashSeconds: 0.4
   landingFxScale: 2
+  landingFxReferenceSize: 4
   landingFxScaleRange: {x: 0.6, y: 2.5}
   landingShake: 0.25
   landingShakeRadius: 35
   landingShakeSeconds: 0.3
   dustColor: {r: 0.85, g: 0.8, b: 0.72, a: 1}
+  confettiColor: {r: 1, g: 1, b: 1, a: 1}
+  confettiHeight: 1
   beaconColor: {r: 1, g: 0.68, b: 0.12, a: 1}
   beaconScale: 1.6
   coinBurstScale: 1.8
+  coinAppearBurstScale: 0.9
+  coinAppearVolume: 0.8
   goldColor: {r: 1, g: 0.85, b: 0.3, a: 1}
   coinAppearSemitones: 7
+  coinPopupScale: 1.2
+  coinRegisterCoins: 3
   rebirthFlash: {r: 1, g: 0.42, b: 0.84, a: 0.65}
   rebirthColor: {r: 1, g: 0.42, b: 0.84, a: 1}
   rebirthFlashSeconds: 0.6
   shockwaveScale: 9
+  rebirthConfettiScale: 4
+  rebirthConfettiHeight: 2
   rebirthShake: 0.8
   rebirthShakeRadius: 60
-  teardownSpread: 0.8
-  teardownSeconds: 0.35
-  rebuildDelay: 1.1
+  teardownSpread: 1.2
+  teardownSeconds: 0.5
+  teardownFlattenSize: 6
+  maxPartPuffs: 8
+  rebuildDelay: 1.9
   perkFlash: {r: 1, g: 0.85, b: 0.3, a: 0.25}
   rushColor: {r: 1, g: 0.62, b: 0.15, a: 1}
   rushFlash: {r: 1, g: 0.62, b: 0.15, a: 0.3}
   bannerSeconds: 2.2
+  bannerSize: 0.6
   affordablePunch: 0.2
+  deniedVolume: 0.7
+  collectorFullVolume: 0.5
+  collectorFullSemitones: -3
+  rushEndVolume: 0.6
 --- !u!1 &4915508552241904351
 GameObject:
   m_ObjectHideFlags: 0

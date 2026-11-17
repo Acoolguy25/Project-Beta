@@ -49,6 +49,11 @@ namespace Universes.UniverseData.tycoon.Client {
 
         [Header("Toast")]
         public CanvasGroup toast;
+        [Tooltip("Toast fade in/out speed, in alpha per second.")]
+        [Min(0.1f)] public float toastFadeSpeed = 6f;
+        [Tooltip("Seconds a toast stays up, per kind of event.")]
+        [Min(0.5f)] public float toastBoughtSeconds = 2.5f, toastCollectedSeconds = 2f, toastDeniedSeconds = 2.5f, toastRebirthSeconds = 5f,
+            toastGoldSeconds = 3f, toastPerkSeconds = 3f, toastFullSeconds = 3.5f, toastRushOverSeconds = 3f, toastDefaultSeconds = 3f;
         public Image toastAccent, toastIcon;
         public TMP_Text toastText;
         public Sprite iconBought, iconCash, iconDenied, iconRebirth, iconGolden, iconPerk, iconInfo, iconFull, iconRush;
@@ -69,6 +74,9 @@ namespace Universes.UniverseData.tycoon.Client {
         bool hasWallet;
         float toastUntil;
         double cashShown, cashFrom, cashTarget;
+        long cashTextKey = long.MinValue;
+        // Diagnostics: how often the cash text was rewritten (stays put while the number does not change).
+        int cashTextWrites;
         float cashCount = 1f;
         float rushEndsAt;
         int rushShownSeconds = -1;
@@ -83,7 +91,7 @@ namespace Universes.UniverseData.tycoon.Client {
             perksClose.onClick.AddListener(TogglePerks);
             foreach (var row in perkRows) row.Upgrade += RequestPerk;
             plotTitle.text = "BRICK TYCOON";
-            cash.text = "$0";
+            ShowCash(0);
             income.text = "";
             multiplierPill.SetActive(false);
             rushPill.SetActive(false);
@@ -98,7 +106,7 @@ namespace Universes.UniverseData.tycoon.Client {
 
         void Update() {
             float target = Time.unscaledTime < toastUntil ? 1f : 0f;
-            toast.alpha = Mathf.MoveTowards(toast.alpha, target, Time.unscaledDeltaTime * 6f);
+            toast.alpha = Mathf.MoveTowards(toast.alpha, target, Time.unscaledDeltaTime * toastFadeSpeed);
             CountCash();
             TickRush();
             var keyboard = Keyboard.current;
@@ -112,7 +120,7 @@ namespace Universes.UniverseData.tycoon.Client {
 
         // ---------------------------------------------------------------- cash counter and rush timer
         void SetCash(long value) {
-            if (!hasWallet) { cashShown = cashTarget = value; cashCount = 1f; cash.text = $"${TY_Catalog.Money(value)}"; return; }
+            if (!hasWallet) { cashShown = cashTarget = value; cashCount = 1f; ShowCash(value); return; }
             if (value == cashTarget) return;
             cashFrom = cashShown;
             cashTarget = value;
@@ -125,8 +133,28 @@ namespace Universes.UniverseData.tycoon.Client {
             cashCount = Mathf.Min(1f, cashCount + Time.unscaledDeltaTime / cashCountSeconds);
             float eased = 1f - (1f - cashCount) * (1f - cashCount) * (1f - cashCount);
             cashShown = cashCount >= 1f ? cashTarget : cashFrom + (cashTarget - cashFrom) * eased;
-            cash.text = $"${TY_Catalog.Money(System.Math.Floor(cashShown))}";
+            ShowCash((long)System.Math.Floor(cashShown));
         }
+
+        /// <summary>
+        /// Rewrites the cash text only when what it shows changes: whole dollars below 10K (written
+        /// without allocating), the shown digits of "12.5K" / "3.25M" above that.
+        /// </summary>
+        void ShowCash(long value) {
+            long key = CashTextKey(value);
+            if (key == cashTextKey) return;
+            cashTextKey = key;
+            cashTextWrites++;
+            if (value >= 0 && value < 10_000) cash.SetText("${0}", value);
+            else cash.text = "$" + TY_Catalog.Money(value);
+        }
+
+        /// <summary>Changes exactly when <see cref="TY_Catalog.Money"/>'s text for <paramref name="value"/> can change.</summary>
+        static long CashTextKey(long value) =>
+            value < 10_000 ? value
+            : value < 1_000_000 ? (1L << 40) + value / 50 // "0.#" K: steps of $100, rounded, so check every $50
+            : value < 1_000_000_000 ? (2L << 40) + value / 5_000 // "0.##" M: steps of $10K
+            : (3L << 40) + value / 5_000_000; // "0.##" B
 
         /// <summary>Bumps the cash number (a collection or a gold coin just paid out).</summary>
         public void PunchCash() => Punch.Scale(cash.transform, cashPunch);
@@ -249,17 +277,18 @@ namespace Universes.UniverseData.tycoon.Client {
 
         // ---------------------------------------------------------------- feedback
         public void ShowEvent(in TY_EventBroadcast e) {
+            // A rush hour's start already has the chat line, the banner and the HUD pill: no toast as well.
+            if (e.kind == TY_EventKind.RushHour) return;
             (Sprite icon, Color color, float seconds) = e.kind switch {
-                TY_EventKind.Bought or TY_EventKind.Claimed => (iconBought, toastBought, 2.5f),
-                TY_EventKind.Collected => (iconCash, toastCash, 2f),
-                TY_EventKind.TooPoor => (iconDenied, toastDenied, 2.5f),
-                TY_EventKind.Rebirth => (iconRebirth, toastRebirth, 5f),
-                TY_EventKind.GoldenBrick => (iconGolden, toastGold, 3f),
-                TY_EventKind.Perk => (iconPerk, toastGold, 3f),
-                TY_EventKind.CollectorFull => (iconFull, toastFull, 3.5f),
-                TY_EventKind.RushHour => (iconRush, toastRush, 4f),
-                TY_EventKind.RushHourOver => (iconRush, toastCash, 3f),
-                _ => (iconInfo, toastCash, 3f),
+                TY_EventKind.Bought or TY_EventKind.Claimed => (iconBought, toastBought, toastBoughtSeconds),
+                TY_EventKind.Collected => (iconCash, toastCash, toastCollectedSeconds),
+                TY_EventKind.TooPoor => (iconDenied, toastDenied, toastDeniedSeconds),
+                TY_EventKind.Rebirth => (iconRebirth, toastRebirth, toastRebirthSeconds),
+                TY_EventKind.GoldenBrick => (iconGolden, toastGold, toastGoldSeconds),
+                TY_EventKind.Perk => (iconPerk, toastGold, toastPerkSeconds),
+                TY_EventKind.CollectorFull => (iconFull, toastFull, toastFullSeconds),
+                TY_EventKind.RushHourOver => (iconRush, toastRush, toastRushOverSeconds),
+                _ => (iconInfo, toastCash, toastDefaultSeconds),
             };
             toastText.text = e.text;
             toastIcon.sprite = icon != null ? icon : iconInfo;

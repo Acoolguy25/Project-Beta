@@ -23,7 +23,15 @@ namespace Universes.UniverseData.tycoon.Client {
         [Tooltip("Height of a brick above the belt surface.")]
         [SerializeField, Min(0f)] float brickRideHeight = 0.2f;
         [Tooltip("How much bigger a brick gets per upgrader it passes (0.1 = 10%).")]
-        [SerializeField, Min(0f)] float brickGrowthPerStage = 0.1f;
+        [SerializeField, Min(0f)] float brickGrowthPerStage = 0.12f;
+        [Tooltip("Smallest centre-to-centre gap between bricks on the belt, in metres. A dropper holds its brick until there is room, "
+            + "so fully upgraded (grown) bricks never touch. Visual only: income is counted on the server.")]
+        [SerializeField, Min(0f)] float minBrickSpacing = 1.6f;
+
+        [Header("Brick glow")]
+        [Tooltip("Strength (0..1) of the pool of light under a brick per upgrade stage (0 = raw), in that stage's colour; 0 hides it. "
+            + "It lies on the dark belt, so upgraded bricks stand out without bloom.")]
+        [SerializeField] float[] brickGlowStrength = { 0f, 0.6f, 0.75f, 0.95f };
 
         [Header("Belt texture")]
         [Tooltip("+1 or -1: whichever makes the belt's arrows move with the bricks.")]
@@ -35,7 +43,7 @@ namespace Universes.UniverseData.tycoon.Client {
 
         static readonly TY_ItemKind[] PadLanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Rebirth };
 
-        sealed class Ore { public Transform t; public Renderer r; public float distance; public int stage; }
+        sealed class Ore { public Transform t; public TY_OreView view; public float distance; public int stage; }
 
         sealed class PlotVisual {
             public TY_PlotState state;
@@ -140,7 +148,8 @@ namespace Universes.UniverseData.tycoon.Client {
         }
 
         void OnWallet(TY_WalletBroadcast message, Channel channel) {
-            if (hasWallet && message.plot >= 0 && message.plot == wallet.plot && message.plot < visuals.Length
+            if (hasWallet && message.plot != wallet.plot) ResetAutoEarnings();
+            else if (hasWallet && message.plot >= 0 && message.plot == wallet.plot && message.plot < visuals.Length
                 && TY_Catalog.AutoCollects(visuals[message.plot].state.purchased))
                 autoEarned += message.lifetime - wallet.lifetime;
             wallet = message;
@@ -166,10 +175,15 @@ namespace Universes.UniverseData.tycoon.Client {
                     // Already shown: keep it out of the auto-collector's next popup.
                     if (TY_Catalog.AutoCollects(visuals[e.plot].state.purchased)) autoEarned -= e.amount;
                     break;
-                case TY_EventKind.Rebirth: feedback.RebirthScreen((int)e.amount); break;
+                case TY_EventKind.Rebirth:
+                    // Earnings from before the rebirth must not pop up over the torn-down plot.
+                    ResetAutoEarnings();
+                    feedback.RebirthScreen((int)e.amount);
+                    break;
                 case TY_EventKind.Perk: feedback.Perk(); break;
                 case TY_EventKind.CollectorFull: feedback.CollectorFull(); break;
-                case TY_EventKind.RushHour: feedback.RushStarted(hasWallet && wallet.rushMultiplier > 1f ? wallet.rushMultiplier : 2f); break;
+                // The server sends wallets (with its multiplier) before this event.
+                case TY_EventKind.RushHour: feedback.RushStarted(hasWallet ? wallet.rushMultiplier : 0f); break;
                 case TY_EventKind.RushHourOver: feedback.RushEnded(); break;
             }
         }
@@ -201,7 +215,9 @@ namespace Universes.UniverseData.tycoon.Client {
                     : $"${TY_Catalog.Money(state.bank)}<size=55%> / ${TY_Catalog.Money(state.capacity)}</size>\n<size=55%>{(state.bank >= state.capacity ? "<color=#FF6B6B>FULL! step here</color>" : "step here to collect")}</size>";
             if (reborn) feedback.RebirthWorld(map.World(index, Vector3.zero));
             int dropped = 0, torn = 0;
-            int removed = TY_Catalog.OwnedCount(previous.purchased & ~state.purchased);
+            // On a rebirth the kept items collapse with the rest, so they share the tear-down spread.
+            int collapsing = TY_Catalog.OwnedCount(previous.purchased & ~state.purchased)
+                + (reborn ? TY_Catalog.OwnedCount(previous.purchased & state.purchased) : 0);
             float rebuildDelay = reborn ? feedback.rebuildDelay : 0f;
             for (int item = 0; item < TY_Catalog.Count; item++) {
                 var data = TY_Catalog.Items[item];
@@ -214,9 +230,12 @@ namespace Universes.UniverseData.tycoon.Client {
                     v.items[item] = go;
                     if (animate) DropIn(go.transform, data.itemPosition, dropped++);
                 } else if (has && reborn) {
-                    DropIn(v.items[item].transform, data.itemPosition, dropped++);
+                    // Kept through the rebirth: it collapses with the rest of the build, then drops back in.
+                    int order = dropped++;
+                    feedback.Rebuild(v.items[item].transform, data.itemPosition, feedback.TearDownDelay(torn++, collapsing),
+                        rebuildDelay + feedback.DropDelay(order), mine && order == 0);
                 } else if (!has && v.items[item] != null) {
-                    if (animate) feedback.TearDown(v.items[item], feedback.TearDownDelay(torn++, removed));
+                    if (animate) feedback.TearDown(v.items[item], feedback.TearDownDelay(torn++, collapsing));
                     else Destroy(v.items[item]);
                     v.items[item] = null;
                 }
@@ -287,9 +306,15 @@ namespace Universes.UniverseData.tycoon.Client {
                 if (data.kind != TY_ItemKind.Dropper || !TY_Catalog.Owns(v.state.purchased, item)) continue;
                 v.dropTimers[item] += dt;
                 if (v.dropTimers[item] < data.interval) continue;
+                float drop = TY_Catalog.BeltDistance(data.itemPosition);
+                if (!BeltClearAt(v, drop)) {
+                    // Hold the brick until a gap passes under the dropper, so bricks never merge into bars.
+                    v.dropTimers[item] = data.interval;
+                    continue;
+                }
                 v.dropTimers[item] -= data.interval;
                 if (v.ores.Count >= maxBricksPerBelt) continue;
-                v.ores.Add(SpawnOre(plot, TY_Catalog.BeltDistance(data.itemPosition)));
+                v.ores.Add(SpawnOre(plot, drop));
                 if (mine) feedback.BrickDropped(plot.TransformPoint(data.itemPosition + Vector3.up * TY_Catalog.BeltTop));
             }
             float end = TY_Catalog.BeltEndX - TY_Catalog.BeltStartX + 1.5f;
@@ -304,8 +329,9 @@ namespace Universes.UniverseData.tycoon.Client {
                     bool upgraded = ore.stage >= 0 && stage > ore.stage;
                     ore.stage = stage;
                     int look = oreTints.Length > 0 ? Mathf.Min(stage, oreTints.Length - 1) : -1;
-                    if (look >= 0) ore.r.sharedMaterial = map.oreMaterials[look];
+                    if (look >= 0) ore.view.body.sharedMaterial = map.oreMaterials[look];
                     ore.t.localScale = Vector3.one * (1f + brickGrowthPerStage * stage);
+                    SetGlow(ore, stage, look);
                     if (upgraded && mine) feedback.BrickUpgraded(ore.t.position, look >= 0 ? oreTints[look] : Color.white);
                 }
                 if (ore.distance >= end) {
@@ -319,11 +345,30 @@ namespace Universes.UniverseData.tycoon.Client {
             }
         }
 
+        /// <summary>True when no brick on the belt is within <see cref="minBrickSpacing"/> of <paramref name="distance"/>.</summary>
+        bool BeltClearAt(PlotVisual v, float distance) {
+            foreach (var ore in v.ores)
+                if (Mathf.Abs(ore.distance - distance) < minBrickSpacing) return false;
+            return true;
+        }
+
+        /// <summary>Tints the light under the brick for its stage; raw bricks (strength 0) have none.</summary>
+        void SetGlow(Ore ore, int stage, int look) {
+            float strength = brickGlowStrength.Length > 0 ? brickGlowStrength[Mathf.Min(stage, brickGlowStrength.Length - 1)] : 0f;
+            bool show = strength > 0f && look >= 0;
+            ore.view.glow.enabled = show;
+            if (show) {
+                Color tint = oreTints[look];
+                tint.a = strength;
+                ore.view.glow.color = tint;
+            }
+        }
+
         Ore SpawnOre(Transform plot, float distance) {
             Ore ore = orePool.Count > 0 ? orePool.Pop() : null;
             if (ore == null) {
                 var go = Instantiate(map.orePrefab, map.transform);
-                ore = new Ore { t = go.transform, r = go.GetComponentInChildren<Renderer>() };
+                ore = new Ore { t = go.transform, view = go.GetComponent<TY_OreView>() };
             }
             ore.distance = distance;
             ore.stage = -1;
@@ -361,6 +406,12 @@ namespace Universes.UniverseData.tycoon.Client {
         }
 
         // ---------------------------------------------------------------- auto-collector popups
+        /// <summary>Drops earnings not shown yet and holds the next popup back for a full interval.</summary>
+        void ResetAutoEarnings() {
+            autoEarned = 0;
+            nextAutoPopup = Time.time + autoPopupSeconds;
+        }
+
         void PopAutoEarnings() {
             if (autoEarned <= 0 || Time.time < nextAutoPopup || !hasWallet || wallet.plot < 0 || wallet.plot >= visuals.Length) return;
             nextAutoPopup = Time.time + autoPopupSeconds;

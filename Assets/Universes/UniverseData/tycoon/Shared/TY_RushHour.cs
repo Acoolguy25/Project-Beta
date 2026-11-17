@@ -30,6 +30,12 @@ namespace Universes.UniverseData.tycoon {
         /// <summary>Income multiplier at <paramref name="now"/> (1 outside a rush hour).</summary>
         public float Multiplier(float now) => IsActive(now) ? multiplier : 1f;
 
+        /// <summary>
+        /// The server's whole event scale on top of the catalog's income: its tuning
+        /// <paramref name="incomeScale"/> times a running rush hour.
+        /// </summary>
+        public double Scale(double incomeScale, float now) => incomeScale * Multiplier(now);
+
         /// <summary>When the next rush hour is due (for probes and the top message).</summary>
         public float NextAt => nextAt;
 
@@ -39,7 +45,7 @@ namespace Universes.UniverseData.tycoon {
             nextAt = now + Mathf.Lerp(interval.x, interval.y, Mathf.Clamp01(random01));
         }
 
-        /// <summary>Starts a rush hour right away (server console and probes).</summary>
+        /// <summary>Starts a rush hour right away (the StartRushHour server command).</summary>
         public void Begin(float now) {
             Validate();
             endsAt = now + duration;

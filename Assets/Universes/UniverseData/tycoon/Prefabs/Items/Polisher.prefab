@@ -286,7 +286,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d0db3631ae66601fa15a44ba9a2cc37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Rounds::RyanAssets.Rounds.Billboard
+  facing: 0
   yawOnly: 1
+  maxScreenHeight: 0
+  referenceHeight: 1
 --- !u!1 &7176593100033026843
 GameObject:
   m_ObjectHideFlags: 0
@@ -331,7 +334,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: cbb6eabfc66a6d8908bf2da0f6ee738d, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1.3
+      value: 0.806
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: cbb6eabfc66a6d8908bf2da0f6ee738d, type: 3}
       propertyPath: m_LocalScale.y

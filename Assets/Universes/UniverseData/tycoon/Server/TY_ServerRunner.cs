@@ -145,7 +145,7 @@ namespace Universes.UniverseData.tycoon.Server {
         }
 
         /// <summary>Everything on top of the catalog's own multipliers: the tuning scale and a running rush hour.</summary>
-        double EventScale => incomeScale * rushHour.Multiplier(Time.time);
+        double EventScale => rushHour.Scale(incomeScale, Time.time);
 
         double IncomeOf(Plot plot, Tycooner t) => TY_Catalog.Income(plot.purchased, t.rebirths, t.perks) * EventScale;
 
@@ -157,6 +157,7 @@ namespace Universes.UniverseData.tycoon.Server {
             if (plots.Length != map.PlotCount) plots = Enumerable.Range(0, map.PlotCount).Select(_ => new Plot()).ToArray();
             SetGlobalInvul(true);
             SetTeamKillEnabled(false);
+            TY_Commands.Register(this);
             SetLeaderboardEnabled(CashColumn, true);
             SetLeaderboardEnabled(RebirthColumn, true);
             if (SharedGlobalEvents.Instance != null) SharedGlobalEvents.Instance.MusicTrack.Value = MusicSelection.GameMusic;
@@ -198,9 +199,11 @@ namespace Universes.UniverseData.tycoon.Server {
         /// <summary>Tells the whole server (chat and every player's HUD) that a rush hour started or ended.</summary>
         void AnnounceRush(bool started) {
             string text = started
-                ? $"RUSH HOUR! Every tycoon earns x{rushHour.multiplier:0.#} for {rushHour.duration:0} seconds."
+                ? $"RUSH HOUR! Every tycoon earns x{rushHour.multiplier:0.#} for {rushHour.duration:0} seconds. Keep emptying your collector!"
                 : "Rush hour is over. Income is back to normal.";
             ServerChat.SendSystemMessage(new(text, SystemMessageSource.CustomMessage));
+            // Wallets first: the HUD's timer and the banner's multiplier come from the server's tuning.
+            foreach (var connection in players.Keys) SendWallet(connection);
             TY_EventKind kind = started ? TY_EventKind.RushHour : TY_EventKind.RushHourOver;
             long seconds = started ? (long)Math.Ceiling(rushHour.duration) : 0;
             foreach (var pair in players) Event(pair.Key, kind, pair.Value.plot, -1, seconds, text);
@@ -433,26 +436,38 @@ namespace Universes.UniverseData.tycoon.Server {
         }
 
         // ---------------------------------------------------------------- debugging hooks
-        /// <summary>Gives a player cash (server console and probes).</summary>
+        /// <summary>Gives a player cash (test probes only: no command, so players cannot cheat a saved economy).</summary>
         public void GrantCash(NetworkConnection connection, long amount) {
             Pay(connection, For(connection), amount);
             SendWallet(connection);
         }
 
-        /// <summary>Gives a player rebirth tokens (server console and probes).</summary>
+        /// <summary>Gives a player rebirth tokens (test probes only, like <see cref="GrantCash"/>).</summary>
         public void GrantTokens(NetworkConnection connection, int amount) {
             For(connection).tokens += amount;
             SendWallet(connection);
         }
 
-        /// <summary>Starts a rush hour now (server console and probes).</summary>
+        /// <summary>Starts a rush hour now (the StartRushHour command, see <see cref="TY_Commands"/>).</summary>
         public void StartRushHour() {
             rushHour.Begin(Time.time);
             AnnounceRush(true);
+        }
+
+        /// <summary>Income multiplier of rush hours (the RushMultiplier command).</summary>
+        public float RushMultiplier => rushHour.multiplier;
+
+        public bool RushHourActive => rushHour.IsActive(Time.time);
+
+        /// <summary>Changes the rush-hour multiplier; a running rush hour pays the new rate at once.</summary>
+        public void SetRushMultiplier(float value) {
+            rushHour.multiplier = value;
+            rushHour.Validate();
             foreach (var connection in players.Keys) SendWallet(connection);
         }
 
         protected override void OnDestroy() {
+            TY_Commands.Unregister(this);
             GameCharacter.FallHeightOverride = null;
             PlayerData.OnPlayerRemoved -= OnPlayerLeft;
             if (ServerPlayerCharacter.SpawnLocationFunction == SpawnPosition) ServerPlayerCharacter.SpawnLocationFunction = null;

@@ -36,6 +36,23 @@ namespace Universes.UniverseData.tycoon.Tests {
         }
 
         [Test]
+        public void IncomeDuringARushIsMultipliedThroughTheServerScale() {
+            // The runner pays TY_Catalog.Income(...) * rushHour.Scale(incomeScale, now) every second.
+            var rush = new TY_RushHour { interval = new Vector2(100f, 100f), duration = 30f, multiplier = 3f };
+            const double incomeScale = 1.5;
+            ulong purchased = TY_Catalog.AllButRebirth;
+            var perks = new TY_PerkLevels { income = 2 };
+            double normal = TY_Catalog.Income(purchased, 1, perks) * rush.Scale(incomeScale, 0f);
+            Assert.AreEqual(TY_Catalog.Income(purchased, 1, perks) * incomeScale, normal, 1e-9, "no rush: only the tuning scale");
+
+            rush.Begin(10f);
+            double during = TY_Catalog.Income(purchased, 1, perks) * rush.Scale(incomeScale, 20f);
+            Assert.AreEqual(normal * 3.0, during, 1e-6 * during, "a running rush multiplies the whole income");
+
+            Assert.AreEqual(normal, TY_Catalog.Income(purchased, 1, perks) * rush.Scale(incomeScale, 40f), 1e-9, "back to normal after it ends");
+        }
+
+        [Test]
         public void BeginForcesARushAndValidateKeepsTuningSane() {
             var rush = new TY_RushHour { interval = new Vector2(50f, 10f), duration = 0f, multiplier = 0.5f };
             rush.Begin(5f);

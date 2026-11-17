@@ -25,6 +25,7 @@ namespace Universes.UniverseData.tycoon.Editor {
         const string IconFolder = TY_Authoring.Root + "/UI/Icons";
         const string SignSpritePath = TY_Authoring.Root + "/UI/SignBack.png";
         const string WhiteSpritePath = TY_Authoring.Root + "/UI/White.png";
+        const string GlowSpritePath = TY_Authoring.Root + "/UI/Glow.png";
         const string PrefabPath = TY_Authoring.Root + "/Prefabs/TycoonHUD.prefab";
 
         static readonly Color Pink = new(1f, 0.42f, 0.84f);
@@ -37,8 +38,10 @@ namespace Universes.UniverseData.tycoon.Editor {
             foreach (string path in Directory.GetFiles(IconFolder, "icon_*.png")) ImportSprite(path.Replace('\\', '/'), Vector4.zero, 100f);
             if (!File.Exists(SignSpritePath)) WriteRounded(SignSpritePath, 128, 28);
             if (!File.Exists(WhiteSpritePath)) WriteRounded(WhiteSpritePath, 8, 0);
+            if (!File.Exists(GlowSpritePath)) WriteGlow(GlowSpritePath, 64);
             ImportSprite(SignSpritePath, new Vector4(32, 32, 32, 32), 128f, fullRect: true);
             ImportSprite(WhiteSpritePath, Vector4.zero, 8f);
+            ImportSprite(GlowSpritePath, Vector4.zero, 64f, fullRect: true);
         }
 
         static void ImportSprite(string path, Vector4 border, float pixelsPerUnit, bool fullRect = false) {
@@ -71,6 +74,20 @@ namespace Universes.UniverseData.tycoon.Editor {
             Object.DestroyImmediate(tex);
         }
 
+        /// <summary>A white radial glow, brightest in the middle and fading smoothly to nothing at the edge.</summary>
+        static void WriteGlow(string path, int size) {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            float half = size * 0.5f;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++) {
+                    float r = Mathf.Clamp01(new Vector2(x + 0.5f - half, y + 0.5f - half).magnitude / half);
+                    float a = (1f - r) * (1f - r);
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+        }
+
         public static Sprite IconSprite(string name) {
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>($"{IconFolder}/icon_{name}.png");
             if (sprite == null) throw new FileNotFoundException($"Tycoon icon missing: {IconFolder}/icon_{name}.png");
@@ -79,6 +96,7 @@ namespace Universes.UniverseData.tycoon.Editor {
 
         public static Sprite SignSprite() => AssetDatabase.LoadAssetAtPath<Sprite>(SignSpritePath);
         public static Sprite WhiteSprite() => AssetDatabase.LoadAssetAtPath<Sprite>(WhiteSpritePath);
+        public static Sprite GlowSprite() => AssetDatabase.LoadAssetAtPath<Sprite>(GlowSpritePath);
         public static TMP_FontAsset Font(bool bold) => bold ? UIKit.Theme.boldFont : UIKit.Theme.semiBoldFont;
 
         // ---------------------------------------------------------------- building blocks
@@ -453,6 +471,7 @@ namespace Universes.UniverseData.tycoon.Editor {
         public static Sprite IconSprite(string name) => AssetDatabase.LoadAssetAtPath<Sprite>($"{Ui}/Icons/icon_{name}.png");
         public static Sprite SignSprite() => AssetDatabase.LoadAssetAtPath<Sprite>(Ui + "/SignBack.png");
         public static Sprite WhiteSprite() => AssetDatabase.LoadAssetAtPath<Sprite>(Ui + "/White.png");
+        public static Sprite GlowSprite() => AssetDatabase.LoadAssetAtPath<Sprite>(Ui + "/Glow.png");
         public static TMP_FontAsset Font(bool bold) => null;
         public static GameObject Build() => AssetDatabase.LoadAssetAtPath<GameObject>(TY_Authoring.Root + "/Prefabs/TycoonHUD.prefab");
     }

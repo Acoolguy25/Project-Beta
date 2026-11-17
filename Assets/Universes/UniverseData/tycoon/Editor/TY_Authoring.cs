@@ -136,8 +136,8 @@ namespace Universes.UniverseData.tycoon.Editor {
                 plotMats = PlotColors.Select((c, i) => Kit.Mat($"Plot{i}", c, tile, smoothness: 0.35f)).ToArray(),
                 // Raw clay -> polished -> washed -> glazed gold, one stage per upgrader; each stage glows brighter.
                 oreMats = new[] {
-                    Kit.Mat("Ore0", new Color(0.62f, 0.33f, 0.24f), Kit.Tex("BrickFace"), smoothness: 0.15f),
-                    Kit.Mat("Ore1", new Color(0.92f, 0.32f, 0.24f), Kit.Tex("BrickFace"), 0.6f, smoothness: 0.55f),
+                    Kit.Mat("Ore0", new Color(0.5f, 0.37f, 0.31f), Kit.Tex("BrickFace"), smoothness: 0.15f),
+                    Kit.Mat("Ore1", new Color(1f, 0.36f, 0.2f), Kit.Tex("BrickFace"), 0.6f, smoothness: 0.55f),
                     Kit.Mat("Ore2", new Color(0.55f, 0.85f, 1f), Kit.Tex("BrickFace"), 1.1f, smoothness: 0.8f),
                     Kit.Mat("Ore3", new Color(1f, 0.8f, 0.2f), Kit.Tex("BrickFace"), 1.8f, smoothness: 0.9f, metallic: 0.7f),
                 },
@@ -275,18 +275,22 @@ namespace Universes.UniverseData.tycoon.Editor {
             view.title = SignText("Title", sign.transform, new Vector3(0.75f, 0.52f, -0.02f), 2.6f, Color.white, FontStyles.Bold, new Vector2(2.6f, 0.6f));
             view.effect = SignText("Effect", sign.transform, new Vector3(0.75f, 0.02f, -0.02f), 1.9f, laneColor, FontStyles.Normal, new Vector2(2.6f, 0.5f));
             view.price = SignText("Price", sign.transform, new Vector3(0.75f, -0.58f, -0.02f), 3.2f, view.affordablePrice, FontStyles.Bold, new Vector2(2.6f, 0.7f));
-            SaveBar(view, sign.transform, laneColor);
+            SaveBar(view, sign.transform);
             return Kit.Save(root, "Pads", $"Pad{kind}");
         }
 
-        /// <summary>A thin bar along the sign's bottom edge that fills as the owner saves up for the item.</summary>
-        static void SaveBar(TY_ButtonView view, Transform sign, Color laneColor) {
-            const float width = 3.9f, height = 0.16f, y = -0.97f;
+        /// <summary>A bar along the sign's bottom edge that fills as the owner saves up for the item.</summary>
+        /// <summary>Savings bar: money green, so it never reads as the sign's lane-coloured edge strip.</summary>
+        static readonly Color SaveFillColor = new(0.3f, 0.92f, 0.45f);
+        static readonly Color SaveTrackColor = new(0f, 0f, 0f, 0.55f);
+
+        static void SaveBar(TY_ButtonView view, Transform sign) {
+            const float width = 3.9f, height = 0.28f, y = -0.98f;
             var bar = Empty("SaveBar", sign, new Vector3(0f, y, -0.015f));
-            SpriteChild("Track", bar.transform, Vector3.zero, TY_HudAuthoring.WhiteSprite(), new Color(1f, 1f, 1f, 0.22f), 2).transform.localScale = new Vector3(width, height, 1f);
+            SpriteChild("Track", bar.transform, Vector3.zero, TY_HudAuthoring.WhiteSprite(), SaveTrackColor, 2).transform.localScale = new Vector3(width, height, 1f);
             // The fill's parent sits on the bar's left end, so scaling it along X grows the bar to the right.
             var fill = Empty("Fill", bar.transform, new Vector3(-width * 0.5f, 0f, -0.005f));
-            SpriteChild("Bar", fill.transform, new Vector3(width * 0.5f, 0f, 0f), TY_HudAuthoring.WhiteSprite(), laneColor, 3).transform.localScale = new Vector3(width, height, 1f);
+            SpriteChild("Bar", fill.transform, new Vector3(width * 0.5f, 0f, 0f), TY_HudAuthoring.WhiteSprite(), SaveFillColor, 3).transform.localScale = new Vector3(width, height, 1f);
             fill.transform.localScale = new Vector3(0.4f, 1f, 1f);
             view.saveBar = bar;
             view.saveFill = fill.transform;
@@ -316,10 +320,25 @@ namespace Universes.UniverseData.tycoon.Editor {
             return text;
         }
 
+        /// <summary>Size of a brick riding the belt.</summary>
+        static readonly Vector3 BrickSize = new(0.9f, 0.42f, 0.5f);
+        /// <summary>Width of the light under an upgraded brick, in brick lengths.</summary>
+        const float BrickGlowSize = 2.2f;
+        /// <summary>Height of that light above the brick's bottom face, so it never flickers into the belt.</summary>
+        const float BrickGlowLift = 0.03f;
+
         static GameObject Brick(Material mat) {
             var root = new GameObject("Brick");
-            var body = Cube("Body", root.transform, Vector3.zero, new Vector3(0.9f, 0.42f, 0.5f), mat, false);
-            body.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var view = root.AddComponent<TY_OreView>();
+            var body = Cube("Body", root.transform, Vector3.zero, BrickSize, mat, false);
+            view.body = body.GetComponent<Renderer>();
+            view.body.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            // Lies flat just above the belt surface (the brick rides with its bottom on the belt), so the
+            // light shows on the dark belt around the brick from any camera angle.
+            view.glow = SpriteChild("Glow", root.transform, new Vector3(0f, -BrickSize.y * 0.5f + BrickGlowLift, 0f), TY_HudAuthoring.GlowSprite(), Color.clear, 0);
+            view.glow.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            view.glow.transform.localScale = Vector3.one * (BrickSize.x * BrickGlowSize);
+            view.glow.enabled = false;
             return Kit.Save(root, "", "Ore");
         }
 
@@ -365,11 +384,18 @@ namespace Universes.UniverseData.tycoon.Editor {
         }
 
         /// <summary>A KayKit tunnel over the belt with a glowing field; bricks change look as they pass.</summary>
+        /// <summary>
+        /// Length of an upgrader tunnel along the belt, as a fraction of the model's size. Upgraders stand
+        /// 2.8 m apart; a shorter tunnel leaves a stretch of open belt after each one, so the bricks can be
+        /// seen changing colour stage by stage.
+        /// </summary>
+        const float UpgraderTunnelLength = 0.62f;
+
         static GameObject Upgrader(Prefabs p, in TY_Item item, int tier, Mats m) {
             string name = item.name.Replace(" ", "");
             var root = new GameObject(name);
             var tunnel = Kay(p, Pack.Space, tier % 2 == 0 ? "tunnel_straight_A" : "tunnel_straight_B", root.transform, 2.6f, Vector3.zero, 0f);
-            tunnel.transform.localScale = Vector3.Scale(tunnel.transform.localScale, new Vector3(1f, 2.6f, 2.4f));
+            tunnel.transform.localScale = Vector3.Scale(tunnel.transform.localScale, new Vector3(UpgraderTunnelLength, 2.6f, 2.4f));
             var b = RendererBounds(tunnel);
             tunnel.transform.position += Vector3.down * b.min.y;
             var field = Cube("Field", root.transform, new Vector3(0f, 1.3f, 0f), new Vector3(0.12f, 1.9f, 1.9f), m.upgradeFields[tier % m.upgradeFields.Length], false);
@@ -556,7 +582,7 @@ namespace Universes.UniverseData.tycoon.Editor {
                     ore.transform.localPosition = new Vector3(x, TY_Catalog.BeltTop + 0.2f, TY_Catalog.BeltZ);
                     ore.transform.localRotation = Quaternion.identity;
                     int stage = x < 7.4f ? 0 : x < 10.2f ? 1 : x < 13f ? 2 : 3;
-                    ore.GetComponentInChildren<Renderer>().sharedMaterial = map.oreMaterials[stage];
+                    ore.GetComponent<TY_OreView>().body.sharedMaterial = map.oreMaterials[stage];
                 }
                 if (plot == 1) {
                     foreach (var kind in TY_Lanes.BuildLanes) {
