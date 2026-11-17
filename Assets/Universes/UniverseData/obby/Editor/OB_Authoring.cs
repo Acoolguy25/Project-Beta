@@ -759,22 +759,30 @@ namespace Universes.UniverseData.obby.Editor {
                     float x = (i % 2 == 0 ? -1 : 1) * (LobbySize * 0.5f - 0.6f), z = (i < 2 ? -1 : 1) * (LobbySize * 0.5f - 0.6f);
                     Cube($"Pillar{i}", root.transform, new Vector3(x, 2f, z), new Vector3(0.8f, 4f, 0.8f), p.palette[1 + i]);
                 }
+                // Name board along the left side, between the corner pillars: solid Ink with Paper lettering so it
+                // reads as a sign over any sky. On the side it stays out of the view through the gate, where the
+                // race clock and the countdown sit, and out of the course entirely.
+                const float signBottom = 2.2f, signHeight = 1.8f, sideX = -(LobbySize * 0.5f - 0.6f);
+                var boardMat = BlockMat("SignBoard", OB_Palette.Ink, 0f, smoothness: 0.3f);
+                Cube("SignBoard", root.transform, new Vector3(sideX, signBottom + signHeight * 0.5f, 0f), new Vector3(0.4f, signHeight, LobbySize - 1.2f), boardMat, false);
                 var sign = new GameObject("Sign", typeof(TextMeshPro));
                 sign.transform.SetParent(root.transform, false);
-                sign.transform.localPosition = new Vector3(0f, 3.2f, LobbySize * 0.5f - 0.6f);
+                sign.transform.localPosition = new Vector3(sideX + 0.22f, signBottom + signHeight * 0.5f, 0f);
+                // Faces into the lobby. One-sided, so from outside only the board's back shows, never mirrored text.
+                sign.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
                 var tmp = sign.GetComponent<TextMeshPro>();
-                tmp.text = "SKY OBBY\n<size=45%>A new course every race. Every coin takes time off your finish!</size>";
+                tmp.text = "SKY OBBY";
                 tmp.font = font.asset;
-                // Reads from the lobby, where racers wait for the gate. One-sided, so from the course side
-                // (looking back past the gate) it is hidden instead of reading mirrored.
                 var signMat = FontPreset(font.asset, font.asset.name + " Sign", 0.24f, 0.9f);
                 signMat.SetFloat("_CullMode", (float)UnityEngine.Rendering.CullMode.Back);
                 EditorUtility.SetDirty(signMat);
                 tmp.fontSharedMaterial = signMat;
-                tmp.fontSize = 5f;
+                tmp.fontSize = 14f;
+                tmp.characterSpacing = 8f;
                 tmp.alignment = TextAlignmentOptions.Center;
+                tmp.textWrappingMode = TextWrappingModes.NoWrap;
                 tmp.color = OB_Palette.Paper;
-                tmp.rectTransform.sizeDelta = new Vector2(12f, 3f);
+                tmp.rectTransform.sizeDelta = new Vector2(LobbySize - 2f, signHeight);
                 p.lobby = Save(root, "Lobby");
             }
             return p;
@@ -1070,8 +1078,14 @@ namespace Universes.UniverseData.obby.Editor {
                 Icon("Clock", body, "icon_schedule", new Vector2(0f, 0.5f), new Vector2(32f, 0f), 30f, OB_Palette.Gold);
                 client.timerLabel = Label(Stretch("Timer", body, Vector2.zero, Vector2.one, new Vector2(56f, 0f), new Vector2(-14f, 0f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
                 client.timerLabel.textWrappingMode = TextWrappingModes.NoWrap;
-                // Wide enough for a split against the gold pace ("1:23.4  -4.8 vs gold").
-                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-85f, clockTop - 60f), new Vector2(380f, 30f)), bold, bold.outline, 22, OB_Palette.Paper, TextAlignmentOptions.Center);
+                // The line under the clock. A split against the gold pace ("1:23.4  -4.8 vs gold") gets a dark
+                // pill like the clock's, so its colour reads over a pale sky, the desert and the gate stripes;
+                // the controller fits the pill to the text and hides it for the plain status words.
+                var status = Box("Status", hud, top, top, new Vector2(-85f, clockTop - 62f), new Vector2(380f, 34f));
+                var backing = Box("Backing", status, centre, centre, Vector2.zero, new Vector2(300f, 34f));
+                Panel(backing, panel, 17f);
+                client.statusBacking = backing;
+                client.statusLabel = Label(Stretch("Label", status, Vector2.zero, Vector2.one), bold, bold.shadow, 22, OB_Palette.Paper, TextAlignmentOptions.Center);
                 client.statusLabel.textWrappingMode = TextWrappingModes.NoWrap;
                 // Only the race result is written here; during the race the strip on the stage card shows the field.
                 client.leaderLabel = Label(Box("Leader", hud, top, top, new Vector2(0f, clockTop - 86f), new Vector2(900f, 30f)), bold, bold.outline, 20, OB_Palette.Paper, TextAlignmentOptions.Center);
@@ -1099,8 +1113,8 @@ namespace Universes.UniverseData.obby.Editor {
                 client.toastLabel.fontSizeMin = 16f;
                 client.toastLabel.fontSizeMax = 24f;
             }
-            {   // Countdown and GO!, in the sky above the player rather than over the character.
-                client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.76f), centre, Vector2.zero, new Vector2(600f, 150f)), bold, bold.outline, 104, OB_Palette.Paper, TextAlignmentOptions.Center);
+            {   // Countdown and GO!, in the free sky between the clock/toast rows and the character's head.
+                client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.64f), centre, Vector2.zero, new Vector2(600f, 150f)), bold, bold.outline, 104, OB_Palette.Paper, TextAlignmentOptions.Center);
                 client.centerLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
             {   // Results board.
@@ -1113,10 +1127,12 @@ namespace Universes.UniverseData.obby.Editor {
                 Panel(header, OB_Palette.Gold, 36f);
                 Icon("Medal", header, "icon_military_tech", new Vector2(0f, 0.5f), new Vector2(64f, 0f), 60f, OB_Palette.Ink);
                 Label(Stretch("Title", header, Vector2.zero, Vector2.one, new Vector2(110f, 0f), new Vector2(-40f, 0f)), bold, bold.asset.material, 52, OB_Palette.Ink, TextAlignmentOptions.MidlineLeft).text = "RACE RESULTS";
-                client.resultsBody = Label(Stretch("Rows", body, Vector2.zero, Vector2.one, new Vector2(56f, 84f), new Vector2(-48f, -130f)), semi, semi.shadow, 30, OB_Palette.Paper, TextAlignmentOptions.TopLeft);
+                // Rows sit between the header (rowsTop from the top) and the footer (rowsBottom from the bottom).
+                const float rowsTop = 130f, rowsBottom = 84f, rowsSlack = 22f;
+                client.resultsBody = Label(Stretch("Rows", body, Vector2.zero, Vector2.one, new Vector2(56f, rowsBottom), new Vector2(-48f, -rowsTop)), semi, semi.shadow, 30, OB_Palette.Paper, TextAlignmentOptions.TopLeft);
                 client.resultsBody.lineSpacing = 16f;
                 client.resultsBody.overflowMode = TextOverflowModes.Truncate;
-                client.resultsFrameHeight = 130f + 84f + 22f;
+                client.resultsFrameHeight = rowsTop + rowsBottom + rowsSlack;
                 client.resultsBody.textWrappingMode = TextWrappingModes.NoWrap;
                 // Medal targets for this course and the coin bonus, along the bottom.
                 client.resultsFooter = Label(Stretch("Footer", body, Vector2.zero, new Vector2(1f, 0f), new Vector2(56f, 24f), new Vector2(-48f, 64f)), semi, semi.shadow, 22, muted, TextAlignmentOptions.MidlineLeft);

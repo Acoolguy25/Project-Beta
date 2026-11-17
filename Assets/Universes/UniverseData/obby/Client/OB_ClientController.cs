@@ -37,6 +37,10 @@ namespace Universes.UniverseData.obby.Client {
         [Header("Race status")]
         public TMP_Text timerLabel;
         public TMP_Text statusLabel, coinsLabel, leaderLabel;
+        [Tooltip("Dark pill behind the status line, shown while a split is up and fitted to its text.")]
+        public RectTransform statusBacking;
+        [Tooltip("Horizontal room around the split text inside its pill.")]
+        [Min(0f)] public float statusBackingPadding = 32f;
         public RectTransform coinPill;
         [Tooltip("Seconds a checkpoint split (and its difference to the gold medal pace) replaces the clock status.")]
         [Min(0f)] public float splitSeconds = 4f;
@@ -304,7 +308,7 @@ namespace Universes.UniverseData.obby.Client {
             if (wantedGoldPerStage > 0f) {
                 float delta = OB_Scoring.GoldPaceDelta(raceTime, coins, wantedCoinBonus, checkpoint, wantedGoldPerStage);
                 Color color = delta <= 0f ? OB_Palette.Go : OB_Palette.Lava;
-                splitText = $"{clock}  <color=#{ColorUtility.ToHtmlStringRGB(color)}>{(delta <= 0f ? "-" : "+")}{Mathf.Abs(delta):0.0} <size=80%>vs gold</size></color>";
+                splitText = $"{clock}  <color=#{ColorUtility.ToHtmlStringRGB(color)}>{(delta <= 0f ? "-" : "+")}{Mathf.Abs(delta):0.0}</color> <size=80%><alpha=#AA>vs gold</size>";
             } else {
                 splitText = $"split {clock}";
             }
@@ -362,13 +366,18 @@ namespace Universes.UniverseData.obby.Client {
             int me = LocalClientId, mine = -1;
             for (int i = 0; i < entries.Length; i++)
                 if (entries[i].clientId == me) mine = i;
-            // Too many racers for the board: the leaders, then your own row in its real place.
+            // Too many racers for the board: the leaders, a line counting the rows left out, then your own
+            // row in its real place (so the board never grows past resultsMaxRows lines).
             int listed = Mathf.Min(entries.Length, resultsMaxRows);
             bool appendMine = mine >= resultsMaxRows;
-            if (appendMine) listed = resultsMaxRows - 1;
+            if (appendMine) listed = Mathf.Max(1, resultsMaxRows - 2);
             rows.Clear();
             for (int i = 0; i < listed; i++) AppendRow(entries[i], i + 1, i == mine);
-            if (appendMine) AppendRow(entries[mine], mine + 1, true);
+            if (appendMine) {
+                int skipped = mine - listed;
+                if (skipped > 0) rows.Append($"<alpha=#88><pos=10%>... {skipped} more<alpha=#FF>\n");
+                AppendRow(entries[mine], mine + 1, true);
+            }
             resultsBody.text = rows.Length > 0 ? rows.ToString() : "No racers.";
             resultsFooter.text = MedalTargets(message);
             // The board is as tall as its rows, so one racer is not an empty board and eight still fit.
@@ -469,7 +478,8 @@ namespace Universes.UniverseData.obby.Client {
             var current = layout.stages[Mathf.Clamp(checkpoint, 0, layout.StageCount - 1)];
             if (feel != null) feel.KillHeight = finished ? layout.finishTop.y - OB_CourseGenerator.KillDepth : current.killY;
             if (finished) {
-                stageLabel.text = "FINISHED";
+                // The finish toast gives way to the results board, so a new best also stays on the card.
+                stageLabel.text = progress.personalBest ? $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Go)}>NEW BEST!</color>" : "FINISHED";
                 stageNameLabel.text = progress.medal != OB_Medal.None ? $"{progress.medal} medal!" : "Course complete!";
                 hintLabel.text = "Wait here for the next course, or watch the others.";
                 progressTarget = 1f;
@@ -510,6 +520,12 @@ namespace Universes.UniverseData.obby.Client {
                 "closing" => $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Lava)}>closes in {closesIn}s</color>",
                 _ => key
             };
+            // Only the split sits on a pill: it is the line read at a glance while running.
+            statusBacking.gameObject.SetActive(split);
+            if (split) {
+                float width = statusLabel.GetPreferredValues(splitText).x + statusBackingPadding;
+                statusBacking.sizeDelta = new Vector2(width, statusBacking.sizeDelta.y);
+            }
         }
 
         /// <summary>Shows a short message in the toast pill.</summary>

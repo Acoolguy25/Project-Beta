@@ -33,8 +33,11 @@ namespace Universes.UniverseData.obby.Client {
         [Tooltip("Screen flash on a new tier, in the tier's accent colour at this peak opacity.")]
         [Range(0f, 1f)] public float tierFlashAlpha = 0.25f;
         [Min(0.01f)] public float tierFlashSeconds = 0.5f;
-        [Tooltip("Big confetti burst over the pad that starts a new tier (an ordinary checkpoint only has the pad's own small burst).")]
-        [Min(0f)] public float tierConfettiScale = 2.5f;
+        [Tooltip("Size of each confetti burst over the pad that starts a new tier (an ordinary checkpoint only has the pad's own small burst). " +
+                 "Keep it near 1 so pieces stay smaller than the character's head; the burst gets bigger from its count instead.")]
+        [Min(0f)] public float tierConfettiScale = 1f;
+        [Tooltip("Confetti bursts spread around the pad on a new tier.")]
+        [Min(1)] public int tierConfettiBursts = 3;
 
         [Header("Countdown")]
         public OB_Cue countdownSound = new(SfxCue.CountdownBeep, 0.8f);
@@ -44,7 +47,11 @@ namespace Universes.UniverseData.obby.Client {
         public OB_Cue finishSound = new(SfxCue.Win, 0.9f);
         [Tooltip("Extra sting for a new personal best.")]
         public OB_Cue personalBestSound = new(SfxCue.LevelUp, 0.8f, 1.25f);
-        [Min(0f)] public float finishConfettiScale = 3.5f;
+        [Tooltip("Size of each finish confetti burst (see tierConfettiScale).")]
+        [Min(0f)] public float finishConfettiScale = 1f;
+        [Min(1)] public int finishConfettiBursts = 6;
+        [Tooltip("Radius in metres the tier and finish bursts are spread over.")]
+        [Min(0f)] public float confettiSpread = 3.5f;
         [Min(0f)] public float finishRingScale = 4f;
         [Range(0f, 1f)] public float finishFlashAlpha = 0.35f;
 
@@ -110,7 +117,7 @@ namespace Universes.UniverseData.obby.Client {
             }
             tierSound.Play();
             ScreenFx.Flash(tierAccent.WithAlpha(tierFlashAlpha), tierFlashSeconds);
-            GameFx.Play(FxKind.Confetti, pad, tierConfettiScale);
+            Confetti(pad, tierConfettiBursts, tierConfettiScale);
         }
 
         public void CountdownTick() => countdownSound.Play();
@@ -120,9 +127,18 @@ namespace Universes.UniverseData.obby.Client {
         public void Finish(Vector3 position, bool personalBest) {
             finishSound.Play();
             if (personalBest) personalBestSound.Play();
-            GameFx.Play(FxKind.Confetti, position, finishConfettiScale);
+            Confetti(position, finishConfettiBursts, finishConfettiScale);
             GameFx.Play(FxKind.ShockwaveRing, position, OB_Palette.Gold, finishRingScale);
             ScreenFx.Flash(OB_Palette.Gold.WithAlpha(finishFlashAlpha));
+        }
+
+        /// <summary>A bigger celebration from more small bursts, not bigger pieces: one in the middle, the rest on a ring.</summary>
+        void Confetti(Vector3 centre, int bursts, float scale) {
+            GameFx.Play(FxKind.Confetti, centre, scale);
+            for (int i = 1; i < bursts; i++) {
+                float angle = (i - 1) * Mathf.PI * 2f / (bursts - 1);
+                GameFx.Play(FxKind.Confetti, centre + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * confettiSpread, scale);
+            }
         }
 
         public void GainedPlace() => gainedPlaceSound.Play();

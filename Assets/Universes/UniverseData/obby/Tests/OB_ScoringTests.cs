@@ -4,8 +4,8 @@ using NUnit.Framework;
 
 namespace Universes.UniverseData.obby.Tests {
     public sealed class OB_ScoringTests {
-        static OB_Standing Racer(int id, int stage, bool finished = false, float scored = 0f) =>
-            new() { clientId = id, name = "P" + id, stage = stage, finished = finished, scoredTime = scored };
+        static OB_Standing Racer(int id, int stage, bool finished = false, float scored = 0f, float reachedAt = 0f) =>
+            new() { clientId = id, name = "P" + id, stage = stage, finished = finished, scoredTime = scored, reachedAt = reachedAt };
 
         [Test] public void CoinsTakeTimeOffButNeverBelowZero() {
             Assert.AreEqual(95f, OB_Scoring.ScoredTime(100f, 10, 0.5f), 1e-4f);
@@ -39,7 +39,18 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.IsTrue(OB_Scoring.IsAhead(slowFinish, leader));
             Assert.IsTrue(OB_Scoring.IsAhead(leader, trailer));
             Assert.IsFalse(OB_Scoring.IsAhead(trailer, leader));
-            Assert.IsFalse(OB_Scoring.IsAhead(Racer(5, 12), trailer), "same checkpoint is level");
+            Assert.IsFalse(OB_Scoring.IsAhead(Racer(5, 12), trailer), "same checkpoint at the same time is level");
+        }
+
+        [Test] public void OnTheSameCheckpointWhoeverArrivedFirstIsAhead() {
+            var first = Racer(1, 7, reachedAt: 40f);
+            var second = Racer(2, 7, reachedAt: 43.5f);
+            Assert.IsTrue(OB_Scoring.IsAhead(first, second));
+            Assert.IsFalse(OB_Scoring.IsAhead(second, first));
+            var racers = new[] { second, first };
+            Assert.AreEqual(1, OB_Scoring.PlaceOf(racers, 1));
+            Assert.AreEqual(2, OB_Scoring.PlaceOf(racers, 2));
+            Assert.IsTrue(OB_Scoring.IsAhead(Racer(3, 8, reachedAt: 90f), first), "a later checkpoint beats an earlier arrival");
         }
 
         [Test] public void PlaceCountsOnlyRacersStrictlyAhead() {
@@ -102,12 +113,11 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.AreEqual((0, 2), (gained, lost));
         }
 
-        [Test] public void DrawingLevelOrSomeoneLeavingIsNoPass() {
-            var before = Ahead(new[] { Racer(1, 3), Racer(2, 4), Racer(3, 6) }, 1);
-            var now = new[] { Racer(1, 4), Racer(2, 4) };
+        [Test] public void ArrivingSecondOrSomeoneLeavingIsNoPass() {
+            var before = Ahead(new[] { Racer(1, 3, reachedAt: 20f), Racer(2, 4, reachedAt: 30f), Racer(3, 6, reachedAt: 50f) }, 1);
+            var now = new[] { Racer(1, 4, reachedAt: 33f), Racer(2, 4, reachedAt: 30f) };
             OB_Scoring.Overtakes(before, Ahead(now, 1), now, out int gained, out int lost);
-            Assert.AreEqual(1, gained, "drawing level with racer 2 counts (they are no longer strictly ahead)");
-            Assert.AreEqual(0, lost);
+            Assert.AreEqual((0, 0), (gained, lost), "reaching racer 2's checkpoint after them leaves them ahead");
             var left = new[] { Racer(1, 3) };
             OB_Scoring.Overtakes(Ahead(new[] { Racer(1, 3), Racer(3, 6) }, 1), Ahead(left, 1), left, out gained, out lost);
             Assert.AreEqual((0, 0), (gained, lost), "a leader who leaves was not passed");

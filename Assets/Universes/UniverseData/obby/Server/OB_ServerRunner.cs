@@ -71,6 +71,8 @@ namespace Universes.UniverseData.obby.Server {
             public int place;
             /// <summary>Race time of the last checkpoint, coin or finish (the split clients compare).</summary>
             public float lastEventTime;
+            /// <summary>Race time the current checkpoint was reached (orders racers on the same checkpoint).</summary>
+            public float checkpointTime;
             public float graceUntil;
             /// <summary>When a pending hazard respawn happens (0 when none is pending).</summary>
             public float respawnAt;
@@ -285,7 +287,7 @@ namespace Universes.UniverseData.obby.Server {
         void ReachCheckpoint(NetworkConnection connection, Runner runner, int checkpoint) {
             int gained = checkpoint - runner.checkpoint;
             runner.checkpoint = checkpoint;
-            runner.lastEventTime = RaceTime;
+            runner.lastEventTime = runner.checkpointTime = RaceTime;
             standingsDirty = true;
             Award(connection, checkpointXP * (ulong)gained, 0, "a checkpoint");
             PlayerProgress.Modify<OB_SaveData>(connection, save => save.RecordStage(checkpoint));
@@ -345,21 +347,22 @@ namespace Universes.UniverseData.obby.Server {
             runner.checkpoint = 0;
             runner.coins = 0;
             runner.finished = false;
-            runner.finishTime = runner.scoredTime = runner.lastEventTime = 0f;
+            runner.finishTime = runner.scoredTime = runner.lastEventTime = runner.checkpointTime = 0f;
             runner.medal = OB_Medal.None;
             runner.personalBest = false;
             runner.place = 0;
         }
 
-        OB_Standing StandingOf(NetworkConnection connection, Runner runner) => new() {
-            clientId = connection.ClientId, name = NameOf(connection), stage = runner.checkpoint,
-            finished = runner.finished, scoredTime = runner.scoredTime
+        /// <summary>A racer's standing; the name is only filled for the server's own ordering (clients have the names).</summary>
+        OB_Standing StandingOf(NetworkConnection connection, Runner runner, bool withName) => new() {
+            clientId = connection.ClientId, name = withName ? NameOf(connection) : "", stage = runner.checkpoint,
+            finished = runner.finished, scoredTime = runner.scoredTime, reachedAt = runner.checkpointTime
         };
 
         /// <summary>Active racers ranked for the results: finishers by scored time, then the furthest checkpoint.</summary>
         List<KeyValuePair<NetworkConnection, Runner>> FinalOrder() {
             var order = runners.Where(r => r.Key.IsActive).ToList();
-            order.Sort((a, b) => OB_Scoring.Compare(StandingOf(a.Key, a.Value), StandingOf(b.Key, b.Value)));
+            order.Sort((a, b) => OB_Scoring.Compare(StandingOf(a.Key, a.Value, true), StandingOf(b.Key, b.Value, true)));
             return order;
         }
 
@@ -413,7 +416,7 @@ namespace Universes.UniverseData.obby.Server {
             if (layout == null) return;
             InstanceFinder.ServerManager.Broadcast(new OB_StandingsBroadcast {
                 seed = layout.seed,
-                racers = runners.Where(r => r.Key.IsActive).Select(r => StandingOf(r.Key, r.Value)).ToArray()
+                racers = runners.Where(r => r.Key.IsActive).Select(r => StandingOf(r.Key, r.Value, false)).ToArray()
             });
         }
 

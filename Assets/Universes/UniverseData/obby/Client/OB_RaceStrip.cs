@@ -26,20 +26,20 @@ namespace Universes.UniverseData.obby.Client {
         public Color gainColor = OB_Palette.Go;
         public Color lossColor = OB_Palette.Lava;
         [Tooltip("Seconds the gain/loss colour takes to fade back.")]
-        [Min(0.05f)] public float flashSeconds = 1.6f;
+        [Min(0.05f)] public float flashSeconds = 2.2f;
         [Tooltip("Scale the place label pops in from on a gain (loss pops are smaller).")]
         public float gainPopFrom = 1.6f;
-        public float lossPopFrom = 0.75f;
+        public float lossPopFrom = 1.3f;
         [Min(0.01f)] public float popSeconds = 0.45f;
         [Tooltip("Shortest gap between two shown passes; the place text still updates in between.")]
         [Min(0f)] public float minPassGap = 2.5f;
 
         OB_StandingsBroadcast standings;
         int standingsSeed, shownPlace = -1, shownCount = -1;
-        bool hasStandings, shown;
+        bool hasStandings, shown, flashing;
         readonly HashSet<int> ahead = new(), aheadBefore = new();
         readonly List<Image> racerDots = new();
-        float flashUntil = float.NegativeInfinity, nextPass;
+        float flashStart = float.NegativeInfinity, nextPass;
         Color flashColor;
 
         void Awake() {
@@ -49,9 +49,11 @@ namespace Universes.UniverseData.obby.Client {
         }
 
         void Update() {
-            if (Time.unscaledTime > flashUntil + flashSeconds) return;
-            float t = Mathf.Clamp01((Time.unscaledTime - flashUntil) / flashSeconds);
+            if (!flashing) return;
+            float t = Mathf.Clamp01((Time.unscaledTime - flashStart) / flashSeconds);
             placeLabel.color = Color.Lerp(flashColor, restColor, t);
+            // The last frame lands exactly on the rest colour.
+            if (t >= 1f) flashing = false;
         }
 
         /// <summary>A new course: forget the old field.</summary>
@@ -81,7 +83,8 @@ namespace Universes.UniverseData.obby.Client {
                     // Net result: two gained and one lost in one update is still a gain.
                     bool gain = gained >= lost;
                     flashColor = gain ? gainColor : lossColor;
-                    flashUntil = Time.unscaledTime;
+                    flashStart = Time.unscaledTime;
+                    flashing = true;
                     placeLabel.color = flashColor;
                     Punch.Pop(placeLabel.rectTransform, gain ? gainPopFrom : lossPopFrom, popSeconds);
                     if (fx != null) {

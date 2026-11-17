@@ -51,7 +51,9 @@ namespace Universes.UniverseData.obby {
         /// </summary>
         public static bool IsAhead(in OB_Standing a, in OB_Standing b) {
             if (a.finished != b.finished) return a.finished;
-            return a.finished ? a.scoredTime < b.scoredTime : a.stage > b.stage;
+            if (a.finished) return a.scoredTime < b.scoredTime;
+            // On the same checkpoint, whoever got there first is ahead; racers still on the start are level.
+            return a.stage != b.stage ? a.stage > b.stage : a.reachedAt < b.reachedAt;
         }
 
         /// <summary>Ordering for result tables: leaders first, level racers by name so the order is stable.</summary>

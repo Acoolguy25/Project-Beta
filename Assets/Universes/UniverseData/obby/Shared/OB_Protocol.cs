@@ -84,11 +84,15 @@ namespace Universes.UniverseData.obby {
     /// <summary>Where one racer is, for the race strip and overtake toasts.</summary>
     public struct OB_Standing {
         public int clientId;
+        /// <summary>Unused on the wire (clients know the names); the server fills it only for its own ordering.</summary>
         public string name;
         /// <summary>Checkpoint reached (the stage count once finished).</summary>
         public int stage;
         public bool finished;
         public float scoredTime;
+        // Appended fields.
+        /// <summary>Race time <see cref="stage"/> was reached (0 at the start), so racers on one checkpoint have an order.</summary>
+        public float reachedAt;
     }
 
     /// <summary>Every racer's standing, sent to everyone whenever someone reaches a checkpoint or finishes.</summary>
