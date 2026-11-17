@@ -68,6 +68,14 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         public GameObject blindfold;
         public TMP_Text blindCountdown, blindHint, blindMapName;
 
+        [Header("Alert")]
+        [Tooltip("A short headline in the upper third (the last hider), above the characters and clear of the feed.")]
+        public CanvasGroupController alert;
+        public TMP_Text alertLabel;
+        [Tooltip("Seconds the alert takes to pop from its start scale to full size.")]
+        [Min(0.01f)] public float alertPopSeconds = 0.25f;
+        [Range(0.5f, 1.5f)] public float alertPopScale = 1.25f;
+
         [Header("Results banner")]
         public CanvasGroupController banner;
         public Image bannerAccent, bannerIcon;
@@ -116,6 +124,8 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         [Tooltip("Players this close to a tag (world units) feel a smaller shake.")]
         [Min(0f)] public float tagShakeRadius = 45f;
         [Min(0.1f)] public float lastHiderTextSeconds = 2.2f;
+        [Tooltip("Fade-out of a toast whose time is up (seconds): short, so it is never left half faded over the action.")]
+        [Min(0f)] public float toastFadeOutSeconds = 0.15f;
         [Tooltip("Seconds between the tag that leaves one hider and the last-hider announcement, so the two moments do not land on the same frame.")]
         [Min(0f)] public float lastHiderDelay = 1.1f;
         [Tooltip("How long a seeker ping marker stays up (seconds).")]
@@ -152,13 +162,14 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         ClientManager manager;
         HS_StateBroadcast state;
         bool hasState;
-        float stateAt, toastUntil, nextRequest, nextLocation;
+        float stateAt, toastUntil, alertAt = -1f, alertUntil, nextRequest, nextLocation;
         readonly Dictionary<int, HS_Role> roles = new();
         readonly List<(GameObject marker, float until)> pings = new();
         readonly Queue<(HS_FeedRow row, float until)> feed = new();
         readonly List<FxHandle> beacons = new();
         HS_HidingSpot[] spots = System.Array.Empty<HS_HidingSpot>();
         int spotsRound = -1;
+        string shownArea;
         HS_Phase lastPhase = (HS_Phase)255;
         int savedMask = ~0, lastTickSecond = -1, tauntsUsed;
         float lastTauntAt = float.NegativeInfinity, tauntPendingUntil;
@@ -193,6 +204,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             Show(tagPrompt, false, 0f);
             Show(tauntPrompt, false, 0f);
             Show(toast, false, 0f);
+            Show(alert, false, 0f);
             Show(banner, false, 0f);
         }
 
@@ -229,9 +241,18 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         HS_Role RoleOf(int clientId) => roles.TryGetValue(clientId, out var r) ? r : HS_Role.None;
 
         bool ShowTag(GameCharacter character) {
+            // In the results a survivor's green reveal label is their name: one name each, not two.
+            if (hasState && state.phase == HS_Phase.Results && IsRevealed(character.OwnerId)) return false;
             if (!hasState || !InRound(state.phase)) return true;
             HS_Role other = RoleOf(character.OwnerId), me = MyRole;
             return Seeks(other) == Seeks(me) || me == HS_Role.None;
+        }
+
+        /// <summary>Whether this round's reveal labels a survivor with this client id (yours is never labelled).</summary>
+        bool IsRevealed(int clientId) {
+            if (spotsRound != state.round || clientId == MyId) return false;
+            foreach (var spot in spots) if (spot.clientId == clientId) return true;
+            return false;
         }
 
         void Update() {
@@ -248,7 +269,8 @@ namespace Universes.UniverseData.hide_and_seek.Client {
                 nextRequest = Time.unscaledTime + StateRequestSeconds;
                 manager.Broadcast(new HS_StateRequest());
             }
-            if (toast.isVisible && Time.unscaledTime > toastUntil) Show(toast, false);
+            if (toast.isVisible && Time.unscaledTime > toastUntil) Show(toast, false, toastFadeOutSeconds);
+            RefreshAlert();
             while (feed.Count > 0 && (Time.unscaledTime > feed.Peek().until || feed.Count > feedLines)) Destroy(feed.Dequeue().row.gameObject);
             for (int i = pings.Count - 1; i >= 0; i--) {
                 if (Time.unscaledTime < pings[i].until) continue;
@@ -346,7 +368,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             var me = LocalPlayer.Character;
             string area = me != null && map != null ? map.AreaAt(me.transform.position) : "";
             bool show = area.Length > 0 && state.phase != HS_Phase.Results && !blindfold.activeSelf;
-            if (show && !ReferenceEquals(locationLabel.text, area)) locationLabel.text = area;
+            if (show && area != shownArea) locationLabel.text = shownArea = area;
             Show(locationChip, show);
         }
 
@@ -490,7 +512,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             if (state.phase != HS_Phase.Seeking) return;
             GameSfx.Play(lastHiderSting);
             GameSfx.Play(lastHiderVoice);
-            ScreenFx.ShowText(me == HS_Role.Hider ? "YOU'RE THE LAST HIDER!" : "LAST HIDER!", Theme.danger, lastHiderTextSeconds);
+            ShowAlert(me == HS_Role.Hider ? "YOU'RE THE LAST HIDER!" : "LAST HIDER!", Theme.danger, lastHiderTextSeconds);
             string name = roles.Where(r => r.Value == HS_Role.Hider).Select(r => CharacterLookup.ByClientId(r.Key)).FirstOrDefault(c => c != null)?.DisplayName;
             AddFeed(name != null ? $"Last hider: <color=#{UITheme.ToRichTextHex(Theme.success)}>{name}</color>" : "One hider left", hiderIcon);
         }
@@ -515,8 +537,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             }
             tauntsUsed = message.used;
             tauntPendingUntil = 0f;
-            // xp 0 is the server correcting the count after a refused request, not a taunt.
-            if (message.xp <= 0) return;
+            if (message.correction) return;
             GameSfx.Play(tauntSound);
             lastTauntAt = Time.unscaledTime;
             // A taunt is rare, so a string per popup is fine; the callout style can stay up longer than a number.
@@ -595,6 +616,27 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             if (first) return;
             if (left <= countdownBeepsFrom) GameSfx.Play(SfxCue.CountdownBeep);
             else if (blindfold.activeSelf) GameSfx.Play(blindTick);
+        }
+
+        void ShowAlert(string message, Color color, float seconds) {
+            if (alert == null) return;
+            alertLabel.text = message;
+            alertLabel.color = color;
+            alertAt = Time.unscaledTime;
+            alertUntil = alertAt + seconds;
+            Show(alert, true, 0.08f);
+        }
+
+        /// <summary>Pops the alert in (overshoot to full size) and fades it when its time is up.</summary>
+        void RefreshAlert() {
+            if (alertAt < 0f) return;
+            float age = Time.unscaledTime - alertAt;
+            float t = Mathf.Clamp01(age / alertPopSeconds);
+            alertLabel.transform.localScale = Vector3.one * Mathf.LerpUnclamped(alertPopScale, 1f, 1f - (1f - t) * (1f - t));
+            if (Time.unscaledTime > alertUntil) {
+                Show(alert, false);
+                alertAt = -1f;
+            }
         }
 
         void Toast(string message, Sprite icon, SfxSound sound, float seconds) {

@@ -32,7 +32,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         [Header("Vignette")]
         [SerializeField] Color vignetteColor = new(0.55f, 0.02f, 0.04f, 1f);
         [Tooltip("Peak alpha of the edge vignette at full danger. Keep it low: the hider has to watch the doorway.")]
-        [SerializeField, Range(0f, 1f)] float vignetteMaxAlpha = 0.42f;
+        [SerializeField, Range(0f, 1f)] float vignetteMaxAlpha = 0.3f;
 
         float proximity, target, nextScan, sinceBeat, sentStrength = -1f, sentRate = -1f;
 

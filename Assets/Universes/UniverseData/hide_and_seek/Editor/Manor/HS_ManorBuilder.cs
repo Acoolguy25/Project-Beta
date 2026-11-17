@@ -19,7 +19,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         Transform structure, glazing, furniture, lighting, garden;
         readonly List<Light> flickerLights = new();
         readonly List<Renderer> flickerGlows = new();
+        /// <summary>Unlit additive renderers (lamp glows, lit window panes): no lighting, so the light-reach check skips them.</summary>
         readonly List<Renderer> glows = new();
+        /// <summary>Plan-space positions of the lamp, candle and lantern lights (not the room fills).</summary>
+        readonly List<Vector3> propLights = new();
+        /// <summary>Exterior windows, lit from inside by <see cref="LightWindows"/> once the props are placed.</summary>
+        readonly List<(Vector3 center, Vector3 size, Vector3 outward)> exteriorWindows = new();
 
         /// <param name="scale">World units per plan metre.</param>
         public HS_ManorBuilder(HS_ManorMaterials materials, float scale, string name = "Manor") {
@@ -51,6 +56,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             BuildFence();
             foreach (var block in HS_ManorPlan.Blocks) Box(block.name, furniture, block.center, block.size, block.surface);
             foreach (var prop in HS_ManorPlan.Props) PlaceProp(prop);
+            LightWindows();
             root.localScale = Vector3.one * scale;
             foreach (var light in lighting.GetComponentsInChildren<Light>()) light.range *= scale;
             return root;
@@ -136,7 +142,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             float wallTop = WallHeight(room) + FloorY(room.level);
             float ceiling = room.level == 0 && !IsOutbuilding(room) ? FloorY(1) - HS_ManorPlan.SlabThickness : wallTop;
             if (!openAbove)
-                Tiled("Ceiling", group, new Vector3(a.center.x, ceiling - 0.02f, a.center.y), new Vector3(a.width, 0.04f, a.height), Surface.Plaster, collider: room.level > 0 || IsOutbuilding(room), shadows: false);
+                Tiled("Ceiling", group, new Vector3(a.center.x, ceiling - 0.02f, a.center.y), new Vector3(a.width, 0.04f, a.height), Surface.Plaster, collider: room.level > 0 || IsOutbuilding(room), shadows: false, maxTile: HS_ManorLighting.MaxCeilingTile);
             if (room.fill > 0f) AddFill(room, ceiling);
         }
 
@@ -175,8 +181,9 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             at = lighting.InverseTransformPoint(parent.TransformPoint(at));
             string name = spec.model[(spec.model.IndexOf('/') + 1)..];
             Light light = PointLight(name + " Light", at, preset.color, preset.range, preset.intensity);
+            propLights.Add(at);
             // Pull the glow out past the model's own radius, so the shade, glass or pumpkin skin does not cover it.
-            float pull = Mathf.Clamp(Mathf.Max(b.extents.x, b.extents.z) * HS_ManorLighting.GlowPullFactor, HS_ManorLighting.GlowPull.x, HS_ManorLighting.GlowPull.y);
+            float pull = Mathf.Clamp(Mathf.Max(b.extents.x, b.extents.z) * preset.PullFactor, HS_ManorLighting.GlowPull.x, HS_ManorLighting.GlowPull.y);
             Renderer glow = AddGlow(name + " Glow", light.transform, preset, pull);
             if (preset.flicker) { flickerLights.Add(light); flickerGlows.Add(glow); }
         }
@@ -214,6 +221,44 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             renderer.lightProbeUsage = LightProbeUsage.Off;
             glows.Add(renderer);
             return renderer;
+        }
+
+        /// <summary>
+        /// From outside, the house shows which rooms are lit: an exterior window with a lamp, candle or
+        /// lantern inside it (within <see cref="HS_ManorLighting.WindowLitRadius"/>, same storey) gets a warm
+        /// additive pane just behind its glass. The pane is a one-sided quad facing out, so from inside
+        /// the room the window stays clear.
+        /// </summary>
+        void LightWindows() {
+            float storey = HS_ManorPlan.StoreyHeight;
+            float radius = HS_ManorLighting.WindowLitRadius;
+            Material pane = materials.WindowGlow(HS_ManorLighting.WindowGlowColor, HS_ManorLighting.WindowGlowIntensity);
+            int lit = 0;
+            foreach (var (center, size, outward) in exteriorWindows) {
+                bool litInside = false;
+                foreach (Vector3 light in propLights) {
+                    Vector3 offset = light - center;
+                    if (Vector3.Dot(offset, outward) >= 0f || Mathf.Abs(offset.y) > storey * 0.6f) continue;
+                    if (new Vector2(offset.x, offset.z).sqrMagnitude <= radius * radius) { litInside = true; break; }
+                }
+                if (!litInside) continue;
+                var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                go.name = "LitPane";
+                Object.DestroyImmediate(go.GetComponent<Collider>());
+                go.transform.SetParent(glazing, false);
+                go.transform.localPosition = center - outward * 0.04f;
+                // A quad's visible face looks down its -z: point +z inwards so the lit side faces out.
+                go.transform.localRotation = Quaternion.LookRotation(-outward, Vector3.up);
+                go.transform.localScale = new Vector3(size.x, size.y, 1f);
+                var renderer = go.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = pane;
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.lightProbeUsage = LightProbeUsage.Off;
+                glows.Add(renderer);
+                lit++;
+            }
+            Debug.Log($"[HideAndSeek] Lit windows: {lit} of {exteriorWindows.Count} exterior windows have a lamp inside.");
         }
 
         /// <summary>
@@ -314,6 +359,10 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             bool alongX = Mathf.Abs(dir.x) > 0.5f;
             Vector3 center = new(at.x, baseY + o.bottom + o.height * 0.5f, at.y);
             Box("Glass", glazing, center, Size(alongX, o.width, o.height, 0.04f), Surface.Glass, shadows: false);
+            if (wall.kind == WallKind.Exterior) {
+                Vector2 outward = Outward(wall, dir);
+                exteriorWindows.Add((center, new Vector3(o.width, o.height, 0f), new Vector3(outward.x, 0f, outward.y)));
+            }
             Box("Sill", group, new Vector3(at.x, baseY + o.bottom - 0.03f, at.y), Size(alongX, o.width + 0.2f, 0.06f, thickness + 0.14f), Surface.Trim);
             Box("Lintel", group, new Vector3(at.x, baseY + o.bottom + o.height + 0.04f, at.y), Size(alongX, o.width + 0.2f, 0.08f, thickness + 0.06f), Surface.Trim, collider: false);
             // Mullion: the cross bars make the glass read as a window from far away.

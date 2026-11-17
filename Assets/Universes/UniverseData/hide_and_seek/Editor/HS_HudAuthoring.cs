@@ -53,6 +53,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             BuildTauntPrompt(canvas, hud);
             BuildFeed(canvas, hud);
             BuildToast(canvas, hud);
+            BuildAlert(canvas, hud);
             BuildBanner(canvas, hud);
             hud.hiderIcon = UIThemeAssets.Icon(HiderIcon);
             hud.seekerIcon = UIThemeAssets.Icon(SeekerIcon);
@@ -304,8 +305,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         }
 
         static void BuildFeed(RectTransform canvas, HS_ClientController hud) {
-            RectTransform list = Pinned(canvas, "TagFeed", new Vector2(1f, 0.5f), new Vector2(-16f, -40f), new Vector2(440f, 200f));
-            var column = Column(list.gameObject, 6f, Pad(0), TextAnchor.UpperRight);
+            RectTransform list = Pinned(canvas, "TagFeed", new Vector2(1f, 0.5f), new Vector2(-16f, -40f), new Vector2(FeedWidth, 200f));
+            var column = Column(list.gameObject, 8f, Pad(0), TextAnchor.UpperRight);
             column.childControlHeight = column.childControlWidth = true;
             column.childForceExpandHeight = false;
             hud.feedList = list;
@@ -317,11 +318,17 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             var feedRow = row.gameObject.AddComponent<HS_FeedRow>();
             feedRow.icon = Icon(row, TagIcon, 18f, UIColorRole.Warning);
             feedRow.label = Text(row, "Text", "Seeker found Hider", UIText.Body, UIColorRole.TextPrimary);
-            Size(feedRow.label, 400f, 36f, 1f);
-            // Two long player names still fit: shrink a little before cutting with "...".
-            ShrinkToFit(feedRow.label, 12f);
+            // One line across the rest of the row (the row does not size its children, so set the rect
+            // itself). Two 16-character names fit at full size; anything longer shrinks a little, never wraps.
+            const float labelWidth = FeedWidth - 20f - 18f - 8f;
+            Size(feedRow.label, labelWidth, 36f, 1f);
+            feedRow.label.rectTransform.sizeDelta = new Vector2(labelWidth, 36f);
+            feedRow.label.textWrappingMode = TextWrappingModes.NoWrap;
+            ShrinkToFit(feedRow.label, 14f);
             hud.feedTemplate = feedRow;
         }
+
+        const float FeedWidth = 460f;
 
         static void ShrinkToFit(TMP_Text label, float minSize) {
             label.enableAutoSizing = true;
@@ -341,23 +348,82 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.toast = Fader(layer, false);
         }
 
+        /// <summary>
+        /// The last-hider headline: upper third (above the characters' heads, under the toast), at most
+        /// about 45% of the screen wide and 56 px tall, so the player's own character and the feed stay in view.
+        /// </summary>
+        static void BuildAlert(RectTransform canvas, HS_ClientController hud) {
+            RectTransform layer = Layer(canvas, "Alert");
+            RectTransform box = Pinned(layer, "Alert", new Vector2(0.5f, 0.70f), Vector2.zero, new Vector2(860f, 70f));
+            TextMeshProUGUI label = Text(box, "Text", "LAST HIDER!", UIText.Display, UIColorRole.Danger, TextAlignmentOptions.Center);
+            Stretch(label.rectTransform);
+            label.fontSize = 56f;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            ShrinkToFit(label, 30f);
+            // The theme's drop-shadow variant of the bold font keeps red text readable over any room.
+            var shadowed = AssetDatabase.LoadAssetAtPath<Material>(BoldShadowMaterial);
+            if (shadowed != null && label.font != null && shadowed.mainTexture == label.font.material.mainTexture) label.fontSharedMaterial = shadowed;
+            hud.alertLabel = label;
+            hud.alert = Fader(layer, false);
+        }
+
+        const string BoldShadowMaterial = "Packages/com.ryan.ui/Runtime/UI/Theme/Fonts/Inter-Bold SDF Shadow.mat";
+
+        static void Stretch(RectTransform rect) {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+        }
+
         static void BuildBanner(RectTransform canvas, HS_ClientController hud) {
             RectTransform layer = Layer(canvas, "Results");
-            // Left middle, between the chat and the role card: the centre stays clear for your own character,
-            // and the survivors' names (drawn over the world, mostly near the horizon) are not hidden behind it.
-            RectTransform banner = Card(layer, "ResultsBanner", new Vector2(0f, 0.5f), new Vector2(24f, 0f), new Vector2(560f, 214f), UIColorRole.SurfaceRaised, 24f);
-            RectTransform accent = Pinned(banner, "Accent", new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(500f, 6f));
+            // Left side, its centre at 36% of the height: below the band where the survivors' names float
+            // over the world (about 30-36% from the top), above the role card, clear of your own character.
+            const float width = 560f, height = BannerHeight;
+            RectTransform banner = Card(layer, "ResultsBanner", new Vector2(0f, 0.36f), new Vector2(24f, 0f), new Vector2(width, height), UIColorRole.SurfaceRaised, 24f);
+            RectTransform accent = Pinned(banner, "Accent", new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(width - 60f, 6f));
             hud.bannerAccent = Free(Rounded(accent, UIColorRole.Success, 3f, raycast: false));
-            hud.bannerIcon = Free(PlaceIcon(banner, ResultsIcon, 44f, new Vector2(0.5f, 1f), new Vector2(0f, -22f)));
-            hud.bannerTitle = Label(banner, "Title", "HIDERS WIN", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center, new Vector2(0f, 0.44f), new Vector2(1f, 0.66f));
-            hud.bannerTitle.fontSize = 38f;
-            hud.bannerSubtitle = Label(banner, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center, new Vector2(0f, 0.32f), new Vector2(1f, 0.44f));
+            hud.bannerIcon = Free(PlaceIcon(banner, ResultsIcon, 36f, new Vector2(0.5f, 1f), new Vector2(0f, -22f)));
+            // Rows from the top, in canvas units: icon 22-58, title 60-98, subtitle 100-124, then the list.
+            hud.bannerTitle = BannerRow(banner, "Title", "HIDERS WIN", UIText.Display, UIColorRole.TextPrimary, 60f, 98f);
+            hud.bannerTitle.fontSize = 34f;
+            hud.bannerSubtitle = BannerRow(banner, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, 100f, 124f);
             hud.bannerSubtitle.fontSize = 18f;
-            // Where the survivors hid: one line each (HS_ClientController.bannerSpotLines).
-            hud.bannerSpots = Label(banner, "HidingSpots", "", UIText.Small, UIColorRole.TextPrimary, TextAlignmentOptions.Top, new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.31f));
+            // A line taller than its row is dropped whole by Ellipsis/Truncate (the font has no ellipsis
+            // glyph), so the fixed-height rows overflow instead; the texts are short and fit the width.
+            foreach (TMP_Text row in new TMP_Text[] { hud.bannerTitle, hud.bannerSubtitle }) {
+                row.textWrappingMode = TextWrappingModes.NoWrap;
+                row.overflowMode = TextOverflowModes.Overflow;
+                row.verticalAlignment = VerticalAlignmentOptions.Middle;
+            }
+            // Where the survivors hid: up to HS_ClientController.bannerSpotLines lines, then "+N more", all
+            // inside the card (BannerHeight leaves room for BannerListLines lines at this size).
+            hud.bannerSpots = BannerRow(banner, "HidingSpots", "", UIText.Body, UIColorRole.TextPrimary, BannerListTop, height - 14f);
+            hud.bannerSpots.fontSize = BannerListFontSize;
+            hud.bannerSpots.lineSpacing = 0f;
+            hud.bannerSpots.alignment = TextAlignmentOptions.Top;
             hud.bannerSpots.textWrappingMode = TextWrappingModes.NoWrap;
             hud.bannerSpots.overflowMode = TextOverflowModes.Overflow;
+            hud.bannerSpotLines = BannerListLines - 1;
             hud.banner = Fader(layer, false);
+        }
+
+        /// <summary>The results card: its list holds this many lines (the survivors plus "+N more").</summary>
+        const int BannerListLines = 5;
+        const float BannerListFontSize = 17f, BannerListTop = 134f;
+        /// <summary>Card height: header, then the list at about 1.3 line heights per line, then the bottom margin.</summary>
+        const float BannerHeight = BannerListTop + BannerListLines * BannerListFontSize * 1.3f + 18f;
+
+        /// <summary>A full-width centred text row of the banner, between two distances from its top edge.</summary>
+        static TextMeshProUGUI BannerRow(RectTransform banner, string name, string text, UIText style, UIColorRole role, float top, float bottom) {
+            TextMeshProUGUI label = Text(banner, name, text, style, role, TextAlignmentOptions.Center);
+            RectTransform rect = label.rectTransform;
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.offsetMin = new Vector2(24f, -bottom);
+            rect.offsetMax = new Vector2(-24f, -top);
+            return label;
         }
 
         // ---------------------------------------------------------------- blindfold

@@ -131,6 +131,38 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             return mat;
         }
 
+        /// <summary>
+        /// A warm additive unlit pane for lit windows (seen from outside): <paramref name="color"/> times
+        /// <paramref name="intensity"/>, one per colour and strength.
+        /// </summary>
+        public Material WindowGlow(Color color, float intensity) {
+            string name = $"WindowGlow_{ColorUtility.ToHtmlStringRGB(color)}";
+            if (cache.TryGetValue(name, out var cached)) return cached;
+            string path = $"{folder}/{name}.mat";
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) {
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            mat.shader = shader;
+            mat.SetColor("_BaseColor", new Color(color.r * intensity, color.g * intensity, color.b * intensity, 1f));
+            // Transparent, additive (URP's _Blend 2), no depth write: it brightens what is behind the glass.
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 2f);
+            mat.SetFloat("_SrcBlend", (float)BlendMode.One);
+            mat.SetFloat("_DstBlend", (float)BlendMode.One);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.SetFloat("_Cull", (float)CullMode.Back);
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.renderQueue = (int)RenderQueue.Transparent;
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.EnableKeyword("_BLENDMODE_ADD");
+            EditorUtility.SetDirty(mat);
+            cache[name] = mat;
+            return mat;
+        }
+
         Material Glass() {
             if (glass != null) return glass;
             glass = LoadOrCreate("Glass");

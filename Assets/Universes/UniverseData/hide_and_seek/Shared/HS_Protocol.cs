@@ -65,6 +65,11 @@ namespace Universes.UniverseData.hide_and_seek {
         public bool brave;
         /// <summary>Taunts the taunter has used this round, so their HUD's count survives a reconnect or a late state.</summary>
         public int used;
+        /// <summary>
+        /// Not a taunt: the server is correcting the taunter's count after refusing a request (sent to
+        /// that client only, with <see cref="used"/> and no XP).
+        /// </summary>
+        public bool correction;
     }
 
     /// <summary>Where a hider who was never found spent the end of the round.</summary>

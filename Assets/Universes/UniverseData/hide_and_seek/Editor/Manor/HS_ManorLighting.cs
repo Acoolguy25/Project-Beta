@@ -11,10 +11,19 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public readonly bool flicker;
         /// <summary>Diameter of the soft glow sprite at the light (plan metres): the shade, flame or pumpkin face looks lit.</summary>
         public readonly float glow;
+        /// <summary>
+        /// How far the glow sprite sits towards the camera, as a multiple of the model's radius
+        /// (<see cref="HS_ManorLighting.GlowPullFactor"/> when 0). Lamps need it well clear of the shade;
+        /// a pumpkin wants it on its own skin, or the glow drifts off the face.
+        /// </summary>
+        public readonly float pullFactor;
 
-        public PropLight(float height, Color color, float range, float intensity, bool flicker, float glow) {
+        public PropLight(float height, Color color, float range, float intensity, bool flicker, float glow, float pullFactor = 0f) {
             this.height = height; this.color = color; this.range = range; this.intensity = intensity; this.flicker = flicker; this.glow = glow;
+            this.pullFactor = pullFactor;
         }
+
+        public float PullFactor => pullFactor > 0f ? pullFactor : HS_ManorLighting.GlowPullFactor;
     }
 
     /// <summary>
@@ -48,6 +57,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public const int MaxLightsPerObject = 8;
         /// <summary>Floors, ceilings and roof slopes are cut into tiles no longer than this (plan metres) to stay under that limit.</summary>
         public const float MaxTile = 4f;
+        /// <summary>Ceilings are cut finer: lamps on both storeys reach them (from below and through the slab above).</summary>
+        public const float MaxCeilingTile = 3f;
         /// <summary>The same for the lawn, whose lanterns are further apart.</summary>
         public const float MaxLawnTile = 20f;
         /// <summary>HDR multiplier of the glow sprites (bloom threshold is 0.9).</summary>
@@ -59,6 +70,13 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         /// <summary>Largest share of the screen height a glow sprite covers, so a lamp beside the camera stays a lamp.</summary>
         public const float GlowMaxScreenHeight = 0.12f;
 
+        // ---- lit windows: from outside, the windows of rooms with a lamp glow warm (a one-sided pane behind the glass)
+        public static readonly Color WindowGlowColor = new(1f, 0.66f, 0.36f);
+        /// <summary>HDR multiplier of the window pane (additive), low enough to read as lamplight, not a light box.</summary>
+        public const float WindowGlowIntensity = 0.55f;
+        /// <summary>A window glows when a lamp, candle or lantern stands within this distance inside it (plan metres).</summary>
+        public const float WindowLitRadius = 5f;
+
         // ---- ambient: low, so the lamps make the pools of light; warm near the floor like bounced lamplight.
         public static readonly Color AmbientSky = new(0.34f, 0.34f, 0.45f);
         public static readonly Color AmbientEquator = new(0.33f, 0.28f, 0.25f);
@@ -69,7 +87,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public const float FillIntensity = 1.4f;
         /// <summary>Fill range is this times the room's longer side, clamped to <see cref="FillRange"/> (plan metres).</summary>
         public const float FillRangeFactor = 0.8f;
-        public static readonly Vector2 FillRange = new(3.5f, 6f);
+        public static readonly Vector2 FillRange = new(3.5f, 5f);
         /// <summary>How far below the ceiling the fill light hangs (plan metres).</summary>
         public const float FillDrop = 0.6f;
 
@@ -82,17 +100,19 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public static bool TryGetPropLight(string model, out PropLight light) {
             light = model switch {
                 // Ranges in plan metres: rooms are 4-8 m across, so a lamp lights its own room, not the next one.
-                "furniture/lamp_standing" => new PropLight(0.82f, Lamp, 5f, 2.6f, false, 1.2f),
-                "furniture/lamp_table" => new PropLight(0.75f, Lamp, 3.6f, 2.1f, false, 0.9f),
+                "furniture/lamp_standing" => new PropLight(0.82f, Lamp, 4.5f, 2.7f, false, 1.2f),
+                // The table lamp's glow stays inside its shade: smaller than the shade and a little below its rim.
+                "furniture/lamp_table" => new PropLight(0.68f, Lamp, 3.4f, 2.1f, false, 0.65f),
                 "halloween/lantern_standing" => new PropLight(0.75f, Flame, 4f, 2.2f, true, 0.6f),
-                "halloween/lantern_hanging" => new PropLight(0.4f, Flame, 4.5f, 2.4f, true, 0.45f),
+                "halloween/lantern_hanging" => new PropLight(0.4f, Flame, 3.8f, 2.4f, true, 0.45f),
                 "halloween/post_lantern" => new PropLight(0.9f, Flame, 4.5f, 2.6f, true, 0.6f),
                 "city/streetlight" => new PropLight(0.92f, StreetLamp, 7f, 3f, false, 0.9f),
                 "halloween/shrine_candles" or "halloween/plaque_candles" or "halloween/candle" or "halloween/candle_thin"
                     or "halloween/candle_triple" or "halloween/candle_melted" or "halloween/skull_candle"
                     or "dungeon/candle" or "dungeon/candle_thin" or "dungeon/candle_triple" or "dungeon/candle_melted" or "dungeon/shelf_small_candles"
-                    => new PropLight(0.95f, Flame, 3f, 1.7f, true, 0.3f),
-                "halloween/pumpkin_orange_jackolantern" or "halloween/pumpkin_yellow_jackolantern" => new PropLight(0.45f, Pumpkin, 3f, 2f, true, 0.7f),
+                    => new PropLight(0.95f, Flame, 2.5f, 1.8f, true, 0.3f),
+                // The glow sits on the pumpkin's skin (pull 1x its radius), so it stays on the carved face.
+                "halloween/pumpkin_orange_jackolantern" or "halloween/pumpkin_yellow_jackolantern" => new PropLight(0.45f, Pumpkin, 3f, 2f, true, 0.5f, pullFactor: 1.05f),
                 _ => default,
             };
             return light.range > 0f;

@@ -295,7 +295,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (refusal != null) {
                 // Say why, and resend the count so a HUD that missed a confirmation (reconnect, late state) corrects itself.
                 InstanceFinder.ServerManager.Broadcast(connection, new HS_ResultBroadcast { accepted = false, message = refusal });
-                if (used > 0) InstanceFinder.ServerManager.Broadcast(connection, new HS_TauntBroadcast { clientId = connection.ClientId, position = Vector3.zero, xp = 0, brave = false, used = used });
+                if (used > 0) InstanceFinder.ServerManager.Broadcast(connection, new HS_TauntBroadcast { clientId = connection.ClientId, used = used, correction = true });
                 return;
             }
             if (!LocalCharacter.Characters.TryGetValue(connection, out var hider) || hider == null || hider.IsDead) return;
