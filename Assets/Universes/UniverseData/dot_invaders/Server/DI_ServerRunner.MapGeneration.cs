@@ -50,6 +50,7 @@ namespace Universes.UniverseData.dot_invaders {
                 AssignPlayer(player);
 
             SpawnNpcTeams();
+            AnnounceNewMatch();
             matchInProgress = true;
             UpdateTopMessage();
             BroadcastState();

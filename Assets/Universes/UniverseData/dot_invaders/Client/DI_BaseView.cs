@@ -84,6 +84,12 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Tooltip("Base units between the troop count and the role/meter labels above and below it; clears the role marks.")]
         [SerializeField, Min(0f)] float labelSpacing = 4.4f;
 
+        [Header("Troop count")]
+        [Tooltip("Font scale for a three-digit count, so 100+ fits inside the body with the margin two digits have.")]
+        [SerializeField, Range(0.3f, 1f)] float threeDigitCountScale = 0.74f;
+        [Tooltip("Font scale for four digits and more (troops can stack past the capacity).")]
+        [SerializeField, Range(0.3f, 1f)] float fourDigitCountScale = 0.58f;
+
         [Header("Super base")]
         [Tooltip("Scale swing of a super base (0.1 = between 1.0x and 1.2x).")]
         [SerializeField, Range(0f, 0.5f)] float superPulseScale = 0.1f;
@@ -117,6 +123,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         Renderer bodyRenderer;
         Renderer glowRenderer;
         TextMeshPro troopLabel;
+        float countFontSize;
+        int shownDigits;
         TextMeshPro productionLabel;
         TextMeshPro roleLabel;
         Color teamColor;
@@ -162,6 +170,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
             bodyRenderer = transform.Find("Body")?.GetComponent<Renderer>();
             glowRenderer = transform.Find("Glow")?.GetComponent<Renderer>();
             troopLabel = transform.Find("TroopLabel")?.GetComponent<TextMeshPro>();
+            if (troopLabel != null)
+                countFontSize = troopLabel.fontSize;
             turret = transform.Find("Turret");
             turretAim = turret != null ? turret.Find("Aim") : null;
             turretRenderer = turret != null ? turret.GetComponent<Renderer>() : null;
@@ -197,6 +207,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             if (troopLabel != null && troops != shownTroops) {
                 shownTroops = troops;
                 troopLabel.SetText("{0}", troops);
+                FitCount(troops);
             }
 
             RoleStyle style = Style(baseRole);
@@ -231,6 +242,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
         public void SetSelected(bool value) {
             selected = value;
             RefreshGlow();
+        }
+
+        /// <summary>Steps the count's font down for three and four digits; only touches TMP when the digit count changes.</summary>
+        void FitCount(int troops) {
+            int digits = troops >= 1000 ? 4 : troops >= 100 ? 3 : 2;
+            if (digits == shownDigits)
+                return;
+            shownDigits = digits;
+            troopLabel.fontSize = countFontSize * (digits >= 4 ? fourDigitCountScale : digits == 3 ? threeDigitCountScale : 1f);
         }
 
         /// <summary>A short scale punch of the base's body and count, for arrivals and captures.</summary>

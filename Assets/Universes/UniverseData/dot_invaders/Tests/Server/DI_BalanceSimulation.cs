@@ -20,6 +20,8 @@ namespace Universes.UniverseData.dot_invaders.Tests {
         const int MatchSeconds = 1200;
         const int MatchesPerCase = 5;
         const int SampleEverySeconds = 60;
+        // Who held the factories this early is the cleaner signal: by the late minutes the leader holds everything.
+        const int EarlyHolderMinute = 2;
 
         GameObject root;
         DI_ServerRunner runner;
@@ -42,7 +44,7 @@ namespace Universes.UniverseData.dot_invaders.Tests {
             float step = (float)typeof(DI_ServerRunner).GetField("SimulationStep", Members).GetValue(null);
             int stepsPerSample = Mathf.RoundToInt(SampleEverySeconds / step);
             var report = new StringBuilder($"Factory/Fortress multiplier {multiplier}x, {MatchesPerCase} NPC-only matches\n");
-            int factoryHolderWon = 0, decided = 0;
+            int factoryHolderWon = 0, sampled = 0, decided = 0;
 
             for (int match = 1; match <= MatchesPerCase; match++) {
                 StartBoard();
@@ -62,20 +64,23 @@ namespace Universes.UniverseData.dot_invaders.Tests {
                 }
                 bool eliminated = survivor != -2;
                 int winner = eliminated ? survivor : (int)Call("DetermineLeadingTeam");
-                // Who held the factories at the 5-minute mark, against the eventual winner.
-                string earlyHolders = HoldersAt(timeline, 5);
+                // Who held the factories early on, against the eventual winner; a match that ended
+                // before the sample does not count either way.
+                string earlyHolders = HoldersAt(timeline, EarlyHolderMinute);
                 if (winner >= 0) {
                     decided++;
-                    if (earlyHolders.Contains(winner.ToString()))
-                        factoryHolderWon++;
+                    if (earlyHolders.Length > 0) {
+                        sampled++;
+                        if (earlyHolders.Contains(winner.ToString()))
+                            factoryHolderWon++;
+                    }
                 }
                 report.Append($"Match {match}: winner team {winner} by {(eliminated ? "elimination" : "time")} after " +
                               $"{elapsedSteps * step / 60f:0.0} min; factories {Join(factories)}, fortresses {Join(fortresses)}\n")
                       .Append(timeline);
             }
-            report.Append($"Winner held a factory at 5 min in {factoryHolderWon} of {decided} decided matches.\n");
+            report.Append($"Winner held a factory at {EarlyHolderMinute} min in {factoryHolderWon} of {sampled} decided matches that reached it.\n");
             TestContext.WriteLine(report.ToString());
-            Debug.Log(report.ToString());
             Assert.That(decided, Is.GreaterThan(0), "No match produced a winner.");
         }
 

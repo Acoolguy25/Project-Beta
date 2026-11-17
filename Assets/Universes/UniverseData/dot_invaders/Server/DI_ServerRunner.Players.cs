@@ -23,18 +23,20 @@ namespace Universes.UniverseData.dot_invaders {
                 teamId = nextTeamId++;
                 playerTeams.Add(clientId, teamId);
             }
-            dotInvadersTeams.Add(teamId);
-
             player.SetPlayerTeam(new TeamConfig(DI_Rules.GetTeamColor(teamId)));
 
             for (int i = 0; i < bases.Count; i++) {
-                if (bases[i].ownerClientId == clientId)
+                if (bases[i].ownerClientId == clientId) {
+                    dotInvadersTeams.Add(teamId);
                     return;
+                }
             }
 
+            // A team only competes (and can be announced eliminated) once it holds a base.
             int baseId = FindSpawnBase();
             if (baseId < 0)
                 return;
+            dotInvadersTeams.Add(teamId);
 
             BaseState home = bases[baseId];
             home.ownerClientId = clientId;

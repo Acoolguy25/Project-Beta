@@ -121,11 +121,16 @@ namespace Universes.UniverseData.dot_invaders {
             BroadcastState();
         }
 
+        /// <summary>Marks the start of a board in chat, so the previous match's eliminations cannot be read as this one's.</summary>
+        static void AnnounceNewMatch() {
+            ServerChat.SendSystemMessage(new SystemMessageBroadcast(NewMatchMessage, SystemMessageSource.CustomMessage));
+        }
+
         static void SendTeamChatMessage(int teamId, string message) {
             string teamName = GetDotInvadersTeamName(teamId, teamId >= NpcTeamIdStart);
             string coloredTeamName = TeamConfig.ColorRichText(
                 teamName,
-                TeamConfig.TeamToColor(DI_Rules.GetTeamColor(teamId)));
+                DI_Rules.Readable(TeamConfig.TeamToColor(DI_Rules.GetTeamColor(teamId)), DI_Rules.DefaultMinTeamLuminance));
             ServerChat.SendSystemMessage(new SystemMessageBroadcast(
                 $"{coloredTeamName} {message}",
                 SystemMessageSource.CustomMessage));

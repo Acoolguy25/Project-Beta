@@ -20,6 +20,7 @@ namespace Universes.UniverseData.dot_invaders {
         const int NpcBasesPerTeam = 1;
         const int NpcStartingTroops = 14;
         const int NpcTeamIdStart = 100;
+        const string NewMatchMessage = "<color=#8C96AA>New match: a fresh board.</color>";
         const int WinnerXPReward = 100;
         const int WinnerGoldReward = 50;
         const float ArenaHalfWidth = 100f;
@@ -81,8 +82,9 @@ namespace Universes.UniverseData.dot_invaders {
         [SerializeField, Range(3, 8)] int nearbyPathsPerBase = 6;
         [SerializeField, Min(12f)] float maximumLocalPathLength = 65f;
         [SerializeField, Range(0.1f, 1f)] float npcSuperLaunchCapacityFraction = 0.85f;
-        // Pause after a match ends before the base class resets and starts the next round.
-        [SerializeField, Range(3, 60)] int intermissionSeconds = 8;
+        // Pause after a match ends before the base class resets and starts the next round: long enough
+        // to read the saved stats on the match-over panel.
+        [SerializeField, Range(3, 60)] int intermissionSeconds = 12;
 
         sealed class BaseState {
             public Vector2 position;

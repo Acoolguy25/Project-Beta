@@ -17,6 +17,22 @@ namespace Universes.UniverseData.dot_invaders {
                 ? NpcTeamOrder[(teamId - 100) % NpcTeamOrder.Length]
                 : TeamOrder[teamId % TeamOrder.Length];
 
+        /// <summary>Lowest relative luminance a team colour is drawn with on the dark board (pure blue is about 0.07).</summary>
+        public const float DefaultMinTeamLuminance = 0.3f;
+
+        /// <summary>
+        /// <paramref name="color"/> lifted toward white until its relative luminance reaches
+        /// <paramref name="minLuminance"/>; lighter colours come back unchanged. Keeps the hue, so blue stays blue.
+        /// </summary>
+        public static Color Readable(Color color, float minLuminance) {
+            float luminance = 0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;
+            if (luminance >= minLuminance || luminance >= 1f)
+                return color;
+            Color lifted = Color.Lerp(color, Color.white, (minLuminance - luminance) / (1f - luminance));
+            lifted.a = color.a;
+            return lifted;
+        }
+
         public const float DefaultNPCIntelligence = 60f;
         // Only automatic training is capped. Incoming troops may stack without a cap.
         public const int DefaultMaxCapacity = 50;

@@ -48,6 +48,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         // Effect scales are in board units and sized for the board camera, which frames about 180 units top to bottom.
         [Header("Captures")]
         [SerializeField, Min(0f)] float captureRingScale = 7.5f;
+        [Tooltip("How far the capture ring is lightened toward white, so a capture reads as a crisp flash, not a dull band.")]
+        [SerializeField, Range(0f, 1f)] float captureRingWhiten = 0.35f;
         [SerializeField, Min(0f)] float capturePunch = 0.25f;
         [SerializeField, Min(0.01f)] float capturePunchSeconds = 0.35f;
         [Tooltip("Camera kick when your base falls.")]
@@ -60,19 +62,24 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Min(0f)] float clashRingScale = 3f;
         [SerializeField] Color clashSparkColor = new(1f, 0.92f, 0.7f);
         [SerializeField, Min(0)] int maxClashSparksPerSnapshot = 12;
+        [Tooltip("Seconds during which a new clash ring is skipped if one already went off within Clash Ring Scale of it, so a brawl on one road does not stack rings.")]
+        [SerializeField, Min(0f)] float clashRingCooldown = 0.3f;
 
         [Header("Arrivals")]
         [Tooltip("A troop that vanishes within this many board units of a base landed on it.")]
         [SerializeField, Min(0f)] float arrivalRadius = 5f;
         [Tooltip("A vanished troop this close to a clash or a turret hit died there; it did not land.")]
         [SerializeField, Min(0f)] float combatLossRadius = 2.5f;
-        [SerializeField, Min(0f)] float arrivalPunch = 0.22f;
-        [SerializeField, Min(0.01f)] float arrivalPunchSeconds = 0.22f;
+        [Tooltip("Extra scale a base swells by when troops land on it.")]
+        [SerializeField, Min(0f)] float arrivalPunch = 0.45f;
+        [SerializeField, Min(0.01f)] float arrivalPunchSeconds = 0.25f;
         [Tooltip("Seconds before the same base punches again, so a steady stream reads as beats, not jitter.")]
         [SerializeField, Min(0f)] float arrivalPunchCooldown = 0.3f;
 
         [Header("Eliminations")]
         [SerializeField, Min(0f)] float eliminationRingScale = 13f;
+        [Tooltip("Brightness of the outer ring: below 1 so a saturated team colour stays a ring instead of blooming into a haze.")]
+        [SerializeField, Range(0f, 1f)] float eliminationRingGlow = 0.5f;
         [Tooltip("A thinner second ring inside the first, in the eliminated team's colour.")]
         [SerializeField, Min(0f)] float eliminationInnerRingScale = 7f;
         [Tooltip("How far the inner ring is lightened toward white, so the two rings read apart.")]
@@ -83,6 +90,12 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField] Color localEliminationFlash = new(1f, 0.2f, 0.25f, 0.35f);
         [SerializeField, Min(0.01f)] float localEliminationFlashSeconds = 0.5f;
         [SerializeField] string localEliminationText = "ELIMINATED";
+        [Tooltip("Caption size as a share of the countdown font: small enough to leave the board readable.")]
+        [SerializeField, Range(0.1f, 1f)] float localEliminationTextSize = 0.33f;
+        [Tooltip("How far the caption is lightened from the team colour toward white, so it reads over the red flash.")]
+        [SerializeField, Range(0f, 1f)] float localEliminationTextWhiten = 0.65f;
+        [Tooltip("How long the ELIMINATED caption stays on screen.")]
+        [SerializeField, Min(0.1f)] float localEliminationTextSeconds = 2.2f;
 
         [Header("Match end")]
         [SerializeField, Min(0f)] float confettiScale = 8f;
@@ -92,11 +105,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField] Color victoryFlash = new(1f, 1f, 1f, 0.25f);
         [SerializeField, Min(0.01f)] float victoryFlashSeconds = 0.4f;
         [SerializeField] Color defeatFlash = new(0.05f, 0.02f, 0.08f, 0.45f);
+        [Tooltip("A loss gets a dark flash and the lose cue only; the match-over panel is the caption.")]
         [SerializeField, Min(0.01f)] float defeatFlashSeconds = 0.8f;
-        [SerializeField] string defeatText = "DEFEAT";
-        [SerializeField] Color defeatTextColor = new(1f, 0.4f, 0.4f);
-        [Tooltip("How long the ELIMINATED and DEFEAT captions stay on screen.")]
-        [SerializeField, Min(0.1f)] float screenTextSeconds = 2.2f;
 
         [Header("Placement")]
         [Tooltip("Height above the board effects play at, so they sit over roads and bases.")]
@@ -107,6 +117,11 @@ namespace Universes.UniverseData.dot_invaders.Client {
         readonly List<int> vanished = new();
         readonly HashSet<int> scratch = new();
         float[] nextPunchTime = Array.Empty<float>();
+        // Recent clash rings (position, unscaled time) in a small ring buffer; see clashRingCooldown.
+        const int RecentClashRings = 16;
+        readonly Vector2[] recentClashPositions = new Vector2[RecentClashRings];
+        readonly float[] recentClashTimes = new float[RecentClashRings];
+        int nextClashSlot;
 
         /// <summary>The order blip for a wave of <paramref name="troops"/>: bigger waves sound lower.</summary>
         public void PlayOrder(int troops) {
@@ -138,11 +153,24 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 Vector2 point = next.clashPositions[i];
                 Vector3 position = World(point);
                 GameFx.Play(FxKind.Sparks, position, Vector3.up, clashSparkColor, clashSparkScale);
-                GameFx.Play(FxKind.ShockwaveRing, position, clashSparkColor, clashRingScale);
+                if (TryClaimClashRing(point))
+                    GameFx.Play(FxKind.ShockwaveRing, position, clashSparkColor, clashRingScale);
                 involved |= HasTeamDotNear(next, next.yourTeamId, point, clashInvolvementRadius);
             }
             // The sound's own minimum interval (DI_Authoring) keeps a brawl from machine-gunning.
             GameSfx.Play(clashSound, involved ? clashVolume : otherClashVolume);
+        }
+
+        /// <summary>False when a ring already went off near <paramref name="point"/> within the cooldown.</summary>
+        bool TryClaimClashRing(Vector2 point) {
+            float now = Time.unscaledTime, squared = clashRingScale * clashRingScale;
+            for (int i = 0; i < RecentClashRings; i++)
+                if (now - recentClashTimes[i] < clashRingCooldown && (recentClashPositions[i] - point).sqrMagnitude <= squared)
+                    return false;
+            recentClashPositions[nextClashSlot] = point;
+            recentClashTimes[nextClashSlot] = now;
+            nextClashSlot = (nextClashSlot + 1) % RecentClashRings;
+            return true;
         }
 
         static bool HasTeamDotNear(in DI_StateBroadcast state, int team, Vector2 point, float radius) {
@@ -199,7 +227,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             int you = next.yourTeamId;
             foreach (DI_Capture capture in captures) {
                 Vector3 position = World(next.basePositions[capture.baseId]);
-                GameFx.Play(FxKind.ShockwaveRing, position, teamColor(capture.teamId), captureRingScale);
+                GameFx.Play(FxKind.ShockwaveRing, position, Color.Lerp(teamColor(capture.teamId), Color.white, captureRingWhiten), captureRingScale);
                 if (capture.baseId < views.Count)
                     views[capture.baseId].PlayPunch(capturePunch, capturePunchSeconds);
                 if (you >= 0 && capture.teamId == you) {
@@ -219,7 +247,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 Color color = teamColor(team);
                 // The shockwave goes off where the team made its last stand.
                 if (TryLastPosition(previous, team, out Vector3 position)) {
-                    GameFx.Play(FxKind.ShockwaveRing, position, color, eliminationRingScale);
+                    GameFx.Play(FxKind.ShockwaveRing, position, Dim(color, eliminationRingGlow), eliminationRingScale);
                     GameFx.Play(FxKind.ShockwaveRing, position, Color.Lerp(color, Color.white, eliminationInnerWhiten), eliminationInnerRingScale);
                     GameFx.Play(FxKind.Sparks, position, Vector3.up, color, eliminationSparkScale);
                     CameraShake.Explosion(position, eliminationShakeRadius, eliminationShake);
@@ -227,7 +255,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 if (team == next.yourTeamId) {
                     GameSfx.Play(eliminationSound);
                     ScreenFx.Flash(localEliminationFlash, localEliminationFlashSeconds);
-                    ScreenFx.ShowText(localEliminationText, color, screenTextSeconds);
+                    ScreenFx.ShowText(localEliminationText, Color.Lerp(color, Color.white, localEliminationTextWhiten),
+                        localEliminationTextSeconds, localEliminationTextSize);
                 } else {
                     GameSfx.Play(eliminationSound, otherEliminationVolume);
                 }
@@ -241,7 +270,6 @@ namespace Universes.UniverseData.dot_invaders.Client {
             if (next.winningTeamId != you) {
                 GameSfx.Play(SfxCue.Lose);
                 ScreenFx.Flash(defeatFlash, defeatFlashSeconds);
-                ScreenFx.ShowText(defeatText, defeatTextColor, screenTextSeconds);
                 return;
             }
             GameSfx.Play(SfxCue.Win);
@@ -296,6 +324,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         }
 
         Vector3 World(Vector2 point) => new(point.x, effectHeight, point.y);
+
+        static Color Dim(Color color, float brightness) => new(color.r * brightness, color.g * brightness, color.b * brightness, color.a);
 #endif
     }
 }

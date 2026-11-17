@@ -264,6 +264,7 @@ MonoBehaviour:
   orderChevronLength: 0.4
   orderArrowHeight: 0.22
   boardFocusPoint: {x: 0, y: 0, z: 6}
+  minTeamLuminance: 0.3
 --- !u!114 &3074514017627796893
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -398,6 +399,7 @@ MonoBehaviour:
   clashInvolvementRadius: 3
   otherEliminationVolume: 0.6
   captureRingScale: 7.5
+  captureRingWhiten: 0.35
   capturePunch: 0.25
   capturePunchSeconds: 0.35
   baseLostShake: 0.15
@@ -406,12 +408,14 @@ MonoBehaviour:
   clashRingScale: 3
   clashSparkColor: {r: 1, g: 0.92, b: 0.7, a: 1}
   maxClashSparksPerSnapshot: 12
+  clashRingCooldown: 0.3
   arrivalRadius: 5
   combatLossRadius: 2.5
-  arrivalPunch: 0.22
-  arrivalPunchSeconds: 0.22
+  arrivalPunch: 0.45
+  arrivalPunchSeconds: 0.25
   arrivalPunchCooldown: 0.3
   eliminationRingScale: 13
+  eliminationRingGlow: 0.5
   eliminationInnerRingScale: 7
   eliminationInnerWhiten: 0.5
   eliminationSparkScale: 6
@@ -420,6 +424,9 @@ MonoBehaviour:
   localEliminationFlash: {r: 1, g: 0.2, b: 0.25, a: 0.35}
   localEliminationFlashSeconds: 0.5
   localEliminationText: ELIMINATED
+  localEliminationTextSize: 0.33
+  localEliminationTextWhiten: 0.65
+  localEliminationTextSeconds: 2.2
   confettiScale: 8
   maxConfettiBursts: 8
   confettiKeepOut:
@@ -432,9 +439,6 @@ MonoBehaviour:
   victoryFlashSeconds: 0.4
   defeatFlash: {r: 0.05, g: 0.02, b: 0.08, a: 0.45}
   defeatFlashSeconds: 0.8
-  defeatText: DEFEAT
-  defeatTextColor: {r: 1, g: 0.4, b: 0.4, a: 1}
-  screenTextSeconds: 2.2
   effectHeight: 0.6
 --- !u!1 &5060468652190620228
 GameObject:

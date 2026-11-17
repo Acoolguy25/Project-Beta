@@ -25,11 +25,13 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
+    - _ChevronBend: 0.35
     - _Chevrons: 0
     - _CoreBoost: 0.35
     - _EdgeSoftness: 0.45
     - _LineLength: 10
     - _PulseDirection: 1
+    - _PulseHeadSoftness: 12
     - _PulseLength: 0.3
     - _PulseSpacing: 9
     - _PulseSpeed: 14

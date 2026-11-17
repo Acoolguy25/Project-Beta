@@ -83,13 +83,22 @@ namespace Universes.UniverseData.dot_invaders.Editor {
 
         // --- Board look ---------------------------------------------------------------------
 
+        /// <summary>
+        /// The material's own emission, kept just above black so it is never flagged EmissiveIsBlack.
+        /// Renderers set the real glow through property blocks.
+        /// </summary>
+        static readonly Color BaseMaterialEmission = new(1f / 128f, 1f / 128f, 1f / 128f, 1f);
+
         /// <summary>Bases, troops and the border share DI_Base.mat; their views drive emission per renderer.</summary>
         static void EnableBaseEmission() {
             Material material = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath)
                 ?? throw new System.IO.FileNotFoundException("Dot Invaders base material is missing.", BaseMaterialPath);
             material.EnableKeyword("_EMISSION");
-            material.SetColor("_EmissionColor", Color.black);
-            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            material.SetColor("_EmissionColor", BaseMaterialEmission);
+            // URP re-derives _EMISSION from these flags whenever it validates the material (reimport,
+            // batchmode test runs, Editor quit) and strips the keyword unless a GI emissive flag is set.
+            // The board is dynamic, so the realtime flag only keeps the keyword; it bakes nothing.
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             EditorUtility.SetDirty(material);
         }
 

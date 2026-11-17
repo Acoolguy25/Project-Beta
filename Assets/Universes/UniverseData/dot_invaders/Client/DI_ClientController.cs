@@ -64,6 +64,10 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Tooltip("Board point the camera centres on when a match starts: the board's middle, nudged so the board sits between the top HUD and the controls hint.")]
         [SerializeField] Vector3 boardFocusPoint = new(0f, 0f, 6f);
 
+        [Header("Team colours")]
+        [Tooltip("Dark team colours (pure blue) are lifted toward white to at least this relative luminance for every board element: bodies, rings, ranges, arrows, troops and effects.")]
+        [SerializeField, Range(0f, 1f)] float minTeamLuminance = DI_Rules.DefaultMinTeamLuminance;
+
         readonly List<DI_BaseView> baseViews = new();
         readonly List<DI_LinkView> linkViews = new();
         readonly Dictionary<int, DI_DotView> dotViews = new();
@@ -73,7 +77,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
         readonly List<int> prunedSelection = new();
         readonly Vector3[] marqueeCorners = new Vector3[4];
         readonly Dictionary<long, int> linkLookup = new();
-        static readonly System.Func<int, Color> TeamColorOf = GetTeamColor;
+        System.Func<int, Color> teamColorOf;
 
         // Per road: the team colour and direction of the route pulse it carries, if any.
         Color[] linkPulseColors = System.Array.Empty<Color>();
@@ -101,6 +105,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
         int[] lookupTargets = System.Array.Empty<int>();
 
         void Awake() {
+            teamColorOf = GetTeamColor;
             runtimeRoot = new GameObject("Runtime Views").transform;
             runtimeRoot.SetParent(transform, false);
             boardTitle = transform.Find("Title")?.GetComponent<TextMeshPro>();
@@ -167,11 +172,11 @@ namespace Universes.UniverseData.dot_invaders.Client {
             state = next;
             routeTarget = -1;
             SynchronizeViews();
-            hud?.SetState(state, GetTeamColor, GetTeamName);
+            hud?.SetState(state, teamColorOf, GetTeamName);
             if (boardFx != null)
-                boardFx.Present(previous, state, baseViews, TeamColorOf);
+                boardFx.Present(previous, state, baseViews, teamColorOf);
             if (backdrop != null)
-                backdrop.SetState(state, TeamColorOf);
+                backdrop.SetState(state, teamColorOf);
 
             PruneSelection();
 
@@ -734,8 +739,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
             return new Vector3(point.x, height, point.y);
         }
 
-        static Color GetTeamColor(int teamId) {
-            return TeamConfig.TeamToColor(DI_Rules.GetTeamColor(teamId));
+        Color GetTeamColor(int teamId) {
+            return DI_Rules.Readable(TeamConfig.TeamToColor(DI_Rules.GetTeamColor(teamId)), minTeamLuminance);
         }
 
         void OnDestroy() {

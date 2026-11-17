@@ -16,6 +16,8 @@ Shader "Dot Invaders/Neon Line" {
         _PulseDirection ("Pulse Direction (+1 start to end, -1 back)", Float) = 1
         _Chevrons ("Chevron Shape", Range(0, 1)) = 0
         _PulseThin ("Pulse Thinness (0 full width, 1 centre streak)", Range(0, 1)) = 1
+        _PulseHeadSoftness ("Pulse Head Softness (higher = harder head)", Range(1, 50)) = 12
+        _ChevronBend ("Chevron Bend (share of spacing the tip leads by)", Range(0, 1)) = 0.35
         _LineLength ("Line Length (board units)", Float) = 10
     }
     SubShader {
@@ -47,6 +49,8 @@ Shader "Dot Invaders/Neon Line" {
                 float _PulseDirection;
                 half _Chevrons;
                 half _PulseThin;
+                half _PulseHeadSoftness;
+                half _ChevronBend;
                 float _LineLength;
             CBUFFER_END
 
@@ -83,12 +87,12 @@ Shader "Dot Invaders/Neon Line" {
                 // look like the round troop dots travelling on the same road.
                 float along = input.uv.x * _LineLength;
                 float spacing = max(0.01, _PulseSpacing);
-                float phase = along * _PulseDirection - _Time.y * _PulseSpeed + across * spacing * 0.35 * _Chevrons;
+                float phase = along * _PulseDirection - _Time.y * _PulseSpeed + across * spacing * _ChevronBend * _Chevrons;
                 float cell = frac(phase / spacing);
                 half pulse = saturate((cell - (1.0 - _PulseLength)) / max(0.001, _PulseLength));
                 pulse = lerp(pulse, pulse * pulse, _Chevrons);
                 // Soften the head so a streak fades in rather than starting on a hard edge.
-                pulse *= saturate((1.0 - cell) * 12.0);
+                pulse *= saturate((1.0 - cell) * _PulseHeadSoftness);
                 // Pulses fade in and out at the ends instead of popping.
                 half ends = smoothstep(0.0, 1.5, along) * smoothstep(0.0, 1.5, _LineLength - along);
                 pulse *= ends * _PulseStrength * lerp(1.0, core, _PulseThin);
