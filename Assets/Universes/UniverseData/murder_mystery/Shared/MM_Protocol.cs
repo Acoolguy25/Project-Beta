@@ -93,6 +93,8 @@ namespace Universes.UniverseData.murder_mystery {
         public string summary;
         public MM_ResultEntry[] entries;
         public int secondsLeft;
+        /// <summary>The outcome itself, so clients colour the card without reading the display text.</summary>
+        public bool murderersWon;
     }
 
     public static class MM_Text {
@@ -118,8 +120,11 @@ namespace Universes.UniverseData.murder_mystery {
         /// </summary>
         public static string ClassicHeadline(bool murderersWon) => murderersWon ? "Murderers win" : "The town wins";
 
-        /// <summary>Whether a <see cref="MM_ResultsBroadcast.winner"/> line is a murderer win.</summary>
-        public static bool IsMurdererWin(string headline) => headline == ClassicHeadline(true);
+        /// <summary>How the Classic round was decided, for the line under the headline.</summary>
+        public static string ClassicReason(bool murderersWon, int murderersLeft) =>
+            murderersWon ? "Nobody was left to stop the murderers"
+            : murderersLeft == 0 ? "Every murderer was caught"
+            : "The murderers ran out of time";
 
         public static Color RoleColor(MM_Role role) => role switch {
             MM_Role.Innocent => new Color(0.35f, 0.85f, 0.45f),

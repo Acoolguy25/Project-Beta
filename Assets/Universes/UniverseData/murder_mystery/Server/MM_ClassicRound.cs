@@ -156,6 +156,26 @@ namespace Universes.murder_mystery.Server {
         public bool IsSheriffExposed(GameCharacter sheriff) =>
             sheriff != null && sheriffExposedUntil.TryGetValue(sheriff, out float until) && Time.time < until;
 
+        /// <summary>How close this sheriff must be before this NPC murderer goes for them (<see cref="MM_ClassicTuning.SheriffNoticeDistance"/>).</summary>
+        public float SheriffNoticeDistance(GameCharacter hunter, GameCharacter sheriff) =>
+            tuning.SheriffNoticeDistance(IsSheriffExposed(sheriff), HuntSecondsElapsed, ManhuntRank(hunter));
+
+        /// <summary>The murderer's place in the manhunt: living murderers dealt before it this round.</summary>
+        int ManhuntRank(GameCharacter hunter) {
+            int rank = 0;
+            foreach (Participant participant in participants) {
+                if (participant.character == hunter)
+                    return rank;
+                if (participant.role == MM_Role.Murderer && IsAlive(participant.character))
+                    rank++;
+            }
+            return rank;
+        }
+
+        /// <summary>Seconds of hunt played so far this round; meetings do not count.</summary>
+        public float HuntSecondsElapsed => Phase == MM_Phase.Hunt ? huntLength - SecondsLeft : 0f;
+        int huntLength;
+
         /// <summary>
         /// Puts every living player murderer's dagger on the server cooldown the kill clock dictates, so their
         /// client shows it and refuses to swing early. NPC murderers are held back through <see cref="CanKill"/>
@@ -312,6 +332,7 @@ namespace Universes.murder_mystery.Server {
         /// </summary>
         public async UniTask RunHunt(int seconds, Func<bool> roundOver, CancellationToken token) {
             Phase = MM_Phase.Hunt;
+            huntLength = seconds;
             SecondsLeft = seconds;
             reportAllowedAt = Time.time + tuning.firstReportDelaySeconds;
             killClock.BeginHunt(Time.time);
@@ -382,7 +403,8 @@ namespace Universes.murder_mystery.Server {
 
                 Phase = MM_Phase.Voting;
                 SecondsLeft = tuning.voteSeconds;
-                string[] descriptions = suspects.Select(s => s.Owner.IsValid ? "Player" : "Townsperson").ToArray();
+                // The same line for everyone: naming who is a player would single the human suspects out.
+                string[] descriptions = suspects.Select(_ => "Seen near the body").ToArray();
                 VoteResult result = await ServerVote.StartDynamicVote(
                     $"Who killed {body.victimName}?",
                     $"Reported by {reporterName}. These were seen near the body. Most votes is ejected; a tie ejects nobody.",
@@ -431,7 +453,7 @@ namespace Universes.murder_mystery.Server {
             }
         }
 
-        public async UniTask RunResults(string headline, string summary, int seconds, CancellationToken token) {
+        public async UniTask RunResults(bool murderersWon, string headline, string summary, int seconds, CancellationToken token) {
             Phase = MM_Phase.Results;
             MM_ResultEntry[] entries = participants
                 .Where(p => p.player != null || p.role == MM_Role.Murderer || p.role == MM_Role.Sheriff)
@@ -450,7 +472,7 @@ namespace Universes.murder_mystery.Server {
             for (int i = seconds; i > 0; i--) {
                 SecondsLeft = i;
                 InstanceFinder.ServerManager.Broadcast(new MM_ResultsBroadcast {
-                    round = Round, winner = headline, summary = summary, entries = entries, secondsLeft = i,
+                    round = Round, winner = headline, summary = summary, entries = entries, secondsLeft = i, murderersWon = murderersWon,
                 });
                 ServerRunner.SetTopMessage($"{headline}! Next round in {i}");
                 if (await runner.AwaitTime(1000, token))

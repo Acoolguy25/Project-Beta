@@ -144,5 +144,27 @@ namespace Universes.UniverseData.murder_mystery.Tests {
             Assert.That(MM_DropRules.RoleFor(MM_DroppedWeapon.Dagger), Is.EqualTo(MM_Role.Murderer));
             Assert.That(MM_DropRules.RoleFor(MM_DroppedWeapon.None), Is.EqualTo(MM_Role.None));
         }
+
+        [Test]
+        public void MurderersNoticeTheSheriffFromFurtherWhenExposedOrLateInTheHunt() {
+            MM_ClassicTuning tuning = new() {
+                sheriffNoticeDistance = 30f, exposedSheriffNoticeDistance = 60f,
+                sheriffManhuntAfterSeconds = 70f, manhuntNoticeDistance = 200f, manhuntStaggerSeconds = 20f,
+            };
+            Assert.That(tuning.SheriffNoticeDistance(exposed: false, huntSecondsElapsed: 10f, hunterRank: 0), Is.EqualTo(30f));
+            Assert.That(tuning.SheriffNoticeDistance(exposed: true, huntSecondsElapsed: 10f, hunterRank: 0), Is.EqualTo(60f));
+            Assert.That(tuning.SheriffNoticeDistance(exposed: false, huntSecondsElapsed: 70f, hunterRank: 0), Is.EqualTo(200f));
+            Assert.That(tuning.SheriffNoticeDistance(exposed: true, huntSecondsElapsed: 90f, hunterRank: 0), Is.EqualTo(200f));
+            // The second murderer joins the manhunt one stagger later.
+            Assert.That(tuning.SheriffNoticeDistance(exposed: false, huntSecondsElapsed: 80f, hunterRank: 1), Is.EqualTo(30f));
+            Assert.That(tuning.SheriffNoticeDistance(exposed: false, huntSecondsElapsed: 90f, hunterRank: 1), Is.EqualTo(200f));
+        }
+
+        [Test]
+        public void TheResultsLineSaysHowTheRoundWasDecided() {
+            Assert.That(MM_Text.ClassicReason(murderersWon: true, murderersLeft: 2), Does.Contain("Nobody was left"));
+            Assert.That(MM_Text.ClassicReason(murderersWon: false, murderersLeft: 0), Does.Contain("caught"));
+            Assert.That(MM_Text.ClassicReason(murderersWon: false, murderersLeft: 1), Does.Contain("ran out of time"));
+        }
     }
 }

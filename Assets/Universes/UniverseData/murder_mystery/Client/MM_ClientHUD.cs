@@ -105,7 +105,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
         [Header("Kill feedback")]
         [Tooltip("Sparks are played this high above the victim's feet (the robot is about 5.6 m tall).")]
         [Min(0f)] public float killFxHeight = 2.4f;
-        [Min(0.1f)] public float killFxScale = 3.5f;
+        [Min(0.1f)] public float killFxScale = 2.2f;
         public Color killSparkColor = new(1f, 0.25f, 0.2f);
         [Tooltip("A red ring on the floor under the victim, so a kill reads from across a hall.")]
         [Min(0f)] public float killRingScale = 3f;
@@ -409,6 +409,10 @@ namespace Universes.UniverseData.murder_mystery.Client {
             ejection.Show(icon, color, title, ejectionResult.headline, Mathf.Max(0.5f, ejectionUntil - now));
         }
 
+        // What the role chip's name currently shows (None until the first state).
+        MM_Role chipRole;
+        bool chipAlive;
+
         /// <summary>The role chip, kill cooldown, report prompt and meeting card, from the latest server state.</summary>
         void ApplyState() {
             bool classic = hasState && state.classic;
@@ -419,8 +423,13 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 Color color = MM_Text.RoleColor(state.role);
                 roleChipDisc.color = state.alive ? color : Color.Lerp(color, Muted, 0.7f);
                 roleChipIcon.sprite = state.alive ? RoleIcon(state.role) : diedIcon;
-                roleChipName.text = state.alive ? MM_Text.RoleName(state.role) : $"{MM_Text.RoleName(state.role)} <size=70%><color=#9AA3AF>· eliminated</color></size>";
-                roleChipName.color = Color.Lerp(color, Color.white, 0.2f);
+                // The name only changes with the role or a death; the state arrives twice a second.
+                if (state.role != chipRole || state.alive != chipAlive) {
+                    chipRole = state.role;
+                    chipAlive = state.alive;
+                    roleChipName.text = state.alive ? MM_Text.RoleName(state.role) : $"{MM_Text.RoleName(state.role)} <size=70%><color=#9AA3AF>· eliminated</color></size>";
+                    roleChipName.color = Color.Lerp(color, Color.white, 0.2f);
+                }
                 meetingsLeft.label.SetText("{0}", state.meetingsLeft);
                 meetingsLeft.SetTint(state.meetingsLeft > 0 ? Alarm : Muted);
                 meetingsLeft.SetVisible(state.role != MM_Role.Spectator);
@@ -460,7 +469,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
         }
 
         void FillResults() {
-            bool murderersWon = MM_Text.IsMurdererWin(lastResults.winner);
+            bool murderersWon = lastResults.murderersWon;
             Color color = murderersWon ? Alarm : MM_Text.RoleColor(MM_Role.Innocent);
             resultsTitle.text = (lastResults.winner ?? string.Empty).ToUpperInvariant();
             resultsTitle.color = Color.Lerp(color, Color.white, 0.2f);

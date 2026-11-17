@@ -24,7 +24,8 @@ HUD icons come from the shared theme (`Packages/com.ryan.ui/Runtime/UI/Theme/Gam
 
 ## Models
 
-The standing lamp (`Prefabs/MM_StandingLamp.prefab`) uses `lamp_standing.fbx` from **KayKit Furniture Bits 1.0**
+The standing lamp (`Prefabs/MM_StandingLamp.prefab`) and its corner (`Prefabs/MM_LampCorner.prefab`) use
+`lamp_standing.fbx`, `armchair_pillows.fbx`, `cabinet_medium_decorated.fbx` and `rug_oval_A.fbx` from **KayKit Furniture Bits 1.0**
 by Kay Lousberg (www.kaylousberg.com), CC0 1.0, already in the project at `Assets/ThirdParty/KayKit/FurnitureBits/`
 (license in that folder). Its glowing shade material `Materials/MM_LampGlow.mat` is a copy of the pack's material
 with emission added.

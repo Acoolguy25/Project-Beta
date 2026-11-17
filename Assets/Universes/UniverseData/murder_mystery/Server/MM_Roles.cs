@@ -43,6 +43,7 @@ namespace Universes.UniverseData.murder_mystery.Server {
             if (totalCount <= 0) return;
 
             // --- Sheriff: must be a player, so pick from PlayerRoles indices only ---
+            // TEST ONLY: the editor solo play-test switch (MM_ServerRunner.DebugSoloNpcSheriff) hands it to an NPC.
             if (npcSheriff && npcCount > 0) {
                 NPCRoles[Random.Range(0, npcCount)] = TeamColor.Blue;
             }

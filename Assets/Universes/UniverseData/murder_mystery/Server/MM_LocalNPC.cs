@@ -66,7 +66,8 @@ namespace Universes.murder_mystery.Server {
                 ? new List<TeamColor>()
                 : new List<TeamColor> { TeamColor.Red });
 
-            // A sheriff NPC (only dealt by the solo play-test switch) carries the pistol, so it can be
+            // TEST ONLY: a sheriff NPC (dealt only by the editor solo play-test switch,
+            // MM_ServerRunner.DebugSoloNpcSheriff) carries the pistol, so it can be
             // recognised as armed and drop the gun when it dies. It does not shoot.
             if (gameCharacter.GetTeam().realTeam == TeamColor.Blue && sheriffPistol == null)
                 sheriffPistol = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Pistol);

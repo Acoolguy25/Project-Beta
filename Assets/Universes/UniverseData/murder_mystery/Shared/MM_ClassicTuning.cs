@@ -48,18 +48,44 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0)] public int murdererHealOnNpcKill = 20;
 
         [Header("NPC murderers and the sheriff")]
-        // Measured with a solo sheriff (README, "Balance"): 12 m and nobody ever came for a sheriff who stayed put
-        // (town won every round on time); 30 m and a sheriff who shoots back won 4 of 5. 45 m is the default.
-        [Tooltip("An NPC murderer that may kill only rushes an armed sheriff closer than this (metres). Further away the sheriff is just another face in the crowd.")]
+        // Measured with a solo sheriff (README, "Balance"). Proximity alone either let a sheriff who stays put
+        // win on time (12 m: nobody came; 45 m: about one approach per round) or got them killed early, so the
+        // murderers go looking for the sheriff once the hunt is under way, one at a time, and creep up on the
+        // gun rather than charge it.
+        [Tooltip("An NPC murderer that may kill rushes an armed sheriff closer than this (metres). Further away the sheriff is just another face in the crowd, until the manhunt starts.")]
         [Min(0f)] public float sheriffNoticeDistance = 45f;
         [Tooltip("For this long after the sheriff shoots someone, NPC murderers notice them from much further away.")]
         [Min(0f)] public float sheriffExposedSeconds = 8f;
         [Tooltip("How far NPC murderers notice a sheriff who has just shot someone (metres).")]
         [Min(0f)] public float exposedSheriffNoticeDistance = 60f;
+        [Tooltip("Once the hunt has run this long (seconds, meetings not counted), NPC murderers go looking for the sheriff instead of waiting to bump into them. Above the hunt length = never.")]
+        [Min(0f)] public float sheriffManhuntAfterSeconds = 60f;
+        [Tooltip("How far NPC murderers notice the sheriff once the manhunt is on (metres). The map is about 450 m across, so the default finds them anywhere.")]
+        [Min(0f)] public float manhuntNoticeDistance = 1000f;
+        [Tooltip("Each further NPC murderer joins the manhunt this much later (seconds), so they come for the sheriff one at a time.")]
+        [Min(0f)] public float manhuntStaggerSeconds = 35f;
+        [Tooltip("Inside this distance of an armed sheriff (metres) an NPC murderer creeps instead of charging, so the sheriff can spot it and shoot first. 0 = always charge.")]
+        [Min(0f)] public float sheriffCreepDistance = 25f;
+        [Tooltip("How fast an NPC murderer creeps up on an armed sheriff (m/s). Walking is 18 and a charge 20.")]
+        [Min(0.5f)] public float sheriffCreepSpeed = 4f;
         [Tooltip("Multiplies an NPC's attack detection radius for an armed sheriff (1 = like anyone else).")]
         [Min(0f)] public float sheriffDetectionMultiplier = 1.5f;
         [Tooltip("Extra target priority an armed sheriff gets with NPC murderers (0 = none).")]
         [Min(0f)] public float sheriffTargetPriority = 1f;
+
+        /// <summary>
+        /// How close an armed sheriff must be before an NPC murderer that may kill goes for them: the widest of
+        /// the quiet distance, the exposed distance (just fired) and the manhunt distance (late in the hunt).
+        /// <paramref name="hunterRank"/> is the murderer's place in the manhunt (0 = first to join).
+        /// </summary>
+        public float SheriffNoticeDistance(bool exposed, float huntSecondsElapsed, int hunterRank) {
+            float distance = sheriffNoticeDistance;
+            if (exposed)
+                distance = Mathf.Max(distance, exposedSheriffNoticeDistance);
+            if (huntSecondsElapsed >= sheriffManhuntAfterSeconds + hunterRank * manhuntStaggerSeconds)
+                distance = Mathf.Max(distance, manhuntNoticeDistance);
+            return distance;
+        }
 
         [Header("Kill feedback")]
         [Tooltip("Players this close to a kill hear and see it (kill sting, sparks). The victim and the killer always do.")]

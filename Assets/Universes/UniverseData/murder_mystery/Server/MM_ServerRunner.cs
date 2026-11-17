@@ -363,8 +363,9 @@ namespace Universes.murder_mystery.Server {
                     mmLocalNpc.KillAllowed = () => classic.CanKill(gameCharacter);
                 MM_NPC threatPolicy = npc.gameObject.AddComponent<MM_NPC>();
                 if (mode == MM_Mode.Classic)
-                    threatPolicy.ConfigureSheriffHunting(classicTuning.sheriffNoticeDistance, classicTuning.exposedSheriffNoticeDistance,
-                        classicTuning.sheriffDetectionMultiplier, classicTuning.sheriffTargetPriority, classic.IsSheriffExposed);
+                    threatPolicy.ConfigureSheriffHunting(sheriff => classic.SheriffNoticeDistance(gameCharacter, sheriff),
+                        classicTuning.sheriffDetectionMultiplier, classicTuning.sheriffTargetPriority,
+                        classicTuning.sheriffCreepDistance, classicTuning.sheriffCreepSpeed);
                 if (mode == MM_Mode.Classic)
                     pendingNpcParticipants.Add(gameCharacter);
                 gameCharacter.OnDied += (source, killer) => {
@@ -618,10 +619,12 @@ namespace Universes.murder_mystery.Server {
             int sheriffs = startSheriff + classic.GunTakeovers;
             int murderers = startMurd + classic.DaggerTakeovers;
             int innocents = startInnocent - classic.GunTakeovers - classic.DaggerTakeovers;
-            string summary = $"{GetTeamCount(TeamColor.Red)}/{murderers} Murderers, {GetTeamCount(TeamColor.Blue)}/{sheriffs} Sheriffs, {GetTeamCount(TeamColor.Green)}/{innocents} Innocents remaining";
-            string headline = MM_Text.ClassicHeadline(winner == TeamColor.Red);
+            bool murderersWon = winner == TeamColor.Red;
+            int murderersLeft = GetTeamCount(TeamColor.Red);
+            string summary = $"{MM_Text.ClassicReason(murderersWon, murderersLeft)}. {murderersLeft}/{murderers} Murderers, {GetTeamCount(TeamColor.Blue)}/{sheriffs} Sheriffs, {GetTeamCount(TeamColor.Green)}/{innocents} Innocents remaining";
+            string headline = MM_Text.ClassicHeadline(murderersWon);
             ServerChat.SendSystemMessage(new($"{headline}! {summary}.", SystemMessageSource.CustomMessage));
-            await classic.RunResults(headline, summary, DebugTimerSpeedUp.Value ? 4 : classicTuning.resultsSeconds, token);
+            await classic.RunResults(murderersWon, headline, summary, DebugTimerSpeedUp.Value ? 4 : classicTuning.resultsSeconds, token);
         }
 
         /// <summary>Tells each player the round phase, their own role and any body they can report.</summary>

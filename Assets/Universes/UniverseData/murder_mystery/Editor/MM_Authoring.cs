@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using RyanAssets.GameFeel;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
@@ -5,6 +7,7 @@ using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.UI;
 using Universes.UniverseData.murder_mystery.Client;
 
@@ -38,22 +41,24 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
         // A lamp-lit house at night rather than grey concrete under white light. Two hues: cool moonlight
         // (the directional "Global Visibility Fill", the ambient and the fog) for the shadows, and warm
-        // tungsten only from the standing lamps, one per room, so each room has a visible light source
-        // with a pool of light around it and darker gaps between. The room fills stay a dim, nearly white
-        // bounce with a short range, so they lift the corners without washing the pools out.
+        // tungsten from standing lamps spread through the rooms, so a warm source is in view from anywhere
+        // in the house, with a pool of light around each and darker gaps between. The room fills stay a
+        // dim, nearly white bounce with a short range, so they lift the corners without washing the pools out.
         // The post-processing look (MoodPreset.WarmIndoor; Night was tried and crushed the rooms to black) is
         // applied at runtime by MM_ClientHUD; judge all of this in Play mode. Values were tuned by eye in Play
-        // mode from the hall and entrance camera spots in the README.
+        // mode from the camera spots in the README.
         //
         // Rendering limits (StarterAssetsURPAsset, the pipeline every game uses): Forward, 8 additional lights
         // per object and no additional-light shadows. So point lights cast no shadows (they are set to None
-        // rather than claiming soft shadows that never render), each room keeps only a few lights, and the
-        // only shadows come from the directional moonlight.
+        // rather than claiming soft shadows that never render), the fill nearest each lamp is switched off
+        // so a room does not stack lights on one floor mesh, and the only shadows come from the moonlight.
         static readonly Color FogColor = new(0.045f, 0.052f, 0.07f);
         const float FogDensity = 0.011f;
+        // The ground term keeps the darkest walls a deep blue rather than black (black walls showed the
+        // renderer's banding as blotches).
         static readonly Color AmbientSky = new(0.21f, 0.24f, 0.32f);
-        static readonly Color AmbientEquator = new(0.176f, 0.184f, 0.208f);
-        static readonly Color AmbientGround = new(0.096f, 0.096f, 0.112f);
+        static readonly Color AmbientEquator = new(0.19f, 0.2f, 0.235f);
+        static readonly Color AmbientGround = new(0.13f, 0.14f, 0.18f);
         static readonly Color TungstenLight = new(1f, 0.74f, 0.45f);
         // The fills are a bounce, not a source: almost white, so characters keep their own colours.
         static readonly Color FillLight = new(1f, 0.93f, 0.84f);
@@ -66,7 +71,11 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         // About one room across (the map is 3x scale, so a 4 m plan room is 12 m): the pools stay separate.
         const float RoomFillRange = 13f;
         const float RoomFillIntensity = 24f;
-        // The ceiling lights were 80 / 50 m, one per room, flooding it; now a soft top light over each lamp.
+        // A fill this close to a wall paints a hard-edged disc on it; it is dimmed in proportion instead.
+        const float FillWallClearance = 3f;
+        // A fill right against a wall keeps this much of its intensity.
+        const float MinWallFillFactor = 0.25f;
+        // The ceiling lights were 80 / 50 m, one per room, flooding it; now a soft top light.
         const float CeilingLightRange = 24f;
         const float CeilingLightIntensity = 18f;
         const string VisibilityFillName = "Global Visibility Fill";
@@ -74,17 +83,22 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         static readonly Color VisibilityFillColor = new(0.62f, 0.72f, 0.95f);
         const float VisibilityFillIntensity = 0.8f;
 
-        // Standing lamps: one beside the nearest wall under each ceiling light.
+        // Standing lamps, placed from the room lights: each ceiling light and room fill marks a spot inside
+        // a room, and a lamp goes against the nearest wall there unless another lamp is already close.
         const string LampModelPath = "Assets/ThirdParty/KayKit/FurnitureBits/Models/lamp_standing.fbx";
+        const string FurnitureModels = "Assets/ThirdParty/KayKit/FurnitureBits/Models/";
         const string LampPrefabPath = Root + "/Prefabs/MM_StandingLamp.prefab";
+        const string LampCornerPrefabPath = Root + "/Prefabs/MM_LampCorner.prefab";
         const string LampGlowMaterialPath = Root + "/Materials/MM_LampGlow.mat";
         const string LampsRoot = "MM_Lamps";
-        // The model is 2.5 m tall; the robots are 5.6 m, so a lamp at 2.2x stands at about head height.
-        const float LampScale = 2.2f;
+        // The model is 2.5 m tall; the robots are 5.6 m, so furniture at 2.2x is in proportion.
+        const float FurnitureScale = 2.2f;
         // The bulb sits inside the shade, near the top of the 2.5 m model (model units).
         const float LampBulbHeight = 2.15f;
         const float LampLightRange = 22f;
         const float LampLightIntensity = 90f;
+        // A thin pole and base: characters walk round the lamp, not through it (metres, after scaling).
+        const float LampColliderRadius = 0.55f;
         // The shade glows: emission is the model's own palette texture tinted tungsten, so the light shade
         // glows brightly and the dark pole barely at all.
         const float LampGlowStrength = 3.5f;
@@ -92,11 +106,31 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         const float LampWallGap = 2.5f;
         const float LampWallSearch = 60f;
         const float LampFloorSearch = 80f;
+        // The wall is looked for in this many directions, from this fraction of the lamp's height.
+        const int WallProbeDirections = 8;
+        const float WallProbeHeightFraction = 0.5f;
+        // No two lamps on the same storey closer than this (metres), so each keeps its own pool.
+        const float LampSpacing = 15f;
+        // Lamps further apart in height than this are on different storeys.
+        const float StoreyHeight = 6f;
+        // The room fill nearest a new lamp, if this close, is switched off: the lamp replaces it.
+        const float FillReplaceRadius = 10f;
+        // Corner group: an armchair and a cabinet either side of the lamp and a rug in front, placed only
+        // where this box (lamp at the origin, wall behind along -Z) is clear: the group itself plus about
+        // 5 m of floor in front of it, so a group never narrows a corridor or a doorway.
+        static readonly Vector3 CornerFootprintCentre = new(0f, 1.8f, 2f);
+        static readonly Vector3 CornerFootprintHalfSize = new(4.6f, 1.4f, 4.5f);
+        // Walkable spots with no room light above them (world positions, a little above the floor): the
+        // landing at the top of the Secret Room stairs, whose room behind is not built and has no lights.
+        static readonly Vector3[] ExtraLampAnchors = { new(969.5f, 43f, 1124f) };
+        // After moving towards the wall there must be floor under the lamp within this height of the anchor's floor.
+        const float MaxFloorStep = 1f;
 
         [MenuItem("Ryan/Murder Mystery/Apply Atmosphere")]
         public static void ApplyAtmosphere() {
             EnsureFolders();
             GameObject lampPrefab = BuildLampPrefab();
+            GameObject cornerPrefab = BuildLampCornerPrefab(lampPrefab);
             EditInStartScene(scene => {
                 RenderSettings.fog = true;
                 RenderSettings.fogMode = FogMode.ExponentialSquared;
@@ -106,6 +140,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 RenderSettings.ambientSkyColor = AmbientSky;
                 RenderSettings.ambientEquatorColor = AmbientEquator;
                 RenderSettings.ambientGroundColor = AmbientGround;
+                Physics.SyncTransforms();
+                PhysicsScene physics = scene.GetPhysicsScene();
+                List<Light> fills = new();
+                List<Light> ceilingLights = new();
                 foreach (GameObject rootObject in scene.GetRootGameObjects()) {
                     foreach (Transform container in rootObject.GetComponentsInChildren<Transform>(true)) {
                         if (System.Array.IndexOf(RoomLightContainers, container.name) < 0)
@@ -114,13 +152,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                         container.localPosition = Vector3.zero;
                         container.localRotation = Quaternion.identity;
                         container.localScale = Vector3.one;
-                        foreach (Light fill in container.GetComponentsInChildren<Light>(true)) {
-                            Undo.RecordObject(fill, "Murder mystery room fills");
-                            fill.range = RoomFillRange;
-                            fill.intensity = RoomFillIntensity;
-                            fill.color = FillLight;
-                            fill.shadows = LightShadows.None;
-                        }
+                        fills.AddRange(container.GetComponentsInChildren<Light>(true));
                     }
                     foreach (Light light in rootObject.GetComponentsInChildren<Light>(true)) {
                         string name = light.gameObject.name;
@@ -137,54 +169,58 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                             light.intensity = CeilingLightIntensity;
                             // Additional lights cannot cast shadows in this pipeline (see above).
                             light.shadows = LightShadows.None;
+                            ceilingLights.Add(light);
                         }
                     }
                 }
-                PlaceLamps(scene, lampPrefab);
+                Physics.SyncTransforms();
+                foreach (Light fill in fills) {
+                    Undo.RecordObject(fill, "Murder mystery room fills");
+                    fill.enabled = true;
+                    fill.range = RoomFillRange;
+                    float clearance = NearestWall(physics, fill.transform.position, FillWallClearance, 0f, out _);
+                    fill.intensity = RoomFillIntensity * Mathf.Lerp(MinWallFillFactor, 1f, clearance / FillWallClearance);
+                    fill.color = FillLight;
+                    fill.shadows = LightShadows.None;
+                }
+                List<Transform> lamps = PlaceLamps(scene, physics, lampPrefab, cornerPrefab, ceilingLights, fills);
+                ReplaceNearestFills(lamps, fills);
+                Debug.Log($"[MM] Atmosphere: {lamps.Count} lamps, {fills.Count(f => !f.enabled)} of {fills.Count} room fills replaced by a lamp.");
                 return true;
             });
         }
 
-        /// <summary>The standing lamp: KayKit model with a glowing shade and its tungsten bulb.</summary>
+        /// <summary>The standing lamp: KayKit model with a glowing shade, its tungsten bulb and a thin collider.</summary>
         static GameObject BuildLampPrefab() {
             GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(LampModelPath);
             if (model == null)
                 throw new System.InvalidOperationException("Missing lamp model: " + LampModelPath);
-            Material source = model.GetComponentInChildren<MeshRenderer>().sharedMaterial;
-
-            Material glow = AssetDatabase.LoadAssetAtPath<Material>(LampGlowMaterialPath);
-            if (glow == null) {
-                glow = new Material(source);
-                AssetDatabase.CreateAsset(glow, LampGlowMaterialPath);
-            } else {
-                glow.CopyPropertiesFromMaterial(source);
-            }
-            // Colour and map first, keyword last: URP turns _EMISSION off for a material whose emission is
-            // black, and CopyPropertiesFromMaterial brings the source's (non-emissive) keywords along.
-            glow.SetTexture("_EmissionMap", source.mainTexture);
-            glow.SetColor("_EmissionColor", TungstenLight * LampGlowStrength);
-            glow.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
-            glow.SetKeyword(new UnityEngine.Rendering.LocalKeyword(glow.shader, "_EMISSION"), true);
-            EditorUtility.SetDirty(glow);
-            AssetDatabase.SaveAssetIfDirty(glow);
+            Material glow = BuildLampGlowMaterial(model.GetComponentInChildren<MeshRenderer>().sharedMaterial);
 
             GameObject root = new("MM_StandingLamp");
             try {
                 GameObject body = (GameObject)PrefabUtility.InstantiatePrefab(model, root.transform);
                 body.name = "Model";
-                body.transform.localScale = Vector3.one * LampScale;
+                body.transform.localScale = Vector3.one * FurnitureScale;
                 foreach (MeshRenderer renderer in body.GetComponentsInChildren<MeshRenderer>())
                     renderer.sharedMaterial = glow;
 
                 GameObject bulb = new("Bulb");
                 bulb.transform.SetParent(root.transform, false);
-                bulb.transform.localPosition = Vector3.up * (LampBulbHeight * LampScale);
+                bulb.transform.localPosition = Vector3.up * (LampBulbHeight * FurnitureScale);
                 Light light = bulb.AddComponent<Light>();
                 light.type = LightType.Point;
                 light.color = TungstenLight;
                 light.range = LampLightRange;
                 light.intensity = LampLightIntensity;
                 light.shadows = LightShadows.None;
+
+                float height = LampBulbHeight * FurnitureScale;
+                CapsuleCollider pole = root.AddComponent<CapsuleCollider>();
+                pole.radius = LampColliderRadius;
+                pole.height = height;
+                pole.center = Vector3.up * (height * 0.5f);
+                AddObstacle(root, pole.center, new Vector3(LampColliderRadius * 2f, height, LampColliderRadius * 2f), NavMeshObstacleShape.Capsule);
                 return PrefabUtility.SaveAsPrefabAsset(root, LampPrefabPath);
             } finally {
                 Object.DestroyImmediate(root);
@@ -192,41 +228,182 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         }
 
         /// <summary>
-        /// One lamp per ceiling light: straight down to the floor, then against the nearest wall, so it
-        /// stands at the edge of the room instead of in the walkway. Re-running replaces the set.
+        /// The shade's material: the model's palette texture as the emission map, tinted tungsten. URP's
+        /// material validation turns _EMISSION off again (on import, in Play, on Editor stop) for a material
+        /// without an emissive GI flag, so the flag is what keeps the glow; MM_LampGlowTests checks the asset.
         /// </summary>
-        static void PlaceLamps(UnityEngine.SceneManagement.Scene scene, GameObject lampPrefab) {
+        static Material BuildLampGlowMaterial(Material source) {
+            Material glow = AssetDatabase.LoadAssetAtPath<Material>(LampGlowMaterialPath);
+            if (glow == null) {
+                glow = new Material(source);
+                AssetDatabase.CreateAsset(glow, LampGlowMaterialPath);
+            } else {
+                glow.CopyPropertiesFromMaterial(source);
+            }
+            glow.SetTexture("_EmissionMap", source.mainTexture);
+            glow.SetColor("_EmissionColor", TungstenLight * LampGlowStrength);
+            glow.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            glow.SetKeyword(new UnityEngine.Rendering.LocalKeyword(glow.shader, "_EMISSION"), true);
+            EditorUtility.SetDirty(glow);
+            AssetDatabase.SaveAssetIfDirty(glow);
+            return glow;
+        }
+
+        /// <summary>A lamp between an armchair and a cabinet, with a rug in front: a lived-in corner of a room.</summary>
+        static GameObject BuildLampCornerPrefab(GameObject lampPrefab) {
+            GameObject root = new("MM_LampCorner");
+            try {
+                PrefabUtility.InstantiatePrefab(lampPrefab, root.transform);
+                // Local +Z faces into the room; the wall is LampWallGap behind the lamp.
+                AddFurniture(root.transform, "armchair_pillows", new Vector3(2.7f, 0f, -0.6f), -25f, true);
+                AddFurniture(root.transform, "cabinet_medium_decorated", new Vector3(-2.9f, 0f, -1.4f), 0f, true);
+                AddFurniture(root.transform, "rug_oval_A", new Vector3(0.6f, 0.02f, 1.2f), 0f, false);
+                return PrefabUtility.SaveAsPrefabAsset(root, LampCornerPrefabPath);
+            } finally {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        static void AddFurniture(Transform parent, string model, Vector3 position, float yaw, bool solid) {
+            string path = FurnitureModels + model + ".fbx";
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset == null)
+                throw new System.InvalidOperationException("Missing furniture model: " + path);
+            GameObject piece = (GameObject)PrefabUtility.InstantiatePrefab(asset, parent);
+            piece.name = model;
+            piece.transform.SetLocalPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+            piece.transform.localScale = Vector3.one * FurnitureScale;
+            if (!solid)
+                return;
+            // A box round the model (its own axes), so nobody walks through the furniture.
+            Bounds bounds = new();
+            bool first = true;
+            foreach (MeshFilter filter in piece.GetComponentsInChildren<MeshFilter>()) {
+                Bounds mesh = filter.sharedMesh.bounds;
+                Matrix4x4 toPiece = piece.transform.worldToLocalMatrix * filter.transform.localToWorldMatrix;
+                foreach (Vector3 corner in Corners(mesh)) {
+                    Vector3 local = toPiece.MultiplyPoint3x4(corner);
+                    if (first) { bounds = new Bounds(local, Vector3.zero); first = false; }
+                    else bounds.Encapsulate(local);
+                }
+            }
+            BoxCollider box = piece.AddComponent<BoxCollider>();
+            box.center = bounds.center;
+            box.size = bounds.size;
+            AddObstacle(piece, bounds.center, bounds.size, NavMeshObstacleShape.Box);
+        }
+
+        static IEnumerable<Vector3> Corners(Bounds b) {
+            for (int i = 0; i < 8; i++)
+                yield return new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
+        }
+
+        /// <summary>
+        /// NPCs steer round the furniture: an avoidance obstacle the size of its collider. Not carving: a hole
+        /// cut in the NavMesh at runtime can split it (a corner in a passage cut the Control Room off).
+        /// </summary>
+        static void AddObstacle(GameObject target, Vector3 centre, Vector3 size, NavMeshObstacleShape shape) {
+            NavMeshObstacle obstacle = target.AddComponent<NavMeshObstacle>();
+            obstacle.shape = shape;
+            obstacle.center = centre;
+            obstacle.size = size;
+            if (shape == NavMeshObstacleShape.Capsule) {
+                obstacle.radius = size.x * 0.5f;
+                obstacle.height = size.y;
+            }
+            obstacle.carving = false;
+        }
+
+        /// <summary>
+        /// Lamps from the room lights, ceiling lights first: straight down to the floor (from the nearest fill
+        /// when a ceiling light has none under it), then against the nearest wall, so a lamp stands at the edge
+        /// of the room rather than in the walkway. Skips spots too close to a lamp already placed. Where there
+        /// is room, the lamp comes with its corner furniture. Re-running replaces the set.
+        /// </summary>
+        static List<Transform> PlaceLamps(UnityEngine.SceneManagement.Scene scene, PhysicsScene physics, GameObject lampPrefab,
+            GameObject cornerPrefab, List<Light> ceilingLights, List<Light> fills) {
             foreach (GameObject rootObject in scene.GetRootGameObjects())
                 if (rootObject.name == LampsRoot)
                     Undo.DestroyObjectImmediate(rootObject);
-            GameObject lamps = new(LampsRoot);
-            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(lamps, scene);
+            GameObject lampsRoot = new(LampsRoot);
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(lampsRoot, scene);
             Physics.SyncTransforms();
-            PhysicsScene physics = scene.GetPhysicsScene();
-            foreach (GameObject rootObject in scene.GetRootGameObjects())
-                foreach (Light light in rootObject.GetComponentsInChildren<Light>(true)) {
-                    if (!light.gameObject.name.StartsWith(CeilingLightPrefix))
-                        continue;
-                    if (!physics.Raycast(light.transform.position, Vector3.down, out RaycastHit floor, LampFloorSearch)) {
-                        Debug.LogWarning($"[MM] No floor under {light.name}; no lamp placed there.", light);
+
+            List<Transform> lamps = new();
+            Collider[] footprintHits = new Collider[1];
+            int corners = 0;
+            var anchors = ceilingLights.Concat(fills).Select(l => (name: l.name, position: l.transform.position, context: (Object)l))
+                .Concat(ExtraLampAnchors.Select(p => (name: $"Anchor {p}", position: p, context: (Object)null)));
+            foreach (var anchor in anchors) {
+                Vector3 from = anchor.position;
+                if (!physics.Raycast(from, Vector3.down, out RaycastHit floor, LampFloorSearch)) {
+                    Light nearestFill = fills.OrderBy(f => (f.transform.position - from).sqrMagnitude).FirstOrDefault();
+                    if (nearestFill == null || !physics.Raycast(nearestFill.transform.position, Vector3.down, out floor, LampFloorSearch)) {
+                        Debug.LogWarning($"[MM] No floor under {anchor.name} or its nearest fill; no lamp there.", anchor.context);
                         continue;
                     }
-                    Vector3 probe = floor.point + Vector3.up * (LampBulbHeight * LampScale * 0.5f);
-                    Vector3 spot = floor.point;
-                    float nearest = LampWallSearch;
-                    for (int i = 0; i < 8; i++) {
-                        Vector3 direction = Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward;
-                        if (physics.Raycast(probe, direction, out RaycastHit wall, nearest) && wall.distance > LampWallGap) {
-                            nearest = wall.distance;
-                            spot = floor.point + direction * (wall.distance - LampWallGap);
-                        }
-                    }
-                    GameObject lamp = (GameObject)PrefabUtility.InstantiatePrefab(lampPrefab, lamps.transform);
-                    lamp.name = "Lamp - " + light.name.Substring(CeilingLightPrefix.Length).TrimStart(' ', '-');
-                    lamp.transform.position = spot;
                 }
-            Undo.RegisterCreatedObjectUndo(lamps, "Place murder mystery lamps");
+                float probeHeight = LampBulbHeight * FurnitureScale * WallProbeHeightFraction;
+                // Closer than the lamp gap is the lamp's own spot against a pillar or doorframe: not a wall to use.
+                float wallDistance = NearestWall(physics, floor.point + Vector3.up * probeHeight, LampWallSearch, LampWallGap, out Vector3 towardWall);
+                Vector3 spot = towardWall == Vector3.zero ? floor.point : floor.point + towardWall * (wallDistance - LampWallGap);
+                // Moving to the wall must not walk the lamp off a landing or onto a step.
+                if (towardWall != Vector3.zero && !physics.Raycast(spot + Vector3.up * MaxFloorStep, Vector3.down, 2f * MaxFloorStep)) {
+                    spot = floor.point;
+                    towardWall = Vector3.zero;
+                }
+                if (lamps.Any(l => SameStorey(l.position, spot) && HorizontalDistance(l.position, spot) < LampSpacing))
+                    continue;
+
+                Quaternion facing = towardWall == Vector3.zero ? Quaternion.identity : Quaternion.LookRotation(-towardWall);
+                bool roomForCorner = towardWall != Vector3.zero
+                    && physics.OverlapBox(spot + facing * CornerFootprintCentre, CornerFootprintHalfSize, footprintHits, facing, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) == 0;
+                GameObject lamp = (GameObject)PrefabUtility.InstantiatePrefab(roomForCorner ? cornerPrefab : lampPrefab, lampsRoot.transform);
+                lamp.name = $"Lamp {lamps.Count + 1:00} - {anchor.name}";
+                lamp.transform.SetPositionAndRotation(spot, facing);
+                lamps.Add(lamp.transform);
+                if (roomForCorner)
+                    corners++;
+                // Later footprint checks see this group.
+                Physics.SyncTransforms();
+            }
+            Undo.RegisterCreatedObjectUndo(lampsRoot, "Place murder mystery lamps");
+            Debug.Log($"[MM] {lamps.Count} lamps placed, {corners} with corner furniture.");
+            return lamps;
         }
+
+        /// <summary>Switches off the room fill nearest each lamp, so the lamp is that spot's light instead of another one on top.</summary>
+        static void ReplaceNearestFills(List<Transform> lamps, List<Light> fills) {
+            foreach (Transform lamp in lamps) {
+                Vector3 bulb = lamp.position + Vector3.up * (LampBulbHeight * FurnitureScale);
+                Light nearest = fills.Where(f => f.enabled)
+                    .OrderBy(f => (f.transform.position - bulb).sqrMagnitude)
+                    .FirstOrDefault();
+                if (nearest != null && (nearest.transform.position - bulb).sqrMagnitude <= FillReplaceRadius * FillReplaceRadius)
+                    nearest.enabled = false;
+            }
+        }
+
+        /// <summary>
+        /// Distance to the nearest wall around <paramref name="from"/> (at most <paramref name="search"/>), and its
+        /// direction (zero if none). Hits closer than <paramref name="ignoreCloserThan"/> are skipped.
+        /// </summary>
+        static float NearestWall(PhysicsScene physics, Vector3 from, float search, float ignoreCloserThan, out Vector3 direction) {
+            float nearest = search;
+            direction = Vector3.zero;
+            for (int i = 0; i < WallProbeDirections; i++) {
+                Vector3 probe = Quaternion.Euler(0f, i * 360f / WallProbeDirections, 0f) * Vector3.forward;
+                if (physics.Raycast(from, probe, out RaycastHit wall, nearest) && wall.distance > ignoreCloserThan) {
+                    nearest = wall.distance;
+                    direction = probe;
+                }
+            }
+            return nearest;
+        }
+
+        static bool SameStorey(Vector3 a, Vector3 b) => Mathf.Abs(a.y - b.y) < StoreyHeight;
+
+        static float HorizontalDistance(Vector3 a, Vector3 b) => Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
 
         /// <summary>Runs <paramref name="edit"/> on the start scene (opening it if needed) and saves it when the edit says so.</summary>
         static void EditInStartScene(System.Func<UnityEngine.SceneManagement.Scene, bool> edit) {

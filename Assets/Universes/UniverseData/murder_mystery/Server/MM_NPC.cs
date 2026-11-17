@@ -15,12 +15,17 @@ namespace Universes.murder_mystery.Server {
     public sealed class MM_NPC : MonoBehaviour {
         // LocalNPC's default detection radius is 10. The pistol reaches 60, so by default a sixfold
         // multiplier makes an armed sheriff visible across their full firing distance. Classic replaces
-        // these through Configure (MM_ClassicTuning), so a sheriff is only rushed once noticed.
+        // these through ConfigureSheriffHunting (MM_ClassicTuning), so a sheriff is only rushed once noticed.
         private float sheriffRangeMultiplier = 6f;
         private float sheriffPriority = 1f;
-        private float sheriffSightRadius = 100f;
-        private float exposedSheriffSightRadius = 100f;
-        private System.Func<GameCharacter, bool> isSheriffExposed;
+        private const float DefaultSheriffSightRadius = 100f;
+        private System.Func<GameCharacter, float> sheriffSightRadius;
+        // Closing in on an armed sheriff this NPC slows to a creep (0 distance = never), which is the
+        // sheriff's chance to spot it and shoot; a charge at full attack speed covers 10 m in half a second.
+        private float sheriffCreepDistance;
+        private float sheriffCreepSpeed;
+        private float chargeSpeed;
+        private bool creeping;
 
         private LocalNPC localNPC;
         private GameCharacter gameCharacter;
@@ -30,6 +35,7 @@ namespace Universes.murder_mystery.Server {
             localNPC = GetComponent<LocalNPC>();
             gameCharacter = GetComponent<GameCharacter>();
             murderPolicy = GetComponent<MM_LocalNPC>();
+            chargeSpeed = localNPC.AttackSpeed;
 
             localNPC.AttackTargetRangeMultiplier = GetAttackRangeMultiplier;
             localNPC.AttackTargetPriority = GetAttackPriority;
@@ -37,32 +43,39 @@ namespace Universes.murder_mystery.Server {
         }
 
         /// <summary>
-        /// How hard this NPC goes after an armed sheriff: <paramref name="sightRadius"/> is how close a
-        /// quiet sheriff must be before it is rushed, <paramref name="exposedSightRadius"/> applies while
-        /// <paramref name="isExposed"/> says the sheriff has just shot someone.
+        /// How hard this NPC goes after an armed sheriff: <paramref name="sightRadius"/> says how close a given
+        /// sheriff must be right now before they are rushed (the round widens it after a shot and late in the hunt),
+        /// and inside <paramref name="creepDistance"/> of one it slows to <paramref name="creepSpeed"/>.
         /// </summary>
-        public void ConfigureSheriffHunting(float sightRadius, float exposedSightRadius, float rangeMultiplier, float priority,
-            System.Func<GameCharacter, bool> isExposed) {
+        public void ConfigureSheriffHunting(System.Func<GameCharacter, float> sightRadius, float rangeMultiplier, float priority,
+            float creepDistance, float creepSpeed) {
             sheriffSightRadius = sightRadius;
-            exposedSheriffSightRadius = exposedSightRadius;
             sheriffRangeMultiplier = rangeMultiplier;
             sheriffPriority = priority;
-            isSheriffExposed = isExposed;
+            sheriffCreepDistance = creepDistance;
+            sheriffCreepSpeed = creepSpeed;
         }
 
         /// <summary>Forced targeting only applies while this NPC may actually kill (not during a grace period or cooldown).</summary>
         private bool MayForceTarget => localNPC.AllowAttackTargetOverrides && (murderPolicy == null || murderPolicy.CanKillNow);
 
         private void Update() {
-            if (!MayForceTarget)
-                return;
-
+            GameCharacter armedSheriff = MayForceTarget ? GetNearestArmedSheriff() : null;
             // Enforce the game-mode priority every frame rather than waiting for LocalNPC's
             // normal retarget interval. This makes a newly armed sheriff immediately replace
             // an NPC's current victim.
-            GameCharacter armedSheriff = GetNearestArmedSheriff();
             if (armedSheriff != null)
                 localNPC.TargetCharacter(armedSheriff);
+            SetCreeping(armedSheriff != null
+                && (armedSheriff.transform.position - transform.position).sqrMagnitude < sheriffCreepDistance * sheriffCreepDistance);
+        }
+
+        private void SetCreeping(bool creep) {
+            if (creep == creeping)
+                return;
+            creeping = creep;
+            localNPC.AttackSpeed = creep ? Mathf.Min(sheriffCreepSpeed, chargeSpeed) : chargeSpeed;
+            localNPC.UpdateSpeed();
         }
 
         private void OnDestroy() {
@@ -101,7 +114,7 @@ namespace Universes.murder_mystery.Server {
             foreach (GameCharacter sheriff in sheriffs) {
                 if (!IsArmedSheriff(sheriff)) continue;
 
-                float sight = isSheriffExposed != null && isSheriffExposed(sheriff) ? exposedSheriffSightRadius : sheriffSightRadius;
+                float sight = sheriffSightRadius != null ? sheriffSightRadius(sheriff) : DefaultSheriffSightRadius;
                 float distanceSquared = (sheriff.transform.position - transform.position).sqrMagnitude;
                 if (distanceSquared >= sight * sight || distanceSquared >= nearestDistanceSquared) continue;
 
