@@ -30,6 +30,7 @@ namespace Universes.UniverseData.dot_invaders {
             announcedEliminations.Clear();
             clashPositions.Clear();
             matchRecords.Clear();
+            matchSummaries.Clear();
             nextTeamId = 0;
             nextDotId = 0;
             revision = 0;
@@ -149,8 +150,22 @@ namespace Universes.UniverseData.dot_invaders {
 
         // Special bases are spread over fixed objectives so every board has the same
         // shape of contest; each objective takes the nearest base that is still plain.
-        static readonly Vector2[] FactoryObjectives = { new(-62f, 42f), new(62f, -42f), new(-62f, -42f), new(62f, 42f) };
-        static readonly Vector2[] FortressObjectives = { new(-62f, -42f), new(62f, 42f), new(0f, 60f), new(0f, -60f) };
+        // Objectives as fractions of the arena half-extents. Factories take the corners of one
+        // diagonal first, fortresses the other diagonal, then the remaining edge midpoints, so
+        // no two specials share a point whatever the counts (up to 4 each).
+        const float ObjectiveCornerX = 0.62f;
+        const float ObjectiveCornerY = 0.57f;
+        const float ObjectiveEdge = 0.8f;
+        static readonly Vector2[] FactoryObjectives = {
+            Objective(-ObjectiveCornerX, ObjectiveCornerY), Objective(ObjectiveCornerX, -ObjectiveCornerY),
+            Objective(-ObjectiveEdge, 0f), Objective(ObjectiveEdge, 0f)
+        };
+        static readonly Vector2[] FortressObjectives = {
+            Objective(-ObjectiveCornerX, -ObjectiveCornerY), Objective(ObjectiveCornerX, ObjectiveCornerY),
+            Objective(0f, ObjectiveEdge), Objective(0f, -ObjectiveEdge)
+        };
+
+        static Vector2 Objective(float x, float y) => new(x * ArenaHalfWidth, y * ArenaHalfHeight);
 
         void AssignTurrets() {
             // Two separated objectives near the middle of each half of the board.
@@ -218,7 +233,7 @@ namespace Universes.UniverseData.dot_invaders {
 
         float ProductionRate(BaseState state) => state.isSuperProducer
             ? DI_Rules.SuperProductionRate(state.uninterruptedSeconds, superProductionSpeed, superSpeedupSeconds)
-            : DI_Rules.BaseProductionRate(productionSpeed, state.isFactory);
+            : DI_Rules.BaseProductionRate(productionSpeed, state.isFactory, factoryMultiplier);
 
         static void InterruptProduction(BaseState state) {
             state.uninterruptedSeconds = 0f;

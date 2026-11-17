@@ -163,8 +163,10 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 52d782a8f27657a4a932b8dab889fc69, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.DI_LinkView
+  m_EditorClassIdentifier: Universes.UniverseData.dot_invaders.Client::Universes.UniverseData.dot_invaders.Client.DI_LinkView
   glow: 1.5
-  pulseGlow: 3
+  pulseGlow: 1.1
   pulseSpeed: 14
-  pulseSpacing: 9
+  pulseSpacing: 26
+  pulseLength: 0.55
+  pulseThin: 0.4

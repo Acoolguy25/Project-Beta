@@ -13,9 +13,11 @@ namespace Universes.UniverseData.dot_invaders.Editor {
     /// <summary>
     /// Generates the Dot Invaders screen HUD (DI_HUD prefab) from the shared HudKit and the board's
     /// neon look (road and backdrop materials, bloom volume profile, emission on the base material),
-    /// then wires the HUD, look, effects and sounds into the board and road prefabs. Run from
-    /// Ryan/Dot Invaders in a client (non-server) Editor, or batchmode
-    /// <c>-executeMethod Universes.UniverseData.dot_invaders.Editor.DI_Authoring.BuildAll</c>; safe to re-run.
+    /// the base's role marks, range outline and outlined labels, then wires the HUD, look, effects and
+    /// sounds into the board and road prefabs. Run from Ryan/Dot Invaders in a client (non-server)
+    /// Editor, or batchmode <c>-executeMethod Universes.UniverseData.dot_invaders.Editor.DI_Authoring.BuildAll</c>;
+    /// safe to re-run. A rebuild keeps tuning done in the Inspector; "Reset Board Tuning" puts the
+    /// view components and generated materials back to their script and shader defaults.
     /// </summary>
     public static class DI_Authoring {
         const string Root = "Assets/Universes/UniverseData/dot_invaders";
@@ -24,6 +26,8 @@ namespace Universes.UniverseData.dot_invaders.Editor {
         const string HudPath = Prefabs + "/DI_HUD.prefab";
         const string BoardPath = Prefabs + "/DI_Board.prefab";
         const string LinkPath = Prefabs + "/DI_Link.prefab";
+        const string BasePath = Prefabs + "/DI_Base.prefab";
+        const string LabelMaterialPath = Prefabs + "/DI_Label.mat";
         const string BaseMaterialPath = Prefabs + "/DI_Base.mat";
         const string RoadMaterialPath = Prefabs + "/DI_Road.mat";
         const string BackdropMaterialPath = Prefabs + "/DI_Backdrop.mat";
@@ -35,6 +39,23 @@ namespace Universes.UniverseData.dot_invaders.Editor {
         const float NeonVolumePriority = 5f;
         static readonly Color Muted = new(0.71f, 0.74f, 0.78f);
 
+        // Role marks, in DI_Base local units (the body's radius is 2.25, its ring's 2.7).
+        const int GearTeeth = 8;
+        const float GearRadius = 3.2f;
+        static readonly Vector3 GearToothSize = new(0.9f, 0.4f, 0.8f);
+        const float FortressHalfSize = 3.25f;
+        const float FortressWallThickness = 0.38f;
+        const float FortressWallHeight = 0.35f;
+        const float FortressTowerSize = 1f;
+        const float MarkHeight = 0.25f;
+        const int RangeEdgeSegments = 72;
+        // Outlined, dark-backed board labels, so counts read over bloom and roads.
+        const float LabelOutlineWidth = 0.22f;
+        static readonly Color LabelOutlineColor = new(0.02f, 0.03f, 0.06f, 1f);
+        static readonly Color LabelUnderlayColor = new(0f, 0f, 0f, 0.8f);
+        const float LabelUnderlayDilate = 0.65f;
+        const float LabelUnderlaySoftness = 0.55f;
+
         [MenuItem("Ryan/Dot Invaders/Rebuild HUD and Board")]
         public static void BuildAll() {
             DI_HUD hud = BuildHud();
@@ -43,6 +64,7 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Material backdrop = BuildMaterial(BackdropMaterialPath, BackdropShader);
             VolumeProfile neon = BuildNeonProfile();
             ConfigureLink(road);
+            ConfigureBase(road);
 
             GameObject board = PrefabUtility.LoadPrefabContents(BoardPath);
             try {
@@ -71,23 +93,198 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             EditorUtility.SetDirty(material);
         }
 
+        /// <summary>Creates a generated material from its shader the first time; later rebuilds keep its tuned values.</summary>
         static Material BuildMaterial(string path, string shaderName) {
-            Shader shader = Shader.Find(shaderName)
-                ?? throw new System.InvalidOperationException($"Shader '{shaderName}' was not found; check its compile errors.");
+            Shader shader = FindShader(shaderName);
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null) {
                 material = new Material(shader);
                 AssetDatabase.CreateAsset(material, path);
             } else {
-                // The shader's property defaults are the tuning source: a rebuild resets the
-                // generated material to them, keeping its GUID and references.
-                var defaults = new Material(shader) { name = material.name };
-                EditorUtility.CopySerialized(defaults, material);
-                Object.DestroyImmediate(defaults);
+                material.shader = shader;
             }
             material.enableInstancing = true;
             EditorUtility.SetDirty(material);
             return material;
+        }
+
+        static Shader FindShader(string shaderName) => Shader.Find(shaderName)
+            ?? throw new System.InvalidOperationException($"Shader '{shaderName}' was not found; check its compile errors.");
+
+        /// <summary>
+        /// Puts the board's view components (controller, effects, backdrop, road, base) and the generated materials
+        /// back to their script and shader defaults, then rebuilds. Use after changing those defaults in code.
+        /// </summary>
+        [MenuItem("Ryan/Dot Invaders/Reset Board Tuning to Defaults")]
+        public static void ResetTuningToDefaults() {
+            ResetMaterial(RoadMaterialPath, NeonLineShader);
+            ResetMaterial(BackdropMaterialPath, BackdropShader);
+            EditPrefab(BoardPath, board => {
+                ResetComponent(board.GetComponent<DI_ClientController>());
+                ResetComponent(board.GetComponent<DI_BoardFx>());
+                ResetComponent(board.GetComponent<DI_BoardBackdrop>());
+            });
+            EditPrefab(LinkPath, link => ResetComponent(link.GetComponent<DI_LinkView>()));
+            EditPrefab(BasePath, view => ResetComponent(view.GetComponent<DI_BaseView>()));
+            BuildAll();
+        }
+
+        static void ResetMaterial(string path, string shaderName) {
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+                return;
+            var defaults = new Material(FindShader(shaderName)) { name = material.name };
+            EditorUtility.CopySerialized(defaults, material);
+            Object.DestroyImmediate(defaults);
+            EditorUtility.SetDirty(material);
+        }
+
+        /// <summary>
+        /// Copies a fresh instance's tuning defaults over the component. Fields that hold (or contain)
+        /// object references keep their current wiring.
+        /// </summary>
+        static void ResetComponent<T>(T component) where T : MonoBehaviour {
+            if (component == null)
+                return;
+            var holder = new GameObject("Defaults") { hideFlags = HideFlags.HideAndDontSave };
+            try {
+                var defaults = new SerializedObject(holder.AddComponent<T>());
+                var target = new SerializedObject(component);
+                SerializedProperty property = defaults.GetIterator();
+                for (bool more = property.NextVisible(true); more; more = property.NextVisible(false))
+                    if (property.name != "m_Script" && !HoldsReference(property))
+                        target.CopyFromSerializedProperty(property);
+                target.ApplyModifiedPropertiesWithoutUndo();
+            } finally {
+                Object.DestroyImmediate(holder);
+            }
+        }
+
+        static bool HoldsReference(SerializedProperty property) {
+            if (property.propertyType == SerializedPropertyType.ObjectReference)
+                return true;
+            if (!property.hasVisibleChildren)
+                return false;
+            SerializedProperty child = property.Copy(), end = property.GetEndProperty();
+            for (bool more = child.NextVisible(true); more && !SerializedProperty.EqualContents(child, end); more = child.NextVisible(false))
+                if (HoldsReference(child))
+                    return true;
+            return false;
+        }
+
+        static void EditPrefab(string path, System.Action<GameObject> edit) {
+            GameObject contents = PrefabUtility.LoadPrefabContents(path);
+            try {
+                edit(contents);
+                PrefabUtility.SaveAsPrefabAsset(contents, path);
+            } finally {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
+        }
+
+        // --- Base ---------------------------------------------------------------------------
+
+        /// <summary>
+        /// Role marks (factory gear teeth, fortress walls and towers), the turret range outline and the
+        /// outlined label material on DI_Base.prefab, wired into DI_BaseView. Rebuilt from scratch each run.
+        /// </summary>
+        static void ConfigureBase(Material road) {
+            Material body = AssetDatabase.LoadAssetAtPath<Material>(BaseMaterialPath);
+            EditPrefab(BasePath, root => {
+                TextMeshPro troops = root.transform.Find("TroopLabel")?.GetComponent<TextMeshPro>()
+                    ?? throw new MissingReferenceException("DI_Base has no TroopLabel.");
+                Material label = BuildLabelMaterial(troops.fontSharedMaterial);
+                troops.fontSharedMaterial = label;
+                if (root.transform.Find("SpeedLabel")?.GetComponent<TextMeshPro>() is { } role)
+                    role.fontSharedMaterial = label;
+
+                GameObject gear = Rebuild(root.transform, "FactoryMark");
+                for (int i = 0; i < GearTeeth; i++) {
+                    float angle = 360f * i / GearTeeth;
+                    Quaternion turn = Quaternion.Euler(0f, angle, 0f);
+                    MarkPart(gear.transform, body, turn * new Vector3(0f, MarkHeight, GearRadius), turn, GearToothSize);
+                }
+
+                GameObject fortress = Rebuild(root.transform, "FortressMark");
+                float wallLength = FortressHalfSize * 2f;
+                for (int side = 0; side < 4; side++) {
+                    Quaternion turn = Quaternion.Euler(0f, 90f * side, 0f);
+                    MarkPart(fortress.transform, body, turn * new Vector3(0f, MarkHeight, FortressHalfSize), turn,
+                        new Vector3(wallLength, FortressWallHeight, FortressWallThickness));
+                    MarkPart(fortress.transform, body, turn * new Vector3(FortressHalfSize, MarkHeight, FortressHalfSize), turn,
+                        Vector3.one * FortressTowerSize);
+                }
+
+                LineRenderer edge = BuildRangeEdge(root.transform, road);
+
+                var view = new SerializedObject(root.GetComponent<DI_BaseView>());
+                view.FindProperty("factoryMark").objectReferenceValue = gear;
+                view.FindProperty("fortressMark").objectReferenceValue = fortress;
+                view.FindProperty("rangeEdge").objectReferenceValue = edge;
+                view.ApplyModifiedPropertiesWithoutUndo();
+            });
+        }
+
+        static Material BuildLabelMaterial(Material font) {
+            var material = AssetDatabase.LoadAssetAtPath<Material>(LabelMaterialPath);
+            if (material == null) {
+                material = new Material(font);
+                AssetDatabase.CreateAsset(material, LabelMaterialPath);
+            }
+            // Same font atlas, plus a dark outline and a soft dark underlay behind every glyph.
+            material.shader = font.shader;
+            material.SetTexture(ShaderUtilities.ID_MainTex, font.GetTexture(ShaderUtilities.ID_MainTex));
+            material.EnableKeyword(ShaderUtilities.Keyword_Outline);
+            material.EnableKeyword(ShaderUtilities.Keyword_Underlay);
+            material.SetFloat(ShaderUtilities.ID_OutlineWidth, LabelOutlineWidth);
+            material.SetColor(ShaderUtilities.ID_OutlineColor, LabelOutlineColor);
+            material.SetColor(ShaderUtilities.ID_UnderlayColor, LabelUnderlayColor);
+            material.SetFloat(ShaderUtilities.ID_UnderlayDilate, LabelUnderlayDilate);
+            material.SetFloat(ShaderUtilities.ID_UnderlaySoftness, LabelUnderlaySoftness);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        static GameObject Rebuild(Transform parent, string name) {
+            Transform old = parent.Find(name);
+            if (old != null)
+                Object.DestroyImmediate(old.gameObject);
+            var mark = new GameObject(name);
+            mark.transform.SetParent(parent, false);
+            mark.SetActive(false);
+            return mark;
+        }
+
+        /// <summary>One flat block of a role mark, on the base's emissive material (the view sets its colour).</summary>
+        static void MarkPart(Transform parent, Material material, Vector3 position, Quaternion rotation, Vector3 size) {
+            GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.DestroyImmediate(part.GetComponent<Collider>());
+            part.name = "Part";
+            part.transform.SetParent(parent, false);
+            part.transform.SetLocalPositionAndRotation(position, rotation);
+            part.transform.localScale = size;
+            var renderer = part.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        /// <summary>A closed world-space line; DI_BaseView places its points on the turret's reach.</summary>
+        static LineRenderer BuildRangeEdge(Transform root, Material road) {
+            Transform oldEdge = root.Find("TurretRange/Edge");
+            if (oldEdge != null)
+                Object.DestroyImmediate(oldEdge.gameObject);
+            GameObject edgeObject = Rebuild(root, "TurretRangeEdge");
+            var edge = edgeObject.AddComponent<LineRenderer>();
+            edge.useWorldSpace = true;
+            edge.loop = true;
+            edge.positionCount = RangeEdgeSegments;
+            edge.alignment = LineAlignment.View;
+            edge.textureMode = LineTextureMode.Stretch;
+            edge.sharedMaterial = road;
+            edge.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            edge.receiveShadows = false;
+            return edge;
         }
 
         /// <summary>
@@ -160,7 +357,7 @@ namespace Universes.UniverseData.dot_invaders.Editor {
                 if (child.name.StartsWith("Border_") && child.TryGetComponent(out Renderer border))
                     borders.Add(border);
 
-            DI_BoardBackdrop component = Fresh<DI_BoardBackdrop>(board);
+            DI_BoardBackdrop component = GetOrAdd<DI_BoardBackdrop>(board);
             var serialized = new SerializedObject(component);
             SerializedProperty list = serialized.FindProperty("borders");
             list.arraySize = borders.Count;
@@ -186,12 +383,13 @@ namespace Universes.UniverseData.dot_invaders.Editor {
 
         /// <summary>Game sounds (Kenney Digital Audio, CC0; see CREDITS.md) on the board's effects component.</summary>
         static DI_BoardFx ConfigureEffects(GameObject board) {
-            DI_BoardFx fx = Fresh<DI_BoardFx>(board);
+            DI_BoardFx fx = GetOrAdd<DI_BoardFx>(board);
             var serialized = new SerializedObject(fx);
             Sound(serialized, "sendSound", 0.55f, 0.3f, 0.05f, "di_send_1", "di_send_2", "di_send_3");
             Sound(serialized, "captureSound", 0.8f, 0.5f, 0.08f, "di_capture");
             Sound(serialized, "baseLostSound", 0.85f, 0.3f, 0.15f, "di_base_lost");
-            Sound(serialized, "clashSound", 0.5f, 1.5f, 0.09f, "di_clash_1", "di_clash_2");
+            // A long minimum interval: a brawl across the board must not zap ten times a second.
+            Sound(serialized, "clashSound", 0.5f, 1.5f, 0.2f, "di_clash_1", "di_clash_2");
             Sound(serialized, "eliminationSound", 0.9f, 0.3f, 0.3f, "di_elimination");
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return fx;
@@ -216,15 +414,6 @@ namespace Universes.UniverseData.dot_invaders.Editor {
         static T GetOrAdd<T>(GameObject target) where T : Component =>
             target.TryGetComponent(out T existing) ? existing : target.AddComponent<T>();
 
-        /// <summary>
-        /// A generated component with its script's field defaults, which are the tuning source;
-        /// the caller rewires every reference to it (the controller's fields are set in BuildAll).
-        /// </summary>
-        static T Fresh<T>(GameObject target) where T : Component {
-            if (target.TryGetComponent(out T existing))
-                Object.DestroyImmediate(existing, true);
-            return target.AddComponent<T>();
-        }
 
         // --- HUD ----------------------------------------------------------------------------
 
@@ -258,6 +447,8 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Hint(controls, "Drag empty", "Select");
             Hint(controls, "RMB", "Stop");
             Hint(controls, "Esc", "Cancel");
+            Hint(controls, "Gear", "Factory trains faster");
+            Hint(controls, "Walls", "Fortress needs more attackers");
             HudPopup controlsPopup = HudKit.Popup(controls, true);
 
             HudBanner banner = HudKit.Banner(root, "MatchEnd", new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), 560f, "laurels_trophy", Color.cyan, 88f, "Match over");

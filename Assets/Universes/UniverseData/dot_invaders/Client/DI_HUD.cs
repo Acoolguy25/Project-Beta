@@ -53,14 +53,21 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 bool draw = state.winningTeamId < 0;
                 bool won = !draw && state.winningTeamId == state.yourTeamId;
                 Color color = draw ? new Color(0.6f, 0.64f, 0.7f) : teamColor(state.winningTeamId);
+                string outcome = draw ? "Nobody conquered the board." : $"{teamNameOf(state.winningTeamId)} conquered the board.";
                 banner.Show(draw ? drawIcon : won ? victoryIcon : defeatIcon, color,
-                    draw ? "DRAW" : won ? "VICTORY!" : "DEFEAT",
-                    draw ? "Nobody conquered the board." : $"{teamNameOf(state.winningTeamId)} conquered the board.", 0f);
+                    draw ? "DRAW" : won ? "VICTORY!" : "DEFEAT", WithProgress(outcome, state.yourSummary), 0f);
             } else if (!state.matchEnded && matchEnded) {
                 banner.Hide();
             }
             matchEnded = state.matchEnded;
         }
+
+        /// <summary>Adds the player's saved stats under the outcome, so they can see their progress is kept.</summary>
+        static string WithProgress(string outcome, DI_MatchSummary summary) =>
+            summary.saved
+                ? $"{outcome}\nBases captured {summary.matchCaptures} (all time {summary.totalCaptures})  ·  " +
+                  $"Most held {summary.matchMostHeld} (best {summary.bestMostHeld})"
+                : outcome;
     }
 }
 #endif

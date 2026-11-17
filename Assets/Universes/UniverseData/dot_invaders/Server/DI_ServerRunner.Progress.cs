@@ -1,4 +1,5 @@
 #if UNITY_SERVER
+using System.Collections.Generic;
 using FishNet;
 using FishNet.Connection;
 using RyanAssets.DataService;
@@ -28,6 +29,9 @@ namespace Universes.UniverseData.dot_invaders {
             matchRecords[ownerClientId] = record;
         }
 
+        /// <summary>What each player's match-over panel shows; filled when the match ends, cleared with the board.</summary>
+        readonly Dictionary<int, DI_MatchSummary> matchSummaries = new();
+
         /// <summary>Counts the finished match for every player still on a team; a player team in front wins it.</summary>
         void RecordMatchProgress(int winnerTeamId) {
             bool playerTeamWon = winnerTeamId >= 0 && winnerTeamId < NpcTeamIdStart;
@@ -39,6 +43,14 @@ namespace Universes.UniverseData.dot_invaders {
                     save.RecordMatch(won);
                     save.RecordCaptures(record.captures, record.mostBasesHeld);
                 });
+                bool saved = PlayerProgress.TryGet(connection, out DI_SaveData progress);
+                matchSummaries[connection.ClientId] = new DI_MatchSummary {
+                    saved = saved,
+                    matchCaptures = record.captures,
+                    matchMostHeld = record.mostBasesHeld,
+                    totalCaptures = saved ? progress.basesCaptured : record.captures,
+                    bestMostHeld = saved ? progress.mostBasesHeld : record.mostBasesHeld
+                };
             }
         }
 

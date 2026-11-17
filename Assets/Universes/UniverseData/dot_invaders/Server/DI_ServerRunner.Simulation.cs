@@ -60,7 +60,7 @@ namespace Universes.UniverseData.dot_invaders {
                 float production = state.isSuperProducer
                     ? DI_Rules.SuperProductionOverInterval(state.uninterruptedSeconds, deltaTime,
                         superProductionSpeed, superSpeedupSeconds)
-                    : deltaTime * DI_Rules.BaseProductionRate(productionSpeed, state.isFactory);
+                    : deltaTime * DI_Rules.BaseProductionRate(productionSpeed, state.isFactory, factoryMultiplier);
                 production *= GetPlayerProductionMultiplier(state.ownerClientId);
                 state.uninterruptedSeconds = Mathf.Min(superSpeedupSeconds, state.uninterruptedSeconds + deltaTime);
                 if (state.troops >= Capacity(state)) {
@@ -266,7 +266,7 @@ namespace Universes.UniverseData.dot_invaders {
 
             if (target.troops > 0) {
                 target.damageTaken += DI_Rules.ArrivalDamage(
-                    GetPlayerDamageMultiplier(dot.ownerClientId) * dot.health, target.isFortress);
+                    GetPlayerDamageMultiplier(dot.ownerClientId) * dot.health, target.isFortress, fortressMultiplier);
                 int defeated = Mathf.Min(target.troops, Mathf.FloorToInt(target.damageTaken + 0.00001f));
                 target.troops -= defeated;
                 target.damageTaken -= defeated;

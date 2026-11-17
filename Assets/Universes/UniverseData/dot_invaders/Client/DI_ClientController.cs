@@ -34,17 +34,35 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Header("Road Visibility")]
         [SerializeField] Color roadColor = new Color(0.35f, 0.45f, 0.6f);
         [SerializeField, Min(0.05f)] float roadWidth = 0.3f;
-        [Tooltip("Brightness of the team-coloured pulses that run along roads troops are routed down.")]
-        [SerializeField, Min(0f)] float routePulseStrength = 1f;
+        [Tooltip("Brightness of the team-coloured streaks that run along roads troops are routed down. The streak sits on a thin road, so it needs more than 1 to read; it stays dimmer than a troop.")]
+        [SerializeField, Min(0f)] float routePulseStrength = 3f;
+        [Tooltip("Road colours while you drag an order: the previewed route, a base's queued route on hover, and roads out of the dragged base.")]
+        [SerializeField] Color routeRoadColor = Color.white;
+        [SerializeField] Color queuedRoadColor = new(0.3f, 0.85f, 1f);
+        [SerializeField] Color dragRoadColor = new(0.9f, 0.7f, 0.2f);
+        [SerializeField, Min(1f)] float routeRoadWidthFactor = 1.6f;
+        [SerializeField, Min(1f)] float dragRoadWidthFactor = 1.3f;
 
         [Header("Order Arrow")]
-        [SerializeField, Min(0.05f)] float orderArrowWidth = 0.3f;
-        [SerializeField, Min(0.05f)] float aimingLineWidth = 0.18f;
+        [Tooltip("Board units; wide enough at board zoom for the chevrons to read (about 12 px at 1080p).")]
+        [SerializeField, Min(0.05f)] float orderArrowWidth = 2.2f;
+        [SerializeField, Min(0.05f)] float aimingLineWidth = 0.5f;
         [SerializeField] Color aimingLineColor = new(0.75f, 0.8f, 0.9f);
+        [Tooltip("How far the arrow and its chevrons are lightened from the team colour toward white.")]
+        [SerializeField, Range(0f, 1f)] float orderArrowWhiten = 0.25f;
+        [SerializeField, Range(0f, 1f)] float orderChevronWhiten = 0.7f;
         [Tooltip("Brightness of the chevrons marching toward the target while you drag an order.")]
         [SerializeField, Min(0f)] float orderArrowPulseStrength = 1.6f;
         [SerializeField, Range(0f, 1f)] float orderArrowChevrons = 1f;
+        [Tooltip("Board units between chevrons on the order arrow.")]
+        [SerializeField, Min(0.5f)] float orderChevronSpacing = 7f;
+        [Tooltip("Share of the spacing each chevron covers.")]
+        [SerializeField, Range(0.02f, 1f)] float orderChevronLength = 0.4f;
         [SerializeField, Min(0f)] float orderArrowHeight = 0.22f;
+
+        [Header("Framing")]
+        [Tooltip("Board point the camera centres on when a match starts: the board's middle, nudged so the board sits between the top HUD and the controls hint.")]
+        [SerializeField] Vector3 boardFocusPoint = new(0f, 0f, 6f);
 
         readonly List<DI_BaseView> baseViews = new();
         readonly List<DI_LinkView> linkViews = new();
@@ -78,6 +96,9 @@ namespace Universes.UniverseData.dot_invaders.Client {
         bool manualRoute;
         bool registered;
         bool focusedOnHome;
+        Camera boardCamera;
+        int[] lookupSources = System.Array.Empty<int>();
+        int[] lookupTargets = System.Array.Empty<int>();
 
         void Awake() {
             runtimeRoot = new GameObject("Runtime Views").transform;
@@ -91,8 +112,10 @@ namespace Universes.UniverseData.dot_invaders.Client {
 
             if (linkPrefab != null) {
                 dragLink = Instantiate(linkPrefab, runtimeRoot).GetComponent<DI_LinkView>();
-                if (dragLink != null)
+                if (dragLink != null) {
+                    dragLink.SetPulseShape(orderChevronSpacing, orderChevronLength, 0f);
                     dragLink.gameObject.SetActive(false);
+                }
                 marqueeView = Instantiate(linkPrefab, runtimeRoot).GetComponent<DI_LinkView>();
                 if (marqueeView != null)
                     marqueeView.gameObject.SetActive(false);
@@ -108,8 +131,19 @@ namespace Universes.UniverseData.dot_invaders.Client {
 
         void Update() {
             TryRegister();
-            TryFocusHomeBase();
+            TrackCamera();
+            TryFrameBoard();
             HandlePointer();
+        }
+
+        /// <summary>Hands the main camera to the base views once per change, so they never look it up per frame.</summary>
+        void TrackCamera() {
+            Camera main = Camera.main;
+            if (main == boardCamera)
+                return;
+            boardCamera = main;
+            foreach (DI_BaseView view in baseViews)
+                view.SetCamera(boardCamera);
         }
 
         void TryRegister() {
@@ -157,14 +191,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
         void SynchronizeViews() {
             ResizeViews(baseViews, state.basePositions.Length, basePrefab);
             for (int i = 0; i < baseViews.Count; i++) {
+                DI_BaseRole role = RoleOf(i);
                 baseViews[i].SetState(
                     i,
                     ToWorld(state.basePositions[i], 0f),
                     state.baseTroops[i],
-                    state.baseOwners[i] == state.yourClientId,
                     state.baseTeams[i] < 0,
                     GetTeamColor(state.baseTeams[i]),
-                    RoleOf(i));
+                    role,
+                    MultiplierOf(role));
                 bool isTurret = state.baseTurrets != null && i < state.baseTurrets.Length && state.baseTurrets[i];
                 int shot = state.turretShotSequences != null && i < state.turretShotSequences.Length
                     ? state.turretShotSequences[i] : 0;
@@ -214,6 +249,13 @@ namespace Universes.UniverseData.dot_invaders.Client {
             Flag(state.baseFortresses, baseId) ? DI_BaseRole.Fortress :
             Flag(state.baseSpeedBases, baseId) ? DI_BaseRole.Speed : DI_BaseRole.Plain;
 
+        /// <summary>The live rule multiplier a role's label shows; an older server that sends none gets the defaults.</summary>
+        float MultiplierOf(DI_BaseRole role) => role switch {
+            DI_BaseRole.Factory => state.factoryMultiplier > 0f ? state.factoryMultiplier : DI_Rules.DefaultFactoryMultiplier,
+            DI_BaseRole.Fortress => state.fortressMultiplier > 0f ? state.fortressMultiplier : DI_Rules.DefaultFortressMultiplier,
+            _ => 0f,
+        };
+
         static bool Flag(bool[] flags, int index) => flags != null && index >= 0 && index < flags.Length && flags[index];
 
         /// <summary>Marks every road on an active route with a pulse in the routing team's colour, heading its way.</summary>
@@ -224,9 +266,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 linkPulsing = new bool[linkCount];
             }
             System.Array.Clear(linkPulsing, 0, linkCount);
-            linkLookup.Clear();
-            for (int i = 0; i < linkCount; i++)
-                linkLookup[LinkKey(state.linkSources[i], state.linkTargets[i])] = i;
+            RefreshLinkLookup(linkCount);
 
             if (state.baseRoutes == null)
                 return;
@@ -246,6 +286,31 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     linkPulseDirections[link] = state.linkSources[link] == route[leg - 1] ? 1f : -1f;
                 }
             }
+        }
+
+        /// <summary>Rebuilds the road index only when the board's roads change, not every snapshot.</summary>
+        void RefreshLinkLookup(int linkCount) {
+            if (SameLinks(linkCount))
+                return;
+            linkLookup.Clear();
+            if (lookupSources.Length != linkCount) {
+                lookupSources = new int[linkCount];
+                lookupTargets = new int[linkCount];
+            }
+            for (int i = 0; i < linkCount; i++) {
+                lookupSources[i] = state.linkSources[i];
+                lookupTargets[i] = state.linkTargets[i];
+                linkLookup[LinkKey(lookupSources[i], lookupTargets[i])] = i;
+            }
+        }
+
+        bool SameLinks(int linkCount) {
+            if (lookupSources.Length != linkCount)
+                return false;
+            for (int i = 0; i < linkCount; i++)
+                if (lookupSources[i] != state.linkSources[i] || lookupTargets[i] != state.linkTargets[i])
+                    return false;
+            return true;
         }
 
         static long LinkKey(int a, int b) => ((long)Mathf.Min(a, b) << 32) | (uint)Mathf.Max(a, b);
@@ -290,6 +355,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     Debug.LogError($"Prefab '{prefab.name}' does not contain {typeof(T).Name}.", prefab);
                     return;
                 }
+                if (view is DI_BaseView baseView)
+                    baseView.SetCamera(boardCamera);
                 views.Add(view);
             }
 
@@ -395,11 +462,11 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 // A valid order shows chevrons marching to the target; aiming shows a plain line.
                 Color team = GetTeamColor(state.baseTeams[dragSource]);
                 if (validTarget)
-                    dragLink.SetRoute(state.basePositions, previewRoute, Color.Lerp(team, Color.white, 0.4f),
+                    dragLink.SetRoute(state.basePositions, previewRoute, Color.Lerp(team, Color.white, orderArrowWhiten),
                         orderArrowWidth, orderArrowHeight);
                 else
                     dragLink.SetLine(start, end, aimingLineColor, aimingLineWidth);
-                dragLink.SetPulse(Color.Lerp(team, Color.white, 0.6f), 1f, validTarget ? orderArrowPulseStrength : 0f);
+                dragLink.SetPulse(Color.Lerp(team, Color.white, orderChevronWhiten), 1f, validTarget ? orderArrowPulseStrength : 0f);
                 dragLink.SetChevrons(validTarget ? orderArrowChevrons : 0f);
             }
 
@@ -529,11 +596,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
             });
         }
 
-        void TryFocusHomeBase() {
-            if (focusedOnHome || state.basePositions == null || state.baseOwners == null || Camera.main == null)
+        /// <summary>
+        /// At the start of a match the camera frames the whole board (your bases stand out by their
+        /// team ring); the home-base teleporter still remembers where you started.
+        /// </summary>
+        void TryFrameBoard() {
+            if (focusedOnHome || state.basePositions == null || state.baseOwners == null || boardCamera == null)
                 return;
 
-            Component twoDimController = Camera.main.GetComponent("TwoDimController");
+            Component twoDimController = boardCamera.GetComponent("TwoDimController");
             if (twoDimController == null)
                 return;
 
@@ -542,8 +613,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 if (state.baseOwners[i] != state.yourClientId)
                     continue;
 
-                twoDimController.SendMessage("SetFocusPoint", ToWorld(state.basePositions[i], 0f),
-                    SendMessageOptions.RequireReceiver);
+                twoDimController.SendMessage("SetFocusPoint", boardFocusPoint, SendMessageOptions.RequireReceiver);
                 homeBaseTeleporter?.SetHomeBase(ToWorld(state.basePositions[i], 0f));
                 focusedOnHome = true;
                 return;
@@ -637,9 +707,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 start += direction * baseViews[source].PickRadius;
                 end -= direction * baseViews[target].PickRadius;
                 linkViews[i].SetLine(start, end,
-                    onRoute ? Color.white : queued ? new Color(0.3f, 0.85f, 1f) :
-                        highlighted ? new Color(0.9f, 0.7f, 0.2f) : roadColor,
-                    roadWidth * (onRoute || queued ? 1.6f : highlighted ? 1.3f : 1f));
+                    onRoute ? routeRoadColor : queued ? queuedRoadColor : highlighted ? dragRoadColor : roadColor,
+                    roadWidth * (onRoute || queued ? routeRoadWidthFactor : highlighted ? dragRoadWidthFactor : 1f));
                 bool pulsing = i < linkPulsing.Length && linkPulsing[i];
                 linkViews[i].SetPulse(pulsing ? linkPulseColors[i] : Color.white,
                     pulsing ? linkPulseDirections[i] : 1f, pulsing ? routePulseStrength : 0f);

@@ -34,6 +34,7 @@ Material:
     - _PulseSpacing: 9
     - _PulseSpeed: 14
     - _PulseStrength: 0
+    - _PulseThin: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _PulseColor: {r: 1, g: 1, b: 1, a: 1}

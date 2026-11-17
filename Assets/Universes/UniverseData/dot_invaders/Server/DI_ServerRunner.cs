@@ -68,10 +68,16 @@ namespace Universes.UniverseData.dot_invaders {
 
         [SerializeField, Min(30)] int matchDurationSeconds = 300;
         [SerializeField, Range(1, 2)] int turretBaseCount = 2;
-        [Tooltip("Factories train troops at DI_Rules.FactoryProductionMultiplier times the normal rate.")]
+        [Tooltip("Factories on each board; they train at factoryMultiplier times the normal rate.")]
         [SerializeField, Range(0, 4)] int factoryBaseCount = 2;
-        [Tooltip("Fortresses need DI_Rules.FortressDefenceMultiplier attackers per defender.")]
+        [Tooltip("Fortresses on each board; they need fortressMultiplier attackers per defender.")]
         [SerializeField, Range(0, 4)] int fortressBaseCount = 2;
+        [Tooltip("Production multiplier of a factory (FactoryMultiplier command).")]
+        [SerializeField, Range(DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier)]
+        float factoryMultiplier = DI_Rules.DefaultFactoryMultiplier;
+        [Tooltip("Attackers a fortress needs per defender (FortressMultiplier command).")]
+        [SerializeField, Range(DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier)]
+        float fortressMultiplier = DI_Rules.DefaultFortressMultiplier;
         [SerializeField, Range(3, 8)] int nearbyPathsPerBase = 6;
         [SerializeField, Min(12f)] float maximumLocalPathLength = 65f;
         [SerializeField, Range(0.1f, 1f)] float npcSuperLaunchCapacityFraction = 0.85f;
@@ -246,6 +252,7 @@ namespace Universes.UniverseData.dot_invaders {
             announcedEliminations.Clear();
             clashPositions.Clear();
             matchRecords.Clear();
+            matchSummaries.Clear();
             base.Reset();
         }
 

@@ -7,9 +7,10 @@ using TMPro;
 
 namespace Universes.UniverseData.dot_invaders.Client {
     /// <summary>
-    /// One base on the board: team-coloured neon body and ring, troop count, role label (speed,
-    /// factory, fortress), super-base meter, turret and its shots. Presentation only; fed by
-    /// <see cref="DI_ClientController"/> from each server snapshot.
+    /// One base on the board: team-coloured neon body and ring, troop count, role mark and label
+    /// (speed, factory, fortress), super-base meter, turret, its range and its shots. Presentation
+    /// only; fed by <see cref="DI_ClientController"/> from each server snapshot. The role marks, the
+    /// range outline and the outlined label material are authored onto DI_Base.prefab by DI_Authoring.
     /// </summary>
     public sealed class DI_BaseView : MonoBehaviour {
 #if !UNITY_SERVER
@@ -17,14 +18,16 @@ namespace Universes.UniverseData.dot_invaders.Client {
         static readonly int ColorId = Shader.PropertyToID("_Color");
         static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
-        /// <summary>How a special base labels itself and tints its ring.</summary>
+        /// <summary>How a special base labels itself and colours its role mark.</summary>
         [Serializable]
         public sealed class RoleStyle {
             public string label = string.Empty;
+            [Tooltip("Append the live rule multiplier to the label (FACTORY x2).")]
+            public bool showMultiplier;
             public Color labelColor = Color.white;
-            [Tooltip("Ring colour of the base while neutral; a held base shows its team colour, the label keeps its role.")]
-            public Color ringTint = Color.white;
-            [Tooltip("Ring brightness swing, 0 = steady.")]
+            [Tooltip("Colour of the role mark around the base (gear teeth, fortress walls); it stays the same whoever holds the base.")]
+            public Color markColor = Color.white;
+            [Tooltip("Mark brightness swing, 0 = steady.")]
             [Range(0f, 1f)] public float pulseAmount = 0.2f;
             [Min(0f)] public float pulseSpeed = 0.4f;
         }
@@ -36,22 +39,34 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Min(0f)] float neutralBodyGlow = 0.15f;
         [Tooltip("Ring brightness multiplier; above 1 blooms.")]
         [SerializeField, Min(0f)] float ringGlow = 2.2f;
+        [Tooltip("Ring brightness while selected or hovered: kept low so the white ring never blooms over the count.")]
+        [SerializeField, Min(0f)] float selectedRingGlow = 1.2f;
         [SerializeField] Color selectedRingColor = Color.white;
         [SerializeField] Color neighborRingColor = new(1f, 0.8f, 0.2f);
 
         [Header("Roles")]
         [SerializeField] RoleStyle speedStyle = new() {
-            label = ">> SPEED", labelColor = new Color(0.55f, 0.95f, 1f), ringTint = new Color(0.6f, 0.8f, 1f),
-            pulseAmount = 0.2f, pulseSpeed = 0.4f,
-        };
-        [SerializeField] RoleStyle factoryStyle = new() {
-            label = "FACTORY x2", labelColor = new Color(1f, 0.78f, 0.35f), ringTint = new Color(1f, 0.7f, 0.3f),
-            pulseAmount = 0.3f, pulseSpeed = 0.9f,
-        };
-        [SerializeField] RoleStyle fortressStyle = new() {
-            label = "FORTRESS x2", labelColor = new Color(0.8f, 0.88f, 1f), ringTint = new Color(0.78f, 0.85f, 1f),
+            label = ">> SPEED", labelColor = new Color(0.55f, 0.95f, 1f), markColor = new Color(0.6f, 0.8f, 1f),
             pulseAmount = 0f, pulseSpeed = 0f,
         };
+        [SerializeField] RoleStyle factoryStyle = new() {
+            label = "FACTORY", showMultiplier = true, labelColor = new Color(1f, 0.78f, 0.35f),
+            markColor = new Color(1f, 0.62f, 0.18f), pulseAmount = 0.25f, pulseSpeed = 0.9f,
+        };
+        [SerializeField] RoleStyle fortressStyle = new() {
+            label = "FORTRESS", showMultiplier = true, labelColor = new Color(0.8f, 0.88f, 1f),
+            markColor = new Color(0.62f, 0.78f, 1f), pulseAmount = 0f, pulseSpeed = 0f,
+        };
+
+        [Header("Role marks")]
+        [Tooltip("Gear teeth around a factory (children authored by DI_Authoring).")]
+        [SerializeField] GameObject factoryMark;
+        [Tooltip("Walls and towers around a fortress (children authored by DI_Authoring).")]
+        [SerializeField] GameObject fortressMark;
+        [Tooltip("Brightness multiplier of the role marks; above 1 blooms.")]
+        [SerializeField, Min(0f)] float markGlow = 1.6f;
+        [Tooltip("Degrees per second a held factory's gear turns; a neutral factory stands still.")]
+        [SerializeField] float factoryGearSpin = 25f;
 
         [Header("Labels")]
         [Tooltip("Font size of the role label (SPEED, FACTORY, FORTRESS); readable at the board's zoom.")]
@@ -66,8 +81,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Range(1, 10)] int superMeterSegments = 5;
         [Tooltip("Meter colour while charging; it whitens as the charge fills.")]
         [SerializeField] Color superChargingColor = new(1f, 0.72f, 0.22f);
-        [Tooltip("Board units between the troop count and the role/meter labels above and below it.")]
-        [SerializeField, Min(0f)] float labelSpacing = 3.6f;
+        [Tooltip("Base units between the troop count and the role/meter labels above and below it; clears the role marks.")]
+        [SerializeField, Min(0f)] float labelSpacing = 4.4f;
 
         [Header("Super base")]
         [Tooltip("Scale swing of a super base (0.1 = between 1.0x and 1.2x).")]
@@ -76,10 +91,28 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Range(0f, 1f)] float superGlowSwing = 0.3f;
         [SerializeField, Min(0f)] float superGlowSpeed = 0.5f;
 
+        [Header("Arrivals and captures")]
+        [Tooltip("The count punches this much harder than the body, so a landing reads on the number.")]
+        [SerializeField, Min(0f)] float labelPunchFactor = 1.5f;
+
         [Header("Turret")]
         [SerializeField, Min(0f)] float shotSeconds = 0.16f;
         [Tooltip("Size of the sparks where a turret shot lands.")]
         [SerializeField, Min(0f)] float shotSparkScale = 0.8f;
+        [Tooltip("Thin outline at the edge of the turret's reach (authored by DI_Authoring).")]
+        [SerializeField] LineRenderer rangeEdge;
+        [Tooltip("Opacity of the range disc's fill; the outline carries the shape.")]
+        [SerializeField, Range(0f, 1f)] float rangeFillAlpha = 0.012f;
+        [Tooltip("Opacity of the range outline.")]
+        [SerializeField, Range(0f, 1f)] float rangeEdgeAlpha = 0.5f;
+        [Tooltip("Width of the range outline in board units.")]
+        [SerializeField, Min(0.01f)] float rangeEdgeWidth = 0.45f;
+        [Tooltip("Height of the range outline above the board, under the roads.")]
+        [SerializeField] float rangeEdgeHeight = 0.05f;
+        [Tooltip("Shot colour: how far the team colour is lightened toward white.")]
+        [SerializeField, Range(0f, 1f)] float shotWhiten = 0.65f;
+        [Tooltip("Turret icon colour: how far the team colour is lightened toward white.")]
+        [SerializeField, Range(0f, 1f)] float turretIconWhiten = 0.35f;
 
         Renderer bodyRenderer;
         Renderer glowRenderer;
@@ -87,7 +120,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         TextMeshPro productionLabel;
         TextMeshPro roleLabel;
         Color teamColor;
-        bool owned;
+        bool neutral = true;
+        int shownTroops = int.MinValue;
         bool selected;
         bool neighbor;
         bool hovered;
@@ -101,6 +135,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
         float shotUntil;
         int lastShotSequence = -1;
         MaterialPropertyBlock colorBlock;
+        Renderer[] factoryMarkRenderers;
+        Renderer[] fortressMarkRenderers;
+        Transform cameraTransform;
+        Vector3[] edgePoints;
+        float edgeRadius = -1f;
+        Vector3 edgeCentre;
+        float roleMultiplier = -1f;
+        DI_BaseRole shownRole = (DI_BaseRole)(-1);
+        readonly System.Text.StringBuilder roleText = new(24);
         DI_BaseRole role;
         bool isSuperBase;
         const int MeterFull = -1, MeterPaused = -2, MeterIdle = -3;
@@ -131,33 +174,58 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 roleLabel.fontSize = roleLabelFontSize;
                 roleLabel.rectTransform.sizeDelta = labelBoxSize;
             }
+            factoryMarkRenderers = factoryMark != null ? factoryMark.GetComponentsInChildren<Renderer>(true) : null;
+            fortressMarkRenderers = fortressMark != null ? fortressMark.GetComponentsInChildren<Renderer>(true) : null;
+            if (rangeEdge != null)
+                rangeEdge.widthMultiplier = rangeEdgeWidth;
             originalScale = transform.localScale;
         }
 
-        public void SetState(int baseId, Vector3 position, int troops, bool isOwned, bool isNeutral, Color color,
-            DI_BaseRole baseRole) {
+        /// <summary>The camera labels face; the controller hands it over so bases never look it up per frame.</summary>
+        public void SetCamera(Camera boardCamera) => cameraTransform = boardCamera != null ? boardCamera.transform : null;
+
+        /// <param name="multiplier">The live rule multiplier of the base's role (factory or fortress), shown on its label.</param>
+        public void SetState(int baseId, Vector3 position, int troops, bool isNeutral, Color color,
+            DI_BaseRole baseRole, float multiplier) {
             BaseId = baseId;
             transform.position = position;
-            owned = isOwned;
             teamColor = color;
             role = baseRole;
+            neutral = isNeutral;
             SetRendererColor(bodyRenderer, color, color * (isNeutral ? neutralBodyGlow : bodyGlow));
 
-            if (troopLabel != null) {
-                troopLabel.text = troops.ToString();
-                troopLabel.color = Color.white;
+            if (troopLabel != null && troops != shownTroops) {
+                shownTroops = troops;
+                troopLabel.SetText("{0}", troops);
             }
 
             RoleStyle style = Style(baseRole);
-            if (roleLabel != null) {
+            if (roleLabel != null && (baseRole != shownRole || multiplier != roleMultiplier)) {
+                shownRole = baseRole;
+                roleMultiplier = multiplier;
                 roleLabel.gameObject.SetActive(style != null);
                 if (style != null) {
-                    roleLabel.text = style.label;
+                    roleText.Clear().Append(style.label);
+                    if (style.showMultiplier)
+                        AppendMultiplier(roleText.Append(" x"), multiplier);
+                    roleLabel.SetText(roleText);
                     roleLabel.color = style.labelColor;
                 }
             }
+            if (factoryMark != null)
+                factoryMark.SetActive(baseRole == DI_BaseRole.Factory);
+            if (fortressMark != null)
+                fortressMark.SetActive(baseRole == DI_BaseRole.Fortress);
 
             RefreshGlow();
+        }
+
+        /// <summary>"2", "2.5": one decimal at most, without a string allocation.</summary>
+        static void AppendMultiplier(System.Text.StringBuilder text, float value) {
+            int tenths = Mathf.RoundToInt(value * 10f);
+            text.Append(tenths / 10);
+            if (tenths % 10 != 0)
+                text.Append('.').Append(tenths % 10);
         }
 
         public void SetSelected(bool value) {
@@ -170,7 +238,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             if (bodyRenderer != null)
                 Punch.Scale(bodyRenderer.transform, amount, seconds);
             if (troopLabel != null)
-                Punch.Scale(troopLabel.transform, amount * 1.5f, seconds);
+                Punch.Scale(troopLabel.transform, amount * labelPunchFactor, seconds);
         }
 
         public void SetProduction(bool isSuperProducer, float charge, float rate, bool active, bool full) {
@@ -233,18 +301,48 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 rangeRenderer.transform.localScale = new Vector3(
                     turretRange * 2f / transform.lossyScale.x, 0.01f,
                     turretRange * 2f / transform.lossyScale.z);
-                Color tint = teamColor;
-                tint.a = 0.035f;
-                SetRendererColor(rangeRenderer, tint);
+                Color fill = teamColor;
+                fill.a = rangeFillAlpha;
+                SetRendererColor(rangeRenderer, fill);
+            }
+            if (rangeEdge != null) {
+                rangeEdge.gameObject.SetActive(isTurret);
+                if (isTurret) {
+                    PlaceRangeEdge(turretRange);
+                    Color edge = teamColor;
+                    edge.a = rangeEdgeAlpha;
+                    SetRendererColor(rangeEdge, edge);
+                }
             }
             SetRendererColor(turretRenderer, teamColor * ringGlow);
             if (turretIconRenderers != null)
                 foreach (Renderer icon in turretIconRenderers)
-                    SetRendererColor(icon, Color.Lerp(teamColor, Color.white, 0.35f) * ringGlow);
+                    SetRendererColor(icon, Color.Lerp(teamColor, Color.white, turretIconWhiten) * ringGlow);
             // A newly joined client must not replay a historical shot.
             if (isTurret && lastShotSequence >= 0 && shotSequence > lastShotSequence)
                 PlayShot(shotPosition);
             lastShotSequence = shotSequence;
+        }
+
+        /// <summary>
+        /// The outline is drawn in world space, so its width is exact board units whatever the base's
+        /// scale; its points move only when the base or the range changes (bases never move mid-match).
+        /// </summary>
+        void PlaceRangeEdge(float radius) {
+            Vector3 centre = transform.position;
+            if (radius == edgeRadius && centre == edgeCentre)
+                return;
+            edgeRadius = radius;
+            edgeCentre = centre;
+            int count = rangeEdge.positionCount;
+            edgePoints ??= new Vector3[count];
+            if (edgePoints.Length != count)
+                edgePoints = new Vector3[count];
+            for (int i = 0; i < count; i++) {
+                float angle = Mathf.PI * 2f * i / count;
+                edgePoints[i] = centre + new Vector3(Mathf.Cos(angle) * radius, rangeEdgeHeight, Mathf.Sin(angle) * radius);
+            }
+            rangeEdge.SetPositions(edgePoints);
         }
 
         void PlayShot(Vector3 shotPosition) {
@@ -253,7 +351,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             direction.y = 0f;
             if (turretAim != null && direction.sqrMagnitude > 0.001f)
                 turretAim.rotation = Quaternion.LookRotation(direction);
-            Color shotColor = Color.Lerp(teamColor, Color.white, 0.65f);
+            Color shotColor = Color.Lerp(teamColor, Color.white, shotWhiten);
             if (shotLine != null) {
                 shotLine.gameObject.SetActive(true);
                 shotLine.SetPosition(0, start);
@@ -272,37 +370,52 @@ namespace Universes.UniverseData.dot_invaders.Client {
             _ => null,
         };
 
+        /// <summary>
+        /// The ring shows the base's team (any team, not only yours), white while selected or hovered and
+        /// gold as a neighbour of the order you drag; the role mark keeps the role's own colour.
+        /// </summary>
         void RefreshGlow() {
+            RoleStyle style = Style(role);
+            float markPulse = style != null && style.pulseAmount > 0f
+                ? 1f - style.pulseAmount + Mathf.PingPong(Time.unscaledTime * style.pulseSpeed, style.pulseAmount) : 1f;
+            Renderer[] marks = role == DI_BaseRole.Factory ? factoryMarkRenderers
+                : role == DI_BaseRole.Fortress ? fortressMarkRenderers : null;
+            if (marks != null && style != null)
+                foreach (Renderer mark in marks)
+                    SetRendererColor(mark, style.markColor, style.markColor * (markPulse * markGlow));
+
             if (glowRenderer == null)
                 return;
-
-            glowRenderer.gameObject.SetActive(owned || selected || neighbor || hovered);
-
-            RoleStyle style = Style(role);
-            Color idle = style != null && !owned ? style.ringTint : teamColor;
-            Color ring = selected || hovered ? selectedRingColor : neighbor ? neighborRingColor : idle;
-            float intensity = 1f;
-            if (isSuperBase)
-                intensity = 1f - superGlowSwing + Mathf.PingPong(Time.unscaledTime * superGlowSpeed, superGlowSwing);
-            else if (style != null && style.pulseAmount > 0f)
-                intensity = 1f - style.pulseAmount + Mathf.PingPong(Time.unscaledTime * style.pulseSpeed, style.pulseAmount);
-            SetRendererColor(glowRenderer, ring * (intensity * ringGlow));
+            glowRenderer.gameObject.SetActive(!neutral || selected || neighbor || hovered);
+            bool highlighted = selected || hovered;
+            Color ring = highlighted ? selectedRingColor : neighbor ? neighborRingColor : teamColor;
+            float intensity = isSuperBase
+                ? 1f - superGlowSwing + Mathf.PingPong(Time.unscaledTime * superGlowSpeed, superGlowSwing) : 1f;
+            SetRendererColor(glowRenderer, ring * (intensity * (highlighted ? selectedRingGlow : ringGlow)));
         }
 
+        bool Pulsing => isSuperBase || Style(role) is { pulseAmount: > 0f };
+
         void LateUpdate() {
-            Camera camera = Camera.main;
-            if (troopLabel != null && camera != null)
-                troopLabel.transform.rotation = camera.transform.rotation;
-            if (productionLabel != null && troopLabel != null && camera != null) {
-                productionLabel.transform.rotation = camera.transform.rotation;
-                productionLabel.transform.position = troopLabel.transform.position -
-                    camera.transform.up * (labelSpacing * transform.lossyScale.x);
+            if (cameraTransform != null) {
+                Quaternion facing = cameraTransform.rotation;
+                Vector3 up = cameraTransform.up * (labelSpacing * transform.lossyScale.x);
+                if (troopLabel != null)
+                    troopLabel.transform.rotation = facing;
+                if (productionLabel != null && troopLabel != null) {
+                    productionLabel.transform.rotation = facing;
+                    productionLabel.transform.position = troopLabel.transform.position - up;
+                }
+                if (roleLabel != null && troopLabel != null) {
+                    roleLabel.transform.rotation = facing;
+                    roleLabel.transform.position = troopLabel.transform.position + up;
+                }
             }
-            if (roleLabel != null && troopLabel != null && camera != null) {
-                roleLabel.transform.rotation = camera.transform.rotation;
-                roleLabel.transform.position = troopLabel.transform.position +
-                    camera.transform.up * (labelSpacing * transform.lossyScale.x);
-            }
+            // Glow pulses run per frame (snapshots arrive only about ten times a second).
+            if (Pulsing)
+                RefreshGlow();
+            if (factoryMark != null && role == DI_BaseRole.Factory && !neutral)
+                factoryMark.transform.Rotate(0f, factoryGearSpin * Time.unscaledDeltaTime, 0f, Space.Self);
             if (shotLine != null && Time.unscaledTime >= shotUntil)
                 shotLine.gameObject.SetActive(false);
 

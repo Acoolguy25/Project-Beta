@@ -193,6 +193,8 @@ namespace Universes.UniverseData.dot_invaders {
 
                 state.yourClientId = connection.ClientId;
                 state.yourTeamId = playerTeams.TryGetValue(connection.ClientId, out int teamId) ? teamId : -1;
+                state.yourSummary = matchSummaries.TryGetValue(connection.ClientId, out DI_MatchSummary summary)
+                    ? summary : default;
                 InstanceFinder.ServerManager.Broadcast(connection, state);
             }
             // Clashes are events, not state: each one is sent in exactly one snapshot.
@@ -242,7 +244,9 @@ namespace Universes.UniverseData.dot_invaders {
                 baseSpeedBases = new bool[baseCount],
                 baseFactories = new bool[baseCount],
                 baseFortresses = new bool[baseCount],
-                clashPositions = clashPositions.ToArray()
+                clashPositions = clashPositions.ToArray(),
+                factoryMultiplier = factoryMultiplier,
+                fortressMultiplier = fortressMultiplier
             };
 
             for (int i = 0; i < baseCount; i++) {

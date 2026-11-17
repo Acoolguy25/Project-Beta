@@ -32,10 +32,13 @@ namespace Universes.UniverseData.dot_invaders {
         public const float DefaultSuperSpeedupSeconds = 12f;
         public const int BasePower = 25;
 
-        // Special dots placed by the map generator. A factory trains this many times
+        // Special dots placed by the map generator, tuned live like every other rule
+        // (FactoryMultiplier / FortressMultiplier commands). A factory trains this many times
         // faster than a normal base; a fortress needs this many attackers per defender.
-        public const float FactoryProductionMultiplier = 2f;
-        public const float FortressDefenceMultiplier = 2f;
+        public const float DefaultFactoryMultiplier = 2f;
+        public const float DefaultFortressMultiplier = 2f;
+        public const float MinSpecialBaseMultiplier = 1f;
+        public const float MaxSpecialBaseMultiplier = 5f;
 
         // MoveSpeed and SendInterval are tuned as multipliers of their defaults.
         public const float MinMoveSpeedMultiplier = 0.05f;
@@ -73,20 +76,20 @@ namespace Universes.UniverseData.dot_invaders {
             moveSpeed * (1f + Mathf.Max(0, speedBases) * Mathf.Max(0f, speedBaseBonus));
 
         /// <summary>Troops per second a normal (non-super) base trains; factories train faster.</summary>
-        public static float BaseProductionRate(float productionSpeed, bool factory) =>
-            productionSpeed * (factory ? FactoryProductionMultiplier : 1f);
+        public static float BaseProductionRate(float productionSpeed, bool factory, float factoryMultiplier) =>
+            productionSpeed * (factory ? factoryMultiplier : 1f);
 
         /// <summary>Garrison damage one arriving troop deals; a fortress shrugs off part of it.</summary>
-        public static float ArrivalDamage(float attackDamage, bool fortress) =>
-            fortress ? attackDamage / FortressDefenceMultiplier : attackDamage;
+        public static float ArrivalDamage(float attackDamage, bool fortress, float fortressMultiplier) =>
+            fortress ? attackDamage / fortressMultiplier : attackDamage;
 
         /// <summary>Attackers it takes to empty a garrison of <paramref name="defenders"/>.</summary>
-        public static int AttackersToDefeat(int defenders, bool fortress) =>
-            fortress ? Mathf.CeilToInt(Mathf.Max(0, defenders) * FortressDefenceMultiplier) : Mathf.Max(0, defenders);
+        public static int AttackersToDefeat(int defenders, bool fortress, float fortressMultiplier) =>
+            fortress ? Mathf.CeilToInt(Mathf.Max(0, defenders) * fortressMultiplier) : Mathf.Max(0, defenders);
 
         /// <summary>Defenders that <paramref name="attackers"/> plain troops are sure to defeat.</summary>
-        public static int DefendersDefeatedBy(int attackers, bool fortress) =>
-            fortress ? Mathf.FloorToInt(Mathf.Max(0, attackers) / FortressDefenceMultiplier) : Mathf.Max(0, attackers);
+        public static int DefendersDefeatedBy(int attackers, bool fortress, float fortressMultiplier) =>
+            fortress ? Mathf.FloorToInt(Mathf.Max(0, attackers) / fortressMultiplier) : Mathf.Max(0, attackers);
 
         public static float SuperProductionRate(float uninterruptedSeconds, float peakRate, float speedupSeconds) {
             float startRate = Mathf.Min(1.25f, peakRate);
@@ -233,5 +236,19 @@ namespace Universes.UniverseData.dot_invaders {
         public bool[] baseFactories;
         public bool[] baseFortresses;
         public Vector2[] clashPositions;
+        // Appended: the live Factory/Fortress multipliers, so labels show the tuned value.
+        public float factoryMultiplier;
+        public float fortressMultiplier;
+        // Appended: the receiving player's saved progress, filled once the match is over.
+        public DI_MatchSummary yourSummary;
+    }
+
+    /// <summary>One player's captures and most bases held, this match and over all saved matches.</summary>
+    public struct DI_MatchSummary {
+        public bool saved;
+        public int matchCaptures;
+        public int totalCaptures;
+        public int matchMostHeld;
+        public int bestMostHeld;
     }
 }

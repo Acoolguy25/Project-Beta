@@ -247,13 +247,23 @@ MonoBehaviour:
   dragSelectMinimumPixels: 8
   roadColor: {r: 0.35, g: 0.45, b: 0.6, a: 1}
   roadWidth: 0.3
-  routePulseStrength: 1
-  orderArrowWidth: 0.3
-  aimingLineWidth: 0.18
+  routePulseStrength: 3
+  routeRoadColor: {r: 1, g: 1, b: 1, a: 1}
+  queuedRoadColor: {r: 0.3, g: 0.85, b: 1, a: 1}
+  dragRoadColor: {r: 0.9, g: 0.7, b: 0.2, a: 1}
+  routeRoadWidthFactor: 1.6
+  dragRoadWidthFactor: 1.3
+  orderArrowWidth: 2.2
+  aimingLineWidth: 0.5
   aimingLineColor: {r: 0.75, g: 0.8, b: 0.9, a: 1}
+  orderArrowWhiten: 0.25
+  orderChevronWhiten: 0.7
   orderArrowPulseStrength: 1.6
   orderArrowChevrons: 1
+  orderChevronSpacing: 7
+  orderChevronLength: 0.4
   orderArrowHeight: 0.22
+  boardFocusPoint: {x: 0, y: 0, z: 6}
 --- !u!114 &3074514017627796893
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -366,7 +376,7 @@ MonoBehaviour:
     volumeJitter: 0.1
     pitch: 1
     pitchJitterSemitones: 1.5
-    minInterval: 0.09
+    minInterval: 0.2
     minDistance: 0
     maxDistance: 0
   eliminationSound:
@@ -383,27 +393,48 @@ MonoBehaviour:
   largeWavePitch: 0.7
   largeWave: 120
   otherCaptureVolume: 0.25
-  clashVolume: 0.3
+  clashVolume: 0.45
+  otherClashVolume: 0.12
+  clashInvolvementRadius: 3
   otherEliminationVolume: 0.6
-  captureRingScale: 10
+  captureRingScale: 7.5
   capturePunch: 0.25
   capturePunchSeconds: 0.35
   baseLostShake: 0.15
+  baseLostShakeSeconds: 0.2
   clashSparkScale: 6
   clashRingScale: 3
   clashSparkColor: {r: 1, g: 0.92, b: 0.7, a: 1}
   maxClashSparksPerSnapshot: 12
   arrivalRadius: 5
+  combatLossRadius: 2.5
   arrivalPunch: 0.22
   arrivalPunchSeconds: 0.22
-  eliminationRingScale: 24
+  arrivalPunchCooldown: 0.3
+  eliminationRingScale: 13
+  eliminationInnerRingScale: 7
+  eliminationInnerWhiten: 0.5
+  eliminationSparkScale: 6
   eliminationShakeRadius: 120
   eliminationShake: 0.35
   localEliminationFlash: {r: 1, g: 0.2, b: 0.25, a: 0.35}
+  localEliminationFlashSeconds: 0.5
   localEliminationText: ELIMINATED
   confettiScale: 8
   maxConfettiBursts: 8
+  confettiKeepOut:
+    serializedVersion: 2
+    x: 0.3
+    y: 0.3
+    width: 0.4
+    height: 0.45
   victoryFlash: {r: 1, g: 1, b: 1, a: 0.25}
+  victoryFlashSeconds: 0.4
+  defeatFlash: {r: 0.05, g: 0.02, b: 0.08, a: 0.45}
+  defeatFlashSeconds: 0.8
+  defeatText: DEFEAT
+  defeatTextColor: {r: 1, g: 0.4, b: 0.4, a: 1}
+  screenTextSeconds: 2.2
   effectHeight: 0.6
 --- !u!1 &5060468652190620228
 GameObject:

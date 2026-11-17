@@ -34,6 +34,9 @@ namespace Universes.UniverseData.dot_invaders.Client {
         readonly Color[] targetColors = new Color[MaxBases];
         readonly float[] targetWeights = new float[MaxBases];
         int count;
+        // True while some base's tint is still fading; once all have arrived the arrays stop being pushed.
+        bool fading;
+        const float SettledWeight = 0.002f;
 
         void OnEnable() {
             PaintBorders();
@@ -49,13 +52,16 @@ namespace Universes.UniverseData.dot_invaders.Client {
             int bases = state.basePositions != null && state.baseTeams != null
                 ? Mathf.Min(MaxBases, Mathf.Min(state.basePositions.Length, state.baseTeams.Length)) : 0;
             bool newBoard = bases != count;
+            bool changed = false;
             for (int i = 0; i < bases; i++) {
                 Vector2 position = state.basePositions[i];
                 newBoard |= sites[i].x != position.x || sites[i].y != position.y;
                 int team = state.baseTeams[i];
-                targetWeights[i] = team >= 0 ? 1f : 0f;
-                if (team >= 0)
-                    targetColors[i] = teamColor(team);
+                float weight = team >= 0 ? 1f : 0f;
+                Color color = team >= 0 ? teamColor(team) : targetColors[i];
+                changed |= weight != targetWeights[i] || color != targetColors[i];
+                targetWeights[i] = weight;
+                targetColors[i] = color;
                 sites[i] = new Vector4(position.x, position.y, territoryRadius, sites[i].w);
             }
             count = bases;
@@ -65,19 +71,32 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     sites[i].w = targetWeights[i];
                     colors[i] = targetColors[i];
                 }
-            Push();
+            if (newBoard || changed) {
+                fading = true;
+                Push();
+            }
         }
 
         void Update() {
-            if (count == 0)
+            if (count == 0 || !fading)
                 return;
             float step = 1f - Mathf.Exp(-Time.unscaledDeltaTime / tintFadeSeconds);
+            bool settled = true;
             for (int i = 0; i < count; i++) {
                 sites[i].w = Mathf.Lerp(sites[i].w, targetWeights[i], step);
                 // Keep the old colour while a neutralised base fades out.
                 if (targetWeights[i] > 0f)
                     colors[i] = Vector4.Lerp(colors[i], targetColors[i], step);
+                if (Mathf.Abs(sites[i].w - targetWeights[i]) > SettledWeight ||
+                    targetWeights[i] > 0f && ((Vector4)targetColors[i] - colors[i]).sqrMagnitude > SettledWeight * SettledWeight) {
+                    settled = false;
+                } else {
+                    sites[i].w = targetWeights[i];
+                    if (targetWeights[i] > 0f)
+                        colors[i] = targetColors[i];
+                }
             }
+            fading = !settled;
             Push();
         }
 

@@ -48,7 +48,11 @@ namespace Universes.UniverseData.dot_invaders {
                 arguments = Array.Empty<CommandArgumentConfig>()
             },
             PlayerMultiplierCommand("TroopDamage", "Privately sets a player's troop damage multiplier for this match."),
-            PlayerMultiplierCommand("PlayerProduction", "Privately sets a player's production multiplier for this match.")
+            PlayerMultiplierCommand("PlayerProduction", "Privately sets a player's production multiplier for this match."),
+            FloatCommand("FactoryMultiplier", "Sets how many times faster a factory base trains troops.", "Multiplier",
+                DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier),
+            FloatCommand("FortressMultiplier", "Sets how many attackers a fortress base needs per defender.", "Multiplier",
+                DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier)
         };
 
         static DI_ServerRunner runner;
@@ -71,6 +75,8 @@ namespace Universes.UniverseData.dot_invaders {
             ServerCommandService.RegisterCommand(Commands[13], RerollBoard);
             ServerCommandService.RegisterCommand(Commands[14], SetPlayerBuff, (caller, args) => ReadPlayerBuff(caller, args, true));
             ServerCommandService.RegisterCommand(Commands[15], SetPlayerBuff, (caller, args) => ReadPlayerBuff(caller, args, false));
+            ServerCommandService.RegisterCommand(Commands[16], SetFactoryMultiplier, (_, _) => runner.FactoryMultiplier);
+            ServerCommandService.RegisterCommand(Commands[17], SetFortressMultiplier, (_, _) => runner.FortressMultiplier);
         }
 
         internal static void Unregister() {
@@ -134,6 +140,18 @@ namespace Universes.UniverseData.dot_invaders {
             Announce(commandName, value);
         }
 
+        static void SetFactoryMultiplier(NetworkConnection caller, string commandName, string[] args) {
+            float value = ParseFloat(args[0]);
+            runner.SetFactoryMultiplier(value);
+            Announce(commandName, runner.FactoryMultiplier);
+        }
+
+        static void SetFortressMultiplier(NetworkConnection caller, string commandName, string[] args) {
+            float value = ParseFloat(args[0]);
+            runner.SetFortressMultiplier(value);
+            Announce(commandName, runner.FortressMultiplier);
+        }
+
         static void SetNPCAggression(NetworkConnection caller, string commandName, string[] args) {
             float value = ParseFloat(args[0]);
             runner.SetNpcAggression(value);
@@ -156,6 +174,7 @@ SendInterval {runner.SendIntervalMultiplier}x ({runner.SendInterval} seconds)
 ProductionSpeed {runner.ProductionSpeed} | MaxCapacity {runner.MaxCapacity}
 SuperProduction {runner.SuperProductionSpeed}/s over {runner.SuperSpeedupSeconds}s | SuperMaxCapacity {runner.SuperMaxCapacity}
 TurretRange {runner.TurretRange} | TurretFireRate {runner.TurretFireRate}
+FactoryMultiplier {runner.FactoryMultiplier}x | FortressMultiplier {runner.FortressMultiplier}x
 MatchTime {runner.SecondsRemaining}s remaining");
             ServerChat.SendSystemMessage(caller, new SystemMessageBroadcast(report, SystemMessageSource.CustomMessage));
         }

@@ -18,15 +18,22 @@ namespace Universes.UniverseData.dot_invaders.Client {
         static readonly int PulseSpacingId = Shader.PropertyToID("_PulseSpacing");
         static readonly int ChevronsId = Shader.PropertyToID("_Chevrons");
         static readonly int LineLengthId = Shader.PropertyToID("_LineLength");
+        static readonly int PulseLengthId = Shader.PropertyToID("_PulseLength");
+        static readonly int PulseThinId = Shader.PropertyToID("_PulseThin");
 
         [Tooltip("Brightness multiplier on the line colour; above 1 makes bright lines bloom.")]
         [SerializeField, Min(0f)] float glow = 1.5f;
-        [Tooltip("Brightness multiplier on travelling pulses.")]
-        [SerializeField, Min(0f)] float pulseGlow = 3f;
+        [Header("Route streaks (defaults; the order arrow sets its own with SetPulseShape)")]
+        [Tooltip("Brightness multiplier on travelling pulses. Kept low: a streak must stay dimmer than a troop.")]
+        [SerializeField, Min(0f)] float pulseGlow = 1.1f;
         [Tooltip("Board units per second a pulse travels; roughly troop speed reads best.")]
         [SerializeField, Min(0f)] float pulseSpeed = 14f;
-        [Tooltip("Board units between consecutive pulses.")]
-        [SerializeField, Min(0.5f)] float pulseSpacing = 9f;
+        [Tooltip("Board units between consecutive pulses: far wider than the gap between troops in a wave.")]
+        [SerializeField, Min(0.5f)] float pulseSpacing = 26f;
+        [Tooltip("Share of the spacing a pulse's fading tail covers: a long streak, not a bead.")]
+        [SerializeField, Range(0.02f, 1f)] float pulseLength = 0.55f;
+        [Tooltip("0 = pulse fills the line's width, 1 = a thin streak along its centre.")]
+        [SerializeField, Range(0f, 1f)] float pulseThin = 0.4f;
 
         LineRenderer lineRenderer;
         MaterialPropertyBlock block;
@@ -99,6 +106,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 Push();
         }
 
+        /// <summary>Overrides the pulse shape of this line (the order arrow uses short, full-width chevrons).</summary>
+        public void SetPulseShape(float spacing, float lengthShare, float thin) {
+            pulseSpacing = Mathf.Max(0.5f, spacing);
+            pulseLength = Mathf.Clamp(lengthShare, 0.02f, 1f);
+            pulseThin = Mathf.Clamp01(thin);
+            if (TryGetLine())
+                Push();
+        }
+
         /// <summary>Bends pulses into chevrons that point along the pulse direction (0..1).</summary>
         public void SetChevrons(float amount) {
             amount = Mathf.Clamp01(amount);
@@ -134,6 +150,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
             block.SetFloat(PulseDirectionId, pulseDirection);
             block.SetFloat(PulseSpeedId, pulseSpeed);
             block.SetFloat(PulseSpacingId, pulseSpacing);
+            block.SetFloat(PulseLengthId, pulseLength);
+            block.SetFloat(PulseThinId, pulseThin);
             block.SetFloat(ChevronsId, chevrons);
             block.SetFloat(LineLengthId, Mathf.Max(0.01f, length));
             lineRenderer.SetPropertyBlock(block);

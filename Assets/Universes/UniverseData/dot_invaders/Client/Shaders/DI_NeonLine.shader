@@ -15,6 +15,7 @@ Shader "Dot Invaders/Neon Line" {
         _PulseSpeed ("Pulse Speed (board units/s)", Float) = 14
         _PulseDirection ("Pulse Direction (+1 start to end, -1 back)", Float) = 1
         _Chevrons ("Chevron Shape", Range(0, 1)) = 0
+        _PulseThin ("Pulse Thinness (0 full width, 1 centre streak)", Range(0, 1)) = 1
         _LineLength ("Line Length (board units)", Float) = 10
     }
     SubShader {
@@ -45,6 +46,7 @@ Shader "Dot Invaders/Neon Line" {
                 float _PulseSpeed;
                 float _PulseDirection;
                 half _Chevrons;
+                half _PulseThin;
                 float _LineLength;
             CBUFFER_END
 
@@ -75,17 +77,21 @@ Shader "Dot Invaders/Neon Line" {
                 half body = 1.0 - smoothstep(1.0 - _EdgeSoftness, 1.0, across);
                 half core = 1.0 - smoothstep(0.0, 0.5, across);
 
-                // Pulses: a bright head with a fading tail, moving along the line. Chevrons bend
-                // each pulse so its tip (the centre) leads its edges.
+                // Pulses: a head with a fading tail, moving along the line. Chevrons bend each pulse so
+                // its tip (the centre) leads its edges and keep a crisp, squared head; route streaks
+                // stay a soft linear ramp confined to the line's centre (_PulseThin), so they never
+                // look like the round troop dots travelling on the same road.
                 float along = input.uv.x * _LineLength;
                 float spacing = max(0.01, _PulseSpacing);
                 float phase = along * _PulseDirection - _Time.y * _PulseSpeed + across * spacing * 0.35 * _Chevrons;
                 float cell = frac(phase / spacing);
                 half pulse = saturate((cell - (1.0 - _PulseLength)) / max(0.001, _PulseLength));
-                pulse *= pulse;
+                pulse = lerp(pulse, pulse * pulse, _Chevrons);
+                // Soften the head so a streak fades in rather than starting on a hard edge.
+                pulse *= saturate((1.0 - cell) * 12.0);
                 // Pulses fade in and out at the ends instead of popping.
                 half ends = smoothstep(0.0, 1.5, along) * smoothstep(0.0, 1.5, _LineLength - along);
-                pulse *= ends * _PulseStrength;
+                pulse *= ends * _PulseStrength * lerp(1.0, core, _PulseThin);
 
                 half3 color = _BaseColor.rgb * (1.0 + core * _CoreBoost) + _PulseColor.rgb * pulse;
                 half alpha = saturate(body * (_BaseColor.a + pulse));

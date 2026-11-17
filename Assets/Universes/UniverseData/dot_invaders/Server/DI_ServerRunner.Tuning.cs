@@ -27,6 +27,8 @@ namespace Universes.UniverseData.dot_invaders {
         internal float SendInterval => sendInterval;
         internal float SendIntervalMultiplier => sendIntervalMultiplier;
         internal float SpeedBaseBonus => speedBaseBonus;
+        internal float FactoryMultiplier => factoryMultiplier;
+        internal float FortressMultiplier => fortressMultiplier;
         internal float NpcAggression => npcAggression;
         internal int SecondsRemaining => secondsRemaining;
         internal bool MatchInProgress => matchInProgress;
@@ -102,6 +104,16 @@ namespace Universes.UniverseData.dot_invaders {
 
         internal void SetSpeedBaseBonus(float value) {
             speedBaseBonus = Mathf.Clamp(value, 0f, 5f);
+            BroadcastState();
+        }
+
+        internal void SetFactoryMultiplier(float value) {
+            factoryMultiplier = Mathf.Clamp(value, DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier);
+            BroadcastState();
+        }
+
+        internal void SetFortressMultiplier(float value) {
+            fortressMultiplier = Mathf.Clamp(value, DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier);
             BroadcastState();
         }
 

@@ -62,15 +62,18 @@ namespace Universes.UniverseData.dot_invaders.Tests {
 
         [Test]
         public void FactoriesDoubleTrainingAndFortressesDoubleDefence() {
-            Assert.That(DI_Rules.BaseProductionRate(1.25f, false), Is.EqualTo(1.25f));
-            Assert.That(DI_Rules.BaseProductionRate(1.25f, true), Is.EqualTo(2.5f));
-            Assert.That(DI_Rules.ArrivalDamage(1f, false), Is.EqualTo(1f));
-            Assert.That(DI_Rules.ArrivalDamage(1.5f, true), Is.EqualTo(0.75f));
-            Assert.That(DI_Rules.AttackersToDefeat(10, false), Is.EqualTo(10));
-            Assert.That(DI_Rules.AttackersToDefeat(10, true), Is.EqualTo(20));
-            Assert.That(DI_Rules.AttackersToDefeat(-3, true), Is.Zero);
-            Assert.That(DI_Rules.DefendersDefeatedBy(7, false), Is.EqualTo(7));
-            Assert.That(DI_Rules.DefendersDefeatedBy(7, true), Is.EqualTo(3));
+            const float x2 = 2f, x3 = 3f;
+            Assert.That(DI_Rules.BaseProductionRate(1.25f, false, x2), Is.EqualTo(1.25f));
+            Assert.That(DI_Rules.BaseProductionRate(1.25f, true, x2), Is.EqualTo(2.5f));
+            Assert.That(DI_Rules.BaseProductionRate(1.25f, true, x3), Is.EqualTo(3.75f));
+            Assert.That(DI_Rules.ArrivalDamage(1f, false, x2), Is.EqualTo(1f));
+            Assert.That(DI_Rules.ArrivalDamage(1.5f, true, x2), Is.EqualTo(0.75f));
+            Assert.That(DI_Rules.AttackersToDefeat(10, false, x2), Is.EqualTo(10));
+            Assert.That(DI_Rules.AttackersToDefeat(10, true, x2), Is.EqualTo(20));
+            Assert.That(DI_Rules.AttackersToDefeat(10, true, x3), Is.EqualTo(30));
+            Assert.That(DI_Rules.AttackersToDefeat(-3, true, x2), Is.Zero);
+            Assert.That(DI_Rules.DefendersDefeatedBy(7, false, x2), Is.EqualTo(7));
+            Assert.That(DI_Rules.DefendersDefeatedBy(7, true, x2), Is.EqualTo(3));
         }
 
         static DI_StateBroadcast Snapshot(int revision, int[] baseTeams, int[] dotIds = null, int[] dotTeams = null) {

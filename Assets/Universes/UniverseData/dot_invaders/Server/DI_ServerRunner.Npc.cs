@@ -83,7 +83,7 @@ namespace Universes.UniverseData.dot_invaders {
                             EstimateInterceptionLosses(route, npcTeam.teamId), intelligence);
                         // A fortress garrison takes more attackers per defender to empty.
                         int defense = DI_Rules.AttackersToDefeat(
-                            target.troops + growth + reinforcements - thirdParty, target.isFortress);
+                            target.troops + growth + reinforcements - thirdParty, target.isFortress, fortressMultiplier);
                         int committed = CountIncomingTroops(targetId, npcTeam.teamId);
                         // A cautious team insists on a wider margin than an aggressive one.
                         int margin = Mathf.RoundToInt(Mathf.Lerp(6f, 1f, aggression));
@@ -198,7 +198,7 @@ namespace Universes.UniverseData.dot_invaders {
 
         /// <summary>Defenders the hostile troops heading for this base can defeat; fortresses halve the threat.</summary>
         int HostileThreat(int baseId, int teamId) =>
-            DI_Rules.DefendersDefeatedBy(CountHostileIncomingTroops(baseId, teamId), bases[baseId].isFortress);
+            DI_Rules.DefendersDefeatedBy(CountHostileIncomingTroops(baseId, teamId), bases[baseId].isFortress, fortressMultiplier);
 
         int NpcReserveForBase(int baseId, int teamId) {
             BaseState state = bases[baseId];
@@ -263,7 +263,7 @@ namespace Universes.UniverseData.dot_invaders {
             float production = target.isSuperProducer
                 ? DI_Rules.SuperProductionOverInterval(target.uninterruptedSeconds, productiveTime,
                     superProductionSpeed, superSpeedupSeconds)
-                : productiveTime * DI_Rules.BaseProductionRate(productionSpeed, target.isFactory);
+                : productiveTime * DI_Rules.BaseProductionRate(productionSpeed, target.isFactory, factoryMultiplier);
             return Mathf.Min(Mathf.Max(0, Capacity(target) - target.troops), Mathf.CeilToInt(production));
         }
 
@@ -314,7 +314,7 @@ namespace Universes.UniverseData.dot_invaders {
             }
             // Past emptying the garrison the rival takes the base itself, which is a
             // different fight; never plan on more than the defenders actually there.
-            return Mathf.Min(DI_Rules.DefendersDefeatedBy(damage, target.isFortress), Mathf.Max(0, target.troops));
+            return Mathf.Min(DI_Rules.DefendersDefeatedBy(damage, target.isFortress, fortressMultiplier), Mathf.Max(0, target.troops));
         }
 
         /// <summary>
@@ -417,7 +417,7 @@ namespace Universes.UniverseData.dot_invaders {
                 int defense = DI_Rules.AttackersToDefeat(bases[targetId].troops +
                     EstimateDefenderGrowth(targetId, travelTime) +
                     ScaleForecast(EstimateDefenderReinforcements(targetId, travelTime), intelligence * 0.5f),
-                    bases[targetId].isFortress);
+                    bases[targetId].isFortress, fortressMultiplier);
                 if (CountIncomingTroops(targetId, teamId) >= Mathf.CeilToInt(defense * NpcAbandonThreshold))
                     continue;
 

@@ -47,6 +47,10 @@ namespace Universes.UniverseData.dot_invaders {
             home.actionTimer = 0f;
             home.productionDelay = 0f;
             home.uninterruptedSeconds = 0f;
+            // The home base counts as held, so a player who never captures still shows "Most held 1".
+            matchRecords.TryGetValue(clientId, out MatchRecord record);
+            record.mostBasesHeld = Mathf.Max(record.mostBasesHeld, 1);
+            matchRecords[clientId] = record;
             if (matchInProgress)
                 BroadcastState();
         }
