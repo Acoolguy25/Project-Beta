@@ -59,3 +59,4 @@ MonoBehaviour:
   waveXP: 6
   victoryXP: 120
   victoryGold: 60
+  voteInterval: 0.25

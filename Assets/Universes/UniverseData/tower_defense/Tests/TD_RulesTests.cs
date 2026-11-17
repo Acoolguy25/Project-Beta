@@ -58,6 +58,69 @@ namespace Universes.UniverseData.tower_defense.Tests {
             Assert.AreEqual(0, TD_Rules.EarlyStartBonus(0));
             Assert.AreEqual(0, TD_Rules.EarlyStartBonus(-3));
             Assert.AreEqual(10 * TD_Rules.EarlyStartBonusPerSecond, TD_Rules.EarlyStartBonus(10));
+            Assert.AreEqual(0, TD_Rules.EarlyStartBonus(1, 25), "the first build phase pays no early bonus");
+            Assert.AreEqual(TD_Rules.EarlyStartBonus(10), TD_Rules.EarlyStartBonus(2, 10));
+        }
+
+        [Test]
+        public void AnEnemyThatReachesTheBaseLeaksAndPaysNothing() {
+            float end = TD_Rules.LaneTrack.Length;
+            var leaker = new TD_SimEnemy { id = 1, kind = TD_EnemyKind.Apc, distance = end - 0.1f, health = 50f, maxHealth = 50f };
+            var walker = new TD_SimEnemy { id = 2, kind = TD_EnemyKind.Scout, distance = 0f, health = 50f, maxHealth = 50f };
+            var enemies = new System.Collections.Generic.List<TD_SimEnemy> { leaker, walker };
+            var leaked = new System.Collections.Generic.List<ushort>();
+            var killed = new System.Collections.Generic.List<ushort>();
+
+            int damage = TD_Battle.Advance(enemies, 1f, 0f, leaked);
+            Assert.AreEqual(TD_Rules.Enemy(TD_EnemyKind.Apc).leakDamage, damage);
+            CollectionAssert.AreEqual(new ushort[] { 1 }, leaked);
+            CollectionAssert.IsEmpty(killed, "a leak is not a kill");
+            CollectionAssert.AreEqual(new[] { walker }, enemies);
+            Assert.AreEqual(0, TD_Battle.Damage(enemies, leaker, 1000f, killed), "a leaked enemy can no longer be shot for its reward");
+            CollectionAssert.IsEmpty(killed);
+
+            Assert.AreEqual(0, TD_Battle.Damage(enemies, walker, 10f, killed), "a hit that does not destroy pays nothing");
+            Assert.AreEqual(TD_Rules.Enemy(TD_EnemyKind.Scout).reward, TD_Battle.Damage(enemies, walker, 100f, killed));
+            CollectionAssert.AreEqual(new ushort[] { 2 }, killed);
+            CollectionAssert.IsEmpty(enemies);
+            Assert.AreEqual(0, TD_Battle.Damage(enemies, walker, 100f, killed), "a kill pays once");
+        }
+
+        [Test]
+        public void SlowedEnemiesMoveAtTheTowersSlowFactor() {
+            Assert.AreEqual(0.55f, TD_Rules.SlowFactor(TD_TowerKind.Frost, 1), 1e-4f);
+            Assert.Less(TD_Rules.SlowFactor(TD_TowerKind.Frost, 3), TD_Rules.SlowFactor(TD_TowerKind.Frost, 2));
+            Assert.AreEqual(1f, TD_Rules.SlowFactor(TD_TowerKind.Gunner, 3));
+            Assert.AreEqual(45, TD_Rules.SlowPercent(TD_TowerKind.Frost, 1));
+            var slowed = new TD_SimEnemy { kind = TD_EnemyKind.Scout, slowUntil = 2f, slowFactor = TD_Rules.SlowFactor(TD_TowerKind.Frost, 1) };
+            var leaked = new System.Collections.Generic.List<ushort>();
+            TD_Battle.Advance(new System.Collections.Generic.List<TD_SimEnemy> { slowed }, 1f, 1f, leaked);
+            Assert.AreEqual(TD_Rules.Enemy(TD_EnemyKind.Scout).speed * 0.55f, slowed.distance, 1e-3f);
+            TD_Battle.Advance(new System.Collections.Generic.List<TD_SimEnemy> { slowed }, 1f, 3f, leaked);
+            Assert.AreEqual(TD_Rules.Enemy(TD_EnemyKind.Scout).speed * 1.55f, slowed.distance, 1e-3f, "the slow wears off");
+        }
+
+        [Test]
+        public void WavesGrowWithoutACliff() {
+            // From wave 3 on, the ground army's health never more than doubles from one wave to the next,
+            // and the head count never jumps by more than ten.
+            for (int w = 2; w <= TD_Rules.WaveCount; w++) {
+                float Ground(int wave) => TD_Rules.Wave(wave).Where(g => g.kind is TD_EnemyKind.Scout or TD_EnemyKind.Apc or TD_EnemyKind.Tank).Sum(g => g.count * TD_Rules.Enemy(g.kind).health) * TD_Rules.HealthScale(wave);
+                if (w >= 3) Assert.LessOrEqual(Ground(w) / Ground(w - 1), 2f, $"wave {w} is a cliff");
+                int Ground_count(int wave) => TD_Rules.Wave(wave).Where(g => g.kind is TD_EnemyKind.Scout or TD_EnemyKind.Apc or TD_EnemyKind.Tank).Sum(g => g.count);
+                Assert.LessOrEqual(Ground_count(w) - Ground_count(w - 1), 10, $"wave {w} adds too many enemies at once");
+            }
+        }
+
+        [Test]
+        public void CachedWaveCountsMatchTheWavePlan() {
+            for (int w = 1; w <= TD_Rules.WaveCount; w++) {
+                int[] counts = TD_Rules.WaveCounts(w);
+                foreach (TD_EnemyKind kind in System.Enum.GetValues(typeof(TD_EnemyKind)))
+                    Assert.AreEqual(TD_Rules.Wave(w).Where(g => g.kind == kind).Sum(g => g.count), counts[(int)kind], $"wave {w} {kind}");
+                Assert.AreSame(counts, TD_Rules.WaveCounts(w), "computed once");
+            }
+            Assert.AreEqual(0, TD_Rules.EnemyCount(0));
         }
 
         [Test]

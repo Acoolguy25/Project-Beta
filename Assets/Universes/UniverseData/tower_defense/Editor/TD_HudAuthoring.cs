@@ -117,11 +117,12 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     new TD_FxTuning.TowerFx { fire = Sound(0.6f, 0.7f, 0.5f, 0.12f, TD_Authoring.FireClip), impact = Sound(0.5f, 1f, 1f, 0.1f, Numbered(KitAudio, "hit", 5)), muzzleSparks = 0.6f },
                 },
                 enemies = new[] {
-                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 0.8f, shake = 0.12f, debrisScale = 0.7f }, // Scout
-                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 1.1f, shake = 0.2f, debrisScale = 1f },    // APC
-                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 0.8f, shake = 0.4f, debrisScale = 1.3f },   // Tank
-                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 1.3f, shake = 0.3f, debrisScale = 1.2f },  // Chopper
-                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 1.7f, shake = 0.9f, debrisScale = 2.2f },   // Heavy Tank (boss)
+                    // Blasts are sized to the vehicles (3.6-8.5 m), so a kill reads from the top-down camera.
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 1.5f, shake = 0.12f, debrisScale = 1f },   // Scout
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 2f, shake = 0.2f, debrisScale = 1.4f },    // APC
+                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 1.5f, shake = 0.4f, debrisScale = 2f },     // Tank
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 2.2f, shake = 0.3f, debrisScale = 1.6f },  // Chopper
+                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 2.6f, shake = 0.9f, debrisScale = 3f },     // Heavy Tank (boss)
                 },
             };
             Debug.Assert(tuning.towers.Length == TD_Rules.Towers.Length && tuning.enemies.Length == TD_Rules.Enemies.Length, "[TowerDefense] Fx tuning arrays must match the tower and enemy kinds.");
@@ -215,6 +216,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             RectTransform castle = Group(bar, "Base", false, 12f, TextAnchor.MiddleLeft, 200f);
             Image icon = TdIcon(castle, "base", 40f, Theme.textPrimary);
             hud.basePunch = icon.rectTransform;
+            hud.baseIconImage = icon;
             RectTransform baseText = Group(castle, "Text", true, 4f, TextAnchor.MiddleLeft);
             Size(baseText, 148f, -1f);
             RectTransform head = Group(baseText, "Head", false, 6f, TextAnchor.MiddleLeft);
@@ -282,24 +284,31 @@ namespace Universes.UniverseData.tower_defense.Editor {
         }
 
         // ---------------------------------------------------------------- boss bar
+        /// <summary>
+        /// A pill in the row right under the status bar, left of centre; the fast-forward pill steps to
+        /// its right while it shows (TD_Hud.ShowBoss).
+        /// </summary>
         static void BossBar(RectTransform root, TD_Hud hud) {
-            // The fader sits on a holder so the card's drop shadow (a sibling of the card) fades with it.
-            RectTransform holder = Pinned(root, "Boss", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 236f), new Vector2(460f, 66f));
+            const float width = 360f;
+            RectTransform holder = Pinned(root, "Boss", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 112f), new Vector2(width, 48f));
+            holder.pivot = new Vector2(1f, 1f);
+            holder.anchoredPosition = new Vector2(-hud.bossPillGap, StatusTop - 112f);
             holder.gameObject.AddComponent<CanvasGroup>();
             hud.bossPanel = holder.gameObject.AddComponent<TD_Fader>();
             RectTransform panel = Fill(holder, "Card");
-            Shadow(panel, 22f, 6f, 0.35f);
-            Rounded(panel, UIColorRole.Surface, CardRadius, raycast: false);
-            Column(panel.gameObject, 6f, Pad(18, 10), TextAnchor.MiddleCenter);
-            RectTransform head = Group(panel, "Head", false, 8f, TextAnchor.MiddleCenter);
-            TdIcon(head, "enemy_boss", 22f, Theme.danger);
-            hud.bossLabel = Label(head, "Name", "HEAVY TANK", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
-            hud.bossFill = Track(panel, "Health", 12f, Theme.danger);
+            Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
+            Row(panel.gameObject, 8f, Pad(14, 6), TextAnchor.MiddleLeft);
+            TdIcon(panel, "enemy_boss", 22f, Theme.danger);
+            hud.bossLabel = Label(panel, "Name", "HEAVY TANK", UIText.Strong, UIColorRole.TextPrimary);
+            hud.bossLabel.fontSize = 15f;
+            hud.bossFill = Track(panel, "Health", 10f, Theme.danger); // takes the rest of the row
         }
 
         // ---------------------------------------------------------------- shop
         static void Shop(RectTransform root, TD_Hud hud) {
             RectTransform dock = Pinned(root, "Shop", new Vector2(0.5f, 0f), new Vector2(0f, 18f), new Vector2(0f, CardSize.y + 14f));
+            hud.shopGroup = dock.gameObject.AddComponent<CanvasGroup>();
+            hud.shopGroup.blocksRaycasts = false;
             Row(dock.gameObject, Gap, Pad(0, 0), TextAnchor.LowerCenter);
             FitContent(dock.gameObject, true, false);
             hud.shopCards = new TD_ShopCard[TD_Rules.Towers.Length];
@@ -367,7 +376,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Stat(tags, "damage", TD_Rules.Damage(kind, 1).ToString("0"));
             Stat(tags, "range", TD_Rules.Range(kind, 1).ToString("0") + "m");
             Stat(tags, kind == TD_TowerKind.Frost ? "slow" : stats.splash > 0f ? "splash" : stats.hitsAir ? "air" : "rate",
-                kind == TD_TowerKind.Frost ? $"{stats.slow * 100f:0}%" : stats.splash > 0f ? $"{stats.splash:0}m" : stats.hitsAir ? "Air" : stats.fireRate.ToString("0.0"));
+                kind == TD_TowerKind.Frost ? $"{TD_Rules.SlowPercent(kind, 1)}%" : stats.splash > 0f ? $"{stats.splash:0}m" : stats.hitsAir ? "Air" : stats.fireRate.ToString("0.0"));
             return card;
         }
 
@@ -466,7 +475,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
         }
 
         static void WaveBanner(RectTransform root, TD_Hud hud) {
-            RectTransform banner = Pinned(root, "WaveBanner", new Vector2(0.5f, 0.5f), new Vector2(0f, 150f), new Vector2(900f, 150f));
+            // Low enough that the toast row under the status bar never touches it.
+            RectTransform banner = Pinned(root, "WaveBanner", new Vector2(0.5f, 0.5f), new Vector2(0f, 100f), new Vector2(900f, 150f));
             banner.gameObject.AddComponent<CanvasGroup>();
             hud.banner = banner.gameObject.AddComponent<TD_Fader>();
             hud.banner.popScale = 0.8f;

@@ -57,7 +57,7 @@ namespace Universes.UniverseData.tower_defense.Client {
                 stars[i].gameObject.SetActive(level > 0);
                 stars[i].color = i < level ? starOn : starOff;
             }
-            tagsLabel.text = Tags(kind);
+            tagsLabel.text = Tags(kind, Mathf.Max(1, level));
         }
 
         void Stats(TD_TowerKind kind, int level, bool showNext) {
@@ -75,12 +75,12 @@ namespace Universes.UniverseData.tower_defense.Client {
             actionBack.color = color;
         }
 
-        /// <summary>Short capability list, e.g. "Hits air  ·  Splash".</summary>
-        public static string Tags(TD_TowerKind kind) {
+        /// <summary>Short capability list at <paramref name="level"/>, e.g. "Hits air  ·  Slows 45%".</summary>
+        public static string Tags(TD_TowerKind kind, int level) {
             var t = TD_Rules.Tower(kind);
             var parts = new System.Collections.Generic.List<string> { t.hitsAir ? "Hits air" : "Ground only" };
             if (t.splash > 0f) parts.Add("Splash");
-            if (t.slow > 0f) parts.Add($"Slows {Mathf.RoundToInt(t.slow * 100f)}%");
+            if (t.slow > 0f) parts.Add($"Slows {TD_Rules.SlowPercent(kind, level)}%"); // the server slows by TD_Rules.SlowFactor too
             if (kind == TD_TowerKind.Sniper) parts.Add("Pierces armour");
             return string.Join("  ·  ", parts);
         }

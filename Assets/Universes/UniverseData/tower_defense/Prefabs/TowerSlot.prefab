@@ -45,7 +45,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d0db3631ae66601fa15a44ba9a2cc37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Rounds::RyanAssets.Rounds.Billboard
+  facing: 0
   yawOnly: 1
+  maxScreenHeight: 0
+  referenceHeight: 1
 --- !u!1 &1135893024787247427
 GameObject:
   m_ObjectHideFlags: 0
@@ -439,7 +442,7 @@ LineRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 4b15b95876d045eb592f6c2831ad3905, type: 2}
+  - {fileID: 2100000, guid: ba6a54575a567fe7996824df263297bd, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

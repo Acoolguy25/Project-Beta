@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using RyanAssets.Authoring;
@@ -31,18 +32,28 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         /// <summary>
         /// Turret model per level (index 0 = level 1) and plinth-relative size per tower, index-aligned
-        /// with <see cref="TD_TowerKind"/>. An upgrade swaps to the next model, so level 3 reads as a
-        /// different, heavier gun; repeat a name to keep the model and only repaint and grow it.
+        /// with <see cref="TD_TowerKind"/>. Every upgrade swaps to a different, heavier model (and adds a
+        /// trim band, see <see cref="TrimBands"/>), so each level reads at a glance.
         /// </summary>
         static readonly (string[] models, float size)[] TowerModels = {
-            (new[] { "Turret_01_Prefeb", "Turret_01_Prefeb", "Turret_02_Prefeb" }, 4.2f),
-            (new[] { "Turret_05_Prefeb", "Turret_06_Prefeb", "Turret_12_Prefeb" }, 4.8f),
-            (new[] { "Turret_08_Prefeb", "Turret_08_Prefeb", "Turret_07_Prefeb" }, 4.4f),
-            (new[] { "Turret_10_Prefeb", "Turret_10_Prefeb", "Turret_11_Prefeb" }, 5.2f),
+            (new[] { "Turret_09_Prefeb", "Turret_08_Prefeb", "Turret_07_Prefeb" }, 4.4f), // Gunner: rifle, gatling, armoured gatling
+            (new[] { "Turret_06_Prefeb", "Turret_01_Prefeb", "Turret_12_Prefeb" }, 4.8f), // Cannon: armoured gun, twin pods, triple gun
+            (new[] { "Turret_10_Prefeb", "Turret_13_Prefeb", "Turret_11_Prefeb" }, 4.6f), // Frost: emitter, twin prong, cryo tank
+            (new[] { "Turret_04_Prefeb", "Turret_02_Prefeb", "Turret_03_Prefeb" }, 5.2f), // Sniper: long gun, sensor gun, heavy battery
         };
 
         /// <summary>How far each level's paint leans toward the tower's colour (index 0 = level 1; 0 = the model's own colours).</summary>
-        static readonly float[] LevelPaint = { 0f, 0.25f, 0.45f };
+        static readonly float[] LevelPaint = { 0f, 0.38f, 0.6f };
+        /// <summary>Frost towers keep their textures but are always cooled toward frost blue, from level 1.</summary>
+        const float FrostBasePaint = 0.3f;
+        /// <summary>Faint glow of a frost tower's paint (an HDR multiple of its colour).</summary>
+        const float FrostGlow = 0.12f;
+        /// <summary>Glowing trim bands in the tower's colour around the turret's base, per level (index 0 = level 1): the colour says which tower, the count which level.</summary>
+        static readonly int[] TrimBands = { 1, 2, 3 };
+        /// <summary>Extra fit size for models whose long barrel makes them read small at the tower's size.</summary>
+        static readonly Dictionary<string, float> ModelFit = new() { ["Turret_04_Prefeb"] = 1.4f };
+        /// <summary>Gap in metres between a turret's top and its level stars.</summary>
+        const float BadgeGap = 1f;
         /// <summary>Uniform tower scale per level (index 0 = level 1).</summary>
         static readonly float[] LevelScale = { 1f, 1.12f, 1.24f };
 
@@ -120,9 +131,11 @@ namespace Universes.UniverseData.tower_defense.Editor {
         }
 
         /// <summary>Unlit (optionally transparent) URP material: health bars, glows, icons on quads.</summary>
-        internal static Material Unlit(string name, Color color, Texture texture = null, bool transparent = false, bool additive = false) {
+        /// <paramref name="vertexColors"/>: use the Particles/Unlit shader, which multiplies in vertex colours
+        /// (URP/Unlit ignores them), so a LineRenderer's start/end colour tints it.
+        internal static Material Unlit(string name, Color color, Texture texture = null, bool transparent = false, bool additive = false, bool vertexColors = false) {
             string path = $"{Root}/Materials/{name}.mat";
-            var shader = Shader.Find(additive ? "Universal Render Pipeline/Particles/Unlit" : "Universal Render Pipeline/Unlit");
+            var shader = Shader.Find(additive || vertexColors ? "Universal Render Pipeline/Particles/Unlit" : "Universal Render Pipeline/Unlit");
             var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (mat == null) {
                 mat = new Material(shader);
@@ -145,7 +158,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         }
 
         internal sealed class Materials {
-            public Material barBack, barFill, frost, blob, star, marker, ring, tracer, projectile, ghost;
+            public Material barBack, barFill, frost, blob, star, marker, ring, rangeRing, bossRing, tracer, projectile, ghost;
             public Material[] trims;
         }
 
@@ -158,6 +171,9 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 star = Unlit("Star", new Color(1f, 0.82f, 0.25f), TD_HudAuthoring.IconTexture("star"), transparent: true),
                 marker = Unlit("BuildMarker", new Color(1f, 1f, 1f, 0.9f), TD_HudAuthoring.IconTexture("build"), transparent: true),
                 ring = Unlit("RangeRing", Color.white, additive: true),
+                // Range previews blend instead of adding, so the red "cannot afford" ring stays red on grass.
+                rangeRing = Unlit("RangePreview", Color.white, transparent: true, vertexColors: true),
+                bossRing = Unlit("BossRing", new Color(0.95f, 0.12f, 0.1f, 0.85f), transparent: true),
                 tracer = Unlit("Tracer", Color.white, additive: true),
                 projectile = Kit.Mat("Projectile", Color.white, emission: 2f),
                 ghost = Unlit("Ghost", new Color(1f, 1f, 1f, 0.45f), transparent: true),
@@ -186,15 +202,6 @@ namespace Universes.UniverseData.tower_defense.Editor {
             go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             go.SetActive(false);
             return ring;
-        }
-
-        static TextMeshPro Label(Transform parent, Vector3 position, string text, float size, Color color) {
-            var label = WorldText("Label", parent, position, text, size, color, new Vector2(10f, 1.4f));
-            label.fontStyle = FontStyles.Bold;
-            label.outlineWidth = 0.25f;
-            label.outlineColor = new Color32(10, 12, 18, 220);
-            label.gameObject.AddComponent<Billboard>();
-            return label;
         }
 
         /// <summary>A flat ring of <paramref name="radius"/> metres in the parent's space (pad glows).</summary>
@@ -228,7 +235,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             marker.AddComponent<Billboard>();
             IconQuad("Icon", marker.transform, Vector3.zero, 1.6f, m.marker);
             view.marker = marker.transform;
-            view.rangeRing = Ring(root.transform, m.ring);
+            view.rangeRing = Ring(root.transform, m.rangeRing);
             return Kit.Save(root, "", "TowerSlot");
         }
 
@@ -245,13 +252,17 @@ namespace Universes.UniverseData.tower_defense.Editor {
             view.head = head.transform;
             view.tiers = new GameObject[TD_Rules.MaxLevel];
             view.levelScale = LevelScale.ToArray();
+            view.badgeHeight = new float[TD_Rules.MaxLevel];
             for (int level = 1; level <= TD_Rules.MaxLevel; level++) {
                 var tier = Empty($"Tier{level}", head.transform);
                 view.tiers[level - 1] = tier;
                 string model = models[Mathf.Min(level, models.Length) - 1];
                 var turret = TurretModel(kind, model, tier.transform, size, m);
                 if (turret == null) continue;
-                if (level > 1) Paint(turret, kind, level);
+                // Stars sit just above this level's own model, not at a height shared by all levels.
+                view.badgeHeight[level - 1] = RendererBounds(turret).max.y - root.transform.position.y + BadgeGap;
+                Paint(turret, kind, level);
+                Bands(turret, tier.transform, kind, level, m);
                 if (level == 1) {
                     var b = RendererBounds(turret);
                     var box = root.AddComponent<BoxCollider>();
@@ -262,39 +273,66 @@ namespace Universes.UniverseData.tower_defense.Editor {
             }
             view.muzzle = Empty("Muzzle", head.transform, new Vector3(0f, size * 0.45f, size * 0.55f)).transform;
 
-            var badge = Empty("Badge", root.transform, new Vector3(0f, size + 1.6f, 0f));
-            badge.AddComponent<Billboard>();
+            // Level stars only (the builder's name is on the info card): flat to the camera plane and
+            // never taller than a few percent of the screen; the client hides them near the camera and
+            // the screen's top and side edges.
+            var badge = Empty("Badge", root.transform, new Vector3(0f, view.badgeHeight[0] > 0f ? view.badgeHeight[0] : size + 1.6f, 0f));
+            var billboard = badge.AddComponent<Billboard>();
+            billboard.facing = Billboard.Facing.CameraPlane;
+            billboard.yawOnly = false;
+            billboard.maxScreenHeight = 0.035f;
+            billboard.referenceHeight = 0.8f;
+            view.badge = badge.transform;
             view.levelStars = new GameObject[TD_Rules.MaxLevel];
             for (int i = 0; i < TD_Rules.MaxLevel; i++)
                 view.levelStars[i] = IconQuad($"Star{i}", badge.transform, new Vector3((i - (TD_Rules.MaxLevel - 1) * 0.5f) * 0.85f, 0f, 0f), 0.8f, m.star);
-            view.label = Label(badge.transform, new Vector3(0f, 0.8f, 0f), "", 2.4f, Color.white);
 
-            view.rangeRing = Ring(root.transform, m.ring);
-            view.nextRangeRing = Ring(root.transform, m.ring, "NextRangeRing");
+            view.rangeRing = Ring(root.transform, m.rangeRing);
+            view.nextRangeRing = Ring(root.transform, m.rangeRing, "NextRangeRing");
             view.nextRangeRing.widthMultiplier = 0.18f;
             return Kit.Save(root, "Towers", stats.name);
         }
 
-        /// <summary>The turret model for one level; frost turrets are cast in the frost trim.</summary>
+        /// <summary>The turret model for one level, with the pack's own textured materials.</summary>
         static GameObject TurretModel(TD_TowerKind kind, string model, Transform parent, float size, Materials m) {
-            var turret = Model(Turrets + model + ".prefab", parent, size);
-            if (turret == null) {
-                Debug.LogWarning($"[TowerDefense] Turret model {model} missing; {TD_Rules.Tower(kind).name} has no model at this level.");
-                return null;
-            }
-            if (kind == TD_TowerKind.Frost)
-                foreach (var r in turret.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => m.trims[(int)kind]).ToArray();
+            var turret = Model(Turrets + model + ".prefab", parent, size * (ModelFit.TryGetValue(model, out float fit) ? fit : 1f));
+            if (turret == null) Debug.LogWarning($"[TowerDefense] Turret model {model} missing; {TD_Rules.Tower(kind).name} has no model at this level.");
             return turret;
         }
 
-        /// <summary>Repaints an upgraded turret: each material's colour leans toward the tower's colour (copies in Materials/Tiers).</summary>
+        /// <summary>
+        /// Repaints a turret for its level: each material's colour leans toward the tower's colour (copies
+        /// in Materials/Tiers; textures kept). Frost leans blue from level 1 and glows faintly.
+        /// </summary>
         static void Paint(GameObject turret, TD_TowerKind kind, int level) {
-            Color paint = Color.Lerp(Color.white, TD_Palette.Tower(kind), LevelPaint[level - 1]);
+            float amount = LevelPaint[level - 1];
+            float glow = 0f;
+            if (kind == TD_TowerKind.Frost) {
+                amount = Mathf.Max(amount, FrostBasePaint);
+                glow = FrostGlow;
+            }
+            if (amount <= 0f) return;
+            Color paint = Color.Lerp(Color.white, TD_Palette.Tower(kind), amount);
+            Color emission = TD_Palette.Tower(kind) * glow;
             foreach (var r in turret.GetComponentsInChildren<Renderer>())
-                r.sharedMaterials = r.sharedMaterials.Select(source => source == null ? null : Painted(source, $"{kind}_L{level}_{source.name}", paint)).ToArray();
+                r.sharedMaterials = r.sharedMaterials.Select(source => source == null ? null : Painted(source, $"{kind}_L{level}_{source.name}", paint, emission)).ToArray();
         }
 
-        static Material Painted(Material source, string name, Color paint) {
+        /// <summary>Glowing bands in the tower's colour stacked around the turret's base: one at level 2, two at level 3.</summary>
+        static void Bands(GameObject turret, Transform tier, TD_TowerKind kind, int level, Materials m) {
+            int count = TrimBands[level - 1];
+            if (count <= 0) return;
+            var b = RendererBounds(turret);
+            float radius = Mathf.Max(b.extents.x, b.extents.z) * 0.62f;
+            float bottom = b.min.y - tier.position.y;
+            for (int i = 0; i < count; i++) {
+                var band = FlatRing($"TrimBand{i + 1}", tier, radius, bottom + 0.3f + i * 0.45f, m.trims[(int)kind], 40);
+                band.widthMultiplier = 0.3f;
+                band.alignment = LineAlignment.View;
+            }
+        }
+
+        static Material Painted(Material source, string name, Color paint, Color emission = default) {
             string path = $"{Root}/Materials/Tiers/{name}.mat";
             var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (mat == null) {
@@ -309,6 +347,11 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     mat.SetColor(property, source.GetColor(property) * paint);
                     break;
                 }
+            if (emission.maxColorComponent > 0f && mat.HasProperty("_EmissionColor")) {
+                mat.EnableKeyword("_EMISSION");
+                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                mat.SetColor("_EmissionColor", emission);
+            }
             EditorUtility.SetDirty(mat);
             return mat;
         }
@@ -344,13 +387,25 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
             float barWidth = Mathf.Clamp(size * 0.5f, 2.2f, 4f);
             var bar = Empty("HealthBar", root.transform, new Vector3(0f, size * 0.7f + 1.2f, 0f));
-            bar.AddComponent<Billboard>();
+            // Flat to the camera plane (readable from the steep build camera too) and never a wide
+            // stripe across the screen when an enemy passes right by the camera.
+            var barFacing = bar.AddComponent<Billboard>();
+            barFacing.facing = Billboard.Facing.CameraPlane;
+            barFacing.yawOnly = false;
+            barFacing.maxScreenHeight = 0.02f;
+            barFacing.referenceHeight = 0.42f;
             NoShadows(Cube("Back", bar.transform, Vector3.zero, new Vector3(barWidth + 0.16f, 0.42f, 0.02f), m.barBack, false));
             var pivot = Empty("Pivot", bar.transform, new Vector3(-barWidth * 0.5f, 0f, -0.03f));
             var fill = Cube("Fill", pivot.transform, new Vector3(barWidth * 0.5f, 0f, 0f), new Vector3(barWidth, 0.26f, 0.02f), m.barFill, false);
             NoShadows(fill);
             view.healthFill = pivot.transform;
             view.healthRenderer = fill.GetComponent<Renderer>();
+
+            if (TD_Rules.IsBoss(kind)) {
+                // Boss marker: a red ring on the ground around the heavy tank, readable from above.
+                var ring = FlatRing("BossRing", root.transform, size * 0.62f, 0.2f, m.bossRing, 64);
+                ring.widthMultiplier = 0.45f;
+            }
 
             var ice = Primitive(PrimitiveType.Sphere, "FrostShell", root.transform, new Vector3(0f, size * 0.25f, 0f), Vector3.one * size * 0.9f, m.frost, false);
             NoShadows(ice);

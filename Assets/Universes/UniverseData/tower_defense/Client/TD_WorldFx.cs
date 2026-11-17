@@ -12,7 +12,7 @@ namespace Universes.UniverseData.tower_defense.Client {
     /// </summary>
     public sealed class TD_WorldFx {
         struct Flight {
-            public Transform projectile;
+            public Projectile projectile;
             public Vector3 from;
             public Transform target;
             public Vector3 lastTarget;
@@ -25,10 +25,13 @@ namespace Universes.UniverseData.tower_defense.Client {
             public float start, until, width;
         }
 
-        /// <summary>Shot shapes per tower kind: flight time and arc for shells, width and life for lines.</summary>
-        const float CannonFlight = 0.45f, CannonArc = 3.5f, CannonShellScale = 0.7f;
-        const float FrostFlight = 0.3f, FrostArc = 0.6f, FrostBoltScale = 0.5f;
-        const float SniperBeamWidth = 0.22f, SniperBeamSeconds = 0.22f, TracerWidth = 0.09f, TracerSeconds = 0.06f;
+        /// <summary>A pooled shell or bolt with its renderers looked up once, not per shot.</summary>
+        sealed class Projectile {
+            public Transform transform;
+            public Renderer[] renderers;
+            public TrailRenderer[] trails;
+        }
+
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
@@ -36,7 +39,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         readonly TD_FxTuning tuning;
         readonly Transform parent;
         readonly Stack<LineRenderer> linePool = new();
-        readonly Stack<Transform> projectilePool = new();
+        readonly Stack<Projectile> projectilePool = new();
         readonly List<Line> lines = new();
         readonly List<Flight> flights = new();
         readonly MaterialPropertyBlock block = new();
@@ -58,17 +61,17 @@ namespace Universes.UniverseData.tower_defense.Client {
             GameSfx.PlayAt(fx.fire, muzzle);
             switch (kind) {
                 case TD_TowerKind.Cannon:
-                    Launch(kind, muzzle, target, aim, CannonFlight, CannonArc, CannonShellScale);
+                    Launch(kind, muzzle, target, aim, tuning.cannonFlight, tuning.cannonArc, tuning.cannonShellScale);
                     break;
                 case TD_TowerKind.Frost:
-                    Launch(kind, muzzle, target, aim, FrostFlight, FrostArc, FrostBoltScale);
+                    Launch(kind, muzzle, target, aim, tuning.frostFlight, tuning.frostArc, tuning.frostBoltScale);
                     break;
                 case TD_TowerKind.Sniper:
-                    Trace(muzzle, aim, color, SniperBeamWidth, SniperBeamSeconds);
+                    Trace(muzzle, aim, color, tuning.sniperBeamWidth, tuning.sniperBeamSeconds);
                     Land(kind, aim);
                     break;
                 default:
-                    Trace(muzzle, aim, color, TracerWidth, TracerSeconds);
+                    Trace(muzzle, aim, color, tuning.tracerWidth, tuning.tracerSeconds);
                     break;
             }
         }
@@ -97,7 +100,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             GameFx.Play(fx.largeExplosion ? FxKind.ExplosionLarge : FxKind.ExplosionSmall, position, fx.explosionScale);
             if (fx.debrisScale > 0f) {
                 GameFx.Play(FxKind.Sparks, position, tuning.debrisTint, fx.debrisScale);
-                GameFx.Play(FxKind.Smoke, position, fx.debrisScale);
+                GameFx.Play(FxKind.Smoke, position, tuning.smokeTint, fx.debrisScale);
             }
             GameSfx.PlayAt(fx.largeExplosion ? SfxCue.ExplosionLarge : SfxCue.Explosion, position);
             if (fx.shake > 0f) CameraShake.Explosion(position, tuning.shakeRadius, fx.shake);
@@ -117,22 +120,21 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         // ---------------------------------------------------------------- towers
         public void Built(Transform tower, Vector3 pad, TD_TowerKind kind) {
-            GameFx.Play(FxKind.DustPuff, pad, tuning.buildDustScale);
-            // Lifted a little so the pad's own top doesn't swallow the flat ring.
-            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * 0.25f, TD_Palette.Tower(kind), tuning.buildDustScale);
+            GameFx.Play(FxKind.DustPuff, pad, tuning.dustTint, tuning.buildDustScale);
+            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * tuning.ringLift, TD_Palette.Tower(kind), tuning.buildDustScale);
             GameSfx.PlayAt(SfxCue.Build, pad);
             if (tower != null) Punch.Pop(tower);
         }
 
         public void Upgraded(Transform tower, Vector3 pad) {
-            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * 0.25f, tuning.levelUpColor, tuning.levelUpScale);
-            GameFx.Play(FxKind.Sparks, pad + Vector3.up * 2f, tuning.levelUpColor, tuning.levelUpScale);
+            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * tuning.ringLift, tuning.levelUpColor, tuning.levelUpScale);
+            GameFx.Play(FxKind.Sparks, pad + Vector3.up * tuning.levelUpSparkHeight, tuning.levelUpColor, tuning.levelUpScale);
             GameSfx.PlayAt(SfxCue.LevelUp, pad);
-            if (tower != null) Punch.Squash(tower, -0.2f);
+            if (tower != null) Punch.Squash(tower, tuning.levelUpSquash);
         }
 
         public void Sold(Vector3 pad, int refund) {
-            GameFx.Play(FxKind.DustPuff, pad, tuning.buildDustScale);
+            GameFx.Play(FxKind.DustPuff, pad, tuning.dustTint, tuning.buildDustScale);
             GameFx.Play(FxKind.CoinBurst, pad + Vector3.up, tuning.sellBurstScale);
             GameSfx.PlayAt(SfxCue.Purchase, pad);
             FloatingText.Money(pad + Vector3.up * tuning.rewardPopupHeight, refund, tuning.sellPopupSize);
@@ -152,16 +154,16 @@ namespace Universes.UniverseData.tower_defense.Client {
             }
             for (int i = flights.Count - 1; i >= 0; i--) {
                 var f = flights[i];
-                if (f.target != null && f.target.gameObject.activeInHierarchy) f.lastTarget = f.target.position + Vector3.up;
+                if (f.target != null && f.target.gameObject.activeInHierarchy) f.lastTarget = f.target.position + Vector3.up * tuning.aimHeight;
                 float t = Mathf.Clamp01((now - f.start) / f.duration);
                 Vector3 p = Vector3.Lerp(f.from, f.lastTarget, t) + Vector3.up * (f.arc * 4f * t * (1f - t));
                 if (t < 1f) {
-                    f.projectile.position = p;
+                    f.projectile.transform.position = p;
                     flights[i] = f;
                     continue;
                 }
                 Land(f.kind, f.lastTarget);
-                f.projectile.gameObject.SetActive(false);
+                f.projectile.transform.gameObject.SetActive(false);
                 projectilePool.Push(f.projectile);
                 flights.RemoveAt(i);
             }
@@ -174,7 +176,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             line.SetPosition(0, from);
             line.SetPosition(1, to);
             line.startColor = color;
-            line.endColor = Color.Lerp(color, Color.white, 0.6f);
+            line.endColor = Color.Lerp(color, Color.white, tuning.tracerTipWhiten);
             line.widthMultiplier = width;
             lines.Add(new Line { line = line, start = Time.time, until = Time.time + seconds, width = width });
         }
@@ -184,23 +186,33 @@ namespace Universes.UniverseData.tower_defense.Client {
                 Land(kind, aim);
                 return;
             }
-            var projectile = projectilePool.Count > 0 ? projectilePool.Pop() : Object.Instantiate(set.projectile, parent).transform;
-            projectile.gameObject.SetActive(true);
-            projectile.position = from;
-            projectile.localScale = Vector3.one * scale;
+            var projectile = projectilePool.Count > 0 ? projectilePool.Pop() : NewProjectile();
+            var root = projectile.transform;
+            root.gameObject.SetActive(true);
+            root.position = from;
+            root.localScale = Vector3.one * scale;
             Color color = TD_Palette.Tower(kind);
-            foreach (var r in projectile.GetComponentsInChildren<Renderer>()) {
+            foreach (var r in projectile.renderers) {
                 r.GetPropertyBlock(block);
                 block.SetColor(BaseColorId, color);
-                block.SetColor(EmissionColorId, color * 2f);
+                block.SetColor(EmissionColorId, color * tuning.projectileGlow);
                 r.SetPropertyBlock(block);
-                if (r is TrailRenderer trail) {
-                    trail.Clear();
-                    trail.startColor = color;
-                    trail.endColor = new Color(color.r, color.g, color.b, 0f);
-                }
+            }
+            foreach (var trail in projectile.trails) {
+                trail.Clear();
+                trail.startColor = color;
+                trail.endColor = new Color(color.r, color.g, color.b, 0f);
             }
             flights.Add(new Flight { projectile = projectile, from = from, target = target, lastTarget = aim, start = Time.time, duration = seconds, arc = arc, kind = kind });
+        }
+
+        Projectile NewProjectile() {
+            var go = Object.Instantiate(set.projectile, parent);
+            return new Projectile {
+                transform = go.transform,
+                renderers = go.GetComponentsInChildren<Renderer>(true),
+                trails = go.GetComponentsInChildren<TrailRenderer>(true),
+            };
         }
     }
 }

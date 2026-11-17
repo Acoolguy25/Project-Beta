@@ -1,10 +1,9 @@
-using TMPro;
 using UnityEngine;
 
 namespace Universes.UniverseData.tower_defense {
     /// <summary>
     /// Tower presentation: a head that turns to its target, a muzzle for shots, one model per level
-    /// (each upgrade swaps the model, repaints it and grows the tower), level stars, an owner label,
+    /// (each upgrade swaps the model, repaints it and grows the tower), a level-star badge
     /// and range rings (current and next level) shown while a player looks at the tower.
     /// </summary>
     public sealed class TD_TowerView : MonoBehaviour {
@@ -13,7 +12,10 @@ namespace Universes.UniverseData.tower_defense {
         public GameObject[] tiers;
         [Tooltip("Uniform scale of the whole tower per level (index 0 = level 1).")]
         public float[] levelScale = { 1f, 1.12f, 1.24f };
-        public TMP_Text label;
+        [Tooltip("The level-star badge above the tower (a camera-plane Billboard); the client hides it near the camera and the screen edges.")]
+        public Transform badge;
+        [Tooltip("Local height of the badge per level (index 0 = level 1), just above that level's model.")]
+        public float[] badgeHeight;
         [Tooltip("One star per level, lit from the left.")]
         public GameObject[] levelStars;
         public LineRenderer rangeRing;
@@ -34,6 +36,11 @@ namespace Universes.UniverseData.tower_defense {
                     if (tiers[i] != null) tiers[i].SetActive(i == Mathf.Min(level, tiers.Length) - 1);
             if (levelStars != null)
                 for (int i = 0; i < levelStars.Length; i++) levelStars[i].SetActive(i < level);
+            if (badge != null && badgeHeight != null && badgeHeight.Length > 0) {
+                Vector3 p = badge.localPosition;
+                p.y = badgeHeight[Mathf.Clamp(level - 1, 0, badgeHeight.Length - 1)];
+                badge.localPosition = p;
+            }
             float scale = levelScale != null && levelScale.Length > 0 ? levelScale[Mathf.Clamp(level - 1, 0, levelScale.Length - 1)] : 1f;
             transform.localScale = Vector3.one * scale;
         }

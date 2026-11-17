@@ -20,6 +20,10 @@ namespace Universes.UniverseData.tower_defense.Client {
         public Image waveProgress, baseFill;
         public TMP_Text baseLabel;
         public RectTransform basePunch;
+        [Tooltip("The base icon; pulses red while the base is critical (the standing warning; the screen only flashes on a leak).")]
+        public Image baseIconImage;
+        [Min(0.1f)] public float criticalPulsesPerSecond = 1.4f;
+        [Range(0f, 0.5f)] public float criticalPulseScale = 0.16f;
 
         [Header("Next wave")]
         public TD_Fader nextWave;
@@ -35,11 +39,15 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         [Header("Boss")]
         public TD_Fader bossPanel;
+        [Tooltip("Gap between the boss bar (left of centre) and the fast-forward pill beside it.")]
+        public float bossPillGap = 8f;
         public TMP_Text bossLabel;
         [Tooltip("Sized by its right anchor like the other bars.")]
         public Image bossFill;
 
         [Header("Shop")]
+        [Tooltip("The shop dock; hidden while the result card shows.")]
+        public CanvasGroup shopGroup;
         public TD_ShopCard[] shopCards;
         [Tooltip("Index-aligned with TD_TowerKind; also used by the info card.")]
         public Sprite[] towerPortraits;
@@ -66,12 +74,15 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Header("Timing")]
         [Min(0.1f)] public float bannerSeconds = 2.2f;
 
-        [Header("Keys (labels only; the controller reads the keys)")]
-        public string readyKey = "R", fastForwardKey = "G";
+        // Key labels come from TD_ClientController (SetKeys), which reads the keys.
+        string readyKey = "R", fastForwardKey = "G", interactKey = "E";
 
-        int shownCash = -1, shownBase = -1;
+        int shownCash = -1, shownBase = -1, shownBosses = -1, shownChipWave = -1;
         float toastUntil, bannerUntil, cashKick, baseKick;
+        bool baseCritical, speedBesideBoss;
+        Color baseIconColor;
         UITheme theme;
+        RectTransform speedRect;
 
         void Awake() {
             theme = UITheme.Active;
@@ -91,6 +102,15 @@ namespace Universes.UniverseData.tower_defense.Client {
             cashLabel.text = "$0";
             baseLabel.text = "";
             resultRecord.text = "";
+            if (baseIconImage != null) baseIconColor = baseIconImage.color;
+            speedRect = speedPill.transform as RectTransform;
+        }
+
+        /// <summary>Key names shown in the pills and prompts, as the controller has them bound.</summary>
+        public void SetKeys(string ready, string fastForward, string interact) {
+            readyKey = ready;
+            fastForwardKey = fastForward;
+            interactKey = interact;
         }
 
         void Update() {
@@ -99,6 +119,24 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (banner.Visible && Time.unscaledTime > bannerUntil) banner.Set(false);
             cashKick = Kick(cashPunch, cashKick, dt);
             baseKick = Kick(basePunch, baseKick, dt);
+            PulseBaseIcon();
+        }
+
+        /// <summary>While the base is critical its icon throbs red; otherwise it keeps its authored colour.</summary>
+        void PulseBaseIcon() {
+            if (baseIconImage == null || !baseCritical) return;
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * criticalPulsesPerSecond * Mathf.PI * 2f);
+            baseIconImage.color = Color.Lerp(theme.danger, Color.white, pulse * 0.35f);
+            if (baseKick <= 0f && basePunch != null) basePunch.localScale = Vector3.one * (1f + criticalPulseScale * pulse);
+        }
+
+        void SetBaseCritical(bool critical) {
+            if (critical == baseCritical) return;
+            baseCritical = critical;
+            if (!critical && baseIconImage != null) {
+                baseIconImage.color = baseIconColor;
+                if (basePunch != null) basePunch.localScale = Vector3.one;
+            }
         }
 
         static float Kick(RectTransform target, float amount, float dt) {
@@ -120,6 +158,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             Bar(baseFill, baseFraction);
             baseFill.color = TD_Palette.Health(baseFraction);
             baseLabel.text = $"{Mathf.Max(0, state.baseHealth)}<size=70%><color=#B4BCC8> / {TD_Rules.BaseHealth}</color></size>";
+            SetBaseCritical(state.baseHealth > 0 && state.baseHealth <= TD_Rules.BaseCriticalHealth && state.phase is TD_Phase.Build or TD_Phase.Wave);
 
             waveTitle.text = state.phase == TD_Phase.Waiting ? "TOWER DEFENSE" : $"WAVE {state.wave}<size=65%><color=#B4BCC8> / {TD_Rules.WaveCount}</color></size>";
             int total = Mathf.Max(1, TD_Rules.EnemyCount(state.wave));
@@ -142,7 +181,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             ShowNextWave(state, ready);
             ShowSpeed(state, fastVote);
             ShowResult(state);
-            if (state.phase != TD_Phase.Wave) bossPanel.Set(false);
+            if (state.phase != TD_Phase.Wave) ShowBoss(0, 0f);
         }
 
         void Status(string text, Sprite icon, float progress) {
@@ -160,14 +199,16 @@ namespace Universes.UniverseData.tower_defense.Client {
             bool show = state.phase == TD_Phase.Build;
             nextWave.Set(show);
             if (!show) return;
-            var counts = new int[TD_Rules.Enemies.Length];
-            foreach (var group in TD_Rules.Wave(state.wave)) counts[(int)group.kind] += group.count;
-            for (int i = 0; i < enemyChips.Length && i < counts.Length; i++) {
-                enemyChips[i].root.SetActive(counts[i] > 0);
-                enemyChips[i].count.text = $"×{counts[i]}";
+            if (state.wave != shownChipWave) {
+                shownChipWave = state.wave;
+                int[] counts = TD_Rules.WaveCounts(state.wave);
+                for (int i = 0; i < enemyChips.Length && i < counts.Length; i++) {
+                    enemyChips[i].root.SetActive(counts[i] > 0);
+                    enemyChips[i].count.text = $"×{counts[i]}";
+                }
             }
             int players = Mathf.Max(1, (int)state.activePlayers);
-            int bonus = TD_Rules.EarlyStartBonus(state.secondsLeft);
+            int bonus = TD_Rules.EarlyStartBonus(state.wave, state.secondsLeft);
             string reward = bonus > 0 ? $"  <color=#{ColorUtility.ToHtmlStringRGB(theme.currency)}>+${bonus}</color>" : "";
             readyLabel.text = ready
                 ? $"Ready{reward}  <color=#B4BCC8>{state.readyPlayers}/{players}</color>"
@@ -176,7 +217,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void ShowSpeed(in TD_StateBroadcast state, bool fastVote) {
-            bool show = state.phase == TD_Phase.Wave;
+            bool show = state.phase == TD_Phase.Wave && state.fastForwardAllowed;
             speedPill.Set(show);
             if (!show) return;
             bool fast = state.speed > 1f;
@@ -185,25 +226,42 @@ namespace Universes.UniverseData.tower_defense.Client {
             speedBack.color = fast ? theme.accent : fastVote ? theme.success : theme.surfaceHover;
         }
 
-        /// <summary>The boss bar: health of the lead boss, and how many are on the road.</summary>
+        /// <summary>
+        /// The boss bar, in the pill row under the status bar: health of the lead boss and how many are
+        /// on the road. While it shows, the fast-forward pill steps aside to its right.
+        /// </summary>
         public void ShowBoss(int count, float health) {
-            bossPanel.Set(count > 0);
-            if (count <= 0) return;
-            string name = TD_Rules.Enemy(TD_EnemyKind.Boss).name.ToUpperInvariant();
-            bossLabel.text = count > 1 ? $"{name}  <color=#B4BCC8>×{count}</color>" : name;
-            Bar(bossFill, health);
+            if (count != shownBosses) {
+                shownBosses = count;
+                bossPanel.Set(count > 0);
+                if (count > 0) {
+                    string name = TD_Rules.Enemy(TD_EnemyKind.Boss).name.ToUpperInvariant();
+                    bossLabel.text = count > 1 ? $"{name}  <color=#B4BCC8>×{count}</color>" : name;
+                }
+                PlaceSpeedPill(count > 0);
+            }
+            if (count > 0) Bar(bossFill, health);
         }
 
-        /// <summary>The player's saved record, shown on the result card.</summary>
+        void PlaceSpeedPill(bool besideBoss) {
+            if (speedRect == null || besideBoss == speedBesideBoss) return;
+            speedBesideBoss = besideBoss;
+            speedRect.pivot = new Vector2(besideBoss ? 0f : 0.5f, 1f);
+            speedRect.anchoredPosition = new Vector2(besideBoss ? bossPillGap : 0f, speedRect.anchoredPosition.y);
+        }
+
+        /// <summary>The player's saved record, shown on the result card (with "New best!" when this game set it).</summary>
         public void ShowRecord(in TD_ProfileBroadcast profile) {
+            string best = profile.newBestWave ? $"<color=#{ColorUtility.ToHtmlStringRGB(theme.currency)}><b>New best!</b></color>  " : "";
             resultRecord.text = profile.bestWave > 0
-                ? $"Personal best: wave {profile.bestWave}  ·  {profile.gamesWon} {(profile.gamesWon == 1 ? "win" : "wins")}  ·  {profile.totalKills:N0} kills"
+                ? $"{best}Personal best: wave {profile.bestWave}  ·  {profile.gamesWon} {(profile.gamesWon == 1 ? "win" : "wins")}  ·  {profile.totalKills:N0} kills"
                 : "";
         }
 
         void ShowResult(in TD_StateBroadcast state) {
             bool over = state.phase is TD_Phase.Victory or TD_Phase.Defeat;
             result.Set(over);
+            if (shopGroup != null) shopGroup.alpha = over ? 0f : 1f;
             if (!over) return;
             bool won = state.phase == TD_Phase.Victory;
             resultIcon.sprite = won ? trophyIcon : defeatIcon;
@@ -224,14 +282,22 @@ namespace Universes.UniverseData.tower_defense.Client {
         public void ShowFocusPad(TD_TowerKind selected, int cash) {
             info.ShowBuild(selected, Portrait(selected), cash);
             var t = TD_Rules.Tower(selected);
-            string action = cash >= t.cost ? $"<b>E</b>  Build {t.name}" : $"<color=#{ColorUtility.ToHtmlStringRGB(theme.danger)}>Need ${t.cost - cash} more for a {t.name}</color>";
+            string action = cash >= t.cost ? $"<b>{interactKey}</b>  Build {t.name}" : $"<color=#{ColorUtility.ToHtmlStringRGB(theme.danger)}>Need ${t.cost - cash} more for a {t.name}</color>";
             Prompt($"{action}     <color=#B4BCC8><b>1-4</b>  Change tower</color>");
         }
 
         public void ShowFocusTower(in TD_TowerSnap tower, int cash, string sellKey) {
             info.ShowTower(tower, Portrait(tower.kind), cash, sellKey);
             string sell = $"<b>{sellKey}</b>  Sell +${TD_Rules.SellRefund(tower.kind, tower.level)}";
-            Prompt(tower.level >= TD_Rules.MaxLevel ? sell : $"<b>E</b>  Upgrade {TD_Rules.Tower(tower.kind).name}     <color=#B4BCC8>{sell}</color>");
+            if (tower.level >= TD_Rules.MaxLevel) {
+                Prompt(sell);
+                return;
+            }
+            int cost = TD_Rules.UpgradeCost(tower.kind, tower.level);
+            string upgrade = cash >= cost
+                ? $"<b>{interactKey}</b>  Upgrade {TD_Rules.Tower(tower.kind).name}"
+                : $"<color=#{ColorUtility.ToHtmlStringRGB(theme.danger)}>Need ${cost - cash} more for Lv {tower.level + 1}</color>";
+            Prompt($"{upgrade}     <color=#B4BCC8>{sell}</color>");
         }
 
         public void ClearFocus() {

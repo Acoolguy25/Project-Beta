@@ -155,9 +155,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
 #if !UNITY_SERVER
             baseModel.AddComponent<RyanAssets.GameFeel.HitFlash>(); // flashed by the client when enemies get through
 #endif
-            var sign = WorldText("BaseSign", parent, BaseSpot + Vector3.up * 16f, "DEFEND THE BASE", 8f, new Color(1f, 0.85f, 0.3f), new Vector2(24f, 3f));
-            sign.fontStyle = TMPro.FontStyles.Bold;
-            sign.gameObject.AddComponent<RyanAssets.Rounds.Billboard>();
+            // No floating "defend the base" sign: it sat behind the status bar, and the HUD's base bar says it.
 
             // Enemy camp: red flags, ammo and crates around the hangar.
             Vector3 h = HangarSpot;

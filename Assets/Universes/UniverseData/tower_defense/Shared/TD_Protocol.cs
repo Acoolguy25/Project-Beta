@@ -10,6 +10,8 @@ namespace Universes.UniverseData.tower_defense {
         /// <summary>Health fraction 0..255.</summary>
         public byte health;
         public bool slowed;
+        /// <summary>Current speed multiplier 0..255 (255 = not slowed), from <see cref="TD_Rules.SlowFactor"/>.</summary>
+        public byte slow;
     }
 
     public struct TD_TowerSnap {
@@ -54,6 +56,8 @@ namespace Universes.UniverseData.tower_defense {
         public float speed;
         /// <summary>Players voting for fast forward, out of <see cref="activePlayers"/>.</summary>
         public byte fastPlayers;
+        /// <summary>Whether this server lets players vote for fast forward at all.</summary>
+        public bool fastForwardAllowed;
     }
 
     /// <summary>Build (on an empty slot) or upgrade (on a tower).</summary>

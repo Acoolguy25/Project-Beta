@@ -17,7 +17,7 @@ namespace Universes.UniverseData.tower_defense.Client {
     /// and sends build, upgrade, sell, ready and fast-forward requests. Keys: 1-4 pick a tower, E
     /// builds or upgrades the pad in front of you, X (twice) sells the tower there, R votes to start
     /// the next wave early, G votes for fast forward. All feedback (blasts, popups, shake, sounds,
-    /// base alarm) is a reaction to server broadcasts.
+    /// base alarm) is a reaction to server broadcasts. The key names the HUD shows come from here.
     /// </summary>
     [RequireComponent(typeof(TD_Hud))]
     public sealed class TD_ClientController : MonoBehaviour {
@@ -51,8 +51,6 @@ namespace Universes.UniverseData.tower_defense.Client {
         public float markerHeight = 2.6f;
         [Tooltip("Extra height of the marker above a pad while its build ghost shows.")]
         public float markerGhostLift = 3.2f;
-        [Tooltip("Closer to the camera than this, tower badges shrink so they don't cover the screen.")]
-        [Min(1f)] public float badgeFullSizeDistance = 16f;
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -62,7 +60,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         HitFlash baseFlash;
         ClientManager manager;
         TD_StateBroadcast state;
-        bool hasState, ready, fastVote;
+        bool hasState, ready, fastVote, toldRecord;
         int selected, focusedSlot = -1, sellSlot = -1, ghostKind = -1;
         float nextRequest, snapshotAt, sellConfirmUntil, lastAlarm = float.NegativeInfinity;
         readonly Dictionary<ushort, TD_EnemyView> enemyViews = new();
@@ -76,6 +74,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         readonly TD_TowerSnap[] towerSnaps = new TD_TowerSnap[TD_Rules.Slots.Length];
         readonly float[] towerLastShot = new float[TD_Rules.Slots.Length];
         readonly bool[] pendingPop = new bool[TD_Rules.Slots.Length];
+        readonly bool[] present = new bool[TD_Rules.Slots.Length];
         readonly TD_SlotView[] slotViews = new TD_SlotView[TD_Rules.Slots.Length];
         readonly List<Vector3> slotPositions = new(TD_Rules.Slots);
         GameObject[] ghosts;
@@ -97,6 +96,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void Start() {
+            hud.SetKeys(BindingLabel("ReloadTool", "R"), fastForwardKey.ToString(), BindingLabel("Interact", "E"));
             for (int i = 0; i < TD_Rules.Slots.Length; i++) {
                 var go = Instantiate(map.slotPrefab, TD_Rules.Slots[i], Quaternion.identity, map.transform);
                 go.name = $"Slot {i + 1}";
@@ -118,8 +118,19 @@ namespace Universes.UniverseData.tower_defense.Client {
             ToolControls.reloadToolPressed -= ToggleReady;
         }
 
+        /// <summary>The keyboard key bound to a tool action (ready = ReloadTool, build = Interact), for labels.</summary>
+        static string BindingLabel(string actionName, string fallback) {
+            foreach (var input in PlayerInput.all) {
+                var action = input.actions != null ? input.actions.FindAction(actionName) : null;
+                if (action == null) continue;
+                for (int i = 0; i < action.bindings.Count; i++)
+                    if (action.bindings[i].effectivePath.StartsWith("<Keyboard>")) return action.GetBindingDisplayString(i);
+            }
+            return fallback;
+        }
+
         void OnDestroy() {
-            ScreenFx.SetLowHealth(1f);
+            ScreenFx.ClearDanger();
             if (manager == null) return;
             manager.UnregisterBroadcast<TD_StateBroadcast>(OnState);
             manager.UnregisterBroadcast<TD_SnapshotBroadcast>(OnSnapshot);
@@ -145,7 +156,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             MoveEnemies(Time.deltaTime);
             TurnTowers(Time.deltaTime);
             BobMarkers();
-            ShrinkNearBadges();
+            UpdateBadges();
             fx.Update();
             UpdateFocus();
             UpdateGhost();
@@ -165,7 +176,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             ready = !ready;
             manager.Broadcast(new TD_ReadyRequest { ready = ready });
             hud.ShowState(state, ready, fastVote);
-            hud.Toast(ready ? "Ready! Waiting for the others..." : "Not ready", TD_Hud.ToastKind.Good, 1.5f);
+            hud.Toast(ready ? "Ready! Waiting for the others..." : "Not ready", TD_Hud.ToastKind.Good, tuning.shortToastSeconds);
         }
 
         void Interact() {
@@ -202,11 +213,11 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void ToggleFastForward() {
-            if (manager == null || !manager.Started || !hasState) return;
+            if (manager == null || !manager.Started || !hasState || !state.fastForwardAllowed) return;
             fastVote = !fastVote;
             manager.Broadcast(new TD_SpeedRequest { fast = fastVote });
             hud.ShowState(state, ready, fastVote);
-            hud.Toast(fastVote ? "Voted for fast forward" : "Voted for normal speed", TD_Hud.ToastKind.Info, 1.5f);
+            hud.Toast(fastVote ? "Voted for fast forward" : "Voted for normal speed", TD_Hud.ToastKind.Info, tuning.shortToastSeconds);
         }
 
         // ---------------------------------------------------------------- focus + placement preview
@@ -315,7 +326,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (!first) {
                 if (message.phase == TD_Phase.Wave && message.wave != bannerWave) WaveStarted(message);
                 if (message.phase == TD_Phase.Build && previousPhase == TD_Phase.Wave && message.wave > 1) {
-                    hud.Toast($"Wave {message.wave - 1} cleared!  +${TD_Rules.WaveBonus(message.wave - 1)}", TD_Hud.ToastKind.Money, 2.5f);
+                    hud.Toast($"Wave {message.wave - 1} cleared!  +${TD_Rules.WaveBonus(message.wave - 1)}", TD_Hud.ToastKind.Money, tuning.toastSeconds);
                     GameSfx.Play(SfxCue.Purchase);
                 }
                 if (message.phase == TD_Phase.Build && message.secondsLeft != lastSecondsLeft && message.secondsLeft <= countdownBeeps && message.secondsLeft > 0)
@@ -323,11 +334,13 @@ namespace Universes.UniverseData.tower_defense.Client {
                 if (message.baseHealth < lastBase) BaseHit(lastBase - message.baseHealth, message.baseHealth);
                 if (message.phase != previousPhase && message.phase is TD_Phase.Victory or TD_Phase.Defeat) GameOver(message.phase == TD_Phase.Victory);
             }
-            if (message.baseHealth > lastBase || message.phase is TD_Phase.Waiting or TD_Phase.Victory or TD_Phase.Defeat) ScreenFx.SetLowHealth(1f);
-            if (message.phase is TD_Phase.Victory or TD_Phase.Defeat) {
-                bannerWave = 0; // a new game starts again at wave 1
+            if (message.phase is TD_Phase.Waiting or TD_Phase.Victory or TD_Phase.Defeat) {
+                ScreenFx.ClearDanger();
                 fastVote = false;
             }
+            if (message.phase is TD_Phase.Victory or TD_Phase.Defeat) bannerWave = 0; // a new game starts again at wave 1
+            if (message.phase == TD_Phase.Build && message.wave == 1) toldRecord = false; // a new game: its best may be told once
+            if (!message.fastForwardAllowed) fastVote = false;
             lastBase = message.baseHealth;
             lastPhase = message.phase;
             lastSecondsLeft = message.secondsLeft;
@@ -344,39 +357,43 @@ namespace Universes.UniverseData.tower_defense.Client {
             hud.Banner($"WAVE {message.wave}", (boss ? "BOSS WAVE  ·  " : "") + Describe(message.wave), boss);
             GameSfx.Play(SfxCue.Horn);
             if (message.earlyBonus > 0) {
-                hud.Toast($"Called early!  +${message.earlyBonus}", TD_Hud.ToastKind.Money, 2.5f);
+                hud.Toast($"Called early!  +${message.earlyBonus}", TD_Hud.ToastKind.Money, tuning.toastSeconds);
                 GameSfx.Play(SfxCue.Coin);
             }
         }
 
-        /// <summary>Enemies got through: base flash, screen pulse, and an alarm while the base is critical.</summary>
+        /// <summary>
+        /// Enemies got through: the base model flashes and the screen edges flash red for a moment
+        /// (longer and stronger once the base is critical, with an alarm). Nothing stays on screen:
+        /// the HUD's red base bar and pulsing base icon are the standing warning.
+        /// </summary>
         void BaseHit(int damage, int health) {
-            if (health > 0) hud.Toast($"The base took {damage} damage!", TD_Hud.ToastKind.Bad, 1.5f); // at 0 the result card says it
-            ScreenFx.DamagePulse(Mathf.Min(1f, damage * tuning.damagePulsePerPoint));
+            if (health > 0) hud.Toast($"The base took {damage} damage!", TD_Hud.ToastKind.Bad, tuning.shortToastSeconds); // at 0 the result card says it
             if (baseFlash != null) baseFlash.Flash(tuning.baseHitFlash, tuning.baseHitFlashSeconds);
-            if (health > TD_Rules.BaseCriticalHealth) return;
-            ScreenFx.SetLowHealth(health / (float)TD_Rules.BaseHealth);
+            bool critical = health <= TD_Rules.BaseCriticalHealth;
+            if (critical) ScreenFx.DangerFlash(tuning.leakFlashColor, tuning.criticalFlashSeconds, tuning.criticalFlashAlpha);
+            else ScreenFx.DangerFlash(tuning.leakFlashColor, tuning.leakFlashSeconds, tuning.leakFlashAlpha);
+            if (!critical) return;
             bool crossed = lastBase > TD_Rules.BaseCriticalHealth;
             if (!crossed && Time.unscaledTime - lastAlarm < tuning.alarmInterval) return;
             lastAlarm = Time.unscaledTime;
             GameSfx.Play(SfxCue.Alarm);
-            if (crossed && health > 0) hud.Toast("The base is critical!", TD_Hud.ToastKind.Bad, 2.5f);
+            if (crossed && health > 0) hud.Toast("The base is critical!", TD_Hud.ToastKind.Bad, tuning.toastSeconds);
         }
 
         void GameOver(bool won) {
             Vector3 at = map.baseModel != null ? map.baseModel.position : TD_Rules.Lane[^1];
             if (won) {
-                GameFx.Play(FxKind.Confetti, at, tuning.levelUpScale * 2f);
+                GameFx.Play(FxKind.Confetti, at, tuning.victoryConfettiScale);
                 GameSfx.Play(SfxCue.Win);
             } else {
-                GameFx.Explosion(at, true, tuning.shakeRadius * 2f);
+                GameFx.Explosion(at, true, tuning.defeatShakeRadius);
                 GameSfx.Play(SfxCue.Lose);
             }
         }
 
         static string Describe(int wave) {
-            var counts = new int[TD_Rules.Enemies.Length];
-            foreach (var g in TD_Rules.Wave(wave)) counts[(int)g.kind] += g.count;
+            int[] counts = TD_Rules.WaveCounts(wave);
             var parts = new List<string>();
             for (int i = 0; i < counts.Length; i++)
                 if (counts[i] > 0) parts.Add($"{counts[i]} {TD_Rules.Enemies[i].name}");
@@ -384,7 +401,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void ApplyTowers(TD_TowerSnap[] towers) {
-            var present = new bool[towerViews.Length];
+            System.Array.Clear(present, 0, present.Length);
             if (towers != null)
                 foreach (var t in towers) {
                     if (t.slot >= towerViews.Length) continue;
@@ -402,7 +419,6 @@ namespace Universes.UniverseData.tower_defense.Client {
                     }
                     pendingPop[t.slot] = false;
                     towerSnaps[t.slot] = t;
-                    if (view.label != null) view.label.text = t.owner ?? "";
                     if (view.shownLevel != t.level) {
                         view.ShowLevel(t.level);
                         if (t.slot == focusedSlot) Highlight(t.slot, true);
@@ -445,14 +461,16 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void OnResult(TD_ResultBroadcast message, Channel channel) {
-            hud.Toast(message.message, message.accepted ? TD_Hud.ToastKind.Good : TD_Hud.ToastKind.Bad, 2.2f);
+            hud.Toast(message.message, message.accepted ? TD_Hud.ToastKind.Good : TD_Hud.ToastKind.Bad, tuning.toastSeconds);
             if (!message.accepted) GameSfx.Play(SfxCue.Error);
         }
 
         void OnProfile(TD_ProfileBroadcast message, Channel channel) {
             hud.ShowRecord(message);
-            if (!message.newBestWave) return;
-            hud.Toast($"New personal best: wave {message.bestWave}!", TD_Hud.ToastKind.Good, 2.5f);
+            // The server announces a new best once per game; the result card repeats it as "New best!".
+            if (!message.newBestWave || toldRecord || state.phase is TD_Phase.Victory or TD_Phase.Defeat) return;
+            toldRecord = true;
+            hud.Toast($"New personal best: wave {message.bestWave}!", TD_Hud.ToastKind.Good, tuning.toastSeconds);
             GameSfx.Play(SfxCue.LevelUp);
         }
 
@@ -474,7 +492,8 @@ namespace Universes.UniverseData.tower_defense.Client {
                         enemyKinds[e.id] = e.kind;
                     }
                     view.targetDistance = e.distance;
-                    view.speed = TD_Rules.Enemy(e.kind).speed * (e.slowed ? 0.6f : 1f) * speed;
+                    float slow = e.slow > 0 ? e.slow / 255f : 1f; // TD_Rules.SlowFactor, as the server applied it
+                    view.speed = TD_Rules.Enemy(e.kind).speed * slow * speed;
                     view.slowed = e.slowed;
                     SetHealth(view, e.health / 255f);
                     if (view.slowTint != null && view.slowTint.gameObject.activeSelf != e.slowed) view.slowTint.gameObject.SetActive(e.slowed);
@@ -514,7 +533,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (view.healthFill != null) view.healthFill.localScale = new Vector3(Mathf.Max(0.001f, fraction), 1f, 1f);
             if (view.healthRenderer != null) {
                 view.healthRenderer.GetPropertyBlock(block);
-                block.SetColor(BaseColorId, TD_Palette.Health(fraction));
+                block.SetColor(BaseColorId, Color.Lerp(tuning.enemyBarEmpty, tuning.enemyBarFull, fraction));
                 view.healthRenderer.SetPropertyBlock(block);
             }
         }
@@ -583,26 +602,30 @@ namespace Universes.UniverseData.tower_defense.Client {
                 // On the focused pad the marker floats up out of the build ghost instead of through it.
                 markerLift ??= new float[slotViews.Length];
                 float lift = i == focusedSlot && ghostKind >= 0 ? markerGhostLift : 0f;
-                markerLift[i] = Mathf.MoveTowards(markerLift[i], lift, Time.deltaTime * 12f);
+                markerLift[i] = Mathf.MoveTowards(markerLift[i], lift, Time.deltaTime * tuning.markerLiftSpeed);
                 p.y = markerHeight + markerLift[i] + Mathf.Sin(Time.time * 2.2f + i * 0.7f) * 0.25f;
                 marker.localPosition = p;
             }
         }
 
         /// <summary>
-        /// Tower badges (stars, builder name) are world-space and grow huge right in front of the camera;
-        /// below badgeFullSizeDistance they shrink with distance so they never cover the screen.
+        /// Tower badges (level stars) face the camera plane and are capped in screen size by their
+        /// Billboard; here they hide when too close to the camera, behind it, beside the screen edge or
+        /// high enough to reach the status bar. The owner's name is on the info card, not in the world.
         /// </summary>
-        void ShrinkNearBadges() {
+        void UpdateBadges() {
             var cam = Camera.main;
             if (cam == null) return;
             Vector3 eye = cam.transform.position;
+            float near = tuning.badgeHideDistance * tuning.badgeHideDistance;
             for (int i = 0; i < towerViews.Length; i++) {
                 var tower = towerViews[i];
-                if (tower == null || tower.label == null) continue;
-                Transform badge = tower.label.transform.parent;
-                float scale = Mathf.Clamp(Vector3.Distance(eye, badge.position) / badgeFullSizeDistance, 0.25f, 1f);
-                badge.localScale = Vector3.one * scale;
+                if (tower == null || tower.badge == null) continue;
+                Vector3 at = tower.badge.position;
+                Vector3 v = cam.WorldToViewportPoint(at);
+                bool show = v.z > 0f && (at - eye).sqrMagnitude > near && v.y < tuning.badgeMaxViewportY
+                    && v.x > tuning.badgeEdgeMargin && v.x < 1f - tuning.badgeEdgeMargin;
+                if (tower.badge.gameObject.activeSelf != show) tower.badge.gameObject.SetActive(show);
             }
         }
 
@@ -622,7 +645,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         void DrawShot(TD_Shot shot) {
             if (shot.slot >= towerViews.Length || towerViews[shot.slot] == null || !enemyViews.TryGetValue(shot.enemy, out var target)) return;
             var tower = towerViews[shot.slot];
-            Vector3 aim = target.transform.position + Vector3.up * 1f;
+            Vector3 aim = target.transform.position + Vector3.up * tuning.aimHeight;
             if (tower.head != null) {
                 Vector3 flat = aim - tower.head.position;
                 flat.y = 0f;
@@ -633,7 +656,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             }
             towerLastShot[shot.slot] = Time.time;
             tower.recoil = 1f;
-            Vector3 from = tower.muzzle != null ? tower.muzzle.position : tower.transform.position + Vector3.up * 3f;
+            Vector3 from = tower.muzzle != null ? tower.muzzle.position : tower.transform.position + Vector3.up * tuning.fallbackMuzzleHeight;
             fx.Shot(towerSnaps[shot.slot].kind, from, target.transform, aim);
         }
     }

@@ -119,6 +119,18 @@ namespace Universes.UniverseData.tower_defense {
         /// <summary>Bonus for starting the next wave with <paramref name="secondsLeft"/> of the build phase unused.</summary>
         public static int EarlyStartBonus(int secondsLeft) => Mathf.Max(0, secondsLeft) * EarlyStartBonusPerSecond;
 
+        /// <summary>
+        /// The early-call bonus for <paramref name="wave"/>: none before wave 1, whose long first build
+        /// phase is for spending the starting cash, not for farming the bonus.
+        /// </summary>
+        public static int EarlyStartBonus(int wave, int secondsLeft) => wave <= 1 ? 0 : EarlyStartBonus(secondsLeft);
+
+        /// <summary>Speed multiplier on an enemy hit by a <paramref name="kind"/> tower of <paramref name="level"/> (1 = no slow).</summary>
+        public static float SlowFactor(TD_TowerKind kind, int level) => Mathf.Clamp01(1f - Tower(kind).slow * (1f + 0.15f * (level - 1)));
+
+        /// <summary>The slow of <see cref="SlowFactor"/> as a whole percentage, for cards ("Slows 45%").</summary>
+        public static int SlowPercent(TD_TowerKind kind, int level) => Mathf.RoundToInt((1f - SlowFactor(kind, level)) * 100f);
+
         public static bool IsBoss(TD_EnemyKind kind) => kind == TD_EnemyKind.Boss;
 
         /// <summary>Damage one hit does after armour (snipers ignore it); never less than 1.</summary>
@@ -147,23 +159,40 @@ namespace Universes.UniverseData.tower_defense {
                 if (count > 0) groups.Add(new TD_SpawnGroup { kind = kind, count = count, spacing = spacing, delay = delay });
             }
             Add(TD_EnemyKind.Scout, 4 + wave, Mathf.Max(0.5f, 1.2f - wave * 0.03f));
-            if (wave >= 3) Add(TD_EnemyKind.Apc, wave - 1, 1.6f, 2f);
-            if (wave >= 6) Add(TD_EnemyKind.Tank, (wave - 3) / 2, 3f, 3f);
+            // Tanks come in pairs of waves; the waves where the tank count holds get two extra APCs, so
+            // the ground army grows every wave instead of in steps.
+            int tanks = wave >= 6 ? (wave - 4) / 2 : 0;
+            if (wave >= 3) Add(TD_EnemyKind.Apc, wave - 2 + (tanks > 0 && wave % 2 == 1 ? 2 : 0), 1.6f, 2f);
+            Add(TD_EnemyKind.Tank, tanks, 3f, 3f);
             if (wave % 4 == 0) Add(TD_EnemyKind.Chopper, 2 + wave / 3, 1.8f, 2f);
-            if (wave >= 12) Add(TD_EnemyKind.Scout, wave, 0.4f, 1f);
+            // A second, faster scout rush grows from wave 8 on (no sudden jump at any wave).
+            if (wave >= 8) Add(TD_EnemyKind.Scout, (wave - 7) * 2, 0.45f, 1f);
             if (wave == 10 || wave == WaveCount) Add(TD_EnemyKind.Boss, wave == WaveCount ? 2 : 1, 8f, 4f);
             return groups;
         }
 
+        static int[][] waveCounts;
+
+        /// <summary>
+        /// Enemies of each kind (index = <see cref="TD_EnemyKind"/>) in <paramref name="wave"/>, computed once
+        /// per wave and shared: callers must not modify the array. Outside 1..WaveCount it is all zeros.
+        /// </summary>
+        public static int[] WaveCounts(int wave) {
+            waveCounts ??= new int[WaveCount + 2][];
+            int index = Mathf.Clamp(wave, 0, WaveCount + 1);
+            if (waveCounts[index] != null) return waveCounts[index];
+            var counts = new int[Enemies.Length];
+            if (index >= 1 && index <= WaveCount)
+                foreach (var g in Wave(index)) counts[(int)g.kind] += g.count;
+            return waveCounts[index] = counts;
+        }
+
         public static int EnemyCount(int wave) {
             int n = 0;
-            foreach (var g in Wave(wave)) n += g.count;
+            foreach (int c in WaveCounts(wave)) n += c;
             return n;
         }
 
-        public static bool HasBoss(int wave) {
-            foreach (var g in Wave(wave)) if (IsBoss(g.kind)) return true;
-            return false;
-        }
+        public static bool HasBoss(int wave) => WaveCounts(wave)[(int)TD_EnemyKind.Boss] > 0;
     }
 }

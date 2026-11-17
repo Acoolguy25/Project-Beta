@@ -41,13 +41,6 @@ namespace Universes.UniverseData.tower_defense.Server {
         const string KillsColumn = "Kills";
         const string BuiltColumn = "Built";
 
-        sealed class Enemy {
-            public ushort id;
-            public TD_EnemyKind kind;
-            public float distance, health, maxHealth, slowUntil, slowFactor = 1f;
-            public bool Flying => TD_Rules.Enemy(kind).flying;
-        }
-
         sealed class Tower {
             public byte slot;
             public TD_TowerKind kind;
@@ -57,7 +50,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             public string ownerName;
         }
 
-        readonly List<Enemy> enemies = new();
+        readonly List<TD_SimEnemy> enemies = new();
         readonly Dictionary<int, Tower> towers = new();
         readonly List<TD_Shot> shots = new();
         readonly List<ushort> killed = new();
@@ -65,6 +58,11 @@ namespace Universes.UniverseData.tower_defense.Server {
         readonly HashSet<NetworkConnection> ready = new();
         readonly HashSet<NetworkConnection> fastVotes = new();
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
+        readonly Dictionary<NetworkConnection, float> voteTimes = new();
+        /// <summary>Players told about a new personal best this game (the toast shows once; the result card repeats it).</summary>
+        readonly HashSet<NetworkConnection> newRecord = new();
+        [Tooltip("Shortest time between two ready or fast-forward votes from one player (seconds).")]
+        [SerializeField, Min(0f)] float voteInterval = 0.25f;
         TD_Map map;
         TD_Phase phase;
         int wave, cash, baseHealth, secondsLeft, spawnsPending, earlyBonus;
@@ -115,6 +113,8 @@ namespace Universes.UniverseData.tower_defense.Server {
         void OnPlayerLeft(PlayerData player) {
             ready.Remove(player.Owner);
             requestTimes.Remove(player.Owner);
+            voteTimes.Remove(player.Owner);
+            newRecord.Remove(player.Owner);
             fastVotes.Remove(player.Owner);
             foreach (var tower in towers.Values) if (tower.owner == player.Owner) tower.owner = null;
             UpdateSpeed();
@@ -134,6 +134,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             enemies.Clear();
             towers.Clear();
             fastVotes.Clear();
+            newRecord.Clear();
             speed = 1f;
             cash = TD_Rules.StartCash;
             baseHealth = TD_Rules.BaseHealth;
@@ -155,7 +156,7 @@ namespace Universes.UniverseData.tower_defense.Server {
                     SetTopMessage($"Build phase: wave {wave} in {secondsLeft}s");
                     if (AllReady()) {
                         // Calling the wave early pays for the build time the team gave up.
-                        earlyBonus = TD_Rules.EarlyStartBonus(secondsLeft); // the same whole seconds the HUD promised
+                        earlyBonus = TD_Rules.EarlyStartBonus(wave, secondsLeft); // the same whole seconds the HUD promised
                         cash += earlyBonus;
                         break;
                     }
@@ -193,7 +194,7 @@ namespace Universes.UniverseData.tower_defense.Server {
                 PlayerProgress.Modify<TD_SaveData>(player, save => {
                     save.gamesPlayed++;
                     if (won) save.gamesWon++;
-                    SendProfile(owner, save, false);
+                    SendProfile(owner, save, newRecord.Contains(owner));
                 });
             }
             enemies.Clear();
@@ -213,12 +214,14 @@ namespace Universes.UniverseData.tower_defense.Server {
             spawnsPending = groups.Sum(g => g.count);
             try {
                 foreach (var group in groups) {
+                    // speed is read once per wait: a fast-forward vote during a long gap (8 s between
+                    // bosses) takes effect at the next spawn, which is fine for pacing.
                     if (group.delay > 0f) await AwaitTime(Mathf.RoundToInt(group.delay / speed * 1000f), token);
                     for (int i = 0; i < group.count; i++) {
                         if (phase != TD_Phase.Wave) return;
                         var stats = TD_Rules.Enemy(group.kind);
                         float hp = stats.health * TD_Rules.HealthScale(number);
-                        enemies.Add(new Enemy { id = nextId++, kind = group.kind, health = hp, maxHealth = hp });
+                        enemies.Add(new TD_SimEnemy { id = nextId++, kind = group.kind, health = hp, maxHealth = hp });
                         if (nextId == 0) nextId = 1;
                         spawnsPending--;
                         await AwaitTime(Mathf.RoundToInt(group.spacing / speed * 1000f), token);
@@ -248,9 +251,12 @@ namespace Universes.UniverseData.tower_defense.Server {
             foreach (var player in PlayerData.Players.Values) {
                 var owner = player.Owner;
                 PlayerProgress.Modify<TD_SaveData>(player, save => {
-                    // A first game sets the record quietly; only beating an earlier best is celebrated.
+                    // A first game sets the record quietly; beating an earlier best is celebrated once per
+                    // game (the toast), and the result card says it again at the end.
                     bool hadRecord = save.bestWave > 0;
-                    if (save.RecordWave(number)) SendProfile(owner, save, hadRecord);
+                    if (!save.RecordWave(number)) return;
+                    bool announce = hadRecord && newRecord.Add(owner);
+                    SendProfile(owner, save, announce);
                 });
             }
         }
@@ -263,15 +269,9 @@ namespace Universes.UniverseData.tower_defense.Server {
                 dt *= speed;
                 simTime += dt;
                 float now = simTime;
-                float end = TD_Rules.LaneTrack.Length;
-                for (int i = enemies.Count - 1; i >= 0; i--) {
-                    var e = enemies[i];
-                    float slow = now < e.slowUntil ? e.slowFactor : 1f;
-                    e.distance += TD_Rules.Enemy(e.kind).speed * slow * dt;
-                    if (e.distance < end) continue;
-                    baseHealth = Mathf.Max(0, baseHealth - TD_Rules.Enemy(e.kind).leakDamage);
-                    leaked.Add(e.id);
-                    enemies.RemoveAt(i);
+                int leakDamage = TD_Battle.Advance(enemies, dt, now, leaked);
+                if (leakDamage > 0) {
+                    baseHealth = Mathf.Max(0, baseHealth - leakDamage);
                     MarkDirty();
                 }
                 foreach (var tower in towers.Values) Fire(tower, dt, now);
@@ -289,7 +289,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             if (tower.cooldown > 0f) return;
             Vector3 at = TD_Rules.Slots[tower.slot];
             float range = TD_Rules.Range(tower.kind, tower.level);
-            Enemy target = null;
+            TD_SimEnemy target = null;
             foreach (var e in enemies) {
                 if (!TD_Rules.CanHit(tower.kind, e.kind)) continue;
                 Vector3 p = TD_Rules.LaneTrack.Evaluate(e.distance);
@@ -306,25 +306,25 @@ namespace Universes.UniverseData.tower_defense.Server {
             var stats = TD_Rules.Tower(tower.kind);
             if (stats.splash > 0f) {
                 Vector3 centre = TD_Rules.LaneTrack.Evaluate(target.distance);
-                foreach (var e in enemies.ToList())
+                for (int i = enemies.Count - 1; i >= 0; i--) { // backwards: a kill removes the enemy
+                    if (i >= enemies.Count) continue;
+                    var e = enemies[i];
                     if (!e.Flying && (TD_Rules.LaneTrack.Evaluate(e.distance) - centre).sqrMagnitude <= stats.splash * stats.splash)
                         Hit(tower, e, e == target ? 1f : 0.6f);
+                }
             } else {
                 Hit(tower, target, 1f);
             }
             if (stats.slow > 0f) {
                 target.slowUntil = now + TD_Rules.SlowSeconds;
-                target.slowFactor = 1f - stats.slow * (1f + 0.15f * (tower.level - 1));
+                target.slowFactor = TD_Rules.SlowFactor(tower.kind, tower.level);
             }
         }
 
-        void Hit(Tower tower, Enemy e, float scale) {
-            if (e.health <= 0f) return;
-            e.health -= TD_Rules.HitDamage(tower.kind, tower.level, e.kind) * scale;
-            if (e.health > 0f) return;
-            enemies.Remove(e);
-            killed.Add(e.id);
-            cash += TD_Rules.Enemy(e.kind).reward;
+        void Hit(Tower tower, TD_SimEnemy e, float scale) {
+            int reward = TD_Battle.Damage(enemies, e, TD_Rules.HitDamage(tower.kind, tower.level, e.kind) * scale, killed);
+            if (reward <= 0) return;
+            cash += reward;
             if (tower.owner != null && PlayerData.TryGetPlayerData(tower.owner, out var player)) {
                 RoundLeaderboard.Add(player, KillsColumn, 1);
                 bool boss = TD_Rules.IsBoss(e.kind);
@@ -397,8 +397,15 @@ namespace Universes.UniverseData.tower_defense.Server {
             return $"Sold the {TD_Rules.Tower(tower.kind).name} for ${refund}.";
         }
 
+        /// <summary>False when <paramref name="connection"/> voted less than voteInterval ago (spam guard).</summary>
+        bool VoteAllowed(NetworkConnection connection) {
+            if (voteTimes.TryGetValue(connection, out float previous) && Time.unscaledTime - previous < voteInterval) return false;
+            voteTimes[connection] = Time.unscaledTime;
+            return true;
+        }
+
         void OnSpeedRequest(NetworkConnection connection, TD_SpeedRequest request, Channel channel) {
-            if (!connection.IsAuthenticated || !allowFastForward) return;
+            if (!connection.IsAuthenticated || !allowFastForward || !VoteAllowed(connection)) return;
             if (request.fast) fastVotes.Add(connection); else fastVotes.Remove(connection);
             UpdateSpeed();
         }
@@ -421,7 +428,7 @@ namespace Universes.UniverseData.tower_defense.Server {
         }
 
         void OnReadyRequest(NetworkConnection connection, TD_ReadyRequest request, Channel channel) {
-            if (!connection.IsAuthenticated || phase != TD_Phase.Build) return;
+            if (!connection.IsAuthenticated || phase != TD_Phase.Build || !VoteAllowed(connection)) return;
             if (request.ready) ready.Add(connection); else ready.Remove(connection);
             MarkDirty();
         }
@@ -439,7 +446,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             enemiesLeft = spawnsPending + enemies.Count, headline = headline,
             readyPlayers = (byte)Mathf.Min(255, ReadyCount()), activePlayers = (byte)Mathf.Min(255, GetActivePlayers().Length),
             towers = towers.Values.Select(t => new TD_TowerSnap { slot = t.slot, kind = t.kind, level = (byte)t.level, owner = t.ownerName }).ToArray(),
-            earlyBonus = earlyBonus, speed = speed, fastPlayers = (byte)Mathf.Min(255, FastCount())
+            earlyBonus = earlyBonus, speed = speed, fastPlayers = (byte)Mathf.Min(255, FastCount()), fastForwardAllowed = allowFastForward
         };
 
         void BroadcastState() {
@@ -460,7 +467,8 @@ namespace Universes.UniverseData.tower_defense.Server {
                 enemies = enemies.Select(e => new TD_EnemySnap {
                     id = e.id, kind = e.kind, distance = e.distance,
                     health = (byte)Mathf.Clamp(Mathf.CeilToInt(e.health / e.maxHealth * 255f), 1, 255),
-                    slowed = simTime < e.slowUntil
+                    slowed = simTime < e.slowUntil,
+                    slow = (byte)Mathf.RoundToInt(e.Slow(simTime) * 255f)
                 }).ToArray(),
                 shots = shots.ToArray(),
                 killed = killed.ToArray(),
