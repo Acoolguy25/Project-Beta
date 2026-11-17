@@ -16,7 +16,8 @@
         "RyanAssets.GameFeel",
         "RyanAssets.Tools.Shared",
         "RyanAssets.Tools.Client",
-        "RyanAssets.Shared.Combat"
+        "RyanAssets.Shared.Combat",
+        "RyanAssets.Cameras"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

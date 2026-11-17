@@ -39,6 +39,13 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             else beams[index] = GameFx.Start(FxKind.BeaconBeam, position, color, beamScale);
         }
 
+        /// <summary>Stops flag <paramref name="index"/>'s beam and trail.</summary>
+        public void Stop(int index) {
+            beams[index].Stop();
+            trails[index].Stop();
+            trailTargets[index] = null;
+        }
+
         /// <summary>Stops every effect (the kit's pool outlives this game's scene).</summary>
         public void StopAll() {
             for (int i = 0; i < beams.Length; i++) {

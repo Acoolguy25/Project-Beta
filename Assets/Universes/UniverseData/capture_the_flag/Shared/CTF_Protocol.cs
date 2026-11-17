@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Universes.UniverseData.capture_the_flag {
     public enum CTF_Phase : byte { Waiting, Countdown, Playing, Results }
-    public enum CTF_EventKind : byte { Taken, Dropped, Returned, Captured, Won }
+    public enum CTF_EventKind : byte { Taken, Dropped, Returned, Captured, Won, Draw }
 
     // Wire contracts: only ever append fields, never reorder or retype them.
 
@@ -22,6 +22,13 @@ namespace Universes.UniverseData.capture_the_flag {
         public string headline;
         /// <summary>Bit i set = <c>CTF_Map.powerUps[i]</c> can be taken (see <see cref="CTF_Rules.IsReady"/>).</summary>
         public uint powerUpsReady;
+        /// <summary>
+        /// Counts up with every state the server sends. States travel unreliably and can arrive out of
+        /// order: a client keeps only states newer than the last (see <see cref="CTF_Rules.IsNewer"/>).
+        /// </summary>
+        public uint sequence;
+        /// <summary>Captures that win the match (the server's setting).</summary>
+        public int capturesToWin;
     }
 
     /// <summary>Your team, sent when it is assigned.</summary>
@@ -35,6 +42,8 @@ namespace Universes.UniverseData.capture_the_flag {
         public CTF_Team flag;
         public string playerName;
         public int playerId;
+        /// <summary>The score after this event, so a banner never shows a stale score from an older state.</summary>
+        public int redScore, blueScore;
     }
 
     public struct CTF_StateRequest : IBroadcast {

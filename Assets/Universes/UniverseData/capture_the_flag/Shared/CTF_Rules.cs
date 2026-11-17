@@ -60,6 +60,29 @@ namespace Universes.UniverseData.capture_the_flag {
         public static float SpeedMultiplier(bool carrying, bool boosted, float boost) =>
             (carrying ? CarrierSpeedMultiplier : 1f) * (boosted ? boost : 1f);
 
+        /// <summary>
+        /// Whether state <paramref name="sequence"/> is newer than <paramref name="last"/>. Counts wrap
+        /// around; a jump far back (a restarted server) also counts as newer, so a client never gets stuck.
+        /// </summary>
+        public static bool IsNewer(uint sequence, uint last) {
+            int ahead = unchecked((int)(sequence - last));
+            return ahead > 0 || ahead < -SequenceRestartGap;
+        }
+
+        /// <summary>
+        /// Maps health to the value the shared low-health heartbeat takes (it beats at
+        /// <paramref name="kitThreshold"/> and below, 1 = off). With two-hit kills the only living values
+        /// are full and one hit left, so "one hit left" (<paramref name="lowAt"/> and below) is mapped into
+        /// the beating range, at <paramref name="signalAtLowAt"/> and falling toward 0.
+        /// </summary>
+        public static float LowHealthSignal(float health01, float lowAt, float signalAtLowAt) {
+            if (health01 <= 0f || health01 > lowAt || lowAt <= 0f) return 1f;
+            return signalAtLowAt * (health01 / lowAt);
+        }
+
+        /// <summary>A state this far behind the last one comes from a restarted server, not a late packet.</summary>
+        public const int SequenceRestartGap = 1000;
+
         /// <summary>How much a health power-up actually restores (never above max; 0 means "don't take it").</summary>
         public static long HealAmount(long health, long maxHealth, long heal) =>
             health <= 0 ? 0 : Math.Max(0L, Math.Min(heal, maxHealth - health));

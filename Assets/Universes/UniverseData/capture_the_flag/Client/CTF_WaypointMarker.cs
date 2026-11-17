@@ -19,6 +19,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         RectTransform rect;
         int shownMetres = -1;
         bool visible;
+        float maxAlpha = 1f;
 
         public RectTransform Rect => rect != null ? rect : rect = (RectTransform)transform;
 
@@ -29,8 +30,9 @@ namespace Universes.UniverseData.capture_the_flag.Client {
 
         public void Hide() => visible = false;
 
-        public void Show(Vector2 localPosition, bool offScreen, float arrowDegrees, int metres, Sprite sprite, Color color) {
+        public void Show(Vector2 localPosition, bool offScreen, float arrowDegrees, int metres, Sprite sprite, Color color, float alpha = 1f) {
             visible = true;
+            maxAlpha = alpha;
             Rect.anchoredPosition = localPosition;
             if (arrow.gameObject.activeSelf != offScreen) arrow.gameObject.SetActive(offScreen);
             if (offScreen) arrow.localRotation = Quaternion.Euler(0f, 0f, arrowDegrees);
@@ -43,7 +45,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         }
 
         void LateUpdate() {
-            float target = visible ? 1f : 0f;
+            float target = visible ? maxAlpha : 0f;
             if (!Mathf.Approximately(group.alpha, target))
                 group.alpha = Mathf.MoveTowards(group.alpha, target, Time.unscaledDeltaTime / fadeSeconds);
         }

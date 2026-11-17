@@ -53,7 +53,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         const float FrontRampWidth = 12f;
         const float SideRampWidth = 10f;
         const float SideRampF = 2f;
-        const float ParapetHeight = 2.6f;
+        /// <summary>Chest high on the 5.6 m robot (its eye is 4.1 m up): you see and shoot over it, it covers legs and body.</summary>
+        const float ParapetHeight = 3.5f;
         const float ParapetThickness = 1.2f;
         const float BackWallHeight = 9f;
         const float FlagF = -4f;
@@ -67,7 +68,14 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         const float BridgeWidth = 10f;
         const float BridgeRampRun = 14f;
         const float BridgeRampWidth = 10f;
-        const float RailHeight = 1.5f;
+        /// <summary>Waist high on the robot, so the bridge and catwalks are not shooting galleries.</summary>
+        const float RailHeight = 3f;
+        // ---- cover (the robot is about 5.6 m tall)
+        /// <summary>Low cover: chest high (the robot's eye is 4.1 m up), shoot over it.</summary>
+        const float LowCoverHeight = 3.5f;
+        /// <summary>Full cover: hides a standing robot completely.</summary>
+        const float FullCoverHeight = 7f;
+        const float FullCoverLength = 8f, FullCoverThickness = 1.4f;
         const float HealthPowerUpX = -48f;
         static readonly Vector3 LobbySpawn = new(0f, 0.5f, -10f);
 
@@ -80,6 +88,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         const float TeamLightIntensity = 3f, TeamLightRange = 55f;
         /// <summary>How far each base floor's tiles are tinted toward the team colour.</summary>
         const float BaseFloorTint = 0.4f;
+        /// <summary>Neutral props: khaki tint, how much of it is plain grey, and how much original colour survives.</summary>
+        static readonly Color NeutralTint = new(0.78f, 0.74f, 0.6f);
+        const float NeutralGreyShare = 0.35f, NeutralKeep = 0.12f;
 
         // ---- asset paths
         const string Military = "Assets/CartoonMilitaryModelPack/Prefebs/";
@@ -91,7 +102,12 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         const string Props = Medieval + "decoration/props/";
         const string PolyHaven = "Assets/ThirdParty/PolyHaven/Textures/";
 
-        enum Solid { None, Box, Trunk }
+        /// <summary>
+        /// How a prop collides. Box: its whole bounds (solid blocks: crates, containers, rocks). Trunk: a
+        /// narrow box (trees). Mesh: its own shape, for open props (stilted guard posts, light towers,
+        /// the radar, the tank's barrel, the open hangar) where a bounds box would make empty air solid.
+        /// </summary>
+        enum Solid { None, Box, Trunk, Mesh }
 
         sealed class Mats {
             public Material grass, road, concrete, wall, sandbag, space, proto, medieval;
@@ -119,7 +135,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             map.lobbySpawn = Empty("LobbySpawn", mapGo.transform, LobbySpawn).transform;
             map.killY = KillY;
 
-            Centre(world, m);
+            map.title = Centre(world, m);
             MidLane(world, m);
             NorthLane(world, m);
             SouthLane(world, m);
@@ -148,8 +164,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
                 concrete = Tiled(kit.Mat("Concrete", Color.white, concrete, smoothness: 0.15f), 4f, 4f),
                 wall = Surface("Wall", "white_stucco", new Color(0.7f, 0.68f, 0.64f), HalfLength * 2f / 4f, 2f, concrete),
                 sandbag = Tiled(kit.Mat("Sandbag", Color.white, kit.Tex("Sandbag"), smoothness: 0.05f), 3f, 1f),
-                space = Atlas("KayKitSpace", Space + "spacebits_texture.png"),
-                proto = Atlas("KayKitProto", Proto + "prototypebits_texture.png"),
+                space = Atlas("KayKitSpace", NeutralAtlas("SpaceNeutral", Space + "spacebits_texture.png")),
+                proto = Atlas("KayKitProto", NeutralAtlas("ProtoNeutral", Proto + "prototypebits_texture.png")),
                 medieval = Atlas("KayKitMedieval", Medieval + "tiles/base/hexagons_medieval.png"),
                 floor = new Material[2], parapet = new Material[2], trim = new Material[2], banner = new Material[2],
             };
@@ -176,6 +192,37 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             mat.SetTexture("_BumpMap", hasNormal ? AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath) : null);
             if (hasNormal) mat.EnableKeyword("_NORMALMAP"); else mat.DisableKeyword("_NORMALMAP");
             return Tiled(mat, tileX, tileY);
+        }
+
+        /// <summary>
+        /// Saturated red and blue belong to the teams (bases, flags, beacons, players). The space and
+        /// prototype packs paint containers, cargo and barrels red, blue and green, so the arena uses a
+        /// copy of their palette with the colour washed toward khaki, saved in this game's Textures folder.
+        /// </summary>
+        static string NeutralAtlas(string name, string sourcePath) {
+            if (!File.Exists(sourcePath)) return sourcePath; // Atlas() warns
+            var source = new Texture2D(2, 2);
+            source.LoadImage(File.ReadAllBytes(sourcePath));
+            var pixels = source.GetPixels();
+            for (int i = 0; i < pixels.Length; i++) {
+                Color c = pixels[i];
+                float grey = c.r * 0.3f + c.g * 0.59f + c.b * 0.11f;
+                Color neutral = NeutralTint * Mathf.Lerp(0.35f, 1.05f, grey);
+                pixels[i] = Color.Lerp(neutral, new Color(grey, grey, grey), NeutralGreyShare) * (1f - NeutralKeep) + c * NeutralKeep;
+                pixels[i].a = c.a;
+            }
+            source.SetPixels(pixels);
+            string path = $"{CTF_Authoring.Root}/Textures/{name}.png";
+            File.WriteAllBytes(path, source.EncodeToPNG());
+            Object.DestroyImmediate(source);
+            AssetDatabase.ImportAsset(path);
+            if (AssetImporter.GetAtPath(sourcePath) is TextureImporter from && AssetImporter.GetAtPath(path) is TextureImporter to) {
+                to.filterMode = from.filterMode;
+                to.mipmapEnabled = from.mipmapEnabled;
+                to.wrapMode = from.wrapMode;
+                to.SaveAndReimport();
+            }
+            return path;
         }
 
         /// <summary>One material per KayKit pack: all its models share one palette texture.</summary>
@@ -207,7 +254,10 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             }
             if (material != null)
                 foreach (var r in model.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => material).ToArray();
-            if (solid != Solid.None) {
+            if (solid == Solid.Mesh) {
+                foreach (var filter in model.GetComponentsInChildren<MeshFilter>())
+                    if (filter.sharedMesh != null) filter.gameObject.AddComponent<MeshCollider>().sharedMesh = filter.sharedMesh;
+            } else if (solid != Solid.None) {
                 var bounds = RendererBounds(model);
                 var box = anchor.AddComponent<BoxCollider>();
                 box.center = bounds.center - anchor.transform.position;
@@ -248,7 +298,13 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         }
 
         static void Sandbags(Transform parent, Vector3 position, float length, float yaw, Material mat) {
-            var wall = Cube("Sandbags", parent, position + Vector3.up * 1.4f, new Vector3(length, 2.8f, 1.8f), mat);
+            var wall = Cube("Sandbags", parent, position + Vector3.up * (LowCoverHeight * 0.5f), new Vector3(length, LowCoverHeight, 1.8f), mat);
+            wall.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+        }
+
+        /// <summary>A concrete blast wall taller than a robot: full cover at lane entrances and by the health pads.</summary>
+        static void BlastWall(Transform parent, Vector3 position, float yaw, Mats m) {
+            var wall = Cube("BlastWall", parent, position + Vector3.up * (FullCoverHeight * 0.5f), new Vector3(FullCoverLength, FullCoverHeight, FullCoverThickness), m.concrete);
             wall.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         }
 
@@ -285,8 +341,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             Mirrored((p, _) => Road("BaseLink", field, p, new Vector3(p.x, 0f, LaneZ * Mathf.Sign(p.z)), SideRoadWidth, m.road), new Vector3(-BaseX + SideRampF, 0f, -rampFoot), 0f);
 
             // Flood lights in the four corners.
-            Mirrored((p, y) => Prop(Military + "Building_Prefebs/LightTower_Prefeb.prefab", field, p, 14f, y, null, Solid.Box), new Vector3(-HalfLength + 6f, 0f, HalfWidth - 6f), 0f);
-            Mirrored((p, y) => Prop(Military + "Building_Prefebs/LightTower_Prefeb.prefab", field, p, 14f, y, null, Solid.Box), new Vector3(-HalfLength + 6f, 0f, -HalfWidth + 6f), 0f);
+            Mirrored((p, y) => Prop(Military + "Building_Prefebs/LightTower_Prefeb.prefab", field, p, 14f, y, null, Solid.Mesh), new Vector3(-HalfLength + 6f, 0f, HalfWidth - 6f), 0f);
+            Mirrored((p, y) => Prop(Military + "Building_Prefebs/LightTower_Prefeb.prefab", field, p, 14f, y, null, Solid.Mesh), new Vector3(-HalfLength + 6f, 0f, -HalfWidth + 6f), 0f);
         }
 
         // ---------------------------------------------------------------- bases
@@ -344,10 +400,10 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             light.shadows = LightShadows.None;
 
             // Buildings behind the flag, sniper posts at the front corners.
-            Prop(Military + "Building_Prefebs/MilitaryBase_Prefeb.prefab", root, At(-11f, BaseHeight, 12f), 11f, yaw + 90f, null, Solid.Box);
-            Prop(Military + "Building_Prefebs/Radar_Prefeb.prefab", root, At(-11f, BaseHeight, -13f), 8f, yaw, null, Solid.Box);
-            Prop(Military + "Building_Prefebs/GuardPoint_01_Prefeb.prefab", root, At(halfDepth - 3f, BaseHeight, halfWidth - 4f), 7f, yaw + 90f, null, Solid.Box);
-            Prop(Military + "Building_Prefebs/GuardPoint_01_Prefeb.prefab", root, At(halfDepth - 3f, BaseHeight, -halfWidth + 4f), 7f, yaw + 90f, null, Solid.Box);
+            Prop(Military + "Building_Prefebs/MilitaryBase_Prefeb.prefab", root, At(-11f, BaseHeight, 12f), 11f, yaw + 90f, null, Solid.Mesh);
+            Prop(Military + "Building_Prefebs/Radar_Prefeb.prefab", root, At(-11f, BaseHeight, -13f), 8f, yaw, null, Solid.Mesh);
+            Prop(Military + "Building_Prefebs/GuardPoint_01_Prefeb.prefab", root, At(halfDepth - 3f, BaseHeight, halfWidth - 4f), 7f, yaw + 90f, null, Solid.Mesh);
+            Prop(Military + "Building_Prefebs/GuardPoint_01_Prefeb.prefab", root, At(halfDepth - 3f, BaseHeight, -halfWidth + 4f), 7f, yaw + 90f, null, Solid.Mesh);
 
             // Flag dais and the point the server uses.
             Vector3 standAt = At(FlagF, BaseHeight, 0f);
@@ -363,15 +419,17 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
 
         // ---------------------------------------------------------------- centre and lanes
         /// <summary>The bridge over the mid lane: high ground in the middle, the speed power-up on top.</summary>
-        static void Centre(Transform world, Mats m) {
+        static GameObject Centre(Transform world, Mats m) {
             var centre = Empty("Centre", world).transform;
             Deck("Bridge", centre, 0f, 0f, BridgeLength, BridgeWidth, BridgeHeight, m.concrete);
             Mirrored((p, y) => Ramp("BridgeRamp", centre, p, Quaternion.Euler(0f, y, 0f) * Vector3.left, BridgeRampRun, BridgeRampWidth, m.concrete),
                 new Vector3(-BridgeLength * 0.5f, BridgeHeight, 0f), 0f);
             Mirrored((p, y) => Cube("Rail", centre, p, new Vector3(BridgeLength, RailHeight, 0.6f), m.sandbag),
                 new Vector3(0f, BridgeHeight + RailHeight * 0.5f, BridgeWidth * 0.5f - 0.3f), 0f);
-            var title = WorldText("Title", centre, new Vector3(0f, 22f, 0f), "FLAG WARS\n<size=45%>Take their flag. Bring it home. First to 3.</size>", 9f, new Color(1f, 0.85f, 0.25f), TitleBox);
+            var title = WorldText("Title", centre, new Vector3(0f, 22f, 0f), "FLAG WARS", 9f, new Color(1f, 0.85f, 0.25f), TitleBox);
+            title.fontStyle = FontStyles.Bold;
             CTF_Authoring.FacingLabel(title, TitleBox.y, TitleMaxScreen);
+            return title.gameObject;
         }
 
         static void MidLane(Transform world, Mats m) {
@@ -379,22 +437,27 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             Mirrored((p, y) => Sandbags(lane, p, 8f, y, m.sandbag), new Vector3(-44f, 0f, 6f), 0f);
             Mirrored((p, y) => Sandbags(lane, p, 8f, y, m.sandbag), new Vector3(-52f, 0f, -6f), 0f);
             Mirrored((p, y) => Sandbags(lane, p, 9f, y, m.sandbag), new Vector3(-60f, 0f, 9f), 90f);
-            Mirrored((p, y) => Prop(Military + "Tank_Prefebs/Tank_01_Prefeb.prefab", lane, p, 10f, y, null, Solid.Box), new Vector3(-28f, 0f, 9f), 25f);
+            Mirrored((p, y) => Prop(Military + "Tank_Prefebs/Tank_01_Prefeb.prefab", lane, p, 10f, y, null, Solid.Mesh), new Vector3(-28f, 0f, 9f), 25f);
             Mirrored((p, y) => Crates(lane, p, y, m), new Vector3(-66f, 0f, -9f), 0f);
             Mirrored((p, y) => Crates(lane, p, y, m), new Vector3(-20f, 0f, -10f), 15f);
             Mirrored((p, y) => Prop(Proto + "Barrel_A.fbx", lane, p, 2.6f, y, m.proto, Solid.Box), new Vector3(-26f, 0f, -3f), 0f);
             Mirrored((p, y) => Prop(Proto + "Barrel_B.fbx", lane, p, 2.6f, y, m.proto, Solid.Box), new Vector3(-24.5f, 0f, -5f), 0f);
+            // Full cover either side of the health pad (x = HealthPowerUpX) and at the mid-lane mouth.
+            Mirrored((p, y) => BlastWall(lane, p, y, m), new Vector3(-48f, 0f, 11f), 0f);
+            Mirrored((p, y) => BlastWall(lane, p, y, m), new Vector3(-40f, 0f, -9.5f), 0f);
+            Mirrored((p, y) => BlastWall(lane, p, y, m), new Vector3(-36f, 0f, -1f), 90f);
         }
 
         static void NorthLane(Transform world, Mats m) {
             var lane = Empty("SideLanes", world).transform;
             // North half of red's side (mirrored to the south half of blue's).
-            Mirrored((p, y) => Prop(Military + "Building_Prefebs/VehicleHangar_01_Prefeb.prefab", lane, p, 22f, y, null, Solid.Box), new Vector3(-50f, 0f, 60f), 0f);
-            Mirrored((p, y) => Prop(Military + "Building_Prefebs/GuardPoint_02_Prefeb.prefab", lane, p, 8f, y, null, Solid.Box), new Vector3(-82f, 0f, 54f), 90f);
+            Mirrored((p, y) => Prop(Military + "Building_Prefebs/VehicleHangar_01_Prefeb.prefab", lane, p, 22f, y, null, Solid.Mesh), new Vector3(-50f, 0f, 60f), 0f);
+            Mirrored((p, y) => Prop(Military + "Building_Prefebs/GuardPoint_02_Prefeb.prefab", lane, p, 8f, y, null, Solid.Mesh), new Vector3(-82f, 0f, 54f), 90f);
             Mirrored((p, y) => Prop(Space + "cargo_A_stacked.fbx", lane, p, 9f, y, m.space, Solid.Box), new Vector3(-70f, 0f, 35f), 0f);
             Mirrored((p, y) => Prop(Space + "containers_B.fbx", lane, p, 8f, y, m.space, Solid.Box), new Vector3(-8f, 0f, 36f), 90f);
             Mirrored((p, y) => Crates(lane, p, y, m), new Vector3(-62f, 0f, 50f), 30f);
             Mirrored((p, y) => Crates(lane, p, y, m), new Vector3(-38f, 0f, 39f), -10f);
+            Mirrored((p, y) => BlastWall(lane, p, y, m), new Vector3(-72f, 0f, 49f), 0f);
             // Raised catwalk with a ramp toward the centre: height over the lane.
             const float catHeight = 4f;
             Mirrored((p, y) => Deck("Catwalk", lane, p.x, p.z, 20f, 8f, catHeight, m.concrete), new Vector3(-24f, 0f, 54f), 0f);
@@ -405,12 +468,13 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         static void SouthLane(Transform world, Mats m) {
             var lane = world.Find("SideLanes");
             // South half of red's side (mirrored to the north half of blue's).
-            Mirrored((p, y) => Prop(Military + "Building_Prefebs/OilTank_Prefeb.prefab", lane, p, 12f, y, null, Solid.Box), new Vector3(-30f, 0f, -60f), 0f);
-            Mirrored((p, y) => Prop(Military + "Building_Prefebs/OilTank_Prefeb.prefab", lane, p, 10f, y, null, Solid.Box), new Vector3(-46f, 0f, -62f), 0f);
-            Mirrored((p, y) => Prop(Military + "APC_Prefebs/APC_01_Prefeb.prefab", lane, p, 9f, y, null, Solid.Box), new Vector3(-58f, 0f, -38f), 70f);
+            Mirrored((p, y) => Prop(Military + "Building_Prefebs/OilTank_Prefeb.prefab", lane, p, 12f, y, null, Solid.Mesh), new Vector3(-30f, 0f, -60f), 0f);
+            Mirrored((p, y) => Prop(Military + "Building_Prefebs/OilTank_Prefeb.prefab", lane, p, 10f, y, null, Solid.Mesh), new Vector3(-46f, 0f, -62f), 0f);
+            Mirrored((p, y) => Prop(Military + "APC_Prefebs/APC_01_Prefeb.prefab", lane, p, 9f, y, null, Solid.Mesh), new Vector3(-58f, 0f, -38f), 70f);
             Mirrored((p, y) => Prop(Space + "rocks_A.fbx", lane, p, 7f, y, m.space, Solid.Box), new Vector3(-18f, 0f, -40f), 40f);
             Mirrored((p, y) => Crates(lane, p, y, m), new Vector3(-36f, 0f, -48f), 0f);
             Mirrored((p, y) => Prop(Proto + "Barrel_C.fbx", lane, p, 2.6f, y, m.proto, Solid.Box), new Vector3(-50f, 0f, -34f), 0f);
+            Mirrored((p, y) => BlastWall(lane, p, y, m), new Vector3(-42f, 0f, -38.5f), 0f);
             // Bunker roof with a ramp down onto the lane.
             const float bunkerHeight = 4f;
             Mirrored((p, y) => Deck("Bunker", lane, p.x, p.z, 14f, 10f, bunkerHeight, m.concrete), new Vector3(-67f, 0f, -57f), 0f);

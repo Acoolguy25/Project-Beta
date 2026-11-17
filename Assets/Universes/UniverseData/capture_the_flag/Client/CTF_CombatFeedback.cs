@@ -30,6 +30,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         public HudToastFeed killFeed;
         public Sprite pistolIcon, daggerIcon, fallIcon, skullIcon;
         [Min(0.5f)] public float killFeedSeconds = 5f;
+        [Tooltip("Colour of the verb between the names (\"eliminated\").")]
+        public Color feedVerbColor = new(0.6f, 0.64f, 0.7f);
 
         [Header("Respawn")]
         public HudPopup respawnCard;
@@ -41,23 +43,48 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Min(0f)] public float impactHeight = 3.2f;
         [Min(0.1f)] public float impactScale = 1.6f;
         public Color impactTint = new(1f, 0.9f, 0.6f);
-        [Tooltip("Metres above the victim's feet where damage numbers start.")]
-        [Min(0f)] public float damageNumberHeight = 6f;
-        [Min(0.1f)] public float damageNumberSize = 1.2f;
+        [Tooltip("Metres above the victim's feet where damage numbers start: chest height, so the number " +
+                 "rises beside the head and never sits on the name tag.")]
+        [Min(0f)] public float damageNumberHeight = 3.4f;
+        [Tooltip("Metres to the shooter's right of the victim, so the number does not cover the target.")]
+        public float damageNumberSide = 1.4f;
+        [Tooltip("Damage number look: a bit bigger and longer-lived than the kit default (0.8 s), so a " +
+                 "one-shot-per-second pistol hit stays readable.")]
+        public FloatingTextStyle damageNumberStyle = new(new Color(1f, 0.32f, 0.28f), 1.1f, 1.6f, 1.3f, 1.8f, 0.4f);
         [Tooltip("Height of the robot, for the puff where someone is eliminated.")]
         [Min(0.1f)] public float poofHeight = 5.6f;
-        [Min(0.1f)] public float poofScale = 1.2f;
+        [Min(0.1f)] public float poofScale = 0.9f;
+        [Tooltip("Smoke colour of that puff: a dark grey, so it reads as smoke and not white cotton.")]
+        public Color poofTint = new(0.42f, 0.4f, 0.38f);
 
         [Header("Shake and screen")]
         [Range(0f, 1f)] public float killShake = 0.15f;
         [Range(0f, 1f)] public float deathFlashAlpha = 0.35f;
         [Tooltip("Damage pulse strength for losing all of your health at once (scaled by the share lost).")]
         [Min(0f)] public float damagePulseScale = 2f;
+        [Tooltip("Share of max health at or below which the heartbeat runs. Hits deal half of max health, so 0.5 = one hit left.")]
+        [Range(0.05f, 1f)] public float lowHealthAt = 0.5f;
+        [Tooltip("Value handed to the shared heartbeat at lowHealthAt (it beats at 0.3 and below, stronger toward 0).")]
+        [Range(0.01f, 0.3f)] public float oneHitLeftSignal = 0.2f;
 
         ClientManager manager;
         LocalCharacter watched;
         float respawnAt, hitMarkerUntil;
         int shownSeconds = -1;
+        string verbHex;
+        int lastDamage = int.MinValue;
+        string lastDamageText;
+
+        /// <summary>Every pistol and dagger hit deals the same damage, so the text is built once.</summary>
+        string DamageText(int damage) {
+            if (damage != lastDamage) {
+                lastDamage = damage;
+                lastDamageText = damage.ToString();
+            }
+            return lastDamageText;
+        }
+
+        void Awake() => verbHex = "#" + ColorUtility.ToHtmlStringRGB(feedVerbColor);
 
         int MyId => manager != null && manager.Connection != null ? manager.Connection.ClientId : -1;
 
@@ -125,7 +152,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             long max = watched.MaxHealth.Value;
             if (max <= 0) return;
             if (next < previous && next > 0) ScreenFx.DamagePulse(Mathf.Clamp01((previous - next) / (float)max) * damagePulseScale);
-            ScreenFx.SetLowHealth(next <= 0 ? 1f : next / (float)max);
+            ScreenFx.SetLowHealth(CTF_Rules.LowHealthSignal(next / (float)max, lowHealthAt, oneHitLeftSignal));
         }
 
         void HideRespawn() {
@@ -137,14 +164,18 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         // ---------------------------------------------------------------- broadcasts
         void OnHit(CTF_HitBroadcast message, Channel channel) {
             GameFx.Play(FxKind.Sparks, message.position + Vector3.up * impactHeight, impactTint, impactScale);
-            if (message.killed) GameFx.Poof(message.position, poofHeight, poofScale);
+            if (message.killed) GameFx.Poof(message.position, poofHeight, poofTint, poofScale);
             if (message.attackerId != MyId || message.victimId == MyId) return;
             hitMarkerIcon.color = message.killed ? killColor : hitColor;
             hitMarker.Show();
             hitMarkerUntil = Time.time + hitMarkerSeconds;
             Punch.Scale(hitMarkerIcon.rectTransform, hitMarkerPunch, hitMarkerSeconds);
-            FloatingText.Damage(message.position + Vector3.up * damageNumberHeight, message.damage, damageNumberSize);
-            GameSfx.PlayAt(SfxCue.Hit, message.position);
+            Camera view = Camera.main;
+            Vector3 side = view != null ? view.transform.right : Vector3.zero;
+            FloatingText.Spawn(message.position + Vector3.up * damageNumberHeight + side * damageNumberSide,
+                DamageText(message.damage), damageNumberStyle);
+            // 2D: the shooter must hear the confirm at any range.
+            GameSfx.Play(SfxCue.Hit);
         }
 
         void OnKill(CTF_KillBroadcast message, Channel channel) {
@@ -153,8 +184,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             bool hasKiller = message.killerId >= 0 || !string.IsNullOrEmpty(message.killerName);
             string victim = Name(message.victimName, message.victimTeam, message.victimId == me);
             string line = hasKiller
-                ? $"{Name(message.killerName, message.killerTeam, message.killerId == me)}  <color=#9AA3B2><size=85%>eliminated</size></color>  {victim}"
-                : $"{victim}  <color=#9AA3B2><size=85%>{Fate(message.cause, message.victimId == me)}</size></color>";
+                ? $"{Name(message.killerName, message.killerTeam, message.killerId == me)}  <color={verbHex}><size=85%>eliminated</size></color>  {victim}"
+                : $"{victim}  <color={verbHex}><size=85%>{Fate(message.cause, message.victimId == me)}</size></color>";
             killFeed.Push(Icon(message.cause), CTF_Rules.Color(hasKiller ? message.killerTeam : message.victimTeam), line, killFeedSeconds);
 
             if (hasKiller && message.killerId == me) {

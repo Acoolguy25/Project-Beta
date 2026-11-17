@@ -23,6 +23,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         /// </summary>
         const float BoardTop = -100f;
         const float BoardHeight = 64f, ChipGap = 6f;
+        /// <summary>Crosshair, in pixels: tick length and thickness, gap from the centre, cooldown ring size.</summary>
+        const float TickLength = 9f, TickWidth = 2f, TickGap = 6f, DotSize = 3f, RingSize = 34f;
+        const string RingTexture = "CrosshairRing";
         const string PrefabPath = CTF_Authoring.Root + "/Prefabs/FlagWarsHUD.prefab";
 
         public static GameObject Build() {
@@ -215,7 +218,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             combat.fallIcon = HudKit.Icon("mountains");
             combat.skullIcon = HudKit.Icon("skull");
 
-            // Hit marker: an X around the crosshair.
+            BuildCrosshair(root);
+
+            // Hit marker: an X around the crosshair (built after it, so it draws on top).
             RectTransform marker = UIKit.Pinned(root, "HitMarker", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(44f, 44f));
             combat.hitMarkerIcon = UIKit.Icon(marker, "close", 44f);
             Object.DestroyImmediate(combat.hitMarkerIcon.GetComponent<UIThemeColor>());
@@ -239,6 +244,67 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             combat.respawnBy = UIKit.Text(card, "By", "Eliminated", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             combat.respawnBy.richText = true;
             combat.respawnCard = card.GetComponent<HudPopup>();
+        }
+
+        /// <summary>Four ticks and a dot at the screen centre, with a cooldown ring around them.</summary>
+        static void BuildCrosshair(RectTransform root) {
+            RectTransform aim = UIKit.Pinned(root, "Crosshair", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(RingSize, RingSize));
+            var crosshair = root.gameObject.AddComponent<CTF_Crosshair>();
+
+            RectTransform ringRect = UIKit.Node(aim, "CooldownRing");
+            UIKit.Center(ringRect);
+            ringRect.sizeDelta = new Vector2(RingSize, RingSize);
+            var ring = ringRect.gameObject.AddComponent<Image>();
+            ring.sprite = RingSprite();
+            ring.type = Image.Type.Filled;
+            ring.fillMethod = Image.FillMethod.Radial360;
+            ring.fillOrigin = (int)Image.Origin360.Top;
+            ring.fillClockwise = false;
+            ring.fillAmount = 0f;
+            ring.color = new Color(1f, 1f, 1f, 0.75f);
+            ring.raycastTarget = false;
+            crosshair.cooldownRing = ring;
+
+            Tick(aim, "Dot", Vector2.zero, new Vector2(DotSize, DotSize));
+            float offset = TickGap + TickLength * 0.5f;
+            Tick(aim, "Up", new Vector2(0f, offset), new Vector2(TickWidth, TickLength));
+            Tick(aim, "Down", new Vector2(0f, -offset), new Vector2(TickWidth, TickLength));
+            Tick(aim, "Left", new Vector2(-offset, 0f), new Vector2(TickLength, TickWidth));
+            Tick(aim, "Right", new Vector2(offset, 0f), new Vector2(TickLength, TickWidth));
+            crosshair.crosshair = HudKit.Popup(aim, false);
+        }
+
+        /// <summary>A white tick with a dark outline, readable on sky and on bright walls alike.</summary>
+        static void Tick(RectTransform parent, string name, Vector2 position, Vector2 size) {
+            RectTransform rect = UIKit.Node(parent, name);
+            UIKit.Center(rect);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+            var image = rect.gameObject.AddComponent<Image>();
+            image.color = Color.white;
+            image.raycastTarget = false;
+            var outline = rect.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.65f);
+            outline.effectDistance = new Vector2(1f, -1f);
+        }
+
+        /// <summary>A thin anti-aliased ring, saved as a sprite in this game's Textures folder.</summary>
+        static Sprite RingSprite() {
+            const float outer = 0.48f, width = 0.07f, feather = 0.02f;
+            CTF_Authoring.Kit.SaveTexture(RingTexture, (u, v) => {
+                float d = Vector2.Distance(new Vector2(u, v), new Vector2(0.5f, 0.5f));
+                float edge = Mathf.Min(outer - d, d - (outer - width));
+                return new Color(1f, 1f, 1f, Mathf.Clamp01(edge / feather + 0.5f));
+            }, 128);
+            string path = $"{CTF_Authoring.Root}/Textures/{RingTexture}.png";
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
         }
 #endif
     }

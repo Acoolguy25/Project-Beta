@@ -17,6 +17,8 @@ namespace Universes.UniverseData.capture_the_flag {
         [Tooltip("Flag visuals: index 0 red, 1 blue.")]
         public GameObject[] flagPrefabs = new GameObject[2];
         public GameObject clientPrefab;
+        [Tooltip("The FLAG WARS title over the bridge: shown while waiting and counting down, hidden during play.")]
+        public GameObject title;
 
         public bool IsConfigured => flagStands is { Length: 2 } && flagStands[0] != null && flagStands[1] != null
             && redSpawns is { Length: > 0 } && blueSpawns is { Length: > 0 } && lobbySpawn != null

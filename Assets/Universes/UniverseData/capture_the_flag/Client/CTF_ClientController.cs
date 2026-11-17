@@ -52,9 +52,9 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Tooltip("The big 3-2-1 starts when the pre-match countdown reaches this.")]
         [Min(1)] public int bigCountdownFrom = 3;
         public string goText = "FIGHT!";
-        [Min(0.1f)] public float captureConfettiScale = 1.6f;
-        [Tooltip("How high above the stand the confetti bursts, so it rains down past the scorer instead of filling their camera.")]
-        [Min(0f)] public float captureConfettiHeight = 7f;
+        [Min(0.1f)] public float captureConfettiScale = 2f;
+        [Tooltip("Where the two capture confetti bursts go, from the scoring team's stand: metres toward the field, to each side and up. In front of the stand and above eye level, so the scorer sees it falling without looking up and the field sees it over the base.")]
+        public Vector3 captureConfettiOffset = new(7f, 5f, 4.5f);
         [Min(0.1f)] public float captureRingScale = 4f;
         [Range(0f, 1f)] public float captureShake = 0.3f;
         [Min(0f)] public float captureShakeSeconds = 0.35f;
@@ -65,6 +65,13 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Tooltip("Centre text size for a power-up (1 = the countdown's size).")]
         [Range(0.1f, 1f)] public float powerUpTextSize = 0.45f;
         [Min(0.1f)] public float powerUpTextSeconds = 1.2f;
+        [Min(0.5f)] public float winBannerSeconds = 8f;
+        [Min(0.5f)] public float captureBannerSeconds = 3.5f;
+        [Min(0.5f)] public float flagToastSeconds = 4f;
+        [Min(0.5f)] public float powerUpToastSeconds = 3f;
+        [Tooltip("Seconds between state requests while this client has no state or team yet.")]
+        [Min(0.5f)] public float stateRequestSeconds = 2f;
+        public Color drawColor = new(0.85f, 0.87f, 0.9f);
         public Color healthColor = new(0.35f, 1f, 0.45f);
         public Color speedColor = new(1f, 0.85f, 0.25f);
 
@@ -91,7 +98,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         CTF_Map map;
         ClientManager manager;
         CTF_StateBroadcast state;
-        bool hasState, hasTeam, bigCountdownStarted;
+        bool hasState, hasTeam, bigCountdownStarted, titleShown = true;
         CTF_Team myTeam;
         float nextRequest, stateAt, speedLinesUntil;
         readonly CTF_FlagView[] views = new CTF_FlagView[2];
@@ -101,7 +108,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         // What the HUD shows now, so text is rebuilt only when it changes (not every frame).
         readonly int[] chipKeys = { -1, -1 };
         readonly int[] labelKeys = { -1, -1 };
-        int shownLeft = -1, shownPhase = -1, objectiveKey = -1, shownDistance = -1;
+        int shownLeft = -1, shownPhase = -1, objectiveKey = -1, shownDistance = -1, shownRed = -1, shownBlue = -1;
         bool dangerOn;
 
         public bool HasTeam => hasTeam;
@@ -147,7 +154,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 manager.RegisterBroadcast<CTF_PowerUpBroadcast>(OnPowerUp);
             }
             if (manager != null && manager.Started && (!hasState || !hasTeam) && Time.unscaledTime > nextRequest) {
-                nextRequest = Time.unscaledTime + 2f;
+                nextRequest = Time.unscaledTime + stateRequestSeconds;
                 manager.Broadcast(new CTF_StateRequest());
             }
             if (speedLinesUntil > 0f && Time.time >= speedLinesUntil) {
@@ -169,12 +176,16 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             }
             if ((int)state.phase != shownPhase) {
                 shownPhase = (int)state.phase;
-                phaseLabel.text = state.phase switch {
-                    CTF_Phase.Playing => $"First to {CTF_Rules.CapturesToWin}",
+                if (state.phase == CTF_Phase.Playing) phaseLabel.SetText("First to {0}", state.capturesToWin);
+                else phaseLabel.text = state.phase switch {
                     CTF_Phase.Countdown => "Get ready",
                     CTF_Phase.Results => "Match over",
                     _ => "Waiting"
                 };
+                // The title over the bridge is for the lobby and countdown; in play it would sit behind the HUD.
+                bool title = state.phase is CTF_Phase.Waiting or CTF_Phase.Countdown;
+                if (map.title != null && title != titleShown) map.title.SetActive(title);
+                titleShown = title;
             }
             FlagStatus(0, redFlagStatus, state.redFlag);
             FlagStatus(1, blueFlagStatus, state.blueFlag);
@@ -233,7 +244,9 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                     _ => $"<color={CTF_Rules.Hex(team)}>{CTF_Rules.Name(team)} FLAG</color>"
                 }, snap.state == CTF_FlagState.Home);
             }
-            beacons.Refresh(i, snap.state, shown[i], carrier, CTF_Rules.Color(team));
+            // No beacons over the results: the flags are home and the banner has the stage.
+            if (state.phase == CTF_Phase.Results) beacons.Stop(i);
+            else beacons.Refresh(i, snap.state, shown[i], carrier, CTF_Rules.Color(team));
         }
 
         /// <summary>
@@ -337,6 +350,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
 
         // ---------------------------------------------------------------- broadcasts
         void OnState(CTF_StateBroadcast message, Channel channel) {
+            // States are unreliable: a late one must not roll the score or the flags back.
+            if (hasState && !CTF_Rules.IsNewer(message.sequence, state.sequence)) return;
             if (message.phase != CTF_Phase.Countdown) bigCountdownStarted = false;
             else if (!bigCountdownStarted && message.secondsLeft <= bigCountdownFrom && message.secondsLeft > 0) {
                 bigCountdownStarted = true;
@@ -345,8 +360,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             state = message;
             hasState = true;
             stateAt = Time.unscaledTime;
-            redScoreLabel.text = message.redScore.ToString();
-            blueScoreLabel.text = message.blueScore.ToString();
+            if (message.redScore != shownRed) redScoreLabel.SetText("{0}", shownRed = message.redScore);
+            if (message.blueScore != shownBlue) blueScoreLabel.SetText("{0}", shownBlue = message.blueScore);
         }
 
         void OnTeam(CTF_TeamBroadcast message, Channel channel) {
@@ -389,11 +404,15 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                     string team = $"<color={CTF_Rules.Hex(message.flag)}>{CTF_Rules.Name(message.flag)}</color>";
                     banner.Show(won || !hasTeam ? victoryIcon : defeatIcon, CTF_Rules.Color(message.flag),
                         !hasTeam ? $"{CTF_Rules.Name(message.flag)} WINS" : won ? "VICTORY!" : "DEFEAT",
-                        $"{team} team wins the match {state.redScore}-{state.blueScore}.", 8f);
+                        $"{team} team wins the match {message.redScore}-{message.blueScore}.", winBannerSeconds);
                     GameSfx.Play(won || !hasTeam ? SfxCue.Win : SfxCue.Lose);
                     Celebrate(message.flag);
                     break;
                 }
+                case CTF_EventKind.Draw:
+                    banner.Show(flagIcon, drawColor, "DRAW", $"Time is up at {message.redScore}-{message.blueScore}.", winBannerSeconds);
+                    GameSfx.Play(SfxCue.Horn);
+                    break;
             }
         }
 
@@ -401,18 +420,29 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             // The flag captured is the loser's; the capturing team is the other one.
             var scorer = CTF_Rules.Other(message.flag);
             Color scorerColor = CTF_Rules.Color(scorer);
-            string title = ours ? "FLAG LOST" : "FLAG CAPTURED";
             string subtitle = ours ? $"{who} captured your flag." : $"{who} captured the {flag}!";
-            banner.Show(flagIcon, scorerColor, title, subtitle, 3.5f);
+            // The winning capture: the Won banner and celebration follow at once, so this one is a toast only.
+            int target = state.capturesToWin > 0 ? state.capturesToWin : CTF_Rules.CapturesToWin;
+            if (Mathf.Max(message.redScore, message.blueScore) >= target) {
+                toasts.Push(flagIcon, scorerColor, subtitle, flagToastSeconds);
+                return;
+            }
+            banner.Show(flagIcon, scorerColor, ours ? "FLAG LOST" : "FLAG CAPTURED", subtitle, captureBannerSeconds);
             GameSfx.Play(ours ? SfxCue.Alarm : SfxCue.LevelUp);
             Celebrate(scorer);
         }
 
-        /// <summary>Team-colour confetti and a ring at the team's stand, a screen flash and a shake.</summary>
+        /// <summary>Two team-colour confetti bursts in front of the team's stand, a ring on it, a screen flash and a shake.</summary>
         void Celebrate(CTF_Team team) {
             Color color = CTF_Rules.Color(team);
             Vector3 stand = map.Stand(team);
-            GameFx.Play(FxKind.Confetti, stand + Vector3.up * captureConfettiHeight, color, captureConfettiScale);
+            Vector3 field = map.Stand(CTF_Rules.Other(team)) - stand;
+            field.y = 0f;
+            field.Normalize();
+            Vector3 side = Vector3.Cross(Vector3.up, field);
+            Vector3 front = stand + field * captureConfettiOffset.x + Vector3.up * captureConfettiOffset.y;
+            GameFx.Play(FxKind.Confetti, front + side * captureConfettiOffset.z, color, captureConfettiScale);
+            GameFx.Play(FxKind.Confetti, front - side * captureConfettiOffset.z, color, captureConfettiScale);
             GameFx.Play(FxKind.ShockwaveRing, stand, color, captureRingScale);
             CameraShake.Kick(captureShake, captureShakeSeconds);
             ScreenFx.Flash(new Color(color.r, color.g, color.b, captureFlashAlpha));
@@ -428,7 +458,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             GameSfx.PlayAt(SfxCue.Pickup, spot.Position);
             if (message.playerId != MyId) return;
             ScreenFx.ShowText(health ? "+HEALTH" : "SPEED BOOST", color, powerUpTextSeconds, powerUpTextSize);
-            toasts.Push(health ? healthIcon : speedIcon, color, health ? "You patched up." : $"Speed boost for {Mathf.RoundToInt(message.seconds)} s!", 3f);
+            toasts.Push(health ? healthIcon : speedIcon, color, health ? "You patched up." : $"Speed boost for {Mathf.RoundToInt(message.seconds)} s!", powerUpToastSeconds);
             if (!health) {
                 ScreenFx.SetSpeedLines(speedLines);
                 speedLinesUntil = Time.time + message.seconds;
@@ -436,7 +466,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         }
 
         void Toast(Sprite icon, Color color, string text, SfxCue cue) {
-            toasts.Push(icon, color, text, 4f);
+            toasts.Push(icon, color, text, flagToastSeconds);
             GameSfx.Play(cue);
         }
     }

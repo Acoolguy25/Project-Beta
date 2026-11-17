@@ -63,5 +63,22 @@ namespace Universes.UniverseData.capture_the_flag.Tests {
             Assert.That(CTF_Rules.HealAmount(200, 200, 100), Is.EqualTo(0));
             Assert.That(CTF_Rules.HealAmount(0, 200, 100), Is.EqualTo(0));
         }
+
+        [Test]
+        public void OnlyNewerStatesAreKept() {
+            Assert.That(CTF_Rules.IsNewer(5, 4), Is.True);
+            Assert.That(CTF_Rules.IsNewer(4, 5), Is.False);
+            Assert.That(CTF_Rules.IsNewer(5, 5), Is.False);
+            Assert.That(CTF_Rules.IsNewer(2, uint.MaxValue), Is.True, "the count wraps around");
+            Assert.That(CTF_Rules.IsNewer(1, 50000), Is.True, "a restarted server starts again from 1");
+        }
+
+        [Test]
+        public void OneHitLeftBeatsTheHeartbeat() {
+            Assert.That(CTF_Rules.LowHealthSignal(1f, 0.5f, 0.2f), Is.EqualTo(1f));
+            Assert.That(CTF_Rules.LowHealthSignal(0.5f, 0.5f, 0.2f), Is.EqualTo(0.2f).Within(1e-5f));
+            Assert.That(CTF_Rules.LowHealthSignal(0.25f, 0.5f, 0.2f), Is.EqualTo(0.1f).Within(1e-5f));
+            Assert.That(CTF_Rules.LowHealthSignal(0f, 0.5f, 0.2f), Is.EqualTo(1f), "dead: no heartbeat");
+        }
     }
 }

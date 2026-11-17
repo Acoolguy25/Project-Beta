@@ -25,6 +25,12 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Tooltip("Hide a marker when you are closer than this to its target (it is right in front of you).")]
         [Min(0f)] public float hideWithin = 10f;
 
+        [Header("Crosshair clearance")]
+        [Tooltip("Within this distance of the screen centre (share of the screen height) a marker fades so the crosshair stays readable.")]
+        [Range(0f, 0.5f)] public float centreClear = 0.12f;
+        [Tooltip("Marker opacity right on the crosshair.")]
+        [Range(0f, 1f)] public float centreAlpha = 0.2f;
+
         Camera cam;
 
         public void SetFlag(int index, bool show, Vector3 target, Sprite icon, Color color) =>
@@ -68,8 +74,13 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 // The arrow sprite points up.
                 arrowDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
             }
+            float alpha = 1f;
+            if (!offScreen && centreClear > 0f) {
+                float fromCentre = Vector2.Distance(point, new Vector2(w * 0.5f, h * 0.5f)) / (h * centreClear);
+                alpha = Mathf.Lerp(centreAlpha, 1f, Mathf.Clamp01(fromCentre * fromCentre));
+            }
             RectTransformUtility.ScreenPointToLocalPointInRectangle(area, point, null, out Vector2 local);
-            marker.Show(local, offScreen, arrowDegrees, Mathf.RoundToInt(metres), icon, color);
+            marker.Show(local, offScreen, arrowDegrees, Mathf.RoundToInt(metres), icon, color, alpha);
         }
     }
 }

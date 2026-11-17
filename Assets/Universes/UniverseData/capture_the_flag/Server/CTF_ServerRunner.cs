@@ -26,6 +26,8 @@ namespace Universes.UniverseData.capture_the_flag.Server {
     /// </summary>
     public sealed class CTF_ServerRunner : ServerRunner {
         [Header("Round")]
+        [Tooltip("The match waits until this many players are in. There are no bots, so a lone player waits on " +
+                 "\"Waiting for players (1/2)\" until a second one joins (set 1 by reflection for solo tests).")]
         [SerializeField, Min(1)] int minPlayers = 2;
         [SerializeField, Min(1)] int countdownSeconds = 8;
         [SerializeField, Min(30)] int matchSeconds = 480;
@@ -48,7 +50,7 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         [Header("Rewards (account XP/gold)")]
         [SerializeField] ulong killXP = 10, captureXP = 50, captureGold = 20, returnXP = 10, winXP = 60, winGold = 25;
 
-        const string CapturesColumn = "Captures";
+        const string CapturesColumn = "Flags";
         const string KillsColumn = "Kills";
         static readonly ToolEnum[] Loadout = { ToolEnum.Pistol, ToolEnum.Dagger };
 
@@ -96,8 +98,8 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         CTF_Phase phase;
         int redScore, blueScore, secondsLeft;
         string headline = "";
-        float nextSnapshot;
-        uint powerUpsReady;
+        float nextSnapshot, previousRespawnTime;
+        uint powerUpsReady, stateSequence;
         float[] powerUpReadyAt = Array.Empty<float>();
 
         protected override void Awake() {
@@ -110,6 +112,7 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             };
             ServerPlayerCharacter.SpawnLocationFunction = SpawnPosition;
             ServerPlayerCharacter.SpawnRotationFunction = SpawnRotation;
+            previousRespawnTime = ServerPlayerCharacter.RespawnTime;
             ServerPlayerCharacter.RespawnTime = respawnSeconds;
             PlayerData.OnPlayerRemoved += OnPlayerLeft;
             InstanceFinder.ServerManager.RegisterBroadcast<CTF_StateRequest>(OnStateRequest);
@@ -278,14 +281,14 @@ namespace Universes.UniverseData.capture_the_flag.Server {
 
             phase = CTF_Phase.Playing;
             SetGlobalInvul(false);
-            ServerChat.SendSystemMessage(new("FIGHT! Take the enemy flag back to your base.", SystemMessageSource.CustomMessage));
             float end = Time.time + matchSeconds;
             while (true) {
                 token.ThrowIfCancellationRequested();
                 secondsLeft = Mathf.Max(0, Mathf.CeilToInt(end - Time.time));
                 if (secondsLeft == 0 || redScore >= capturesToWin || blueScore >= capturesToWin) break;
                 headline = $"RED {redScore}  -  {blueScore} BLUE";
-                SetTopMessage($"{headline}   ({RoundFormat.Clock(secondsLeft)})");
+                // The scoreboard shows the score and clock; the shared top pill stays out of the way.
+                SetTopMessage("");
                 await AwaitTime(500, token);
             }
 
@@ -305,11 +308,12 @@ namespace Universes.UniverseData.capture_the_flag.Server {
                     if (won) save.wins++;
                 });
             }
-            if (winner is CTF_Team wonTeam) InstanceFinder.ServerManager.Broadcast(new CTF_EventBroadcast { kind = CTF_EventKind.Won, flag = wonTeam });
-            ServerChat.SendSystemMessage(new(headline, SystemMessageSource.CustomMessage));
+            if (winner is CTF_Team wonTeam) Event(CTF_EventKind.Won, wonTeam, null);
+            else Event(CTF_EventKind.Draw, CTF_Team.Red, null);
             for (int i = resultsSeconds; i > 0; i--) {
                 secondsLeft = i;
-                SetTopMessage($"{headline}  Next match in {i}");
+                // The banner names the winner and the score; the top pill only counts down.
+                SetTopMessage($"Next match in {i}");
                 BroadcastState();
                 await AwaitTime(1000, token);
             }
@@ -376,7 +380,6 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             Award(carrier, captureXP, captureGold);
             PlayerProgress.Modify<CTF_SaveData>(carrier, save => save.captures++);
             Event(CTF_EventKind.Captured, flag.team, carrier);
-            ServerChat.SendSystemMessage(new($"{PlayerData.GetPlayerName(carrier)} captured the {CTF_Rules.Name(flag.team)} flag! RED {redScore} - {blueScore} BLUE", SystemMessageSource.CustomMessage));
             Return(flag, false);
         }
 
@@ -487,13 +490,13 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         }
 
         void Event(CTF_EventKind kind, CTF_Team flag, NetworkConnection player) {
-            // State first: an event's handlers read the state it caused (the final score on Won).
-            BroadcastState();
             InstanceFinder.ServerManager.Broadcast(new CTF_EventBroadcast {
                 kind = kind, flag = flag,
                 playerName = player != null ? PlayerData.GetPlayerName(player) : "",
-                playerId = player != null ? player.ClientId : -1
+                playerId = player != null ? player.ClientId : -1,
+                redScore = redScore, blueScore = blueScore
             });
+            BroadcastState();
         }
 
         // ---------------------------------------------------------------- messages
@@ -512,7 +515,9 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         CTF_StateBroadcast MakeState() => new() {
             phase = phase, secondsLeft = secondsLeft, redScore = redScore, blueScore = blueScore,
             redFlag = Snap(flags[0]), blueFlag = Snap(flags[1]), headline = headline,
-            powerUpsReady = powerUpsReady
+            powerUpsReady = powerUpsReady,
+            sequence = ++stateSequence,
+            capturesToWin = capturesToWin
         };
 
         void BroadcastState() => InstanceFinder.ServerManager.Broadcast(MakeState(), true, Channel.Unreliable);
@@ -535,6 +540,7 @@ namespace Universes.UniverseData.capture_the_flag.Server {
 
         protected override void OnDestroy() {
             GameCharacter.FallHeightOverride = null;
+            ServerPlayerCharacter.RespawnTime = previousRespawnTime;
             PlayerData.OnPlayerRemoved -= OnPlayerLeft;
             if (ServerPlayerCharacter.SpawnLocationFunction == SpawnPosition) ServerPlayerCharacter.SpawnLocationFunction = null;
             if (ServerPlayerCharacter.SpawnRotationFunction == SpawnRotation) ServerPlayerCharacter.SpawnRotationFunction = null;
