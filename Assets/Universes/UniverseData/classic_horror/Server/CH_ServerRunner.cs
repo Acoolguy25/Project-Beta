@@ -63,6 +63,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         [Tooltip("Seconds it keeps its distance after it catches someone, so the team can regroup and a recovered "
             + "investigator is not hunted the moment they are back on their feet.")]
         [SerializeField, Min(0)] float caughtRepelSeconds = 20f;
+        [Tooltip("Off: drowning in deep water returns the investigator to the team without spending a life (it still costs "
+            + "the respawn delay). On: deep water costs a life like a catch.")]
+        [SerializeField] bool drowningCostsLife = false;
         [Tooltip("Seconds it falters after a diary page is read aloud.")]
         [SerializeField, Min(0)] float diaryRepelSeconds = 6f;
         [Tooltip("Seconds it holds back when the escape begins.")]
@@ -127,7 +130,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         CH_Monster monster;
         string dialogue = "", ending = "";
         readonly List<Transform> spawnAnchors = new();
-        int dialogueRevision, livesLost, completedCases, lastSeed, secondsLeft;
+        int dialogueRevision, livesLost, drownings, completedCases, lastSeed, secondsLeft;
         float deadline, chaseMusicUntil;
         bool acceptingPlayers;
         public CH_Case CurrentCase => current;
@@ -336,6 +339,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             current = map.storyLibrary.Generate(seed, map.searchLocations.Length, map.sourceLocations.Length);
             current.BindSource(map.sourceLocations[current.SourceIndex].name);
             livesLost = 0;
+            drownings = 0;
             eliminated.Clear();
             reviving.Clear();
             accountLives.Clear();
@@ -375,7 +379,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 if (secondsLeft == 0 || EveryoneOut()) {
                     current.Fail();
                     caseEnded = Time.time;
-                    Debug.Log($"[Classic Horror] case failed ({(secondsLeft == 0 ? "out of time" : "everyone caught")}) at {CaseSeconds}s, evidence {current.EvidenceCount}, lives lost {livesLost}");
+                    Debug.Log($"[Classic Horror] case failed ({(secondsLeft == 0 ? "out of time" : "everyone caught")}) at {CaseSeconds}s, evidence {current.EvidenceCount}, lives lost {livesLost}, drownings {drownings}");
                     ending = current.Ending();
                     pendingSpeech.Clear();
                     Speak("DISPATCH / We have lost the signal. A new investigation will begin shortly.");
@@ -406,6 +410,15 @@ namespace Universes.UniverseData.classic_horror.Server {
         void OnInvestigatorDied(LocalCharacter character, DamageType damage, GameCharacter source) {
             if (!CaseActive || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
+            if (damage == DamageType.Water && !drowningCostsLife) {
+                // Deep water is scenery, not the Presence: the investigator is pulled out and regroups, keeping their life.
+                drownings++;
+                Debug.Log($"[Classic Horror] investigator {character.Owner.ClientId} pulled from deep water at case {CaseSeconds}s; no life spent (drownings {drownings})");
+                character.CanSpectate.Value = false;
+                reviving.Add(character.Owner);
+                Speak("DISPATCH / We pulled you out of the deep water. Stay on the paths and the jetties; the flood is deeper than it looks.");
+                return;
+            }
             livesLost++;
             Debug.Log($"[Classic Horror] investigator {character.Owner.ClientId} lost a life ({damage}) at case {CaseSeconds}s; lives lost {livesLost}");
             string account = AccountKey(character.Owner);
@@ -596,7 +609,7 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         void AwardVictoryRewards() {
             int endingIndex = current.EndingIndex(), caseSeconds = CaseSeconds;
-            Debug.Log($"[Classic Horror] case closed: ending {endingIndex} in {caseSeconds}s, evidence {current.EvidenceCount}, memories {current.MemoryCount}, lives lost {livesLost}");
+            Debug.Log($"[Classic Horror] case closed: ending {endingIndex} in {caseSeconds}s, evidence {current.EvidenceCount}, memories {current.MemoryCount}, lives lost {livesLost}, drownings {drownings}");
             foreach (var player in PlayerData.Players.Values) {
                 if (player == null || eliminated.Contains(player.Owner)) continue;
                 AwardReward(player.Owner, winXPReward, winCreditReward, "surviving the case");

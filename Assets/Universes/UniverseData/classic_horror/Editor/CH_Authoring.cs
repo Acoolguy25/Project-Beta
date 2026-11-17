@@ -542,6 +542,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         const float RecordLightRange = 4f;
+        // Outline strength when not in focus: records glow faintly beside their lantern; offerings stand alone in the
+        // dark and need an outline that reads from 4 m as "something to pick up".
+        const float RecordIdleRim = 0.22f, OfferingIdleRim = 0.65f;
         // The pack's small-props atlas reads almost white under the record's own glow and a flashlight;
         // the table, lamp and paper take darker, warmer tints so only the outline reads as bright.
         static readonly Color RecordWoodTint = new(0.4f, 0.3f, 0.22f);
@@ -549,7 +552,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         static readonly Color RecordPaperTint = new(0.5f, 0.44f, 0.31f);
 
         /// <summary>The amber glow light and CH_EvidenceGlow (with its code defaults) on a record or offering.</summary>
-        static void AddGlow(GameObject root, float range) {
+        static void AddGlow(GameObject root, float range, float idleRim = RecordIdleRim) {
             var light = root.GetComponent<Light>();
             if (light == null) light = root.AddComponent<Light>();
             light.type = LightType.Point;
@@ -561,6 +564,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
             glow.glowLight = light;
             light.intensity = glow.IdleLight;
             glow.rimRenderers = AddRim(root, RimMaterial());
+            var serialized = new SerializedObject(glow);
+            serialized.FindProperty("idleRim").floatValue = idleRim;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         static Material RecordWoodMaterial(GameObject table) => TintedCopy(table, "EvidenceTable", RecordWoodTint, 0.1f);
@@ -595,8 +601,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
         // panel from most sides), each with its own object on top, tall enough to read from 4 m.
         const string OfferingStand = FloodedProps + "Prop_SmallTable_B.prefab";
         const float OfferingLightRange = 3f;
-        static readonly float[] OfferingHeights = { 0.62f, 0.58f, 0.9f };
-        static readonly Color BronzeColour = new(0.36f, 0.24f, 0.1f), SaltColour = new(0.86f, 0.84f, 0.78f);
+        static readonly float[] OfferingHeights = { 0.3f, 0.58f, 0.9f };
+        static readonly Color BronzeColour = new(0.36f, 0.24f, 0.1f), SaltColour = new(0.86f, 0.84f, 0.78f), DishColour = new(0.2f, 0.15f, 0.12f);
+        static readonly Color EmberColour = new(1f, 0.42f, 0.14f);
 
         /// <summary>
         /// The salt canister, the hand bell and the keeper's lantern: each its own object on a small table,
@@ -612,13 +619,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 item.transform.SetParent(root.transform, false);
                 switch (offering) {
                     case 0: {
-                        var jar = PlaceVisual(FloodedProps + "Prop_Vase_B.prefab", item.transform, Vector3.zero, Vector3.one);
-                        Shape("Salt", PrimitiveType.Cylinder, item.transform, Vector3.zero, Vector3.one, Material("OfferingSalt", SaltColour));
-                        FitHeight(jar, OfferingHeights[0]);
-                        var salt = item.transform.Find("Salt");
-                        Bounds rim = BoundsOf(jar);
-                        salt.localScale = new Vector3(rim.size.x * 0.55f, 0.01f, rim.size.z * 0.55f);
-                        salt.localPosition = new Vector3(0f, rim.max.y - item.transform.position.y - 0.02f, 0f);
+                        // A heap of coarse salt in a dark earthenware dish: pale and matte, so it cannot pass for metal.
+                        var dish = Material("OfferingDish", DishColour);
+                        var salt = Material("OfferingSalt", SaltColour);
+                        salt.SetFloat("_Smoothness", 0.05f);
+                        var heap = new GameObject("Salt"); heap.transform.SetParent(item.transform, false);
+                        Shape("Dish", PrimitiveType.Cylinder, heap.transform, new Vector3(0f, 0.025f, 0f), new Vector3(0.44f, 0.025f, 0.44f), dish);
+                        Shape("Rim", PrimitiveType.Cylinder, heap.transform, new Vector3(0f, 0.06f, 0f), new Vector3(0.46f, 0.012f, 0.46f), dish);
+                        Shape("Heap", PrimitiveType.Sphere, heap.transform, new Vector3(0f, 0.09f, 0f), new Vector3(0.36f, 0.26f, 0.36f), salt);
+                        Shape("Spill", PrimitiveType.Sphere, heap.transform, new Vector3(0.2f, 0.005f, 0.14f), new Vector3(0.12f, 0.02f, 0.09f), salt);
+                        FitHeight(heap, OfferingHeights[0]);
                         break;
                     }
                     case 1: {
@@ -639,13 +649,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
                         var atlas = lantern.GetComponentInChildren<Renderer>().sharedMaterial;
                         foreach (var renderer in lantern.GetComponentsInChildren<Renderer>())
                             renderer.sharedMaterial = LanternPostMaterial(atlas);
-                        // The KayKit lantern is one mesh; its glow is the record light, not its glass.
                         FitHeight(lantern, OfferingHeights[2]);
+                        // The KayKit lantern is one mesh, so a faint ember sits inside it: an offering, not a lamp that is out.
+                        Bounds body = BoundsOf(lantern);
+                        Shape("Ember", PrimitiveType.Sphere, item.transform, new Vector3(0f, body.center.y - item.transform.position.y - body.size.y * 0.08f, 0f),
+                            Vector3.one * body.size.x * 0.22f, Material("OfferingEmber", EmberColour, true));
                         break;
                     }
                 }
                 item.transform.localPosition = new Vector3(0f, top - root.transform.position.y, 0f);
-                AddGlow(root, OfferingLightRange);
+                AddGlow(root, OfferingLightRange, OfferingIdleRim);
                 PrefabUtility.SaveAsPrefabAsset(root, OfferingViewPath(offering));
             } finally { Object.DestroyImmediate(root); }
         }
@@ -840,6 +853,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             scare.face = face;
             var portrait = face.gameObject.AddComponent<UnityEngine.UI.RawImage>();
             portrait.texture = CH_EncounterFace.Build(); portrait.raycastTarget = false;
+            scare.picture = portrait;
             var fit = face.gameObject.AddComponent<UnityEngine.UI.AspectRatioFitter>();
             fit.aspectMode = UnityEngine.UI.AspectRatioFitter.AspectMode.EnvelopeParent;
             fit.aspectRatio = (float)portrait.texture.width / portrait.texture.height;

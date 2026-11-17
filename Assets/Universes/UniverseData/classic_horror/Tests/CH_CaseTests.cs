@@ -221,18 +221,37 @@ namespace Universes.UniverseData.classic_horror.Tests {
 
         [Test] public void ALoneInvestigatorCanGetOutOfSightByDistance() {
             var tuning = new CH_MonsterTuning();
-            Assert.Less(tuning.PursuitSightRange(1), tuning.PursuitSightRange(2), "Alone, a chase is lost at a shorter distance.");
-            float sprintGap = (CH_MonsterTuning.InvestigatorSprintSpeed - tuning.HuntSpeed(false, false, 1)) * 10f;
-            Assert.Less(tuning.PursuitSightRange(1), 20f + sprintGap,
-                "Ten seconds of sprint from a 20 m start take a lone investigator out of its pursuit sight.");
+            float Pursuit(int living) => tuning.SightRange(CH_Temperament.LightSeeker, true, CH_MonsterTuning.InvestigatorSprintSpeed, false, true, living);
+            Assert.Less(Pursuit(1), Pursuit(2), "Alone, a chase is lost at a shorter distance.");
+            Assert.Greater(tuning.SightRange(CH_Temperament.LightSeeker, true, 0f, true, true, 1), Pursuit(1), "Enraged, it sees a lone investigator further.");
+            float sprintGap = (CH_MonsterTuning.InvestigatorSprintSpeed - tuning.HuntSpeed(false, false, 1)) * CH_MonsterTuning.InvestigatorSprintSeconds;
+            // A sprint starting at the edge of walking earshot ends out of sight.
+            Assert.Less(Pursuit(1), tuning.walkHearingRange + sprintGap,
+                "A full sprint from the edge of its walking earshot takes a lone investigator out of its sight.");
+        }
+
+        [Test] public void PuttingTheLightOutHidesALoneInvestigatorFromALightSeeker() {
+            var tuning = new CH_MonsterTuning();
+            float Notice(bool lit, int living) => tuning.SightRange(CH_Temperament.LightSeeker, lit, CH_MonsterTuning.InvestigatorWalkSpeed, false, false, living);
+            Assert.Less(Notice(false, 1), Notice(true, 1), "Alone, the dark still hides an investigator better than the beam.");
+            Assert.Less(Notice(false, 2), Notice(true, 2), "In a group too.");
+        }
+
+        [Test] public void FootstepsCarryFurtherForAListenerAndStillnessIsSilent() {
+            var tuning = new CH_MonsterTuning();
+            const float sprint = CH_MonsterTuning.InvestigatorSprintSpeed, walk = CH_MonsterTuning.InvestigatorWalkSpeed;
+            Assert.AreEqual(0f, tuning.HearingRange(CH_Temperament.Listener, 0f), "Standing still makes no sound.");
+            Assert.Greater(tuning.HearingRange(CH_Temperament.LightSeeker, walk), 0f, "Walking is heard.");
+            Assert.Greater(tuning.HearingRange(CH_Temperament.LightSeeker, sprint), tuning.HearingRange(CH_Temperament.LightSeeker, walk), "Sprinting carries further.");
+            Assert.Greater(tuning.HearingRange(CH_Temperament.Listener, sprint), tuning.HearingRange(CH_Temperament.LightSeeker, sprint), "A listener hears further.");
         }
 
         [Test] public void AStalledPresenceLungesAtAnInvestigatorJustOffTheWalkableGround() {
             var tuning = new CH_MonsterTuning();
             Assert.AreEqual(tuning.strikeDistance, tuning.StrikeRange(0f), "A normal strike while it is still closing in.");
             Assert.AreEqual(tuning.strikeDistance, tuning.StrikeRange(tuning.standOffSeconds * 0.5f));
-            // The monster accepts an approach point up to 3 m from the investigator and stops 0.65 m short of it.
-            Assert.GreaterOrEqual(tuning.StrikeRange(tuning.standOffSeconds), 3f + 0.65f, "The lunge covers the approach ring.");
+            Assert.GreaterOrEqual(tuning.StrikeRange(tuning.standOffSeconds),
+                CH_MonsterTuning.OffMeshApproachRadius + CH_MonsterTuning.AgentStoppingDistance, "The lunge covers the approach ring.");
             Assert.Greater(tuning.standOffGiveUpSeconds, tuning.standOffSeconds, "It lunges before it gives up.");
         }
     }

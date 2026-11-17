@@ -18,7 +18,9 @@ namespace Universes.UniverseData.classic_horror.Editor.Server {
         [MenuItem("Ryan/Classic Horror/Server/Save Runner Tuning")]
         public static void SaveRunnerTuning() {
             if (Application.isPlaying) throw new System.InvalidOperationException("Leave Play Mode before saving the runner prefab.");
-            System.DateTime before = System.IO.File.GetLastWriteTimeUtc(RunnerPath);
+            if (IsParrelSyncClone)
+                throw new System.InvalidOperationException("This Editor is a ParrelSync clone, which does not save assets. Open the main "
+                    + "project with the server build profile to save the runner prefab.");
             GameObject prefab = PrefabUtility.LoadPrefabContents(RunnerPath);
             try {
                 if (!prefab.TryGetComponent(out Runner runner))
@@ -28,10 +30,11 @@ namespace Universes.UniverseData.classic_horror.Editor.Server {
             } finally {
                 PrefabUtility.UnloadPrefabContents(prefab);
             }
-            // A ParrelSync clone with asset saving blocked drops the write silently, so check the file itself.
-            if (System.IO.File.GetLastWriteTimeUtc(RunnerPath) == before)
-                Debug.LogWarning("Classic Horror: " + RunnerPath + " was not written; this Editor blocks asset saves (for example a ParrelSync clone).");
-            else Debug.Log("Classic Horror: saved the runner tuning into " + RunnerPath);
+            Debug.Log("Classic Horror: saved the runner tuning into " + RunnerPath);
         }
+
+        /// <summary>ParrelSync marks a clone project with an empty ".clone" file in its root folder.</summary>
+        static bool IsParrelSyncClone =>
+            System.IO.File.Exists(System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, ".clone"));
     }
 }

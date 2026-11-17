@@ -48,7 +48,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField] Vector2 dronePitch = new(0.7f, 1.05f);
         [Tooltip("Edge vignette (the shared danger vignette, drawn under the HUD); it beats with the heart.")]
         [SerializeField] Color dangerColor = new(0.42f, 0.02f, 0.02f);
-        [SerializeField, Range(0f, 1f)] float dangerMaxAlpha = 0.22f;
+        [SerializeField, Range(0f, 1f)] float dangerMaxAlpha = 0.16f;
         [Tooltip("Fear below this leaves the screen edge clear.")]
         [SerializeField, Range(0f, 1f)] float dangerThreshold = 0.2f;
         [Tooltip("The vignette is only re-sent when its strength moves by more than this.")]

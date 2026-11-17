@@ -27,6 +27,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const float GlowRadius = 0.75f;
         // Hand-shaped light: the right of the frame falls into shadow between these widths, the
         // top (brow and hat) by BrowShadow of the way, down to ShadowFloor of the rendered colour.
+        // Renderers left out of the portrait.
+        static readonly string[] HiddenParts = { "Hat" };
         const float SideShadowStart = 0.38f, SideShadowEnd = 0.74f, BrowShadow = 0.8f, ShadowFloor = 0.07f;
 
         public static Texture2D Build() {
@@ -50,6 +52,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
                     target.AddComponent<MeshFilter>().sharedMesh = mesh;
                     target.AddComponent<MeshRenderer>().sharedMaterials = materials;
                 }
+                // At this distance the hat's brim is a flat disc over the top of the frame; the portrait is the face alone.
+                foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+                    if (System.Array.IndexOf(HiddenParts, renderer.name) >= 0) renderer.enabled = false;
                 foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) {
                     if (!renderer.enabled) continue;
                     if (!foundAny) { all = renderer.bounds; foundAny = true; } else all.Encapsulate(renderer.bounds);

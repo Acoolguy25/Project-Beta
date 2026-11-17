@@ -17,18 +17,25 @@ namespace Universes.UniverseData.classic_horror.Client {
             [Min(0f)] public float shakeSeconds;
             [Tooltip("Peak weight of the lens volume (chromatic aberration and vignette).")]
             [Range(0f, 1f)] public float lens;
+            [Tooltip("Colour the face is multiplied by, so a catch does not look like a warning.")]
+            public Color tint;
+            [Tooltip("How close the face is cropped (1 = the full portrait).")]
+            [Range(1f, 2f)] public float zoom;
         }
 
         public CanvasGroup overlay;
         public RectTransform face;
+        [Tooltip("The face picture, tinted per encounter.")]
+        public UnityEngine.UI.Graphic picture;
         public AudioSource sting;
         [Tooltip("Global volume with the scare's chromatic aberration and vignette. Its weight is animated from 0.")]
         public Volume lensVolume;
         [Tooltip("Indexed by CH_ScareKind: warning, discovery, fatal.")]
         public Encounter[] encounters = {
-            new() { seconds = 2.25f, stingPitch = 0.85f, shake = 0.55f, shakeSeconds = 0.45f, lens = 0.8f },
-            new() { seconds = 1.75f, stingPitch = 1.25f, shake = 0.4f, shakeSeconds = 0.35f, lens = 0.6f },
-            new() { seconds = 3.5f, stingPitch = 0.85f, shake = 0.9f, shakeSeconds = 0.7f, lens = 1f },
+            new() { seconds = 2.25f, stingPitch = 0.85f, shake = 0.55f, shakeSeconds = 0.45f, lens = 0.8f, tint = Color.white, zoom = 1f },
+            new() { seconds = 1.75f, stingPitch = 1.25f, shake = 0.4f, shakeSeconds = 0.35f, lens = 0.6f, tint = Color.white, zoom = 1f },
+            // The catch: drowned in red and a little closer; at 1.06 x the 1.22 end scale the mouth still sits inside a 16:9 frame.
+            new() { seconds = 3.5f, stingPitch = 0.7f, shake = 0.9f, shakeSeconds = 0.7f, lens = 1f, tint = new Color(1f, 0.42f, 0.36f), zoom = 1.06f },
         };
         [Tooltip("Fraction of the encounter the face stays fully visible before fading.")]
         [Range(0f, 1f)] public float holdFraction = 0.55f;
@@ -41,7 +48,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Min(0f)] float faceWobbleSpeed = 7f;
 
         int lastSequence;
-        float started = -100, duration, lensPeak;
+        float started = -100, duration, lensPeak, zoom = 1f;
         public int PlayedCount { get; private set; }
         public bool Playing => Time.unscaledTime - started < duration;
 
@@ -62,6 +69,8 @@ namespace Universes.UniverseData.classic_horror.Client {
             started = Time.unscaledTime;
             duration = encounter.seconds;
             lensPeak = encounter.lens;
+            zoom = Mathf.Max(1f, encounter.zoom);
+            if (picture != null) picture.color = encounter.tint;
             overlay.alpha = 1;
             if (sting != null) { sting.pitch = encounter.stingPitch; sting.Play(); }
             CameraShake.Kick(encounter.shake, encounter.shakeSeconds);
@@ -77,7 +86,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             // One sudden appearance and a fade, without repeated flashes.
             overlay.alpha = 1f - Mathf.SmoothStep(0, 1, Mathf.InverseLerp(holdFraction, 1f, t));
-            face.localScale = Vector3.one * Mathf.Lerp(faceScale.x, faceScale.y, Mathf.Sqrt(Mathf.Clamp01(t)));
+            face.localScale = Vector3.one * (zoom * Mathf.Lerp(faceScale.x, faceScale.y, Mathf.Sqrt(Mathf.Clamp01(t))));
             face.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(t * faceWobbleSpeed) * faceWobbleDegrees);
             if (lensVolume != null)
                 lensVolume.weight = lensPeak * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(holdFraction, lensRecoveryFraction, t)));

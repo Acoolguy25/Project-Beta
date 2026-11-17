@@ -12,6 +12,7 @@ namespace Universes.UniverseData.classic_horror.Tests {
 
         [TestCase("EvidenceGlow")]
         [TestCase("SearchLanternGlass")]
+        [TestCase("OfferingEmber")]
         public void GeneratedGlowMaterialsKeepTheirEmission(string name) {
             var material = AssetDatabase.LoadAssetAtPath<Material>(Materials + name + ".mat");
             Assert.IsNotNull(material, name + ".mat is missing; run Ryan/Classic Horror/Rebuild Evidence Prefabs.");

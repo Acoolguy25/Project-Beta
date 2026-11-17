@@ -120,7 +120,7 @@ MonoBehaviour:
   - {fileID: 616058513970600625}
   - {fileID: 5687354957215542019}
   glowLight: {fileID: 300830658350716806}
-  idleRim: 0.22
+  idleRim: 0.65
   focusedRim: 1.25
   pulseDepth: 0.4
   pulseSeconds: 2.4

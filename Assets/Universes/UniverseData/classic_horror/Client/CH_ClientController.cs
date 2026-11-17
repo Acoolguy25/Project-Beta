@@ -41,8 +41,11 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Min(0.5f)] float feedbackSeconds = 2.5f;
         [Tooltip("Gap, in HUD units, between the focused prop's outline and its prompt, which sits below the prop (or above it when there is no room).")]
         [SerializeField, Min(0f)] float promptGap = 24f;
-        [Tooltip("Closest the prompt may come to the top or bottom screen edge, in HUD units.")]
-        [SerializeField, Min(0f)] float promptEdgeMargin = 90f;
+        [Tooltip("Closest the prompt may come to the top screen edge, in HUD units (clear of the case card).")]
+        [SerializeField, Min(0f)] float promptTopMargin = 90f;
+        [Tooltip("Closest the prompt may come to the bottom screen edge, in HUD units: clear of the hotbar and the radio line. "
+            + "When the space below the prop is inside this band, the prompt goes above it instead.")]
+        [SerializeField, Min(0f)] float promptBottomMargin = 175f;
         [Tooltip("After E is pressed the record's prompt hides at once; it may come back if the server has not answered within this many seconds.")]
         [SerializeField, Min(0.1f)] float pendingInteractionSeconds = 2f;
         [Tooltip("Offerings placed at the source are smaller than the records found around the map.")]
@@ -113,6 +116,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         float pendingUntil;
         // Where the HUD prefab puts the prompt; used when nothing is focused.
         Vector2 promptRest;
+        RectTransform promptRect, promptHud;
         static readonly Vector3[] BoundsCorners = new Vector3[8];
 
         bool CaseOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
@@ -122,7 +126,9 @@ namespace Universes.UniverseData.classic_horror.Client {
             visibilityMask = ~LayerMask.GetMask("Character", "LocalCharacter", "UI", "Ignore Raycast");
             endingPopup.HideImmediate();
             interactionPrompt.HideImmediate();
-            promptRest = ((RectTransform)interactionPrompt.transform).anchoredPosition;
+            promptRect = (RectTransform)interactionPrompt.transform;
+            promptHud = promptRect.parent as RectTransform;
+            promptRest = promptRect.anchoredPosition;
             radio.Clear();
             chapterLabel.text = "Investigator";
             objectiveLabel.text = "Establishing the radio link...";
@@ -410,16 +416,15 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         /// <summary>Keeps the prompt just below the focused prop on screen (above it near the bottom edge) so it never covers it.</summary>
         void PlacePrompt() {
-            var prompt = (RectTransform)interactionPrompt.transform;
-            var hud = prompt.parent as RectTransform;
+            RectTransform prompt = promptRect, hud = promptHud;
             var camera = Camera.main;
             Vector2 position = promptRest;
             if (hud != null && camera != null && focusedGlow != null && focusedGlow.TryGetBounds(out Bounds bounds)
                 && TryScreenSpan(camera, bounds, out float bottom, out float top)) {
                 float toHud = hud.rect.height / Mathf.Max(1f, Screen.height);
                 float halfHeight = prompt.rect.height * 0.5f;
-                float floor = hud.rect.yMin + promptEdgeMargin + halfHeight;
-                float ceiling = hud.rect.yMax - promptEdgeMargin - halfHeight;
+                float floor = hud.rect.yMin + promptBottomMargin + halfHeight;
+                float ceiling = hud.rect.yMax - promptTopMargin - halfHeight;
                 float below = hud.rect.yMin + bottom * toHud - promptGap - halfHeight;
                 float above = hud.rect.yMin + top * toHud + promptGap + halfHeight;
                 position.y = (below >= floor ? below : Mathf.Min(above, ceiling)) - hud.rect.center.y;

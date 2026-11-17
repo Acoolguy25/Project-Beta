@@ -15,7 +15,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float NavigationHeight = 1.05f;
         const float UnreachableGiveUpSeconds = 10f;
         const float UnreachableRetrySeconds = 12f;
-        const float ReachableApproachRadius = 3f;
+        const float ReachableApproachRadius = CH_MonsterTuning.OffMeshApproachRadius;
         // How close to its approach point counts as having arrived there (stand-off), and to the
         // last sensed position when searching.
         const float StandOffArrivalRadius = 1f, SearchArrivalRadius = 1.5f;
@@ -102,7 +102,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             locomotion.agent.height = NavigationHeight;
             locomotion.agent.acceleration = 38f;
             locomotion.agent.angularSpeed = 480f;
-            locomotion.agent.stoppingDistance = 0.65f;
+            locomotion.agent.stoppingDistance = CH_MonsterTuning.AgentStoppingDistance;
             locomotion.agent.autoRepath = true;
             locomotion.agent.autoBraking = false;
             locomotion.agent.obstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance;
@@ -184,27 +184,14 @@ namespace Universes.UniverseData.classic_horror.Server {
                 float distance = Vector3.Distance(eye, targetEye);
                 var light = ServerTool.Instance.GetTool(character.NetworkObject, ToolEnum.Flashlight) as ToolFlashlightShared;
                 bool lit = light != null && light.IsIlluminating;
-                bool sight = WorldInteraction.CanReach(eye, targetEye, 85f, obstacleMask);
-                bool beamOnMonster = lit && sight && distance < 32f && Vector3.Dot(light.BeamDirection, (eye - targetEye).normalized) > 0.86f;
+                bool sight = WorldInteraction.CanReach(eye, targetEye, tuning.MaxSightRange, obstacleMask);
+                bool beamOnMonster = lit && sight && distance < tuning.beamRepelRange
+                    && Vector3.Dot(light.BeamDirection, (eye - targetEye).normalized) > tuning.beamRepelAlignment;
                 if (temperament == CH_Temperament.LightShy && beamOnMonster) heldByLight = true;
-                float sightRange = temperament switch {
-                    CH_Temperament.LightSeeker => lit ? 85f : 55f,
-                    CH_Temperament.Listener => movement > 3f ? 85f : 60f,
-                    _ => 60f
-                };
-                if (Time.time < enragedUntil) sightRange = 85f;
-                // Temperament controls acquisition. Once a chase begins, retain a
-                // visible investigator well past the shorter initial detection radius
-                // (less far when they are alone, so distance can shake it off too).
-                if (character == pursued) sightRange = Mathf.Max(sightRange, tuning.PursuitSightRange(livingInvestigators));
-                // Footsteps carry through cover. Walking speed in this universe is
-                // 4.5 m/s, so a 6 m/s threshold missed ordinary movement entirely.
-                float hearingRange = movement > 6f
-                    ? (temperament == CH_Temperament.Listener ? 55f : 34f)
-                    : movement > 1.25f
-                        ? (temperament == CH_Temperament.Listener ? 40f : 20f)
-                        : 0f;
-                bool heard = distance < hearingRange;
+                // Temperament sets how far it notices someone; a chase holds them further, except alone.
+                float sightRange = tuning.SightRange(temperament, lit, movement, Time.time < enragedUntil, character == pursued, livingInvestigators);
+                // Footsteps carry through cover.
+                bool heard = distance < tuning.HearingRange(temperament, movement);
                 if ((sight && distance < sightRange) || heard)
                     sensedCandidates.Add(new SensedCandidate(character, distance, sight));
             }
@@ -216,7 +203,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 reachability.Remove(stale);
             }
 
-            if (heldByLight) lightHeldUntil = Time.time + 1.5f;
+            if (heldByLight) lightHeldUntil = Time.time + tuning.lightHoldSeconds;
             if (Time.time < lightHeldUntil || Time.time < repelledUntil) {
                 // Keep the same pursuit while light-shy retreat is active. A short
                 // hold prevents tiny beam/occlusion changes from flipping between
