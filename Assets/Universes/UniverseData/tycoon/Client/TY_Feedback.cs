@@ -99,6 +99,10 @@ namespace Universes.UniverseData.tycoon.Client {
         [Min(0.5f)] public float teardownFlattenSize = 6f;
         [Tooltip("Most dust or smoke puffs one item makes when it lands or collapses, one per part (a wall run puffs along its length).")]
         [Range(1, 16)] public int maxPartPuffs = 8;
+        [Tooltip("Tint of the smoke a torn-down item makes; light, so it reads as dust and debris against the pale floor.")]
+        public Color teardownSmokeColor = new(0.86f, 0.84f, 0.8f, 0.85f);
+        [Tooltip("Size of that smoke relative to the landing dust of the same part.")]
+        [Range(0.1f, 2f)] public float teardownSmokeScale = 0.7f;
         [Tooltip("Delay after the rebirth before the kept items drop back in (after the whole build has collapsed).")]
         [Min(0f)] public float rebuildDelay = 1.9f;
 
@@ -124,9 +128,15 @@ namespace Universes.UniverseData.tycoon.Client {
         SfxLadder register;
         int autoPopups;
         // Animations in flight, finished at once if this object is disabled mid-animation (see OnDisable).
-        readonly Dictionary<Transform, Vector3> pendingDrops = new();
+        readonly Dictionary<Transform, Rest> pendingDrops = new();
         readonly HashSet<GameObject> pendingTeardowns = new();
         static readonly List<Renderer> RendererBuffer = new();
+
+        /// <summary>Where and how big an item is once it has landed (its parent's space).</summary>
+        readonly struct Rest {
+            public readonly Vector3 position, scale;
+            public Rest(Vector3 position, Vector3 scale) { this.position = position; this.scale = scale; }
+        }
 
         void Awake() => register = new SfxLadder(SfxCue.Coin, registerSemitoneStep, maxRegisterCoins * 2, registerResetSeconds);
 
@@ -140,7 +150,8 @@ namespace Universes.UniverseData.tycoon.Client {
                 if (pair.Key == null) continue;
                 Punch.Cancel(pair.Key);
                 pair.Key.gameObject.SetActive(true);
-                pair.Key.localPosition = pair.Value;
+                pair.Key.localPosition = pair.Value.position;
+                pair.Key.localScale = pair.Value.scale;
             }
             pendingDrops.Clear();
             foreach (var item in pendingTeardowns) if (item != null) Destroy(item);
@@ -231,12 +242,12 @@ namespace Universes.UniverseData.tycoon.Client {
             Begin(item, rest, DropRoutine(item, rest, delay, shake, true, vanishDelay));
 
         void Begin(Transform item, Vector3 rest, IEnumerator routine) {
-            pendingDrops[item] = rest;
+            Punch.Cancel(item);
+            pendingDrops[item] = new Rest(rest, item.localScale);
             StartCoroutine(routine);
         }
 
         IEnumerator DropRoutine(Transform item, Vector3 rest, float delay, bool shake, bool vanishFirst, float vanishDelay = 0f) {
-            Punch.Cancel(item);
             Vector3 up = item.parent != null ? item.parent.InverseTransformDirection(Vector3.up) : Vector3.up;
             float wait = delay;
             if (vanishFirst) {
@@ -269,7 +280,7 @@ namespace Universes.UniverseData.tycoon.Client {
         void Landed(Transform item, bool shake) {
             Punch.Squash(item, landingSquash, landingSquashSeconds);
             (Vector3 centre, float scale, _) = Footprint(item);
-            PuffAlongParts(FxKind.DustPuff, item);
+            PuffAlongParts(FxKind.DustPuff, item, dustColor, 1f);
             GameFx.Play(FxKind.Confetti, centre + Vector3.up * confettiHeight, confettiColor, scale);
             GameSfx.PlayAt(SfxCue.Build, centre);
             if (shake) CameraShake.Explosion(centre, landingShakeRadius, landingShake, landingShakeSeconds);
@@ -289,13 +300,13 @@ namespace Universes.UniverseData.tycoon.Client {
         /// One puff on the ground under each part of the item (up to <see cref="maxPartPuffs"/>, spread
         /// evenly), sized to that part: a wall run puffs along its whole length, not in the plot's middle.
         /// </summary>
-        void PuffAlongParts(FxKind kind, Transform item) {
+        void PuffAlongParts(FxKind kind, Transform item, Color color, float scale) {
             item.GetComponentsInChildren(RendererBuffer);
             int parts = RendererBuffer.Count, puffs = Mathf.Min(parts, maxPartPuffs);
             for (int i = 0; i < puffs; i++) {
                 Bounds part = RendererBuffer[parts * i / puffs].bounds;
                 Vector3 ground = new(part.center.x, item.position.y, part.center.z);
-                GameFx.Play(kind, ground, dustColor, EffectScale(Mathf.Max(part.size.x, part.size.z)));
+                GameFx.Play(kind, ground, color, scale * EffectScale(Mathf.Max(part.size.x, part.size.z)));
             }
         }
 
@@ -316,14 +327,13 @@ namespace Universes.UniverseData.tycoon.Client {
         }
 
         /// <summary>
-        /// Smoke along the item's parts, then a wide item (a wall run, a building row) sinks flat into
+        /// Light smoke along the item's parts (smoke only: a whole build collapses at once, so one effect per part), then a wide item (a wall run, a building row) sinks flat into
         /// the floor while a small one shrinks about its own centre, so nothing slides across the plot.
         /// </summary>
         IEnumerator Collapse(Transform t) {
             Punch.Cancel(t);
             (Vector3 centre, _, float size) = Footprint(t);
-            PuffAlongParts(FxKind.DustPuff, t);
-            PuffAlongParts(FxKind.Smoke, t);
+            PuffAlongParts(FxKind.Smoke, t, teardownSmokeColor, teardownSmokeScale);
             bool flatten = size > teardownFlattenSize;
             Vector3 startScale = t.localScale, startPosition = t.position;
             for (float a = 0f; a < 1f; a += Time.deltaTime / teardownSeconds) {

@@ -20,18 +20,19 @@ namespace Universes.UniverseData.tycoon.Client {
         [SerializeField, Min(8)] int maxBricksPerBelt = 80;
         [Tooltip("Height above the belt where a dropped brick appears.")]
         [SerializeField, Min(0f)] float brickDropHeight = 2.2f;
-        [Tooltip("Height of a brick above the belt surface.")]
-        [SerializeField, Min(0f)] float brickRideHeight = 0.2f;
         [Tooltip("How much bigger a brick gets per upgrader it passes (0.1 = 10%).")]
         [SerializeField, Min(0f)] float brickGrowthPerStage = 0.12f;
-        [Tooltip("Smallest centre-to-centre gap between bricks on the belt, in metres. A dropper holds its brick until there is room, "
-            + "so fully upgraded (grown) bricks never touch. Visual only: income is counted on the server.")]
-        [SerializeField, Min(0f)] float minBrickSpacing = 1.6f;
+        [Tooltip("Smallest centre-to-centre gap between bricks on the belt, in metres; keep it above a fully grown brick's length "
+            + "so bricks never touch. A due dropper waits for a gap. Visual only: income is counted on the server.")]
+        [SerializeField, Min(0.1f)] float minBrickSpacing = 1.4f;
+        [Tooltip("Share (0..1) of the belt's room the droppers may fill. When the owned droppers together want more bricks than that, "
+            + "every dropper's visual interval is stretched by the same factor, so all of them keep dropping in proportion.")]
+        [SerializeField, Range(0.1f, 1f)] float beltFill = 0.75f;
 
         [Header("Brick glow")]
         [Tooltip("Strength (0..1) of the pool of light under a brick per upgrade stage (0 = raw), in that stage's colour; 0 hides it. "
             + "It lies on the dark belt, so upgraded bricks stand out without bloom.")]
-        [SerializeField] float[] brickGlowStrength = { 0f, 0.6f, 0.75f, 0.95f };
+        [SerializeField] float[] brickGlowStrength = { 0f, 1f, 1f, 1f };
 
         [Header("Belt texture")]
         [Tooltip("+1 or -1: whichever makes the belt's arrows move with the bricks.")]
@@ -43,13 +44,17 @@ namespace Universes.UniverseData.tycoon.Client {
 
         static readonly TY_ItemKind[] PadLanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Rebirth };
 
-        sealed class Ore { public Transform t; public TY_OreView view; public float distance; public int stage; }
+        sealed class Ore { public Transform t; public TY_OreView view; public float distance; public int stage; public float scale; }
 
         sealed class PlotVisual {
             public TY_PlotState state;
             public readonly GameObject[] items = new GameObject[TY_Catalog.Count];
             public readonly TY_ButtonView[] pads = new TY_ButtonView[PadLanes.Length];
             public readonly float[] dropTimers = new float[TY_Catalog.Count];
+#if UNITY_EDITOR
+            /// <summary>Editor-only diagnostics: bricks dropped per item on this plot (read by test probes).</summary>
+            public readonly int[] dropCounts = new int[TY_Catalog.Count];
+#endif
             public readonly List<Ore> ores = new();
             public GameObject golden;
             public FxHandle beacon;
@@ -73,6 +78,7 @@ namespace Universes.UniverseData.tycoon.Client {
         float beltOffset, beltOffsetPerSecond;
         long autoEarned;
         float nextAutoPopup;
+        float brickHalfHeight;
 
         void Awake() {
             map = GetComponentInParent<TY_Map>();
@@ -85,6 +91,15 @@ namespace Universes.UniverseData.tycoon.Client {
             oreTints = new Color[map.oreMaterials?.Length ?? 0];
             for (int i = 0; i < oreTints.Length; i++)
                 oreTints[i] = map.oreMaterials[i] != null && map.oreMaterials[i].HasProperty("_BaseColor") ? map.oreMaterials[i].GetColor("_BaseColor") : Color.white;
+            brickHalfHeight = map.orePrefab != null ? HalfHeight(map.orePrefab.GetComponent<TY_OreView>()) : 0f;
+        }
+
+        /// <summary>Distance from the brick's pivot down to its bottom face, read from the authored brick mesh.</summary>
+        static float HalfHeight(TY_OreView view) {
+            var filter = view != null && view.body != null ? view.body.GetComponent<MeshFilter>() : null;
+            if (filter == null || filter.sharedMesh == null) return 0f;
+            var body = view.body.transform;
+            return filter.sharedMesh.bounds.extents.y * body.localScale.y - body.localPosition.y;
         }
 
         void Start() {
@@ -301,22 +316,7 @@ namespace Universes.UniverseData.tycoon.Client {
             var v = visuals[index];
             if (!v.hasState || v.state.ownerId < 0 || map.orePrefab == null) return;
             var plot = map.plots[index].transform;
-            for (int item = 0; item < TY_Catalog.Count; item++) {
-                var data = TY_Catalog.Items[item];
-                if (data.kind != TY_ItemKind.Dropper || !TY_Catalog.Owns(v.state.purchased, item)) continue;
-                v.dropTimers[item] += dt;
-                if (v.dropTimers[item] < data.interval) continue;
-                float drop = TY_Catalog.BeltDistance(data.itemPosition);
-                if (!BeltClearAt(v, drop)) {
-                    // Hold the brick until a gap passes under the dropper, so bricks never merge into bars.
-                    v.dropTimers[item] = data.interval;
-                    continue;
-                }
-                v.dropTimers[item] -= data.interval;
-                if (v.ores.Count >= maxBricksPerBelt) continue;
-                v.ores.Add(SpawnOre(plot, drop));
-                if (mine) feedback.BrickDropped(plot.TransformPoint(data.itemPosition + Vector3.up * TY_Catalog.BeltTop));
-            }
+            DropBricks(v, plot, dt, mine);
             float end = TY_Catalog.BeltEndX - TY_Catalog.BeltStartX + 1.5f;
             for (int i = v.ores.Count - 1; i >= 0; i--) {
                 var ore = v.ores[i];
@@ -330,7 +330,8 @@ namespace Universes.UniverseData.tycoon.Client {
                     ore.stage = stage;
                     int look = oreTints.Length > 0 ? Mathf.Min(stage, oreTints.Length - 1) : -1;
                     if (look >= 0) ore.view.body.sharedMaterial = map.oreMaterials[look];
-                    ore.t.localScale = Vector3.one * (1f + brickGrowthPerStage * stage);
+                    ore.scale = 1f + brickGrowthPerStage * stage;
+                    ore.t.localScale = Vector3.one * ore.scale;
                     SetGlow(ore, stage, look);
                     if (upgraded && mine) feedback.BrickUpgraded(ore.t.position, look >= 0 ? oreTints[look] : Color.white);
                 }
@@ -340,9 +341,68 @@ namespace Universes.UniverseData.tycoon.Client {
                     v.ores.RemoveAt(i);
                     continue;
                 }
-                ore.t.position = plot.TransformPoint(new Vector3(TY_Catalog.BeltStartX + ore.distance, TY_Catalog.BeltTop + brickRideHeight, TY_Catalog.BeltZ));
+                // The brick grows about its centre, so lift it with its size: its bottom (and the light under it) stays on the belt.
+                ore.t.position = plot.TransformPoint(new Vector3(TY_Catalog.BeltStartX + ore.distance, TY_Catalog.BeltTop + brickHalfHeight * ore.scale, TY_Catalog.BeltZ));
                 ore.t.rotation = plot.rotation;
             }
+        }
+
+        /// <summary>
+        /// Runs the droppers' visual timers and drops the bricks that are due. Every owned dropper must visibly drop, so:
+        /// intervals are stretched by one common factor when the belt cannot fit them all (<see cref="DropStretch"/>), and a
+        /// dropper may not drop while a dropper further down the belt has been waiting longer, because its brick would ride
+        /// through that dropper's gap. Downstream droppers therefore cannot be starved by the cheap upstream ones.
+        /// </summary>
+        void DropBricks(PlotVisual v, Transform plot, float dt, bool mine) {
+            float stretch = DropStretch(v.state.purchased);
+            for (int item = 0; item < TY_Catalog.Count; item++) {
+                if (!IsOwnedDropper(v, item)) continue;
+                float interval = TY_Catalog.Items[item].interval * stretch;
+                v.dropTimers[item] = Mathf.Min(v.dropTimers[item] + dt, interval * MaxDropBacklog);
+            }
+            for (int item = 0; item < TY_Catalog.Count; item++) {
+                if (!IsOwnedDropper(v, item)) continue;
+                var data = TY_Catalog.Items[item];
+                float interval = data.interval * stretch;
+                float waited = v.dropTimers[item] - interval;
+                if (waited < 0f) continue;
+                float drop = TY_Catalog.BeltDistance(data.itemPosition);
+                if (!BeltClearAt(v, drop) || LongerWaitDownstream(v, item, drop, waited, stretch)) continue;
+                v.dropTimers[item] -= interval;
+                if (v.ores.Count >= maxBricksPerBelt) continue;
+                v.ores.Add(SpawnOre(plot, drop));
+#if UNITY_EDITOR
+                v.dropCounts[item]++;
+#endif
+                if (mine) feedback.BrickDropped(plot.TransformPoint(data.itemPosition + Vector3.up * TY_Catalog.BeltTop));
+            }
+        }
+
+        /// <summary>Most intervals a waiting dropper may fall behind; beyond that its missed bricks are skipped, not queued.</summary>
+        const float MaxDropBacklog = 2f;
+
+        static bool IsOwnedDropper(PlotVisual v, int item) =>
+            TY_Catalog.Items[item].kind == TY_ItemKind.Dropper && TY_Catalog.Owns(v.state.purchased, item);
+
+        /// <summary>1, or the factor that slows every dropper equally so their bricks fill at most <see cref="beltFill"/> of the belt.</summary>
+        float DropStretch(ulong purchased) {
+            float bricksPerSecond = 0f;
+            for (int item = 0; item < TY_Catalog.Count; item++)
+                if (TY_Catalog.Items[item].kind == TY_ItemKind.Dropper && TY_Catalog.Owns(purchased, item))
+                    bricksPerSecond += 1f / TY_Catalog.Items[item].interval;
+            float room = beltFill * TY_Catalog.BeltSpeed / minBrickSpacing;
+            return bricksPerSecond > room ? bricksPerSecond / room : 1f;
+        }
+
+        /// <summary>True when a due dropper further down the belt than <paramref name="drop"/> has waited longer.</summary>
+        bool LongerWaitDownstream(PlotVisual v, int item, float drop, float waited, float stretch) {
+            for (int other = 0; other < TY_Catalog.Count; other++) {
+                if (other == item || !IsOwnedDropper(v, other)) continue;
+                var data = TY_Catalog.Items[other];
+                float otherWaited = v.dropTimers[other] - data.interval * stretch;
+                if (otherWaited > waited && TY_Catalog.BeltDistance(data.itemPosition) > drop) return true;
+            }
+            return false;
         }
 
         /// <summary>True when no brick on the belt is within <see cref="minBrickSpacing"/> of <paramref name="distance"/>.</summary>
@@ -372,6 +432,7 @@ namespace Universes.UniverseData.tycoon.Client {
             }
             ore.distance = distance;
             ore.stage = -1;
+            ore.scale = 1f;
             ore.t.gameObject.SetActive(true);
             ore.t.position = plot.TransformPoint(new Vector3(TY_Catalog.BeltStartX + distance, TY_Catalog.BeltTop + brickDropHeight, TY_Catalog.BeltZ));
             return ore;

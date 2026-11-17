@@ -74,14 +74,17 @@ namespace Universes.UniverseData.tycoon.Editor {
             Object.DestroyImmediate(tex);
         }
 
-        /// <summary>A white radial glow, brightest in the middle and fading smoothly to nothing at the edge.</summary>
+        /// <summary>
+        /// A white radial glow with a broad bright middle that fades smoothly to nothing at the edge, so the
+        /// light still shows around the brick that covers its centre.
+        /// </summary>
         static void WriteGlow(string path, int size) {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
             float half = size * 0.5f;
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++) {
                     float r = Mathf.Clamp01(new Vector2(x + 0.5f - half, y + 0.5f - half).magnitude / half);
-                    float a = (1f - r) * (1f - r);
+                    float a = (1f - r * r) * (1f - r * r);
                     tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
                 }
             File.WriteAllBytes(path, tex.EncodeToPNG());

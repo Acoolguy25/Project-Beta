@@ -13820,13 +13820,14 @@ MonoBehaviour:
   feedback: {fileID: 2454792979175191635}
   maxBricksPerBelt: 80
   brickDropHeight: 2.2
-  brickRideHeight: 0.2
   brickGrowthPerStage: 0.12
+  minBrickSpacing: 1.4
+  beltFill: 0.75
   brickGlowStrength:
   - 0
-  - 0.6
-  - 0.75
-  - 0.95
+  - 1
+  - 1
+  - 1
   beltScrollDirection: 1
   autoPopupSeconds: 3
 --- !u!114 &7523678133117142180
@@ -13985,6 +13986,8 @@ MonoBehaviour:
   teardownSeconds: 0.5
   teardownFlattenSize: 6
   maxPartPuffs: 8
+  teardownSmokeColor: {r: 0.86, g: 0.84, b: 0.8, a: 0.85}
+  teardownSmokeScale: 0.7
   rebuildDelay: 1.9
   perkFlash: {r: 1, g: 0.85, b: 0.3, a: 0.25}
   rushColor: {r: 1, g: 0.62, b: 0.15, a: 1}

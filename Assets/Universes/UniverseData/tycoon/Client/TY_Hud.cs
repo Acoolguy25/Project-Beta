@@ -75,8 +75,10 @@ namespace Universes.UniverseData.tycoon.Client {
         float toastUntil;
         double cashShown, cashFrom, cashTarget;
         long cashTextKey = long.MinValue;
-        // Diagnostics: how often the cash text was rewritten (stays put while the number does not change).
+#if UNITY_EDITOR
+        // Editor-only diagnostics for test probes: how often the cash text was rewritten (stays put while the number does not change).
         int cashTextWrites;
+#endif
         float cashCount = 1f;
         float rushEndsAt;
         int rushShownSeconds = -1;
@@ -144,7 +146,9 @@ namespace Universes.UniverseData.tycoon.Client {
             long key = CashTextKey(value);
             if (key == cashTextKey) return;
             cashTextKey = key;
+#if UNITY_EDITOR
             cashTextWrites++;
+#endif
             if (value >= 0 && value < 10_000) cash.SetText("${0}", value);
             else cash.text = "$" + TY_Catalog.Money(value);
         }

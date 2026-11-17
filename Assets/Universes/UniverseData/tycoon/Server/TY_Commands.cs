@@ -9,8 +9,11 @@ using RyanAssets.Shared.Requests;
 
 namespace Universes.UniverseData.tycoon.Server {
     /// <summary>
-    /// Brick Tycoon's server commands (typed in chat, e.g. "/StartRushHour"): the rush-hour testing and
-    /// tuning hooks. There is deliberately no cash or token command, because progress is saved.
+    /// Brick Tycoon's rush-hour testing and tuning commands, StartRushHour and RushMultiplier (com.ryan.commands).
+    /// They are registered only when the runner's rushCommands flag is on (test servers), because the command service
+    /// has no permissions and rush earnings are saved. The tycoon client has no chat command box
+    /// (ClientCommandController), so a tester sends them as a CommandBroadcast from an Editor client.
+    /// There is deliberately no cash or token command.
     /// </summary>
     static class TY_Commands {
         const string Type = "Brick Tycoon";
@@ -58,8 +61,7 @@ namespace Universes.UniverseData.tycoon.Server {
 
         static void OnRushMultiplier(NetworkConnection caller, string commandName, string[] args) {
             runner.SetRushMultiplier(float.Parse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture));
-            ServerChat.SendSystemMessage(new SystemMessageBroadcast(
-                FormattableString.Invariant($"Rush hours now pay x{runner.RushMultiplier:0.##}."), SystemMessageSource.CustomMessage));
+            Reply(caller, FormattableString.Invariant($"Rush hours now pay x{runner.RushMultiplier:0.##}."));
         }
 
         static void Reply(NetworkConnection caller, string text) =>

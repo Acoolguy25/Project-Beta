@@ -45,6 +45,9 @@ namespace Universes.UniverseData.tycoon.Server {
         [Header("Rush hour")]
         [Tooltip("Timed server event: every few minutes every tycoon earns more for a short while.")]
         [SerializeField] TY_RushHour rushHour = new();
+        [Tooltip("Test servers only: registers the StartRushHour and RushMultiplier commands (see TY_Commands). The command "
+            + "service has no permissions, so any player could run them, and rush earnings are saved. Keep it off when shipping.")]
+        [SerializeField] bool rushCommands;
 
         [Header("Rewards (account XP/gold)")]
         [SerializeField] ulong purchaseXP = 4;
@@ -57,7 +60,8 @@ namespace Universes.UniverseData.tycoon.Server {
         [SerializeField, Min(1f)] float fullReminder = 25f;
 
         const string CashColumn = "Cash";
-        const string RebirthColumn = "Rebirths";
+        // Short titles: the shared player list gives every stat column the same narrow fixed width.
+        const string RebirthColumn = "Reb.";
 
         sealed class Plot {
             public NetworkConnection owner;
@@ -157,7 +161,7 @@ namespace Universes.UniverseData.tycoon.Server {
             if (plots.Length != map.PlotCount) plots = Enumerable.Range(0, map.PlotCount).Select(_ => new Plot()).ToArray();
             SetGlobalInvul(true);
             SetTeamKillEnabled(false);
-            TY_Commands.Register(this);
+            if (rushCommands) TY_Commands.Register(this);
             SetLeaderboardEnabled(CashColumn, true);
             SetLeaderboardEnabled(RebirthColumn, true);
             if (SharedGlobalEvents.Instance != null) SharedGlobalEvents.Instance.MusicTrack.Value = MusicSelection.GameMusic;

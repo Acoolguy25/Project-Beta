@@ -279,11 +279,11 @@ namespace Universes.UniverseData.tycoon.Editor {
             return Kit.Save(root, "Pads", $"Pad{kind}");
         }
 
-        /// <summary>A bar along the sign's bottom edge that fills as the owner saves up for the item.</summary>
         /// <summary>Savings bar: money green, so it never reads as the sign's lane-coloured edge strip.</summary>
         static readonly Color SaveFillColor = new(0.3f, 0.92f, 0.45f);
         static readonly Color SaveTrackColor = new(0f, 0f, 0f, 0.55f);
 
+        /// <summary>A bar along the sign's bottom edge that fills as the owner saves up for the item.</summary>
         static void SaveBar(TY_ButtonView view, Transform sign) {
             const float width = 3.9f, height = 0.28f, y = -0.98f;
             var bar = Empty("SaveBar", sign, new Vector3(0f, y, -0.015f));
@@ -354,7 +354,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             glow.transform.localPosition = new Vector3(0f, 1.4f, 0f);
             var light = glow.GetComponent<Light>();
             light.type = LightType.Point; light.color = new Color(1f, 0.82f, 0.3f); light.range = 5f; light.intensity = 3f;
-            WorldText("Label", root.transform, new Vector3(0f, 3.3f, 0f), "GOLD COIN", 3.2f, new Color(1f, 0.85f, 0.3f), new Vector2(5f, 1f)).gameObject.AddComponent<Billboard>();
+            WorldText("Label", root.transform, new Vector3(0f, 3.3f, 0f), "GOLD COIN", 3.2f, new Color(1f, 0.85f, 0.3f), new Vector2(5f, 1f)).gameObject.AddComponent<Billboard>().facing = Billboard.Facing.CameraPlane;
             return Kit.Save(root, "", "GoldCoin");
         }
 
@@ -383,7 +383,6 @@ namespace Universes.UniverseData.tycoon.Editor {
             return Kit.Save(root, "Items", name);
         }
 
-        /// <summary>A KayKit tunnel over the belt with a glowing field; bricks change look as they pass.</summary>
         /// <summary>
         /// Length of an upgrader tunnel along the belt, as a fraction of the model's size. Upgraders stand
         /// 2.8 m apart; a shorter tunnel leaves a stretch of open belt after each one, so the bricks can be
@@ -391,6 +390,16 @@ namespace Universes.UniverseData.tycoon.Editor {
         /// </summary>
         const float UpgraderTunnelLength = 0.62f;
 
+        /// <summary>How much of the upgrader's field colour is darkened in its label, so it reads on the pale floor.</summary>
+        const float UpgraderLabelShade = 0.4f;
+
+        public static Color UpgraderLabelColor(Color field) {
+            Color shaded = Color.Lerp(field, Color.black, UpgraderLabelShade);
+            shaded.a = 1f;
+            return shaded;
+        }
+
+        /// <summary>A KayKit tunnel over the belt with a glowing field; bricks change look as they pass.</summary>
         static GameObject Upgrader(Prefabs p, in TY_Item item, int tier, Mats m) {
             string name = item.name.Replace(" ", "");
             var root = new GameObject(name);
@@ -401,7 +410,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             var field = Cube("Field", root.transform, new Vector3(0f, 1.3f, 0f), new Vector3(0.12f, 1.9f, 1.9f), m.upgradeFields[tier % m.upgradeFields.Length], false);
             NoShadows(field);
             WorldText("Label", root.transform, new Vector3(0f, RendererBounds(tunnel).max.y + 1.1f, 0f), $"{item.name.ToUpperInvariant()}\n<size=70%>x{item.value:0.##}</size>", 3f,
-                m.upgradeFields[tier % m.upgradeFields.Length].GetColor("_BaseColor") * 1.2f + new Color(0.2f, 0.2f, 0.2f), new Vector2(5f, 1.6f)).gameObject.AddComponent<Billboard>();
+                UpgraderLabelColor(m.upgradeFields[tier % m.upgradeFields.Length].GetColor("_BaseColor")), new Vector2(5f, 1.6f)).gameObject.AddComponent<Billboard>();
             return Kit.Save(root, "Items", name);
         }
 
