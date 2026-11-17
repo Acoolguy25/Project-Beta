@@ -7,6 +7,7 @@
         "RyanAssets.Core",
         "RyanAssets.Characters.Shared",
         "RyanAssets.Shared.Component",
+        "RyanAssets.Shared.Declarations",
         "RyanAssets.Characters.Client",
         "FishNet.Runtime",
         "Unity.TextMeshPro",

@@ -52,9 +52,12 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Tooltip("The big 3-2-1 starts when the pre-match countdown reaches this.")]
         [Min(1)] public int bigCountdownFrom = 3;
         public string goText = "FIGHT!";
-        [Min(0.1f)] public float captureConfettiScale = 2f;
-        [Tooltip("Where the two capture confetti bursts go, from the scoring team's stand: metres toward the field, to each side and up. In front of the stand and above eye level, so the scorer sees it falling without looking up and the field sees it over the base.")]
-        public Vector3 captureConfettiOffset = new(7f, 5f, 4.5f);
+        [Tooltip("Confetti size: smaller pieces read better than a few big ones.")]
+        [Min(0.1f)] public float captureConfettiScale = 1.3f;
+        [Tooltip("Where the two capture confetti bursts go, from the scoring team's stand: metres toward the field, up and to each side. High enough to clear the parapets and back wall (and the banner) when seen from the field, and in front of the stand so the scorer sees it falling.")]
+        public Vector3 captureConfettiOffset = new(9f, 12f, 6f);
+        [Tooltip("Extra bursts for the winners on the Won banner, from the local camera: metres ahead, up and to each side. Wide and low enough to land beside the banner rather than behind it or above the screen.")]
+        public Vector3 winConfettiOffset = new(8f, 1.5f, 5f);
         [Min(0.1f)] public float captureRingScale = 4f;
         [Range(0f, 1f)] public float captureShake = 0.3f;
         [Min(0f)] public float captureShakeSeconds = 0.35f;
@@ -98,7 +101,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         CTF_Map map;
         ClientManager manager;
         CTF_StateBroadcast state;
-        bool hasState, hasTeam, bigCountdownStarted, titleShown = true;
+        bool hasState, hasTeam, bigCountdownStarted, labelsShown = true;
         CTF_Team myTeam;
         float nextRequest, stateAt, speedLinesUntil;
         readonly CTF_FlagView[] views = new CTF_FlagView[2];
@@ -122,6 +125,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         }
 
         void Start() {
+            beacons.Init(map.transform);
             for (int i = 0; i < 2; i++) {
                 if (map.flagPrefabs[i] == null) continue;
                 views[i] = Instantiate(map.flagPrefabs[i], map.flagStands[i].position, Quaternion.identity, map.transform).GetComponent<CTF_FlagView>();
@@ -141,6 +145,14 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             manager.UnregisterBroadcast<CTF_TeamBroadcast>(OnTeam);
             manager.UnregisterBroadcast<CTF_EventBroadcast>(OnEvent);
             manager.UnregisterBroadcast<CTF_PowerUpBroadcast>(OnPowerUp);
+            manager.OnClientConnectionState -= OnConnectionState;
+        }
+
+        /// <summary>A new connection (for example to a restarted server) starts a new state sequence: forget the old one.</summary>
+        void OnConnectionState(ClientConnectionStateArgs args) {
+            if (args.ConnectionState != LocalConnectionState.Started) return;
+            hasState = false;
+            hasTeam = false;
         }
 
         int MyId => manager != null && manager.Connection != null ? manager.Connection.ClientId : -1;
@@ -152,6 +164,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 manager.RegisterBroadcast<CTF_TeamBroadcast>(OnTeam);
                 manager.RegisterBroadcast<CTF_EventBroadcast>(OnEvent);
                 manager.RegisterBroadcast<CTF_PowerUpBroadcast>(OnPowerUp);
+                manager.OnClientConnectionState += OnConnectionState;
             }
             if (manager != null && manager.Started && (!hasState || !hasTeam) && Time.unscaledTime > nextRequest) {
                 nextRequest = Time.unscaledTime + stateRequestSeconds;
@@ -182,10 +195,12 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                     CTF_Phase.Results => "Match over",
                     _ => "Waiting"
                 };
-                // The title over the bridge is for the lobby and countdown; in play it would sit behind the HUD.
-                bool title = state.phase is CTF_Phase.Waiting or CTF_Phase.Countdown;
-                if (map.title != null && title != titleShown) map.title.SetActive(title);
-                titleShown = title;
+                // The title and base signs are for the lobby and countdown; in play they would sit behind the HUD.
+                bool labels = state.phase is CTF_Phase.Waiting or CTF_Phase.Countdown;
+                if (labels != labelsShown) {
+                    labelsShown = labels;
+                    foreach (var label in map.lobbyLabels) label.SetActive(labels);
+                }
             }
             FlagStatus(0, redFlagStatus, state.redFlag);
             FlagStatus(1, blueFlagStatus, state.blueFlag);
@@ -377,7 +392,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         void OnEvent(CTF_EventBroadcast message, Channel channel) {
             string flag = $"<color={CTF_Rules.Hex(message.flag)}>{CTF_Rules.Name(message.flag)}</color> flag";
             bool ours = hasTeam && message.flag == myTeam;
-            string who = message.playerId == MyId ? "You" : message.playerName;
+            bool teammate = hasTeam && CTF_Rules.ActorTeam(message.kind, message.flag) == myTeam;
+            string who = CTF_Rules.PlayerLabel(message.playerName, message.playerId == MyId, teammate);
             Color flagColor = CTF_Rules.Color(message.flag);
             if (!string.IsNullOrEmpty(message.playerName)) {
                 carrierNames[message.playerId] = message.playerName;
@@ -393,7 +409,9 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                     Toast(droppedIcon, flagColor, $"{who} dropped the {flag}.", SfxCue.Whoosh);
                     break;
                 case CTF_EventKind.Returned:
-                    Toast(homeIcon, flagColor, string.IsNullOrEmpty(message.playerName) ? $"The {flag} went home." : $"{who} returned the {flag}.", SfxCue.Coin);
+                    // No player: the flag lay on the ground long enough to go home by itself.
+                    bool byItself = message.playerId < 0;
+                    Toast(homeIcon, flagColor, byItself ? $"The {flag} went home." : $"{who} returned the {flag}.", SfxCue.Coin);
                     GameFx.Play(FxKind.ShockwaveRing, map.Stand(message.flag), flagColor, takenRingScale);
                     break;
                 case CTF_EventKind.Captured:
@@ -407,6 +425,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                         $"{team} team wins the match {message.redScore}-{message.blueScore}.", winBannerSeconds);
                     GameSfx.Play(won || !hasTeam ? SfxCue.Win : SfxCue.Lose);
                     Celebrate(message.flag);
+                    if (won) ConfettiAhead(CTF_Rules.Color(message.flag));
                     break;
                 }
                 case CTF_EventKind.Draw:
@@ -446,6 +465,19 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             GameFx.Play(FxKind.ShockwaveRing, stand, color, captureRingScale);
             CameraShake.Kick(captureShake, captureShakeSeconds);
             ScreenFx.Flash(new Color(color.r, color.g, color.b, captureFlashAlpha));
+        }
+
+        /// <summary>Two confetti bursts just ahead of and above the local camera, wherever the player stands.</summary>
+        void ConfettiAhead(Color color) {
+            Camera view = Camera.main;
+            if (view == null) return;
+            Transform eye = view.transform;
+            Vector3 ahead = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
+            ahead = ahead.sqrMagnitude > 1e-4f ? ahead.normalized : Vector3.forward;
+            Vector3 side = Vector3.Cross(Vector3.up, ahead) * winConfettiOffset.z;
+            Vector3 at = eye.position + ahead * winConfettiOffset.x + Vector3.up * winConfettiOffset.y;
+            GameFx.Play(FxKind.Confetti, at + side, color, captureConfettiScale);
+            GameFx.Play(FxKind.Confetti, at - side, color, captureConfettiScale);
         }
 
         void OnPowerUp(CTF_PowerUpBroadcast message, Channel channel) {

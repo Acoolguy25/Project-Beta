@@ -27,6 +27,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         const float TickLength = 9f, TickWidth = 2f, TickGap = 6f, DotSize = 3f, RingSize = 34f;
         const string RingTexture = "CrosshairRing";
         const string PrefabPath = CTF_Authoring.Root + "/Prefabs/FlagWarsHUD.prefab";
+        const string KitBeamPath = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Prefabs/FxBeaconBeam.prefab";
+        /// <summary>How far the beam's motes may lean out of the column while they rise.</summary>
+        const float MoteSpreadDegrees = 6f;
 
         public static GameObject Build() {
 #if UNITY_SERVER
@@ -44,6 +47,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             hud.defeatIcon = HudKit.Icon("tombstone");
             hud.healthIcon = HudKit.Icon("favorite");
             hud.speedIcon = HudKit.Icon("bolt");
+            hud.beacons.beamPrefab = BuildFlagBeam();
 
             // Waypoints first so every card draws over them.
             hud.waypoints = BuildWaypoints(root);
@@ -61,6 +65,26 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         }
 
 #if !UNITY_SERVER
+        // ---------------------------------------------------------------- flag beam
+        /// <summary>
+        /// The kit's beacon beam with its motes sent up the column. The kit emits them from a flat
+        /// circle, so they slid outward along the floor and left team-coloured blobs across both bases.
+        /// </summary>
+        static ParticleSystem BuildFlagBeam() {
+            var source = AssetDatabase.LoadAssetAtPath<ParticleSystem>(KitBeamPath);
+            if (source == null) throw new System.InvalidOperationException($"Kit beacon missing at {KitBeamPath}: run Ryan > Game Feel > Rebuild.");
+            var beam = Object.Instantiate(source);
+            beam.name = "FlagBeam";
+            foreach (var system in beam.GetComponentsInChildren<ParticleSystem>(true)) {
+                var shape = system.shape;
+                if (!shape.enabled || shape.shapeType != ParticleSystemShapeType.Circle) continue;
+                // A narrow upward cone from the same ring: the shape's (-90, 0, 0) turn points its +z up.
+                shape.shapeType = ParticleSystemShapeType.Cone;
+                shape.angle = MoteSpreadDegrees;
+            }
+            return CTF_Authoring.Kit.Save(beam.gameObject, "", "FlagBeam").GetComponent<ParticleSystem>();
+        }
+
         // ---------------------------------------------------------------- scoreboard
         /// <summary>
         /// Top centre, under the shared top bar: both scores on their team colour, the clock between

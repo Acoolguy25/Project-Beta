@@ -80,6 +80,21 @@ namespace Universes.UniverseData.capture_the_flag {
             return signalAtLowAt * (health01 / lowAt);
         }
 
+        /// <summary>
+        /// How a toast, banner or feed line names a player: "You" for the local player, otherwise their
+        /// name, or "An enemy" / "A teammate" when the name is missing, so no line starts with a blank.
+        /// </summary>
+        public static string PlayerLabel(string name, bool isLocal, bool teammate, bool startsSentence = true) {
+            if (isLocal) return "You";
+            if (!string.IsNullOrWhiteSpace(name)) return name;
+            if (teammate) return startsSentence ? "A teammate" : "a teammate";
+            return startsSentence ? "An enemy" : "an enemy";
+        }
+
+        /// <summary>Who did a flag event: a return is by the flag's own team, anything else by the other team.</summary>
+        public static CTF_Team ActorTeam(CTF_EventKind kind, CTF_Team flag) =>
+            kind == CTF_EventKind.Returned ? flag : Other(flag);
+
         /// <summary>A state this far behind the last one comes from a restarted server, not a late packet.</summary>
         public const int SequenceRestartGap = 1000;
 

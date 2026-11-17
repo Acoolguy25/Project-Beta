@@ -4,6 +4,7 @@ using FishNet.Transporting;
 using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
 using RyanAssets.GameFeel;
+using RyanAssets.Shared.Declarations;
 using RyanAssets.UI.GameHud;
 using TMPro;
 using UnityEngine;
@@ -196,7 +197,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             ScreenFx.SetLowHealth(1f);
             ScreenFx.Flash(new Color(killColor.r, killColor.g, killColor.b, deathFlashAlpha));
             respawnBy.text = hasKiller
-                ? $"Eliminated by {Name(message.killerName, message.killerTeam, false)}"
+                ? $"Eliminated by {Name(message.killerName, message.killerTeam, false, startsSentence: false)}"
                 : message.cause == CTF_KillCause.Fall ? "You fell off the map" : "You were eliminated";
             respawnAt = Time.time + message.respawnSeconds;
             shownSeconds = -1;
@@ -206,8 +207,14 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         static string Fate(CTF_KillCause cause, bool isMe) =>
             cause == CTF_KillCause.Fall ? "fell" : isMe ? "were eliminated" : "was eliminated";
 
-        static string Name(string name, CTF_Team team, bool isMe) =>
-            $"<color={CTF_Rules.Hex(team)}>{(isMe ? "You" : string.IsNullOrEmpty(name) ? "Someone" : name)}</color>";
+        static string Name(string name, CTF_Team team, bool isMe, bool startsSentence = true) =>
+            $"<color={CTF_Rules.Hex(team)}>{CTF_Rules.PlayerLabel(name, isMe, IsMyTeam(team), startsSentence)}</color>";
+
+        /// <summary>Whether <paramref name="team"/> is the local player's team (from their character).</summary>
+        static bool IsMyTeam(CTF_Team team) {
+            var me = LocalPlayer.Character;
+            return me != null && me.GetTeam().realTeam == (team == CTF_Team.Red ? TeamColor.Red : TeamColor.Blue);
+        }
 
         Sprite Icon(CTF_KillCause cause) => cause switch {
             CTF_KillCause.Gun => pistolIcon,

@@ -26,7 +26,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
     internal static class CTF_ArenaAuthoring {
         // ---- field
         static readonly Vector2 SignBox = new(26f, 5f);
-        static readonly Vector2 TitleBox = new(30f, 7f);
+        static readonly Vector2 TitleBox = new(40f, 7f);
+        /// <summary>Title font size: about 3.5 m letters, readable from the lobby spawn 46 m away.</summary>
+        const float TitleFontSize = 40f;
         /// <summary>Largest share of the screen height a base sign or the title may cover up close.</summary>
         const float SignMaxScreen = 0.12f;
         const float TitleMaxScreen = 0.16f;
@@ -76,8 +78,14 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         /// <summary>Full cover: hides a standing robot completely.</summary>
         const float FullCoverHeight = 7f;
         const float FullCoverLength = 8f, FullCoverThickness = 1.4f;
+        const float BlastCapHeight = 0.6f, BlastCapOverhang = 0.4f;
         const float HealthPowerUpX = -48f;
-        static readonly Vector3 LobbySpawn = new(0f, 0.5f, -10f);
+        /// <summary>
+        /// Where players wait for the match: on the south lane road, 46 m from the centre, facing the
+        /// bridge, so a lone player sees the arena and the "FLAG WARS" title instead of a wall.
+        /// </summary>
+        static readonly Vector3 LobbySpawn = new(0f, 0.5f, -46f);
+        const float LobbyYaw = 0f;
 
         // ---- look
         static readonly Color SkyTint = new(0.52f, 0.56f, 0.62f);
@@ -88,9 +96,17 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         const float TeamLightIntensity = 3f, TeamLightRange = 55f;
         /// <summary>How far each base floor's tiles are tinted toward the team colour.</summary>
         const float BaseFloorTint = 0.4f;
-        /// <summary>Neutral props: khaki tint, how much of it is plain grey, and how much original colour survives.</summary>
-        static readonly Color NeutralTint = new(0.78f, 0.74f, 0.6f);
-        const float NeutralGreyShare = 0.35f, NeutralKeep = 0.12f;
+        /// <summary>How a pack's palette is washed out of team colours: tint, share of plain grey, share of original colour kept.</summary>
+        readonly struct Wash {
+            public readonly Color tint;
+            public readonly float greyShare, keep;
+            public Wash(Color tint, float greyShare, float keep) => (this.tint, this.greyShare, this.keep) = (tint, greyShare, keep);
+        }
+
+        /// <summary>Containers, cargo and barrels: khaki.</summary>
+        static readonly Wash NeutralWash = new(new Color(0.78f, 0.74f, 0.6f), 0.35f, 0.12f);
+        /// <summary>Crate stacks: pale pine with a little warmth left, so they read as wood and never as team red.</summary>
+        static readonly Wash CrateWash = new(new Color(0.86f, 0.76f, 0.58f), 0.3f, 0.1f);
 
         // ---- asset paths
         const string Military = "Assets/CartoonMilitaryModelPack/Prefebs/";
@@ -110,7 +126,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         enum Solid { None, Box, Trunk, Mesh }
 
         sealed class Mats {
-            public Material grass, road, concrete, wall, sandbag, space, proto, medieval;
+            public Material grass, road, concrete, wall, sandbag, space, proto, medieval, crate;
             public Material[] floor, parapet, trim, banner;
         }
 
@@ -126,16 +142,19 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             Field(world, m);
             map.flagStands = new Transform[2];
             var spawns = new[] { new List<Transform>(), new List<Transform>() };
+            var lobbyLabels = new List<GameObject>();
             for (int t = 0; t < 2; t++) {
                 var team = (CTF_Team)t;
-                map.flagStands[t] = Base(team, world, mapGo.transform, m, spawns[t]);
+                map.flagStands[t] = Base(team, world, mapGo.transform, m, spawns[t], lobbyLabels);
             }
             map.redSpawns = spawns[0].ToArray();
             map.blueSpawns = spawns[1].ToArray();
             map.lobbySpawn = Empty("LobbySpawn", mapGo.transform, LobbySpawn).transform;
+            map.lobbySpawn.rotation = Quaternion.Euler(0f, LobbyYaw, 0f);
             map.killY = KillY;
 
-            map.title = Centre(world, m);
+            lobbyLabels.Add(Centre(world, m));
+            map.lobbyLabels = lobbyLabels.ToArray();
             MidLane(world, m);
             NorthLane(world, m);
             SouthLane(world, m);
@@ -164,9 +183,11 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
                 concrete = Tiled(kit.Mat("Concrete", Color.white, concrete, smoothness: 0.15f), 4f, 4f),
                 wall = Surface("Wall", "white_stucco", new Color(0.7f, 0.68f, 0.64f), HalfLength * 2f / 4f, 2f, concrete),
                 sandbag = Tiled(kit.Mat("Sandbag", Color.white, kit.Tex("Sandbag"), smoothness: 0.05f), 3f, 1f),
-                space = Atlas("KayKitSpace", NeutralAtlas("SpaceNeutral", Space + "spacebits_texture.png")),
-                proto = Atlas("KayKitProto", NeutralAtlas("ProtoNeutral", Proto + "prototypebits_texture.png")),
+                space = Atlas("KayKitSpace", NeutralAtlas("SpaceNeutral", Space + "spacebits_texture.png", NeutralWash)),
+                proto = Atlas("KayKitProto", NeutralAtlas("ProtoNeutral", Proto + "prototypebits_texture.png", NeutralWash)),
                 medieval = Atlas("KayKitMedieval", Medieval + "tiles/base/hexagons_medieval.png"),
+                // The crates share the medieval palette with rocks, trees and hills, which keep their colour.
+                crate = Atlas("KayKitCrate", NeutralAtlas("CrateNeutral", Medieval + "tiles/base/hexagons_medieval.png", CrateWash)),
                 floor = new Material[2], parapet = new Material[2], trim = new Material[2], banner = new Material[2],
             };
             for (int t = 0; t < 2; t++) {
@@ -197,9 +218,10 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         /// <summary>
         /// Saturated red and blue belong to the teams (bases, flags, beacons, players). The space and
         /// prototype packs paint containers, cargo and barrels red, blue and green, so the arena uses a
-        /// copy of their palette with the colour washed toward khaki, saved in this game's Textures folder.
+        /// copy of their palette with the colour washed out (see <see cref="Wash"/>), saved in this game's
+        /// Textures folder. The medieval crates get the same treatment through their own copy.
         /// </summary>
-        static string NeutralAtlas(string name, string sourcePath) {
+        static string NeutralAtlas(string name, string sourcePath, Wash wash) {
             if (!File.Exists(sourcePath)) return sourcePath; // Atlas() warns
             var source = new Texture2D(2, 2);
             source.LoadImage(File.ReadAllBytes(sourcePath));
@@ -207,8 +229,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             for (int i = 0; i < pixels.Length; i++) {
                 Color c = pixels[i];
                 float grey = c.r * 0.3f + c.g * 0.59f + c.b * 0.11f;
-                Color neutral = NeutralTint * Mathf.Lerp(0.35f, 1.05f, grey);
-                pixels[i] = Color.Lerp(neutral, new Color(grey, grey, grey), NeutralGreyShare) * (1f - NeutralKeep) + c * NeutralKeep;
+                Color neutral = wash.tint * Mathf.Lerp(0.35f, 1.05f, grey);
+                pixels[i] = Color.Lerp(neutral, new Color(grey, grey, grey), wash.greyShare) * (1f - wash.keep) + c * wash.keep;
                 pixels[i].a = c.a;
             }
             source.SetPixels(pixels);
@@ -306,6 +328,10 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         static void BlastWall(Transform parent, Vector3 position, float yaw, Mats m) {
             var wall = Cube("BlastWall", parent, position + Vector3.up * (FullCoverHeight * 0.5f), new Vector3(FullCoverLength, FullCoverHeight, FullCoverThickness), m.concrete);
             wall.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            // A sandbag cap, a little wider than the wall, so it reads as placed cover rather than a bare block.
+            var cap = Cube("BlastWallCap", wall.transform.parent, position + Vector3.up * (FullCoverHeight + BlastCapHeight * 0.5f),
+                new Vector3(FullCoverLength + BlastCapOverhang, BlastCapHeight, FullCoverThickness + BlastCapOverhang), m.sandbag);
+            cap.transform.rotation = wall.transform.rotation;
         }
 
         /// <summary>Two big crates side by side with a third on top.</summary>
@@ -313,9 +339,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             var stack = Empty("Crates", parent, position);
             const float size = 3.4f;
             // Prop positions are local to the stack, which turns as one afterwards.
-            Prop(Props + "crate_A_big.fbx", stack.transform, new Vector3(-size * 0.55f, 0f, 0f), size, 4f, m.medieval, Solid.Box);
-            Prop(Props + "crate_B_big.fbx", stack.transform, new Vector3(size * 0.55f, 0f, 0f), size, -6f, m.medieval, Solid.Box);
-            Prop(Props + "crate_A_big.fbx", stack.transform, new Vector3(0f, size * 0.9f, 0f), size, 12f, m.medieval, Solid.Box);
+            Prop(Props + "crate_A_big.fbx", stack.transform, new Vector3(-size * 0.55f, 0f, 0f), size, 4f, m.crate, Solid.Box);
+            Prop(Props + "crate_B_big.fbx", stack.transform, new Vector3(size * 0.55f, 0f, 0f), size, -6f, m.crate, Solid.Box);
+            Prop(Props + "crate_A_big.fbx", stack.transform, new Vector3(0f, size * 0.9f, 0f), size, 12f, m.crate, Solid.Box);
             stack.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         }
 
@@ -347,7 +373,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
 
         // ---------------------------------------------------------------- bases
         /// <summary>Builds one team's base; returns its flag point. Red sits at -x facing +x, blue mirrors it.</summary>
-        static Transform Base(CTF_Team team, Transform world, Transform mapRoot, Mats m, List<Transform> spawns) {
+        static Transform Base(CTF_Team team, Transform world, Transform mapRoot, Mats m, List<Transform> spawns, List<GameObject> lobbyLabels) {
             int t = (int)team;
             float s = team == CTF_Team.Red ? 1f : -1f;
             float yaw = team == CTF_Team.Red ? 0f : 180f;
@@ -390,6 +416,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             var sign = WorldText("BaseSign", root, At(backF, BackWallHeight + 4f, 0f), $"{CTF_Rules.Name(team)} BASE", 8f, CTF_Rules.Color(team), SignBox, team == CTF_Team.Red ? -90f : 90f);
             sign.fontStyle = FontStyles.Bold;
             CTF_Authoring.FacingLabel(sign, SignBox.y, SignMaxScreen);
+            lobbyLabels.Add(sign.gameObject);
             var light = new GameObject("TeamLight", typeof(Light)).GetComponent<Light>();
             light.transform.SetParent(root, false);
             light.transform.position = At(0f, 14f, 0f);
@@ -426,7 +453,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
                 new Vector3(-BridgeLength * 0.5f, BridgeHeight, 0f), 0f);
             Mirrored((p, y) => Cube("Rail", centre, p, new Vector3(BridgeLength, RailHeight, 0.6f), m.sandbag),
                 new Vector3(0f, BridgeHeight + RailHeight * 0.5f, BridgeWidth * 0.5f - 0.3f), 0f);
-            var title = WorldText("Title", centre, new Vector3(0f, 22f, 0f), "FLAG WARS", 9f, new Color(1f, 0.85f, 0.25f), TitleBox);
+            var title = WorldText("Title", centre, new Vector3(0f, 22f, 0f), "FLAG WARS", TitleFontSize, new Color(1f, 0.85f, 0.25f), TitleBox);
             title.fontStyle = FontStyles.Bold;
             CTF_Authoring.FacingLabel(title, TitleBox.y, TitleMaxScreen);
             return title.gameObject;

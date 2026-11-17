@@ -74,6 +74,17 @@ namespace Universes.UniverseData.capture_the_flag.Tests {
         }
 
         [Test]
+        public void MissingNamesFallBackBySide() {
+            Assert.That(CTF_Rules.PlayerLabel("Ana", false, false), Is.EqualTo("Ana"));
+            Assert.That(CTF_Rules.PlayerLabel("Ana", true, true), Is.EqualTo("You"));
+            Assert.That(CTF_Rules.PlayerLabel("", false, false), Is.EqualTo("An enemy"));
+            Assert.That(CTF_Rules.PlayerLabel(" ", false, true), Is.EqualTo("A teammate"));
+            Assert.That(CTF_Rules.PlayerLabel(null, false, false, startsSentence: false), Is.EqualTo("an enemy"));
+            Assert.That(CTF_Rules.ActorTeam(CTF_EventKind.Taken, CTF_Team.Red), Is.EqualTo(CTF_Team.Blue));
+            Assert.That(CTF_Rules.ActorTeam(CTF_EventKind.Returned, CTF_Team.Red), Is.EqualTo(CTF_Team.Red));
+        }
+
+        [Test]
         public void OneHitLeftBeatsTheHeartbeat() {
             Assert.That(CTF_Rules.LowHealthSignal(1f, 0.5f, 0.2f), Is.EqualTo(1f));
             Assert.That(CTF_Rules.LowHealthSignal(0.5f, 0.5f, 0.2f), Is.EqualTo(0.2f).Within(1e-5f));

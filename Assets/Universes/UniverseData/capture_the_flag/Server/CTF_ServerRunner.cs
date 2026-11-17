@@ -27,9 +27,12 @@ namespace Universes.UniverseData.capture_the_flag.Server {
     public sealed class CTF_ServerRunner : ServerRunner {
         [Header("Round")]
         [Tooltip("The match waits until this many players are in. There are no bots, so a lone player waits on " +
-                 "\"Waiting for players (1/2)\" until a second one joins (set 1 by reflection for solo tests).")]
+                 "\"Waiting for players (1/2)\" until a second one joins. Set it to 1 to test alone.")]
         [SerializeField, Min(1)] int minPlayers = 2;
         [SerializeField, Min(1)] int countdownSeconds = 8;
+        [Tooltip("Top bar text during play. The score and goal are on the scoreboard, so this is just the game's name " +
+                 "(the shared top bar falls back to the universe id, \"Capture The Flag\", when it is empty).")]
+        [SerializeField] string playingTopMessage = "Flag Wars";
         [SerializeField, Min(30)] int matchSeconds = 480;
         [SerializeField, Min(3)] int resultsSeconds = 10;
         [SerializeField, Min(1)] int capturesToWin = CTF_Rules.CapturesToWin;
@@ -127,9 +130,13 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             return spawns[random.Next(spawns.Length)].position + Vector3.up;
         }
 
-        /// <summary>Spawn facing the enemy base, so the first view is the field rather than a wall.</summary>
+        /// <summary>
+        /// Spawn facing the enemy base, so the first view is the field rather than a wall. While waiting
+        /// for players (or without a team yet) everyone uses the lobby spawn's own facing.
+        /// </summary>
         Quaternion SpawnRotation(NetworkConnection connection) {
-            if (map == null || !teams.TryGetValue(connection, out var team)) return Quaternion.identity;
+            if (map == null) return Quaternion.identity;
+            if (phase is CTF_Phase.Waiting || !teams.TryGetValue(connection, out var team)) return map.lobbySpawn.rotation;
             Vector3 toward = map.Stand(CTF_Rules.Other(team)) - map.Stand(team);
             toward.y = 0f;
             return toward.sqrMagnitude > 0f ? Quaternion.LookRotation(toward) : Quaternion.identity;
@@ -217,14 +224,25 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         void BroadcastKill(NetworkConnection victim, GameCharacter victimCharacter, NetworkConnection killer, GameCharacter otherKiller, DamageType source) {
             InstanceFinder.ServerManager.Broadcast(new CTF_KillBroadcast {
                 killerId = killer != null ? killer.ClientId : -1,
-                killerName = killer != null ? PlayerData.GetPlayerName(killer) : otherKiller != null ? otherKiller.DisplayName : "",
+                killerName = killer != null ? NameOf(killer) : otherKiller != null ? otherKiller.DisplayName : "",
                 killerTeam = TeamOf(killer, otherKiller),
                 victimId = victim.ClientId,
-                victimName = PlayerData.GetPlayerName(victim) ?? (victimCharacter != null ? victimCharacter.DisplayName : ""),
+                victimName = NameOf(victim, victimCharacter),
                 victimTeam = TeamOf(victim, victimCharacter),
                 cause = Cause(source),
                 respawnSeconds = ServerPlayerCharacter.RespawnTime
             });
+        }
+
+        /// <summary>
+        /// A player's account name, or their character's display name when the account has none, so a
+        /// feed line, toast or banner always has a name to print.
+        /// </summary>
+        static string NameOf(NetworkConnection connection, GameCharacter character = null) {
+            string name = PlayerData.GetPlayerName(connection);
+            if (!string.IsNullOrEmpty(name)) return name;
+            if (character == null && LocalCharacter.Characters.TryGetValue(connection, out var own)) character = own;
+            return character != null ? character.DisplayName : "";
         }
 
         /// <summary>A player's team from the roster, otherwise the character's own team colour.</summary>
@@ -287,8 +305,8 @@ namespace Universes.UniverseData.capture_the_flag.Server {
                 secondsLeft = Mathf.Max(0, Mathf.CeilToInt(end - Time.time));
                 if (secondsLeft == 0 || redScore >= capturesToWin || blueScore >= capturesToWin) break;
                 headline = $"RED {redScore}  -  {blueScore} BLUE";
-                // The scoreboard shows the score and clock; the shared top pill stays out of the way.
-                SetTopMessage("");
+                // The scoreboard shows the score and clock; the shared top pill only names the game.
+                SetTopMessage(playingTopMessage);
                 await AwaitTime(500, token);
             }
 
@@ -492,7 +510,7 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         void Event(CTF_EventKind kind, CTF_Team flag, NetworkConnection player) {
             InstanceFinder.ServerManager.Broadcast(new CTF_EventBroadcast {
                 kind = kind, flag = flag,
-                playerName = player != null ? PlayerData.GetPlayerName(player) : "",
+                playerName = player != null ? NameOf(player) : "",
                 playerId = player != null ? player.ClientId : -1,
                 redScore = redScore, blueScore = blueScore
             });
