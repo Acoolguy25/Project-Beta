@@ -539,8 +539,10 @@ MonoBehaviour:
   farScale: 0.6
   farAlpha: 0.45
   showAtFullHealth: 0
+  markWaveEnemies: 1
   namedSelectionLimit: 3
   fullHealthSelectionLimit: 6
+  nameSpacing: {x: 120, y: 18}
   headroom: 0.6
   fallbackHeight: 2
   hoverRayDistance: 600
@@ -5626,7 +5628,7 @@ MonoBehaviour:
   flagAlarmCooldown: 7
   flagArrowSeconds: 6
   flagDangerColor: {r: 1, g: 0.16, b: 0.1, a: 1}
-  flagFlashAlpha: 0.5
+  flagFlashAlpha: 0.3
   flagFlashSeconds: 1.4
   flagLowHealth: 0.35
   flagDangerAlpha: 0.45

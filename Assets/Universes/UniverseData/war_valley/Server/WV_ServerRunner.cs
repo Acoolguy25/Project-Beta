@@ -64,9 +64,6 @@ namespace Universes.UniverseData.war_valley.Server
         /// <summary>Wave enemies killed this round (not cleared away by a reset), for the end-of-round summary.</summary>
         private int enemiesDefeated;
 
-        /// <summary>When the first wave started, for the end-of-round summary.</summary>
-        private float roundStartedAt;
-
         /// <summary>Waves fully fought this round: the last one whose bounty was paid.</summary>
         private int wavesHeld;
 
@@ -215,11 +212,11 @@ namespace Universes.UniverseData.war_valley.Server
             // Account for wave index being zero-based
             switch (GameState) {
                 case WV_ActiveGameState.Wave:
+                    // Kept short: the client's wave banner and edge arrows carry the detail, and a
+                    // long pill here would repeat the banner hanging just under it.
                     SetTopMessage(currentWave == null
                         ? $"Wave {WaveNumber + 1}"
-                        : $"{(currentWave.IsSurge ? "SURGE - " : string.Empty)}Wave {currentWave.Number}/{WaveTuning.WaveCount} " +
-                          $"- {WV_WavePlan.GetThemeName(currentWave.Theme)}{(currentWave.Boss != null ? " + " + currentWave.Boss.DisplayName : string.Empty)}: " +
-                          $"{currentWave.EnemyCount} enemies from {WV_WavePlan.DescribeApproaches(currentWave)}");
+                        : WV_WavePlan.DescribeTopBar(currentWave, WaveTuning.WaveCount));
                     break;
                 case WV_ActiveGameState.AdvanceWave:
                     SetTopMessage(WaveNumber + 2 > WaveTuning.WaveCount
@@ -394,7 +391,6 @@ namespace Universes.UniverseData.war_valley.Server
             if (token.IsCancellationRequested)
                 return;
             SetGlobalInvul(false);
-            roundStartedAt = Time.time;
             for (WaveNumber = 0; WaveNumber < WaveTuning.WaveCount && !flagDown && !token.IsCancellationRequested; WaveNumber++) {
                 // Reaching the next wave with the flag up means the last one was held.
                 if (currentWave != null)
@@ -404,7 +400,6 @@ namespace Universes.UniverseData.war_valley.Server
                 GameState = WV_ActiveGameState.Wave;
                 int waveNumber = currentWave.Number;
                 PlayerProgress.ModifyAll<WV_SaveData>(save => save.RecordWave(waveNumber));
-                WV_ServerCommand.NotifyAll(WV_WavePlan.Describe(currentWave, WaveTuning.WaveCount));
                 BroadcastToAll(new WV_WaveStarted {
                     waveNumber = currentWave.Number,
                     waveCount = WaveTuning.WaveCount,
@@ -468,10 +463,8 @@ namespace Universes.UniverseData.war_valley.Server
             SharedGlobalEvents.Instance.CanBuild.Value = false;
             if (WaveTuning.VictoryBounty > 0)
                 serverEconomy.PayEveryone(WaveTuning.VictoryBounty, $"Victory bonus: +{WaveTuning.VictoryBounty:N0} funds");
-            string summary = DescribeRound();
-            WV_ServerCommand.NotifyAll($"Victory! War Valley held all {WaveTuning.WaveCount} waves. {summary}");
-            await TimerCountdown($"VICTORY - all {WaveTuning.WaveCount} waves held. {summary} Next round in {{0}}",
-                VictorySeconds, token);
+            // The client's result banner carries the summary; the top bar only counts down.
+            await TimerCountdown("Victory - next round in {0}", VictorySeconds, token);
         }
 
         /// <summary>
@@ -497,12 +490,6 @@ namespace Universes.UniverseData.war_valley.Server
                 InstanceFinder.ServerManager.Broadcast(message);
         }
 
-        /// <summary>"312 enemies defeated in 24:10." - the shared half of the victory and defeat summaries.</summary>
-        private string DescribeRound() {
-            TimeSpan length = TimeSpan.FromSeconds(Mathf.Max(0f, Time.time - roundStartedAt));
-            return $"{enemiesDefeated:N0} enemies defeated in {(int)length.TotalMinutes}:{length.Seconds:00}.";
-        }
-
         /// <summary>
         /// Plays out the end of a lost round. Returning from here lets the runner's own loop restart
         /// the match, the same way finishing the last wave does.
@@ -511,10 +498,8 @@ namespace Universes.UniverseData.war_valley.Server
             GameState = WV_ActiveGameState.GameOver;
             EndRound(victory: false);
             SharedGlobalEvents.Instance.CanBuild.Value = false;
-            int reached = currentWave != null ? currentWave.Number : 0;
-            string summary = $"Fell on wave {reached}/{WaveTuning.WaveCount} after holding {wavesHeld}. {DescribeRound()}";
-            WV_ServerCommand.NotifyAll($"Defeat - the flag has fallen. {summary}");
-            await TimerCountdown($"DEFEAT - the flag has fallen. {summary} Next round in {{0}}", GameOverSeconds, token);
+            // The client's result banner carries the summary; the top bar only counts down.
+            await TimerCountdown("Defeat - next round in {0}", GameOverSeconds, token);
         }
 
         /// <summary>

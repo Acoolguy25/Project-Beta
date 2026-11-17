@@ -62,7 +62,7 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField, Min(0f)] float arrowHeight = 12f;
 
         [Header("Flag Alarm")]
-        [Tooltip("Arrow to the flag, shown while it is under attack and off screen.")]
+        [Tooltip("Arrow to the flag, shown at the screen edge while it is under attack and out of view.")]
         [SerializeField] RectTransform flagArrow;
         [Tooltip("Seconds between alarms while the flag keeps being hit.")]
         [SerializeField, Min(1f)] float flagAlarmCooldown = 7f;
@@ -71,7 +71,7 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("Colour of the edge vignette while the flag is under attack. Drawn under the HUD.")]
         [SerializeField] Color flagDangerColor = new(1f, 0.16f, 0.1f, 1f);
         [Tooltip("Peak opacity of the edge flash on each alarm.")]
-        [SerializeField, Range(0f, 1f)] float flagFlashAlpha = 0.5f;
+        [SerializeField, Range(0f, 1f)] float flagFlashAlpha = 0.3f;
         [SerializeField, Min(0.1f)] float flagFlashSeconds = 1.4f;
         [Tooltip("While the flag keeps being hit at or below this share of its health, the screen edges " +
                  "keep a heartbeat that grows as it falls; it fades once the attack stops.")]
@@ -120,15 +120,18 @@ namespace Universes.UniverseData.war_valley.Client {
             arrowsUntil = Time.unscaledTime + arrowSeconds;
 
             Color accent = wave.hasBoss ? bossAccent : wave.isSurge ? surgeAccent : waveAccent;
+            // The title stays short enough for one line of the banner; the theme leads the
+            // subtitle instead, and only when it is not a plain assault.
             string title = wave.waveNumber >= wave.waveCount
-                ? $"FINAL WAVE - {WV_WavePlan.GetThemeName(theme).ToUpperInvariant()}"
-                : $"WAVE {wave.waveNumber}/{wave.waveCount} - {WV_WavePlan.GetThemeName(theme).ToUpperInvariant()}";
+                ? "FINAL WAVE"
+                : $"WAVE {wave.waveNumber}/{wave.waveCount}";
+            bool themed = theme != WV_WaveTheme.Standard;
+            string themeLead = themed ? $"{WV_WavePlan.GetThemeName(theme).ToUpperInvariant()} - " : string.Empty;
             // A plain assault needs no advice; a themed wave's hint is what tells the commander how
             // to answer it.
-            string hint = theme == WV_WaveTheme.Standard
-                ? string.Empty
-                : $"\n<size=85%>{WV_WavePlan.GetThemeHint(theme)}</size>";
-            string subtitle = $"{wave.enemyCount} {(wave.enemyCount == 1 ? "enemy" : "enemies")} from {DescribeSides()}"
+            string hint = themed ? $"\n<size=85%>{WV_WavePlan.GetThemeHint(theme)}</size>" : string.Empty;
+            string subtitle = themeLead
+                              + $"{wave.enemyCount} {(wave.enemyCount == 1 ? "enemy" : "enemies")} from {DescribeSides()}"
                               + (wave.hasBoss ? $", led by a {WV_WaveBoss.DefaultName}" : string.Empty)
                               + hint;
             if (banner != null)
@@ -187,10 +190,18 @@ namespace Universes.UniverseData.war_valley.Client {
                     PlaceArrow(arrow, camera, WV_WavePlan.GetEntrance((WV_Approach)i) + Vector3.up * arrowHeight);
             }
 
-            bool flagShown = now < flagArrowUntil && watchedFlag != null;
+            // The flag arrow is only for a flag the commander cannot see: a flag anywhere in the
+            // view already shows its own bar, and an arrow there would sit on top of it.
+            bool flagShown = now < flagArrowUntil && watchedFlag != null && !IsInView(camera, watchedFlag.transform.position);
             if (flagShown)
-                flagShown = !PlaceArrow(flagArrow, camera, watchedFlag.transform.position + Vector3.up * arrowHeight);
+                PlaceArrow(flagArrow, camera, watchedFlag.transform.position + Vector3.up * arrowHeight);
             SetArrowVisible(flagArrow, flagShown);
+        }
+
+        /// <summary>True when <paramref name="world"/> is in front of the camera and inside the viewport.</summary>
+        static bool IsInView(Camera camera, Vector3 world) {
+            Vector3 viewport = camera.WorldToViewportPoint(world);
+            return viewport.z > 0f && viewport.x >= 0f && viewport.x <= 1f && viewport.y >= 0f && viewport.y <= 1f;
         }
 
         /// <summary>

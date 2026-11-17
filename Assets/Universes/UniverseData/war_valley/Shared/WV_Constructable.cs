@@ -88,9 +88,17 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         /// <summary>
         /// Raised on each client the moment this site finishes building, so presentation can react
-        /// to the replicated flag instead of polling it.
+        /// to the replicated flag instead of polling it. Never raised for a building that was already
+        /// finished when this client first saw it, such as on joining a round in progress.
         /// </summary>
         public event Action<WV_Constructable> Completed;
+
+        /// <summary>
+        /// Whether this client saw the site unfinished. FishNet applies a late joiner's first state
+        /// before <see cref="OnStartClient"/> and replays its change (unfinished to finished) right
+        /// after, so without this every standing building would announce itself on join.
+        /// </summary>
+        bool clientSawUnfinished;
 
         /// <summary>The replicated deadline, as a <see cref="NetworkHelper.ServerTime"/> reading.</summary>
         public float CompletionServerTime => completionTime.Value;
@@ -189,9 +197,15 @@ namespace Universes.UniverseData.war_valley.Shared {
             base.OnStopNetwork();
         }
 
+        public override void OnStartClient() {
+            base.OnStartClient();
+            // The first state is applied by now: a site that arrives finished never announces.
+            clientSawUnfinished = !complete.Value;
+        }
+
         void HandleCompleteChanged(bool previous, bool next, bool asServer) {
             ApplyPresentation();
-            if (next && !previous && !asServer)
+            if (next && !previous && !asServer && clientSawUnfinished)
                 Completed?.Invoke(this);
         }
 

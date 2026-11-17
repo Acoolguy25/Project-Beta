@@ -25,9 +25,14 @@ namespace Universes.UniverseData.war_valley.Client {
         [Min(0.1f)] public float damageNumberSize = 1f;
 
         [Header("Deaths")]
-        [Tooltip("Size of the dust a soldier goes down in. The dust fills the soldier's whole height " +
-                 "(the robots are about 5.6 m tall), so it reads from the commander's camera.")]
-        [Min(0.1f)] public float soldierBurstScale = 1.2f;
+        [Tooltip("Size of the dust a soldier goes down in. Kept small: a whole wave falling at once " +
+                 "must not whiten the fight.")]
+        [Min(0.1f)] public float soldierBurstScale = 0.7f;
+        [Tooltip("How much of the soldier's height the dust rises over, from the feet (the robots are " +
+                 "about 5.6 m tall).")]
+        [Range(0.1f, 1f)] public float soldierBurstHeight = 0.5f;
+        [Tooltip("Colour of that dust: the valley's grey-brown, so it reads as dirt kicked up, not cloud.")]
+        public Color soldierBurstTint = new(0.66f, 0.6f, 0.52f, 1f);
         [Tooltip("Size of the sparks thrown from a falling soldier's chest.")]
         [Min(0.1f)] public float soldierSparkScale = 1.4f;
         [Tooltip("Spark colour when a wave enemy falls.")]
@@ -37,7 +42,7 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("Camera-shake radius of a destroyed vehicle (m).")]
         [Min(1f)] public float vehicleExplosionRadius = 50f;
         [Tooltip("Size of the smoke left over a destroyed building, per grid cell of its footprint.")]
-        [Min(0.1f)] public float structureSmokeScale = 2.2f;
+        [Min(0.1f)] public float structureSmokeScale = 3f;
 
         [Header("Shells")]
         [Tooltip("Camera-shake radius of an artillery shell or a tank round (m).")]
@@ -202,7 +207,8 @@ namespace Universes.UniverseData.war_valley.Client {
                     break;
                 case GameCharacter:
                     Color side = IsWave(entity) ? tuning.enemyDeathTint : tuning.defenderDeathTint;
-                    GameFx.Poof(position, GetTop(entity).y - position.y, tuning.soldierBurstScale);
+                    GameFx.Poof(position, (GetTop(entity).y - position.y) * tuning.soldierBurstHeight,
+                        tuning.soldierBurstTint, tuning.soldierBurstScale);
                     GameFx.Play(FxKind.Sparks, GetCentre(entity), side, tuning.soldierSparkScale);
                     GameSfx.PlayAt(SfxCue.Kill, position);
                     break;

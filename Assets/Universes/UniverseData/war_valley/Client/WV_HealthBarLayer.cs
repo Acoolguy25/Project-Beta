@@ -15,10 +15,13 @@ namespace Universes.UniverseData.war_valley.Client {
     /// A battle puts dozens of soldiers on screen, and a full name tag over each - "Knifeman" in
     /// giant red letters - buried the fight under labels. Here every troop, wave enemy, vehicle,
     /// building and the flag instead gets one bar in its side's colour (green for the commander's
-    /// own, the ally's colour for an ally's, red for the waves). A soldier's or vehicle's bar shows
-    /// once it is hurt, while it is selected, or while the pointer is over it, and its name only on
-    /// hover or over a small selection. A building's bar is larger and shows while it is hurt or
-    /// still being built, named on hover or while damaged; the flag's bar and name always show.
+    /// own, the ally's colour for an ally's, red for the waves). A wave enemy always wears its red
+    /// bar, which is what marks it as an enemy whatever colour its body. A defender's soldier or
+    /// vehicle shows its bar once it is hurt, while it is selected, or while the pointer is over it,
+    /// and its name only on hover or over a small selection; the commander's own are named by kind
+    /// alone ("Gunner"), an ally's with the owner ("Sam's Gunner"). A building's bar is larger and
+    /// shows while it is hurt or still being built; the flag's bar always shows. Both are named only
+    /// on hover or while damaged, so the labels stay off a quiet base.
     /// Player characters keep their shared tag, since knowing who is who among the commanders still
     /// matters.
     /// </para>
@@ -48,12 +51,19 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField, Range(0f, 1f)] float farAlpha = 0.45f;
         [Tooltip("Show a bar on every soldier even at full health. Off keeps an untouched army clean.")]
         [SerializeField] bool showAtFullHealth;
+        [Tooltip("Wave enemies always show their red bar, even untouched: wave soldiers come in random " +
+                 "body colours, so the bar is what tells them from the defenders at a glance.")]
+        [SerializeField] bool markWaveEnemies = true;
         [Tooltip("Selected soldiers are named only while the selection is at most this big; a whole " +
                  "army's names would cover the field again.")]
         [SerializeField, Min(0)] int namedSelectionLimit = 3;
         [Tooltip("Untouched selected soldiers keep a bar only while the selection is at most this big; " +
                  "past it only the hurt ones do, so a big army's fight stays readable.")]
         [SerializeField, Min(0)] int fullHealthSelectionLimit = 6;
+        [Tooltip("A name is left off when it would land closer than this to a name already drawn this " +
+                 "frame (canvas pixels, horizontal and vertical), so a squad standing together shows " +
+                 "one label instead of a stack.")]
+        [SerializeField] Vector2 nameSpacing = new(120f, 18f);
         [Tooltip("Gap between the top of a body and its bar (m).")]
         [SerializeField, Min(0f)] float headroom = 0.6f;
         [Tooltip("Height of the bar above an entity that has no collider to measure (m).")]
@@ -99,11 +109,16 @@ namespace Universes.UniverseData.war_valley.Client {
             public WV_Constructable Site;
             public WV_HealthBar Bar;
             public bool IsBoss;
+            /// <summary>"Gunner", "Tank": the name without its owner, for the commander's own.</summary>
+            public string KindName;
+            /// <summary>The display name <see cref="KindName"/> and <see cref="IsBoss"/> were read from.</summary>
+            public string NameSource;
         }
 
         readonly List<Entry> entries = new();
         readonly Dictionary<EntityBase, Entry> byEntity = new();
         readonly Stack<WV_HealthBar> pool = new();
+        readonly List<Vector2> namesPlaced = new();
 
         Func<EntityBase, bool> isSelected;
         Func<EntityBase, bool> isOwn;
@@ -169,10 +184,8 @@ namespace Universes.UniverseData.war_valley.Client {
             tagFilterInstalled = false;
             tagView?.Dispose();
             tagView = null;
-            for (int i = entries.Count - 1; i >= 0; i--) {
-                entries[i].Entity.DisplayNameChanged -= HandleDisplayNameChanged;
+            for (int i = entries.Count - 1; i >= 0; i--)
                 Release(entries[i]);
-            }
             entries.Clear();
             byEntity.Clear();
         }
@@ -205,10 +218,6 @@ namespace Universes.UniverseData.war_valley.Client {
             };
             entries.Add(entry);
             byEntity.Add(entity, entry);
-            // A boss is told apart by the name the server gives it, decided once here and again
-            // only if the name changes, never per frame.
-            UpdateBoss(entry);
-            entity.DisplayNameChanged += HandleDisplayNameChanged;
         }
 
         void HandleRemoved(EntityBase entity) {
@@ -216,17 +225,26 @@ namespace Universes.UniverseData.war_valley.Client {
                 Forget(entry);
         }
 
-        void HandleDisplayNameChanged(EntityBase entity) {
-            if (byEntity.TryGetValue(entity, out Entry entry))
-                UpdateBoss(entry);
+        /// <summary>
+        /// Everything read from the entity's name: whether it is a boss, and its bare kind name. The
+        /// server names a spawned troop after it reaches the client, so this is re-read whenever the
+        /// name is no longer the one last read: a string comparison per frame, not a parse.
+        /// </summary>
+        static void RefreshNames(Entry entry) {
+            EntityBase entity = entry.Entity;
+            string name = entity.DisplayName;
+            if (name == entry.NameSource)
+                return;
+            entry.NameSource = name;
+            entry.IsBoss = entry.Kind == Kind.Soldier && name == WV_WaveBoss.DefaultName;
+            entry.KindName = entry.Kind switch {
+                Kind.Soldier when WV_Rules.TryGetTroopKind(name, out WV_TroopKind troop) => WV_Rules.GetTroopDisplayName(troop),
+                Kind.Vehicle when entity is WV_Unit unit => WV_Rules.GetUnitDisplayName(unit.Kind),
+                _ => name
+            };
         }
 
-        static void UpdateBoss(Entry entry) =>
-            entry.IsBoss = entry.Kind == Kind.Soldier && entry.Entity.DisplayName == WV_WaveBoss.DefaultName;
-
         void Forget(Entry entry) {
-            if (entry.Entity != null)
-                entry.Entity.DisplayNameChanged -= HandleDisplayNameChanged;
             Release(entry);
             entries.Remove(entry);
             byEntity.Remove(entry.Entity);
@@ -264,6 +282,7 @@ namespace Universes.UniverseData.war_valley.Client {
             float scaleFactor = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
             Vector3 cameraPosition = camera.transform.position;
             int selected = selectionCount != null ? selectionCount() : 0;
+            namesPlaced.Clear();
             for (int i = entries.Count - 1; i >= 0; i--) {
                 Entry entry = entries[i];
                 if (entry.Entity == null) {
@@ -280,6 +299,7 @@ namespace Universes.UniverseData.war_valley.Client {
             if (entity.IsDead || !entity.isActiveAndEnabled)
                 return false;
 
+            RefreshNames(entry);
             long max = entity.MaxHealth.Value;
             float health = max > 0 ? Mathf.Clamp01(entity.Health.Value / (float)max) : 1f;
             bool damaged = health < FullHealth;
@@ -292,7 +312,8 @@ namespace Universes.UniverseData.war_valley.Client {
             float size;
             switch (entry.Kind) {
                 case Kind.Flag:
-                    show = named = true;
+                    show = true;
+                    named = isHovered || damaged;
                     size = flagBarScale;
                     break;
                 case Kind.Structure:
@@ -302,7 +323,8 @@ namespace Universes.UniverseData.war_valley.Client {
                     break;
                 default:
                     bool selectedShown = isSelectedEntity && (damaged || selected <= fullHealthSelectionLimit);
-                    show = entry.IsBoss || isHovered || selectedShown || damaged || showAtFullHealth;
+                    bool marked = markWaveEnemies && IsWave(entity);
+                    show = entry.IsBoss || marked || isHovered || selectedShown || damaged || showAtFullHealth;
                     named = entry.IsBoss || isHovered || (isSelectedEntity && selected <= namedSelectionLimit);
                     size = entry.Kind == Kind.Vehicle ? vehicleBarScale : 1f;
                     break;
@@ -329,21 +351,43 @@ namespace Universes.UniverseData.war_valley.Client {
             bar.SetVisible(true);
 
             float far = reach > fadeStart && !isHovered ? Mathf.InverseLerp(fadeStart, reach, distance) : 0f;
-            bar.Place(new Vector2(screen.x, screen.y) / scaleFactor,
-                size * Mathf.Lerp(1f, farScale, far), Mathf.Lerp(1f, farAlpha, far));
+            Vector2 canvasPosition = new Vector2(screen.x, screen.y) / scaleFactor;
+            bar.Place(canvasPosition, size * Mathf.Lerp(1f, farScale, far), Mathf.Lerp(1f, farAlpha, far));
+            // The hovered entity and a boss keep their name even in a crowd.
+            if (named && !ClaimNameSpace(canvasPosition) && !isHovered && !entry.IsBoss)
+                named = false;
             Color color = entry.Kind == Kind.Flag ? flagColor : entry.IsBoss ? bossColor : GetSideColor(entity);
             bar.SetHealth(health, color);
-            bar.SetName(named ? entity.DisplayName : null,
+            bar.SetName(named ? GetLabel(entry) : null,
                 entry.Kind == Kind.Flag ? flagColor : entry.IsBoss ? bossColor : nameColor);
             return true;
         }
+
+        /// <summary>True, and the spot is taken, when no name drawn this frame is within <see cref="nameSpacing"/>.</summary>
+        bool ClaimNameSpace(Vector2 position) {
+            foreach (Vector2 placed in namesPlaced) {
+                if (Mathf.Abs(placed.x - position.x) < nameSpacing.x && Mathf.Abs(placed.y - position.y) < nameSpacing.y)
+                    return false;
+            }
+            namesPlaced.Add(position);
+            return true;
+        }
+
+        /// <summary>The commander's own are named by kind alone; everyone else's keep their full name.</summary>
+        string GetLabel(Entry entry) =>
+            entry.Kind is Kind.Soldier or Kind.Vehicle && isOwn != null && isOwn(entry.Entity)
+                ? entry.KindName
+                : entry.Entity.DisplayName;
+
+        static bool IsWave(EntityBase entity) =>
+            entity.Team != null && entity.Team.realTeam == WV_Alliances.GetWaveSide();
 
         /// <summary>Green for the commander's own, red for the waves, and an ally's own commander colour.</summary>
         Color GetSideColor(EntityBase entity) {
             TeamConfig team = entity.Team;
             if (team == null)
                 return ownColor;
-            if (team.realTeam == WV_Alliances.GetWaveSide())
+            if (IsWave(entity))
                 return enemyColor;
             if (isOwn != null && isOwn(entity))
                 return ownColor;

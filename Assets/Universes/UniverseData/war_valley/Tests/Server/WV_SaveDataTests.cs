@@ -2,7 +2,14 @@ using NUnit.Framework;
 using Universes.UniverseData.war_valley.Server;
 
 namespace Universes.UniverseData.war_valley.Tests.Server {
-    /// <summary>Covers the round statistics a commander's save keeps, and the clamps applied on load.</summary>
+    /// <summary>
+    /// Covers the round statistics a commander's save keeps, and the clamps applied on load.
+    /// <para>
+    /// The save lives in the server assembly, so this assembly compiles only with UNITY_SERVER and the
+    /// client project's test run never sees it. Run it as a second EditMode run in the server clone
+    /// project: <c>-runTests -testPlatform EditMode -assemblyNames Universes.UniverseData.war_valley.Server.Tests</c>.
+    /// </para>
+    /// </summary>
     public sealed class WV_SaveDataTests {
         [Test]
         public void RecordRound_CountsTheRound_AndAddsItsDefeatedEnemies() {

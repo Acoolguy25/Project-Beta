@@ -427,7 +427,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         public static long GetWaveBounty(int waveNumber, WV_WaveTuning tuning) =>
             Math.Max(0, tuning.WaveBountyBase) + (long)Math.Max(0, tuning.WaveBountyPerWave) * Mathf.Max(0, waveNumber - 1);
 
-        /// <summary>"north and east", "every side" - for the wave announcement.</summary>
+        /// <summary>"the north and the east", "every side": where a wave comes from, in words.</summary>
         public static string DescribeApproaches(WV_Wave wave) {
             IReadOnlyList<WV_Approach> sides = wave.DistinctApproaches;
             if (sides.Count >= ApproachCount)
@@ -462,14 +462,15 @@ namespace Universes.UniverseData.war_valley.Shared {
             _ => "a mixed assault"
         };
 
-        /// <summary>The announcement for a wave as it begins.</summary>
-        public static string Describe(WV_Wave wave, int waveCount) {
-            string header = $"Wave {wave.Number}/{waveCount} - {GetThemeName(wave.Theme)}";
-            string boss = wave.Boss != null ? $", led by a {wave.Boss.DisplayName}" : string.Empty;
-            // A plain assault needs no advice; a themed wave's hint tells the commander how to answer it.
-            string hint = wave.Theme == WV_WaveTheme.Standard ? string.Empty : $" ({GetThemeHint(wave.Theme)})";
-            return $"{header}: {wave.EnemyCount} {(wave.EnemyCount == 1 ? "enemy" : "enemies")} from {DescribeApproaches(wave)}{boss}{hint}";
-        }
+        /// <summary>
+        /// The top bar's line while a wave runs: "Wave 5/20", or "Wave 9/20 - Swarm" for a themed
+        /// wave. Kept short because the client's wave banner, hanging just under it, carries the
+        /// enemy count, sides, boss and advice.
+        /// </summary>
+        public static string DescribeTopBar(WV_Wave wave, int waveCount) =>
+            wave.Theme == WV_WaveTheme.Standard
+                ? $"Wave {wave.Number}/{waveCount}"
+                : $"Wave {wave.Number}/{waveCount} - {GetThemeName(wave.Theme)}";
 
         /// <summary>The wave's strength budget, in knifemen, eased for the opening waves.</summary>
         public static float GetStrength(int waveNumber, WV_WaveTuning tuning) {

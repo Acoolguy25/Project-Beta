@@ -50,7 +50,7 @@ namespace Universes.UniverseData.war_valley.Tests {
             Assert.That(wave.Theme, Is.EqualTo(WV_WaveTheme.Pincer));
             Assert.That(wave.Groups.Count, Is.GreaterThanOrEqualTo(WV_WavePlan.ApproachCount));
             Assert.That(wave.DistinctApproaches.Count, Is.EqualTo(WV_WavePlan.ApproachCount));
-            StringAssert.Contains("every side", WV_WavePlan.Describe(wave, tuning.WaveCount));
+            Assert.That(WV_WavePlan.DescribeApproaches(wave), Is.EqualTo("every side"));
         }
 
         [Test]
@@ -159,13 +159,11 @@ namespace Universes.UniverseData.war_valley.Tests {
         }
 
         [Test]
-        public void Announcements_NameTheThemeApproachesAndBoss() {
+        public void TopBar_IsShort_AndNamesOnlyAThemedWave() {
             var tuning = new WV_WaveTuning { WaveCount = 20 };
-            string final = WV_WavePlan.Describe(WV_WavePlan.Build(20, tuning), 20);
-            StringAssert.Contains("Wave 20/20", final);
-            StringAssert.Contains("Siege", final);
-            StringAssert.Contains(WV_WaveBoss.DefaultName, final);
-            StringAssert.Contains("from the ", final);
+            Assert.That(WV_WavePlan.DescribeTopBar(WV_WavePlan.Build(1, tuning), 20), Is.EqualTo("Wave 1/20"));
+            string final = WV_WavePlan.DescribeTopBar(WV_WavePlan.Build(20, tuning), 20);
+            Assert.That(final, Is.EqualTo("Wave 20/20 - Siege"));
         }
 
         [Test]
