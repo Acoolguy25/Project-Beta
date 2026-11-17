@@ -18,7 +18,8 @@ namespace Universes.UniverseData.dot_invaders {
         const int NeutralTroops = 5;
         const int NpcTeamCount = 4;
         const int NpcBasesPerTeam = 1;
-        const int NpcStartingTroops = 14;
+        // The same start as a player: the NPCs already fight each other, so they need no head start.
+        const int NpcStartingTroops = StartingTroops;
         const int NpcTeamIdStart = 100;
         const string NewMatchMessage = "<color=#8C96AA>New match: a fresh board.</color>";
         const int WinnerXPReward = 100;

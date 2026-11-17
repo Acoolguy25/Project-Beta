@@ -47,9 +47,9 @@ namespace Universes.UniverseData.dot_invaders.Client {
 
         // Effect scales are in board units and sized for the board camera, which frames about 180 units top to bottom.
         [Header("Captures")]
-        [SerializeField, Min(0f)] float captureRingScale = 7.5f;
+        [SerializeField, Min(0f)] float captureRingScale = 5f;
         [Tooltip("How far the capture ring is lightened toward white, so a capture reads as a crisp flash, not a dull band.")]
-        [SerializeField, Range(0f, 1f)] float captureRingWhiten = 0.35f;
+        [SerializeField, Range(0f, 1f)] float captureRingWhiten = 0.55f;
         [SerializeField, Min(0f)] float capturePunch = 0.25f;
         [SerializeField, Min(0.01f)] float capturePunchSeconds = 0.35f;
         [Tooltip("Camera kick when your base falls.")]
@@ -102,6 +102,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Min(0)] int maxConfettiBursts = 8;
         [Tooltip("Viewport area the match-over panel covers; confetti bursts go off outside it.")]
         [SerializeField] Rect confettiKeepOut = new(0.3f, 0.3f, 0.4f, 0.45f);
+        [Tooltip("Viewport area bursts may start in: clear of the HUD strip at the top and the chat on the left, since bursts rise.")]
+        [SerializeField] Rect confettiArea = new(0.25f, 0.05f, 0.55f, 0.62f);
         [SerializeField] Color victoryFlash = new(1f, 1f, 1f, 0.25f);
         [SerializeField, Min(0.01f)] float victoryFlashSeconds = 0.4f;
         [SerializeField] Color defeatFlash = new(0.05f, 0.02f, 0.08f, 0.45f);
@@ -282,14 +284,14 @@ namespace Universes.UniverseData.dot_invaders.Client {
             Camera view = Camera.main;
             int held = 0;
             for (int i = 0; i < next.baseTeams.Length; i++)
-                if (next.baseTeams[i] == you && Visible(view, next.basePositions[i]))
+                if (next.baseTeams[i] == you && InConfettiArea(view, next.basePositions[i]))
                     held++;
             if (held == 0 || maxConfettiBursts == 0)
                 return;
             // Every stride-th visible base, so bursts spread over the board rather than bunching at low ids.
             int stride = Mathf.Max(1, held / maxConfettiBursts);
             for (int i = 0, seen = 0, bursts = 0; i < next.baseTeams.Length && bursts < maxConfettiBursts; i++) {
-                if (next.baseTeams[i] != you || !Visible(view, next.basePositions[i]))
+                if (next.baseTeams[i] != you || !InConfettiArea(view, next.basePositions[i]))
                     continue;
                 if (seen++ % stride != 0)
                     continue;
@@ -298,12 +300,11 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
         }
 
-        bool Visible(Camera view, Vector2 point) {
+        bool InConfettiArea(Camera view, Vector2 point) {
             if (view == null)
                 return true;
             Vector3 viewport = view.WorldToViewportPoint(World(point));
-            return viewport.z > 0f && viewport.x is >= 0f and <= 1f && viewport.y is >= 0f and <= 1f &&
-                   !confettiKeepOut.Contains(viewport);
+            return viewport.z > 0f && confettiArea.Contains(viewport) && !confettiKeepOut.Contains(viewport);
         }
 
         bool TryLastPosition(in DI_StateBroadcast state, int team, out Vector3 position) {

@@ -473,7 +473,18 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Set(hud, "victoryIcon", HudKit.Icon("laurels_trophy"));
             Set(hud, "defeatIcon", HudKit.Icon("tombstone"));
             Set(hud, "drawIcon", HudKit.Icon("crossed_swords"));
+            UseTruncateOverflow(root);
             return UIKit.SavePrefab(root.gameObject, HudPath).GetComponent<DI_HUD>();
+        }
+
+        /// <summary>
+        /// The HUD font has no ellipsis glyph, so TMP fell back to Truncate at runtime with a console warning
+        /// for every ellipsis label. Truncate is set up front instead.
+        /// </summary>
+        static void UseTruncateOverflow(Component root) {
+            foreach (TMP_Text text in root.GetComponentsInChildren<TMP_Text>(true))
+                if (text.overflowMode == TextOverflowModes.Ellipsis)
+                    text.overflowMode = TextOverflowModes.Truncate;
         }
 
         /// <summary>Power shares under the status strip, with the hover card under the bar.</summary>

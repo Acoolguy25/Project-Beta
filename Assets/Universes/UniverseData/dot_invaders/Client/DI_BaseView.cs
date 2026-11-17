@@ -42,7 +42,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Tooltip("Ring brightness while selected or hovered: kept low so the white ring never blooms over the count.")]
         [SerializeField, Min(0f)] float selectedRingGlow = 1.2f;
         [SerializeField] Color selectedRingColor = Color.white;
-        [SerializeField] Color neighborRingColor = new(1f, 0.8f, 0.2f);
+        [Tooltip("Ring of the bases you can send to while dragging. Kept a cool white so it never reads as the yellow team.")]
+        [SerializeField] Color neighborRingColor = new(0.8f, 0.88f, 1f);
 
         [Header("Roles")]
         [SerializeField] RoleStyle speedStyle = new() {
@@ -100,6 +101,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Header("Arrivals and captures")]
         [Tooltip("The count punches this much harder than the body, so a landing reads on the number.")]
         [SerializeField, Min(0f)] float labelPunchFactor = 1.5f;
+        [Tooltip("Extra ring brightness at the top of a punch, as a share of the punch amount.")]
+        [SerializeField, Min(0f)] float punchGlowBoost = 0.6f;
 
         [Header("Turret")]
         [SerializeField, Min(0f)] float shotSeconds = 0.16f;
@@ -121,6 +124,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Range(0f, 1f)] float turretIconWhiten = 0.35f;
 
         Renderer bodyRenderer;
+        // The dark disc under the count; it swells with the body so the count never sits on the bright body.
+        Transform core;
         Renderer glowRenderer;
         TextMeshPro troopLabel;
         float countFontSize;
@@ -154,10 +159,18 @@ namespace Universes.UniverseData.dot_invaders.Client {
         readonly System.Text.StringBuilder roleText = new(24);
         DI_BaseRole role;
         bool isSuperBase;
-        const int MeterFull = -1, MeterPaused = -2, MeterIdle = -3;
+        const int MeterCharging = 0, MeterFull = -1, MeterPaused = -2, MeterIdle = -3;
         readonly System.Text.StringBuilder meterText = new(32);
         int shownMeter = -1;
         int shownStatus = int.MinValue;
+        // A punch is one swell and settle of the body, the ring and the count (not the whole base,
+        // so the turret range and labels keep their size). Driven here so it cannot be lost to another animator.
+        Vector3 bodyScale, coreScale, glowScale, labelScale;
+        float punchAmount, punchSeconds, punchStart;
+        bool punching;
+        float punchSwell;
+        // Share of a punch's time at which sin(pi * sqrt(t)) peaks.
+        const float PunchPeakTime = 0.25f;
         float superBasePulseTimer;
         Vector3 originalScale;
 
@@ -168,6 +181,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
 
         void Awake() {
             bodyRenderer = transform.Find("Body")?.GetComponent<Renderer>();
+            core = transform.Find("Core");
             glowRenderer = transform.Find("Glow")?.GetComponent<Renderer>();
             troopLabel = transform.Find("TroopLabel")?.GetComponent<TextMeshPro>();
             if (troopLabel != null)
@@ -189,6 +203,14 @@ namespace Universes.UniverseData.dot_invaders.Client {
             if (rangeEdge != null)
                 rangeEdge.widthMultiplier = rangeEdgeWidth;
             originalScale = transform.localScale;
+            if (bodyRenderer != null)
+                bodyScale = bodyRenderer.transform.localScale;
+            if (core != null)
+                coreScale = core.localScale;
+            if (glowRenderer != null)
+                glowScale = glowRenderer.transform.localScale;
+            if (troopLabel != null)
+                labelScale = troopLabel.transform.localScale;
         }
 
         /// <summary>The camera labels face; the controller hands it over so bases never look it up per frame.</summary>
@@ -253,12 +275,36 @@ namespace Universes.UniverseData.dot_invaders.Client {
             troopLabel.fontSize = countFontSize * (digits >= 4 ? fourDigitCountScale : digits == 3 ? threeDigitCountScale : 1f);
         }
 
-        /// <summary>A short scale punch of the base's body and count, for arrivals and captures.</summary>
+        /// <summary>
+        /// A short swell of the body, core, ring and count (the count by <see cref="labelPunchFactor"/> more) for
+        /// arrivals and captures. A new punch restarts from rest, so a stream never compounds.
+        /// </summary>
         public void PlayPunch(float amount, float seconds) {
+            punchAmount = amount;
+            punchSeconds = Mathf.Max(0.01f, seconds);
+            // Start at the peak, so the frame that shows the landing shows the full swell. Starting from rest
+            // let a short punch begin and end between two frames whenever a frame took longer than the punch
+            // (the Editor here renders at about 3 fps), and it was never seen.
+            punchStart = Time.unscaledTime - punchSeconds * PunchPeakTime;
+            punching = true;
+        }
+
+        void UpdatePunch() {
+            if (!punching)
+                return;
+            float t = (Time.unscaledTime - punchStart) / punchSeconds;
+            // One swell, peaking at PunchPeakTime and settling over the rest of the time.
+            punchSwell = t >= 1f ? 0f : punchAmount * Mathf.Sin(Mathf.PI * Mathf.Sqrt(Mathf.Clamp01(t)));
+            punching = t < 1f;
             if (bodyRenderer != null)
-                Punch.Scale(bodyRenderer.transform, amount, seconds);
+                bodyRenderer.transform.localScale = bodyScale * (1f + punchSwell);
+            if (core != null)
+                core.localScale = coreScale * (1f + punchSwell);
+            if (glowRenderer != null)
+                glowRenderer.transform.localScale = glowScale * (1f + punchSwell);
             if (troopLabel != null)
-                Punch.Scale(troopLabel.transform, amount * labelPunchFactor, seconds);
+                troopLabel.transform.localScale = labelScale * (1f + punchSwell * labelPunchFactor);
+            RefreshGlow();
         }
 
         public void SetProduction(bool isSuperProducer, float charge, float rate, bool active, bool full) {
@@ -278,8 +324,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
             productionLabel.gameObject.SetActive(isSuperProducer);
             if (!isSuperProducer) return;
             int filled = active ? Mathf.RoundToInt(Mathf.Clamp01(charge) * superMeterSegments) : 0;
-            // The rate in tenths of a troop per second, or a state: the text only rebuilds when it would read differently.
-            int status = !active ? MeterIdle : full ? MeterFull : rate > 0f ? Mathf.RoundToInt(rate * 10f) : MeterPaused;
+            // The text only rebuilds when it would read differently.
+            int status = !active ? MeterIdle : full ? MeterFull : rate > 0f ? MeterCharging : MeterPaused;
             if (filled != shownMeter || status != shownStatus) {
                 shownMeter = filled;
                 shownStatus = status;
@@ -292,12 +338,11 @@ namespace Universes.UniverseData.dot_invaders.Client {
         void BuildSuperText(int filled, int status) {
             // Digits and '/' only: the board's label font has no bar or dash glyphs.
             meterText.Clear().Append("SUPER ").Append(filled).Append('/').Append(superMeterSegments);
+            // One line only: a second line ran into neighbouring bases and the drag arrow.
             if (status == MeterFull)
-                meterText.Append("\nFULL");
+                meterText.Append(" FULL");
             else if (status == MeterPaused)
-                meterText.Append("\nPAUSED");
-            else if (status >= 0)
-                meterText.Append('\n').Append(status / 10).Append('.').Append(status % 10).Append("/s");
+                meterText.Append(" PAUSED");
         }
 
         public void SetInteraction(bool isSelected, bool isNeighbor, bool isHovered) {
@@ -411,6 +456,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
             Color ring = highlighted ? selectedRingColor : neighbor ? neighborRingColor : teamColor;
             float intensity = isSuperBase
                 ? 1f - superGlowSwing + Mathf.PingPong(Time.unscaledTime * superGlowSpeed, superGlowSwing) : 1f;
+            intensity *= 1f + punchSwell * punchGlowBoost;
             SetRendererColor(glowRenderer, ring * (intensity * (highlighted ? selectedRingGlow : ringGlow)));
         }
 
@@ -432,7 +478,9 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 }
             }
             // Glow pulses run per frame (snapshots arrive only about ten times a second).
-            if (Pulsing)
+            if (punching)
+                UpdatePunch();
+            else if (Pulsing)
                 RefreshGlow();
             if (factoryMark != null && role == DI_BaseRole.Factory && !neutral)
                 factoryMark.transform.Rotate(0f, factoryGearSpin * Time.unscaledDeltaTime, 0f, Space.Self);

@@ -39,7 +39,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Tooltip("Road colours while you drag an order: the previewed route, a base's queued route on hover, and roads out of the dragged base.")]
         [SerializeField] Color routeRoadColor = Color.white;
         [SerializeField] Color queuedRoadColor = new(0.3f, 0.85f, 1f);
-        [SerializeField] Color dragRoadColor = new(0.9f, 0.7f, 0.2f);
+        [Tooltip("Roads out of the base you are dragging from: a cool white, so they never read as yellow-owned.")]
+        [SerializeField] Color dragRoadColor = new(0.8f, 0.88f, 1f);
         [SerializeField, Min(1f)] float routeRoadWidthFactor = 1.6f;
         [SerializeField, Min(1f)] float dragRoadWidthFactor = 1.3f;
 

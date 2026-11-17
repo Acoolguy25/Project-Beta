@@ -8,8 +8,9 @@ namespace Universes.UniverseData.dot_invaders {
             TeamColor.Blue, TeamColor.Red, TeamColor.Green, TeamColor.Orange,
             TeamColor.Purple, TeamColor.Cyan, TeamColor.Pink, TeamColor.Lime
         };
+        // No grey: a grey team could not be told from the white neutral bases.
         static readonly TeamColor[] NpcTeamOrder = {
-            TeamColor.Purple, TeamColor.Cyan, TeamColor.Yellow, TeamColor.Grey
+            TeamColor.Purple, TeamColor.Cyan, TeamColor.Yellow, TeamColor.Red
         };
 
         public static TeamColor GetTeamColor(int teamId) =>
