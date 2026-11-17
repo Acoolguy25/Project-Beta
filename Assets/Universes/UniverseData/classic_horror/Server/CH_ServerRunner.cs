@@ -76,7 +76,10 @@ namespace Universes.UniverseData.classic_horror.Server {
         [SerializeField, Min(1)] float proximityScareDistance = 6f;
         [Tooltip("Seconds the Presence stands still after a warning scare: the face is on screen for about 2.25 s, "
             + "and the rest is the investigator's head start once it fades.")]
-        [SerializeField, Min(0)] float warningStaggerSeconds = 3.5f;
+        [SerializeField, Min(0)] float warningStaggerSeconds = 4.5f;
+        [Tooltip("Seconds the Presence then withdraws after a warning, as it does after a catch: the warning is a real "
+            + "chance to get away, not a countdown to the strike.")]
+        [SerializeField, Min(0)] float warningRetreatSeconds = 8f;
         [Tooltip("Seconds the Presence stands still after a discovery scare.")]
         [SerializeField, Min(0)] float discoveryStaggerSeconds = 2f;
         [Header("Story Timing")]
@@ -453,9 +456,12 @@ namespace Universes.UniverseData.classic_horror.Server {
             SendScare(connection, kind);
             // The face fills their screen: hold the Presence until it fades.
             if (monster != null) {
-                float hold = kind == CH_ScareKind.Warning ? warningStaggerSeconds : discoveryStaggerSeconds;
-                monster.Stagger(hold);
-                Debug.Log($"[Classic Horror] the Presence is held for {hold:0.0}s while the {kind} face plays");
+                bool warning = kind == CH_ScareKind.Warning;
+                float hold = warning ? warningStaggerSeconds : discoveryStaggerSeconds;
+                monster.Stagger(hold, warning ? warningRetreatSeconds : 0f);
+                Debug.Log(warning
+                    ? $"[Classic Horror] the Presence is held for {hold:0.0}s while the {kind} face plays, then withdraws for {warningRetreatSeconds:0}s"
+                    : $"[Classic Horror] the Presence is held for {hold:0.0}s while the {kind} face plays");
             }
             return true;
         }

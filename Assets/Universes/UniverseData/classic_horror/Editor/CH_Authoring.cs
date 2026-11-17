@@ -33,9 +33,20 @@ namespace Universes.UniverseData.classic_horror.Editor {
             if (result == null) { result = new Material(Shader.Find("Universal Render Pipeline/Lit")); AssetDatabase.CreateAsset(result, path); }
             result.SetColor("_BaseColor", color);
             result.SetFloat("_Smoothness", 0.18f);
-            if (glow) { result.EnableKeyword("_EMISSION"); result.SetColor("_EmissionColor", color * 2f); }
+            SetEmission(result, glow ? color * 2f : Color.black);
             EditorUtility.SetDirty(result);
             return result;
+        }
+        /// <summary>
+        /// Turns URP emission on with <paramref name="emission"/>, or off when it is black. The project's
+        /// material validation clears _EMISSION unless the GI flags say the material is emissive, so both are set.
+        /// </summary>
+        public static void SetEmission(Material material, Color emission) {
+            bool glows = emission.maxColorComponent > 0f;
+            material.SetColor("_EmissionColor", emission);
+            material.globalIlluminationFlags = glows ? MaterialGlobalIlluminationFlags.RealtimeEmissive : MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+            if (glows) material.EnableKeyword("_EMISSION");
+            else material.DisableKeyword("_EMISSION");
         }
         static GameObject Shape(string name, PrimitiveType type, Transform parent, Vector3 position, Vector3 scale, Material material, Vector3 angles = default) {
             var obj = GameObject.CreatePrimitive(type);
@@ -106,7 +117,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const float LanternOffset = 2.1f, LanternClearance = 0.35f, LanternProbeHeight = 6f, LanternRange = 11f;
         // The KayKit atlas is a light beige; the posts take a dark, weathered copy so they don't glow in the flashlight.
         static readonly Color LanternPostTint = new(0.3f, 0.25f, 0.21f);
-        static readonly Color LanternGlow = new Color(1f, 0.58f, 0.24f) * 2.4f;
+        static readonly Color LanternGlow = new Color(1f, 0.58f, 0.24f) * 1.9f;
 
         /// <summary>
         /// A gallows post with a hanging lantern (KayKit Halloween Bits, CC0) whose glass is emissive,
@@ -151,10 +162,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null) { material = new Material(atlas) { name = "SearchLanternGlass" }; AssetDatabase.CreateAsset(material, path); }
             else material.CopyPropertiesFromMaterial(atlas);
-            material.EnableKeyword("_EMISSION");
-            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             material.SetTexture("_EmissionMap", atlas.GetTexture("_BaseMap"));
-            material.SetColor("_EmissionColor", LanternGlow);
+            SetEmission(material, LanternGlow);
             EditorUtility.SetDirty(material);
             return material;
         }
@@ -488,7 +497,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         [MenuItem("Ryan/Classic Horror/Rebuild Evidence Prefabs")]
         public static void BuildClueViews() {
             EnsureFolders();
-            var paper = Material("EvidencePaper", new Color(0.65f, 0.58f, 0.41f));
+            var paper = Material("EvidencePaper", RecordPaperTint);
             var ink = Material("EvidenceInk", new Color(0.12f, 0.16f, 0.15f));
             var rune = Material("EvidenceGlow", new Color(0.78f, 0.54f, 0.25f), true);
             string cluePath = Root + "/Prefabs/EvidenceRecord.prefab";
@@ -497,7 +506,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 ClearVisualChildren(clue);
                 var table = PlaceVisual(FloodedProps + "Prop_SmallTable_B.prefab", clue.transform, Vector3.zero, Vector3.one);
                 UseMaterial(table, RecordWoodMaterial(table));
-                PlaceVisual(FloodedProps + "Prop_Lamp_A.prefab", clue.transform, new Vector3(0.32f, 0.70f, 0.19f), Vector3.one * 0.68f);
+                var lamp = PlaceVisual(FloodedProps + "Prop_Lamp_A.prefab", clue.transform, new Vector3(0.32f, 0.70f, 0.19f), Vector3.one * 0.68f);
+                UseMaterial(lamp, TintedCopy(lamp, "EvidenceLamp", RecordLampTint, 0.15f));
                 var notes = Shape("Field Notes", PrimitiveType.Quad, clue.transform, new Vector3(-0.16f, 0.735f, -0.04f), new Vector3(0.48f, 0.34f, 1f), paper, new Vector3(90f, 18f, 0f));
                 Shape("Case Heading", PrimitiveType.Quad, notes.transform, new Vector3(-0.06f, 0.28f, -0.004f), new Vector3(0.68f, 0.09f, 1f), ink);
                 for (int i = 0; i < 3; i++)
@@ -532,8 +542,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         const float RecordLightRange = 4f;
-        // The pack's small-props atlas reads almost white under a flashlight; records use a darker, warmer copy.
-        static readonly Color RecordWoodTint = new(0.58f, 0.46f, 0.36f);
+        // The pack's small-props atlas reads almost white under the record's own glow and a flashlight;
+        // the table, lamp and paper take darker, warmer tints so only the outline reads as bright.
+        static readonly Color RecordWoodTint = new(0.4f, 0.3f, 0.22f);
+        static readonly Color RecordLampTint = new(0.46f, 0.38f, 0.29f);
+        static readonly Color RecordPaperTint = new(0.5f, 0.44f, 0.31f);
 
         /// <summary>The amber glow light and CH_EvidenceGlow (with its code defaults) on a record or offering.</summary>
         static void AddGlow(GameObject root, float range) {
@@ -550,14 +563,19 @@ namespace Universes.UniverseData.classic_horror.Editor {
             glow.rimRenderers = AddRim(root, RimMaterial());
         }
 
-        static Material RecordWoodMaterial(GameObject table) {
-            var source = table.GetComponentInChildren<Renderer>().sharedMaterial;
-            string path = Root + "/Materials/EvidenceTable.mat";
+        static Material RecordWoodMaterial(GameObject table) => TintedCopy(table, "EvidenceTable", RecordWoodTint, 0.1f);
+
+        /// <summary>A copy of a pack prop's material, saved as Materials/<paramref name="name"/>, with its colour multiplied by <paramref name="tint"/>.</summary>
+        static Material TintedCopy(GameObject prop, string name, Color tint, float smoothness) {
+            var source = prop.GetComponentInChildren<Renderer>().sharedMaterial;
+            string path = Root + "/Materials/" + name + ".mat";
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (material == null) { material = new Material(source) { name = "EvidenceTable" }; AssetDatabase.CreateAsset(material, path); }
+            if (material == null) { material = new Material(source) { name = name }; AssetDatabase.CreateAsset(material, path); }
             else material.CopyPropertiesFromMaterial(source);
-            material.SetColor("_BaseColor", RecordWoodTint);
-            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.1f);
+            material.SetColor("_BaseColor", tint);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
+            // The pack material keeps _EMISSION on with a black colour; the copy turns it off cleanly.
+            SetEmission(material, Color.black);
             EditorUtility.SetDirty(material);
             return material;
         }
@@ -573,10 +591,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
         public const string OfferingViewFolder = Root + "/Prefabs/";
         static readonly string[] OfferingViewNames = { "OfferingSalt", "OfferingBell", "OfferingLantern" };
         public static string OfferingViewPath(int offering) => OfferingViewFolder + OfferingViewNames[offering] + ".prefab";
-        // Offerings stand on the pack's other small table (records use Prop_SmallTable_B), each with its own object on top.
-        const string OfferingStand = FloodedProps + "Prop_SmallTable_A.prefab";
+        // Offerings stand on the low, open record table (the pack's other small table shows a blank
+        // panel from most sides), each with its own object on top, tall enough to read from 4 m.
+        const string OfferingStand = FloodedProps + "Prop_SmallTable_B.prefab";
         const float OfferingLightRange = 3f;
-        static readonly float[] OfferingHeights = { 0.32f, 0.3f, 0.5f };
+        static readonly float[] OfferingHeights = { 0.62f, 0.58f, 0.9f };
         static readonly Color BronzeColour = new(0.36f, 0.24f, 0.1f), SaltColour = new(0.86f, 0.84f, 0.78f);
 
         /// <summary>

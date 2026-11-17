@@ -29,6 +29,19 @@ namespace Universes.UniverseData.classic_horror.Client {
         /// <summary>The glow light's resting intensity, for authoring.</summary>
         public float IdleLight => idleLight;
 
+        /// <summary>The world-space box around every outlined renderer, used to keep the prompt off the prop.</summary>
+        public bool TryGetBounds(out Bounds bounds) {
+            bounds = default;
+            bool any = false;
+            foreach (Renderer target in rimRenderers) {
+                if (target == null || !target.enabled) continue;
+                if (any) bounds.Encapsulate(target.bounds);
+                else bounds = target.bounds;
+                any = true;
+            }
+            return any;
+        }
+
         void Awake() {
             block = new MaterialPropertyBlock();
             // Records found at the same moment should not pulse in lockstep.

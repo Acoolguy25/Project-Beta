@@ -16,6 +16,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float UnreachableGiveUpSeconds = 10f;
         const float UnreachableRetrySeconds = 12f;
         const float ReachableApproachRadius = 3f;
+        // How close to its approach point counts as having arrived there (stand-off), and to the
+        // last sensed position when searching.
+        const float StandOffArrivalRadius = 1f, SearchArrivalRadius = 1.5f;
         static readonly Vector3 HitboxSize = new(0.2f, 0.9f, 0.2f);
         static readonly Vector3 HitboxCenter = new(0, 0.45f, 0);
         static readonly Vector3[] ReachabilityProbeDirections = {
@@ -39,17 +42,24 @@ namespace Universes.UniverseData.classic_horror.Server {
         LocalCharacter pursued;
         float lastProgress;
         public int AbandonedChases { get; private set; }
-        public bool IsChasing => !suspended && pursued != null && Time.time - lastSeen < tuning.PursuitMemory(LivingInvestigators());
+        public bool IsChasing => !suspended && pursued != null && Time.time - lastSeen < tuning.PursuitMemory(livingInvestigators);
         /// <summary>True while a scare holds it in place.</summary>
         public bool IsStaggered => Time.time < staggeredUntil;
         public string State { get; private set; } = "Emerging";
         Vector3 patrolPoint, progressPosition;
-        float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, lightHeldUntil, enragedUntil, nextWhisper, nextPatrol, staggeredUntil;
+        float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, lightHeldUntil, enragedUntil, nextWhisper, nextPatrol;
+        // Negative while it is not held by a scare; the retreat follows once the hold ends.
+        float staggeredUntil = -1f, retreatAfterStagger;
         float unreachableSince = -1f;
+        // When it first stood at its approach point without being able to strike, or negative.
+        float stalledSince = -1f;
+        // Where it last saw or heard its quarry: a search goes there, not to where they are now.
+        Vector3 lastSeenPosition;
+        int livingInvestigators = 1;
         Vector3 committedPursuitDestination;
         float nextPursuitRepath;
         bool hasCommittedPursuitDestination;
-        bool suspended, staggered;
+        bool suspended;
         int warningIndex;
         int obstacleMask;
 
@@ -112,33 +122,36 @@ namespace Universes.UniverseData.classic_horror.Server {
             lastProgress = Time.time;
         }
         public void Enrage(float seconds) { enragedUntil = Time.time + seconds; repelledUntil = 0; }
-        public void Repel(float seconds) { repelledUntil = Time.time + seconds; nextPatrol = 0; pursued = null; lastSeen = -100; unreachableSince = -1f; hasCommittedPursuitDestination = false; }
+        public void Repel(float seconds) { repelledUntil = Time.time + seconds; nextPatrol = 0; pursued = null; lastSeen = -100; unreachableSince = -1f; stalledSince = -1f; hasCommittedPursuitDestination = false; }
         public void Suspend() { suspended = true; locomotion.SetTargetingType(NPCTargetingType.None); }
 
         /// <summary>
         /// Freezes it where it stands for <paramref name="seconds"/>: a scare that fills an
         /// investigator's screen also holds the Presence, so they can still run when the face fades.
-        /// It keeps its pursuit and resumes the hunt afterwards; a strike is never due during it.
+        /// A strike is never due during it. With <paramref name="retreatSeconds"/> above zero it then
+        /// withdraws for that long (as after a catch); otherwise it resumes the same hunt.
         /// </summary>
-        public void Stagger(float seconds) {
+        public void Stagger(float seconds, float retreatSeconds = 0f) {
             if (seconds <= 0f) return;
             staggeredUntil = Mathf.Max(staggeredUntil, Time.time + seconds);
+            retreatAfterStagger = Mathf.Max(retreatAfterStagger, retreatSeconds);
             nextAttack = Mathf.Max(nextAttack, staggeredUntil);
-            staggered = true;
             var agent = locomotion.agent;
             if (agent.enabled && agent.isOnNavMesh) { agent.isStopped = true; agent.velocity = Vector3.zero; }
             State = "Staggered";
         }
 
-        /// <summary>Lets the agent move again once a stagger is over.</summary>
+        /// <summary>Lets the agent move again once a stagger is over, withdrawing first if one was asked for.</summary>
         void EndStagger() {
-            staggered = false;
+            staggeredUntil = -1f;
             lastProgress = Time.time;
             var agent = locomotion.agent;
             if (agent.enabled && agent.isOnNavMesh) agent.isStopped = false;
+            if (retreatAfterStagger > 0f) Repel(retreatAfterStagger);
+            retreatAfterStagger = 0f;
         }
 
-        static int LivingInvestigators() {
+        static int CountLivingInvestigators() {
             int living = 0;
             foreach (var character in LocalCharacter.Characters.Values)
                 if (character != null && !character.IsDead) living++;
@@ -147,10 +160,11 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         void Update() {
             if (runner == null || suspended || !runner.CaseActive || Time.time < nextThink) return;
-            if (staggered) {
+            if (staggeredUntil >= 0f) {
                 if (IsStaggered) return;
                 EndStagger();
             }
+            livingInvestigators = CountLivingInvestigators();
             float elapsed = Mathf.Max(0.01f, Time.time - lastThink);
             lastThink = Time.time;
             nextThink = Time.time + 0.15f;
@@ -180,9 +194,9 @@ namespace Universes.UniverseData.classic_horror.Server {
                 };
                 if (Time.time < enragedUntil) sightRange = 85f;
                 // Temperament controls acquisition. Once a chase begins, retain a
-                // visible investigator across the map instead of dropping them as
-                // soon as they cross the shorter initial detection radius.
-                if (character == pursued) sightRange = 85f;
+                // visible investigator well past the shorter initial detection radius
+                // (less far when they are alone, so distance can shake it off too).
+                if (character == pursued) sightRange = Mathf.Max(sightRange, tuning.PursuitSightRange(livingInvestigators));
                 // Footsteps carry through cover. Walking speed in this universe is
                 // 4.5 m/s, so a 6 m/s threshold missed ordinary movement entirely.
                 float hearingRange = movement > 6f
@@ -254,9 +268,23 @@ namespace Universes.UniverseData.classic_horror.Server {
                     runner.OnMonsterChaseStarted();
                 }
                 lastSeen = Time.time;
-                NavigatePursued(tuning.HuntSpeed(runner.CurrentCase.Phase != CH_Phase.Investigation, Time.time < enragedUntil, LivingInvestigators()));
+                lastSeenPosition = sensed.transform.position;
+                NavigatePursued(tuning.HuntSpeed(runner.CurrentCase.Phase != CH_Phase.Investigation, Time.time < enragedUntil, livingInvestigators));
                 Vector3 sensedEye = sensed.CharacterCamera != null ? sensed.CharacterCamera.position : sensed.transform.position + Vector3.up * 2f;
-                if (closest < tuning.strikeDistance && Time.time >= nextAttack && WorldInteraction.CanReach(eye, sensedEye, tuning.strikeReach, obstacleMask)) {
+                // An investigator standing just off the walkable area keeps it at its approach point, a
+                // little beyond normal strike range. Once it has stood there for a moment it lunges;
+                // if it cannot see them from there either, it leaves instead of waiting beside them.
+                UpdateStandOff(closest);
+                float stalledFor = stalledSince < 0f ? 0f : Time.time - stalledSince;
+                float strikeRange = tuning.StrikeRange(stalledFor);
+                bool strikeClear = WorldInteraction.CanReach(eye, sensedEye, Mathf.Max(tuning.strikeReach, strikeRange), obstacleMask);
+                if (stalledFor >= tuning.standOffGiveUpSeconds && !strikeClear) {
+                    ignoredUntil[sensed] = Time.time + UnreachableRetrySeconds;
+                    GiveUp(sensed);
+                    return;
+                }
+                if (closest < strikeRange && Time.time >= nextAttack && strikeClear) {
+                    stalledSince = -1f;
                     nextAttack = Time.time + tuning.attackInterval;
                     // Use the health contract so a successful hit is lethal at any
                     // player health, while still respecting spawn protection.
@@ -271,12 +299,12 @@ namespace Universes.UniverseData.classic_horror.Server {
                     warningIndex++;
                     nextWhisper = Time.time + tuning.whisperInterval;
                 }
-            } else if (Time.time - lastSeen < tuning.PursuitMemory(LivingInvestigators()) && IsEligibleTarget(pursued)) {
+            } else if (Time.time - lastSeen < tuning.PursuitMemory(livingInvestigators) && IsEligibleTarget(pursued)) {
                 State = "Searching";
-                // Once acquired, keep tracking the investigator through cover. This
-                // lets the monster commit to entering a house instead of stopping at
-                // the doorway where line of sight was lost.
-                NavigatePursued(Mathf.Min(tuning.searchSpeed, tuning.HuntSpeed(true, false, LivingInvestigators())));
+                stalledSince = -1f;
+                // It goes to where it last saw or heard them (through a doorway into a house if need be),
+                // not to where they are now, so breaking its line of sight really shakes it off.
+                Search(Mathf.Min(tuning.searchSpeed, tuning.HuntSpeed(true, false, livingInvestigators)));
             } else {
                 if (pursued != null) GiveUp(pursued);
                 State = "Roaming"; Roam(false);
@@ -348,10 +376,31 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
             return Time.time - unreachableSince >= UnreachableGiveUpSeconds;
         }
+        /// <summary>Starts or clears the stand-off clock: it is at its approach point but outside strike range.</summary>
+        void UpdateStandOff(float distance) {
+            var agent = locomotion.agent;
+            bool atApproach = agent.enabled && agent.isOnNavMesh && hasCommittedPursuitDestination
+                && (transform.position - committedPursuitDestination).sqrMagnitude <= StandOffArrivalRadius * StandOffArrivalRadius;
+            if (!atApproach || distance < tuning.strikeDistance) stalledSince = -1f;
+            else if (stalledSince < 0f) stalledSince = Time.time;
+        }
+
+        /// <summary>Walks to where it last sensed its quarry and waits there until its memory runs out.</summary>
+        void Search(float speed) {
+            if ((transform.position - lastSeenPosition).sqrMagnitude <= SearchArrivalRadius * SearchArrivalRadius) {
+                var agent = locomotion.agent;
+                if (agent.enabled && agent.isOnNavMesh && agent.hasPath) agent.ResetPath();
+                return;
+            }
+            locomotion.agent.autoBraking = true;
+            hasCommittedPursuitDestination = false;
+            Navigate(lastSeenPosition, speed);
+        }
+
         void GiveUp(LocalCharacter target) {
             if (target != null) AbandonedChases++;
             if (pursued == target) pursued = null;
-            lastSeen = -100; nextPatrol = 0; lastProgress = Time.time; unreachableSince = -1f;
+            lastSeen = -100; nextPatrol = 0; lastProgress = Time.time; unreachableSince = -1f; stalledSince = -1f;
             hasCommittedPursuitDestination = false;
             State = "Giving up pursuit";
         }

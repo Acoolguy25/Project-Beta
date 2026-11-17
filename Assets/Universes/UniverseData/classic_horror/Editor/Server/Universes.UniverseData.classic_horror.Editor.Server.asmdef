@@ -1,0 +1,22 @@
+{
+    "name": "Universes.UniverseData.classic_horror.Editor.Server",
+    "rootNamespace": "Universes.UniverseData.classic_horror.Editor.Server",
+    "references": [
+        "Universes.UniverseData.classic_horror.Shared",
+        "Universes.UniverseData.classic_horror.Server",
+        "RyanAssets.Server.ServerFeatures"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -199,7 +199,7 @@ namespace Universes.UniverseData.classic_horror.Tests {
 
         [Test] public void ALoneInvestigatorCanOutrunEveryHunt() {
             var tuning = new CH_MonsterTuning();
-            const float sprint = 9.5f;
+            const float sprint = CH_MonsterTuning.InvestigatorSprintSpeed;
             foreach (bool ritual in new[] { false, true })
                 foreach (bool enraged in new[] { false, true })
                     Assert.Less(tuning.HuntSpeed(ritual, enraged, 1), sprint, $"ritual {ritual}, enraged {enraged}");
@@ -207,6 +207,33 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.Greater(tuning.HuntSpeed(true, false, 2), tuning.HuntSpeed(false, false, 2), "Chapter II hunts harder than Chapter I.");
             Assert.Less(tuning.strikeDistance, 6f, "The strike range must sit inside the warning range.");
             Assert.Less(tuning.PursuitMemory(1), tuning.PursuitMemory(2), "Breaking sight shakes it off sooner for a lone investigator.");
+        }
+
+        [Test] public void ALoneHuntSitsJustAboveWalkingPace() {
+            var tuning = new CH_MonsterTuning();
+            const float walk = CH_MonsterTuning.InvestigatorWalkSpeed;
+            float lone = tuning.HuntSpeed(true, false, 1);
+            Assert.Greater(lone, walk, "A lone investigator who only walks is still caught up with.");
+            Assert.LessOrEqual(lone - walk, 1f, "...but slowly: a short sprint and a corner shake it off.");
+            Assert.AreEqual(lone, tuning.HuntSpeed(false, false, 1), "Alone, Chapter I and II hunt at the same pace.");
+            Assert.Greater(tuning.HuntSpeed(false, true, 1), lone, "An enraged Presence is faster even against a lone investigator.");
+        }
+
+        [Test] public void ALoneInvestigatorCanGetOutOfSightByDistance() {
+            var tuning = new CH_MonsterTuning();
+            Assert.Less(tuning.PursuitSightRange(1), tuning.PursuitSightRange(2), "Alone, a chase is lost at a shorter distance.");
+            float sprintGap = (CH_MonsterTuning.InvestigatorSprintSpeed - tuning.HuntSpeed(false, false, 1)) * 10f;
+            Assert.Less(tuning.PursuitSightRange(1), 20f + sprintGap,
+                "Ten seconds of sprint from a 20 m start take a lone investigator out of its pursuit sight.");
+        }
+
+        [Test] public void AStalledPresenceLungesAtAnInvestigatorJustOffTheWalkableGround() {
+            var tuning = new CH_MonsterTuning();
+            Assert.AreEqual(tuning.strikeDistance, tuning.StrikeRange(0f), "A normal strike while it is still closing in.");
+            Assert.AreEqual(tuning.strikeDistance, tuning.StrikeRange(tuning.standOffSeconds * 0.5f));
+            // The monster accepts an approach point up to 3 m from the investigator and stops 0.65 m short of it.
+            Assert.GreaterOrEqual(tuning.StrikeRange(tuning.standOffSeconds), 3f + 0.65f, "The lunge covers the approach ring.");
+            Assert.Greater(tuning.standOffGiveUpSeconds, tuning.standOffSeconds, "It lunges before it gives up.");
         }
     }
 }

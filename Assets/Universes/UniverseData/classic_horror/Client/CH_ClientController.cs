@@ -39,6 +39,10 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Range(0f, 1f)] float focusAlignment = 0.9f;
         [SerializeField, Min(0.02f)] float focusInterval = 0.08f;
         [SerializeField, Min(0.5f)] float feedbackSeconds = 2.5f;
+        [Tooltip("Gap, in HUD units, between the focused prop's outline and its prompt, which sits below the prop (or above it when there is no room).")]
+        [SerializeField, Min(0f)] float promptGap = 24f;
+        [Tooltip("Closest the prompt may come to the top or bottom screen edge, in HUD units.")]
+        [SerializeField, Min(0f)] float promptEdgeMargin = 90f;
         [Tooltip("After E is pressed the record's prompt hides at once; it may come back if the server has not answered within this many seconds.")]
         [SerializeField, Min(0.1f)] float pendingInteractionSeconds = 2f;
         [Tooltip("Offerings placed at the source are smaller than the records found around the map.")]
@@ -107,6 +111,9 @@ namespace Universes.UniverseData.classic_horror.Client {
         // The point E was last pressed on, hidden from focus until the server answers.
         int pendingId = -1;
         float pendingUntil;
+        // Where the HUD prefab puts the prompt; used when nothing is focused.
+        Vector2 promptRest;
+        static readonly Vector3[] BoundsCorners = new Vector3[8];
 
         bool CaseOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
 
@@ -115,6 +122,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             visibilityMask = ~LayerMask.GetMask("Character", "LocalCharacter", "UI", "Ignore Raycast");
             endingPopup.HideImmediate();
             interactionPrompt.HideImmediate();
+            promptRest = ((RectTransform)interactionPrompt.transform).anchoredPosition;
             radio.Clear();
             chapterLabel.text = "Investigator";
             objectiveLabel.text = "Establishing the radio link...";
@@ -160,6 +168,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             if (!hasState) return;
             if (Time.unscaledTime > nextFocus) { nextFocus = Time.unscaledTime + focusInterval; UpdateFocus(); }
+            PlacePrompt();
             radio.SetSuppressed(journal.IsOpen || CaseOver);
         }
 
@@ -397,6 +406,41 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (prompt == null) return;
             interactionLabel.text = prompt;
             if (interactionKey.activeSelf != actionable) interactionKey.SetActive(actionable);
+        }
+
+        /// <summary>Keeps the prompt just below the focused prop on screen (above it near the bottom edge) so it never covers it.</summary>
+        void PlacePrompt() {
+            var prompt = (RectTransform)interactionPrompt.transform;
+            var hud = prompt.parent as RectTransform;
+            var camera = Camera.main;
+            Vector2 position = promptRest;
+            if (hud != null && camera != null && focusedGlow != null && focusedGlow.TryGetBounds(out Bounds bounds)
+                && TryScreenSpan(camera, bounds, out float bottom, out float top)) {
+                float toHud = hud.rect.height / Mathf.Max(1f, Screen.height);
+                float halfHeight = prompt.rect.height * 0.5f;
+                float floor = hud.rect.yMin + promptEdgeMargin + halfHeight;
+                float ceiling = hud.rect.yMax - promptEdgeMargin - halfHeight;
+                float below = hud.rect.yMin + bottom * toHud - promptGap - halfHeight;
+                float above = hud.rect.yMin + top * toHud + promptGap + halfHeight;
+                position.y = (below >= floor ? below : Mathf.Min(above, ceiling)) - hud.rect.center.y;
+            }
+            prompt.anchoredPosition = position;
+        }
+
+        /// <summary>The lowest and highest screen rows (pixels) the box covers; false when part of it is behind the camera.</summary>
+        static bool TryScreenSpan(Camera camera, Bounds bounds, out float bottom, out float top) {
+            bottom = float.MaxValue;
+            top = float.MinValue;
+            Vector3 min = bounds.min, max = bounds.max;
+            for (int i = 0; i < BoundsCorners.Length; i++)
+                BoundsCorners[i] = new Vector3((i & 1) == 0 ? min.x : max.x, (i & 2) == 0 ? min.y : max.y, (i & 4) == 0 ? min.z : max.z);
+            foreach (Vector3 corner in BoundsCorners) {
+                Vector3 screen = camera.WorldToScreenPoint(corner);
+                if (screen.z <= camera.nearClipPlane) return false;
+                bottom = Mathf.Min(bottom, screen.y);
+                top = Mathf.Max(top, screen.y);
+            }
+            return true;
         }
 
         void SetFocusedGlow(CH_EvidenceGlow glow) {

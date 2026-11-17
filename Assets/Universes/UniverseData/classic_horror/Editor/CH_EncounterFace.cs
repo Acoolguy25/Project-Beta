@@ -13,10 +13,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const string FacePrefab = "Packages/com.ryan.gameframework/Runtime/Characters/Monster/Prefabs/PresenceFace.prefab";
         const int Width = 1920, Height = 1080;
         // Vertical field of view, and how much of the frame height the face (brow to chin) fills.
-        const float FieldOfView = 30f, FaceFill = 0.95f;
+        const float FieldOfView = 30f, FaceFill = 0.9f;
         // Where the frame is centred, as a fraction of the head's height from its lowest point
-        // (the neck): high enough that the cut neck sits below the bottom edge.
-        const float FrameCentre = 0.68f;
+        // (the neck): low enough that the mouth clears the bottom edge on wide windows, high enough
+        // that the cut neck stays below it.
+        const float FrameCentre = 0.65f;
         // One hard key light from low on the left, a faint red rim from behind on the right.
         static readonly Vector3 KeyAngles = new(-38f, 140f, 0f), RimAngles = new(10f, -30f, 0f);
         static readonly Color KeyColour = new(1f, 0.82f, 0.66f), RimColour = new(0.8f, 0.08f, 0.05f);
@@ -26,7 +27,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const float GlowRadius = 0.75f;
         // Hand-shaped light: the right of the frame falls into shadow between these widths, the
         // top (brow and hat) by BrowShadow of the way, down to ShadowFloor of the rendered colour.
-        const float SideShadowStart = 0.46f, SideShadowEnd = 0.6f, BrowShadow = 0.8f, ShadowFloor = 0.07f;
+        const float SideShadowStart = 0.38f, SideShadowEnd = 0.74f, BrowShadow = 0.8f, ShadowFloor = 0.07f;
 
         public static Texture2D Build() {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(FacePrefab);

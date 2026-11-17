@@ -67,7 +67,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Min(0.1f)] float closeRangeDistance = 2.5f;
         [Tooltip("Beam strength (fraction of normal) against a surface right at the lens. Between the lens and the close-range "
             + "distance the strength follows the square of the distance, as the light on the surface grows with it.")]
-        [SerializeField, Range(0.01f, 1f)] float closeRangeFloor = 0.04f;
+        [SerializeField, Range(0.01f, 1f)] float closeRangeFloor = 0.12f;
         [Tooltip("How fast the beam follows the close-range dimming (per second).")]
         [SerializeField, Min(0.5f)] float closeRangeRate = 6f;
 
