@@ -43,7 +43,7 @@ namespace Universes.UniverseData.obby.Server {
         [SerializeField] ulong coinGold = 3;
         [SerializeField] ulong finishXP = 60;
         [SerializeField] ulong finishGold = 25;
-        [Tooltip("Extra gold for the top three of the final results.")]
+        [Tooltip("Extra gold for the top three of the final results (races with two or more racers only).")]
         [SerializeField] ulong[] podiumGold = { 30, 15, 5 };
         [Header("Scoring")]
         [Tooltip("Seconds each collected coin takes off a finish time. Results are ranked by this scored time.")]
@@ -215,9 +215,10 @@ namespace Universes.UniverseData.obby.Server {
             AwardPodium(final);
             InstanceFinder.ServerManager.Broadcast(MakeResults(final));
             var winner = final.Count > 0 && final[0].Value.finished ? final[0] : default;
-            headline = winner.Key != null
-                ? $"{PlayerData.GetPlayerName(winner.Key)} wins in {OB_Scoring.Clock(winner.Value.scoredTime, true)}!"
-                : "Nobody finished this one. New course next!";
+            // Times are on every client's results board, so the top bar only names the winner.
+            headline = winner.Key == null ? "Nobody finished this one. New course next!"
+                : final.Count < 2 ? "Course complete!"
+                : $"{NameOf(winner.Key)} wins!";
             for (int i = resultsSeconds; i > 0; i--) {
                 secondsLeft = i;
                 SetTopMessage($"{headline}  Next course in {i}");
@@ -309,7 +310,7 @@ namespace Universes.UniverseData.obby.Server {
             bool personalBest = false;
             PlayerProgress.Modify<OB_SaveData>(connection, save => personalBest = save.RecordFinish(finishTime, scoredTime, medal, stages));
             runner.personalBest = personalBest;
-            string name = PlayerData.GetPlayerName(connection);
+            string name = NameOf(connection);
             headline = $"{name} finished in {OB_Scoring.Clock(runner.scoredTime, true)}" + (runner.place == 1 ? ", the best time so far!" : "!");
             standingsDirty = true;
             if (firstFinisher && phase == OB_Phase.Racing) {
@@ -351,7 +352,7 @@ namespace Universes.UniverseData.obby.Server {
         }
 
         OB_Standing StandingOf(NetworkConnection connection, Runner runner) => new() {
-            clientId = connection.ClientId, name = PlayerData.GetPlayerName(connection), stage = runner.checkpoint,
+            clientId = connection.ClientId, name = NameOf(connection), stage = runner.checkpoint,
             finished = runner.finished, scoredTime = runner.scoredTime
         };
 
@@ -362,8 +363,12 @@ namespace Universes.UniverseData.obby.Server {
             return order;
         }
 
-        /// <summary>Podium gold, wins and podiums go by the final results, after every coin bonus is known.</summary>
+        /// <summary>
+        /// Podium gold, wins and podiums go by the final results, after every coin bonus is known. A race
+        /// alone is no contest: the finish reward and medal still count, places do not.
+        /// </summary>
         void AwardPodium(List<KeyValuePair<NetworkConnection, Runner>> final) {
+            if (final.Count < 2) return;
             for (int i = 0; i < final.Count; i++) {
                 if (!final[i].Value.finished) break;
                 int place = i + 1;
@@ -375,7 +380,8 @@ namespace Universes.UniverseData.obby.Server {
 
         // ---------------------------------------------------------------- messages
         OB_CourseBroadcast MakeCourse() => new() {
-            seed = layout?.seed ?? 0, stageCount = layout?.StageCount ?? 0, round = round, coinBonus = coinTimeBonus
+            seed = layout?.seed ?? 0, stageCount = layout?.StageCount ?? 0, round = round, coinBonus = coinTimeBonus,
+            goldPerStage = medalTimes.goldPerStage
         };
 
         void SendCourse(NetworkConnection connection) {
@@ -416,7 +422,7 @@ namespace Universes.UniverseData.obby.Server {
             var leader = FinalOrder().FirstOrDefault();
             InstanceFinder.ServerManager.Broadcast(new OB_RoundBroadcast {
                 seed = layout.seed, phase = phase, secondsLeft = secondsLeft, raceTime = RaceTime,
-                leaderName = leader.Key != null ? PlayerData.GetPlayerName(leader.Key) : "",
+                leaderName = leader.Key != null ? NameOf(leader.Key) : "",
                 leaderStage = leader.Value?.checkpoint ?? 0, finishedCount = finishCount,
                 playerCount = PlayerData.Players.Count, headline = headline
             });
@@ -425,9 +431,9 @@ namespace Universes.UniverseData.obby.Server {
         OB_ResultsBroadcast MakeResults(List<KeyValuePair<NetworkConnection, Runner>> final) => new() {
             seed = layout.seed,
             entries = final.Select(r => new OB_ResultEntry {
-                name = PlayerData.GetPlayerName(r.Key), finished = r.Value.finished, time = r.Value.finishTime,
+                name = NameOf(r.Key), finished = r.Value.finished, time = r.Value.finishTime,
                 stage = r.Value.checkpoint, coins = OB_Scoring.CountCoins(r.Value.coins),
-                scoredTime = r.Value.scoredTime, medal = r.Value.medal
+                scoredTime = r.Value.scoredTime, medal = r.Value.medal, clientId = r.Key.ClientId
             }).ToArray(),
             goldTime = medalTimes.Target(OB_Medal.Gold, layout.StageCount),
             silverTime = medalTimes.Target(OB_Medal.Silver, layout.StageCount),
@@ -437,7 +443,8 @@ namespace Universes.UniverseData.obby.Server {
 
         void WriteLeaderboard(PlayerData player) {
             if (!runners.TryGetValue(player.Owner, out Runner runner)) return;
-            SetLeaderboardValue(player, StageColumn, runner.checkpoint);
+            // The same stage number as the client's stage card ("STAGE 4 / 30" while stage 4 is next).
+            SetLeaderboardValue(player, StageColumn, runner.finished ? layout.StageCount : runner.checkpoint + 1);
             SetLeaderboardValue(player, CoinColumn, OB_Scoring.CountCoins(runner.coins));
         }
 
@@ -446,6 +453,10 @@ namespace Universes.UniverseData.obby.Server {
             if (index >= 0 && index < player.leaderboard.Count && player.leaderboard[index] != value)
                 player.leaderboard[index] = value;
         }
+
+        /// <summary>The racer's display name; a connection without player data (already left) still gets one.</summary>
+        static string NameOf(NetworkConnection connection) =>
+            PlayerData.GetPlayerName(connection) is { Length: > 0 } name ? name : $"Racer {connection.ClientId}";
 
         static void Award(NetworkConnection connection, ulong xp, ulong gold, string reason) {
             if (xp == 0 && gold == 0) return;

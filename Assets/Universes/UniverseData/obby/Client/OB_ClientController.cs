@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text;
 using FishNet;
 using FishNet.Managing.Client;
@@ -32,20 +31,14 @@ namespace Universes.UniverseData.obby.Client {
         [Min(0.01f)] public float progressSmoothing = 0.25f;
 
         [Header("Race strip")]
-        [Tooltip("The progress track other racers are marked on (the stage card's bar).")]
-        public RectTransform racerTrack;
-        [Tooltip("Inactive marker under the track, copied once per other racer.")]
-        public Image racerDotTemplate;
-        [Tooltip("Your place in the race, beside the stage name.")]
-        public TMP_Text placeLabel;
-        [Tooltip("Seconds the overtake toasts stay up.")]
-        [Min(0.1f)] public float overtakeToastSeconds = 1.4f;
+        [Tooltip("Other racers' dots on the progress track and your place, with pass pops.")]
+        public OB_RaceStrip raceStrip;
 
         [Header("Race status")]
         public TMP_Text timerLabel;
         public TMP_Text statusLabel, coinsLabel, leaderLabel;
         public RectTransform coinPill;
-        [Tooltip("Seconds a checkpoint split (and its difference to your best this session) replaces the clock status.")]
+        [Tooltip("Seconds a checkpoint split (and its difference to the gold medal pace) replaces the clock status.")]
         [Min(0f)] public float splitSeconds = 4f;
 
         [Header("Announcements")]
@@ -64,6 +57,12 @@ namespace Universes.UniverseData.obby.Client {
         public TMP_Text resultsBody;
         public TMP_Text resultsFooter;
         [Min(1f)] public float resultsSeconds = 9f;
+        [Tooltip("Most rows the board lists. With more racers it lists the leaders and always your own row.")]
+        [Min(1)] public int resultsMaxRows = 8;
+        [Tooltip("Height of the board around its rows (header, margins and footer); the rows add their own height.")]
+        [Min(0f)] public float resultsFrameHeight = 236f;
+        [Tooltip("Longest racer name shown in full; longer names are cut with \"..\".")]
+        [Min(4)] public int resultsNameLength = 16;
 
         [Header("Presentation")]
         public OB_Fx fx;
@@ -91,23 +90,20 @@ namespace Universes.UniverseData.obby.Client {
         OB_Course course;
         ClientManager manager;
         int builtSeed, wantedSeed, wantedStages;
-        float wantedCoinBonus;
+        float wantedCoinBonus, wantedGoldPerStage;
         OB_ProgressBroadcast progress;
         bool hasProgress;
         OB_RoundBroadcast round;
         float roundReceivedAt, toastShownAt, toastUntil, resultsUntil, nextRequest, splitUntil;
-        bool toastMinor;
         float progressShown, progressTarget, progressVelocity, hintShownAt;
         int hintStage = -1;
         string splitText = "";
-
-        // Race strip: the latest standings, who was ahead of us, and one marker per other racer.
-        OB_StandingsBroadcast standings;
-        int standingsSeed;
-        readonly HashSet<int> ahead = new(), aheadBefore = new();
-        readonly List<Image> racerDots = new();
-        /// <summary>Best split per checkpoint this session (race seconds at the moment it was reached).</summary>
-        readonly Dictionary<int, float> bestSplits = new();
+        // What the clock and status line show, so their strings are only rebuilt when it changes.
+        int shownClockTenths = -1;
+        readonly char[] clockChars = new char[16];
+        string shownStatusKey;
+        int shownStatusSeconds = -1;
+        readonly StringBuilder rows = new();
 
         static string StageName(OB_StageKind kind) => kind switch {
             OB_StageKind.Hops => "Skyhop",
@@ -158,8 +154,6 @@ namespace Universes.UniverseData.obby.Client {
             timerLabel.text = "0:00.0";
             statusLabel.text = "";
             leaderLabel.text = "";
-            placeLabel.text = "";
-            racerDotTemplate.gameObject.SetActive(false);
             SetProgress(0f, true);
             if (backdrop != null && course != null) backdrop.Arrange(null, course.LobbySpawn);
         }
@@ -188,8 +182,6 @@ namespace Universes.UniverseData.obby.Client {
                 manager.Broadcast(new OB_CourseRequest { knownSeed = builtSeed });
             }
             if (resultsPanel.activeSelf && Time.unscaledTime > resultsUntil) resultsPanel.SetActive(false);
-            // The results headline sits under the clock, where the open results panel would cover it.
-            leaderLabel.enabled = !resultsPanel.activeSelf;
             RefreshTimer();
             AnimateHud();
         }
@@ -219,14 +211,13 @@ namespace Universes.UniverseData.obby.Client {
             wantedSeed = message.seed;
             wantedStages = message.stageCount;
             wantedCoinBonus = message.coinBonus;
+            wantedGoldPerStage = message.goldPerStage;
             if (course == null || message.seed == 0 || message.seed == builtSeed) return;
             course.Build(message.seed, message.stageCount);
             builtSeed = message.seed;
             hasProgress = false;
-            ahead.Clear();
-            standings = default;
-            standingsSeed = 0;
-            RefreshRacers();
+            splitUntil = 0f;
+            if (raceStrip != null) raceStrip.Clear();
             if (fx != null) fx.CoinBonus = wantedCoinBonus;
             resultsPanel.SetActive(false);
             SetProgress(0f, true);
@@ -237,7 +228,9 @@ namespace Universes.UniverseData.obby.Client {
         /// <summary>Builds the announced course if a message for it arrived before the course itself was built.</summary>
         void CatchUp(int seed, Channel channel) {
             if (seed != builtSeed && seed == wantedSeed && wantedSeed != 0)
-                OnCourse(new OB_CourseBroadcast { seed = wantedSeed, stageCount = wantedStages, coinBonus = wantedCoinBonus }, channel);
+                OnCourse(new OB_CourseBroadcast {
+                    seed = wantedSeed, stageCount = wantedStages, coinBonus = wantedCoinBonus, goldPerStage = wantedGoldPerStage
+                }, channel);
         }
 
         void OnProgress(OB_ProgressBroadcast message, Channel channel) {
@@ -258,9 +251,10 @@ namespace Universes.UniverseData.obby.Client {
                     if (newTier)
                         Toast($"{OB_Tiers.Name(tier).ToUpperInvariant()}  <size=75%><alpha=#CC>{OB_Tiers.Theme(tier)}</size>", accent, 3f);
                     else
-                        Toast($"CHECKPOINT {message.checkpoint}/{total - 1}" + (message.checkpoint - previous > 1 ? "  <size=70%>skipped ahead!</size>" : ""), OB_Palette.Go);
-                    if (fx != null) fx.Checkpoint(newTier, accent);
-                    ShowSplit(message.checkpoint, message.raceTime);
+                        // Same numbering as the stage card: reaching checkpoint 3 starts stage 4.
+                        Toast($"CHECKPOINT  <size=75%><alpha=#CC>STAGE {message.checkpoint + 1} / {total}</size>", OB_Palette.Go);
+                    if (fx != null) fx.Checkpoint(newTier, accent, course.Layout.stages[message.checkpoint].spawn);
+                    ShowSplit(message.checkpoint, message.raceTime, OB_Scoring.CountCoins(message.coins));
                     Punch.Pop(stageCard, stagePopFrom, stagePopSeconds);
                     break;
                 }
@@ -268,7 +262,8 @@ namespace Universes.UniverseData.obby.Client {
                     Punch.Pop(coinPill, coinPopFrom, coinPopSeconds);
                     break;
                 case OB_ProgressReason.Finish:
-                    Toast(FinishToast(message), OB_Palette.Medal(message.medal == OB_Medal.None ? OB_Medal.Gold : message.medal), 5f);
+                    // No medal is not gold: a plain finish gets the "go" green.
+                    Toast(FinishToast(message), message.medal == OB_Medal.None ? OB_Palette.Go : OB_Palette.Medal(message.medal), 5f);
                     Punch.Pop(stageCard, stagePopFrom, stagePopSeconds);
                     if (fx != null) fx.Finish(course.Layout.finishTop, message.personalBest);
                     break;
@@ -299,20 +294,22 @@ namespace Universes.UniverseData.obby.Client {
             return text.ToString();
         }
 
-        /// <summary>Shows the split for <paramref name="checkpoint"/> under the clock, against your best this session.</summary>
-        void ShowSplit(int checkpoint, float raceTime) {
+        /// <summary>
+        /// Shows the split for <paramref name="checkpoint"/> under the clock against the gold medal pace,
+        /// which exists from the first checkpoint of the first race (coins count, as in the medal).
+        /// </summary>
+        void ShowSplit(int checkpoint, float raceTime, int coins) {
             if (raceTime <= 0f || splitSeconds <= 0f) return;
             string clock = OB_Scoring.Clock(raceTime, true);
-            if (bestSplits.TryGetValue(checkpoint, out float best)) {
-                float delta = raceTime - best;
+            if (wantedGoldPerStage > 0f) {
+                float delta = OB_Scoring.GoldPaceDelta(raceTime, coins, wantedCoinBonus, checkpoint, wantedGoldPerStage);
                 Color color = delta <= 0f ? OB_Palette.Go : OB_Palette.Lava;
-                splitText = $"{clock}  <color=#{ColorUtility.ToHtmlStringRGB(color)}>{(delta <= 0f ? "-" : "+")}{Mathf.Abs(delta):0.0}</color>";
-                if (delta < 0f) bestSplits[checkpoint] = raceTime;
+                splitText = $"{clock}  <color=#{ColorUtility.ToHtmlStringRGB(color)}>{(delta <= 0f ? "-" : "+")}{Mathf.Abs(delta):0.0} <size=80%>vs gold</size></color>";
             } else {
                 splitText = $"split {clock}";
-                bestSplits[checkpoint] = raceTime;
             }
             splitUntil = Time.unscaledTime + splitSeconds;
+            shownStatusKey = null;
         }
 
         // ---------------------------------------------------------------- round
@@ -338,48 +335,18 @@ namespace Universes.UniverseData.obby.Client {
                     }
                 }
             }
-            // The race strip shows where everyone is, so the line under the clock only carries the result.
-            leaderLabel.text = message.phase == OB_Phase.Results ? message.headline : "";
-            if (!Racing) placeLabel.text = "";
+            // The top bar already carries the headline and the results board the field, so this line stays empty.
+            leaderLabel.text = "";
+            if (raceStrip != null) raceStrip.Refresh(LocalClientId, StageCount, Racing || message.phase == OB_Phase.Results);
         }
+
+        int StageCount => course != null && course.Layout != null ? course.Layout.StageCount : 0;
 
         // ---------------------------------------------------------------- standings
         void OnStandings(OB_StandingsBroadcast message, Channel channel) {
             CatchUp(message.seed, channel);
-            if (message.seed != builtSeed || message.racers == null) return;
-            bool continuing = standingsSeed == message.seed;
-            standings = message;
-            standingsSeed = message.seed;
-            int me = LocalClientId;
-            int index = OB_Scoring.IndexOf(message.racers, me);
-
-            aheadBefore.Clear();
-            aheadBefore.UnionWith(ahead);
-            ahead.Clear();
-            if (index >= 0)
-                foreach (var racer in message.racers)
-                    if (OB_Scoring.IsAhead(racer, message.racers[index])) ahead.Add(racer.clientId);
-
-            if (continuing && index >= 0 && Racing && message.racers.Length > 1) {
-                int gained = 0;
-                foreach (int id in aheadBefore)
-                    if (!ahead.Contains(id) && OB_Scoring.IndexOf(message.racers, id) >= 0) gained++;
-                string passedBy = null;
-                int passers = 0;
-                foreach (var racer in message.racers) {
-                    if (!ahead.Contains(racer.clientId) || aheadBefore.Contains(racer.clientId)) continue;
-                    passers++;
-                    passedBy ??= racer.name;
-                }
-                if (passers > 0) {
-                    Toast($"PASSED BY {passedBy.ToUpperInvariant()}" + (passers > 1 ? $" <size=70%>+{passers - 1}</size>" : ""), OB_Palette.InkSoft, overtakeToastSeconds, true);
-                    if (fx != null) fx.LostPlace();
-                } else if (gained > 0) {
-                    Toast(gained == 1 ? "+1 PLACE" : $"+{gained} PLACES", OB_Palette.Go, overtakeToastSeconds, true);
-                    if (fx != null) fx.GainedPlace();
-                }
-            }
-            RefreshRacers();
+            if (message.seed != builtSeed || message.racers == null || raceStrip == null) return;
+            raceStrip.Apply(message, LocalClientId, StageCount, Racing);
         }
 
         static int LocalClientId {
@@ -389,62 +356,55 @@ namespace Universes.UniverseData.obby.Client {
             }
         }
 
-        /// <summary>Places a marker on the progress track for every other racer, and shows your place.</summary>
-        void RefreshRacers() {
-            var racers = standingsSeed == builtSeed ? standings.racers : null;
-            int me = LocalClientId, stages = course != null && course.Layout != null ? course.Layout.StageCount : 0;
-            int shown = 0;
-            if (racers != null && stages > 0) {
-                foreach (var racer in racers) {
-                    if (racer.clientId == me) continue;
-                    if (shown == racerDots.Count) racerDots.Add(Instantiate(racerDotTemplate, racerTrack));
-                    var dot = racerDots[shown++];
-                    dot.gameObject.SetActive(true);
-                    float x = racer.finished ? 1f : Mathf.Clamp01((float)racer.stage / stages);
-                    var rect = dot.rectTransform;
-                    rect.anchorMin = new Vector2(x, rect.anchorMin.y);
-                    rect.anchorMax = new Vector2(x, rect.anchorMax.y);
-                    dot.color = racer.finished ? OB_Palette.Gold : OB_Palette.Paper;
-                }
-            }
-            for (int i = shown; i < racerDots.Count; i++) racerDots[i].gameObject.SetActive(false);
-
-            int place = racers != null ? OB_Scoring.PlaceOf(racers, me) : 0;
-            placeLabel.text = place > 0 && racers.Length > 1 && (Racing || round.phase == OB_Phase.Results)
-                ? $"{OB_Scoring.Ordinal(place)}<size=65%><alpha=#99> / {racers.Length}</size>"
-                : "";
-        }
-
         // ---------------------------------------------------------------- results
         void OnResults(OB_ResultsBroadcast message, Channel channel) {
-            var text = new StringBuilder();
-            int place = 0;
-            string coin = ColorUtility.ToHtmlStringRGB(OB_Palette.Gold);
-            foreach (var entry in message.entries) {
-                place++;
-                string rank = ColorUtility.ToHtmlStringRGB(place switch {
-                    1 => OB_Palette.Gold,
-                    2 => OB_Palette.Silver,
-                    3 => OB_Palette.Bronze,
-                    _ => OB_Palette.Paper
-                });
-                text.Append($"<color=#{rank}><b>{OB_Scoring.Ordinal(place)}</b></color><pos=10%>{entry.name}<pos=50%>");
-                if (entry.finished) {
-                    text.Append(OB_Scoring.Clock(entry.scoredTime, true));
-                    float bonus = entry.time - entry.scoredTime;
-                    if (bonus > 0.05f) text.Append($" <size=70%><alpha=#99>-{bonus:0.0}s<alpha=#FF></size>");
-                } else {
-                    text.Append($"<alpha=#99>stage {entry.stage}<alpha=#FF>");
-                }
-                if (entry.medal != OB_Medal.None)
-                    text.Append($"<pos=70%><color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Medal(entry.medal))}>• {entry.medal.ToString().ToUpperInvariant()}</color>");
-                text.Append($"<pos=87%><color=#{coin}>{entry.coins}</color> <size=75%>{(entry.coins == 1 ? "coin" : "coins")}</size>\n");
-            }
-            resultsBody.text = text.Length > 0 ? text.ToString() : "No racers.";
+            var entries = message.entries ?? System.Array.Empty<OB_ResultEntry>();
+            int me = LocalClientId, mine = -1;
+            for (int i = 0; i < entries.Length; i++)
+                if (entries[i].clientId == me) mine = i;
+            // Too many racers for the board: the leaders, then your own row in its real place.
+            int listed = Mathf.Min(entries.Length, resultsMaxRows);
+            bool appendMine = mine >= resultsMaxRows;
+            if (appendMine) listed = resultsMaxRows - 1;
+            rows.Clear();
+            for (int i = 0; i < listed; i++) AppendRow(entries[i], i + 1, i == mine);
+            if (appendMine) AppendRow(entries[mine], mine + 1, true);
+            resultsBody.text = rows.Length > 0 ? rows.ToString() : "No racers.";
             resultsFooter.text = MedalTargets(message);
+            // The board is as tall as its rows, so one racer is not an empty board and eight still fit.
+            var board = (RectTransform)resultsPanel.transform;
+            float height = resultsFrameHeight + resultsBody.GetPreferredValues(resultsBody.text, resultsBody.rectTransform.rect.width, 0f).y;
+            board.sizeDelta = new Vector2(board.sizeDelta.x, height);
             resultsPanel.SetActive(true);
+            // The board repeats your finish line, so the finish toast makes way for it.
+            toastUntil = Mathf.Min(toastUntil, Time.unscaledTime);
             resultsUntil = Time.unscaledTime + resultsSeconds;
-            RefreshRacers();
+            if (raceStrip != null) raceStrip.Refresh(me, StageCount, true);
+        }
+
+        void AppendRow(in OB_ResultEntry entry, int place, bool mine) {
+            string rank = ColorUtility.ToHtmlStringRGB(place switch {
+                1 => OB_Palette.Gold,
+                2 => OB_Palette.Silver,
+                3 => OB_Palette.Bronze,
+                _ => OB_Palette.Paper
+            });
+            string name = string.IsNullOrEmpty(entry.name) ? "?" : entry.name;
+            if (name.Length > resultsNameLength) name = name.Substring(0, resultsNameLength - 2) + "..";
+            rows.Append($"<color=#{rank}><b>{OB_Scoring.Ordinal(place)}</b></color><pos=10%>");
+            if (mine) rows.Append($"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Gold)}>{name}</color>");
+            else rows.Append(name);
+            rows.Append("<pos=48%>");
+            if (entry.finished) {
+                rows.Append(OB_Scoring.Clock(entry.scoredTime, true));
+                float bonus = entry.time - entry.scoredTime;
+                if (bonus > 0.05f) rows.Append($" <size=70%><alpha=#99>-{bonus:0.0}s<alpha=#FF></size>");
+            } else {
+                rows.Append($"<alpha=#99>stage {Mathf.Min(entry.stage + 1, StageCount)}<alpha=#FF>");
+            }
+            if (entry.medal != OB_Medal.None)
+                rows.Append($"<pos=70%><color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Medal(entry.medal))}>• {entry.medal.ToString().ToUpperInvariant()}</color>");
+            rows.Append($"<pos=87%><color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Gold)}>{entry.coins}</color> <size=75%>{(entry.coins == 1 ? "coin" : "coins")}</size>\n");
         }
 
         static string MedalTargets(in OB_ResultsBroadcast message) {
@@ -523,34 +483,42 @@ namespace Universes.UniverseData.obby.Client {
             coinsLabel.text = $"{coins}<size=70%><alpha=#99> / {layout.StageCount}</size>";
         }
 
+        /// <summary>Updates the clock and the line under it; strings are only rebuilt when what they show changes.</summary>
         void RefreshTimer() {
             float elapsed = Time.unscaledTime - roundReceivedAt;
-            if (hasProgress && progress.finished) timerLabel.text = OB_Scoring.Clock(progress.finishTime, true);
-            else timerLabel.text = Racing ? OB_Scoring.Clock(round.raceTime + elapsed, true) : "0:00.0";
-            string status = round.phase switch {
-                OB_Phase.Closing when Time.unscaledTime < splitUntil => splitText,
-                OB_Phase.Closing => $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Lava)}>closes in {Mathf.Max(0, round.secondsLeft - (int)elapsed)}s</color>",
-                OB_Phase.Racing when Time.unscaledTime < splitUntil => splitText,
+            float clock = hasProgress && progress.finished ? progress.finishTime : Racing ? round.raceTime + elapsed : 0f;
+            int tenths = Mathf.FloorToInt(Mathf.Max(0f, clock) * 10f);
+            if (tenths != shownClockTenths) {
+                shownClockTenths = tenths;
+                timerLabel.SetCharArray(clockChars, 0, OB_Scoring.ClockTenths(tenths, clockChars));
+            }
+            bool split = Racing && Time.unscaledTime < splitUntil;
+            string key = split ? "split" : round.phase switch {
+                OB_Phase.Closing => "closing",
                 OB_Phase.Racing => hasProgress && progress.finished ? "your time" : "race time",
                 OB_Phase.Countdown => "get ready",
                 OB_Phase.Results => "race over",
                 _ => "waiting for players"
             };
-            if (statusLabel.text != status) statusLabel.text = status;
+            int closesIn = key == "closing" ? Mathf.Max(0, round.secondsLeft - (int)elapsed) : -1;
+            // The keys are literals, so a reference check is enough (a new split clears the key).
+            if (ReferenceEquals(key, shownStatusKey) && closesIn == shownStatusSeconds) return;
+            shownStatusKey = key;
+            shownStatusSeconds = closesIn;
+            statusLabel.text = key switch {
+                "split" => splitText,
+                "closing" => $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Lava)}>closes in {closesIn}s</color>",
+                _ => key
+            };
         }
 
-        /// <summary>
-        /// Shows a short message in the toast pill. A minor toast (an overtake) never covers a more
-        /// important one that is still showing.
-        /// </summary>
-        void Toast(string message, Color accent, float seconds = -1f, bool minor = false) {
-            if (minor && !toastMinor && Time.unscaledTime < toastUntil) return;
+        /// <summary>Shows a short message in the toast pill.</summary>
+        void Toast(string message, Color accent, float seconds = -1f) {
             toastLabel.text = message;
             toastBackground.color = accent.WithAlpha(toastOpacity);
             toastLabel.color = accent.grayscale > 0.55f ? OB_Palette.Ink : OB_Palette.Paper;
             toastShownAt = Time.unscaledTime;
             toastUntil = Time.unscaledTime + (seconds > 0f ? seconds : toastSeconds);
-            toastMinor = minor;
             Punch.Pop(toast, toastPopFrom, toastPopSeconds);
         }
     }

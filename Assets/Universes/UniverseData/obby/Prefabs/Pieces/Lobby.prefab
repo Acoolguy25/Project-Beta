@@ -473,7 +473,7 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5599904305644054241}
-  m_LocalRotation: {x: 0, y: 1, z: 0, w: -0.00000004371139}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 8.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -510,7 +510,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: a979b81bbcd47cc3fb6b95c342883923, type: 2}
+  - {fileID: 2100000, guid: eec5d65cf687cf23cb629b0436b0c4b3, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -559,7 +559,7 @@ MonoBehaviour:
     <size=45%>A new course every race. Every coin takes time off your finish!</size>'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 4151c602c59eba322938f2fb2c9c578c, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: a979b81bbcd47cc3fb6b95c342883923, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: eec5d65cf687cf23cb629b0436b0c4b3, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []

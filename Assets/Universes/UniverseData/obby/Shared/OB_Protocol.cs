@@ -17,6 +17,8 @@ namespace Universes.UniverseData.obby {
         // Appended fields.
         /// <summary>Seconds each coin takes off a finish time on this course.</summary>
         public float coinBonus;
+        /// <summary>Gold medal pace in scored seconds per stage (splits are shown against it).</summary>
+        public float goldPerStage;
     }
 
     /// <summary>A client without the current course asks for it (and its own progress).</summary>
@@ -67,6 +69,8 @@ namespace Universes.UniverseData.obby {
         /// <summary>Finish time minus the coin bonus (what the results are ranked by).</summary>
         public float scoredTime;
         public OB_Medal medal;
+        /// <summary>The racer's connection id, so a client can always show its own row.</summary>
+        public int clientId;
     }
 
     public struct OB_ResultsBroadcast : IBroadcast {

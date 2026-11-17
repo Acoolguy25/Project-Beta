@@ -2427,8 +2427,8 @@ ParticleSystem:
     startSpeed:
       serializedVersion: 3
       minMaxState: 3
-      scalar: 20
-      minScalar: 12
+      scalar: 9
+      minScalar: 5
       maxCurve:
         serializedVersion: 2
         m_Curve: []
@@ -2509,8 +2509,8 @@ ParticleSystem:
     startSize:
       serializedVersion: 3
       minMaxState: 3
-      scalar: 0.6
-      minScalar: 0.35
+      scalar: 0.32
+      minScalar: 0.18
       maxCurve:
         serializedVersion: 2
         m_Curve: []
@@ -2610,7 +2610,7 @@ ParticleSystem:
         m_RotationOrder: 4
     randomizeRotationDirection: 0
     gravitySource: 0
-    maxNumParticles: 160
+    maxNumParticles: 80
     customEmitterVelocity: {x: 0, y: 0, z: 0}
     size3D: 0
     rotation3D: 1
@@ -2635,7 +2635,7 @@ ParticleSystem:
     serializedVersion: 6
     enabled: 1
     type: 4
-    angle: 22
+    angle: 16
     length: 5
     boxThickness: {x: 0, y: 0, z: 0}
     radiusThickness: 1
@@ -2770,7 +2770,7 @@ ParticleSystem:
       countCurve:
         serializedVersion: 3
         minMaxState: 0
-        scalar: 70
+        scalar: 30
         minScalar: 30
         maxCurve:
           serializedVersion: 2

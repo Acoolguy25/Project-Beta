@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
@@ -69,6 +70,60 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.AreEqual("1:05.9", OB_Scoring.Clock(65.9f, true));
             Assert.AreEqual("2:00.0", OB_Scoring.Clock(119.97f, true));
             Assert.AreEqual("0:00", OB_Scoring.Clock(-3f));
+        }
+
+        [Test] public void AllocationFreeClockMatchesTheStringClock() {
+            var buffer = new char[16];
+            foreach (int tenths in new[] { 0, 9, 659, 1234, 5999, 6000, 36001 }) {
+                int length = OB_Scoring.ClockTenths(tenths, buffer);
+                Assert.AreEqual(OB_Scoring.Clock(tenths / 10f + 0.01f, true), new string(buffer, 0, length), $"{tenths} tenths");
+            }
+            Assert.AreEqual("0:00.0", new string(buffer, 0, OB_Scoring.ClockTenths(-5, buffer)));
+        }
+
+        // Overtakes: the rule the race strip uses ("who was ahead before and is not now").
+        static HashSet<int> Ahead(OB_Standing[] racers, int me) {
+            var set = new HashSet<int>();
+            OB_Scoring.AheadOf(racers, me, set);
+            return set;
+        }
+
+        [Test] public void ReachingACheckpointPastSomeoneIsAGain() {
+            var before = Ahead(new[] { Racer(1, 3), Racer(2, 4) }, 1);
+            var now = new[] { Racer(1, 5), Racer(2, 4) };
+            OB_Scoring.Overtakes(before, Ahead(now, 1), now, out int gained, out int lost);
+            Assert.AreEqual((1, 0), (gained, lost));
+        }
+
+        [Test] public void BeingPassedIsALoss() {
+            var before = Ahead(new[] { Racer(1, 5), Racer(2, 4), Racer(3, 4) }, 1);
+            var now = new[] { Racer(1, 5), Racer(2, 6), Racer(3, 7) };
+            OB_Scoring.Overtakes(before, Ahead(now, 1), now, out int gained, out int lost);
+            Assert.AreEqual((0, 2), (gained, lost));
+        }
+
+        [Test] public void DrawingLevelOrSomeoneLeavingIsNoPass() {
+            var before = Ahead(new[] { Racer(1, 3), Racer(2, 4), Racer(3, 6) }, 1);
+            var now = new[] { Racer(1, 4), Racer(2, 4) };
+            OB_Scoring.Overtakes(before, Ahead(now, 1), now, out int gained, out int lost);
+            Assert.AreEqual(1, gained, "drawing level with racer 2 counts (they are no longer strictly ahead)");
+            Assert.AreEqual(0, lost);
+            var left = new[] { Racer(1, 3) };
+            OB_Scoring.Overtakes(Ahead(new[] { Racer(1, 3), Racer(3, 6) }, 1), Ahead(left, 1), left, out gained, out lost);
+            Assert.AreEqual((0, 0), (gained, lost), "a leader who leaves was not passed");
+        }
+
+        [Test] public void FinishingAheadOfAFinisherIsAGain() {
+            var before = Ahead(new[] { Racer(1, 29), Racer(2, 30, true, 300f) }, 1);
+            var now = new[] { Racer(1, 30, true, 280f), Racer(2, 30, true, 300f) };
+            OB_Scoring.Overtakes(before, Ahead(now, 1), now, out int gained, out int lost);
+            Assert.AreEqual((1, 0), (gained, lost));
+        }
+
+        [Test] public void GoldPaceCountsCoinsAndStages() {
+            Assert.AreEqual(-5f, OB_Scoring.GoldPaceDelta(25f, 0, 0.5f, 3, 10f), 1e-4f);
+            Assert.AreEqual(4f, OB_Scoring.GoldPaceDelta(35f, 2, 0.5f, 3, 10f), 1e-4f);
+            Assert.AreEqual(0f, OB_Scoring.GoldPaceDelta(0f, 0, 0.5f, 0, 10f), 1e-4f);
         }
 
         [Test] public void OrdinalsReadNaturally() {

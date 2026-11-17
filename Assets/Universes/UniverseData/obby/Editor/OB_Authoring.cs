@@ -424,12 +424,12 @@ namespace Universes.UniverseData.obby.Editor {
         }
 
         /// <summary>Confetti: palette-coloured paper squares tumbling down.</summary>
-        static ParticleSystem Confetti(string name, Material paper, int count, Vector2 speed, float spread) {
+        static ParticleSystem Confetti(string name, Material paper, int count, Vector2 speed, float spread, Vector2 size) {
             var ps = NewParticles(name, null, paper, 0.6f, false, count * 2 + 20);
             var main = ps.main;
             main.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 2.8f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(speed.x, speed.y);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.6f);
+            main.startSize = new ParticleSystem.MinMaxCurve(size.x, size.y);
             main.startRotation3D = true;
             main.startRotationX = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
             main.startRotationY = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
@@ -487,8 +487,10 @@ namespace Universes.UniverseData.obby.Editor {
             var paper = FxMat("FxConfetti", null, false);
             var fx = new FxPrefabs();
 
-            {   // Checkpoint: confetti fountain from the pad plus a green flash.
-                var ps = Confetti("CheckpointConfetti", paper, 70, new Vector2(12f, 20f), 22f);
+            {   // Checkpoint: a small confetti pop that stays around the pad and pole (the camera is often
+                // right behind it, so big fast pieces would cover the HUD and the route ahead); a new tier
+                // and the finish add the kit's big burst on top (OB_Fx).
+                var ps = Confetti("CheckpointConfetti", paper, 30, new Vector2(5f, 9f), 16f, new Vector2(0.18f, 0.32f));
                 Flash(ps.transform, glow, OB_Palette.Go, 10f, 0.4f);
                 fx.checkpointBurst = SaveFx(ps);
             }
@@ -591,7 +593,8 @@ namespace Universes.UniverseData.obby.Editor {
                 m.SetColor("_BaseColor", Color.white);
                 m.SetTexture("_BaseMap", Tex("Lava"));
                 m.SetFloat("_Brightness", 1.1f);
-                m.SetFloat("_TileMetres", 4f);
+                // Large tiles so the blob pattern does not visibly repeat along long slabs.
+                m.SetFloat("_TileMetres", 7f);
                 m.SetVector("_Flow", new Vector4(0.35f, 0f, 0.12f, 0f));
                 m.SetFloat("_PourSpeed", 0.8f);
                 m.SetColor("_EmissionColor", OB_Palette.Lava);
@@ -762,12 +765,16 @@ namespace Universes.UniverseData.obby.Editor {
                 var tmp = sign.GetComponent<TextMeshPro>();
                 tmp.text = "SKY OBBY\n<size=45%>A new course every race. Every coin takes time off your finish!</size>";
                 tmp.font = font.asset;
-                tmp.fontSharedMaterial = font.outline;
+                // Reads from the lobby, where racers wait for the gate. One-sided, so from the course side
+                // (looking back past the gate) it is hidden instead of reading mirrored.
+                var signMat = FontPreset(font.asset, font.asset.name + " Sign", 0.24f, 0.9f);
+                signMat.SetFloat("_CullMode", (float)UnityEngine.Rendering.CullMode.Back);
+                EditorUtility.SetDirty(signMat);
+                tmp.fontSharedMaterial = signMat;
                 tmp.fontSize = 5f;
                 tmp.alignment = TextAlignmentOptions.Center;
                 tmp.color = OB_Palette.Paper;
                 tmp.rectTransform.sizeDelta = new Vector2(12f, 3f);
-                sign.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
                 p.lobby = Save(root, "Lobby");
             }
             return p;
@@ -1037,18 +1044,21 @@ namespace Universes.UniverseData.obby.Editor {
                 client.stageNameLabel = Label(Box("StageName", body, topLeft, topLeft, new Vector2(20f, -42f), new Vector2(250f, 44f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
                 client.stageNameLabel.textWrappingMode = TextWrappingModes.NoWrap;
                 client.stageNameLabel.overflowMode = TextOverflowModes.Ellipsis;
-                // Your place in the race, right of the stage name; empty when racing alone.
-                client.placeLabel = Label(Box("Place", body, topRight, topRight, new Vector2(-20f, -42f), new Vector2(90f, 44f)), bold, bold.shadow, 30, OB_Palette.Gold, TextAlignmentOptions.MidlineRight);
-                client.placeLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                // Your place in the race, right of the stage name; empty when racing alone. Passes pop it.
+                var strip = card.gameObject.AddComponent<OB_RaceStrip>();
+                client.raceStrip = strip;
+                strip.fx = client.fx;
+                strip.placeLabel = Label(Box("Place", body, topRight, topRight, new Vector2(-20f, -42f), new Vector2(90f, 44f)), bold, bold.shadow, 30, OB_Palette.Gold, TextAlignmentOptions.MidlineRight);
+                strip.placeLabel.textWrappingMode = TextWrappingModes.NoWrap;
                 // Course progress; the other racers ride on the same track as small dots (the race strip).
                 var track = Box("Progress", body, topLeft, topLeft, new Vector2(20f, -94f), new Vector2(340f, 6f));
                 Panel(track, OB_Palette.InkSoft, 3f);
                 var fill = Stretch("Fill", track, Vector2.zero, new Vector2(0.3f, 1f));
                 Panel(fill, OB_Palette.Gold, 3f);
                 client.progressFill = fill;
-                client.racerTrack = track;
+                strip.racerTrack = track;
                 var dot = Box("RacerDot", track, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.one * 12f);
-                client.racerDotTemplate = Panel(dot, OB_Palette.Paper, 6f);
+                strip.racerDotTemplate = Panel(dot, OB_Palette.Paper, 6f);
             }
             {   // Stage hint: plain outlined text above the card that fades out once read.
                 client.hintLabel = Label(Box("Hint", hud, bottomLeft, bottomLeft, new Vector2(30f, 146f), new Vector2(560f, 60f)), semi, semi.outline, 20, muted, TextAlignmentOptions.BottomLeft);
@@ -1060,7 +1070,9 @@ namespace Universes.UniverseData.obby.Editor {
                 Icon("Clock", body, "icon_schedule", new Vector2(0f, 0.5f), new Vector2(32f, 0f), 30f, OB_Palette.Gold);
                 client.timerLabel = Label(Stretch("Timer", body, Vector2.zero, Vector2.one, new Vector2(56f, 0f), new Vector2(-14f, 0f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
                 client.timerLabel.textWrappingMode = TextWrappingModes.NoWrap;
-                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-85f, clockTop - 60f), new Vector2(210f, 26f)), bold, bold.outline, 18, OB_Palette.Paper, TextAlignmentOptions.Center);
+                // Wide enough for a split against the gold pace ("1:23.4  -4.8 vs gold").
+                client.statusLabel = Label(Box("Status", hud, top, top, new Vector2(-85f, clockTop - 60f), new Vector2(380f, 30f)), bold, bold.outline, 22, OB_Palette.Paper, TextAlignmentOptions.Center);
+                client.statusLabel.textWrappingMode = TextWrappingModes.NoWrap;
                 // Only the race result is written here; during the race the strip on the stage card shows the field.
                 client.leaderLabel = Label(Box("Leader", hud, top, top, new Vector2(0f, clockTop - 86f), new Vector2(900f, 30f)), bold, bold.outline, 20, OB_Palette.Paper, TextAlignmentOptions.Center);
             }
@@ -1087,20 +1099,24 @@ namespace Universes.UniverseData.obby.Editor {
                 client.toastLabel.fontSizeMin = 16f;
                 client.toastLabel.fontSizeMax = 24f;
             }
-            {   // Countdown and GO!
-                client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.55f), centre, Vector2.zero, new Vector2(700f, 220f)), bold, bold.outline, 150, OB_Palette.Paper, TextAlignmentOptions.Center);
+            {   // Countdown and GO!, in the sky above the player rather than over the character.
+                client.centerLabel = Label(Box("Center", hud, new Vector2(0.5f, 0.76f), centre, Vector2.zero, new Vector2(600f, 150f)), bold, bold.outline, 104, OB_Palette.Paper, TextAlignmentOptions.Center);
                 client.centerLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
             {   // Results board.
-                var results = Card("Results", hud, centre, centre, new Vector2(0f, -40f), new Vector2(980f, 600f), OB_Palette.Ink.WithAlpha(0.92f), 36f);
+                // Opaque so the world (the FINISH arch and its beams) never reads through the rows. The controller sizes
+                // the board's height to its rows at runtime (resultsFrameHeight + the rows' height).
+                var results = Card("Results", hud, centre, centre, new Vector2(0f, -40f), new Vector2(980f, 600f), OB_Palette.Ink, 36f);
                 client.resultsPanel = results.gameObject;
                 var body = results.Find("Body");
                 var header = Stretch("Header", body, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -104f), Vector2.zero);
                 Panel(header, OB_Palette.Gold, 36f);
                 Icon("Medal", header, "icon_military_tech", new Vector2(0f, 0.5f), new Vector2(64f, 0f), 60f, OB_Palette.Ink);
                 Label(Stretch("Title", header, Vector2.zero, Vector2.one, new Vector2(110f, 0f), new Vector2(-40f, 0f)), bold, bold.asset.material, 52, OB_Palette.Ink, TextAlignmentOptions.MidlineLeft).text = "RACE RESULTS";
-                client.resultsBody = Label(Stretch("Rows", body, Vector2.zero, Vector2.one, new Vector2(56f, 84f), new Vector2(-48f, -130f)), semi, semi.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.TopLeft);
-                client.resultsBody.lineSpacing = 24f;
+                client.resultsBody = Label(Stretch("Rows", body, Vector2.zero, Vector2.one, new Vector2(56f, 84f), new Vector2(-48f, -130f)), semi, semi.shadow, 30, OB_Palette.Paper, TextAlignmentOptions.TopLeft);
+                client.resultsBody.lineSpacing = 16f;
+                client.resultsBody.overflowMode = TextOverflowModes.Truncate;
+                client.resultsFrameHeight = 130f + 84f + 22f;
                 client.resultsBody.textWrappingMode = TextWrappingModes.NoWrap;
                 // Medal targets for this course and the coin bonus, along the bottom.
                 client.resultsFooter = Label(Stretch("Footer", body, Vector2.zero, new Vector2(1f, 0f), new Vector2(56f, 24f), new Vector2(-48f, 64f)), semi, semi.shadow, 22, muted, TextAlignmentOptions.MidlineLeft);

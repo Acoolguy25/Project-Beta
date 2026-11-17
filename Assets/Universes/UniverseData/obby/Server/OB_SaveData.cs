@@ -41,7 +41,7 @@ namespace Universes.UniverseData.obby.Server {
             return best;
         }
 
-        /// <summary>Records a final race place (1-based).</summary>
+        /// <summary>Records a final race place (1-based). Only call it for races with at least two racers.</summary>
         public void RecordPlace(int place) {
             if (place == 1) wins++;
             if (place is >= 1 and <= 3) podiums++;
@@ -50,6 +50,9 @@ namespace Universes.UniverseData.obby.Server {
         public override void Validate() {
             bestFinishTime = ValidTime(bestFinishTime);
             bestScoredTime = ValidTime(bestScoredTime);
+            // Saves from before the coin bonus have a finish time only. A scored time is never slower than
+            // the finish it came from, so the old finish is a safe best to beat (no free "NEW BEST!").
+            if (bestScoredTime <= 0f && bestFinishTime > 0f) bestScoredTime = bestFinishTime;
             totalCoins = Math.Max(0, totalCoins);
             coursesFinished = Math.Max(0, coursesFinished);
             bestStage = Math.Max(0, bestStage);

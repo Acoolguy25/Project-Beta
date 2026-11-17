@@ -34,7 +34,7 @@ Material:
     - _HotThreshold: 0.55
     - _PourSpeed: 0.8
     - _SecondLayer: 1.7
-    - _TileMetres: 4
+    - _TileMetres: 7
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 1, g: 0.3019608, b: 0.18039216, a: 1}

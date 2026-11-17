@@ -66,7 +66,7 @@ MonoBehaviour:
   podiumGold: 1e000000000000000f000000000000000500000000000000q
   coinTimeBonus: 0.5
   medalTimes:
-    goldPerStage: 10
-    silverPerStage: 15
-    bronzePerStage: 22
+    goldPerStage: 9
+    silverPerStage: 13
+    bronzePerStage: 18
   standingsInterval: 0.5

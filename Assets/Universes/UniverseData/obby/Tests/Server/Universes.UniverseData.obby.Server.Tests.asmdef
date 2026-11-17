@@ -1,0 +1,27 @@
+{
+    "name": "Universes.UniverseData.obby.Server.Tests",
+    "rootNamespace": "",
+    "references": [
+        "Universes.UniverseData.obby.Shared",
+        "Universes.UniverseData.obby.Server",
+        "RyanAssets.Progress",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

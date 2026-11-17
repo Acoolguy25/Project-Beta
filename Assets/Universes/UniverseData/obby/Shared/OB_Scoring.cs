@@ -1,13 +1,15 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Universes.UniverseData.obby {
     /// <summary>
     /// Medal targets for a course, as seconds per stage so they scale with the course length.
     /// A finish earns the best medal whose target its scored time (after the coin bonus) beats.
-    /// Defaults come from the generated courses: about 44 m between checkpoints, run at 10-15 m/s, so
-    /// a clean run with obstacle waits takes about 7-9 s a stage (gold at 10 s), and a run with a few
-    /// falls (5-10 s each) takes about twice that.
+    /// Defaults are measured: a no-skip run of stages 1-10 (Basic and Easy tiers) took 76 s, 7.6 s a
+    /// stage, and clean single stages in the Medium to Extreme tiers took 3-12 s (7.8 s a stage over
+    /// 16 clean stages). Gold at 9 s leaves a clean run a small margin; the same runs with their
+    /// knockbacks and retries counted averaged 13.4 s, between silver (13 s) and bronze (18 s).
     /// </summary>
     [Serializable]
     public struct OB_MedalTimes {
@@ -18,7 +20,7 @@ namespace Universes.UniverseData.obby {
         [Tooltip("Scored seconds per stage for a bronze medal.")]
         [Min(1f)] public float bronzePerStage;
 
-        public static OB_MedalTimes Default => new() { goldPerStage = 10f, silverPerStage = 15f, bronzePerStage = 22f };
+        public static OB_MedalTimes Default => new() { goldPerStage = 9f, silverPerStage = 13f, bronzePerStage = 18f };
 
         /// <summary>The scored time to beat for <paramref name="medal"/> on a course of <paramref name="stageCount"/> stages.</summary>
         public float Target(OB_Medal medal, int stageCount) => Mathf.Max(1, stageCount) * medal switch {
@@ -77,6 +79,35 @@ namespace Universes.UniverseData.obby {
             return -1;
         }
 
+        /// <summary>Fills <paramref name="into"/> with the ids of every racer strictly ahead of <paramref name="clientId"/>.</summary>
+        public static void AheadOf(OB_Standing[] racers, int clientId, HashSet<int> into) {
+            into.Clear();
+            int index = IndexOf(racers, clientId);
+            if (index < 0) return;
+            foreach (var racer in racers)
+                if (IsAhead(racer, racers[index])) into.Add(racer.clientId);
+        }
+
+        /// <summary>
+        /// Who changed places with you between two standings updates. <paramref name="gained"/> counts racers
+        /// that were ahead and are not any more (and are still racing: someone leaving is no pass);
+        /// <paramref name="lost"/> counts racers ahead now that were not before.
+        /// </summary>
+        public static void Overtakes(HashSet<int> aheadBefore, HashSet<int> aheadNow, OB_Standing[] racers, out int gained, out int lost) {
+            gained = lost = 0;
+            foreach (int id in aheadBefore)
+                if (!aheadNow.Contains(id) && IndexOf(racers, id) >= 0) gained++;
+            foreach (int id in aheadNow)
+                if (!aheadBefore.Contains(id)) lost++;
+        }
+
+        /// <summary>
+        /// Race time (scored, so coins count) minus the gold medal pace after <paramref name="stagesDone"/>
+        /// stages: negative means ahead of gold.
+        /// </summary>
+        public static float GoldPaceDelta(float raceTime, int coins, float secondsPerCoin, int stagesDone, float goldPerStage) =>
+            ScoredTime(raceTime, coins, secondsPerCoin) - Mathf.Max(0, stagesDone) * goldPerStage;
+
         /// <summary>Number of collected coins in a per-stage coin bit mask.</summary>
         public static int CountCoins(ulong mask) {
             int count = 0;
@@ -86,6 +117,31 @@ namespace Universes.UniverseData.obby {
 
         /// <summary>"1st", "2nd", "3rd", "4th", ..., "11th", "21st".</summary>
         public static string Ordinal(int n) => n + (n % 100 is 11 or 12 or 13 ? "th" : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
+
+        /// <summary>
+        /// Writes <see cref="Clock(float, bool)"/> with tenths ("m:ss.t") into <paramref name="buffer"/> without
+        /// allocating, for a clock redrawn many times a second. Returns the number of characters written.
+        /// </summary>
+        public static int ClockTenths(int totalTenths, char[] buffer) {
+            totalTenths = Mathf.Max(0, totalTenths);
+            int minutes = totalTenths / 600, rest = totalTenths % 600;
+            int length = 0;
+            if (minutes >= 10) length = WriteDigits(minutes, buffer);
+            else buffer[length++] = (char)('0' + minutes);
+            buffer[length++] = ':';
+            buffer[length++] = (char)('0' + rest / 100);
+            buffer[length++] = (char)('0' + rest / 10 % 10);
+            buffer[length++] = '.';
+            buffer[length++] = (char)('0' + rest % 10);
+            return length;
+        }
+
+        static int WriteDigits(int value, char[] buffer) {
+            int digits = 0;
+            for (int v = value; v > 0; v /= 10) digits++;
+            for (int i = digits - 1; i >= 0; i--, value /= 10) buffer[i] = (char)('0' + value % 10);
+            return digits;
+        }
 
         /// <summary>A race clock: "m:ss", or "m:ss.t" with <paramref name="tenths"/>.</summary>
         public static string Clock(float seconds, bool tenths = false) {

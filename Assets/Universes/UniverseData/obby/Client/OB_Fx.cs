@@ -24,7 +24,7 @@ namespace Universes.UniverseData.obby.Client {
         [Min(0.1f)] public float coinStreakSeconds = 90f;
         [Min(0f)] public float coinBurstScale = 1.6f;
         [Tooltip("Size of the time bonus popup over a collected coin.")]
-        [Min(0f)] public float coinPopupSize = 1.2f;
+        [Min(0f)] public float coinPopupSize = 0.8f;
 
         [Header("Checkpoints")]
         public OB_Cue checkpointSound = new(SfxCue.Pickup, 0.9f, 1.15f);
@@ -33,6 +33,8 @@ namespace Universes.UniverseData.obby.Client {
         [Tooltip("Screen flash on a new tier, in the tier's accent colour at this peak opacity.")]
         [Range(0f, 1f)] public float tierFlashAlpha = 0.25f;
         [Min(0.01f)] public float tierFlashSeconds = 0.5f;
+        [Tooltip("Big confetti burst over the pad that starts a new tier (an ordinary checkpoint only has the pad's own small burst).")]
+        [Min(0f)] public float tierConfettiScale = 2.5f;
 
         [Header("Countdown")]
         public OB_Cue countdownSound = new(SfxCue.CountdownBeep, 0.8f);
@@ -101,13 +103,14 @@ namespace Universes.UniverseData.obby.Client {
             if (CoinBonus > 0f) FloatingText.Number(position, "-{0:1}s", CoinBonus, OB_Palette.Gold, coinPopupSize);
         }
 
-        public void Checkpoint(bool newTier, Color tierAccent) {
+        public void Checkpoint(bool newTier, Color tierAccent, Vector3 pad) {
             if (!newTier) {
                 checkpointSound.Play();
                 return;
             }
             tierSound.Play();
             ScreenFx.Flash(tierAccent.WithAlpha(tierFlashAlpha), tierFlashSeconds);
+            GameFx.Play(FxKind.Confetti, pad, tierConfettiScale);
         }
 
         public void CountdownTick() => countdownSound.Play();

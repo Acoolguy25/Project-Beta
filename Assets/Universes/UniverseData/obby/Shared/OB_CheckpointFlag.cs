@@ -24,31 +24,42 @@ namespace Universes.UniverseData.obby {
 
         public bool Raised => raised;
 
-        /// <summary>Raises or lowers the flag, animated or at once.</summary>
+        /// <summary>
+        /// Raises or lowers the flag, animated or at once. Telling it what it already is does nothing, so a
+        /// later progress message (a coin beside the pad) never cuts a raise short.
+        /// </summary>
         public void SetRaised(bool value, bool animate) {
-            if (flag == null || (raised == value && start < 0f)) {
-                raised = value;
-                return;
-            }
+            if (raised == value) return;
             raised = value;
+            if (flag == null) return;
             from = flag.localPosition.y;
             to = value ? raisedHeight : loweredHeight;
             if (animate && Application.isPlaying) {
                 start = Time.time;
+                enabled = true;
             } else {
                 start = -1f;
                 SetHeight(to);
             }
         }
 
+        // Idle flags cost nothing: the component only runs while a raise is playing.
+        void Awake() => enabled = false;
+
 #if !UNITY_SERVER
         void Update() {
-            if (start < 0f || flag == null) return;
+            if (start < 0f || flag == null) {
+                enabled = false;
+                return;
+            }
             float t = Mathf.Clamp01((Time.time - start) / raiseSeconds);
             float c3 = overshoot + 1f;
             float eased = 1f + c3 * Mathf.Pow(t - 1f, 3f) + overshoot * Mathf.Pow(t - 1f, 2f);
             SetHeight(Mathf.LerpUnclamped(from, to, eased));
-            if (t >= 1f) start = -1f;
+            if (t >= 1f) {
+                start = -1f;
+                enabled = false;
+            }
         }
 #endif
 
