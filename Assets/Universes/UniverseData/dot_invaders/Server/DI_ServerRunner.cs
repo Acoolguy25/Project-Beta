@@ -20,7 +20,7 @@ namespace Universes.UniverseData.dot_invaders {
         const int NpcBasesPerTeam = 1;
         // The same start as a player: the NPCs already fight each other, so they need no head start.
         const int NpcStartingTroops = StartingTroops;
-        const int NpcTeamIdStart = 100;
+        const int NpcTeamIdStart = DI_Rules.NpcTeamIdStart;
         const string NewMatchMessage = "<color=#8C96AA>New match: a fresh board.</color>";
         const int WinnerXPReward = 100;
         const int WinnerGoldReward = 50;

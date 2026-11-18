@@ -296,12 +296,15 @@ namespace Universes.UniverseData.dot_invaders.Client {
             // One swell, peaking at PunchPeakTime and settling over the rest of the time.
             punchSwell = t >= 1f ? 0f : punchAmount * Mathf.Sin(Mathf.PI * Mathf.Sqrt(Mathf.Clamp01(t)));
             punching = t < 1f;
+            // The disc parts widen on the board plane only: growing in height lifted the body's top past the core
+            // and through the count.
+            var widen = new Vector3(1f + punchSwell, 1f, 1f + punchSwell);
             if (bodyRenderer != null)
-                bodyRenderer.transform.localScale = bodyScale * (1f + punchSwell);
+                bodyRenderer.transform.localScale = Vector3.Scale(bodyScale, widen);
             if (core != null)
-                core.localScale = coreScale * (1f + punchSwell);
+                core.localScale = Vector3.Scale(coreScale, widen);
             if (glowRenderer != null)
-                glowRenderer.transform.localScale = glowScale * (1f + punchSwell);
+                glowRenderer.transform.localScale = Vector3.Scale(glowScale, widen);
             if (troopLabel != null)
                 troopLabel.transform.localScale = labelScale * (1f + punchSwell * labelPunchFactor);
             RefreshGlow();

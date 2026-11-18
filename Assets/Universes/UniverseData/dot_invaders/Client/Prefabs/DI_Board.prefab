@@ -411,7 +411,7 @@ MonoBehaviour:
   clashRingCooldown: 0.3
   arrivalRadius: 5
   combatLossRadius: 2.5
-  arrivalPunch: 0.45
+  arrivalPunch: 0.3
   arrivalPunchSeconds: 0.25
   arrivalPunchCooldown: 0.3
   eliminationRingScale: 13

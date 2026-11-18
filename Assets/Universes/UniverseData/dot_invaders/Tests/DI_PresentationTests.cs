@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEditor;
+using RyanAssets.Shared.Declarations;
 using UnityEngine;
 
 namespace Universes.UniverseData.dot_invaders.Tests {
@@ -21,6 +22,18 @@ namespace Universes.UniverseData.dot_invaders.Tests {
             Assert.That(material.globalIlluminationFlags & MaterialGlobalIlluminationFlags.EmissiveIsBlack, Is.EqualTo(MaterialGlobalIlluminationFlags.None));
             // An exactly black emission is flagged EmissiveIsBlack.
             Assert.That(material.GetColor("_EmissionColor").maxColorComponent, Is.GreaterThan(1f / 255f));
+        }
+
+        [Test]
+        public void NpcTeamsNeverShareAColourWithAPlayer([NUnit.Framework.Range(1, DI_Rules.PlayersWithOwnColour)] int players) {
+            const int npcTeams = 4;
+            for (int npc = 0; npc < npcTeams; npc++) {
+                TeamColor npcColor = DI_Rules.GetTeamColor(DI_Rules.NpcTeamIdStart + npc);
+                Assert.That(npcColor, Is.Not.EqualTo(TeamColor.Grey), "Grey reads as a neutral base.");
+                for (int player = 0; player < players; player++)
+                    Assert.That(DI_Rules.GetTeamColor(player), Is.Not.EqualTo(npcColor),
+                        $"Player {player + 1} and NPC team {npc + 1} are both {npcColor} with {players} players.");
+            }
         }
 
         [Test]

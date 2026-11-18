@@ -71,7 +71,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Tooltip("A vanished troop this close to a clash or a turret hit died there; it did not land.")]
         [SerializeField, Min(0f)] float combatLossRadius = 2.5f;
         [Tooltip("Extra scale a base swells by when troops land on it.")]
-        [SerializeField, Min(0f)] float arrivalPunch = 0.45f;
+        [SerializeField, Min(0f)] float arrivalPunch = 0.3f;
         [SerializeField, Min(0.01f)] float arrivalPunchSeconds = 0.25f;
         [Tooltip("Seconds before the same base punches again, so a steady stream reads as beats, not jitter.")]
         [SerializeField, Min(0f)] float arrivalPunchCooldown = 0.3f;

@@ -4,18 +4,24 @@ using RyanAssets.Shared.Declarations;
 
 namespace Universes.UniverseData.dot_invaders {
     public static class DI_Rules {
+        // Player colours the NPC teams never use come first, so up to PlayersWithOwnColour players
+        // never share a colour with an NPC team.
         static readonly TeamColor[] TeamOrder = {
-            TeamColor.Blue, TeamColor.Red, TeamColor.Green, TeamColor.Orange,
-            TeamColor.Purple, TeamColor.Cyan, TeamColor.Pink, TeamColor.Lime
+            TeamColor.Blue, TeamColor.Red, TeamColor.Green, TeamColor.Orange, TeamColor.Lime,
+            TeamColor.Purple, TeamColor.Cyan, TeamColor.Pink
         };
         // No grey: a grey team could not be told from the white neutral bases.
         static readonly TeamColor[] NpcTeamOrder = {
-            TeamColor.Purple, TeamColor.Cyan, TeamColor.Yellow, TeamColor.Red
+            TeamColor.Purple, TeamColor.Cyan, TeamColor.Yellow, TeamColor.Pink
         };
 
+        /// <summary>Players a match can hold before a player colour repeats an NPC team's colour.</summary>
+        public const int PlayersWithOwnColour = 5;
+        public const int NpcTeamIdStart = 100;
+
         public static TeamColor GetTeamColor(int teamId) =>
-            teamId < 0 ? TeamColor.None : teamId >= 100
-                ? NpcTeamOrder[(teamId - 100) % NpcTeamOrder.Length]
+            teamId < 0 ? TeamColor.None : teamId >= NpcTeamIdStart
+                ? NpcTeamOrder[(teamId - NpcTeamIdStart) % NpcTeamOrder.Length]
                 : TeamOrder[teamId % TeamOrder.Length];
 
         /// <summary>Lowest relative luminance a team colour is drawn with on the dark board (pure blue is about 0.07).</summary>
