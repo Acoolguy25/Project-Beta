@@ -505,7 +505,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
 
         void SetCoinChip() {
             bool full = state.coinCap > 0 && state.coins >= state.coinCap;
-            coinChip.label.SetText("{0}/{1}", state.coins, state.coinCap);
+            coinChip.label.SetText("{0}/{1}", (float)state.coins, (float)state.coinCap);
             coinChip.label.color = full ? Gold : Color.white;
         }
 

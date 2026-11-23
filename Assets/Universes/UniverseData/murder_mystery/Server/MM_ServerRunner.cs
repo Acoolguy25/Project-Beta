@@ -4,6 +4,7 @@ using FishNet.Connection;
 using FishNet.Object;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Core;
 using RyanAssets.DataService;
 using RyanAssets.Items.Coin;
 using RyanAssets.Levels.Server;

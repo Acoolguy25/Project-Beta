@@ -27,9 +27,9 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         // Where the model's middle is along its blade (model units), so the flying knife spins round its centre.
         const float KnifeModelCentreY = 0.19f;
         // The model is 0.74 m long; next to the 5.6 m robots a thrown knife reads at about 2.2 m.
-        const float ThrownKnifeScale = 3f;
-        const float ThrownKnifeTrailSeconds = 0.18f;
-        const float ThrownKnifeTrailWidth = 0.35f;
+        const float ThrownKnifeScale = 4f;
+        const float ThrownKnifeTrailSeconds = 0.25f;
+        const float ThrownKnifeTrailWidth = 0.45f;
         const string StartScene = Root + "/murder_mystery_start.unity";
         const string Sounds = "Assets/Universes/UniverseData/classic_horror/Flooded_Grounds/Content/Sounds/";
         const string OwnSounds = Root + "/Audio/";

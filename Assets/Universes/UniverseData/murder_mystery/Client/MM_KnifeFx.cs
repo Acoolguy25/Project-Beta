@@ -23,6 +23,8 @@ namespace Universes.UniverseData.murder_mystery.Client {
         public GameObject thrownKnifePrefab;
         [Tooltip("A knife that hit a wall stays stuck in it this long before it is put away.")]
         [Min(0f)] public float stuckSeconds = 3f;
+        [Tooltip("How far a wall-stuck knife sits back from the hit point along its flight, so the blade shows instead of sinking into the wall (metres; about half the knife's length).")]
+        [Min(0f)] public float wallStickBackOff = 0.7f;
         [Tooltip("A knife that hit someone disappears this soon (the kill effects take over).")]
         [Min(0f)] public float hitHideSeconds = 0.05f;
         [Tooltip("A knife the server has not landed after its full range is put away after this grace.")]
@@ -105,11 +107,13 @@ namespace Universes.UniverseData.murder_mystery.Client {
             if (!flights.TryGetValue(message.throwId, out Flight flight))
                 return;
             flight.landed = true;
-            flight.view.transform.position = message.position;
             if (message.hitCharacter) {
+                flight.view.transform.position = message.position;
                 flight.removeAt = Time.time + hitHideSeconds;
                 return;
             }
+            // The view is centred on the flight line, so only the tip goes into the wall.
+            flight.view.transform.position = message.position - flight.direction * wallStickBackOff;
             flight.removeAt = Time.time + stuckSeconds;
             GameSfx.PlayAt(SfxCue.Hit, message.position, thudVolume, GameSfx.Semitones(-4f));
             if (thudDustScale > 0f)

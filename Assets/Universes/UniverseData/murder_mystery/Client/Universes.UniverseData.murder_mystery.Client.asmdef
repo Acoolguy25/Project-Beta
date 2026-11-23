@@ -13,7 +13,8 @@
         "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
         "RyanAssets.UI",
         "RyanAssets.GameFeel",
-        "RyanAssets.Tools.Shared"
+        "RyanAssets.Tools.Shared",
+        "RyanAssets.Shared.Component"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

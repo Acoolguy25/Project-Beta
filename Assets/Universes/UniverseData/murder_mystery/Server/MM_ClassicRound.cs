@@ -2,7 +2,7 @@ using Cysharp.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
-using FishNet.Transporting;
+using Channel = FishNet.Transporting.Channel;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
