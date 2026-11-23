@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using FishNet;
 using FishNet.Managing.Client;
 using FishNet.Transporting;
+using RyanAssets.Cameras;
 using RyanAssets.Characters.Client;
+using RyanAssets.Client.ClientUI.Spectate;
 using RyanAssets.Characters.Shared;
 using RyanAssets.GameFeel;
 using RyanAssets.Input;
@@ -10,6 +12,7 @@ using RyanAssets.Item.FloatingTool;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.UI.GameHud;
 using TMPro;
+using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -62,6 +65,10 @@ namespace Universes.UniverseData.murder_mystery.Client {
         [Header("Announcements")]
         public HudBanner announcement;
         [Min(0.5f)] public float announcementSeconds = 4f;
+        [Tooltip("A banner stays at least this long before a newer one replaces it; newer ones wait their turn (seconds).")]
+        [Min(0f)] public float announcementMinSeconds = 2.5f;
+        [Tooltip("A waiting banner older than this is dropped, because the moment has passed (seconds).")]
+        [Min(0f)] public float announcementMaxWaitSeconds = 6f;
 
         [Header("Results")]
         public HudPopup results;
@@ -161,12 +168,16 @@ namespace Universes.UniverseData.murder_mystery.Client {
         [Tooltip("Size of the \"SHERIFF'S GUN\" callout (1 = the kit's callout size).")]
         [Min(0.1f)] public float gunCalloutSize = 0.5f;
 
+        [Header("Camera")]
+        [Tooltip("At each role reveal the camera swings behind your character at this pitch (degrees above level), " +
+                 "so the round starts with the room in view. The shared default looks almost straight down. Negative leaves it alone.")]
+        public float revealCameraPitch = 16f;
+        [Tooltip("Pitch when the camera starts following someone else after you die (degrees). Negative leaves it alone.")]
+        public float spectateCameraPitch = 20f;
+
         [Header("Moments")]
         [Tooltip("How long the hero card stays up after you pick up the gun.")]
         [Min(0.5f)] public float heroRevealSeconds = 4f;
-        [Tooltip("The hero card sits at the top of the screen (offset from the top edge), so it does not cover " +
-                 "your own character while the murderer may be next to you.")]
-        public Vector2 heroCardOffset = new(0f, -76f);
         [Tooltip("Flash in the role's colour when the role card appears (alpha, seconds).")]
         [Range(0f, 1f)] public float roleFlashAlpha = 0.25f;
         [Min(0f)] public float roleFlashSeconds = 0.5f;
@@ -216,7 +227,29 @@ namespace Universes.UniverseData.murder_mystery.Client {
         int gunCompassMetres = -1;
         MM_Announcement shownAnnouncement;
         float shownAnnouncementAt = float.NegativeInfinity;
+        // Banners that arrived while another was still within its minimum time on screen.
+        readonly Queue<PendingAnnouncement> pendingAnnouncements = new();
+
+        readonly struct PendingAnnouncement {
+            public readonly MM_Announcement kind;
+            public readonly Sprite icon;
+            public readonly Color color;
+            public readonly string title, subtitle;
+            public readonly float queuedAt;
+
+            public PendingAnnouncement(MM_Announcement kind, Sprite icon, Color color, string title, string subtitle, float queuedAt) {
+                this.kind = kind;
+                this.icon = icon;
+                this.color = color;
+                this.title = title;
+                this.subtitle = subtitle;
+                this.queuedAt = queuedAt;
+            }
+        }
         SfxLadder coinLadder;
+        // Who the camera was last framed on, and in which round, so it is set once and then left to the player.
+        GameCharacter framedTarget;
+        int framedRound = -1;
         // What the role chip's name currently shows (None until the first state).
         MM_Role chipRole;
         bool chipAlive, chipHero;
@@ -291,7 +324,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
             if (next.phase == MM_Phase.Hunt && next.alive && next.hero && (!wasHero || heroRound != next.round)) {
                 revealIsHero = true;
                 revealUntil = Time.unscaledTime + heroRevealSeconds;
-                announcement.Hide();
+                ClearAnnouncements();
             }
             wasHero = next.hero;
             heroRound = next.round;
@@ -397,10 +430,38 @@ namespace Universes.UniverseData.murder_mystery.Client {
             }
         }
 
+        /// <summary>
+        /// Shows a banner, or queues it while the one on screen has not had its minimum time, so two events a
+        /// second apart (the sheriff's mistake, then "no players left") are both read.
+        /// </summary>
         void Announce(MM_Announcement kind, Sprite icon, Color color, string title, string subtitle) {
+            if (pendingAnnouncements.Count > 0 || AnnouncementHeld()) {
+                pendingAnnouncements.Enqueue(new PendingAnnouncement(kind, icon, color, title, subtitle, Time.unscaledTime));
+                return;
+            }
+            ShowAnnouncement(kind, icon, color, title, subtitle);
+        }
+
+        bool AnnouncementHeld() => announcement.Visible && Time.unscaledTime - shownAnnouncementAt < announcementMinSeconds;
+
+        void ShowAnnouncement(MM_Announcement kind, Sprite icon, Color color, string title, string subtitle) {
             shownAnnouncement = kind;
             shownAnnouncementAt = Time.unscaledTime;
             announcement.Show(icon, color, title, subtitle, announcementSeconds);
+        }
+
+        void ShowNextAnnouncement() {
+            while (pendingAnnouncements.Count > 0 && !AnnouncementHeld()) {
+                PendingAnnouncement next = pendingAnnouncements.Dequeue();
+                if (Time.unscaledTime - next.queuedAt > announcementMaxWaitSeconds)
+                    continue;
+                ShowAnnouncement(next.kind, next.icon, next.color, next.title, next.subtitle);
+            }
+        }
+
+        void ClearAnnouncements() {
+            pendingAnnouncements.Clear();
+            announcement.Hide();
         }
 
         /// <summary>The reveal arrives once per round; the top bar counts down to the next one.</summary>
@@ -441,6 +502,43 @@ namespace Universes.UniverseData.murder_mystery.Client {
         /// <summary>Seconds until the knife may be thrown: the throw cooldown or the kill clock, whichever is longer.</summary>
         float KnifeCooldown() => Mathf.Max(state.killCooldown, state.throwCooldown);
 
+        // ---------- camera ----------
+
+        /// <summary>
+        /// Frames the orbit camera once at each role reveal (behind your character) and once for each character
+        /// you start spectating after death, then leaves it to the player's own mouse.
+        /// </summary>
+        void FrameCamera() {
+            if (!Classic || !hasState)
+                return;
+            GameCharacter target = CameraController.targetCharacter;
+            if (target == null || target == framedTarget && framedRound == state.round)
+                return;
+            bool own = target == LocalPlayer.Character;
+            if (own && state.phase == MM_Phase.RoleReveal)
+                AimCamera(target, revealCameraPitch);
+            else if (!own && !state.alive)
+                AimCamera(target, spectateCameraPitch);
+            else
+                return;
+            framedTarget = target;
+            framedRound = state.round;
+        }
+
+        static void AimCamera(GameCharacter target, float pitch) {
+            if (pitch < 0f)
+                return;
+            CinemachineOrbitalFollow orbit = FindAnyObjectByType<CinemachineOrbitalFollow>();
+            if (orbit == null)
+                return;
+            InputAxis vertical = orbit.VerticalAxis;
+            vertical.Value = Mathf.Clamp(pitch, vertical.Range.x, vertical.Range.y);
+            orbit.VerticalAxis = vertical;
+            InputAxis horizontal = orbit.HorizontalAxis;
+            horizontal.Value = target.transform.eulerAngles.y;
+            orbit.HorizontalAxis = horizontal;
+        }
+
         // ---------- presentation ----------
 
         Sprite RoleIcon(MM_Role role, bool hero = false) => role switch {
@@ -465,6 +563,8 @@ namespace Universes.UniverseData.murder_mystery.Client {
             else if (!showReveal && roleReveal.Visible)
                 roleReveal.Hide();
 
+            ShowNextAnnouncement();
+            FrameCamera();
             RefreshThrowPrompt();
             RefreshDroppedGunDisplay();
             RefreshGunCompass();
@@ -472,6 +572,8 @@ namespace Universes.UniverseData.murder_mystery.Client {
             if (hasState && (state.phase == MM_Phase.RoleReveal || state.phase == MM_Phase.Hunt) && state.round > resultsShownRound)
                 resultsUntil = 0f;
             results.SetVisible(now < resultsUntil);
+            // The spectate bar sits where the results card's table ends; the card wins.
+            ClientSpectate.SetBarHidden(Classic && now < resultsUntil);
             bool betweenRounds = ShowOdds() && now >= resultsUntil;
             oddsChip.SetVisible(betweenRounds);
             skinChip.SetVisible(Classic && hasState && (betweenRounds || state.phase == MM_Phase.RoleReveal));
@@ -511,26 +613,10 @@ namespace Universes.UniverseData.murder_mystery.Client {
             string goal = hero ? "Shoot the murderer before they get you. Shoot an innocent and you die too." : MM_Text.RoleGoal(role);
             if (roleReveal.kicker != null)
                 roleReveal.kicker.text = hero ? HeroKicker : RoundStartKicker;
-            PlaceRoleCard(hero);
             Color color = MM_Text.RoleColor(role, hero);
             roleReveal.Show(RoleIcon(role, hero), color, title.ToUpperInvariant(), goal, 0f);
             GameSfx.Play(roleRevealSound);
             ScreenFx.Flash(WithAlpha(color, roleFlashAlpha), roleFlashSeconds);
-        }
-
-        Vector2 roleCardCentre;
-        bool roleCardCentreKnown;
-
-        /// <summary>Round start: centre, as authored. Hero: the top slot, clear of your own character.</summary>
-        void PlaceRoleCard(bool top) {
-            RectTransform card = (RectTransform)roleReveal.transform;
-            if (!roleCardCentreKnown) {
-                roleCardCentre = card.anchoredPosition;
-                roleCardCentreKnown = true;
-            }
-            Vector2 anchor = top ? new Vector2(0.5f, 1f) : new Vector2(0.5f, 0.5f);
-            card.anchorMin = card.anchorMax = card.pivot = anchor;
-            card.anchoredPosition = top ? heroCardOffset : roleCardCentre;
         }
 
         /// <summary>The role chip, coin bag and kill cooldown, and the lobby odds, from the latest server state.</summary>

@@ -768,11 +768,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
                 // The model is a cylinder along local z, 0.02 across: a face on each cap, just proud of it.
                 Vector3 extents = model.GetComponent<MeshFilter>().sharedMesh.bounds.extents;
-                foreach (Transform old in model.Cast<Transform>().Where(child => child.name.StartsWith("Face")).ToList())
-                    Object.DestroyImmediate(old.gameObject);
-                // Unity's quad faces -z; the back one is turned round.
-                AddCoinFace(model, "FaceFront", -extents.z * 1.04f, 0f, extents.x, face);
-                AddCoinFace(model, "FaceBack", extents.z * 1.04f, 180f, extents.x, face);
+                // Unity's quad faces -z; the back one is turned round. Existing faces are updated in place so a
+                // rebuild does not churn the prefab's object ids.
+                SetCoinFace(model, "FaceFront", -extents.z * 1.04f, 0f, extents.x, face);
+                SetCoinFace(model, "FaceBack", extents.z * 1.04f, 180f, extents.x, face);
 
                 // CoinShared by name: the editor assembly does not reference the networking assemblies under it.
                 MonoBehaviour coinBehaviour = root.GetComponentsInChildren<MonoBehaviour>().First(behaviour => behaviour.GetType().Name == "CoinShared");
@@ -785,15 +784,17 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             }
         }
 
-        static void AddCoinFace(Transform model, string name, float z, float yaw, float radius, Material material) {
-            GameObject quad = new(name);
+        static void SetCoinFace(Transform model, string name, float z, float yaw, float radius, Material material) {
+            Transform existing = model.Find(name);
+            GameObject quad = existing != null ? existing.gameObject : new GameObject(name);
             quad.transform.SetParent(model, false);
             quad.transform.localPosition = new Vector3(0f, 0f, z);
             quad.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
             // The quad mesh is 1 across; the face fills the coin inside a thin outer edge.
             quad.transform.localScale = new Vector3(radius * 1.9f, radius * 1.9f, 1f);
-            quad.AddComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
-            MeshRenderer renderer = quad.AddComponent<MeshRenderer>();
+            MeshFilter filter = quad.TryGetComponent(out MeshFilter oldFilter) ? oldFilter : quad.AddComponent<MeshFilter>();
+            filter.sharedMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            MeshRenderer renderer = quad.TryGetComponent(out MeshRenderer oldRenderer) ? oldRenderer : quad.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
@@ -993,9 +994,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             hud.victoryIcon = HudKit.Icon("trophy");
             hud.defeatIcon = HudKit.Icon("tombstone");
 
-            // Role reveal, centre: who you are and what to do.
-            hud.roleReveal = HudKit.Banner(root, "RoleReveal", new Vector2(0.5f, 0.5f), new Vector2(0f, 80f), 640f,
-                "innocent", RoleColor(MM_Role.Innocent), 96f, MM_ClientHUD.RoundStartKicker);
+            // Role reveal, top centre under the top bar (where announcements go during the hunt), so the
+            // player's own character stays in view below it: who you are and what to do.
+            hud.roleReveal = HudKit.Banner(root, "RoleReveal", new Vector2(0.5f, 1f), new Vector2(0f, -76f), 640f,
+                "innocent", RoleColor(MM_Role.Innocent), 80f, MM_ClientHUD.RoundStartKicker);
 
             BuildRoleChip(root, hud);
             BuildThrowPrompt(root, hud);

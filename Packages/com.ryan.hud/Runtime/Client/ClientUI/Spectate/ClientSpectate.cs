@@ -31,7 +31,30 @@ namespace RyanAssets.Client.ClientUI.Spectate {
         // camera to the next investigator rather than restarting at the first one.
         int currentIndex;
         bool isSpectating => gameObject.activeSelf;
+
+        static ClientSpectate instance;
+        static bool barHidden;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() {
+            instance = null;
+            barHidden = false;
+        }
+
+        /// <summary>
+        /// Lets a game hide the spectate bar while its own UI needs the bottom of the screen (a results card,
+        /// for example). The camera keeps following; only the bar is hidden. Cleared when the scene unloads.
+        /// </summary>
+        public static void SetBarHidden(bool hidden) {
+            if (barHidden == hidden)
+                return;
+            barHidden = hidden;
+            if (instance != null && instance.isSpectating)
+                instance.canvasGroupController.SetVisible(!hidden && instance.currentCharacter != null, 0.3f);
+        }
+
         void Awake() {
+            instance = this;
             cinemachineCamera = GetComponent<CinemachineCamera>();
             controller = transform.parent.GetComponent<CameraController>();
             leftArrow.onClick.AddListener(() => AdvancePosition(-1));
@@ -116,7 +139,7 @@ namespace RyanAssets.Client.ClientUI.Spectate {
 
             }
             controller.SetCameraTarget(character);
-            canvasGroupController.SetVisible(character != null, 0.3f);
+            canvasGroupController.SetVisible(character != null && !barHidden, 0.3f);
             UpdatePlayerLabel();
             UpdatePlayerHealth();
             UpdatePlayerLevel();
@@ -129,6 +152,10 @@ namespace RyanAssets.Client.ClientUI.Spectate {
                 AdvancePosition(0);
         }
         void OnDestroy() {
+            if (instance == this) {
+                instance = null;
+                barHidden = false;
+            }
             GameCharacter.GameCharacterAdded -= OnGameCharacterAdded;
             UnsetCamera();
         }

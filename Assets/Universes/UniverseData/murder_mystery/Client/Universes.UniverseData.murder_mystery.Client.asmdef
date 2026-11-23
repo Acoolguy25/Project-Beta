@@ -15,7 +15,10 @@
         "RyanAssets.GameFeel",
         "RyanAssets.Tools.Shared",
         "RyanAssets.Shared.Component",
-        "RyanAssets.Item.FloatingTool"
+        "RyanAssets.Item.FloatingTool",
+        "RyanAssets.Cameras",
+        "RyanAssets.Client.ClientUI.Spectate",
+        "Unity.Cinemachine"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
