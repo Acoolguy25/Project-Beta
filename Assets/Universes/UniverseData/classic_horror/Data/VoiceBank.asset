@@ -1,0 +1,417 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a32c1a0b1f7604ce398b3945bf1fecfe, type: 3}
+  m_Name: VoiceBank
+  m_EditorClassIdentifier: Universes.UniverseData.classic_horror.Shared::Universes.UniverseData.classic_horror.CH_VoiceBank
+  lines:
+  - id: prologue_1
+    speaker: MARA
+    text: There it is. Hollowmere. Nobody has set foot here since the flood of sixty-two.
+    clip: {fileID: 8300000, guid: d409d708f1918ec99ad94d4c21f2f68a, type: 3}
+    radio: 0
+    seconds: 5.5670977
+  - id: prologue_2
+    speaker: MARA
+    text: Ten minutes of footage, then we are gone. I am not staying here after dark.
+    clip: {fileID: 8300000, guid: aad3cf4cbc4e00817bd0f5871daa999a, type: 3}
+    radio: 0
+    seconds: 4.800839
+  - id: prologue_3
+    speaker: MARA
+    text: What was that? Something hit us! The engine is smashed, and the lamp is gone with it.
+    clip: {fileID: 8300000, guid: 523cdac87c8449397bbd02310e43b877, type: 3}
+    radio: 0
+    seconds: 5.346508
+  - id: prologue_4
+    speaker: FATHER CRANE
+    text: Welcome, children. My choir is short of voices.
+    clip: {fileID: 8300000, guid: fd56dd593d5de34a08950d1bea752df9, type: 3}
+    radio: 0
+    seconds: 5.6360545
+  - id: prologue_5
+    speaker: MARA
+    text: Did you hear that? Okay. Okay. I need fuel, a toolbox, and a lantern for the fog. Search the village. And stay together.
+    clip: {fileID: 8300000, guid: 61a2f51e3abed93b98eb4b08656e6dd8, type: 3}
+    radio: 0
+    seconds: 8.2722225
+  - id: stranded_hint
+    speaker: MARA
+    text: Can you hear me? Check the houses and the sheds. The ferryman kept everything out here.
+    clip: {fileID: 8300000, guid: 2c49aaa204260d60ebed848493962017, type: 3}
+    radio: 1
+    seconds: 4.1528344
+  - id: pick_fuel
+    speaker: MARA
+    text: That's fuel! It's heavy, you won't be able to run with it. Bring it back to the boat.
+    clip: {fileID: 8300000, guid: 22d8e53ab0d5def90bbdb8d2bcae876c, type: 3}
+    radio: 1
+    seconds: 3.9902947
+  - id: pick_toolbox
+    speaker: MARA
+    text: The ferryman's toolbox! Bring it back to me.
+    clip: {fileID: 8300000, guid: 7c88e654606c4f361910b1e05ae825e1, type: 3}
+    radio: 1
+    seconds: 2.388118
+  - id: pick_lantern
+    speaker: MARA
+    text: A lantern. Good. We'll need it to find our way through the fog.
+    clip: {fileID: 8300000, guid: bb85811969a48e460a94fc71027d0e61, type: 3}
+    radio: 1
+    seconds: 3.2356462
+  - id: place_fuel
+    speaker: MARA
+    text: Tank's full.
+    clip: {fileID: 8300000, guid: 8151b4f21022a4ae091ab8c32c72626b, type: 3}
+    radio: 0
+    seconds: 1.3178458
+  - id: place_toolbox
+    speaker: MARA
+    text: Okay. I can work with these.
+    clip: {fileID: 8300000, guid: f7c21fdc8c7cd3c2a8edc09a9d818b25, type: 3}
+    radio: 0
+    seconds: 2.5020635
+  - id: place_lantern
+    speaker: MARA
+    text: Lamp's lit.
+    clip: {fileID: 8300000, guid: bc702b1c6df635a7da0c3bb1e6cec2c9, type: 3}
+    radio: 0
+    seconds: 1.3410658
+  - id: stranded_two_left
+    speaker: MARA
+    text: That's one. Two more to go.
+    clip: {fileID: 8300000, guid: 0533b2e60dba85e5eb68c1cda28fc837, type: 3}
+    radio: 1
+    seconds: 1.8076191
+  - id: stranded_one_left
+    speaker: MARA
+    text: One more. Just one more, and we're leaving.
+    clip: {fileID: 8300000, guid: f5fe07f039e473a8588c0848dc239a6e, type: 3}
+    radio: 1
+    seconds: 2.5854876
+  - id: first_chase
+    speaker: MARA
+    text: He's coming for you! Run! Get out of his sight!
+    clip: {fileID: 8300000, guid: 673757a7b9cd85a80a7f3033978203d7, type: 3}
+    radio: 1
+    seconds: 2.7015872
+  - id: chase_tip
+    speaker: MARA
+    text: Lose him between the houses! He can't chase what he can't see or hear!
+    clip: {fileID: 8300000, guid: 51ce642cebea12928954c215ab7fb936, type: 3}
+    radio: 1
+    seconds: 3.850975
+  - id: hide_tip
+    speaker: LILY
+    text: Hide in the old wardrobes. He only looks inside if he saw you go in.
+    clip: {fileID: 8300000, guid: eb8e6d8e76ea5132495ffe311bc623da, type: 3}
+    radio: 0
+    seconds: 5.857143
+  - id: player_down
+    speaker: LILY
+    text: He drowned you. The water gave you back... but it will not do that forever.
+    clip: {fileID: 8300000, guid: 5245e6617a2dfa4d6babc9b1cc710798, type: 3}
+    radio: 0
+    seconds: 6.549569
+  - id: player_out
+    speaker: MARA
+    text: No. No, no, no. They're gone. Keep moving. Please, keep moving.
+    clip: {fileID: 8300000, guid: bb5bbdded487b4748933cf9bc9d9b30b, type: 3}
+    radio: 1
+    seconds: 4.965533
+  - id: taking_1
+    speaker: MARA
+    text: The engine's running! Everybody get to the boat! We're getting out of here!
+    clip: {fileID: 8300000, guid: 8b4fa0442c1d79fd8b19287ea086bd3f, type: 3}
+    radio: 0
+    seconds: 4.0578003
+  - id: taking_2
+    speaker: FATHER CRANE
+    text: No one leaves my parish.
+    clip: {fileID: 8300000, guid: dfde760e2f92f1188b165e2769cc65a5, type: 3}
+    radio: 0
+    seconds: 4.7640815
+  - id: taking_3
+    speaker: MARA
+    text: No! Let go of me! Help me! Help me!
+    clip: {fileID: 8300000, guid: 42ac1858fd339adf3b76a14aa5d34c84, type: 3}
+    radio: 0
+    seconds: 3.3088663
+  - id: taking_4
+    speaker: LILY
+    text: He has taken her to the chapel, to sing with the others.
+    clip: {fileID: 8300000, guid: c8e0f93cbeaec17748838400a7bff096, type: 3}
+    radio: 0
+    seconds: 5.3923583
+  - id: taking_5
+    speaker: LILY
+    text: Free his choir, and the chapel doors will open. Find their things. Lay them on their graves.
+    clip: {fileID: 8300000, guid: 9b37fd25bb08402c7ae0bc38f01e9059, type: 3}
+    radio: 0
+    seconds: 6.7392745
+  - id: relic_agnes
+    speaker: LILY
+    text: That was Agnes Pell's. She sang so sweetly. Her grave is by the chapel.
+    clip: {fileID: 8300000, guid: 06261c598834d59cc9eea3ceb1144e6d, type: 3}
+    radio: 0
+    seconds: 6.483175
+  - id: relic_thomas
+    speaker: LILY
+    text: That belonged to Thomas Hale. He tried to break the doors down.
+    clip: {fileID: 8300000, guid: a5c387e0bd26c0742815cf96f4af69e2, type: 3}
+    radio: 0
+    seconds: 5.515669
+  - id: relic_ruth
+    speaker: LILY
+    text: Ruth Ellery's. She held my hand when the water came in.
+    clip: {fileID: 8300000, guid: 1ace6ecfc220c292d9d02beb9b34035c, type: 3}
+    radio: 0
+    seconds: 5.202653
+  - id: relic_elias
+    speaker: LILY
+    text: Elias Grey's. He played the organ until the very end.
+    clip: {fileID: 8300000, guid: 5cbe8a84b50aacb60bdefb0552297a4a, type: 3}
+    radio: 0
+    seconds: 5.6958957
+  - id: relic_margaret
+    speaker: LILY
+    text: Margaret Lowe's. She was my teacher.
+    clip: {fileID: 8300000, guid: 7b3be5baff618a5979bb5da32503b72a, type: 3}
+    radio: 0
+    seconds: 4.7188888
+  - id: freed_agnes
+    speaker: AGNES PELL
+    text: I can stop singing now. Thank you.
+    clip: {fileID: 8300000, guid: a6a0f0ca477aff0ecb2fd6cc82872e03, type: 3}
+    radio: 0
+    seconds: 6.097347
+  - id: freed_thomas
+    speaker: THOMAS HALE
+    text: The doors. I can finally leave.
+    clip: {fileID: 8300000, guid: a90e13ec093d49d6485b6650028f2a9a, type: 3}
+    radio: 0
+    seconds: 5.433424
+  - id: freed_ruth
+    speaker: RUTH ELLERY
+    text: So cold. For so long. Thank you, child.
+    clip: {fileID: 8300000, guid: 69154dac0ec216aa79940daed2d4106a, type: 3}
+    radio: 0
+    seconds: 6.3432426
+  - id: freed_elias
+    speaker: ELIAS GREY
+    text: The music has stopped. At last.
+    clip: {fileID: 8300000, guid: 4087a64eaf7a3b9f2a65cea5fa64ce97, type: 3}
+    radio: 0
+    seconds: 5.580952
+  - id: freed_margaret
+    speaker: MARGARET LOWE
+    text: Tell Lily... tell her I am sorry.
+    clip: {fileID: 8300000, guid: ecbb1fecd99591aaab15a7294a4a8b98, type: 3}
+    radio: 0
+    seconds: 6.1465306
+  - id: mara_chapel_1
+    speaker: MARA
+    text: It's so cold in here. He keeps making me sing. Please hurry.
+    clip: {fileID: 8300000, guid: 8beb07a6ec00a088c893b6cce556f9bd, type: 3}
+    radio: 1
+    seconds: 5.6549435
+  - id: mara_chapel_2
+    speaker: MARA
+    text: There are others in here with me. Under the water. Their eyes are open.
+    clip: {fileID: 8300000, guid: be585f43bcff12cea98171973f732895, type: 3}
+    radio: 1
+    seconds: 5.212925
+  - id: crane_angry
+    speaker: FATHER CRANE
+    text: You steal my singers? Then you will sing in their place.
+    clip: {fileID: 8300000, guid: 899984691b18832bba41d018795079d3, type: 3}
+    radio: 0
+    seconds: 6.1188207
+  - id: chapel_open
+    speaker: LILY
+    text: The chapel doors are open. Mara is inside. Take his bell, and he will let her go.
+    clip: {fileID: 8300000, guid: 456a93a653e7d7009935fe20afdeae56, type: 3}
+    radio: 0
+    seconds: 6.6539
+  - id: bell_take
+    speaker: FATHER CRANE
+    text: That. Is. Mine.
+    clip: {fileID: 8300000, guid: c47ea24483a98b5b1a966316c7a7cf85, type: 3}
+    radio: 0
+    seconds: 5.70356
+  - id: mara_free
+    speaker: MARA
+    text: I can move! I'm out! I'm running to the boat. Bring that bell, and don't stop!
+    clip: {fileID: 8300000, guid: 5fb30c1c1ab5cf22ca04ae3ed0ecf9ba, type: 3}
+    radio: 1
+    seconds: 4.6288433
+  - id: bell_tip
+    speaker: LILY
+    text: He can hear his bell. Wherever it goes, he follows. Pass it on if he gets close.
+    clip: {fileID: 8300000, guid: 8a6effb45bcd7ea39a1ce48e6c96ad35, type: 3}
+    radio: 0
+    seconds: 6.587506
+  - id: bell_aboard
+    speaker: MARA
+    text: The bell's aboard! Everybody, get in the boat!
+    clip: {fileID: 8300000, guid: 809765457ee2410519736e5e7145353a, type: 3}
+    radio: 0
+    seconds: 3.3960319
+  - id: escape_1
+    speaker: MARA
+    text: Hold on to something!
+    clip: {fileID: 8300000, guid: 4efd1cfe4aef28993bd07c071c509f5f, type: 3}
+    radio: 0
+    seconds: 1.6429251
+  - id: escape_2
+    speaker: FATHER CRANE
+    text: You will come back. They always come back to Hollowmere.
+    clip: {fileID: 8300000, guid: 56ad6241b917fda96af5f32dd2f95dfe, type: 3}
+    radio: 0
+    seconds: 5.6881633
+  - id: escape_true
+    speaker: LILY
+    text: You found my music box. Now I can go home too. Goodbye.
+    clip: {fileID: 8300000, guid: fe0a44e13035d61358d41136ecfa56c0, type: 3}
+    radio: 0
+    seconds: 5.819206
+  - id: escape_plain
+    speaker: LILY
+    text: Don't come back. Please. Don't ever come back.
+    clip: {fileID: 8300000, guid: 045820dc2d6603cad9edad48cd515b7c, type: 3}
+    radio: 0
+    seconds: 5.0508842
+  - id: fail_1
+    speaker: FATHER CRANE
+    text: Sing, children. Sing for me, forever.
+    clip: {fileID: 8300000, guid: 5753d173edd83bc68a897258d1c4d14a, type: 3}
+    radio: 0
+    seconds: 5.2061906
+  - id: musicbox_pick
+    speaker: LILY
+    text: My music box! Please, take it to the jetty steps. That is where I fell.
+    clip: {fileID: 8300000, guid: 817504b628821abaab6fbfa1e0cb14f4, type: 3}
+    radio: 0
+    seconds: 6.5685487
+  - id: musicbox_place
+    speaker: LILY
+    text: Thank you. I can hear my song again.
+    clip: {fileID: 8300000, guid: 96ad0d62903079487897e1146ac1df30, type: 3}
+    radio: 0
+    seconds: 4.643016
+  - id: taunt_1
+    speaker: FATHER CRANE
+    text: I can hear your heart.
+    clip: {fileID: 8300000, guid: caa02ec33d4550ad283c461083b5fbbd, type: 3}
+    radio: 0
+    seconds: 3.8644671
+  - id: taunt_2
+    speaker: FATHER CRANE
+    text: Run, little lamb. Run.
+    clip: {fileID: 8300000, guid: 98d9427f27ce7770d8748202b6ebf610, type: 3}
+    radio: 0
+    seconds: 4.098934
+  - id: taunt_3
+    speaker: FATHER CRANE
+    text: There is room in the choir for you.
+    clip: {fileID: 8300000, guid: a13a472da51d8da63a5eca80b7e9c447, type: 3}
+    radio: 0
+    seconds: 4.190136
+  - id: taunt_4
+    speaker: FATHER CRANE
+    text: Sing for me.
+    clip: {fileID: 8300000, guid: b9f87530aacd9afa187b540c4765ae0d, type: 3}
+    radio: 0
+    seconds: 3.6430159
+  - id: taunt_5
+    speaker: FATHER CRANE
+    text: The water remembers every name.
+    clip: {fileID: 8300000, guid: 5a03e7f6c6df3de888ca1c362bf0a11e, type: 3}
+    radio: 0
+    seconds: 4.4636736
+  - id: taunt_6
+    speaker: FATHER CRANE
+    text: Why do you hide from your shepherd?
+    clip: {fileID: 8300000, guid: c20ff7f723a565e6c981b900260edc13, type: 3}
+    radio: 0
+    seconds: 4.385533
+  - id: taunt_7
+    speaker: FATHER CRANE
+    text: Come out, child. The water is warm.
+    clip: {fileID: 8300000, guid: 7e883b1b923d8ed60bf7965bf0759fbe, type: 3}
+    radio: 0
+    seconds: 4.7372336
+  - id: lost_1
+    speaker: FATHER CRANE
+    text: Hide, then. I have all night.
+    clip: {fileID: 8300000, guid: 1b2fef2ff1c161c7c910d301e80b45e2, type: 3}
+    radio: 0
+    seconds: 4.1640816
+  - id: lost_2
+    speaker: FATHER CRANE
+    text: You cannot hide from the bell.
+    clip: {fileID: 8300000, guid: f84aa3b2313b007ee8d7bcf197e60949, type: 3}
+    radio: 0
+    seconds: 4.3073697
+  - id: catch_1
+    speaker: FATHER CRANE
+    text: Another voice for my choir.
+    clip: {fileID: 8300000, guid: be4217a3678ff0ac2870e6a680bac2ce, type: 3}
+    radio: 0
+    seconds: 4.659864
+  - id: catch_2
+    speaker: FATHER CRANE
+    text: Hush now. Sing.
+    clip: {fileID: 8300000, guid: a1c99cf5dd310baee9d4ef0f22cc3097, type: 3}
+    radio: 0
+    seconds: 4.0859184
+  - id: carry_1
+    speaker: FATHER CRANE
+    text: That is not yours to take.
+    clip: {fileID: 8300000, guid: 3bf04a7e68562a3e297bb7d72657f6df, type: 3}
+    radio: 0
+    seconds: 4.0338097
+  - id: rise_1
+    speaker: FATHER CRANE
+    text: I am here.
+    clip: {fileID: 8300000, guid: b2983c1e2753df5ce8a100e43c5ddd7d, type: 3}
+    radio: 0
+    seconds: 3.4346032
+  - id: wardrobe_found
+    speaker: FATHER CRANE
+    text: There you are.
+    clip: {fileID: 8300000, guid: 72e0026c15cfa7de1be84131372e4723, type: 3}
+    radio: 0
+    seconds: 3.904331
+  - id: whisper_behind
+    speaker: ???
+    text: Behind you.
+    clip: {fileID: 8300000, guid: c2383e4f591714ecaab03997159116ce, type: 3}
+    radio: 0
+    seconds: 1.5498186
+  - id: whisper_dont
+    speaker: ???
+    text: Don't turn around.
+    clip: {fileID: 8300000, guid: 21d137400d90b71ce828250240cbd14c, type: 3}
+    radio: 0
+    seconds: 1.7096598
+  - id: whisper_sees
+    speaker: ???
+    text: He sees you.
+    clip: {fileID: 8300000, guid: 097251155e428f0a997542061ae6f5a2, type: 3}
+    radio: 0
+    seconds: 1.6850567
+  - id: whisper_join
+    speaker: ???
+    text: Join us.
+    clip: {fileID: 8300000, guid: 812ba1852450631489bb6c5f874c21cd, type: 3}
+    radio: 0
+    seconds: 1.3039229

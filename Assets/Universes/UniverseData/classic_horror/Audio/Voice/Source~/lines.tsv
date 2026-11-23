@@ -1,0 +1,68 @@
+# id	speaker	profile	text   (the speaker is the subtitle caption; profile picks the voice and its processing)
+prologue_1	MARA	mara	There it is. Hollowmere. Nobody has set foot here since the flood of sixty-two.
+prologue_2	MARA	mara	Ten minutes of footage, then we are gone. I am not staying here after dark.
+prologue_3	MARA	mara	What was that? Something hit us! The engine is smashed, and the lamp is gone with it.
+prologue_4	FATHER CRANE	crane	Welcome, children. My choir is short of voices.
+prologue_5	MARA	mara	Did you hear that? Okay. Okay. I need fuel, a toolbox, and a lantern for the fog. Search the village. And stay together.
+stranded_hint	MARA	mara_radio	Can you hear me? Check the houses and the sheds. The ferryman kept everything out here.
+pick_fuel	MARA	mara_radio	That's fuel! It's heavy, you won't be able to run with it. Bring it back to the boat.
+pick_toolbox	MARA	mara_radio	The ferryman's toolbox! Bring it back to me.
+pick_lantern	MARA	mara_radio	A lantern. Good. We'll need it to find our way through the fog.
+place_fuel	MARA	mara	Tank's full.
+place_toolbox	MARA	mara	Okay. I can work with these.
+place_lantern	MARA	mara	Lamp's lit.
+stranded_two_left	MARA	mara_radio	That's one. Two more to go.
+stranded_one_left	MARA	mara_radio	One more. Just one more, and we're leaving.
+first_chase	MARA	mara_radio	He's coming for you! Run! Get out of his sight!
+chase_tip	MARA	mara_radio	Lose him between the houses! He can't chase what he can't see or hear!
+hide_tip	LILY	lily	Hide in the old wardrobes. He only looks inside if he saw you go in.
+player_down	LILY	lily	He drowned you. The water gave you back... but it will not do that forever.
+player_out	MARA	mara_radio	No. No, no, no. They're gone. Keep moving. Please, keep moving.
+taking_1	MARA	mara	The engine's running! Everybody get to the boat! We're getting out of here!
+taking_2	FATHER CRANE	crane_loud	No one leaves my parish.
+taking_3	MARA	mara_scream	No! Let go of me! Help me! Help me!
+taking_4	LILY	lily	He has taken her to the chapel, to sing with the others.
+taking_5	LILY	lily	Free his choir, and the chapel doors will open. Find their things. Lay them on their graves.
+relic_agnes	LILY	lily	That was Agnes Pell's. She sang so sweetly. Her grave is by the chapel.
+relic_thomas	LILY	lily	That belonged to Thomas Hale. He tried to break the doors down.
+relic_ruth	LILY	lily	Ruth Ellery's. She held my hand when the water came in.
+relic_elias	LILY	lily	Elias Grey's. He played the organ until the very end.
+relic_margaret	LILY	lily	Margaret Lowe's. She was my teacher.
+freed_agnes	AGNES PELL	ghost_f	I can stop singing now. Thank you.
+freed_thomas	THOMAS HALE	ghost_m	The doors. I can finally leave.
+freed_ruth	RUTH ELLERY	ghost_f2	So cold. For so long. Thank you, child.
+freed_elias	ELIAS GREY	ghost_m2	The music has stopped. At last.
+freed_margaret	MARGARET LOWE	ghost_f3	Tell Lily... tell her I am sorry.
+mara_chapel_1	MARA	mara_far	It's so cold in here. He keeps making me sing. Please hurry.
+mara_chapel_2	MARA	mara_far	There are others in here with me. Under the water. Their eyes are open.
+crane_angry	FATHER CRANE	crane_loud	You steal my singers? Then you will sing in their place.
+chapel_open	LILY	lily	The chapel doors are open. Mara is inside. Take his bell, and he will let her go.
+bell_take	FATHER CRANE	crane_scream	That. Is. Mine.
+mara_free	MARA	mara_radio	I can move! I'm out! I'm running to the boat. Bring that bell, and don't stop!
+bell_tip	LILY	lily	He can hear his bell. Wherever it goes, he follows. Pass it on if he gets close.
+bell_aboard	MARA	mara	The bell's aboard! Everybody, get in the boat!
+escape_1	MARA	mara	Hold on to something!
+escape_2	FATHER CRANE	crane	You will come back. They always come back to Hollowmere.
+escape_true	LILY	lily	You found my music box. Now I can go home too. Goodbye.
+escape_plain	LILY	lily	Don't come back. Please. Don't ever come back.
+fail_1	FATHER CRANE	crane	Sing, children. Sing for me, forever.
+musicbox_pick	LILY	lily	My music box! Please, take it to the jetty steps. That is where I fell.
+musicbox_place	LILY	lily	Thank you. I can hear my song again.
+taunt_1	FATHER CRANE	crane	I can hear your heart.
+taunt_2	FATHER CRANE	crane	Run, little lamb. Run.
+taunt_3	FATHER CRANE	crane	There is room in the choir for you.
+taunt_4	FATHER CRANE	crane	Sing for me.
+taunt_5	FATHER CRANE	crane	The water remembers every name.
+taunt_6	FATHER CRANE	crane	Why do you hide from your shepherd?
+taunt_7	FATHER CRANE	crane	Come out, child. The water is warm.
+lost_1	FATHER CRANE	crane	Hide, then. I have all night.
+lost_2	FATHER CRANE	crane	You cannot hide from the bell.
+catch_1	FATHER CRANE	crane_loud	Another voice for my choir.
+catch_2	FATHER CRANE	crane	Hush now. Sing.
+carry_1	FATHER CRANE	crane	That is not yours to take.
+rise_1	FATHER CRANE	crane	I am here.
+wardrobe_found	FATHER CRANE	crane_loud	There you are.
+whisper_behind	???	whisper	Behind you.
+whisper_dont	???	whisper	Don't turn around.
+whisper_sees	???	whisper	He sees you.
+whisper_join	???	whisper	Join us.

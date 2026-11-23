@@ -33,8 +33,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 CH_Map map = Object.FindAnyObjectByType<CH_Map>();
                 if (map == null || map.arrival == null) throw new System.InvalidOperationException("The horror map has no CH_Map arrival point.");
                 Vector3 eye = map.arrival.position + Vector3.up * EyeHeight;
-                Vector3 target = map.extraction != null && (map.extraction.position - map.arrival.position).sqrMagnitude > 1f
-                    ? map.extraction.position + Vector3.up * EyeHeight
+                // Looks at the boat, the first thing a player is told to find.
+                Vector3 target = map.boardingPoint != null && (map.boardingPoint.position - map.arrival.position).sqrMagnitude > 1f
+                    ? map.boardingPoint.position + Vector3.up * EyeHeight
                     : eye + map.arrival.forward;
                 camera.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(target - eye));
                 camera.clearFlags = CameraClearFlags.Skybox;

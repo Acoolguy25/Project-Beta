@@ -1,475 +1,533 @@
+using System.Collections.Generic;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
-using RyanAssets.Core;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Globals;
 using RyanAssets.Tools.Shared;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace Universes.UniverseData.classic_horror.Server {
-    /// <summary>Haunting-specific perception layered over LocalNPC navigation.</summary>
+    /// <summary>
+    /// Father Crane's hunt, layered over LocalNPC navigation. He patrols towards the investigators, sees in a cone ahead
+    /// of him (much further when your flashlight is on), hears footsteps through walls and always hears his own bell.
+    /// A chase aims where his quarry is going, lunges when close, and does not give up the moment he loses sight: he
+    /// keeps going where they were heading, then sweeps the area, opening hiding places he watched someone climb into.
+    /// When nobody has been near him for a while he rises out of the water somewhere closer.
+    /// </summary>
     public sealed class CH_Monster : MonoBehaviour {
-        const float FootstepPaceMultiplier = 3f;
-        const float NavigationRadius = 0.1f;
-        const float NavigationHeight = 1.05f;
-        const float UnreachableGiveUpSeconds = 10f;
-        const float UnreachableRetrySeconds = 12f;
-        const float ReachableApproachRadius = CH_MonsterTuning.OffMeshApproachRadius;
-        // How close to its approach point counts as having arrived there (stand-off), and to the
-        // last sensed position when searching.
-        const float StandOffArrivalRadius = 1f, SearchArrivalRadius = 1.5f;
-        static readonly Vector3 HitboxSize = new(0.2f, 0.9f, 0.2f);
-        static readonly Vector3 HitboxCenter = new(0, 0.45f, 0);
-        static readonly Vector3[] ReachabilityProbeDirections = {
-            Vector3.right, Vector3.forward, Vector3.left, Vector3.back,
-            new Vector3(1, 0, 1).normalized, new Vector3(-1, 0, 1).normalized,
-            new Vector3(-1, 0, -1).normalized, new Vector3(1, 0, -1).normalized
-        };
+        public enum Mode { Patrol, Chase, Search, OpenHidingPlace, Feed, Held }
+
+        const float ThinkInterval = 0.1f;
+        const float NavigationRadius = 0.25f, NavigationHeight = 1.9f;
+        const float SamplePositionRadius = 3f;
+        static readonly Vector3 HitboxSize = new(0.5f, 1.9f, 0.5f), HitboxCenter = new(0, 0.95f, 0);
 
         CH_ServerRunner runner;
         CH_MonsterTuning tuning;
         LocalNPC locomotion;
+        NavMeshAgent agent;
         GameCharacter entity;
-        CH_Temperament temperament;
-        SeededStoryRandom random;
-        readonly System.Collections.Generic.Dictionary<LocalCharacter, Vector3> previousPositions = new();
-        readonly System.Collections.Generic.List<LocalCharacter> staleCharacters = new();
-        readonly System.Collections.Generic.Dictionary<LocalCharacter, float> ignoredUntil = new();
-        readonly System.Collections.Generic.Dictionary<LocalCharacter, Reachability> reachability = new();
-        readonly System.Collections.Generic.List<SensedCandidate> sensedCandidates = new();
-        UnityEngine.AI.NavMeshPath reachPath;
-        LocalCharacter pursued;
-        float lastProgress;
-        public int AbandonedChases { get; private set; }
-        public bool IsChasing => !suspended && pursued != null && Time.time - lastSeen < tuning.PursuitMemory(livingInvestigators);
-        /// <summary>True while a scare holds it in place.</summary>
-        public bool IsStaggered => Time.time < staggeredUntil;
-        public string State { get; private set; } = "Emerging";
-        Vector3 patrolPoint, progressPosition;
-        float nextThink, lastThink, nextAttack, lastSeen = -100, repelledUntil, lightHeldUntil, enragedUntil, nextWhisper, nextPatrol;
-        // Negative while it is not held by a scare; the retreat follows once the hold ends.
-        float staggeredUntil = -1f, retreatAfterStagger;
-        float unreachableSince = -1f;
-        // When it first stood at its approach point without being able to strike, or negative.
-        float stalledSince = -1f;
-        // Where it last saw or heard its quarry: a search goes there, not to where they are now.
-        Vector3 lastSeenPosition;
-        int livingInvestigators = 1;
-        Vector3 committedPursuitDestination;
-        float nextPursuitRepath;
-        bool hasCommittedPursuitDestination;
-        bool suspended;
-        int warningIndex;
+        System.Random random;
         int obstacleMask;
 
-        readonly struct SensedCandidate {
-            public readonly LocalCharacter Character;
-            public readonly float Distance;
-            public readonly bool Visible;
-            public SensedCandidate(LocalCharacter character, float distance, bool visible) {
-                Character = character;
-                Distance = distance;
-                Visible = visible;
-            }
-        }
+        readonly Dictionary<LocalCharacter, Vector3> previousPositions = new();
+        readonly Dictionary<LocalCharacter, float> speeds = new();
+        /// <summary>When he last saw or heard each investigator: hiding right after means he watched them go in.</summary>
+        readonly Dictionary<LocalCharacter, float> lastSensed = new();
+        readonly List<LocalCharacter> stale = new();
+        readonly List<Vector3> sweepPoints = new();
 
-        readonly struct Reachability {
-            public readonly Vector3 Position;
-            public readonly Vector3 Destination;
-            public readonly float NextCheck;
-            public readonly bool Reachable;
-            public Reachability(Vector3 position, Vector3 destination, float nextCheck, bool reachable) {
-                Position = position;
-                Destination = destination;
-                NextCheck = nextCheck;
-                Reachable = reachable;
-            }
-        }
+        public Mode State { get; private set; } = Mode.Patrol;
+        public LocalCharacter Quarry { get; private set; }
+        public bool IsChasing => State == Mode.Chase;
+        /// <summary>Chasing, sweeping, or on his way to drag someone out: the chase music keeps playing.</summary>
+        public bool IsHunting => State is Mode.Chase or Mode.Search or Mode.OpenHidingPlace;
+        public int Catches { get; private set; }
+        public int ChasesStarted { get; private set; }
+        public int ChasesEscaped { get; private set; }
 
-        public void Initialize(CH_ServerRunner owner, LocalNPC npc, CH_Temperament behavior, int seed, CH_MonsterTuning hunt) {
-            runner = owner; locomotion = npc; temperament = behavior; tuning = hunt;
-            if (TryGetComponent(out CharacterAnimator characterAnimator))
-                characterAnimator.FootstepPaceMultiplier = FootstepPaceMultiplier;
-            reachPath = new UnityEngine.AI.NavMeshPath();
+        Vector3 lastKnownPosition, lastKnownVelocity, patrolPoint;
+        float lostAt = -1f, searchUntil, heldUntil, feedUntil, nextThink, lastThink;
+        float lungeUntil, nextLunge, nextAttack, nextTaunt, nextRepath, lastSensedAnyone, nextRelocate, patrolUntil;
+        float progressCheckAt;
+        Vector3 progressPosition;
+        int tauntIndex;
+        bool suspended;
+        CH_HidingSpot targetHidingPlace;
+        LocalCharacter hidingQuarry;
+        float openingGivesUpAt;
+        // Reused for reachability checks, which run outside the per-frame path.
+        NavMeshPath probePath;
+        readonly HashSet<CH_HidingSpot> checkedHidingPlaces = new();
+
+        public void Initialize(CH_ServerRunner owner, LocalNPC npc, int seed, CH_MonsterTuning hunt) {
+            runner = owner;
+            locomotion = npc;
+            tuning = hunt;
+            agent = npc.agent;
             entity = GetComponent<GameCharacter>();
-            random = new SeededStoryRandom(seed ^ 0x714ade);
+            random = new System.Random(seed ^ 0x5eed);
             locomotion.AutomaticTargeting = false;
-            // The Presence deliberately uses a much smaller navigation capsule than
-            // its visuals so porch steps, narrow doors, and furnished interiors do
-            // not break pursuit.
-            locomotion.agent.radius = NavigationRadius;
-            locomotion.agent.height = NavigationHeight;
-            locomotion.agent.acceleration = 38f;
-            locomotion.agent.angularSpeed = 480f;
-            locomotion.agent.stoppingDistance = CH_MonsterTuning.AgentStoppingDistance;
-            locomotion.agent.autoRepath = true;
-            locomotion.agent.autoBraking = false;
-            locomotion.agent.obstacleAvoidanceType = UnityEngine.AI.ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+            agent.radius = NavigationRadius;
+            agent.height = NavigationHeight;
+            agent.acceleration = 40f;
+            agent.angularSpeed = 540f;
+            agent.stoppingDistance = CH_MonsterTuning.AgentStoppingDistance;
+            agent.autoBraking = false;
+            agent.autoRepath = true;
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.LowQualityObstacleAvoidance;
             if (TryGetComponent(out BoxCollider hitbox)) {
                 hitbox.size = HitboxSize;
                 hitbox.center = HitboxCenter;
             }
+            if (TryGetComponent(out CharacterAnimator animator)) animator.FootstepPaceMultiplier = 2.2f;
             locomotion.SetTargetingType(NPCTargetingType.External);
-            obstacleMask = ~LayerMask.GetMask("Character", "LocalCharacter", "Ignore Raycast", "UI");
-            // Investigators already have 15 seconds of spawn protection. Begin
-            // hunting as soon as that protection expires instead of roaming for
-            // another ten seconds.
-            repelledUntil = Time.time + 15f;
-            nextWhisper = Time.time + 30f;
+            obstacleMask = ~LayerMask.GetMask("Character", "LocalCharacter", "Ignore Raycast", "UI", "Water");
             lastThink = Time.time;
+            lastSensedAnyone = Time.time;
+            nextRelocate = Time.time + tuning.relocateCooldown;
+            nextTaunt = Time.time + 8f;
             progressPosition = transform.position;
-            lastProgress = Time.time;
-        }
-        public void Enrage(float seconds) { enragedUntil = Time.time + seconds; repelledUntil = 0; }
-        public void Repel(float seconds) { repelledUntil = Time.time + seconds; nextPatrol = 0; pursued = null; lastSeen = -100; unreachableSince = -1f; stalledSince = -1f; hasCommittedPursuitDestination = false; }
-        public void Suspend() { suspended = true; locomotion.SetTargetingType(NPCTargetingType.None); }
-
-        /// <summary>
-        /// Freezes it where it stands for <paramref name="seconds"/>: a scare that fills an
-        /// investigator's screen also holds the Presence, so they can still run when the face fades.
-        /// A strike is never due during it. With <paramref name="retreatSeconds"/> above zero it then
-        /// withdraws for that long (as after a catch); otherwise it resumes the same hunt.
-        /// </summary>
-        public void Stagger(float seconds, float retreatSeconds = 0f) {
-            if (seconds <= 0f) return;
-            staggeredUntil = Mathf.Max(staggeredUntil, Time.time + seconds);
-            retreatAfterStagger = Mathf.Max(retreatAfterStagger, retreatSeconds);
-            nextAttack = Mathf.Max(nextAttack, staggeredUntil);
-            var agent = locomotion.agent;
-            if (agent.enabled && agent.isOnNavMesh) { agent.isStopped = true; agent.velocity = Vector3.zero; }
-            State = "Staggered";
         }
 
-        /// <summary>Lets the agent move again once a stagger is over, withdrawing first if one was asked for.</summary>
-        void EndStagger() {
-            staggeredUntil = -1f;
-            lastProgress = Time.time;
-            var agent = locomotion.agent;
-            if (agent.enabled && agent.isOnNavMesh) agent.isStopped = false;
-            if (retreatAfterStagger > 0f) Repel(retreatAfterStagger);
-            retreatAfterStagger = 0f;
+        /// <summary>Freezes him where he stands (a cutscene, a scare on someone's screen).</summary>
+        public void Hold(float seconds) {
+            heldUntil = Mathf.Max(heldUntil, Time.time + seconds);
+            Stop();
         }
 
-        static int CountLivingInvestigators() {
-            int living = 0;
-            foreach (var character in LocalCharacter.Characters.Values)
-                if (character != null && !character.IsDead) living++;
-            return living;
+        public void Release() => heldUntil = 0f;
+
+        /// <summary>Stops him for a scene or the end of the night. He forgets the hunt, so no chase carries across.</summary>
+        public void Suspend() {
+            suspended = true;
+            Stop();
+            ForgetQuarry();
+            targetHidingPlace = null;
+            hidingQuarry = null;
+            State = Mode.Patrol;
+            patrolUntil = 0f;
+        }
+
+        public void Resume() { suspended = false; lastThink = Time.time; lastSensedAnyone = Time.time; }
+
+        /// <summary>Puts him somewhere new at once (a cutscene's end, the director), forgetting the chase.</summary>
+        public void Warp(Vector3 position) {
+            if (NavMesh.SamplePosition(position, out NavMeshHit hit, SamplePositionRadius, agent.areaMask) && agent.enabled)
+                agent.Warp(hit.position);
+            ForgetQuarry();
+            State = Mode.Patrol;
+            patrolUntil = 0f;
+            progressPosition = transform.position;
+        }
+
+        /// <summary>Starts a chase on <paramref name="target"/> at once, wherever they are (the bell is lifted).</summary>
+        public void Hunt(LocalCharacter target) {
+            if (target == null || target.IsDead) return;
+            BeginChase(target);
+            lastKnownPosition = target.transform.position;
+        }
+
+        void Stop() {
+            if (agent != null && agent.enabled && agent.isOnNavMesh) {
+                agent.isStopped = true;
+                agent.velocity = Vector3.zero;
+            }
         }
 
         void Update() {
-            if (runner == null || suspended || !runner.CaseActive || Time.time < nextThink) return;
-            if (staggeredUntil >= 0f) {
-                if (IsStaggered) return;
-                EndStagger();
-            }
-            livingInvestigators = CountLivingInvestigators();
-            float elapsed = Mathf.Max(0.01f, Time.time - lastThink);
+            if (runner == null || suspended || !runner.Hunting) return;
+            if (Time.time < heldUntil) { Stop(); State = Mode.Held; return; }
+            if (Time.time < nextThink) return;
+            float elapsed = Mathf.Max(0.02f, Time.time - lastThink);
             lastThink = Time.time;
-            nextThink = Time.time + 0.15f;
-            LocalCharacter sensed = null;
-            float closest = float.MaxValue;
-            bool sensedVisible = false;
-            bool heldByLight = false;
-            sensedCandidates.Clear();
-            Vector3 eye = entity.CharacterCamera != null ? entity.CharacterCamera.position : transform.position + Vector3.up * 1.75f;
-            foreach (var character in LocalCharacter.Characters.Values) {
-                if (!IsEligibleTarget(character)) continue;
-                Vector3 position = character.transform.position;
-                float movement = previousPositions.TryGetValue(character, out Vector3 previous) ? Vector3.Distance(previous, position) / elapsed : 0;
-                previousPositions[character] = position;
-                if (character != pursued && ignoredUntil.TryGetValue(character, out float ignoreTime) && Time.time < ignoreTime) continue;
-                Vector3 targetEye = character.CharacterCamera != null ? character.CharacterCamera.position : position + Vector3.up * 2;
-                float distance = Vector3.Distance(eye, targetEye);
-                var light = ServerTool.Instance.GetTool(character.NetworkObject, ToolEnum.Flashlight) as ToolFlashlightShared;
-                bool lit = light != null && light.IsIlluminating;
-                bool sight = WorldInteraction.CanReach(eye, targetEye, tuning.MaxSightRange, obstacleMask);
-                bool beamOnMonster = lit && sight && distance < tuning.beamRepelRange
-                    && Vector3.Dot(light.BeamDirection, (eye - targetEye).normalized) > tuning.beamRepelAlignment;
-                if (temperament == CH_Temperament.LightShy && beamOnMonster) heldByLight = true;
-                // Temperament sets how far it notices someone; a chase holds them further, except alone.
-                float sightRange = tuning.SightRange(temperament, lit, movement, Time.time < enragedUntil, character == pursued, livingInvestigators);
-                // Footsteps carry through cover.
-                bool heard = distance < tuning.HearingRange(temperament, movement);
-                if ((sight && distance < sightRange) || heard)
-                    sensedCandidates.Add(new SensedCandidate(character, distance, sight));
-            }
-            staleCharacters.Clear();
-            foreach (var pair in previousPositions) if (pair.Key == null || !pair.Key.IsSpawned) staleCharacters.Add(pair.Key);
-            foreach (var stale in staleCharacters) {
-                previousPositions.Remove(stale);
-                ignoredUntil.Remove(stale);
-                reachability.Remove(stale);
+            nextThink = Time.time + ThinkInterval;
+            if (!agent.enabled || !agent.isOnNavMesh) return;
+            if (State == Mode.Held) State = Quarry != null ? Mode.Chase : Mode.Patrol;
+            if (State == Mode.Feed) {
+                if (Time.time < feedUntil) { Stop(); return; }
+                State = Mode.Patrol;
+                patrolUntil = 0f;
             }
 
-            if (heldByLight) lightHeldUntil = Time.time + tuning.lightHoldSeconds;
-            if (Time.time < lightHeldUntil || Time.time < repelledUntil) {
-                // Keep the same pursuit while light-shy retreat is active. A short
-                // hold prevents tiny beam/occlusion changes from flipping between
-                // retreat and hunt on consecutive perception ticks.
-                unreachableSince = -1f;
-                State = Time.time < lightHeldUntil ? "Retreating from light" : "Keeping distance";
-                Roam(true);
-                return;
-            }
+            TrackMovement(elapsed);
+            LocalCharacter sensed = Sense(out float sensedDistance, out bool sensedVisible);
+            if (sensed != null) lastSensedAnyone = Time.time;
+            WatchHidingPlaces();
 
-            // Protection may begin after a target was acquired (for example, when an
-            // investigator is revived or enters an invulnerability window). Do not
-            // retain that character through pursuit memory or use them for scares.
-            if (pursued != null && !IsEligibleTarget(pursued))
-                GiveUp(pursued);
-
-            if (PursuitHasBeenUnreachable()) {
-                LocalCharacter unreachableTarget = pursued;
-                ignoredUntil[unreachableTarget] = Time.time + UnreachableRetrySeconds;
-                GiveUp(unreachableTarget);
-            }
-
-            sensedCandidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-            foreach (SensedCandidate candidate in sensedCandidates) {
-                // Commit to an eligible investigator through cover and nearby
-                // teammates. Reconsider others only after this pursuit ends.
-                if (pursued != null && candidate.Character != pursued) continue;
-                if (ignoredUntil.TryGetValue(candidate.Character, out float ignoreTime) && Time.time < ignoreTime)
-                    continue;
-                // A pursuit that was reachable when acquired remains valid while its
-                // investigator briefly jumps or crosses a narrow mesh edge. MoveTo will
-                // keep following the last complete route until projection succeeds again.
-                if (candidate.Character != pursued && !CanReachTarget(candidate.Character)) {
-                    ignoredUntil[candidate.Character] = Time.time + 1f;
-                    continue;
+            if (State == Mode.OpenHidingPlace) {
+                // Someone in plain sight matters more than a wardrobe.
+                if (sensed != null && sensedVisible && !runner.IsHidden(sensed)) {
+                    targetHidingPlace = null;
+                    hidingQuarry = null;
+                    BeginChase(sensed);
+                    Chase(sensed, sensedDistance, sensedVisible);
+                } else {
+                    OpenHidingPlace();
                 }
-                sensed = candidate.Character;
-                closest = candidate.Distance;
-                sensedVisible = candidate.Visible;
-                break;
+                CheckProgress();
+                return;
             }
             if (sensed != null) {
-                State = "Hunting";
-                if (pursued != sensed) {
-                    pursued = sensed;
-                    unreachableSince = -1f;
-                    lastProgress = Time.time;
-                    progressPosition = transform.position;
-                    runner.OnMonsterChaseStarted();
-                }
-                lastSeen = Time.time;
-                lastSeenPosition = sensed.transform.position;
-                NavigatePursued(tuning.HuntSpeed(runner.CurrentCase.Phase != CH_Phase.Investigation, Time.time < enragedUntil, livingInvestigators));
-                Vector3 sensedEye = sensed.CharacterCamera != null ? sensed.CharacterCamera.position : sensed.transform.position + Vector3.up * 2f;
-                // An investigator standing just off the walkable area keeps it at its approach point, a
-                // little beyond normal strike range. Once it has stood there for a moment it lunges;
-                // if it cannot see them from there either, it leaves instead of waiting beside them.
-                UpdateStandOff(closest);
-                float stalledFor = stalledSince < 0f ? 0f : Time.time - stalledSince;
-                float strikeRange = tuning.StrikeRange(stalledFor);
-                bool strikeClear = WorldInteraction.CanReach(eye, sensedEye, Mathf.Max(tuning.strikeReach, strikeRange), obstacleMask);
-                if (stalledFor >= tuning.standOffGiveUpSeconds && !strikeClear) {
-                    ignoredUntil[sensed] = Time.time + UnreachableRetrySeconds;
-                    GiveUp(sensed);
-                    return;
-                }
-                if (closest < strikeRange && Time.time >= nextAttack && strikeClear) {
-                    stalledSince = -1f;
-                    nextAttack = Time.time + tuning.attackInterval;
-                    // Use the health contract so a successful hit is lethal at any
-                    // player health, while still respecting spawn protection.
-                    sensed.TakeDamage(System.Math.Max(1L, sensed.Health.Value), DamageType.Melee, (IEntity)entity);
-                }
-                // Face to face in the dark: the runner rations these so they stay rare, and holds the
-                // Presence while the face is up (Stagger).
-                if (CH_ScareRules.ShouldWarn(sensedVisible, closest, tuning.strikeDistance, runner.ProximityScareDistance))
-                    runner.TryEncounterScare(sensed.Owner, CH_ScareKind.Warning);
-                if (closest < tuning.whisperDistance && Time.time > nextWhisper
-                    && runner.TrySpeakWarning(runner.CurrentCase.Warnings[warningIndex % runner.CurrentCase.Warnings.Length])) {
-                    warningIndex++;
-                    nextWhisper = Time.time + tuning.whisperInterval;
-                }
-            } else if (Time.time - lastSeen < tuning.PursuitMemory(livingInvestigators) && IsEligibleTarget(pursued)) {
-                State = "Searching";
-                stalledSince = -1f;
-                // It goes to where it last saw or heard them (through a doorway into a house if need be),
-                // not to where they are now, so breaking its line of sight really shakes it off.
-                Search(Mathf.Min(tuning.searchSpeed, tuning.HuntSpeed(true, false, livingInvestigators)));
+                if (Quarry != sensed || State != Mode.Chase) BeginChase(sensed);
+                Chase(sensed, sensedDistance, sensedVisible);
+            } else if (State == Mode.Chase && Quarry != null) {
+                Pursue();
+            } else if (State == Mode.Search) {
+                Sweep();
             } else {
-                if (pursued != null) GiveUp(pursued);
-                State = "Roaming"; Roam(false);
+                Patrol();
             }
+            Taunt();
+            CheckProgress();
         }
 
-        // Use the same damage context for perception as the eventual attack. This
-        // keeps spawn/global/team protection from becoming a chase target at all.
-        bool IsEligibleTarget(LocalCharacter character) =>
-            character != null && !character.IsDead && !character.IsProtected(entity, DamageType.Melee);
+        // ---- Senses --------------------------------------------------------------------------------------------------
 
-        bool CanReachTarget(LocalCharacter target) {
-            var agent = locomotion.agent;
-            if (!agent.enabled || !agent.isOnNavMesh) return false;
-            Vector3 targetPosition = target.transform.position;
-            if (reachability.TryGetValue(target, out Reachability cached)
-                && Time.time < cached.NextCheck
-                && (targetPosition - cached.Position).sqrMagnitude < 2.25f)
-                return cached.Reachable;
-
-            reachPath ??= new UnityEngine.AI.NavMeshPath();
-            var filter = new UnityEngine.AI.NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
-            bool result = TryCalculateReachablePath(targetPosition, filter, out Vector3 pathDestination);
-            reachability[target] = new Reachability(targetPosition, pathDestination,
-                Time.time + (result ? 1.25f : 0.5f), result);
-            return result;
-        }
-        bool TryCalculateReachablePath(Vector3 targetPosition, UnityEngine.AI.NavMeshQueryFilter filter, out Vector3 pathDestination) {
-            // SamplePosition can select a tiny disconnected polygon around shoreline
-            // props even when the main walkable region is only a step away. Prefer the
-            // exact projection, then probe a small deterministic ring for the nearest
-            // complete approach path before declaring the investigator unreachable.
-            if (TryCalculatePathToSample(targetPosition, 2.5f, targetPosition, filter, out pathDestination))
-                return true;
-
-            for (float radius = 0.75f; radius <= ReachableApproachRadius; radius += 0.75f) {
-                foreach (Vector3 direction in ReachabilityProbeDirections) {
-                    Vector3 candidate = targetPosition + direction * radius;
-                    if (TryCalculatePathToSample(candidate, 0.5f, targetPosition, filter, out pathDestination))
-                        return true;
-                }
+        void TrackMovement(float elapsed) {
+            foreach (var character in LocalCharacter.Characters.Values) {
+                if (character == null) continue;
+                Vector3 position = character.transform.position;
+                float speed = previousPositions.TryGetValue(character, out Vector3 previous)
+                    ? Vector3.Distance(Flat(previous), Flat(position)) / elapsed : 0f;
+                previousPositions[character] = position;
+                // A little smoothing, so one jittery tick is not a sprint.
+                speeds[character] = speeds.TryGetValue(character, out float old) ? Mathf.Lerp(old, speed, 0.5f) : speed;
             }
-            pathDestination = targetPosition;
-            return false;
-        }
-        bool TryCalculatePathToSample(Vector3 sampleCenter, float sampleRadius, Vector3 targetPosition,
-            UnityEngine.AI.NavMeshQueryFilter filter, out Vector3 pathDestination) {
-            pathDestination = targetPosition;
-            if (!UnityEngine.AI.NavMesh.SamplePosition(sampleCenter, out var hit, sampleRadius, filter)
-                || Mathf.Abs(hit.position.y - targetPosition.y) >= 1.5f
-                || !locomotion.agent.CalculatePath(hit.position, reachPath)
-                || reachPath.status != UnityEngine.AI.NavMeshPathStatus.PathComplete)
-                return false;
-            pathDestination = hit.position;
-            return true;
-        }
-        bool PursuitHasBeenUnreachable() {
-            if (pursued == null || pursued.IsDead) {
-                unreachableSince = -1f;
-                return false;
-            }
-            if (CanReachTarget(pursued)) {
-                unreachableSince = -1f;
-                return false;
-            }
-            if (unreachableSince < 0f) {
-                unreachableSince = Time.time;
-                return false;
-            }
-            return Time.time - unreachableSince >= UnreachableGiveUpSeconds;
-        }
-        /// <summary>Starts or clears the stand-off clock: it is at its approach point but outside strike range.</summary>
-        void UpdateStandOff(float distance) {
-            var agent = locomotion.agent;
-            bool atApproach = agent.enabled && agent.isOnNavMesh && hasCommittedPursuitDestination
-                && (transform.position - committedPursuitDestination).sqrMagnitude <= StandOffArrivalRadius * StandOffArrivalRadius;
-            if (!atApproach || distance < tuning.strikeDistance) stalledSince = -1f;
-            else if (stalledSince < 0f) stalledSince = Time.time;
+            stale.Clear();
+            foreach (var pair in previousPositions) if (pair.Key == null || !pair.Key.IsSpawned) stale.Add(pair.Key);
+            foreach (var character in stale) { previousPositions.Remove(character); speeds.Remove(character); lastSensed.Remove(character); }
         }
 
-        /// <summary>Walks to where it last sensed its quarry and waits there until its memory runs out.</summary>
-        void Search(float speed) {
-            if ((transform.position - lastSeenPosition).sqrMagnitude <= SearchArrivalRadius * SearchArrivalRadius) {
-                var agent = locomotion.agent;
-                if (agent.enabled && agent.isOnNavMesh && agent.hasPath) agent.ResetPath();
+        bool IsEligible(LocalCharacter character) =>
+            character != null && !character.IsDead && !character.IsProtected(entity, DamageType.Melee) && !runner.IsHidden(character);
+
+        Vector3 Eye => entity.CharacterCamera != null ? entity.CharacterCamera.position : transform.position + Vector3.up * 1.8f;
+
+        static Vector3 EyeOf(LocalCharacter character) =>
+            character.CharacterCamera != null ? character.CharacterCamera.position : character.transform.position + Vector3.up * 1.6f;
+
+        /// <summary>The investigator he notices most (closest, his current quarry first), or null.</summary>
+        LocalCharacter Sense(out float bestDistance, out bool bestVisible) {
+            LocalCharacter best = null;
+            bestDistance = float.MaxValue;
+            bestVisible = false;
+            Vector3 eye = Eye;
+            foreach (var character in LocalCharacter.Characters.Values) {
+                if (!IsEligible(character)) continue;
+                Vector3 target = EyeOf(character);
+                float distance = Vector3.Distance(eye, target);
+                bool chasing = character == Quarry && State == Mode.Chase;
+                bool lit = IsLit(character);
+                bool bell = runner.IsCarryingBell(character);
+                bool clear = distance < tuning.SightRange(true, true) && WorldInteraction.CanReach(eye, target, distance + 0.5f, obstacleMask);
+                bool seen = clear && distance < tuning.SightRange(lit, chasing)
+                    && (chasing || distance < tuning.closeSenseRadius || tuning.InSightCone(transform.forward, target - eye));
+                speeds.TryGetValue(character, out float speed);
+                bool heard = distance < tuning.HearingRange(speed, bell);
+                bool close = distance < tuning.closeSenseRadius;
+                if (!seen && !heard && !close) continue;
+                lastSensed[character] = Time.time;
+                // Keep the chase on the same person: anyone else must be clearly closer to steal it.
+                float score = distance - (character == Quarry ? 6f : 0f) - (bell ? 4f : 0f);
+                if (score >= bestDistance) continue;
+                bestDistance = score;
+                best = character;
+                bestVisible = seen || (close && clear);
+            }
+            if (best != null) bestDistance = Vector3.Distance(eye, EyeOf(best));
+            return best;
+        }
+
+        static bool IsLit(LocalCharacter character) {
+            var light = ServerTool.Instance != null ? ServerTool.Instance.GetTool(character.NetworkObject, ToolEnum.Flashlight) as ToolFlashlightShared : null;
+            return light != null && light.IsIlluminating;
+        }
+
+        /// <summary>Someone who climbs into a hiding place right after he saw or heard them was watched going in.</summary>
+        void WatchHidingPlaces() {
+            if (State == Mode.OpenHidingPlace) return;
+            foreach (var character in LocalCharacter.Characters.Values) {
+                if (character == null || character.IsDead || !runner.IsHidden(character)) continue;
+                if (!lastSensed.TryGetValue(character, out float sensedAt)) continue;
+                CH_HidingSpot spot = runner.HidingPlaceOf(character);
+                if (spot == null || Time.time - sensedAt > tuning.sawHideSeconds || runner.HiddenSince(character) < sensedAt - 0.05f) continue;
+                // He saw that.
+                lastSensed.Remove(character);
+                if (BeginOpening(spot, character)) return;
+                // He cannot get to it: he waits nearby for them to come out.
+                lastKnownPosition = spot.Exit;
+                lastKnownVelocity = Vector3.zero;
+                BeginSearch();
                 return;
             }
-            locomotion.agent.autoBraking = true;
-            hasCommittedPursuitDestination = false;
-            Navigate(lastSeenPosition, speed);
         }
 
-        void GiveUp(LocalCharacter target) {
-            if (target != null) AbandonedChases++;
-            if (pursued == target) pursued = null;
-            lastSeen = -100; nextPatrol = 0; lastProgress = Time.time; unreachableSince = -1f; stalledSince = -1f;
-            hasCommittedPursuitDestination = false;
-            State = "Giving up pursuit";
-        }
-        float NearestInvestigator(Vector3 position) {
-            float result = 1000f;
-            foreach (var character in LocalCharacter.Characters.Values)
-                if (character != null && !character.IsDead) result = Mathf.Min(result, Vector3.Distance(position, character.transform.position));
-            return result;
-        }
-        void Roam(bool retreat) {
-            // Patrol points are pass-through destinations. Chases use braking so
-            // the agent settles at its target instead of overshooting and turning
-            // back every frame.
-            locomotion.agent.autoBraking = false;
-            hasCommittedPursuitDestination = false;
-            if (Time.time > nextPatrol || (transform.position - patrolPoint).sqrMagnitude < 4f || Time.time - lastProgress > 5f) {
-                nextPatrol = 0;
-                for (int i = 0; i < runner.Map.searchLocations.Length * 2; i++) {
-                    Vector3 candidate = runner.Map.searchLocations[random.Next(runner.Map.searchLocations.Length)].position;
-                    if ((candidate - transform.position).sqrMagnitude < 36f) continue;
-                    if (retreat && i < runner.Map.searchLocations.Length && NearestInvestigator(candidate) < NearestInvestigator(transform.position) + 4f) continue;
-                    if (!locomotion.MoveTo(candidate, tuning.patrolSpeed)) continue;
-                    patrolPoint = candidate; nextPatrol = Time.time + 25f;
-                    lastProgress = Time.time; progressPosition = transform.position;
-                    break;
-                }
-            }
-            if (nextPatrol > 0 && !Navigate(patrolPoint, tuning.patrolSpeed)) nextPatrol = 0;
+        // ---- Chase -----------------------------------------------------------------------------------------------------
+
+        void BeginChase(LocalCharacter target) {
+            bool fresh = State != Mode.Chase || Quarry != target;
+            Quarry = target;
+            State = Mode.Chase;
+            lostAt = -1f;
+            checkedHidingPlaces.Clear();
+            if (!fresh) return;
+            ChasesStarted++;
+            nextRepath = 0f;
+            runner.OnChaseStarted(target);
         }
 
-        bool NavigatePursued(float speed) {
-            var agent = locomotion.agent;
-            if (!agent.enabled || !agent.isOnNavMesh || pursued == null) return false;
-            agent.autoBraking = true;
-            locomotion.SetTargetingType(NPCTargetingType.External);
-            agent.speed = speed;
+        void Chase(LocalCharacter target, float distance, bool visible) {
+            lostAt = -1f;
+            Vector3 position = target.transform.position;
+            Vector3 velocity = previousPositions.ContainsKey(target) && speeds.TryGetValue(target, out float speed)
+                ? Flat(position - lastKnownPosition).normalized * speed : Vector3.zero;
+            if (lastKnownPosition != Vector3.zero) lastKnownVelocity = Vector3.Lerp(lastKnownVelocity, velocity, 0.5f);
+            lastKnownPosition = position;
 
-            // Use the reachable projection selected for this investigator. MoveTo
-            // samples a second time with a wider radius, which can select an
-            // isolated polygon beside a house and repeatedly reject the chase.
-            Reachability route = default;
-            bool reachable = CanReachTarget(pursued)
-                && reachability.TryGetValue(pursued, out route) && route.Reachable;
-            bool usablePath = agent.hasPath && !agent.isPathStale
-                && agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathComplete;
-            if (!reachable) {
-                if (usablePath) agent.isStopped = false;
-                return usablePath;
+            float pace = tuning.ChaseSpeed(runner.Act, runner.IsCarryingBell(target), runner.LivingInvestigators);
+            if (visible && distance < tuning.lungeRange && distance > tuning.strikeDistance && Time.time >= nextLunge) {
+                lungeUntil = Time.time + tuning.lungeSeconds;
+                nextLunge = Time.time + tuning.lungeCooldown;
             }
+            if (Time.time < lungeUntil) pace = tuning.lungeSpeed;
 
-            Vector3 destination = route.Destination;
-            if (usablePath && hasCommittedPursuitDestination
-                && Time.time < nextPursuitRepath
-                && (destination - committedPursuitDestination).sqrMagnitude < 1.56f) {
-                agent.isStopped = false;
-                return true;
-            }
+            // Close in on where they are going, not where they were; right on top of them, go straight for them.
+            Vector3 aim = distance < 4f ? position : position + lastKnownVelocity * tuning.predictionSeconds;
+            Steer(aim, pace, Time.time >= nextRepath || distance < 4f);
 
-            reachPath ??= new UnityEngine.AI.NavMeshPath();
-            if (!agent.CalculatePath(destination, reachPath)
-                || reachPath.status != UnityEngine.AI.NavMeshPathStatus.PathComplete) {
-                if (usablePath) agent.isStopped = false;
-                return usablePath;
+            if (visible && distance < tuning.strikeDistance + 0.6f && Time.time >= nextAttack
+                && Vector3.Distance(Flat(transform.position), Flat(position)) < tuning.strikeDistance) {
+                nextAttack = Time.time + tuning.attackCooldown;
+                Strike(target);
+                return;
             }
-            agent.isStopped = false;
-            if (!agent.SetPath(reachPath)) return usablePath;
-            committedPursuitDestination = destination;
-            hasCommittedPursuitDestination = true;
-            nextPursuitRepath = Time.time + 0.5f;
+            if (visible) runner.OnCloseEncounter(target, distance);
+        }
+
+        void Strike(LocalCharacter target) {
+            Catches++;
+            target.TakeDamage(System.Math.Max(1L, target.Health.Value), DamageType.Melee, (IEntity)entity);
+            if (!target.IsDead) return;
+            ForgetQuarry();
+            State = Mode.Feed;
+            feedUntil = Time.time + tuning.feedSeconds;
+            Stop();
+        }
+
+        /// <summary>He has lost every sense of them: he keeps going where they were heading, then sweeps.</summary>
+        void Pursue() {
+            if (lostAt < 0f) lostAt = Time.time;
+            float lostFor = Time.time - lostAt;
+            if (lostFor > tuning.memorySeconds || Quarry == null || Quarry.IsDead) {
+                BeginSearch();
+                return;
+            }
+            Vector3 guess = lastKnownPosition + lastKnownVelocity * Mathf.Min(lostFor + tuning.predictionSeconds, 2.5f);
+            Steer(guess, tuning.ChaseSpeed(runner.Act, false, runner.LivingInvestigators), Time.time >= nextRepath);
+        }
+
+        void BeginSearch() {
+            if (Quarry != null) ChasesEscaped++;
+            ForgetQuarry();
+            State = Mode.Search;
+            searchUntil = Time.time + tuning.searchSeconds;
+            sweepPoints.Clear();
+            for (int i = 0; i < 4; i++) {
+                Vector2 offset = RandomInCircle() * tuning.searchRadius;
+                Vector3 candidate = lastKnownPosition + lastKnownVelocity.normalized * (tuning.searchRadius * 0.4f) + new Vector3(offset.x, 0f, offset.y);
+                if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, SamplePositionRadius, agent.areaMask)) sweepPoints.Add(hit.position);
+            }
+            runner.OnChaseLost();
+        }
+
+        void Sweep() {
+            if (Time.time > searchUntil) {
+                State = Mode.Patrol;
+                patrolUntil = 0f;
+                return;
+            }
+            // Passing a hiding place close to where he lost someone, he may open it.
+            CH_HidingSpot near = runner.NearestHidingPlace(transform.position, 4f);
+            if (near != null && checkedHidingPlaces.Add(near) && random.NextDouble() < tuning.checkHidingChance && BeginOpening(near, null))
+                return;
+            if (sweepPoints.Count == 0) { Steer(lastKnownPosition, tuning.searchSpeed, false); return; }
+            Vector3 point = sweepPoints[0];
+            if (Flat(point - transform.position).sqrMagnitude < 2.25f) { sweepPoints.RemoveAt(0); return; }
+            Steer(point, tuning.searchSpeed, false);
+        }
+
+        /// <summary>Heads for a hiding place he can actually walk to, with a deadline; false if there is no complete path.</summary>
+        bool BeginOpening(CH_HidingSpot spot, LocalCharacter quarry) {
+            probePath ??= new NavMeshPath();
+            if (!NavMesh.SamplePosition(spot.Exit, out NavMeshHit hit, SamplePositionRadius, agent.areaMask)
+                || !agent.CalculatePath(hit.position, probePath) || probePath.status != NavMeshPathStatus.PathComplete) return false;
+            targetHidingPlace = spot;
+            hidingQuarry = quarry;
+            openingGivesUpAt = Time.time + tuning.openHidingGiveUpSeconds;
+            State = Mode.OpenHidingPlace;
             return true;
         }
 
-        // Patrol destinations still use the shared navigation validation.
-        bool Navigate(Vector3 destination, float speed) {
-            if ((transform.position - progressPosition).sqrMagnitude > 0.09f) {
-                lastProgress = Time.time; progressPosition = transform.position;
+        /// <summary>Walks to a hiding place and pulls it open; whoever is inside is caught.</summary>
+        void OpenHidingPlace() {
+            if (targetHidingPlace == null) { State = Mode.Patrol; return; }
+            if (Time.time > openingGivesUpAt) {
+                targetHidingPlace = null;
+                hidingQuarry = null;
+                State = Mode.Search;
+                return;
             }
-            bool accepted = locomotion.MoveTo(destination, speed);
-            var agent = locomotion.agent;
-            bool usablePath = agent.hasPath && !agent.isPathStale
-                && agent.pathStatus != UnityEngine.AI.NavMeshPathStatus.PathInvalid;
-            return accepted || usablePath;
+            Vector3 front = targetHidingPlace.Exit;
+            float pace = hidingQuarry != null ? tuning.ChaseSpeed(runner.Act, false, runner.LivingInvestigators) : tuning.searchSpeed;
+            if (Flat(front - transform.position).sqrMagnitude > 1.6f * 1.6f) {
+                Steer(front, pace, Time.time >= nextRepath);
+                return;
+            }
+            CH_HidingSpot spot = targetHidingPlace;
+            targetHidingPlace = null;
+            hidingQuarry = null;
+            LocalCharacter inside = runner.OccupantOf(spot);
+            runner.OnHidingPlaceOpened(spot, inside);
+            if (inside != null && !inside.IsDead) {
+                Catches++;
+                inside.TakeDamage(System.Math.Max(1L, inside.Health.Value), DamageType.Melee, (IEntity)entity);
+                State = Mode.Feed;
+                feedUntil = Time.time + tuning.feedSeconds;
+                Stop();
+                return;
+            }
+            State = Mode.Search;
         }
+
+        void ForgetQuarry() {
+            Quarry = null;
+            lostAt = -1f;
+            lungeUntil = 0f;
+        }
+
+        // ---- Patrol and the director --------------------------------------------------------------------------------------
+
+        void Patrol() {
+            if (TryRelocate()) return;
+            bool arrived = Flat(patrolPoint - transform.position).sqrMagnitude < 4f;
+            if (arrived || Time.time > patrolUntil) PickPatrolPoint();
+            Steer(patrolPoint, tuning.patrolSpeed, false);
+        }
+
+        void PickPatrolPoint() {
+            patrolUntil = Time.time + 22f;
+            Vector3 candidate;
+            LocalCharacter someone = RandomLivingInvestigator();
+            if (someone != null && random.NextDouble() < tuning.patrolTowardInvestigators) {
+                Vector2 offset = RandomInCircle() * 16f;
+                candidate = someone.transform.position + new Vector3(offset.x, 0f, offset.y);
+            } else {
+                Transform[] spots = runner.Map.searchLocations;
+                Transform spot = spots != null && spots.Length > 0 ? spots[random.Next(spots.Length)] : null;
+                candidate = spot != null ? spot.position : runner.Map.monsterSpawn.position;
+            }
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, SamplePositionRadius * 2f, agent.areaMask)) patrolPoint = hit.position;
+            else patrolPoint = runner.Map.monsterSpawn.position;
+        }
+
+        /// <summary>Nobody near for a long while: he rises out of the water closer to someone, out of their sight.</summary>
+        bool TryRelocate() {
+            if (Time.time < nextRelocate || Time.time - lastSensedAnyone < tuning.relocateAfterSeconds) return false;
+            LocalCharacter someone = RandomLivingInvestigator();
+            if (someone == null || NearestInvestigatorDistance(transform.position) < tuning.relocateWhenFurtherThan) return false;
+            nextRelocate = Time.time + tuning.relocateCooldown;
+            for (int attempt = 0; attempt < 16; attempt++) {
+                float angle = (float)(random.NextDouble() * Mathf.PI * 2f);
+                float radius = Mathf.Lerp(tuning.relocateDistance.x, tuning.relocateDistance.y, (float)random.NextDouble());
+                Vector3 candidate = someone.transform.position + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+                if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, SamplePositionRadius, agent.areaMask)) continue;
+                if (NearestInvestigatorDistance(hit.position) < tuning.relocateDistance.x * 0.8f || AnyoneCanSee(hit.position)) continue;
+                probePath ??= new NavMeshPath();
+                if (!NavMesh.CalculatePath(hit.position, someone.transform.position, agent.areaMask, probePath) || probePath.status != NavMeshPathStatus.PathComplete) continue;
+                agent.Warp(hit.position);
+                progressPosition = hit.position;
+                patrolPoint = someone.transform.position;
+                patrolUntil = Time.time + 22f;
+                lastSensedAnyone = Time.time;
+                runner.OnRelocated(hit.position);
+                return true;
+            }
+            return false;
+        }
+
+        bool AnyoneCanSee(Vector3 point) {
+            Vector3 head = point + Vector3.up * 1.8f;
+            foreach (var character in LocalCharacter.Characters.Values) {
+                if (character == null || character.IsDead) continue;
+                Vector3 eye = EyeOf(character);
+                if (Vector3.Distance(eye, head) < 70f && WorldInteraction.CanReach(eye, head, 70f, obstacleMask)) return true;
+            }
+            return false;
+        }
+
+        LocalCharacter RandomLivingInvestigator() {
+            LocalCharacter pick = null;
+            int seen = 0;
+            foreach (var character in LocalCharacter.Characters.Values) {
+                if (!IsEligible(character)) continue;
+                if (random.Next(++seen) == 0) pick = character;
+            }
+            return pick;
+        }
+
+        float NearestInvestigatorDistance(Vector3 point) {
+            float nearest = float.MaxValue;
+            foreach (var character in LocalCharacter.Characters.Values)
+                if (character != null && !character.IsDead) nearest = Mathf.Min(nearest, Vector3.Distance(point, character.transform.position));
+            return nearest;
+        }
+
+        // ---- Movement ------------------------------------------------------------------------------------------------------
+
+        void Steer(Vector3 destination, float speed, bool repath) {
+            locomotion.SetTargetingType(NPCTargetingType.External);
+            agent.speed = speed * (entity != null ? entity.Build.Speed : 1f);
+            agent.isStopped = false;
+            if (!repath && agent.hasPath && !agent.isPathStale) return;
+            nextRepath = Time.time + tuning.repathInterval;
+            if (NavMesh.SamplePosition(destination, out NavMeshHit hit, SamplePositionRadius, agent.areaMask))
+                agent.SetDestination(hit.position);
+        }
+
+        /// <summary>Hunting and getting nowhere (a doorframe, a crate): he forces his way along his path.</summary>
+        void CheckProgress() {
+            if (Time.time < progressCheckAt) return;
+            bool moving = State is Mode.Chase or Mode.Search or Mode.OpenHidingPlace;
+            if (moving && agent.hasPath && agent.remainingDistance > 1.5f
+                && Flat(transform.position - progressPosition).sqrMagnitude < 0.3f * 0.3f) {
+                Vector3[] corners = agent.path.corners;
+                Vector3 next = corners.Length > 1 ? corners[1] : agent.destination;
+                Vector3 nudge = transform.position + Flat(next - transform.position).normalized * tuning.stuckNudge;
+                if (NavMesh.SamplePosition(nudge, out NavMeshHit hit, 1.5f, agent.areaMask)) agent.Warp(hit.position);
+                agent.SetDestination(agent.destination);
+            }
+            progressPosition = transform.position;
+            progressCheckAt = Time.time + tuning.stuckSeconds;
+        }
+
+        void Taunt() {
+            if (!IsHunting || Time.time < nextTaunt) return;
+            nextTaunt = Time.time + tuning.tauntInterval * (0.8f + 0.4f * (float)random.NextDouble());
+            string line = Quarry != null && runner.IsCarryingItem(Quarry) && tauntIndex % 3 == 0
+                ? "carry_1" : CH_Story.Taunts[tauntIndex % CH_Story.Taunts.Length];
+            tauntIndex++;
+            runner.SpeakFromMonster(line);
+        }
+
+        Vector2 RandomInCircle() {
+            float angle = (float)(random.NextDouble() * Mathf.PI * 2f);
+            float radius = Mathf.Sqrt((float)random.NextDouble());
+            return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+        }
+
+        static Vector3 Flat(Vector3 value) => new(value.x, 0f, value.z);
     }
 }

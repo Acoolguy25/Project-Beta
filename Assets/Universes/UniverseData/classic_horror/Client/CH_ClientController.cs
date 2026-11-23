@@ -15,43 +15,39 @@ using UnityEngine;
 
 namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>
-    /// Presentation and input only; the server decides every case outcome. Binds the server's case
-    /// state to the HUD, the world markers and the presenters for the radio, journal, fear, scares
-    /// and atmosphere that sit beside it on the investigation HUD.
+    /// Presentation and input for The Drowned Choir; the server decides everything. Binds the night's state to the HUD,
+    /// the items in the world, the cutscenes, the voices and the scares, and sends what the investigator presses E on.
     /// </summary>
     public sealed class CH_ClientController : MonoBehaviour {
-        [Header("Case status")]
-        [Tooltip("The case card; hidden on the ending card, which has its own countdown.")]
+        [Header("Objective card")]
         public GameObject caseStatusCard;
         public TMP_Text chapterLabel;
         public TMP_Text objectiveLabel;
+        public TMP_Text detailLabel;
         public UnityEngine.UI.Image caseIcon;
         public HudChip progressChip, timerChip;
+        [Tooltip("What you are carrying and where it goes; hidden with empty hands.")]
+        public HudChip carryChip;
         public ObjectiveCompass objectiveCompass;
 
         [Header("Prompts")]
         public HudPopup interactionPrompt;
         public TMP_Text interactionLabel;
-        [Tooltip("The E keycap; hidden when the prompt shows feedback rather than an action.")]
         public GameObject interactionKey;
-        [SerializeField, Min(0.5f)] float interactionReach = 3.5f;
-        [Tooltip("How directly the reticle must face a record to focus it (dot product).")]
-        [SerializeField, Range(0f, 1f)] float focusAlignment = 0.9f;
+        [SerializeField, Min(0.5f)] float interactionReach = 3f;
+        [SerializeField, Range(0f, 1f)] float focusAlignment = 0.88f;
         [SerializeField, Min(0.02f)] float focusInterval = 0.08f;
         [SerializeField, Min(0.5f)] float feedbackSeconds = 2.5f;
-        [Tooltip("Gap, in HUD units, between the focused prop's outline and its prompt, which sits below the prop (or above it when there is no room).")]
-        [SerializeField, Min(0f)] float promptGap = 24f;
-        [Tooltip("Closest the prompt may come to the top screen edge, in HUD units (clear of the case card).")]
-        [SerializeField, Min(0f)] float promptTopMargin = 90f;
-        [Tooltip("Closest the prompt may come to the bottom screen edge, in HUD units: clear of the hotbar and the radio line. "
-            + "When the space below the prop is inside this band, the prompt goes above it instead.")]
-        [SerializeField, Min(0f)] float promptBottomMargin = 175f;
-        [Tooltip("After E is pressed the record's prompt hides at once; it may come back if the server has not answered within this many seconds.")]
-        [SerializeField, Min(0.1f)] float pendingInteractionSeconds = 2f;
-        [Tooltip("Offerings placed at the source are smaller than the records found around the map.")]
-        [SerializeField, Range(0.1f, 1f)] float offeringViewScale = 0.65f;
-        [Tooltip("Case points sit above the ground for focus and the compass; their props are set down on whatever is below within this distance.")]
-        [SerializeField, Min(0f)] float viewGroundProbe = 3f;
+        [SerializeField, Min(0.1f)] float pendingInteractionSeconds = 1.5f;
+
+        [Header("Hiding")]
+        [Tooltip("The view through the gaps of a wardrobe door while you hide.")]
+        public CanvasGroup hidingOverlay;
+        public TMP_Text hidingLabel;
+
+        [Header("Boarding")]
+        public HudPopup boardingPopup;
+        public TMP_Text boardingLabel;
 
         [Header("Presenters")]
         public CH_RadioFeed radio;
@@ -59,6 +55,10 @@ namespace Universes.UniverseData.classic_horror.Client {
         public CH_FearLoop fearLoop;
         public CH_AmbientScares ambientScares;
         public CH_Jumpscare jumpscare;
+        public CH_VoicePlayer voice;
+        public CH_CutsceneDirector cutscenes;
+        public CH_ItemPresenter items;
+        public CH_Apparitions apparitions;
 
         [Header("Ending")]
         public HudPopup endingPopup;
@@ -69,69 +69,74 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField] Color failedAccent = new(0.86f, 0.24f, 0.2f);
 
         [Header("Icons")]
-        public Sprite evidenceIcon;
-        public Sprite offeringIcon, solvedIcon, failedIcon;
+        public Sprite boatIcon;
+        public Sprite choirIcon, bellIcon, solvedIcon, failedIcon;
 
         [Header("Feedback")]
         public AudioSource objectiveCollectAudio;
         public AudioClip objectiveCollectCue;
-        [Tooltip("Burst played where any investigator secures a record.")]
-        [SerializeField] Color collectBurstTint = new(1f, 0.72f, 0.36f);
-        [SerializeField, Min(0f)] float collectBurstScale = 0.6f;
         [SerializeField, Range(0f, 1f)] float collectShake = 0.12f;
-        [SerializeField, Min(0f)] float collectShakeSeconds = 0.2f;
-        [SerializeField] Color chapterTitleColor = new(0.94f, 0.68f, 0.32f);
-        [SerializeField, Min(0.5f)] float chapterTitleSeconds = 3f;
-        [Tooltip("Put the flashlight in the investigator's hand when they spawn empty-handed; the night is unplayable without it.")]
+        [SerializeField] Color actTitleColor = new(0.94f, 0.68f, 0.32f);
+        [SerializeField, Min(0.5f)] float actTitleSeconds = 3.5f;
         [SerializeField] bool equipFlashlightOnSpawn = true;
-        [Tooltip("Footstep cadence while investigating (the shared default suits a third-person robot).")]
         [SerializeField, Min(0.1f)] float footstepPaceMultiplier = 3f;
 
-        static readonly string[] TemperamentNames = { "Light seeker", "Light shy", "Listener" };
+        enum FocusKind { None, Item, Slot, Hide }
 
-        readonly Dictionary<int, GameObject> pointViews = new();
-        readonly Dictionary<int, CH_EvidenceGlow> pointGlows = new();
-        readonly HashSet<int> collectedPoints = new();
         readonly List<Vector3> navigationObjectives = new();
+        // Teammates whose renderers are switched off because they are in a hiding place, and everyone hidden right now.
+        readonly HashSet<int> hiddenCharacters = new(), hiddenNow = new();
+        readonly List<int> releasedCharacters = new();
+        bool localHidden;
         CH_Map map;
         ClientManager manager;
         CH_StateBroadcast state;
-        int focusedId = -1, lastDialogue = -1;
-        float nextSnapshot, nextFocus, feedbackUntil;
-        string interactionFeedback;
         bool hasState;
+        FocusKind focusKind, promptKind;
+        int focusId = -1, focusIndex = -1, promptIndex = -1, pendingId = -1;
+        CH_ItemKind? promptCarried;
+        string focusPrompt;
+        FocusKind pendingKind;
+        float nextSnapshot, nextFocus, feedbackUntil, pendingUntil;
+        string feedback;
         int visibilityMask;
         CharacterAnimator localCharacterAnimator;
         float previousFootstepPaceMultiplier = 1f;
         CH_EvidenceGlow focusedGlow;
         ToolFlashlightShared offeredFlashlight;
-        // What the case chips show, so their text is only rebuilt when it changes.
-        bool shownStatus, shownInvestigating;
-        int shownProgress, shownSeconds = -1;
+        string shownObjective, shownDetail;
+        int shownProgress = -1, shownTotal = -1, shownCountdown = -1, shownTranscript = -1;
+        CH_ItemKind? shownCarry;
         bool endingShown;
-        int endingSecondsShown = -1, endingSolvedShown = -1;
-        string shownObjective;
-        // The point E was last pressed on, hidden from focus until the server answers.
-        int pendingId = -1;
-        float pendingUntil;
-        // Where the HUD prefab puts the prompt; used when nothing is focused.
-        Vector2 promptRest;
-        RectTransform promptRect, promptHud;
-        static readonly Vector3[] BoundsCorners = new Vector3[8];
+        CH_Phase cutscenePhase = CH_Phase.Waiting;
 
-        bool CaseOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
+        bool NightOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
+        bool InCutscene => hasState && CH_Story.IsCutscene(state.phase);
 
         void Awake() {
             map = GetComponentInParent<CH_Map>();
             visibilityMask = ~LayerMask.GetMask("Character", "LocalCharacter", "UI", "Ignore Raycast");
             endingPopup.HideImmediate();
             interactionPrompt.HideImmediate();
-            promptRect = (RectTransform)interactionPrompt.transform;
-            promptHud = promptRect.parent as RectTransform;
-            promptRest = promptRect.anchoredPosition;
+            boardingPopup?.HideImmediate();
+            if (hidingOverlay != null) hidingOverlay.alpha = 0f;
             radio.Clear();
-            chapterLabel.text = "Investigator";
-            objectiveLabel.text = "Establishing the radio link...";
+            chapterLabel.text = CH_Story.Title;
+            objectiveLabel.text = "Crossing the reservoir...";
+            if (detailLabel != null) detailLabel.text = string.Empty;
+            if (map != null) {
+                voice.Bind(map.voices);
+                // One puppet priest for the cutscenes and another for the apparitions, so neither interrupts the other.
+                cutscenes.Bind(map.cutscenes, SpawnActor("Priest (cutscenes)"));
+                apparitions.actor = SpawnActor("Priest (apparitions)");
+            }
+        }
+
+        CH_PriestActor SpawnActor(string label) {
+            if (map.priestActorPrefab == null) { Debug.LogError("[Drowned Choir] CH_Map.priestActorPrefab is not assigned."); return null; }
+            GameObject actor = Instantiate(map.priestActorPrefab, map.transform);
+            actor.name = label;
+            return actor.GetComponent<CH_PriestActor>();
         }
 
         void OnEnable() {
@@ -147,15 +152,13 @@ namespace Universes.UniverseData.classic_horror.Client {
         }
 
         void OnDestroy() {
-            if (localCharacterAnimator != null)
-                localCharacterAnimator.FootstepPaceMultiplier = previousFootstepPaceMultiplier;
-            if (manager != null) {
-                manager.UnregisterBroadcast<CH_StateBroadcast>(OnState);
-                manager.UnregisterBroadcast<CH_ScareBroadcast>(OnScare);
-                manager.UnregisterBroadcast<CH_InteractionResult>(OnInteractionResult);
-                manager.UnregisterBroadcast<CH_AmbientScareBroadcast>(OnAmbientScare);
-            }
-            foreach (var view in pointViews.Values) if (view != null) Destroy(view);
+            if (localCharacterAnimator != null) localCharacterAnimator.FootstepPaceMultiplier = previousFootstepPaceMultiplier;
+            if (manager == null) return;
+            manager.UnregisterBroadcast<CH_StateBroadcast>(OnState);
+            manager.UnregisterBroadcast<CH_ScareBroadcast>(OnScare);
+            manager.UnregisterBroadcast<CH_InteractionResult>(OnInteractionResult);
+            manager.UnregisterBroadcast<CH_AmbientScareBroadcast>(OnAmbientScare);
+            manager.UnregisterBroadcast<CH_VoiceBroadcast>(OnVoice);
         }
 
         void Update() {
@@ -167,15 +170,22 @@ namespace Universes.UniverseData.classic_horror.Client {
                 manager.RegisterBroadcast<CH_ScareBroadcast>(OnScare);
                 manager.RegisterBroadcast<CH_InteractionResult>(OnInteractionResult);
                 manager.RegisterBroadcast<CH_AmbientScareBroadcast>(OnAmbientScare);
+                manager.RegisterBroadcast<CH_VoiceBroadcast>(OnVoice);
+                items.Bind(map, manager);
             }
             if (manager != null && manager.Started && Time.unscaledTime > nextSnapshot && !hasState) {
                 nextSnapshot = Time.unscaledTime + 2;
-                manager.Broadcast(new CH_StateRequest { version = 1 });
+                manager.Broadcast(new CH_StateRequest { version = 2 });
             }
             if (!hasState) return;
             if (Time.unscaledTime > nextFocus) { nextFocus = Time.unscaledTime + focusInterval; UpdateFocus(); }
-            PlacePrompt();
-            radio.SetSuppressed(journal.IsOpen || CaseOver);
+            radio.SetSuppressed(NightOver);
+            items.SetLocalHeldVisible(!InCutscene && !localHidden);
+            UpdateHiding();
+            if (voice.TranscriptRevision != shownTranscript) {
+                shownTranscript = voice.TranscriptRevision;
+                journal.SetEntries(TranscriptEntries(), false);
+            }
         }
 
         void ConfigureLocalFootsteps() {
@@ -185,10 +195,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             localCharacterAnimator.FootstepPaceMultiplier = footstepPaceMultiplier;
         }
 
-        /// <summary>
-        /// Once per flashlight the server hands out (each spawn and each new case): put it in the
-        /// investigator's hand unless they already hold a tool. A flashlight they put away stays away.
-        /// </summary>
+        /// <summary>Once per flashlight the server hands out: put it in the investigator's hand unless they hold another tool.</summary>
         void EquipFlashlightOnSpawn() {
             GameCharacter character = LocalPlayer.Character;
             if (!equipFlashlightOnSpawn || character == null || character.IsDead) return;
@@ -198,255 +205,301 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (character.ActiveTool.Value == null) character.SwitchTool(flashlight);
         }
 
+        // ---- Broadcasts --------------------------------------------------------------------------------------------------
+
+        void OnState(CH_StateBroadcast next, Channel channel) {
+            if (next.items == null || next.slots == null || map == null) return;
+            bool fresh = !hasState || state.seed != next.seed;
+            if (fresh) ResetNight();
+            CH_Phase previous = hasState ? state.phase : CH_Phase.Waiting;
+            state = next;
+            hasState = true;
+
+            UpdateCutscene(next, previous, fresh);
+            UpdateObjective(next);
+            if (!fresh && next.phase != previous && CH_Story.ActCard(next.phase) is string card)
+                ScreenFx.ShowText(card, actTitleColor, actTitleSeconds);
+            items.Apply(next, LocalCharacterId(), LocalCarried(), fresh);
+            UpdateHiddenCharacters(next);
+            UpdateBoarding(next);
+            ShowEnding(next);
+            RefreshNavigation();
+            Transform presence = FindObject(next.monsterId);
+            voice.SetMonster(presence);
+            fearLoop.SetThreat(presence, CH_Story.IsPlayable(next.phase));
+        }
+
+        void ResetNight() {
+            journal.Close();
+            jumpscare.ResetCase();
+            apparitions.ResetNight();
+            voice.ResetNight();
+            items.ResetNight();
+            cutscenes.Stop();
+            cutscenePhase = CH_Phase.Waiting;
+            feedbackUntil = 0;
+            endingShown = false;
+            pendingId = -1;
+            shownObjective = shownDetail = null;
+            shownProgress = shownTotal = shownCountdown = -1;
+            shownCarry = null;
+            foreach (int id in hiddenCharacters) SetCharacterVisible(id, true);
+            hiddenCharacters.Clear();
+            localHidden = false;
+            promptKind = FocusKind.None;
+            promptIndex = -1;
+        }
+
+        void OnVoice(CH_VoiceBroadcast line, Channel channel) {
+            if (!hasState || line.seed != state.seed) return;
+            voice.Play(line);
+        }
+
         void OnScare(CH_ScareBroadcast scare, Channel channel) {
             if (!hasState || scare.seed != state.seed) return;
-            jumpscare.Play(scare.sequence, (CH_ScareKind)scare.kind);
+            if (scare.kind is CH_ScareKind.Apparition or CH_ScareKind.Watcher) apparitions.Play(scare.kind, scare.sequence);
+            else jumpscare.Play(scare.sequence, scare.kind);
         }
 
         void OnAmbientScare(CH_AmbientScareBroadcast scare, Channel channel) {
-            if (!hasState || scare.seed != state.seed || CaseOver) return;
+            if (!hasState || scare.seed != state.seed || NightOver) return;
             ambientScares.Play(scare);
         }
 
         void OnInteractionResult(CH_InteractionResult result, Channel channel) {
             if (!hasState || result.seed != state.seed) return;
-            interactionFeedback = result.accepted ? "" : result.message;
+            feedback = result.accepted ? "" : result.message;
             feedbackUntil = result.accepted ? 0 : Time.unscaledTime + feedbackSeconds;
             pendingId = -1;
-            if (result.accepted && result.playObjectiveCollect) PlayPickupSting();
+            if (result.accepted && result.target != CH_Target.Hide) {
+                if (objectiveCollectAudio != null && objectiveCollectCue != null) objectiveCollectAudio.PlayOneShot(objectiveCollectCue);
+                CameraShake.Kick(collectShake, 0.2f);
+            }
             nextFocus = 0;
         }
 
-        /// <summary>The collector's own confirmation: the sting and a small jolt.</summary>
-        void PlayPickupSting() {
-            if (objectiveCollectAudio != null && objectiveCollectCue != null)
-                objectiveCollectAudio.PlayOneShot(objectiveCollectCue);
-            CameraShake.Kick(collectShake, collectShakeSeconds);
-        }
+        // ---- Presentation ------------------------------------------------------------------------------------------------
 
-        void OnState(CH_StateBroadcast next, Channel channel) {
-            if (next.points == null || next.journal == null || map == null) return;
-            bool fresh = !hasState || state.seed != next.seed;
-            if (fresh) ResetCase();
-            bool chapterChanged = !fresh && next.phase != state.phase;
-            state = next;
-            hasState = true;
-
-            UpdateCaseStatus(next);
-            if (lastDialogue != next.dialogueRevision) {
-                lastDialogue = next.dialogueRevision;
-                radio.Show(next.dialogue);
+        void UpdateCutscene(CH_StateBroadcast next, CH_Phase previous, bool fresh) {
+            if (CH_Story.IsCutscene(next.phase)) {
+                if (cutscenePhase != next.phase) {
+                    cutscenePhase = next.phase;
+                    journal.Close();
+                    cutscenes.Play(next.phase, fresh ? next.phaseSeconds : 0f);
+                }
+            } else if (cutscenePhase != CH_Phase.Waiting) {
+                cutscenePhase = CH_Phase.Waiting;
+                cutscenes.Stop();
             }
-            if (chapterChanged) AnnounceChapter(next.phase);
-            ShowEnding(next);
-            journal.SetEntries(next.journal, fresh);
-            UpdatePointViews(next, fresh);
-            RefreshNavigationObjectives();
-            fearLoop.SetThreat(FindMonster(next.monsterId), !CaseOver);
         }
 
-        void ResetCase() {
-            journal.Close();
-            jumpscare.ResetCase();
-            radio.Clear();
-            foreach (var view in pointViews.Values) if (view != null) Destroy(view);
-            pointViews.Clear();
-            pointGlows.Clear();
-            collectedPoints.Clear();
-            focusedGlow = null;
-            lastDialogue = -1;
-            feedbackUntil = 0;
-            endingShown = false;
-            endingSolvedShown = -1;
-            pendingId = -1;
-            shownObjective = null;
-        }
-
-        void UpdateCaseStatus(CH_StateBroadcast next) {
-            if (caseStatusCard != null && caseStatusCard.activeSelf == CaseOver) caseStatusCard.SetActive(!CaseOver);
+        void UpdateObjective(CH_StateBroadcast next) {
+            if (caseStatusCard != null && caseStatusCard.activeSelf == NightOver) caseStatusCard.SetActive(!NightOver);
             if (next.objective != shownObjective) {
                 shownObjective = next.objective;
-                chapterLabel.text = ChapterName(next.phase);
-                int split = next.objective.IndexOf('|');
-                objectiveLabel.text = split >= 0 ? next.objective.Substring(split + 1).Trim() : next.objective;
+                chapterLabel.text = CH_Story.ActName(next.phase);
+                objectiveLabel.text = next.objective;
+                if (caseIcon != null) caseIcon.sprite = Act(next.phase) == 1 ? boatIcon : Act(next.phase) == 2 ? choirIcon : bellIcon;
             }
-            bool investigating = next.phase == CH_Phase.Investigation;
-            int progress = investigating ? next.evidenceCount : next.relicCount;
-            if (!shownStatus || investigating != shownInvestigating || progress != shownProgress) {
-                shownStatus = true;
-                shownInvestigating = investigating;
-                shownProgress = progress;
-                progressChip.SetIcon(investigating ? evidenceIcon : offeringIcon);
-                progressChip.Text = investigating ? $"Evidence  {progress} / {CH_Case.RequiredEvidence}" : $"Offerings  {progress} / {CH_Case.OfferingCount}";
-                if (caseIcon != null) caseIcon.sprite = investigating ? evidenceIcon : offeringIcon;
+            if (detailLabel != null && next.detail != shownDetail) {
+                shownDetail = next.detail;
+                detailLabel.text = next.detail;
             }
-            if (next.secondsLeft != shownSeconds) {
-                shownSeconds = next.secondsLeft;
-                timerChip.Text = FormatTime(next.secondsLeft);
+            if (next.progress != shownProgress || next.progressTotal != shownTotal) {
+                shownProgress = next.progress;
+                shownTotal = next.progressTotal;
+                progressChip.gameObject.SetActive(next.progressTotal > 0);
+                progressChip.SetIcon(Act(next.phase) == 1 ? boatIcon : choirIcon);
+                progressChip.Text = $"{next.progress} / {next.progressTotal}";
+            }
+            int seconds = next.phase == CH_Phase.Boarding ? next.countdown : next.nightSeconds;
+            if (seconds != shownCountdown) {
+                shownCountdown = seconds;
+                timerChip.Text = FormatTime(seconds);
+            }
+            CH_ItemKind? carried = LocalCarried();
+            if (carryChip != null && carried != shownCarry) {
+                shownCarry = carried;
+                carryChip.gameObject.SetActive(carried.HasValue);
+                if (carried.HasValue) carryChip.Text = CarryText(carried.Value);
             }
         }
 
-        static string ChapterName(CH_Phase phase) => phase switch {
-            CH_Phase.Investigation => "Chapter I  ·  The last call",
-            CH_Phase.Descent => "Chapter II  ·  What answered",
-            CH_Phase.Escape => "Chapter III  ·  Escape",
-            _ => "Case closed",
+        static int Act(CH_Phase phase) => phase switch {
+            CH_Phase.Choir or CH_Phase.ChapelOpens => 2,
+            CH_Phase.Sermon or CH_Phase.Boarding or CH_Phase.Departure => 3,
+            _ => 1
         };
 
-        void AnnounceChapter(CH_Phase phase) {
-            if (phase is CH_Phase.Descent or CH_Phase.Escape)
-                ScreenFx.ShowText(ChapterName(phase).ToUpperInvariant(), chapterTitleColor, chapterTitleSeconds);
+        string CarryText(CH_ItemKind kind) => kind switch {
+            CH_ItemKind.Fuel => "Fuel can  ·  too heavy to run",
+            CH_ItemKind.Bell => "Crane's bell  ·  he can hear it",
+            CH_ItemKind.MusicBox => "Lily's music box",
+            _ => CH_Story.ItemName(kind)
+        };
+
+        void UpdateBoarding(CH_StateBroadcast next) {
+            if (boardingPopup == null) return;
+            bool boarding = next.phase == CH_Phase.Boarding;
+            boardingPopup.SetVisible(boarding);
+            if (boarding) boardingLabel.text = $"GET TO THE BOAT  ·  {next.countdown}";
         }
 
-        /// <summary>Spawns, hides and celebrates the world markers for the case's records and offerings.</summary>
-        void UpdatePointViews(CH_StateBroadcast next, bool fresh) {
-            // Phase changes remove points from snapshots; those old views must
-            // disappear too, otherwise completed offerings look interactable.
-            foreach (var view in pointViews.Values) if (view != null) view.SetActive(false);
-            foreach (var point in next.points) {
-                if (!pointViews.TryGetValue(point.id, out var view)) {
-                    view = Instantiate(ViewPrefab(point.id), map.transform);
-                    view.name = $"{point.title} / {point.area}";
-                    view.transform.position = GroundBelow(point.position);
-                    if (CH_Case.IsOfferingId(point.id)) view.transform.localScale = Vector3.one * offeringViewScale;
-                    pointViews.Add(point.id, view);
-                    if (view.TryGetComponent(out CH_EvidenceGlow glow)) pointGlows.Add(point.id, glow);
-                }
-                view.SetActive(!point.collected && !CaseOver);
-                // Everyone sees a record vanish in a burst of light, not just the collector.
-                if (point.collected && collectedPoints.Add(point.id) && !fresh && IsRecord(point.id))
-                    GameFx.Play(FxKind.Sparks, point.position, collectBurstTint, collectBurstScale);
-            }
+        void UpdateHiddenCharacters(CH_StateBroadcast next) {
+            // A teammate inside a wardrobe is not standing in front of it.
+            hiddenNow.Clear();
+            if (next.hides != null) foreach (CH_HideView hide in next.hides) if (hide.occupantId >= 0) hiddenNow.Add(hide.occupantId);
+            int local = LocalCharacterId();
+            localHidden = local >= 0 && hiddenNow.Contains(local);
+            items.SetHiddenCharacters(hiddenNow);
+            // Only remembered once their character exists here, so a late joiner keeps trying on each state.
+            foreach (int id in hiddenNow) if (id != local && !hiddenCharacters.Contains(id) && SetCharacterVisible(id, false)) hiddenCharacters.Add(id);
+            releasedCharacters.Clear();
+            foreach (int id in hiddenCharacters) if (!hiddenNow.Contains(id)) releasedCharacters.Add(id);
+            foreach (int id in releasedCharacters) { SetCharacterVisible(id, true); hiddenCharacters.Remove(id); }
         }
 
-        /// <summary>The source's altar, the offering's own prop, or the record table.</summary>
-        GameObject ViewPrefab(int id) {
-            if (id == CH_Case.SourceId) return map.sourceViewPrefab;
-            int offering = CH_Case.IsOfferingId(id) ? id - CH_Case.OfferingFirstId
-                : id is >= CH_Case.EvidenceRecordCount and < CH_Case.RequiredLocations ? id - CH_Case.EvidenceRecordCount : -1;
-            return offering >= 0 && offering < map.offeringViewPrefabs.Length && map.offeringViewPrefabs[offering] != null
-                ? map.offeringViewPrefabs[offering] : map.clueViewPrefab;
+        /// <summary>Switches a teammate's renderers; false if their character has not spawned here.</summary>
+        bool SetCharacterVisible(int characterId, bool visible) {
+            Transform character = FindObject(characterId);
+            if (character == null) return false;
+            foreach (Renderer part in character.GetComponentsInChildren<Renderer>(true)) part.enabled = visible;
+            return true;
         }
 
-        /// <summary>The first solid surface under a case point, so a record's table stands on the floor instead of floating at the point's height.</summary>
-        Vector3 GroundBelow(Vector3 point) =>
-            Physics.Raycast(point, Vector3.down, out RaycastHit hit, viewGroundProbe, visibilityMask, QueryTriggerInteraction.Ignore) ? hit.point : point;
+        bool LocalHidden => hasState && localHidden;
 
-        static bool IsRecord(int id) => id is >= 0 and < CH_Case.RequiredLocations || id >= CH_Case.DiaryFirstId;
+        void UpdateHiding() {
+            if (hidingOverlay == null) return;
+            float target = LocalHidden ? 1f : 0f;
+            hidingOverlay.alpha = Mathf.MoveTowards(hidingOverlay.alpha, target, Time.deltaTime * 4f);
+            if (hidingLabel != null && LocalHidden) hidingLabel.text = fearLoop.Fear > 0.4f ? "Don't move. Don't breathe." : "Hiding  ·  press E to leave";
+        }
 
-        Transform FindMonster(int monsterId) =>
-            manager != null && manager.Objects.Spawned.TryGetValue(monsterId, out var monster) ? monster.transform : null;
-
-        /// <summary>The ending card: the epilogue's first line is its title, the rest the story, then the case in numbers.</summary>
+        /// <summary>The ending card: its title, the epilogue, the night in numbers and when the next night starts.</summary>
         void ShowEnding(CH_StateBroadcast next) {
             bool over = next.phase is CH_Phase.Complete or CH_Phase.Failed;
             endingPopup.SetVisible(over);
             if (!over) { endingShown = false; return; }
-            if (next.secondsLeft != endingSecondsShown) {
-                endingSecondsShown = next.secondsLeft;
-                endingNextCase.Text = $"Next case in {next.secondsLeft}s";
-            }
-            if (next.completedCases != endingSolvedShown) {
-                endingSolvedShown = next.completedCases;
-                endingSolved.Text = $"Cases solved: {next.completedCases}";
-            }
-            // The epilogue and the case in numbers are fixed once the case is over.
+            endingNextCase.Text = $"Next night in {next.nextNightSeconds}s";
+            endingSolved.Text = $"Escapes tonight: {next.escapes}";
             if (endingShown) return;
             endingShown = true;
-            string ending = next.ending ?? string.Empty;
-            int split = ending.IndexOf('\n');
-            string title = split >= 0 ? ending.Substring(0, split) : ending;
-            string story = split >= 0 ? ending.Substring(split + 1) : string.Empty;
-            bool solved = next.phase == CH_Phase.Complete;
-            Color accent = solved ? solvedAccent : failedAccent;
-            endingTitle.text = string.IsNullOrEmpty(title) ? (solved ? "CASE CLOSED" : "STILL MISSING") : title.ToUpperInvariant();
+            string text = CH_Story.Endings[Mathf.Clamp(next.ending, 0, CH_Story.Endings.Length - 1)];
+            int split = text.IndexOf('\n');
+            bool escaped = next.phase == CH_Phase.Complete;
+            Color accent = escaped ? solvedAccent : failedAccent;
+            endingTitle.text = split >= 0 ? text.Substring(0, split) : text;
             endingTitle.color = Color.Lerp(accent, Color.white, 0.3f);
-            endingLabel.text = story;
-            if (endingSummary != null) endingSummary.text = CaseSummary(next);
+            endingLabel.text = split >= 0 ? text.Substring(split + 1) : string.Empty;
+            if (endingSummary != null) endingSummary.text = Summary(next);
             endingDisc.color = endingStripe.color = accent;
-            endingIcon.sprite = solved ? solvedIcon : failedIcon;
+            endingIcon.sprite = escaped ? solvedIcon : failedIcon;
         }
 
-        static string CaseSummary(CH_StateBroadcast next) {
-            int temperament = Mathf.Clamp((int)next.temperament, 0, TemperamentNames.Length - 1);
-            string diary = next.diaryTotal > 0 ? $"   ·   Diary {next.diaryCount}/{next.diaryTotal}" : string.Empty;
-            return $"Evidence {next.evidenceCount}/{CH_Case.RequiredEvidence}   ·   Memories {next.memoryCount}/{CH_Case.OptionalMemories}{diary}"
-                + $"\nThe Presence: {TemperamentNames[temperament]}   ·   Ritual mistakes {next.ritualMistakes}   ·   Lives lost {next.livesLost}   ·   {FormatTime(next.caseSeconds)}";
+        string Summary(CH_StateBroadcast next) {
+            int freed = 0, total = 0;
+            foreach (CH_SlotView slot in next.slots) if (slot.kind == CH_SlotKind.Grave && slot.filled) freed++;
+            foreach (CH_ItemView item in next.items) if (item.kind is CH_ItemKind.Hymnal or CH_ItemKind.Photograph or CH_ItemKind.Candle) total++;
+            bool musicBox = System.Array.Exists(next.slots, slot => slot.kind == CH_SlotKind.LilyMarker && slot.filled);
+            string secret = next.ending == CH_Story.EndingTrue ? "Lily's music box returned"
+                : musicBox ? "Lily's music box returned" : "Somewhere in Hollowmere, a music box is still waiting...";
+            return $"Singers freed {freed}/{total}   ·   Lives lost {next.livesLost}   ·   {FormatTime(next.nightSeconds)}\n{secret}";
         }
+
+        // ---- Focus and interaction ------------------------------------------------------------------------------------------
 
         void UpdateFocus() {
-            focusedId = -1;
+            focusKind = FocusKind.None;
+            focusId = focusIndex = -1;
             string prompt = null;
-            var camera = Camera.main;
-            bool canNavigate = camera != null && LocalPlayer.Character != null && !LocalPlayer.Character.IsDead
-                && !journal.IsOpen && !CaseOver;
-            objectiveCompass?.SetDisplayAllowed(canNavigate);
-            if (!canNavigate) {
+            Camera camera = Camera.main;
+            bool canAct = camera != null && LocalPlayer.Character != null && !LocalPlayer.Character.IsDead
+                && !journal.IsOpen && !NightOver && !InCutscene && CH_Story.IsPlayable(state.phase);
+            objectiveCompass?.SetDisplayAllowed(canAct && !LocalHidden);
+            if (!canAct) {
                 SetFocusedGlow(null);
                 interactionPrompt.SetVisible(false);
                 return;
             }
-            float best = focusAlignment;
             if (pendingId >= 0 && Time.unscaledTime > pendingUntil) pendingId = -1;
-            foreach (var point in state.points) {
-                if (point.collected || point.id == pendingId || point.id == CH_Case.SourceId && state.relicCount == CH_Case.OfferingCount) continue;
-                Vector3 direction = point.position - camera.transform.position;
-                float distance = direction.magnitude;
-                float alignment = distance < 0.1f ? 1 : Vector3.Dot(camera.transform.forward, direction / distance);
-                if (distance <= interactionReach && alignment > best && WorldInteraction.CanReach(camera.transform.position, point.position, interactionReach, visibilityMask)) {
-                    best = alignment;
-                    focusedId = point.id;
-                    prompt = point.id == CH_Case.SourceId
-                        ? state.relicCount < CH_Case.OfferingCount ? "<b>The source</b>  ·  recover all three offerings" : "Approach an offering. Follow the order in your journal."
-                        : point.title;
+            if (LocalHidden) {
+                focusKind = FocusKind.Hide;
+                focusId = -1;
+                interactionPrompt.SetVisible(false);
+                return;
+            }
+            Vector3 eye = camera.transform.position, forward = camera.transform.forward;
+            float best = focusAlignment;
+            CH_ItemKind? carried = LocalCarried();
+            for (int i = 0; i < state.items.Length; i++) {
+                CH_ItemView item = state.items[i];
+                if (item.state != CH_ItemState.Resting || (pendingKind == FocusKind.Item && item.id == pendingId)) continue;
+                Consider(FocusKind.Item, i, item.position + Vector3.up * 0.3f);
+            }
+            if (carried.HasValue) {
+                for (int i = 0; i < state.slots.Length; i++)
+                    if (state.slots[i].open) Consider(FocusKind.Slot, i, state.slots[i].position + Vector3.up * 0.9f);
+            }
+            if (map.hidingSpots != null) {
+                for (int i = 0; i < map.hidingSpots.Length; i++) {
+                    CH_HidingSpot spot = map.hidingSpots[i];
+                    if (spot == null || (state.hides != null && i < state.hides.Length && state.hides[i].occupantId >= 0)) continue;
+                    Consider(FocusKind.Hide, i, spot.Handle);
                 }
             }
-            SetFocusedGlow(focusedId >= 0 && pointGlows.TryGetValue(focusedId, out var glow) ? glow : null);
-            // The keycap only shows for something E acts on; the source and feedback are just text.
-            bool actionable = prompt != null && focusedId != CH_Case.SourceId;
-            if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(interactionFeedback)) {
-                prompt = interactionFeedback;
-                actionable = false;
+            // Only the winner's prompt is built, and only when the focus changed.
+            if (focusKind != FocusKind.None) {
+                if (focusKind != promptKind || focusIndex != promptIndex || carried != promptCarried) {
+                    promptKind = focusKind;
+                    promptIndex = focusIndex;
+                    promptCarried = carried;
+                    focusPrompt = PromptFor(focusKind, focusIndex, carried);
+                }
+                prompt = focusPrompt;
+                focusId = focusKind switch { FocusKind.Item => state.items[focusIndex].id, FocusKind.Slot => state.slots[focusIndex].id, _ => focusIndex };
             }
+            SetFocusedGlow(focusKind == FocusKind.Item ? items.GlowOf(focusId) : null);
+            bool actionable = prompt != null;
+            if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(feedback)) { prompt = feedback; actionable = false; }
             interactionPrompt.SetVisible(prompt != null);
             if (prompt == null) return;
-            interactionLabel.text = prompt;
+            if (interactionLabel.text != prompt) interactionLabel.text = prompt;
             if (interactionKey.activeSelf != actionable) interactionKey.SetActive(actionable);
+
+            void Consider(FocusKind kind, int index, Vector3 point) {
+                Vector3 direction = point - eye;
+                float distance = direction.magnitude;
+                if (distance > interactionReach) return;
+                float alignment = distance < 0.1f ? 1f : Vector3.Dot(forward, direction / distance);
+                // Close things are easier to point at.
+                float needed = Mathf.Lerp(0.55f, best, Mathf.InverseLerp(0.8f, interactionReach, distance));
+                if (alignment <= needed || alignment <= best - 0.25f || !WorldInteraction.CanReach(eye, point, interactionReach, visibilityMask)) return;
+                best = Mathf.Max(best, alignment);
+                focusKind = kind;
+                focusIndex = index;
+            }
         }
 
-        /// <summary>Keeps the prompt just below the focused prop on screen (above it near the bottom edge) so it never covers it.</summary>
-        void PlacePrompt() {
-            RectTransform prompt = promptRect, hud = promptHud;
-            var camera = Camera.main;
-            Vector2 position = promptRest;
-            if (hud != null && camera != null && focusedGlow != null && focusedGlow.TryGetBounds(out Bounds bounds)
-                && TryScreenSpan(camera, bounds, out float bottom, out float top)) {
-                float toHud = hud.rect.height / Mathf.Max(1f, Screen.height);
-                float halfHeight = prompt.rect.height * 0.5f;
-                float floor = hud.rect.yMin + promptBottomMargin + halfHeight;
-                float ceiling = hud.rect.yMax - promptTopMargin - halfHeight;
-                float below = hud.rect.yMin + bottom * toHud - promptGap - halfHeight;
-                float above = hud.rect.yMin + top * toHud + promptGap + halfHeight;
-                position.y = (below >= floor ? below : Mathf.Min(above, ceiling)) - hud.rect.center.y;
+        string PromptFor(FocusKind kind, int index, CH_ItemKind? carried) {
+            switch (kind) {
+                case FocusKind.Item:
+                    CH_ItemView item = state.items[index];
+                    string name = item.singer >= 0 ? item.title : "the " + item.title.ToLowerInvariant();
+                    return carried.HasValue ? $"Swap for {name}" : $"Take {name}";
+                case FocusKind.Slot:
+                    return SlotPrompt(state.slots[index], carried ?? CH_ItemKind.Fuel);
+                default:
+                    return $"Hide in the {map.hidingSpots[index].label}";
             }
-            prompt.anchoredPosition = position;
         }
 
-        /// <summary>The lowest and highest screen rows (pixels) the box covers; false when part of it is behind the camera.</summary>
-        static bool TryScreenSpan(Camera camera, Bounds bounds, out float bottom, out float top) {
-            bottom = float.MaxValue;
-            top = float.MinValue;
-            Vector3 min = bounds.min, max = bounds.max;
-            for (int i = 0; i < BoundsCorners.Length; i++)
-                BoundsCorners[i] = new Vector3((i & 1) == 0 ? min.x : max.x, (i & 2) == 0 ? min.y : max.y, (i & 4) == 0 ? min.z : max.z);
-            foreach (Vector3 corner in BoundsCorners) {
-                Vector3 screen = camera.WorldToScreenPoint(corner);
-                if (screen.z <= camera.nearClipPlane) return false;
-                bottom = Mathf.Min(bottom, screen.y);
-                top = Mathf.Max(top, screen.y);
-            }
-            return true;
-        }
+        static string SlotPrompt(CH_SlotView slot, CH_ItemKind carried) => slot.kind switch {
+            CH_SlotKind.Grave => $"Lay it on {slot.title}",
+            CH_SlotKind.LilyMarker => "Leave the music box for Lily",
+            CH_SlotKind.BoatBell => "Throw the bell into the boat",
+            _ => $"Fit the {CH_Story.ItemName(carried).ToLowerInvariant()} to the boat"
+        };
 
         void SetFocusedGlow(CH_EvidenceGlow glow) {
             if (focusedGlow == glow) return;
@@ -455,41 +508,81 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (focusedGlow != null) focusedGlow.SetFocused(true);
         }
 
-        void RefreshNavigationObjectives() {
+        void Interact() {
+            if (!hasState) return;
+            UpdateFocus();
+            if (focusKind == FocusKind.Hide && LocalHidden) { Send(CH_Target.Hide, -1); return; }
+            if (focusKind == FocusKind.None || focusId < 0) return;
+            CH_Target target = focusKind switch { FocusKind.Item => CH_Target.Item, FocusKind.Slot => CH_Target.Slot, _ => CH_Target.Hide };
+            if (!Send(target, focusId)) return;
+            pendingKind = focusKind;
+            pendingId = focusId;
+            pendingUntil = Time.unscaledTime + pendingInteractionSeconds;
+        }
+
+        bool Send(CH_Target target, int id) {
+            if (manager == null || !manager.Started || journal.IsOpen || InCutscene) return false;
+            manager.Broadcast(new CH_InteractRequest { seed = state.seed, target = target, id = id });
+            return true;
+        }
+
+        void OpenJournal() {
+            if (hasState && !InCutscene) journal.Open();
+        }
+
+        string[] TranscriptEntries() {
+            var lines = voice.Transcript;
+            if (lines.Count == 0) return new[] { $"{CH_Story.Title.ToUpperInvariant()} / Everything said tonight is written down here." };
+            var entries = new string[lines.Count];
+            for (int i = 0; i < lines.Count; i++) entries[i] = lines[i];
+            return entries;
+        }
+
+        // ---- Navigation --------------------------------------------------------------------------------------------------
+
+        /// <summary>The compass points at the act's items, or, with something in hand, at where it goes.</summary>
+        void RefreshNavigation() {
             navigationObjectives.Clear();
-            if (state.points != null && !CaseOver) {
-                foreach (var point in state.points) {
-                    if (point.navigationTarget && !point.collected && (point.id != CH_Case.SourceId || state.relicCount < CH_Case.OfferingCount))
-                        navigationObjectives.Add(point.position);
+            if (hasState && !NightOver && CH_Story.IsPlayable(state.phase)) {
+                CH_ItemKind? carried = LocalCarried();
+                CH_ItemView? held = LocalCarriedView();
+                if (carried.HasValue) {
+                    foreach (CH_SlotView slot in state.slots)
+                        if (slot.open && Fits(held.Value, slot)) navigationObjectives.Add(slot.position);
+                } else if (state.phase == CH_Phase.Boarding) {
+                    navigationObjectives.Add(map.boardingPoint.position);
+                } else {
+                    foreach (CH_ItemView item in state.items)
+                        if (item.objective && item.state == CH_ItemState.Resting) navigationObjectives.Add(item.position);
                 }
             }
             objectiveCompass?.SetObjectives(navigationObjectives);
         }
 
+        /// <summary>A relic goes on its own singer's grave; everything else goes where its kind goes (as CH_Night.Fits).</summary>
+        static bool Fits(CH_ItemView item, CH_SlotView slot) =>
+            slot.kind == CH_SlotKind.Grave ? item.singer >= 0 && item.singer == slot.singer : slot.accepts == item.kind;
+
+        // ---- Lookups -----------------------------------------------------------------------------------------------------
+
+        int LocalCharacterId() => LocalPlayer.Character != null ? LocalPlayer.Character.ObjectId : -1;
+
+        CH_ItemView? LocalCarriedView() {
+            if (!hasState || state.items == null) return null;
+            int local = LocalCharacterId();
+            if (local < 0) return null;
+            foreach (CH_ItemView item in state.items) if (item.state == CH_ItemState.Carried && item.carrierId == local) return item;
+            return null;
+        }
+
+        CH_ItemKind? LocalCarried() => LocalCarriedView()?.kind;
+
+        Transform FindObject(int objectId) =>
+            manager != null && objectId >= 0 && manager.Objects.Spawned.TryGetValue(objectId, out var found) && found != null ? found.transform : null;
+
         static string FormatTime(int seconds) {
             seconds = Mathf.Max(0, seconds);
             return $"{seconds / 60:00}:{seconds % 60:00}";
-        }
-
-        void Interact() {
-            // Input can arrive between focus scans, especially while turning.
-            UpdateFocus();
-            if (focusedId < 0 || focusedId == CH_Case.SourceId || !SendInteraction(focusedId, -1)) return;
-            // Hide the prompt now rather than when the server's answer arrives: a taken record
-            // should not keep offering itself for the length of a round trip.
-            pendingId = focusedId;
-            pendingUntil = Time.unscaledTime + pendingInteractionSeconds;
-            UpdateFocus();
-        }
-
-        bool SendInteraction(int point, int option) {
-            if (manager == null || !manager.Started || journal.IsOpen) return false;
-            manager.Broadcast(new CH_InteractRequest { seed = state.seed, targetId = point, option = option });
-            return true;
-        }
-
-        void OpenJournal() {
-            if (hasState) journal.Open();
         }
     }
 }

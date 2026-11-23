@@ -17,14 +17,18 @@ using UnityEngine.Rendering.Universal;
 using Universes.UniverseData.classic_horror.Client;
 
 namespace Universes.UniverseData.classic_horror.Editor {
-    /// <summary>Rebuildable presentation assets. Scene layout and story edits are kept separate.</summary>
-    public static class CH_Authoring {
+    /// <summary>
+    /// Rebuildable presentation assets for The Drowned Choir: lighting, the flashlight, the HUD and its presenters.
+    /// The night's items and the priest puppet are in CH_Authoring.Items.cs, the scene's story set in CH_StorySetAuthoring.
+    /// </summary>
+    public static partial class CH_Authoring {
         public const string Root = "Assets/Universes/UniverseData/classic_horror";
         static readonly Color Amber = new(0.78f, 0.55f, 0.28f);
 
         public static void EnsureFolders() {
             foreach (string folder in new[] { "Prefabs", "Materials", "Data", "Scenes" })
                 if (!AssetDatabase.IsValidFolder(Root + "/" + folder)) AssetDatabase.CreateFolder(Root, folder);
+            if (!AssetDatabase.IsValidFolder(Root + "/Prefabs/Items")) AssetDatabase.CreateFolder(Root + "/Prefabs", "Items");
             if (!AssetDatabase.IsValidFolder("Packages/com.ryan.gameframework/Runtime/Tools/Flashlight")) AssetDatabase.CreateFolder("Packages/com.ryan.gameframework/Runtime/Tools", "Flashlight");
         }
         static Material Material(string name, Color color, bool glow = false, string folder = null) {
@@ -209,9 +213,6 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 lamp.renderMode = LightRenderMode.ForcePixel;
             }
             map.practicalGlows = glows;
-            var offerings = new GameObject[CH_Case.OfferingCount];
-            for (int i = 0; i < offerings.Length; i++) offerings[i] = AssetDatabase.LoadAssetAtPath<GameObject>(OfferingViewPath(i));
-            map.offeringViewPrefabs = offerings;
             EditorUtility.SetDirty(map);
         }
 
@@ -337,36 +338,15 @@ namespace Universes.UniverseData.classic_horror.Editor {
             return atmosphere != null && atmosphere.lighting != null ? atmosphere.lighting : new CH_NightLighting();
         }
 
-        /// <summary>
-        /// Overwrites Data/StoryLibrary.asset with the text authored in CH_StoryLibrary's field
-        /// defaults. The asset otherwise keeps whatever it was first saved with, so new story
-        /// text in code only reaches the game through this.
-        /// </summary>
-        [MenuItem("Ryan/Classic Horror/Reset Story Library To Authored Text")]
-        public static void ResetStoryLibrary() {
-            string path = Root + "/Data/StoryLibrary.asset";
-            var authored = ScriptableObject.CreateInstance<CH_StoryLibrary>();
-            var library = AssetDatabase.LoadAssetAtPath<CH_StoryLibrary>(path);
-            if (library == null) {
-                AssetDatabase.CreateAsset(authored, path);
-            } else {
-                EditorUtility.CopySerialized(authored, library);
-                library.name = "StoryLibrary";
-                EditorUtility.SetDirty(library);
-                Object.DestroyImmediate(authored);
-            }
-            AssetDatabase.SaveAssets();
-        }
-
         [MenuItem("Ryan/Classic Horror/Rebuild Presentation Prefabs")]
         public static void BuildPresentation() {
             EnsureFolders();
             BuildFlashlight();
             RyanAssets.Editor.NPCCharacterAuthoring.Build();
-            BuildClueViews();
+            BuildItemViews();
+            BuildPriestActor();
+            CH_VoiceAuthoring.Build();
             BuildHud();
-            var library = AssetDatabase.LoadAssetAtPath<CH_StoryLibrary>(Root + "/Data/StoryLibrary.asset");
-            if (library == null) AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<CH_StoryLibrary>(), Root + "/Data/StoryLibrary.asset");
             AssetDatabase.SaveAssets();
         }
 
@@ -494,65 +474,12 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
         }
 
-        [MenuItem("Ryan/Classic Horror/Rebuild Evidence Prefabs")]
-        public static void BuildClueViews() {
-            EnsureFolders();
-            var paper = Material("EvidencePaper", RecordPaperTint);
-            var ink = Material("EvidenceInk", new Color(0.12f, 0.16f, 0.15f));
-            var rune = Material("EvidenceGlow", new Color(0.78f, 0.54f, 0.25f), true);
-            string cluePath = Root + "/Prefabs/EvidenceRecord.prefab";
-            var clue = PrefabUtility.LoadPrefabContents(cluePath);
-            try {
-                ClearVisualChildren(clue);
-                var table = PlaceVisual(FloodedProps + "Prop_SmallTable_B.prefab", clue.transform, Vector3.zero, Vector3.one);
-                UseMaterial(table, RecordWoodMaterial(table));
-                var lamp = PlaceVisual(FloodedProps + "Prop_Lamp_A.prefab", clue.transform, new Vector3(0.32f, 0.70f, 0.19f), Vector3.one * 0.68f);
-                UseMaterial(lamp, TintedCopy(lamp, "EvidenceLamp", RecordLampTint, 0.15f));
-                var notes = Shape("Field Notes", PrimitiveType.Quad, clue.transform, new Vector3(-0.16f, 0.735f, -0.04f), new Vector3(0.48f, 0.34f, 1f), paper, new Vector3(90f, 18f, 0f));
-                Shape("Case Heading", PrimitiveType.Quad, notes.transform, new Vector3(-0.06f, 0.28f, -0.004f), new Vector3(0.68f, 0.09f, 1f), ink);
-                for (int i = 0; i < 3; i++)
-                    Shape("Handwritten Line " + i, PrimitiveType.Quad, notes.transform,
-                        new Vector3(-0.08f, 0.06f - i * 0.17f, -0.004f), new Vector3(0.55f - i * 0.08f, 0.025f, 1f), ink);
-                Shape("Wax Seal", PrimitiveType.Sphere, clue.transform, new Vector3(-0.34f, 0.745f, -0.15f), new Vector3(0.065f, 0.012f, 0.065f), rune);
-                PlaceEffect(QuickEffects + "vfx_Portal_01.prefab", clue.transform, new Vector3(-0.16f, 0.76f, 0f), 0.1f, new Color(0.95f, 0.62f, 0.3f, 0.35f));
-                AddGlow(clue, RecordLightRange);
-                PrefabUtility.SaveAsPrefabAsset(clue, cluePath);
-            } finally { PrefabUtility.UnloadPrefabContents(clue); }
+        // Outline strength when not in focus: an item lies alone in the dark and needs an edge that reads from 4 m
+        // as "something to pick up".
+        const float ItemIdleRim = 0.65f;
 
-            for (int i = 0; i < CH_Case.OfferingCount; i++) BuildOfferingView(i);
-
-            string sourcePath = Root + "/Prefabs/HauntingSource.prefab";
-            var source = PrefabUtility.LoadPrefabContents(sourcePath);
-            try {
-                ClearVisualChildren(source);
-                PlaceVisual(FloodedProps + "Prop_Pulpit_A.prefab", source.transform, Vector3.zero, Vector3.one * 0.82f);
-                PlaceVisual(FloodedProps + "Prop_Vase_A.prefab", source.transform, new Vector3(0f, 1.75f, 0.15f), Vector3.one * 0.9f);
-                for (int i = 0; i < 3; i++) {
-                    float a = i * Mathf.PI * 2f / 3f;
-                    PlaceVisual(FloodedProps + "Prop_Lamp_C.prefab", source.transform,
-                        new Vector3(Mathf.Sin(a) * 1.3f, 0.58f, Mathf.Cos(a) * 1.3f), Vector3.one * 0.6f);
-                }
-                PlaceEffect(QuickEffects + "vfx_Portal_01.prefab", source.transform, new Vector3(0f, 1.9f, 0.22f), 0.34f, new Color(0.3f, 0.75f, 0.7f, 0.7f));
-                PlaceEffect(QuickEffects + "vfx_Electricity_01.prefab", source.transform, new Vector3(0f, 2.0f, 0.16f), 0.16f, new Color(0.45f, 0.85f, 0.78f, 0.45f));
-                var light = source.GetComponent<Light>();
-                light.color = new Color(0.33f, 0.73f, 0.64f); light.range = 11f; light.intensity = 0.75f;
-                PrefabUtility.SaveAsPrefabAsset(source, sourcePath);
-            } finally { PrefabUtility.UnloadPrefabContents(source); }
-            AssetDatabase.SaveAssets();
-        }
-
-        const float RecordLightRange = 4f;
-        // Outline strength when not in focus: records glow faintly beside their lantern; offerings stand alone in the
-        // dark and need an outline that reads from 4 m as "something to pick up".
-        const float RecordIdleRim = 0.22f, OfferingIdleRim = 0.65f;
-        // The pack's small-props atlas reads almost white under the record's own glow and a flashlight;
-        // the table, lamp and paper take darker, warmer tints so only the outline reads as bright.
-        static readonly Color RecordWoodTint = new(0.4f, 0.3f, 0.22f);
-        static readonly Color RecordLampTint = new(0.46f, 0.38f, 0.29f);
-        static readonly Color RecordPaperTint = new(0.5f, 0.44f, 0.31f);
-
-        /// <summary>The amber glow light and CH_EvidenceGlow (with its code defaults) on a record or offering.</summary>
-        static void AddGlow(GameObject root, float range, float idleRim = RecordIdleRim) {
+        /// <summary>The amber glow light and CH_EvidenceGlow (with its code defaults) on an item.</summary>
+        static void AddGlow(GameObject root, float range, float idleRim = ItemIdleRim) {
             var light = root.GetComponent<Light>();
             if (light == null) light = root.AddComponent<Light>();
             light.type = LightType.Point;
@@ -568,8 +495,6 @@ namespace Universes.UniverseData.classic_horror.Editor {
             serialized.FindProperty("idleRim").floatValue = idleRim;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
-
-        static Material RecordWoodMaterial(GameObject table) => TintedCopy(table, "EvidenceTable", RecordWoodTint, 0.1f);
 
         /// <summary>A copy of a pack prop's material, saved as Materials/<paramref name="name"/>, with its colour multiplied by <paramref name="tint"/>.</summary>
         static Material TintedCopy(GameObject prop, string name, Color tint, float smoothness) {
@@ -592,75 +517,6 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 for (int i = 0; i < materials.Length; i++) materials[i] = material;
                 renderer.sharedMaterials = materials;
             }
-        }
-
-        public const string OfferingViewFolder = Root + "/Prefabs/";
-        static readonly string[] OfferingViewNames = { "OfferingSalt", "OfferingBell", "OfferingLantern" };
-        public static string OfferingViewPath(int offering) => OfferingViewFolder + OfferingViewNames[offering] + ".prefab";
-        // Offerings stand on the low, open record table (the pack's other small table shows a blank
-        // panel from most sides), each with its own object on top, tall enough to read from 4 m.
-        const string OfferingStand = FloodedProps + "Prop_SmallTable_B.prefab";
-        const float OfferingLightRange = 3f;
-        static readonly float[] OfferingHeights = { 0.3f, 0.58f, 0.9f };
-        static readonly Color BronzeColour = new(0.36f, 0.24f, 0.1f), SaltColour = new(0.86f, 0.84f, 0.78f), DishColour = new(0.2f, 0.15f, 0.12f);
-        static readonly Color EmberColour = new(1f, 0.42f, 0.14f);
-
-        /// <summary>
-        /// The salt canister, the hand bell and the keeper's lantern: each its own object on a small table,
-        /// with the record glow, so the ritual's three offerings can be told apart at a glance.
-        /// </summary>
-        static void BuildOfferingView(int offering) {
-            var root = new GameObject(OfferingViewNames[offering]);
-            try {
-                var stand = PlaceVisual(OfferingStand, root.transform, Vector3.zero, Vector3.one);
-                UseMaterial(stand, RecordWoodMaterial(stand));
-                float top = TopOf(stand);
-                var item = new GameObject("Item");
-                item.transform.SetParent(root.transform, false);
-                switch (offering) {
-                    case 0: {
-                        // A heap of coarse salt in a dark earthenware dish: pale and matte, so it cannot pass for metal.
-                        var dish = Material("OfferingDish", DishColour);
-                        var salt = Material("OfferingSalt", SaltColour);
-                        salt.SetFloat("_Smoothness", 0.05f);
-                        var heap = new GameObject("Salt"); heap.transform.SetParent(item.transform, false);
-                        Shape("Dish", PrimitiveType.Cylinder, heap.transform, new Vector3(0f, 0.025f, 0f), new Vector3(0.44f, 0.025f, 0.44f), dish);
-                        Shape("Rim", PrimitiveType.Cylinder, heap.transform, new Vector3(0f, 0.06f, 0f), new Vector3(0.46f, 0.012f, 0.46f), dish);
-                        Shape("Heap", PrimitiveType.Sphere, heap.transform, new Vector3(0f, 0.09f, 0f), new Vector3(0.36f, 0.26f, 0.36f), salt);
-                        Shape("Spill", PrimitiveType.Sphere, heap.transform, new Vector3(0.2f, 0.005f, 0.14f), new Vector3(0.12f, 0.02f, 0.09f), salt);
-                        FitHeight(heap, OfferingHeights[0]);
-                        break;
-                    }
-                    case 1: {
-                        var bronze = Material("OfferingBronze", BronzeColour);
-                        bronze.SetFloat("_Metallic", 0.85f); bronze.SetFloat("_Smoothness", 0.55f);
-                        var bell = new GameObject("Bell"); bell.transform.SetParent(item.transform, false);
-                        Shape("Mouth", PrimitiveType.Cylinder, bell.transform, new Vector3(0f, 0.035f, 0f), new Vector3(0.26f, 0.035f, 0.26f), bronze);
-                        Shape("Waist", PrimitiveType.Cylinder, bell.transform, new Vector3(0f, 0.12f, 0f), new Vector3(0.2f, 0.08f, 0.2f), bronze);
-                        Shape("Crown", PrimitiveType.Sphere, bell.transform, new Vector3(0f, 0.2f, 0f), new Vector3(0.2f, 0.14f, 0.2f), bronze);
-                        Shape("Handle", PrimitiveType.Cylinder, bell.transform, new Vector3(0f, 0.32f, 0f), new Vector3(0.04f, 0.08f, 0.04f), Material("OfferingHandle", new Color(0.2f, 0.12f, 0.07f)));
-                        FitHeight(bell, OfferingHeights[1]);
-                        break;
-                    }
-                    default: {
-                        var model = AssetDatabase.LoadAssetAtPath<GameObject>(KayKitHalloween + "lantern_standing.fbx");
-                        if (model == null) throw new System.InvalidOperationException("KayKit lantern_standing.fbx is missing.");
-                        var lantern = (GameObject)PrefabUtility.InstantiatePrefab(model, item.transform);
-                        var atlas = lantern.GetComponentInChildren<Renderer>().sharedMaterial;
-                        foreach (var renderer in lantern.GetComponentsInChildren<Renderer>())
-                            renderer.sharedMaterial = LanternPostMaterial(atlas);
-                        FitHeight(lantern, OfferingHeights[2]);
-                        // The KayKit lantern is one mesh, so a faint ember sits inside it: an offering, not a lamp that is out.
-                        Bounds body = BoundsOf(lantern);
-                        Shape("Ember", PrimitiveType.Sphere, item.transform, new Vector3(0f, body.center.y - item.transform.position.y - body.size.y * 0.08f, 0f),
-                            Vector3.one * body.size.x * 0.22f, Material("OfferingEmber", EmberColour, true));
-                        break;
-                    }
-                }
-                item.transform.localPosition = new Vector3(0f, top - root.transform.position.y, 0f);
-                AddGlow(root, OfferingLightRange, OfferingIdleRim);
-                PrefabUtility.SaveAsPrefabAsset(root, OfferingViewPath(offering));
-            } finally { Object.DestroyImmediate(root); }
         }
 
         static Bounds BoundsOf(GameObject root) {
@@ -726,11 +582,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         /// <summary>
-        /// The investigation HUD, made from the shared HudKit so it matches the rest of the game, in a
-        /// horror key: dark glass, one amber accent, and nothing on screen that the case doesn't need
-        /// right now. Case status top centre, compass under it, prompts low, radio transcript at the
-        /// bottom, journal and ending as cards. The same prefab carries the client's presenters:
-        /// radio, journal, fear loop, ambient scares, encounter scares and the map's atmosphere.
+        /// The investigation HUD, made from the shared HudKit so it matches the rest of the game, in a horror key: dark
+        /// glass, one amber accent, and nothing on screen the night doesn't need right now. The objective card top centre
+        /// with the compass under it, prompts low, subtitles at the bottom, the journal and ending as cards, and over it
+        /// all the cutscene layer (letterbox, title card, fades) and the jump scares. The same prefab carries the
+        /// client's presenters: voices, items, cutscenes, apparitions, fear loop, ambient scares and the atmosphere.
         /// </summary>
         static void BuildHud() {
             RectTransform canvas = HudKit.Canvas("InvestigationHUD", 40);
@@ -741,30 +597,154 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.ambientScares = root.AddComponent<CH_AmbientScares>();
             client.radio = root.AddComponent<CH_RadioFeed>();
             client.journal = root.AddComponent<CH_Journal>();
-            client.evidenceIcon = HudKit.Icon("magnifier");
-            client.offeringIcon = HudKit.Icon("candle");
+            client.items = root.AddComponent<CH_ItemPresenter>();
+            client.voice = root.AddComponent<CH_VoicePlayer>();
+            client.cutscenes = root.AddComponent<CH_CutsceneDirector>();
+            client.apparitions = root.AddComponent<CH_Apparitions>();
+            client.boatIcon = HudKit.Icon("compass");
+            client.choirIcon = HudKit.Icon("tombstone");
+            client.bellIcon = HudKit.Icon("crowned_skull");
             client.solvedIcon = HudKit.Icon("laurels_trophy");
             client.failedIcon = HudKit.Icon("skull");
 
-            BuildCaseStatus(canvas, client);
-            BuildCompass(canvas, client);
+            // Everything a cutscene fades away; the subtitles, scares and cutscene layer live outside it.
+            RectTransform gameplay = UIKit.Fill(canvas, "Gameplay");
+            client.cutscenes.gameplayHud = gameplay.gameObject.AddComponent<CanvasGroup>();
+            client.cutscenes.gameplayHud.blocksRaycasts = false;
+            BuildCaseStatus(gameplay, client);
+            BuildCompass(gameplay, client);
 
-            RectTransform reticle = UIKit.Pinned(canvas, "Reticle", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(6f, 6f));
+            RectTransform reticle = UIKit.Pinned(gameplay, "Reticle", new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(6f, 6f));
             UIKit.Rounded(reticle, UIColorRole.TextPrimary, 3f, 0.75f, raycast: false);
 
-            RectTransform interaction = HudKit.KeyPrompt(canvas, "Interaction", "E", "Inspect", Amber, out client.interactionLabel, out UnityEngine.UI.Image key, 46f);
+            RectTransform interaction = HudKit.KeyPrompt(gameplay, "Interaction", "E", "Take", Amber, out client.interactionLabel, out UnityEngine.UI.Image key, 46f);
             interaction.anchorMin = interaction.anchorMax = interaction.pivot = new Vector2(0.5f, 0.5f);
             interaction.anchoredPosition = new Vector2(0f, -110f);
             client.interactionKey = key.gameObject;
             client.interactionPrompt = HudKit.Popup(interaction, false);
+            BuildBoarding(gameplay, client);
 
+            BuildHiding(canvas, client);
             BuildRadio(canvas, client.radio);
             BuildJournal(canvas, client.journal);
             BuildEnding(canvas, client);
+            BuildCutsceneLayer(canvas, client.cutscenes);
             BuildAudio(root, client);
+            BuildVoices(root, client);
             BuildAtmosphere(atmosphere);
             BuildEncounter(root, client);
+            BuildApparitions(client);
             UIKit.SavePrefab(root, Root + "/Prefabs/InvestigationHUD.prefab");
+        }
+
+        // Sorting above the shared HUD (top bar, player list, chat): the cutscene layer, then the subtitles over it, then scares.
+        const int CutsceneSortingOrder = 800, SubtitleSortingOrder = 850;
+
+        static Canvas OwnCanvas(GameObject target, int order) {
+            var layer = target.AddComponent<Canvas>();
+            layer.overrideSorting = true;
+            layer.sortingOrder = order;
+            return layer;
+        }
+
+        /// <summary>Letterbox bars, a title card and a full-screen black for cuts, on their own canvas over the shared HUD.</summary>
+        static void BuildCutsceneLayer(RectTransform canvas, CH_CutsceneDirector director) {
+            RectTransform layer = UIKit.Fill(canvas, "Cutscene");
+            OwnCanvas(layer.gameObject, CutsceneSortingOrder);
+            var group = layer.gameObject.AddComponent<CanvasGroup>();
+            group.blocksRaycasts = false; group.interactable = false; group.ignoreParentGroups = true;
+
+            director.topBar = Panel("Top bar", layer, new Vector2(0f, 1f), Vector2.one, Color.black).rectTransform;
+            director.topBar.pivot = new Vector2(0.5f, 1f);
+            director.topBar.sizeDelta = new Vector2(0f, 0f);
+            director.bottomBar = Panel("Bottom bar", layer, Vector2.zero, new Vector2(1f, 0f), Color.black).rectTransform;
+            director.bottomBar.pivot = new Vector2(0.5f, 0f);
+            director.bottomBar.sizeDelta = new Vector2(0f, 0f);
+
+            RectTransform title = UIKit.Pinned(layer, "Title card", new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(1200f, 220f));
+            UIKit.Column(title.gameObject, 6f, null, TextAnchor.MiddleCenter);
+            director.titleCard = title.gameObject.AddComponent<CanvasGroup>();
+            director.titleCard.alpha = 0f;
+            director.titleText = UIKit.Text(title, "Title", CH_Story.Title.ToUpperInvariant(), UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            director.titleText.fontSize = 76f;
+            director.titleText.characterSpacing = 14f;
+            director.subtitleText = UIKit.Text(title, "Subtitle", "Hollowmere, 1962", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            director.subtitleText.color = Amber;
+            director.subtitleText.fontSize = 22f;
+            Object.DestroyImmediate(director.subtitleText.GetComponent<UIThemeColor>());
+
+            var black = Panel("Blackout", layer, Vector2.zero, Vector2.one, Color.black);
+            director.blackout = black.gameObject.AddComponent<CanvasGroup>();
+            director.blackout.alpha = 0f; director.blackout.blocksRaycasts = false;
+            title.SetAsLastSibling();
+
+            const string sounds = AudioFolder;
+            director.thud = Sound(1f, 0.55f, 0f, 0f, sounds + "wood-thud.ogg");
+            director.bell = Sound(1f, 0.5f, 0f, 0f, sounds + "chapel-bell-1.ogg", sounds + "chapel-bell-2.ogg");
+            director.scream = Sound(0.9f, 0.7f, 0f, 0f, FloodedSounds + "WindHowl.mp3");
+            director.doors = Sound(1f, 0.75f, 0f, 0f, sounds + "door-slam-1.ogg", sounds + "door-slam-2.ogg");
+            director.engine = Sound(0.8f, 0.45f, 0f, 0f, FloodedSounds + "DeepRattle.mp3");
+            director.splash = Sound(0.9f, 0.6f, 0f, 0f, sounds + "creak-3.ogg");
+        }
+
+        /// <summary>Hiding: the room through the crack of a wardrobe door, and a line that says how to get out.</summary>
+        static void BuildHiding(RectTransform canvas, CH_ClientController client) {
+            RectTransform view = UIKit.Fill(canvas, "Hiding");
+            client.hidingOverlay = view.gameObject.AddComponent<CanvasGroup>();
+            client.hidingOverlay.alpha = 0f; client.hidingOverlay.blocksRaycasts = false;
+            var doorColour = new Color(0.02f, 0.015f, 0.01f, 0.97f);
+            Panel("Left door", view, Vector2.zero, new Vector2(0.455f, 1f), doorColour);
+            Panel("Right door", view, new Vector2(0.545f, 0f), Vector2.one, doorColour);
+            // The crack lets in a sliver; its edges are darker still.
+            Panel("Crack shadow", view, new Vector2(0.455f, 0f), new Vector2(0.545f, 1f), new Color(0f, 0f, 0f, 0.45f));
+            Panel("Top slat", view, new Vector2(0.455f, 0.82f), new Vector2(0.545f, 1f), doorColour);
+            Panel("Bottom slat", view, new Vector2(0.455f, 0f), new Vector2(0.545f, 0.16f), doorColour);
+            client.hidingLabel = UIKit.Text(view, "Hint", "Hiding  ·  press E to leave", UIText.Strong, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            var hint = client.hidingLabel.rectTransform;
+            hint.anchorMin = new Vector2(0f, 0.06f); hint.anchorMax = new Vector2(1f, 0.11f); hint.offsetMin = hint.offsetMax = Vector2.zero;
+        }
+
+        /// <summary>The boarding countdown: big, centred above the prompt, impossible to miss.</summary>
+        static void BuildBoarding(RectTransform canvas, CH_ClientController client) {
+            RectTransform card = HudKit.Card(canvas, "Boarding", new Vector2(0.5f, 0.5f), new Vector2(0f, 170f), new Vector2(560f, 76f));
+            HudKit.AccentStripe(card, new Color(0.86f, 0.24f, 0.2f), 4f);
+            UIKit.Row(card.gameObject, 12f, new RectOffset(22, 26, 10, 10), TextAnchor.MiddleCenter);
+            HudKit.Icon(card, "directions_run", 34f, new Color(0.86f, 0.24f, 0.2f));
+            client.boardingLabel = UIKit.Text(card, "Countdown", "GET TO THE BOAT  ·  25", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            client.boardingPopup = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
+        }
+
+        /// <summary>Who speaks, and how each voice is captioned. The 3D sources carry the priest and the dead.</summary>
+        static void BuildVoices(GameObject root, CH_ClientController client) {
+            CH_VoicePlayer voice = client.voice;
+            voice.subtitles = client.radio;
+            voice.ear = Source(root.transform, "VoiceEar");
+            voice.monster = Spatial(Source(root.transform, "VoicePriest"), 4f, 70f);
+            voice.world = Spatial(Source(root.transform, "VoiceWorld"), 2f, 45f);
+            voice.styles = new[] {
+                new CH_VoicePlayer.SpeakerStyle { speaker = "MARA", caption = new Color(0.95f, 0.76f, 0.46f) },
+                new CH_VoicePlayer.SpeakerStyle { speaker = "FATHER CRANE", caption = new Color(0.9f, 0.3f, 0.26f) },
+                new CH_VoicePlayer.SpeakerStyle { speaker = "LILY", caption = new Color(0.68f, 0.84f, 1f) },
+                new CH_VoicePlayer.SpeakerStyle { speaker = "???", caption = new Color(0.62f, 0.6f, 0.66f) },
+            };
+        }
+
+        static AudioSource Spatial(AudioSource source, float minDistance, float maxDistance) {
+            source.spatialBlend = 1f;
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = minDistance;
+            source.maxDistance = maxDistance;
+            source.dopplerLevel = 0f;
+            return source;
+        }
+
+        /// <summary>The priest where he cannot be: the stings for when he is seen and when he is gone.</summary>
+        static void BuildApparitions(CH_ClientController client) {
+            CH_Apparitions apparitions = client.apparitions;
+            apparitions.voice = client.voice;
+            apparitions.jumpscare = client.jumpscare;
+            apparitions.revealSting = Sound(1f, 0.6f, 0f, 0f, AudioFolder + "wood-thud.ogg");
+            apparitions.fadeSting = Sound(0.7f, 0.5f, 0f, 0f, AudioFolder + "creak-1.ogg", AudioFolder + "creak-2.ogg");
         }
 
         const string AudioFolder = Root + "/Audio/";
@@ -965,29 +945,33 @@ namespace Universes.UniverseData.classic_horror.Editor {
             return material;
         }
 
-        /// <summary>Top centre: chapter, the current objective, case progress and the clock.</summary>
+        /// <summary>Top centre: the act, the objective, what it needs, progress, the clock and what you are carrying.</summary>
         static void BuildCaseStatus(RectTransform canvas, CH_ClientController client) {
             RectTransform card = UIKit.Pinned(canvas, "CaseStatus", new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(560f, 100f));
             client.caseStatusCard = card.gameObject;
             HudKit.Glass(card, 16f);
             UIKit.Row(card.gameObject, 14f, new RectOffset(14, 20, 12, 12), TextAnchor.MiddleLeft);
             UIKit.FitContent(card.gameObject, false, true);
-            HudKit.Emblem(card, "Emblem", "magnifier", 58f, Amber, out _, out client.caseIcon);
+            HudKit.Emblem(card, "Emblem", "compass", 58f, Amber, out _, out client.caseIcon);
 
             RectTransform text = UIKit.Node(card, "Text");
             UIKit.Size(text, -1f, -1f, 1f);
             UIKit.Column(text.gameObject, 3f, null, TextAnchor.MiddleLeft);
-            client.chapterLabel = UIKit.Text(text, "Chapter", "Investigator", UIText.Caption, UIColorRole.TextMuted);
+            client.chapterLabel = UIKit.Text(text, "Chapter", CH_Story.Title, UIText.Caption, UIColorRole.TextMuted);
             client.chapterLabel.color = Amber;
             Object.DestroyImmediate(client.chapterLabel.GetComponent<UIThemeColor>());
-            client.objectiveLabel = UIKit.Text(text, "Objective", "Establishing the radio link...", UIText.Strong);
+            client.objectiveLabel = UIKit.Text(text, "Objective", "Crossing the reservoir...", UIText.Strong);
             client.objectiveLabel.fontSize = 18f;
             client.objectiveLabel.textWrappingMode = TextWrappingModes.Normal;
+            client.detailLabel = UIKit.Text(text, "Detail", string.Empty, UIText.Small, UIColorRole.TextSecondary);
+            client.detailLabel.textWrappingMode = TextWrappingModes.Normal;
 
             RectTransform chips = UIKit.Node(text, "Chips");
             UIKit.Row(chips.gameObject, 8f, new RectOffset(0, 0, 4, 0), TextAnchor.MiddleLeft);
-            client.progressChip = HudKit.Chip(chips, "Progress", "magnifier", "Evidence 0 / 4", Amber, 28f, UIText.Small);
+            client.progressChip = HudKit.Chip(chips, "Progress", "compass", "0 / 3", Amber, 28f, UIText.Small);
             client.timerChip = HudKit.Chip(chips, "Time", "hourglass", "00:00", Amber, 28f, UIText.Small);
+            client.carryChip = HudKit.Chip(chips, "Carrying", "pan_tool", "Nothing", Amber, 28f, UIText.Small);
+            client.carryChip.gameObject.SetActive(false);
             RectTransform journal = UIKit.Node(chips, "JournalHint");
             UIKit.Row(journal.gameObject, 6f, new RectOffset(6, 0, 0, 0), TextAnchor.MiddleLeft);
             HudKit.KeyCap(journal, "F");
@@ -997,7 +981,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.journal.newEntryBadge = HudKit.Popup(badge, false);
         }
 
-        /// <summary>Under the case status: an arrow towards the nearest lead and how far it is.</summary>
+        /// <summary>Under the objective: an arrow towards the nearest thing the act needs (or where your item goes) and how far.</summary>
         static void BuildCompass(RectTransform canvas, CH_ClientController client) {
             RectTransform pill = UIKit.Pinned(canvas, "ObjectiveCompass", new Vector2(0.5f, 1f), new Vector2(0f, -184f), new Vector2(260f, 38f));
             HudKit.Glass(pill, 19f);
@@ -1007,12 +991,12 @@ namespace Universes.UniverseData.classic_horror.Editor {
             UIKit.Size(pointer, 26f, 26f);
             UnityEngine.UI.Image arrow = HudKit.Icon(pointer, "navigation", 22f, Amber);
             UIKit.Center(arrow.rectTransform);
-            var readout = UIKit.Text(pill, "Readout", "SEARCH   FORWARD   12 m", UIText.Caption, UIColorRole.TextPrimary);
+            var readout = UIKit.Text(pill, "Readout", "OBJECTIVE   FORWARD   12 m", UIText.Caption, UIColorRole.TextPrimary);
             client.objectiveCompass = canvas.gameObject.AddComponent<ObjectiveCompass>();
-            client.objectiveCompass.Configure(pill.gameObject, pointer, readout, "SEARCH");
+            client.objectiveCompass.Configure(pill.gameObject, pointer, readout, "OBJECTIVE");
         }
 
-        /// <summary>Bottom centre: the radio transcript, as a card that fades in for each new message.</summary>
+        /// <summary>Bottom centre: the subtitles, as a card that fades in for each line (with static over Mara's radio).</summary>
         static void BuildRadio(RectTransform canvas, CH_RadioFeed radio) {
             RectTransform card = HudKit.Card(canvas, "RadioTranscript", new Vector2(0.5f, 0f), new Vector2(0f, 120f), new Vector2(820f, 120f));
             HudKit.AccentStripe(card, Amber, 4f, left: true);
@@ -1030,6 +1014,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
             radio.transcript.textWrappingMode = TextWrappingModes.Normal;
             radio.transcript.richText = true;
             radio.popup = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
+            // Subtitles read over the cutscene letterbox too.
+            OwnCanvas(card.gameObject, SubtitleSortingOrder);
         }
 
         /// <summary>The field journal: a readable card with page buttons; the world keeps running behind it.</summary>
@@ -1046,7 +1032,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             RectTransform titles = UIKit.Node(header, "Titles");
             UIKit.Size(titles, -1f, -1f, 1f);
             UIKit.Column(titles.gameObject, 0f, null, TextAnchor.MiddleLeft);
-            UIKit.Text(titles, "Title", "Field notes", UIText.Title);
+            UIKit.Text(titles, "Title", "What was said tonight", UIText.Title);
             journal.pageLabel = UIKit.Text(titles, "Page", "Page 1 / 1", UIText.Small, UIColorRole.TextMuted);
             journal.close = UIKit.IconButton(header, "Close", "close", 40f, UIColorRole.SurfaceInset, 20f, out _, out _);
             UIKit.Divider(card);
@@ -1062,7 +1048,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             RectTransform footer = UIKit.Node(card, "Footer");
             UIKit.Row(footer.gameObject, 10f, null, TextAnchor.MiddleLeft);
             UnityEngine.UI.Image warn = HudKit.Icon(footer, "warning", 20f, Amber);
-            var note = UIKit.Text(footer, "Warning", "The settlement does not pause while you read.", UIText.Small, UIColorRole.TextSecondary);
+            var note = UIKit.Text(footer, "Warning", "Hollowmere does not wait while you read.", UIText.Small, UIColorRole.TextSecondary);
             UIKit.Size(note, -1f, -1f, 1f);
             journal.previous = UIKit.TextButton(footer, "Previous", "Previous", "arrow_back", UIColorRole.SurfaceInset, UIColorRole.TextPrimary, 42f);
             UIKit.Size(journal.previous, 150f, 42f);
@@ -1075,7 +1061,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             card.GetComponent<CanvasGroup>().alpha = 1f;
         }
 
-        /// <summary>The case ending: how it ended, the epilogue, and when the next case starts.</summary>
+        /// <summary>The night's ending: which one, the epilogue, the night in numbers and when the next night starts.</summary>
         const float EndingSummarySize = 18f;
 
         static void BuildEnding(RectTransform canvas, CH_ClientController client) {
@@ -1084,22 +1070,22 @@ namespace Universes.UniverseData.classic_horror.Editor {
             UIKit.Column(card.gameObject, 10f, new RectOffset(48, 48, 32, 30), TextAnchor.UpperCenter);
             UIKit.FitContent(card.gameObject, false, true);
             HudKit.Emblem(card, "Emblem", "laurels_trophy", 92f, Amber, out client.endingDisc, out client.endingIcon);
-            UIKit.Text(card, "Kicker", "Case closed", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
-            client.endingTitle = UIKit.Text(card, "Title", "Last rites", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            UIKit.Text(card, "Kicker", "The night is over", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            client.endingTitle = UIKit.Text(card, "Title", "YOU ESCAPED", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
             Object.DestroyImmediate(client.endingTitle.GetComponent<UIThemeColor>());
             client.endingLabel = UIKit.Text(card, "Epilogue", string.Empty, UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             client.endingLabel.fontSize = 20f;
             client.endingLabel.lineSpacing = 8f;
             client.endingLabel.textWrappingMode = TextWrappingModes.Normal;
-            // The case in numbers: readable body text, not muted small print.
+            // The night in numbers: readable body text, not muted small print.
             client.endingSummary = UIKit.Text(card, "Summary", string.Empty, UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             client.endingSummary.fontSize = EndingSummarySize;
             client.endingSummary.textWrappingMode = TextWrappingModes.Normal;
             client.endingSummary.lineSpacing = 6f;
             RectTransform chips = UIKit.Node(card, "Chips");
             UIKit.Row(chips.gameObject, 10f, new RectOffset(0, 0, 10, 0), TextAnchor.MiddleCenter);
-            client.endingNextCase = HudKit.Chip(chips, "NextCase", "hourglass_bottom", "Next case in 20s", Amber, 32f, UIText.Small);
-            client.endingSolved = HudKit.Chip(chips, "Solved", "star_medal", "Cases solved: 0", Amber, 32f, UIText.Small);
+            client.endingNextCase = HudKit.Chip(chips, "NextNight", "hourglass_bottom", "Next night in 20s", Amber, 32f, UIText.Small);
+            client.endingSolved = HudKit.Chip(chips, "Escapes", "star_medal", "Escapes tonight: 0", Amber, 32f, UIText.Small);
             client.endingPopup = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
         }
     }

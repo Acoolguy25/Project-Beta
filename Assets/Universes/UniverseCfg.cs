@@ -41,8 +41,8 @@ namespace Universes {
             },
             new(){
                 id = "classic_horror",
-                title = "Investigator",
-                description = "A horror story where you investigate an unknown horror source",
+                title = "The Drowned Choir",
+                description = "Stranded in a flooded village with a drowned priest who wants your voice. Fix the boat, free his choir, steal his bell, and run.",
                 creator_playerid = "Uvr2xiFAyUZJDybNdBEKcPOsMvjR",
                 access = UniverseAccess.Public
             },

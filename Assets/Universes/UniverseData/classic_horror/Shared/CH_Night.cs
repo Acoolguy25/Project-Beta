@@ -1,0 +1,246 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Universes.UniverseData.classic_horror {
+    /// <summary>
+    /// One night at Hollowmere as plain state, free of networking and physics so it can be tested: which items exist,
+    /// where they are, who carries what, which slots are filled, and when an act is complete. The server runner owns
+    /// one and turns its answers into broadcasts, voice lines and cutscenes.
+    /// </summary>
+    public sealed class CH_Night {
+        public sealed class Item {
+            public int Id;
+            public CH_ItemKind Kind;
+            public CH_ItemState State;
+            public Vector3 Position;
+            public float Yaw;
+            /// <summary>Who carries it (the runner's investigator key), or -1.</summary>
+            public int Carrier = -1;
+            /// <summary>The slot it was placed in, or -1.</summary>
+            public int Slot = -1;
+            /// <summary>The drowned singer a relic belonged to (<see cref="CH_Story.Singers"/>), or -1.</summary>
+            public int Singer = -1;
+            /// <summary>Has anyone picked it up yet (its first pick-up line plays once).</summary>
+            public bool Touched;
+        }
+
+        public sealed class Slot {
+            public int Id;
+            public CH_SlotKind Kind;
+            public CH_ItemKind Accepts;
+            public Vector3 Position;
+            public float Yaw;
+            /// <summary>The item placed here, or -1.</summary>
+            public int Item = -1;
+            /// <summary>For a grave: whose it is (<see cref="CH_Story.Singers"/>).</summary>
+            public int Singer = -1;
+            public bool Filled => Item >= 0;
+        }
+
+        /// <summary>Where the night's items and slots are, chosen by the runner from the map's anchors.</summary>
+        public struct Layout {
+            /// <summary>Resting places for the three boat parts, in <see cref="CH_Story.BoatParts"/> order.</summary>
+            public Pose[] boatPartSpots;
+            /// <summary>Resting places for the three relics.</summary>
+            public Pose[] relicSpots;
+            /// <summary>Where Lily's music box waits; it appears in Act II.</summary>
+            public Pose musicBoxSpot;
+            /// <summary>The bell on the chapel altar.</summary>
+            public Pose bellSpot;
+            /// <summary>The boat's fuel, toolbox, lantern and bell places.</summary>
+            public Pose[] boatSlots;
+            /// <summary>One grave per singer, in <see cref="CH_Story.Singers"/> order.</summary>
+            public Pose[] graves;
+            /// <summary>Lily's marker on the jetty steps.</summary>
+            public Pose lilyMarker;
+        }
+
+        public readonly int Seed;
+        /// <summary>The three singers freed tonight (indices into <see cref="CH_Story.Singers"/>).</summary>
+        public readonly int[] Singers = new int[CH_Story.SingersPerNight];
+        public readonly List<Item> Items = new();
+        public readonly List<Slot> Slots = new();
+        public CH_Phase Phase { get; private set; } = CH_Phase.Waiting;
+        /// <summary>Boat parts fitted so far.</summary>
+        public int PartsFixed => CountFilled(CH_SlotKind.BoatFuel, CH_SlotKind.BoatToolbox, CH_SlotKind.BoatLantern);
+        public int SingersFreed => CountFilled(CH_SlotKind.Grave);
+        public bool MusicBoxReturned => CountFilled(CH_SlotKind.LilyMarker) > 0;
+        public bool BellAboard => CountFilled(CH_SlotKind.BoatBell) > 0;
+        public bool IsOver => Phase is CH_Phase.Complete or CH_Phase.Failed;
+
+        public CH_Night(int seed, Layout layout) {
+            Seed = seed;
+            var random = new System.Random(seed);
+            // Three of the five singers, in a seeded order.
+            var pool = new List<int> { 0, 1, 2, 3, 4 };
+            for (int i = 0; i < Singers.Length; i++) {
+                int pick = random.Next(pool.Count);
+                Singers[i] = pool[pick];
+                pool.RemoveAt(pick);
+            }
+            for (int i = 0; i < CH_Story.BoatParts.Length; i++)
+                AddItem(CH_Story.BoatParts[i], layout.boatPartSpots[i], CH_ItemState.Resting);
+            for (int i = 0; i < CH_Story.Relics.Length; i++)
+                AddItem(CH_Story.Relics[i], layout.relicSpots[i], CH_ItemState.Hidden).Singer = Singers[i];
+            AddItem(CH_ItemKind.MusicBox, layout.musicBoxSpot, CH_ItemState.Hidden);
+            AddItem(CH_ItemKind.Bell, layout.bellSpot, CH_ItemState.Hidden);
+
+            for (int i = 0; i < CH_Story.BoatParts.Length; i++)
+                AddSlot((CH_SlotKind)i, CH_Story.BoatParts[i], layout.boatSlots[i]);
+            // A grave takes whichever relic belonged to its singer (see Fits), so its Accepts is only nominal.
+            for (int singer = 0; singer < layout.graves.Length && singer < CH_Story.SingerCount; singer++)
+                AddSlot(CH_SlotKind.Grave, CH_ItemKind.Hymnal, layout.graves[singer]).Singer = singer;
+            AddSlot(CH_SlotKind.LilyMarker, CH_ItemKind.MusicBox, layout.lilyMarker);
+            AddSlot(CH_SlotKind.BoatBell, CH_ItemKind.Bell, layout.boatSlots[3]);
+        }
+
+        Item AddItem(CH_ItemKind kind, Pose pose, CH_ItemState state) {
+            var item = new Item { Id = Items.Count, Kind = kind, State = state, Position = pose.position, Yaw = YawOf(pose.rotation) };
+            Items.Add(item);
+            return item;
+        }
+
+        Slot AddSlot(CH_SlotKind kind, CH_ItemKind accepts, Pose pose) {
+            var slot = new Slot { Id = Slots.Count, Kind = kind, Accepts = accepts, Position = pose.position, Yaw = YawOf(pose.rotation) };
+            Slots.Add(slot);
+            return slot;
+        }
+
+        /// <summary>Heading in degrees [0, 360), from managed maths only so the night's rules run without the engine.</summary>
+        static float YawOf(Quaternion rotation) {
+            Vector3 forward = rotation * Vector3.forward;
+            return Mathf.Repeat(Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg, 360f);
+        }
+
+        int CountFilled(params CH_SlotKind[] kinds) {
+            int count = 0;
+            foreach (Slot slot in Slots)
+                if (slot.Filled && System.Array.IndexOf(kinds, slot.Kind) >= 0) count++;
+            return count;
+        }
+
+        /// <summary>Moves the night to <paramref name="next"/> and reveals that act's items.</summary>
+        public void Enter(CH_Phase next) {
+            Phase = next;
+            foreach (Item item in Items) {
+                if (item.State != CH_ItemState.Hidden) continue;
+                bool reveal = next switch {
+                    CH_Phase.Choir => item.Kind is CH_ItemKind.Hymnal or CH_ItemKind.Photograph or CH_ItemKind.Candle or CH_ItemKind.MusicBox,
+                    CH_Phase.ChapelOpens or CH_Phase.Sermon => item.Kind == CH_ItemKind.Bell,
+                    _ => false
+                };
+                if (reveal) item.State = CH_ItemState.Resting;
+            }
+        }
+
+        public void Fail() { if (!IsOver) Phase = CH_Phase.Failed; }
+        public void Complete() { if (!IsOver) Phase = CH_Phase.Complete; }
+
+        public Item CarriedBy(int carrier) {
+            foreach (Item item in Items) if (item.State == CH_ItemState.Carried && item.Carrier == carrier) return item;
+            return null;
+        }
+
+        public Item GetItem(int id) => id >= 0 && id < Items.Count ? Items[id] : null;
+        public Slot GetSlot(int id) => id >= 0 && id < Slots.Count ? Slots[id] : null;
+
+        /// <summary>
+        /// Picks a resting item up. Hands already full swap: the held item is set down where the new one lay.
+        /// Returns the item that was set down, if any, through <paramref name="swapped"/>.
+        /// </summary>
+        public bool TryPickUp(int carrier, int itemId, out Item swapped, out bool firstTouch) {
+            swapped = null;
+            firstTouch = false;
+            Item item = GetItem(itemId);
+            if (item == null || item.State != CH_ItemState.Resting || !CH_Story.IsPlayable(Phase)) return false;
+            Item held = CarriedBy(carrier);
+            if (held != null) {
+                held.State = CH_ItemState.Resting;
+                held.Carrier = -1;
+                held.Position = item.Position;
+                held.Yaw = item.Yaw;
+                swapped = held;
+            }
+            item.State = CH_ItemState.Carried;
+            item.Carrier = carrier;
+            firstTouch = !item.Touched;
+            item.Touched = true;
+            return true;
+        }
+
+        /// <summary>Sets whatever <paramref name="carrier"/> holds down at <paramref name="position"/> (a death, a hiding place).</summary>
+        public Item Drop(int carrier, Vector3 position, float yaw) {
+            Item held = CarriedBy(carrier);
+            if (held == null) return null;
+            held.State = CH_ItemState.Resting;
+            held.Carrier = -1;
+            held.Position = position;
+            held.Yaw = yaw;
+            return held;
+        }
+
+        /// <summary>Whether the slot is accepting its item in the current act.</summary>
+        public bool IsOpen(Slot slot) {
+            if (slot == null || slot.Filled || IsOver) return false;
+            return slot.Kind switch {
+                CH_SlotKind.BoatFuel or CH_SlotKind.BoatToolbox or CH_SlotKind.BoatLantern => Phase == CH_Phase.Stranded,
+                CH_SlotKind.Grave => Phase == CH_Phase.Choir && IsSingerTonight(slot.Singer),
+                CH_SlotKind.LilyMarker => Phase is CH_Phase.Choir or CH_Phase.Sermon or CH_Phase.Boarding,
+                CH_SlotKind.BoatBell => Phase == CH_Phase.Sermon,
+                _ => false
+            };
+        }
+
+        public bool IsSingerTonight(int singer) => System.Array.IndexOf(Singers, singer) >= 0;
+
+        /// <summary>Whether <paramref name="item"/> belongs in <paramref name="slot"/>: a relic goes on its own singer's grave.</summary>
+        public static bool Fits(Item item, Slot slot) {
+            if (item == null || slot == null) return false;
+            if (slot.Kind == CH_SlotKind.Grave) return item.Singer >= 0 && item.Singer == slot.Singer;
+            return item.Kind == slot.Accepts;
+        }
+
+        /// <summary>Places what <paramref name="carrier"/> holds in the slot. The item stays there for the rest of the night.</summary>
+        public bool TryPlace(int carrier, int slotId, out Item placed) {
+            placed = null;
+            Slot slot = GetSlot(slotId);
+            Item held = CarriedBy(carrier);
+            if (held == null || !IsOpen(slot) || !Fits(held, slot)) return false;
+            held.State = CH_ItemState.Placed;
+            held.Carrier = -1;
+            held.Slot = slot.Id;
+            held.Position = slot.Position;
+            held.Yaw = slot.Yaw;
+            slot.Item = held.Id;
+            placed = held;
+            return true;
+        }
+
+        /// <summary>The act that the current state has earned, or the current phase if it is not finished yet.</summary>
+        public CH_Phase EarnedPhase() => Phase switch {
+            CH_Phase.Stranded when PartsFixed == CH_Story.BoatParts.Length => CH_Phase.Taking,
+            CH_Phase.Choir when SingersFreed == CH_Story.SingersPerNight => CH_Phase.ChapelOpens,
+            CH_Phase.Sermon when BellAboard => CH_Phase.Boarding,
+            _ => Phase
+        };
+
+        /// <summary>The slot an item should go to now (for the HUD arrow), or null.</summary>
+        public Slot DestinationFor(Item item) {
+            if (item == null) return null;
+            foreach (Slot slot in Slots) if (IsOpen(slot) && Fits(item, slot)) return slot;
+            return null;
+        }
+
+        /// <summary>Items the team still has to bring somewhere in this act (resting or carried, not yet placed).</summary>
+        public bool IsObjective(Item item) {
+            if (item.State is CH_ItemState.Hidden or CH_ItemState.Placed) return false;
+            if (item.Kind == CH_ItemKind.MusicBox) return false; // a secret; it never gets an arrow
+            return DestinationFor(item) != null;
+        }
+
+        /// <summary>The ending this night has earned so far.</summary>
+        public byte Ending => Phase == CH_Phase.Failed ? CH_Story.EndingDrowned
+            : Phase == CH_Phase.Complete ? (MusicBoxReturned ? CH_Story.EndingTrue : CH_Story.EndingEscaped)
+            : CH_Story.EndingNone;
+    }
+}

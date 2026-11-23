@@ -10,12 +10,12 @@ namespace Universes.UniverseData.classic_horror.Tests {
     public sealed class CH_MaterialTests {
         const string Materials = "Assets/Universes/UniverseData/classic_horror/Materials/";
 
-        [TestCase("EvidenceGlow")]
         [TestCase("SearchLanternGlass")]
-        [TestCase("OfferingEmber")]
+        [TestCase("ItemEmber")]
+        [TestCase("ItemFlame")]
         public void GeneratedGlowMaterialsKeepTheirEmission(string name) {
             var material = AssetDatabase.LoadAssetAtPath<Material>(Materials + name + ".mat");
-            Assert.IsNotNull(material, name + ".mat is missing; run Ryan/Classic Horror/Rebuild Evidence Prefabs.");
+            Assert.IsNotNull(material, name + ".mat is missing; run Ryan/Classic Horror/Rebuild Item Prefabs.");
             Assert.IsTrue(material.IsKeywordEnabled("_EMISSION"), name + " lost its _EMISSION keyword.");
             Assert.IsTrue((material.globalIlluminationFlags & MaterialGlobalIlluminationFlags.RealtimeEmissive) != 0,
                 name + " must be flagged RealtimeEmissive or validation strips its emission.");

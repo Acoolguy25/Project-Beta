@@ -11,6 +11,7 @@
 | wood-thud.ogg | Kenney, *Impact Sounds* (`impactWood_heavy_000.ogg`) | CC0 1.0 |
 | heartbeat.ogg, breathing.ogg, radio-static.ogg | Synthesised for this project by `Audio/Source~/synth_horror_audio.py` | CC0 1.0 (project-owned) |
 | objective-collect.mp3 | Existing project asset | as originally added |
+| Voice/*.ogg (68 voice lines) | Spoken by Piper TTS (MIT licence, github.com/rhasspy/piper) with the `en_US-libritts_r-medium` voice, trained on LibriTTS-R; script in `Voice/Source~/lines.tsv`, processing (pitch, whisper, reverb, radio) in `Voice/Source~/gen_voices.py` | voice model CC BY 4.0 (LibriTTS-R, Koizumi et al. 2023); generated clips project-owned |
 
 Kenney packs (www.kenney.nl) were taken from the GitHub mirror github.com/ETdoFresh/kenney.nl, because
 kenney.nl is not reachable from the cloud environment. Credit is not required by CC0 but given gladly.
@@ -25,10 +26,11 @@ kenney.nl is not reachable from the cloud environment. Credit is not required by
   kit in `Packages/com.ryan.gameframework/Runtime/GameFeel` (see its `Audio/CREDITS.md`).
 - Lantern posts (`Prefabs/SearchLantern.prefab`) use `post_lantern.fbx` from Kay Lousberg's *KayKit Halloween Bits*
   (CC0 1.0), already in the project; `Materials/SearchLanternGlass.mat` is a copy of its atlas material with emission.
-- The evidence tables and the offering stands are Flooded Grounds furniture (`Prop_SmallTable_A`); the tables use
-  `Materials/EvidenceTable.mat`, a darker tinted copy of the pack's table material. The salt offering is the pack's
-  `Prop_Vase_B` with a salt disc, the bell is built from Unity primitives (`OfferingBronze.mat`, `OfferingHandle.mat`),
-  and the lantern offering is `lantern_standing.fbx` from *KayKit Halloween Bits* (CC0 1.0).
+- The night's items (`Prefabs/Items/`): the fuel can, toolbox and bell are built from Unity primitives; the ferry
+  lantern is `lantern_standing.fbx` (*KayKit Halloween Bits*), the hymnal and photograph are `book_single.fbx` and
+  `pictureframe_standing_A.fbx` (*KayKit Furniture Bits*), the candle and music box are `candle_thin.fbx` and
+  `box_small_decorated.fbx` (*KayKit Dungeon Remastered*), all Kay Lousberg, CC0 1.0, tinted copies of their atlases.
+- The ferry, jetty, vestry wardrobes, altar table and Lily's stone (built by **Build Story Set**) are Flooded Grounds props.
 - Lantern post wood uses `Materials/SearchLanternPost.mat`, a darker, matte copy of the KayKit atlas material.
 - `Data/EncounterFace.png` is rendered in the Editor (`Editor/CH_EncounterFace.cs`) from the shared `PresenceFace`
   prefab (the Cursed Priest model above); no outside image.

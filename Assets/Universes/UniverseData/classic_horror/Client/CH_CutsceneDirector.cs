@@ -1,0 +1,165 @@
+using RyanAssets.GameFeel;
+using RyanAssets.Input;
+using TMPro;
+using UnityEngine;
+
+namespace Universes.UniverseData.classic_horror.Client {
+    /// <summary>
+    /// Plays the map's authored cutscenes (<see cref="CH_CutsceneSet"/>) on the main camera: letterbox bars, eased camera
+    /// moves between marks, the priest as a client-only actor, sound cues and a title card. Runs after the first-person
+    /// camera each frame so it wins, and before the game-feel kit so shakes still land. Movement input is off while a
+    /// scene plays; the server holds the night for the same length.
+    /// </summary>
+    [DefaultExecutionOrder(900)]
+    public sealed class CH_CutsceneDirector : MonoBehaviour {
+        [Header("Letterbox")]
+        public RectTransform topBar;
+        public RectTransform bottomBar;
+        [Tooltip("Height of each bar as a fraction of the screen.")]
+        [SerializeField, Range(0f, 0.3f)] float barFraction = 0.13f;
+        [SerializeField, Min(0.05f)] float barSeconds = 0.6f;
+        [Tooltip("The gameplay HUD, faded out while a scene plays.")]
+        public CanvasGroup gameplayHud;
+
+        [Header("Title card")]
+        public CanvasGroup titleCard;
+        public TMP_Text titleText;
+        public TMP_Text subtitleText;
+        [SerializeField, Min(0.1f)] float titleFadeSeconds = 1.2f;
+        [Tooltip("The title card appears this many seconds before the scene ends.")]
+        [SerializeField, Min(0.5f)] float titleLead = 4.5f;
+
+        [Header("Fades")]
+        [Tooltip("Full-screen black, used to cut between shots and to fade in and out of a scene.")]
+        public CanvasGroup blackout;
+        [SerializeField, Min(0f)] float cutFadeSeconds = 0.25f;
+
+        [Header("Cues")]
+        public SfxSound thud = new();
+        public SfxSound bell = new();
+        public SfxSound scream = new();
+        public SfxSound doors = new();
+        public SfxSound engine = new();
+        public SfxSound splash = new();
+
+        CH_CutsceneSet set;
+        CH_PriestActor actor;
+        CH_CutsceneSet.Scene scene;
+        float startedAt, length, defaultFov = -1f, letterbox;
+        int lastShot = -1;
+        bool playing, inputTaken;
+        Canvas barCanvas;
+
+        public bool Playing => playing;
+
+        public void Bind(CH_CutsceneSet cutscenes, CH_PriestActor priestActor) {
+            set = cutscenes;
+            actor = priestActor;
+        }
+
+        /// <summary>Starts the scene for <paramref name="phase"/>, <paramref name="secondsIn"/> seconds in (late joiners pick it up mid-way).</summary>
+        public void Play(CH_Phase phase, float secondsIn) {
+            if (set == null || !set.TryGet(phase, out scene)) { Stop(); return; }
+            startedAt = Time.time - Mathf.Max(0f, secondsIn);
+            length = CH_Story.CutsceneSeconds(phase);
+            playing = true;
+            lastShot = -1;
+            if (!inputTaken) {
+                InputService.SetInputScreenActive(InputScreen.GameMenu, true);
+                inputTaken = true;
+            }
+            if (titleCard != null) titleCard.alpha = 0f;
+            ShowTitle(scene.titleCard);
+        }
+
+        public void Stop() {
+            if (!playing && !inputTaken) return;
+            playing = false;
+            if (inputTaken) {
+                InputService.SetInputScreenActive(InputScreen.GameMenu, false);
+                inputTaken = false;
+            }
+            if (actor != null) actor.Hide();
+            Camera camera = Camera.main;
+            if (camera != null && defaultFov > 0f) camera.fieldOfView = defaultFov;
+            if (titleCard != null) titleCard.alpha = 0f;
+            if (blackout != null) blackout.alpha = 0f;
+        }
+
+        void ShowTitle(string card) {
+            if (titleText == null) return;
+            int split = string.IsNullOrEmpty(card) ? -1 : card.IndexOf('\n');
+            titleText.text = split >= 0 ? card.Substring(0, split) : card ?? string.Empty;
+            if (subtitleText != null) subtitleText.text = split >= 0 ? card.Substring(split + 1) : string.Empty;
+        }
+
+        void OnDisable() => Stop();
+
+        void LateUpdate() {
+            letterbox = Mathf.MoveTowards(letterbox, playing ? 1f : 0f, Time.unscaledDeltaTime / barSeconds);
+            ApplyLetterbox();
+            if (!playing) return;
+
+            float elapsed = Time.time - startedAt;
+            int index = CH_CutsceneSet.ShotAt(scene, elapsed, out float progress);
+            CH_CutsceneSet.Shot shot = scene.shots[index];
+            if (index != lastShot) BeginShot(shot, index);
+
+            Camera camera = Camera.main;
+            if (camera != null && shot.from != null) {
+                if (defaultFov < 0f) defaultFov = camera.fieldOfView;
+                float eased = Mathf.SmoothStep(0f, 1f, progress);
+                Vector3 position = shot.to != null ? Vector3.Lerp(shot.from.position, shot.to.position, eased) : shot.from.position;
+                Quaternion rotation = shot.lookAt != null
+                    ? Quaternion.LookRotation(shot.lookAt.position - position, Vector3.up)
+                    : shot.to != null ? Quaternion.Slerp(shot.from.rotation, shot.to.rotation, eased) : shot.from.rotation;
+                camera.transform.SetPositionAndRotation(position, rotation);
+                if (shot.fieldOfView > 1f) camera.fieldOfView = shot.fieldOfView;
+            }
+            if (actor != null) actor.Animate(shot, progress);
+
+            // A short dip to black at each cut, and out of the last shot.
+            float sinceCut = ShotElapsed(index, elapsed);
+            float cutFade = cutFadeSeconds > 0f ? 1f - Mathf.Clamp01(sinceCut / cutFadeSeconds) : 0f;
+            float endFade = Mathf.Clamp01((elapsed - (length - 0.8f)) / 0.8f);
+            if (blackout != null) blackout.alpha = Mathf.Max(index == 0 ? 0f : cutFade, endFade);
+            if (titleCard != null) {
+                float titleTime = elapsed - (length - titleLead);
+                titleCard.alpha = string.IsNullOrEmpty(scene.titleCard) ? 0f : Mathf.Clamp01(titleTime / titleFadeSeconds) * (1f - endFade);
+            }
+            // The first-person camera unlocks the cursor while input is off; a cutscene keeps it hidden.
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            if (elapsed > length + 0.5f) Stop();
+        }
+
+        float ShotElapsed(int index, float elapsed) {
+            float start = 0f;
+            for (int i = 0; i < index; i++) start += Mathf.Max(0.1f, scene.shots[i].seconds);
+            return elapsed - start;
+        }
+
+        void BeginShot(CH_CutsceneSet.Shot shot, int index) {
+            lastShot = index;
+            if (shot.shake > 0f) CameraShake.Kick(shot.shake, 0.5f);
+            SfxSound cue = shot.cue switch {
+                "thud" => thud, "bell" => bell, "scream" => scream, "doors" => doors, "engine" => engine, "splash" => splash, _ => null
+            };
+            if (cue != null && cue.HasClips) GameSfx.Play(cue);
+        }
+
+        void Awake() {
+            if (topBar != null) barCanvas = topBar.GetComponentInParent<Canvas>().rootCanvas;
+        }
+
+        void ApplyLetterbox() {
+            float eased = Mathf.SmoothStep(0f, 1f, letterbox);
+            // Bar heights are in canvas units; the canvas scales them to pixels.
+            float scale = barCanvas != null ? Mathf.Max(0.01f, barCanvas.scaleFactor) : 1f;
+            float height = Screen.height * barFraction * eased / scale;
+            if (topBar != null) topBar.sizeDelta = new Vector2(topBar.sizeDelta.x, height);
+            if (bottomBar != null) bottomBar.sizeDelta = new Vector2(bottomBar.sizeDelta.x, height);
+            if (gameplayHud != null) gameplayHud.alpha = 1f - eased;
+        }
+    }
+}

@@ -48,9 +48,18 @@ namespace Universes.UniverseData.classic_horror.Client {
             phase = Random.value * pulseSeconds;
         }
 
+        /// <summary>Disabled (carried or set down), the item is just an object: no outline and no glow.</summary>
         void OnDisable() {
             focused = false;
             focus = 0f;
+            if (block == null) return;
+            foreach (Renderer target in rimRenderers) {
+                if (target == null) continue;
+                target.GetPropertyBlock(block);
+                block.SetFloat(RimStrength, 0f);
+                target.SetPropertyBlock(block);
+            }
+            if (glowLight != null) glowLight.intensity = 0f;
         }
 
         void Update() {
