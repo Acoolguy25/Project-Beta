@@ -50,6 +50,29 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         const string GunGlowPath = Root + "/Prefabs/MM_GunGlow.prefab";
         const float GunGlowRange = 14f;
         const float GunGlowIntensity = 40f;
+        // The floating gun's look while it lies on the floor: glowing sheriff blue.
+        const string DroppedGunMaterialPath = Root + "/Materials/MM_DroppedGun.mat";
+        const float DroppedGunGlow = 2.5f;
+        // The coin every player chases (the shared coin prefab: only this game spawns coins). Its look is made
+        // here so the emission keyword and the embossed face cannot drift from what the game needs.
+        const string CoinFolder = "Packages/com.ryan.gameframework/Runtime/Items/Coin";
+        const string CoinPrefabPath = CoinFolder + "/DefaultCoinItem.prefab";
+        const string CoinAnimationPath = CoinFolder + "/CoinFloat.anim";
+        const string CoinMaterialPath = CoinFolder + "/CoinGold.mat";
+        const string CoinFaceMaterialPath = CoinFolder + "/CoinFace.mat";
+        const string CoinFaceTexturePath = CoinFolder + "/CoinFace.png";
+        const int CoinFaceSize = 256;
+        static readonly Color CoinGold = new(1f, 0.74f, 0.2f);
+        static readonly Color CoinBright = new(1f, 0.93f, 0.62f);
+        static readonly Color CoinDark = new(0.42f, 0.25f, 0.04f);
+        const float CoinGlow = 4f;
+        const float CoinFaceGlow = 2.2f;
+        // Root scale 70 makes the 0.02 m model about 1.4 m across, right beside 5.6 m robots.
+        const float CoinScale = 70f;
+        // Thickness of the coin relative to its diameter (the model's z scale), so it still shows edge-on.
+        const float CoinThickness = 0.2f;
+        // Gold per coin: 1, so the top bar's gold, the bag and the floating "+1" agree.
+        const ulong CoinValue = 1;
         // The announcement headline may shrink to this share of its size to fit on one line.
         const float AnnouncementMinTitleScale = 0.7f;
         const string StartScene = Root + "/murder_mystery_start.unity";
@@ -63,7 +86,9 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             Material[] knifeSkins = BuildKnifeSkins();
             GameObject thrownKnife = BuildThrownKnife();
             GameObject gunGlow = BuildGunGlow();
-            BuildHud(thrownKnife, knifeSkins, gunGlow);
+            Material droppedGunMaterial = BuildDroppedGunMaterial();
+            BuildCoin();
+            BuildHud(thrownKnife, knifeSkins, gunGlow, droppedGunMaterial);
             AddHudToStartScene();
             AssetDatabase.SaveAssets();
         }
@@ -652,6 +677,205 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             return AssetDatabase.LoadAssetAtPath<Texture2D>(BladeMaskPath);
         }
 
+        // ---------- materials ----------
+
+        /// <summary>
+        /// A URP Lit material at <paramref name="path"/>, created from the knife's own Lit material so it carries
+        /// URP's material version (a material made from the bare shader loses keywords such as _EMISSION when
+        /// URP upgrades it on import). Every texture and keyword is cleared for the caller to set.
+        /// </summary>
+        static Material LitMaterial(string path, string name) {
+            Material template = AssetDatabase.LoadAssetAtPath<Material>(KnifeMaterialPath);
+            if (template == null)
+                throw new System.InvalidOperationException("Missing knife material: " + KnifeMaterialPath);
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) {
+                material = new Material(template);
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.CopyPropertiesFromMaterial(template);
+            material.name = name;
+            foreach (string texture in new[] { "_BaseMap", "_MainTex", "_BumpMap", "_MetallicGlossMap", "_OcclusionMap", "_EmissionMap" })
+                if (material.HasProperty(texture))
+                    material.SetTexture(texture, null);
+            material.shaderKeywords = System.Array.Empty<string>();
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            return material;
+        }
+
+        static void Emissive(Material material, Color emission, Texture map = null) {
+            material.EnableKeyword("_EMISSION");
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            material.SetTexture("_EmissionMap", map);
+            material.SetColor("_EmissionColor", emission);
+        }
+
+        static void Save(Material material) {
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssetIfDirty(material);
+        }
+
+        /// <summary>The dropped gun's floor look (MM_ClientHUD swaps it onto the floating gun): bright sheriff blue.</summary>
+        static Material BuildDroppedGunMaterial() {
+            Material material = LitMaterial(DroppedGunMaterialPath, "MM_DroppedGun");
+            Color blue = RoleColor(MM_Role.Sheriff);
+            material.SetColor("_BaseColor", Color.Lerp(blue, Color.white, 0.35f));
+            material.SetFloat("_Metallic", 0.4f);
+            material.SetFloat("_Smoothness", 0.7f);
+            Emissive(material, blue.linear * DroppedGunGlow);
+            Save(material);
+            return material;
+        }
+
+        // ---------- coin ----------
+
+        /// <summary>
+        /// The coin: a glowing gold body, an embossed star face on both sides (alpha-cut quads with their own
+        /// glow, brighter than the body), thick enough to read edge-on, a slow spin added to the float animation,
+        /// and a value of 1 so the gold counter, the bag and the "+1" agree.
+        /// </summary>
+        static void BuildCoin() {
+            Material body = LitMaterial(CoinMaterialPath, "CoinGold");
+            body.SetColor("_BaseColor", CoinGold);
+            body.SetFloat("_Metallic", 0.55f);
+            body.SetFloat("_Smoothness", 0.65f);
+            Emissive(body, CoinGold.linear * CoinGlow);
+            Save(body);
+
+            Texture2D faceTexture = BuildCoinFaceTexture();
+            Material face = LitMaterial(CoinFaceMaterialPath, "CoinFace");
+            face.SetTexture("_BaseMap", faceTexture);
+            face.SetColor("_BaseColor", Color.white);
+            face.SetFloat("_Metallic", 0.5f);
+            face.SetFloat("_Smoothness", 0.7f);
+            face.SetFloat("_AlphaClip", 1f);
+            face.SetFloat("_Cutoff", 0.5f);
+            face.EnableKeyword("_ALPHATEST_ON");
+            face.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Back);
+            Emissive(face, Color.white * CoinFaceGlow, faceTexture);
+            Save(face);
+
+            AddCoinSpin();
+
+            GameObject root = PrefabUtility.LoadPrefabContents(CoinPrefabPath);
+            try {
+                root.transform.localScale = Vector3.one * CoinScale;
+                MeshRenderer renderer = root.GetComponentInChildren<MeshRenderer>();
+                Transform model = renderer.transform;
+                renderer.sharedMaterial = body;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                model.localScale = new Vector3(1f, 1f, CoinThickness);
+
+                // The model is a cylinder along local z, 0.02 across: a face on each cap, just proud of it.
+                Vector3 extents = model.GetComponent<MeshFilter>().sharedMesh.bounds.extents;
+                foreach (Transform old in model.Cast<Transform>().Where(child => child.name.StartsWith("Face")).ToList())
+                    Object.DestroyImmediate(old.gameObject);
+                // Unity's quad faces -z; the back one is turned round.
+                AddCoinFace(model, "FaceFront", -extents.z * 1.04f, 0f, extents.x, face);
+                AddCoinFace(model, "FaceBack", extents.z * 1.04f, 180f, extents.x, face);
+
+                // CoinShared by name: the editor assembly does not reference the networking assemblies under it.
+                MonoBehaviour coinBehaviour = root.GetComponentsInChildren<MonoBehaviour>().First(behaviour => behaviour.GetType().Name == "CoinShared");
+                SerializedObject coin = new(coinBehaviour);
+                coin.FindProperty("coinValue").ulongValue = CoinValue;
+                coin.ApplyModifiedPropertiesWithoutUndo();
+                PrefabUtility.SaveAsPrefabAsset(root, CoinPrefabPath);
+            } finally {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        static void AddCoinFace(Transform model, string name, float z, float yaw, float radius, Material material) {
+            GameObject quad = new(name);
+            quad.transform.SetParent(model, false);
+            quad.transform.localPosition = new Vector3(0f, 0f, z);
+            quad.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            // The quad mesh is 1 across; the face fills the coin inside a thin outer edge.
+            quad.transform.localScale = new Vector3(radius * 1.9f, radius * 1.9f, 1f);
+            quad.AddComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            MeshRenderer renderer = quad.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        /// <summary>
+        /// The coin's face, drawn in code (no third-party art): a raised rim and a five-pointed star in bright
+        /// gold, each with a dark drop shadow so they read as embossed. Elsewhere it is cut away (alpha 0) and the
+        /// coin's own gold shows through.
+        /// </summary>
+        static Texture2D BuildCoinFaceTexture() {
+            const float RimOuter = 0.98f, RimInner = 0.84f, GrooveInner = 0.79f;
+            const float StarOuter = 0.6f, StarInner = 0.25f;
+            Vector2 shadow = new(0.045f, -0.045f);
+            Texture2D texture = new(CoinFaceSize, CoinFaceSize, TextureFormat.RGBA32, false);
+            Color[] pixels = new Color[CoinFaceSize * CoinFaceSize];
+            Color clear = new(CoinGold.r, CoinGold.g, CoinGold.b, 0f);
+            for (int y = 0; y < CoinFaceSize; y++)
+                for (int x = 0; x < CoinFaceSize; x++) {
+                    // -1..1 across the face.
+                    Vector2 p = new((x + 0.5f) / CoinFaceSize * 2f - 1f, (y + 0.5f) / CoinFaceSize * 2f - 1f);
+                    float r = p.magnitude;
+                    Color c = clear;
+                    if (r <= RimOuter && r >= RimInner)
+                        c = CoinBright;
+                    else if (r < RimInner && r >= GrooveInner)
+                        c = CoinDark;
+                    else if (InStar(p, StarOuter, StarInner))
+                        c = CoinBright;
+                    else if (InStar(p - shadow, StarOuter, StarInner))
+                        c = CoinDark;
+                    pixels[y * CoinFaceSize + x] = c;
+                }
+            texture.SetPixels(pixels);
+            File.WriteAllBytes(CoinFaceTexturePath, texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(CoinFaceTexturePath, ImportAssetOptions.ForceUpdate);
+            TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(CoinFaceTexturePath);
+            if (!importer.alphaIsTransparency) {
+                importer.alphaIsTransparency = true;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(CoinFaceTexturePath);
+        }
+
+        /// <summary>Inside a five-pointed star with one point up, of the given tip and notch radii.</summary>
+        static bool InStar(Vector2 p, float outer, float inner) {
+            float r = p.magnitude;
+            if (r > outer)
+                return false;
+            // Angle from straight up, folded into one point's half-sector (36 degrees).
+            float angle = Mathf.Atan2(p.x, p.y) * Mathf.Rad2Deg;
+            float sector = Mathf.Repeat(angle, 72f);
+            float fold = Mathf.Abs(sector - 36f);
+            // The edge runs straight from a notch (fold 0) to a tip (fold 36): test against that line.
+            Vector2 tip = new(Mathf.Sin(36f * Mathf.Deg2Rad) * outer, Mathf.Cos(36f * Mathf.Deg2Rad) * outer);
+            Vector2 notch = new(0f, inner);
+            Vector2 q = new(Mathf.Sin(fold * Mathf.Deg2Rad) * r, Mathf.Cos(fold * Mathf.Deg2Rad) * r);
+            // Inside when q is on the centre's side of the notch-to-tip edge.
+            Vector2 edge = tip - notch;
+            float side = edge.x * (q.y - notch.y) - edge.y * (q.x - notch.x);
+            return side <= 0f;
+        }
+
+        /// <summary>Adds a steady turn about the vertical axis to the coin's float animation (kept if already there).</summary>
+        static void AddCoinSpin() {
+            AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(CoinAnimationPath);
+            if (clip == null)
+                throw new System.InvalidOperationException("Missing coin animation: " + CoinAnimationPath);
+            float length = clip.length > 0f ? clip.length : 3.6f;
+            EditorCurveBinding spin = EditorCurveBinding.FloatCurve(string.Empty, typeof(Transform), "localEulerAnglesRaw.y");
+            AnimationCurve turn = AnimationCurve.Linear(0f, 0f, length, 360f);
+            AnimationUtility.SetEditorCurve(clip, spin, turn);
+            foreach (string axis in new[] { "x", "z" })
+                AnimationUtility.SetEditorCurve(clip, EditorCurveBinding.FloatCurve(string.Empty, typeof(Transform), "localEulerAnglesRaw." + axis),
+                    AnimationCurve.Constant(0f, length, 0f));
+            AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(clip);
+            settings.loopTime = true;
+            AnimationUtility.SetAnimationClipSettings(clip, settings);
+            EditorUtility.SetDirty(clip);
+            AssetDatabase.SaveAssetIfDirty(clip);
+        }
+
         // ---------- dropped gun ----------
 
         /// <summary>A light in the sheriff's blue that MM_ClientHUD puts on a dropped gun, so it stands out in a dark room.</summary>
@@ -750,7 +974,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         /// with the coin bag in the corner, the murderer's throw prompt, and cards that pop in only when
         /// something happens (role reveal, announcements, results).
         /// </summary>
-        static void BuildHud(GameObject thrownKnife, Material[] knifeSkins, GameObject gunGlow) {
+        static void BuildHud(GameObject thrownKnife, Material[] knifeSkins, GameObject gunGlow, Material droppedGunMaterial) {
             // Above the spectate bar (5), below the top bar (50).
             RectTransform root = HudKit.Canvas("MM_HUD", 30);
             MM_ClientHUD hud = root.gameObject.AddComponent<MM_ClientHUD>();
@@ -791,14 +1015,16 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             skin.anchoredPosition = new Vector2(20f, 252f);
             hud.skinChip.label.richText = true;
 
-            // Bottom centre, above the throw prompt: which way the dropped gun is, and how far.
+            // Bottom left, above the role chip and clear of your own character: which way the dropped gun is,
+            // and how far. It shares the corner with the skin chip, which is never up during the hunt.
             hud.gunCompass = HudKit.Chip(root, "GunCompass", "pistol", "Sheriff's gun · 0 m", RoleColor(MM_Role.Sheriff), 44f);
             RectTransform compass = (RectTransform)hud.gunCompass.transform;
-            compass.anchorMin = compass.anchorMax = compass.pivot = new Vector2(0.5f, 0f);
-            compass.anchoredPosition = new Vector2(0f, 300f);
+            compass.anchorMin = compass.anchorMax = compass.pivot = Vector2.zero;
+            compass.anchoredPosition = new Vector2(20f, 300f);
             hud.gunCompassArrow = (RectTransform)HudKit.Icon(compass, "navigation", 28f, RoleColor(MM_Role.Sheriff)).transform;
             hud.gunCompassArrow.name = "Arrow";
             hud.droppedGunGlowPrefab = gunGlow;
+            hud.droppedGunMaterial = droppedGunMaterial;
 
             // Announcements, top centre under the top bar: the moments everyone hears about. Kept compact so
             // it does not hide the room while the murderer may be close.

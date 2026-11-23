@@ -21,6 +21,12 @@ namespace Universes.UniverseData.murder_mystery {
             _ => false,
         };
 
+        /// <summary>
+        /// Whether a round extends the win streak: a win you were still alive for. Innocents who were killed
+        /// share the team's win (and its XP) but do not keep a streak going, so the streak means something.
+        /// </summary>
+        public static bool ExtendsStreak(bool won, bool survived) => won && survived;
+
         /// <summary>Whether a bag holding <paramref name="coins"/> has room for one more.</summary>
         public static bool BagHasRoom(int coins, int bagSize) => coins < bagSize;
 

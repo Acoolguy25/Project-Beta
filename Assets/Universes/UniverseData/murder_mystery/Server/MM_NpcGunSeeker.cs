@@ -15,9 +15,6 @@ namespace Universes.murder_mystery.Server {
     public sealed class MM_NpcGunSeeker : MonoBehaviour {
         // LocalNPC re-plans a path only when the destination moves, so re-asking this often is cheap.
         const float RepathSeconds = 0.25f;
-        // An NPC that gets no closer than this in StallSeconds is stuck on the furniture: let the next one try.
-        const float StallSeconds = 3f;
-        const float StallProgress = 1f;
 
         MM_ClassicRound round;
         MM_ClassicTuning tuning;
@@ -38,7 +35,7 @@ namespace Universes.murder_mystery.Server {
             tuning = classicTuning;
             giveUpAt = Time.time + tuning.npcHeroGiveUpSeconds;
             nextPath = 0f;
-            stallCheckAt = Time.time + StallSeconds;
+            stallCheckAt = Time.time + tuning.npcHeroStallSeconds;
             stallDistance = float.MaxValue;
         }
 
@@ -62,12 +59,12 @@ namespace Universes.murder_mystery.Server {
             if (Time.time >= stallCheckAt) {
                 // Measured along the path, so walking round a wall is still progress.
                 float distance = agent != null && agent.hasPath && !agent.pathPending ? agent.remainingDistance : offset.magnitude;
-                if (distance > stallDistance - StallProgress) {
+                if (distance > stallDistance - tuning.npcHeroStallProgress) {
                     Stop();
                     return;
                 }
                 stallDistance = distance;
-                stallCheckAt = Time.time + StallSeconds;
+                stallCheckAt = Time.time + tuning.npcHeroStallSeconds;
             }
             if (Time.time >= nextPath) {
                 nextPath = Time.time + RepathSeconds;

@@ -16,8 +16,11 @@ murderer is shot or the clock runs out with anyone left.
 | Results | 12 s | "Innocents win" or "Murderer wins", who stopped the murderer, the cast (murderer, sheriff, hero), your own round (win or loss, coins, XP), progress to the next knife skin, every character's role, fate, kills and coins, and your odds for the next round. |
 
 The round fills to 18 characters with NPCs (at least 4). One murderer and one sheriff per 24 characters.
-Players start each round near a lamp (`litSpawnDistance`, 16 m, on `MM_ServerRunner`) so the role card is
-never shown over a black corner, and without the spawn-shield ring other modes use.
+Players start each round in the open and in light (`MM_ServerRunner` spawn settings): of `spawnSamples` (24)
+NavMesh points, the one with the most room around it (8 rays at `spawnClearanceHeight`, open when nothing is
+within `spawnClearance`, 7 m) wins, and a lamp within `litSpawnDistance` (16 m) with a clear line to the point
+breaks ties. Open beats lit, so the camera is never jammed against a wall when the role card shows. There is
+no spawn-shield ring in Classic. A player who joins during the results gets that round's results card.
 
 ### The roles
 
@@ -30,12 +33,14 @@ never shown over a black corner, and without the spawn-shield ring other modes u
 - **Sheriff**: shoot the murderer. Shoot an innocent and the sheriff dies too, dropping the gun
   (`wrongShotPenalty`, MM2 rules; `Jam` instead jams the gun for 20 s).
 - **Innocent**: survive and collect coins. When the sheriff dies, their gun drops to the floor where they
-  fell (snapped to the NavMesh), enlarged, glowing blue and with a beam over it, and every living innocent
+  fell (snapped to the NavMesh), enlarged (4x), drawn in a glowing blue-white material and with a beam over it, and every living innocent
   gets a compass chip ("Sheriff's gun · 12 m" with an arrow). The first living, empty-handed innocent to
   touch it becomes the **Hero** (a sheriff in gold). Players get a head start (`npcHeroDelaySeconds`, 10 s);
   after that the nearest NPC townsperson goes for the gun (`MM_NpcGunSeeker`) and, if it gets there, becomes
   an NPC hero with the NPC sheriff's behaviour. An NPC that is stuck or too slow gives up and the next one
-  tries. Only the hero is told who it is; everyone else hears "Someone took the gun".
+  tries (`npcHeroStallSeconds` 3 s without `npcHeroStallProgress` 1 m of progress along its path;
+`npcHeroSearchInterval` 1 s between searches). Only the hero is told who it is; everyone else hears
+"Someone took the gun". The compass chip sits at the bottom left, above the role chip.
 
 NPC sheriffs are not told who the murderer is (`MM_NpcSheriff`): they wander with the gun holstered until
 they see a murderer with the knife out or see (or hear, within 14 m) a kill, then react after 0.9 to 1.6 s
@@ -95,7 +100,7 @@ does nothing in builds.
 | Role reveal | Pizzicato sting and a flash in the role's colour; again (at the top of the screen) when you become the hero. |
 | Knife throw | A whoosh, the knife spinning along its line with a trail in the skin's colour; a thud and dust where it sticks in a wall. |
 | Kill | Sparks, a shockwave ring under the victim and a kill sting where it happened, camera shake by distance (1.5x for the killer). Only players within earshot (`killAudibleDistance`, 45 m) are told. The victim gets a red flash and "YOU WERE KILLED". |
-| Coin | A gold coin (`CoinGold.mat` on the shared coin prefab) that bursts on pickup, a coin sound that climbs in pitch while you pick them up in a row, a floating +1, the bag chip pops; "BAG FULL" when it is. |
+| Coin | A spinning gold coin with a star on each face (shared coin prefab) that bursts on pickup, a coin sound that climbs in pitch while you pick them up in a row, a floating +1, the bag chip pops; "BAG FULL" when it is. |
 | Sheriff down | A horn and alarm, a blue flash, "The sheriff is down" with what it means for you; the floating gun is shown larger with a blue glow (`Prefabs/MM_GunGlow.prefab`), a beam, and a compass chip for living innocents. |
 | Gun taken, last survivor, wrong shot | A banner at the top for everyone ("It's you" for the last survivor). |
 | Final 10 s | A beep every second, higher for the last three. |
@@ -166,7 +171,7 @@ the same frame with the volume off is a smooth gradient. The post-processing loo
 ## Saved progress
 
 `Server/MM_SaveData.cs` (version 3): rounds played, Classic wins per role, the current and best win
-streak, rounds survived, murders and throw kills, murderers shot, guns picked up, lifetime coins (which
+streak (only a round your team won *and* you survived extends it, `MM_RoundRules.ExtendsStreak`), rounds survived, murders and throw kills, murderers shot, guns picked up, lifetime coins (which
 unlock knife skins), and the luck that raises a player's odds of being murderer or sheriff after rounds
 without the role.
 
@@ -185,9 +190,12 @@ without the role.
   `Client/MM_KnifeFx.cs` thrown knives and knife skins.
 - `Editor/MM_Authoring.cs` (menu **Ryan > Murder Mystery > Rebuild HUD and Knife**) rebuilds `Prefabs/MM_HUD.prefab`,
   `Prefabs/MM_ThrownKnife.prefab`, `Prefabs/MM_GunGlow.prefab`, one material per skin and the
-  blade mask they share in `Materials/KnifeSkins/`, and makes sure the HUD is in `murder_mystery_start.unity`. Run it from a client Editor.
+  blade mask they share in `Materials/KnifeSkins/`, `Materials/MM_DroppedGun.mat` (the glowing material a
+  dropped gun is drawn with), the coin (see below), and makes sure the HUD is in `murder_mystery_start.unity`. Run it from a client Editor.
   The same menu has **Apply Atmosphere** for the scene (lighting, lamps, backdrop); it does not touch the HUD.
 
-Outside this folder: the gold coin look (`CoinGold.mat`, coin scale 70) is on the shared
-`com.ryan.gameframework` coin prefab, which only this game uses, and `FloatingToolShared.HoverTransform`
+Outside this folder: the coin look is generated by the same menu onto the shared `com.ryan.gameframework`
+coin prefab, which only this game spawns: `CoinGold.mat` (emissive gold body), `CoinFace.mat` and
+`CoinFace.png` (an embossed star on both faces), `CoinFloat.anim` (a steady spin), scale 70, value 1 (so the
+bag and the gold counter agree). The constants are at the top of `MM_Authoring.cs`. and `FloatingToolShared.HoverTransform`
 was exposed so the HUD can enlarge a dropped gun.

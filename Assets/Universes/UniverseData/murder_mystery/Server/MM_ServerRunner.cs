@@ -64,11 +64,18 @@ namespace Universes.murder_mystery.Server {
         [SerializeField]
         MM_Role debugFirstPlayerRole = MM_Role.None;
         [Header("Spawns")]
-        [Tooltip("Players spawn within this distance of a lamp whenever one of the sampled points allows it, so nobody " +
-                 "starts a round in a dark corner (metres). 0 = anywhere on the NavMesh.")]
+        [Tooltip("Players spawn within this distance of a lamp they can see whenever one of the sampled points allows it, " +
+                 "so nobody starts a round in a dark corner (metres). 0 = anywhere on the NavMesh.")]
         [SerializeField, Min(0f)]
         float litSpawnDistance = 16f;
-        [Tooltip("Random NavMesh points tried per spawn while looking for a lit one.")]
+        [Tooltip("Room the orbit camera needs round a spawn point: a point counts as open when nothing is closer than " +
+                 "this in any of the horizontal directions tested at Spawn Clearance Height (metres). 0 = no check.")]
+        [SerializeField, Min(0f)]
+        float spawnClearance = 7f;
+        [Tooltip("Height above the floor of the clearance test: about where the camera sits (metres).")]
+        [SerializeField, Min(0f)]
+        float spawnClearanceHeight = 4f;
+        [Tooltip("Random NavMesh points tried per spawn while looking for a lit, open one.")]
         [SerializeField, Min(1)]
         int spawnSamples = 24;
 
@@ -134,31 +141,59 @@ namespace Universes.murder_mystery.Server {
         }
 
         /// <summary>A random NavMesh point, preferring one near a lamp: the first frame of a round should never be black.</summary>
+        // Horizontal directions tested for camera room round a spawn point.
+        const int ClearanceRays = 8;
+        // A lamp is seen from a point this high above the floor (chest height on the 5.6 m robots).
+        const float LampSightHeight = 3f;
+        readonly RaycastHit[] spawnHits = new RaycastHit[16];
+
+        /// <summary>
+        /// A NavMesh point for a player's spawn: near a lamp that lights it (nothing in between) and with room
+        /// round it for the orbit camera, so the role card never shows over a dark corner or the inside of a
+        /// wall. Tries <see cref="spawnSamples"/> points and keeps the first that passes both tests, else the
+        /// one that came closest (open beats lit, since a camera inside a wall shows nothing at all).
+        /// </summary>
         Vector3 LitSpawnPoint() {
-            Vector3 best = ServerPathfinding.GetRandomPosition();
-            if (litSpawnDistance <= 0f)
-                return best;
             lampPositions ??= FindLamps();
-            if (lampPositions.Count == 0)
-                return best;
-            float wanted = litSpawnDistance * litSpawnDistance;
-            float bestDistance = NearestLampSqr(best);
-            for (int i = 1; i < spawnSamples && bestDistance > wanted; i++) {
+            Vector3 best = Vector3.zero;
+            float bestScore = float.NegativeInfinity;
+            for (int i = 0; i < spawnSamples; i++) {
                 Vector3 candidate = ServerPathfinding.GetRandomPosition();
-                float distance = NearestLampSqr(candidate);
-                if (distance < bestDistance) {
+                float room = spawnClearance > 0f ? Mathf.Min(Clearance(candidate), spawnClearance) / spawnClearance : 1f;
+                float light = litSpawnDistance > 0f && lampPositions.Count > 0 ? (LitByLamp(candidate) ? 1f : 0f) : 1f;
+                float score = room * 2f + light;
+                if (score > bestScore) {
                     best = candidate;
-                    bestDistance = distance;
+                    bestScore = score;
                 }
+                if (score >= 3f)
+                    break;
             }
             return best;
         }
 
-        float NearestLampSqr(Vector3 point) {
-            float nearest = float.PositiveInfinity;
+        /// <summary>True when a lamp within <see cref="litSpawnDistance"/> has a clear line to the point.</summary>
+        bool LitByLamp(Vector3 point) {
+            Vector3 eye = point + Vector3.up * LampSightHeight;
+            float range = litSpawnDistance * litSpawnDistance;
             foreach (Vector3 lamp in lampPositions)
-                nearest = Mathf.Min(nearest, (lamp - point).sqrMagnitude);
-            return nearest;
+                if ((lamp - eye).sqrMagnitude <= range && !Physics.Linecast(lamp, eye, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    return true;
+            return false;
+        }
+
+        /// <summary>The shortest distance to a wall round the point at camera height; characters do not count.</summary>
+        float Clearance(Vector3 point) {
+            Vector3 origin = point + Vector3.up * spawnClearanceHeight;
+            float shortest = spawnClearance;
+            for (int i = 0; i < ClearanceRays; i++) {
+                Vector3 direction = Quaternion.Euler(0f, i * 360f / ClearanceRays, 0f) * Vector3.forward;
+                int count = Physics.RaycastNonAlloc(origin, direction, spawnHits, spawnClearance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (int h = 0; h < count; h++)
+                    if (spawnHits[h].distance < shortest && spawnHits[h].collider.GetComponentInParent<GameCharacter>() == null)
+                        shortest = spawnHits[h].distance;
+            }
+            return shortest;
         }
 
         static List<Vector3> FindLamps() {
@@ -190,7 +225,7 @@ namespace Universes.murder_mystery.Server {
 
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
-            PlayerProgress.Load<MM_SaveData>(player, MM_SaveData.Universe).Forget();
+            LoadProgress(player).Forget(exception => Debug.LogException(exception, this));
             player.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
             switch (mode) {
                 case MM_Mode.NPCsVsPlayers:
@@ -206,6 +241,13 @@ namespace Universes.murder_mystery.Server {
             }
             player.team.OnChange += (oldTeam, newTeam, _) => OnSetPlayerTeam(player, newTeam);
             OnSetPlayerTeam(player, player.team.Value);
+        }
+
+        /// <summary>Loads the player's saves; someone joining during the reveal then gets this round's results card.</summary>
+        async UniTask LoadProgress(PlayerData player) {
+            await PlayerProgress.Load<MM_SaveData>(player, MM_SaveData.Universe);
+            if (player != null && mode == MM_Mode.Classic)
+                classic.SendResultsToLateJoiner(player);
         }
 
         void PreparePlayerForActiveRound(PlayerData player) {

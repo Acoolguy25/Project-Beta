@@ -142,12 +142,18 @@ namespace Universes.UniverseData.murder_mystery.Client {
         [Min(0f)] public float deathTextSeconds = 2f;
 
         [Header("Dropped gun")]
-        [Tooltip("The kit's beacon beam over the gun. The robots are 5.6 m tall: it needs to clear the crowd.")]
-        [Min(0.1f)] public float gunBeaconScale = 6f;
+        [Tooltip("The kit's beacon beam over the gun. The robots are 5.6 m tall: it needs to clear the crowd, but " +
+                 "much bigger and the pillar is wider than a room and stops reading as a beam.")]
+        [Min(0.1f)] public float gunBeaconScale = 2.5f;
         [Tooltip("A light and glow that make the gun itself stand out on the floor (MM_GunGlow, generated).")]
         public GameObject droppedGunGlowPrefab;
         [Tooltip("The floating gun's model is drawn this many times bigger than the pickup prefab makes it.")]
-        [Min(0.1f)] public float droppedGunDisplayScale = 1.8f;
+        [Min(0.1f)] public float droppedGunDisplayScale = 4f;
+        [Tooltip("Drawn on the floating gun's model while it lies on the floor (MM_DroppedGun, generated): " +
+                 "glowing sheriff blue so it reads against the lamps.")]
+        public Material droppedGunMaterial;
+        [Tooltip("While the gun is down but its pickup has not reached this client yet, look for it this often (seconds).")]
+        [Min(0.05f)] public float droppedGunSearchSeconds = 0.25f;
         [Tooltip("How far from the announced position to look for the floating gun the server spawned (metres).")]
         [Min(0.1f)] public float droppedGunMatchDistance = 4f;
         [Tooltip("The callout floats this far above the dropped gun: above the name tags of the 5.6 m robots around it.")]
@@ -203,6 +209,10 @@ namespace Universes.UniverseData.murder_mystery.Client {
         GameObject gunGlow;
         Transform droppedGunDisplay;
         Vector3 droppedGunDisplayBaseScale;
+        // The floating gun's renderers and their own materials, put back when it is taken.
+        readonly List<(Renderer renderer, Material[] materials)> droppedGunRenderers = new();
+        float nextDroppedGunSearch;
+        int skinChipCoins = -1;
         int gunCompassMetres = -1;
         MM_Announcement shownAnnouncement;
         float shownAnnouncementAt = float.NegativeInfinity;
@@ -236,6 +246,8 @@ namespace Universes.UniverseData.murder_mystery.Client {
         }
 
         void OnDestroy() {
+            if (gunGlow != null)
+                Destroy(gunGlow);
             if (manager == null)
                 return;
             manager.UnregisterBroadcast<MM_StateBroadcast>(OnState);
@@ -454,6 +466,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 roleReveal.Hide();
 
             RefreshThrowPrompt();
+            RefreshDroppedGunDisplay();
             RefreshGunCompass();
             // A new round (a role reveal or a hunt) always clears the last round's card, even if it came early.
             if (hasState && (state.phase == MM_Phase.RoleReveal || state.phase == MM_Phase.Hunt) && state.round > resultsShownRound)
@@ -548,8 +561,6 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 skinChip.label.text = SkinLine(state.lifetimeCoins);
             }
         }
-
-        int skinChipCoins = -1;
 
         void SetCoinChip() {
             bool full = state.coinCap > 0 && state.coins >= state.coinCap;
@@ -695,7 +706,7 @@ namespace Universes.UniverseData.murder_mystery.Client {
             if (dropped && !gunOnFloor) {
                 gunBeacon = GameFx.Start(FxKind.BeaconBeam, state.gunPosition, MM_Text.RoleColor(MM_Role.Sheriff), gunBeaconScale);
                 ShowGunGlow(state.gunPosition);
-                EnlargeDroppedGun(state.gunPosition);
+                nextDroppedGunSearch = 0f;
                 // The callout invites the living innocents to race for it.
                 if (state.alive && state.role == MM_Role.Innocent)
                     FloatingText.Callout(state.gunPosition + Vector3.up * gunCalloutHeight, "SHERIFF'S GUN", MM_Text.RoleColor(MM_Role.Sheriff), gunCalloutSize);
@@ -714,17 +725,29 @@ namespace Universes.UniverseData.murder_mystery.Client {
                 gunPosition = state.gunPosition;
         }
 
+        /// <summary>
+        /// Per frame while the gun is down: until its pickup has arrived on this client and been dressed, look
+        /// for it every <see cref="droppedGunSearchSeconds"/> (the state broadcast can beat the spawn).
+        /// </summary>
+        void RefreshDroppedGunDisplay() {
+            if (!gunOnFloor || droppedGunDisplay != null || Time.unscaledTime < nextDroppedGunSearch)
+                return;
+            nextDroppedGunSearch = Time.unscaledTime + droppedGunSearchSeconds;
+            DressDroppedGun(gunPosition);
+        }
+
         void ShowGunGlow(Vector3 position) {
             if (droppedGunGlowPrefab == null)
                 return;
+            // A world object: kept at the scene root, not under the HUD canvas.
             if (gunGlow == null)
-                gunGlow = Instantiate(droppedGunGlowPrefab, transform);
+                gunGlow = Instantiate(droppedGunGlowPrefab);
             gunGlow.transform.SetPositionAndRotation(position, Quaternion.identity);
             gunGlow.SetActive(true);
         }
 
-        /// <summary>Finds the pickup the server spawned for this gun (once, when it drops) and draws its model bigger.</summary>
-        void EnlargeDroppedGun(Vector3 position) {
+        /// <summary>Finds the pickup the server spawned for this gun and draws its model bigger and glowing.</summary>
+        void DressDroppedGun(Vector3 position) {
             float bestDistance = droppedGunMatchDistance * droppedGunMatchDistance;
             FloatingToolShared match = null;
             foreach (FloatingToolShared pickup in FindObjectsByType<FloatingToolShared>(FindObjectsInactive.Exclude)) {
@@ -739,6 +762,17 @@ namespace Universes.UniverseData.murder_mystery.Client {
             droppedGunDisplay = match.HoverTransform;
             droppedGunDisplayBaseScale = droppedGunDisplay.localScale;
             droppedGunDisplay.localScale = droppedGunDisplayBaseScale * droppedGunDisplayScale;
+            if (droppedGunMaterial == null)
+                return;
+            // Only the gun's meshes: the pickup's own particles keep their materials.
+            foreach (MeshRenderer renderer in droppedGunDisplay.GetComponentsInChildren<MeshRenderer>(true)) {
+                Material[] own = renderer.sharedMaterials;
+                droppedGunRenderers.Add((renderer, own));
+                Material[] glowing = new Material[own.Length];
+                for (int i = 0; i < glowing.Length; i++)
+                    glowing[i] = droppedGunMaterial;
+                renderer.sharedMaterials = glowing;
+            }
         }
 
         void ClearDroppedGun() {
@@ -749,6 +783,10 @@ namespace Universes.UniverseData.murder_mystery.Client {
             if (droppedGunDisplay != null)
                 droppedGunDisplay.localScale = droppedGunDisplayBaseScale;
             droppedGunDisplay = null;
+            foreach ((Renderer renderer, Material[] materials) in droppedGunRenderers)
+                if (renderer != null)
+                    renderer.sharedMaterials = materials;
+            droppedGunRenderers.Clear();
             gunCompass.SetVisible(false);
             gunCompassMetres = -1;
         }

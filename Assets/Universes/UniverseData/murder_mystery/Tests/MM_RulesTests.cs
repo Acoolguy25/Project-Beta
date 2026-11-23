@@ -215,6 +215,13 @@ namespace Universes.UniverseData.murder_mystery.Tests {
         }
 
         [Test]
+        public void OnlyASurvivedWinExtendsTheStreak() {
+            Assert.That(MM_RoundRules.ExtendsStreak(won: true, survived: true), Is.True);
+            Assert.That(MM_RoundRules.ExtendsStreak(won: true, survived: false), Is.False);
+            Assert.That(MM_RoundRules.ExtendsStreak(won: false, survived: true), Is.False);
+        }
+
+        [Test]
         public void TheBagHoldsExactlyItsSize() {
             Assert.That(MM_RoundRules.BagHasRoom(39, 40), Is.True);
             Assert.That(MM_RoundRules.BagHasRoom(40, 40), Is.False);

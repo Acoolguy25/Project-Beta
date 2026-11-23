@@ -110,6 +110,13 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0.5f)] public float npcHeroReachDistance = 4f;
         [Tooltip("An NPC that cannot reach the gun in this long gives up and the next nearest one tries (seconds).")]
         [Min(1f)] public float npcHeroGiveUpSeconds = 20f;
+        [Tooltip("An NPC that gets less than Npc Hero Stall Progress closer along its path in this long is stuck " +
+                 "(on furniture, say) and gives up early (seconds).")]
+        [Min(0.5f)] public float npcHeroStallSeconds = 3f;
+        [Tooltip("How much closer to the gun an NPC must get in each Npc Hero Stall Seconds (metres).")]
+        [Min(0f)] public float npcHeroStallProgress = 1f;
+        [Tooltip("How often the round looks for the next NPC to send while the gun lies unclaimed (seconds).")]
+        [Min(0.1f)] public float npcHeroSearchInterval = 1f;
 
         [Header("NPC sheriff")]
         [Tooltip("An NPC sheriff sees a drawn knife or a kill this far away (metres), given a clear line.")]

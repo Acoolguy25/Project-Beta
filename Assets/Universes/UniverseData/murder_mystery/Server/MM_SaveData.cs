@@ -29,7 +29,7 @@ namespace Universes.murder_mystery.Server {
         public int coinsCollected;
         /// <summary>Rounds in a row without being dealt murderer / sheriff; each one raises the odds (<see cref="MM_RoleOdds"/>).</summary>
         public int murdererLuck, sheriffLuck;
-        /// <summary>Classic rounds won in a row (any role; a loss resets it), and the best streak ever.</summary>
+        /// <summary>Classic rounds won and survived in a row (any role; anything else resets it), and the best streak ever.</summary>
         public int winStreak, bestWinStreak;
 
         public override void Migrate(int fromVersion, JObject stored) {
@@ -37,15 +37,17 @@ namespace Universes.murder_mystery.Server {
         }
 
         /// <summary>A Classic round ended for this player, who played <paramref name="role"/>.</summary>
-        public void RecordRound(MM_Role role, bool won) {
-            if (!won) {
+        public void RecordRound(MM_Role role, bool won, bool survived) {
+            if (won) {
+                switch (role) {
+                    case MM_Role.Innocent: innocentWins++; break;
+                    case MM_Role.Sheriff: sheriffWins++; break;
+                    case MM_Role.Murderer: murdererWins++; break;
+                }
+            }
+            if (!MM_RoundRules.ExtendsStreak(won, survived)) {
                 winStreak = 0;
                 return;
-            }
-            switch (role) {
-                case MM_Role.Innocent: innocentWins++; break;
-                case MM_Role.Sheriff: sheriffWins++; break;
-                case MM_Role.Murderer: murdererWins++; break;
             }
             winStreak++;
             bestWinStreak = Math.Max(bestWinStreak, winStreak);

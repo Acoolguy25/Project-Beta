@@ -31,8 +31,6 @@ namespace Universes.murder_mystery.Server {
     public sealed class MM_ClassicRound {
         // Lethal for any character in this game (100 health), used if a thrower's knife tool is gone.
         const long FallbackKnifeDamage = 1000;
-        // How often the round looks for an NPC to send for a gun nobody has taken.
-        const float GunSeekerSearchInterval = 1f;
 
         /// <summary>Someone who had a role this round, kept for the results.</summary>
         sealed class Participant {
@@ -118,6 +116,7 @@ namespace Universes.murder_mystery.Server {
             StopGunSeeker();
             gunSeekersTried.Clear();
             stoppedBy = null;
+            results = null;
             playersOut = false;
             lastSurvivorAnnounced = false;
             manhuntRanksStale = true;
@@ -349,7 +348,7 @@ namespace Universes.murder_mystery.Server {
             }
             if (GunOnFloor && gunSeeker == null && Time.time >= nextGunSeekerSearch
                 && MM_DropRules.NpcMayGoForGun(Time.time - gunDroppedAt, tuning.npcHeroDelaySeconds)) {
-                nextGunSeekerSearch = Time.time + GunSeekerSearchInterval;
+                nextGunSeekerSearch = Time.time + tuning.npcHeroSearchInterval;
                 SendNpcForGun();
             }
         }
@@ -653,54 +652,75 @@ namespace Universes.murder_mystery.Server {
                 if (survived) Award(p, tuning.xpForSurviving);
                 MM_Role role = p.role;
                 PlayerProgress.Modify<MM_SaveData>(p.player, save => {
-                    save.RecordRound(role, won);
+                    save.RecordRound(role, won, survived);
                     if (survived) save.survivals++;
                 });
             }
             RefreshOdds(force: true);
 
-            string headline = MM_Text.OutcomeHeadline(Outcome);
-            string summary = Summary();
-            ServerChat.SendSystemMessage(new($"{headline}! {summary}", SystemMessageSource.CustomMessage));
-            MM_ResultEntry[] entries = BuildEntries();
-            string murderers = NamesWith(p => p.role == MM_Role.Murderer);
-            string sheriff = NamesWith(p => p.role == MM_Role.Sheriff && !p.hero);
-            string hero = NamesWith(p => p.hero);
+            results = new RoundResults {
+                headline = MM_Text.OutcomeHeadline(Outcome),
+                summary = Summary(),
+                entries = BuildEntries(),
+                murderers = NamesWith(p => p.role == MM_Role.Murderer),
+                sheriff = NamesWith(p => p.role == MM_Role.Sheriff && !p.hero),
+                hero = NamesWith(p => p.hero),
+            };
+            string headline = results.headline;
+            ServerChat.SendSystemMessage(new($"{headline}! {results.summary}", SystemMessageSource.CustomMessage));
             // The card is sent once; its countdown follows the state broadcast's secondsLeft.
             SecondsLeft = seconds;
-            foreach (PlayerData player in PlayerData.Players.Values) {
-                if (player == null || !player.Owner.IsActive)
-                    continue;
-                Participant me = FindPlayer(player);
-                MM_SaveData save = MM_SaveData.Of(player);
-                (byte murdererChance, byte sheriffChance) = OddsFor(player);
-                InstanceFinder.ServerManager.Broadcast(player.Owner, new MM_ResultsBroadcast {
-                    round = Round,
-                    outcome = Outcome,
-                    headline = headline,
-                    summary = summary,
-                    entries = entries,
-                    secondsLeft = seconds,
-                    murdererName = murderers,
-                    sheriffName = sheriff,
-                    heroName = hero,
-                    stoppedBy = stoppedBy,
-                    youWon = me != null && MM_RoundRules.IsWinner(me.role, Outcome),
-                    yourCoins = me?.coins ?? 0,
-                    yourXp = me?.xp ?? 0,
-                    lifetimeCoins = save.coinsCollected,
-                    murdererChance = murdererChance,
-                    sheriffChance = sheriffChance,
-                    winStreak = save.winStreak,
-                    bestWinStreak = save.bestWinStreak,
-                });
-            }
+            foreach (PlayerData player in PlayerData.Players.Values)
+                SendResults(player);
             for (int i = seconds; i > 0; i--) {
                 SecondsLeft = i;
                 ServerRunner.SetTopMessage($"{headline}! Next round in {i}");
                 if (await runner.AwaitTime(1000, token))
                     break;
             }
+        }
+
+        /// <summary>The parts of the results card that are the same for everyone, kept for late joiners.</summary>
+        sealed class RoundResults {
+            public string headline, summary, murderers, sheriff, hero;
+            public MM_ResultEntry[] entries;
+        }
+
+        RoundResults results;
+
+        /// <summary>Someone who joins during the reveal still gets this round's card.</summary>
+        public void SendResultsToLateJoiner(PlayerData player) {
+            if (Phase == MM_Phase.Results)
+                SendResults(player);
+        }
+
+        /// <summary>The results card, personalised for <paramref name="player"/> (their own round, saves and odds).</summary>
+        void SendResults(PlayerData player) {
+            if (results == null || player == null || !player.Owner.IsActive || InstanceFinder.ServerManager == null)
+                return;
+            Participant me = FindPlayer(player);
+            MM_SaveData save = MM_SaveData.Of(player);
+            (byte murdererChance, byte sheriffChance) = OddsFor(player);
+            InstanceFinder.ServerManager.Broadcast(player.Owner, new MM_ResultsBroadcast {
+                round = Round,
+                outcome = Outcome,
+                headline = results.headline,
+                summary = results.summary,
+                entries = results.entries,
+                secondsLeft = SecondsLeft,
+                murdererName = results.murderers,
+                sheriffName = results.sheriff,
+                heroName = results.hero,
+                stoppedBy = stoppedBy,
+                youWon = me != null && MM_RoundRules.IsWinner(me.role, Outcome),
+                yourCoins = me?.coins ?? 0,
+                yourXp = me?.xp ?? 0,
+                lifetimeCoins = save.coinsCollected,
+                murdererChance = murdererChance,
+                sheriffChance = sheriffChance,
+                winStreak = save.winStreak,
+                bestWinStreak = save.bestWinStreak,
+            });
         }
 
         string Summary() {
