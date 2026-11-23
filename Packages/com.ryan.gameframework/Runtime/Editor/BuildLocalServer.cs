@@ -50,6 +50,26 @@ namespace RyanAssets.Editor {
             }
         }
 
+        /// <summary>
+        /// Headless entry point: <c>-batchmode -quit -executeMethod RyanAssets.Editor.BuildLocalServer.BuildLinuxServerBatch</c>.
+        /// Exits with a non-zero code when the build throws or does not succeed, so scripts and CI can rely on it.
+        /// </summary>
+        public static void BuildLinuxServerBatch() {
+            int exitCode = 1;
+            try {
+                BuildReport report = BuildLinuxServer(null);
+                if (report.summary.result == BuildResult.Succeeded) {
+                    UnityDebug.Log($"Linux server build complete: {LinuxServerExecutablePath}");
+                    exitCode = 0;
+                } else {
+                    UnityDebug.LogError($"Linux server build failed: {report.summary.result}");
+                }
+            } catch (Exception e) {
+                UnityDebug.LogError($"Linux server build failed.\n{e}");
+            }
+            EditorApplication.Exit(exitCode);
+        }
+
         //[MenuItem("Build/Run Linux Server")]
         public static void RunLinuxServer(){
             BuildReport report = BuildLinuxServer(null);
