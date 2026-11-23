@@ -44,6 +44,8 @@ namespace Universes.UniverseData.murder_mystery {
         public Vector3 gunPosition;
         /// <summary>This player's chance (0-100) of being dealt murderer / sheriff next round.</summary>
         public byte murdererChance, sheriffChance;
+        /// <summary>Coins this player has collected in murder mystery, ever (knife-skin progress between rounds).</summary>
+        public int lifetimeCoins;
     }
 
     /// <summary>Client (a murderer holding the knife) asks to throw it at a point in the world.</summary>
@@ -60,13 +62,19 @@ namespace Universes.UniverseData.murder_mystery {
         public float maxDistance;
         /// <summary>The thrower's knife skin (<see cref="MM_KnifeSkins"/>).</summary>
         public byte skin;
+        /// <summary>The thrower's knife tool, hidden from their hand while it is "in the air".</summary>
+        public int knifeObjectId;
+        /// <summary>Seconds until the knife is back in the thrower's hand (their throw cooldown).</summary>
+        public float knifeReturnSeconds;
     }
 
-    /// <summary>A thrown knife stopped: in a wall, in someone, or at the end of its range.</summary>
+    /// <summary>A thrown knife stopped: in a wall, in someone, or at the end of its range (neither flag).</summary>
     public struct MM_KnifeLandedBroadcast : IBroadcast {
         public int throwId;
         public Vector3 position;
         public bool hitCharacter;
+        /// <summary>It sank into a wall, floor or prop (it sticks there with a thud).</summary>
+        public bool hitSurface;
     }
 
     /// <summary>
@@ -109,7 +117,10 @@ namespace Universes.UniverseData.murder_mystery {
         PlayersOut,
     }
 
-    /// <summary>Knife skins as the server tells clients about them: the knife tool's object id and its skin.</summary>
+    /// <summary>
+    /// Weapon skins as the server tells clients about them: a tool's object id and its skin. Murderers' knives
+    /// wear the skin in full; a sheriff's or hero's gun is tinted with its owner's best skin.
+    /// </summary>
     public struct MM_KnifeSkinsBroadcast : IBroadcast {
         public int[] toolObjectIds;
         public byte[] skins;
@@ -143,6 +154,8 @@ namespace Universes.UniverseData.murder_mystery {
         /// <summary>Lifetime coins collected in murder mystery, which unlock knife skins.</summary>
         public int lifetimeCoins;
         public byte murdererChance, sheriffChance;
+        /// <summary>The receiving player's Classic wins in a row (0 after a loss) and their best streak.</summary>
+        public int winStreak, bestWinStreak;
     }
 
     public static class MM_Text {

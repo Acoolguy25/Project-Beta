@@ -72,9 +72,11 @@ namespace Universes.UniverseData.murder_mystery.Server {
                 murdererWeights.Add(MM_RoleOdds.Weight(true, save.murdererLuck, tuning.playerRoleWeight, tuning.luckPerRound, tuning.maxLuckRounds));
                 sheriffWeights.Add(MM_RoleOdds.Weight(true, save.sheriffLuck, tuning.playerRoleWeight, tuning.luckPerRound, tuning.maxLuckRounds));
             }
+            // A small lobby filled up with NPCs keeps a fair share of the big roles for its players.
+            float npcWeight = MM_RoleOdds.NpcWeightFor(players.Count, npcCount, tuning.playerRoleWeight, tuning.playerShareOfBigRoles);
             for (int i = 0; i < npcCount; i++) {
-                murdererWeights.Add(MM_RoleOdds.NpcWeight);
-                sheriffWeights.Add(MM_RoleOdds.NpcWeight);
+                murdererWeights.Add(npcWeight);
+                sheriffWeights.Add(npcWeight);
             }
         }
     }

@@ -32,6 +32,19 @@ namespace Universes.UniverseData.murder_mystery {
         }
 
         /// <summary>
+        /// The weight each NPC gets so that <paramref name="players"/> players of base weight
+        /// <paramref name="playerWeight"/> together hold at least <paramref name="playerShare"/> of a draw against
+        /// <paramref name="npcs"/> NPCs. Never more than <see cref="NpcWeight"/>: a big lobby keeps the plain odds.
+        /// </summary>
+        public static float NpcWeightFor(int players, int npcs, float playerWeight, float playerShare) {
+            if (players <= 0 || npcs <= 0 || playerShare <= 0f)
+                return NpcWeight;
+            playerShare = Math.Min(playerShare, 0.99f);
+            float wanted = players * Math.Max(0f, playerWeight) * (1f - playerShare) / (playerShare * npcs);
+            return Math.Max(0.01f, Math.Min(NpcWeight, wanted));
+        }
+
+        /// <summary>
         /// Deals the roles. <paramref name="murdererWeights"/> and <paramref name="sheriffWeights"/> hold one
         /// weight per character (same order); <paramref name="random"/> returns a uniform value in [0, 1).
         /// Returns each character's role.

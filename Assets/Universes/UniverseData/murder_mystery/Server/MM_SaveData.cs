@@ -10,8 +10,8 @@ namespace Universes.murder_mystery.Server {
     public sealed class MM_SaveData : ProgressData {
         public const string Universe = "murder_mystery";
         // 2: MM2-style rounds. Coins, knife-throw kills, survivals and role luck were added; the meeting
-        // vote counter went with the meetings.
-        public override int LatestVersion => 2;
+        // vote counter went with the meetings. 3: Classic win streaks.
+        public override int LatestVersion => 3;
 
         /// <summary>Rounds of any mode the player was in when they started.</summary>
         public int roundsPlayed;
@@ -29,17 +29,26 @@ namespace Universes.murder_mystery.Server {
         public int coinsCollected;
         /// <summary>Rounds in a row without being dealt murderer / sheriff; each one raises the odds (<see cref="MM_RoleOdds"/>).</summary>
         public int murdererLuck, sheriffLuck;
+        /// <summary>Classic rounds won in a row (any role; a loss resets it), and the best streak ever.</summary>
+        public int winStreak, bestWinStreak;
 
         public override void Migrate(int fromVersion, JObject stored) {
-            // Version 1 fields carry over by name; the new counters start at zero.
+            // Older fields carry over by name; counters added since start at zero.
         }
 
-        public void RecordWin(MM_Role role) {
+        /// <summary>A Classic round ended for this player, who played <paramref name="role"/>.</summary>
+        public void RecordRound(MM_Role role, bool won) {
+            if (!won) {
+                winStreak = 0;
+                return;
+            }
             switch (role) {
                 case MM_Role.Innocent: innocentWins++; break;
                 case MM_Role.Sheriff: sheriffWins++; break;
                 case MM_Role.Murderer: murdererWins++; break;
             }
+            winStreak++;
+            bestWinStreak = Math.Max(bestWinStreak, winStreak);
         }
 
         /// <summary>Was dealt <paramref name="role"/> this round: the luck for that role resets, the other grows.</summary>
@@ -61,6 +70,8 @@ namespace Universes.murder_mystery.Server {
             coinsCollected = Math.Max(0, coinsCollected);
             murdererLuck = Math.Max(0, murdererLuck);
             sheriffLuck = Math.Max(0, sheriffLuck);
+            winStreak = Math.Max(0, winStreak);
+            bestWinStreak = Math.Max(winStreak, bestWinStreak);
         }
 
         // ---------------------------------------------------------------- reading (server)

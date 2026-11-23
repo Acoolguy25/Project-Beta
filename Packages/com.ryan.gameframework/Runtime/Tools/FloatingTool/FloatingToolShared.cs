@@ -23,6 +23,9 @@ namespace RyanAssets.Item.FloatingTool
         // strips it and clients spawn a pickup with no tool visual.
         [SerializeField]
         Transform hoverTransform;
+
+        /// <summary>The bobbing transform that holds the tool's model, for game modes that dress the pickup up (scale, glow).</summary>
+        public Transform HoverTransform => hoverTransform;
 #if UNITY_SERVER
         protected override bool OnCollectServer(NetworkBehaviour collectObject, NetworkConnection conn) {
             return OnToolCollectedFunc?.Invoke(collectObject, TargetToolSync.Value) ?? false;

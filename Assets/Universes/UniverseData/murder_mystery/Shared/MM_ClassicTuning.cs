@@ -33,6 +33,9 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0f)] public float luckPerRound = 1.5f;
         [Tooltip("Luck stops growing after this many rounds.")]
         [Min(0)] public int maxLuckRounds = 12;
+        [Tooltip("In a round filled up with NPCs, the players together get at least this share of the murderer and sheriff draws " +
+                 "(before luck), so a small lobby does not spend most rounds as an innocent among bots. 0 = NPCs and players weigh as set above.")]
+        [Range(0f, 0.9f)] public float playerShareOfBigRoles = 0.4f;
 
         [Header("Murderer")]
         [Tooltip("After the round starts nobody can kill for this long, so everyone can scatter.")]
@@ -51,6 +54,12 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0.05f)] public float throwRadius = 0.6f;
         [Tooltip("A knife leaves the hand this high above the thrower's feet (the robot is about 5.6 m tall).")]
         [Min(0f)] public float throwHeight = 3.6f;
+        [Tooltip("A throw aimed at nobody (the cursor on the floor or a wall) flies level instead of diving into the floor short of the target.")]
+        public bool levelThrowsAimedAtNobody = true;
+        [Tooltip("A throw counts as aimed at someone when a living character stands this close to the aim point (metres).")]
+        [Min(0f)] public float throwAimAssistRadius = 3f;
+        [Tooltip("Townsfolk treat a murderer who just threw as a threat for this long (seconds).")]
+        [Min(0f)] public float throwPanicSeconds = 2.5f;
 
         [Header("NPC murderers")]
         [Tooltip("Chance per second that an NPC murderer with a clear line throws at its target instead of running it down.")]
@@ -75,6 +84,8 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0f)] public float sheriffDetectionMultiplier = 1.5f;
         [Tooltip("Extra target priority an armed sheriff gets with NPC murderers (0 = none).")]
         [Min(0f)] public float sheriffTargetPriority = 1f;
+        [Tooltip("NPC murderers carry a random knife skin up to this one (index into MM_KnifeSkins).")]
+        [Min(0)] public int npcKnifeSkinMax = 2;
 
         [Header("Sheriff")]
         [Tooltip("Shots in the sheriff's gun before it reloads (MM2 style: one).")]
@@ -85,6 +96,20 @@ namespace Universes.UniverseData.murder_mystery {
         public MM_WrongShotPenalty wrongShotPenalty = MM_WrongShotPenalty.SheriffDies;
         [Tooltip("With the Jam penalty: how long the gun stays jammed (seconds).")]
         [Min(0f)] public float wrongShotJamSeconds = 20f;
+
+        [Header("Dropped gun")]
+        [Tooltip("A dropped gun floats this high above the floor where the sheriff fell (metres).")]
+        [Min(0f)] public float gunFloatHeight = 1.6f;
+        [Tooltip("How far from the body to look for floor to put the gun on (metres).")]
+        [Min(0.5f)] public float gunFloorSearchRadius = 8f;
+        [Tooltip("Players get this long to reach the gun first; then the nearest NPC townsperson goes for it and becomes the hero. Negative = NPCs never take it.")]
+        public float npcHeroDelaySeconds = 10f;
+        [Tooltip("How fast that NPC heads for the gun (m/s). Walking is 18.")]
+        [Min(1f)] public float npcHeroSpeed = 20f;
+        [Tooltip("The NPC takes the gun this close to it (metres).")]
+        [Min(0.5f)] public float npcHeroReachDistance = 4f;
+        [Tooltip("An NPC that cannot reach the gun in this long gives up and the next nearest one tries (seconds).")]
+        [Min(1f)] public float npcHeroGiveUpSeconds = 20f;
 
         [Header("NPC sheriff")]
         [Tooltip("An NPC sheriff sees a drawn knife or a kill this far away (metres), given a clear line.")]
@@ -107,6 +132,8 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0f)] public float npcPanicDistance = 22f;
         [Tooltip("Townsfolk keep running from a murderer for this long after seeing a kill (seconds).")]
         [Min(0f)] public float npcPanicAfterKillSeconds = 6f;
+        [Tooltip("Fleeing townsfolk stop running once the murderer is this many times the panic distance away.")]
+        [Min(1f)] public float npcPanicClearMultiplier = 1.5f;
 
         [Header("Coins")]
         [Tooltip("Coins a player's bag holds per round.")]

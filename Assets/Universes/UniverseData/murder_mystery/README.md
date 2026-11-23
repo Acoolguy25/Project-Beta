@@ -16,18 +16,26 @@ murderer is shot or the clock runs out with anyone left.
 | Results | 12 s | "Innocents win" or "Murderer wins", who stopped the murderer, the cast (murderer, sheriff, hero), your own round (win or loss, coins, XP), progress to the next knife skin, every character's role, fate, kills and coins, and your odds for the next round. |
 
 The round fills to 18 characters with NPCs (at least 4). One murderer and one sheriff per 24 characters.
+Players start each round near a lamp (`litSpawnDistance`, 16 m, on `MM_ServerRunner`) so the role card is
+never shown over a black corner, and without the spawn-shield ring other modes use.
 
 ### The roles
 
 - **Murderer**: 8 s grace at the start of the hunt, then may kill at will (1.5 s between player kills,
   9 s for NPC murderers). Stab with the knife, or press **E** with the knife drawn to throw it at the
   cursor: the server flies it (75 m/s, 90 m range, `MM_KnifeThrows`), so it can be dodged and it sticks in
-  walls. 3 s between throws.
+  walls. A throw aimed at nobody flies level instead of diving into the floor, and one that reaches the
+  end of its range just vanishes (no thud). The knife in the murderer's hand is hidden until it comes
+  back (3 s between throws).
 - **Sheriff**: shoot the murderer. Shoot an innocent and the sheriff dies too, dropping the gun
   (`wrongShotPenalty`, MM2 rules; `Jam` instead jams the gun for 20 s).
-- **Innocent**: survive and collect coins. When the sheriff dies, their gun drops with a beam over it; the
-  first living, empty-handed innocent **player** to touch it becomes the **Hero** (a sheriff in gold). Only
-  the hero is told who it is; everyone else hears "Someone took the gun".
+- **Innocent**: survive and collect coins. When the sheriff dies, their gun drops to the floor where they
+  fell (snapped to the NavMesh), enlarged, glowing blue and with a beam over it, and every living innocent
+  gets a compass chip ("Sheriff's gun · 12 m" with an arrow). The first living, empty-handed innocent to
+  touch it becomes the **Hero** (a sheriff in gold). Players get a head start (`npcHeroDelaySeconds`, 10 s);
+  after that the nearest NPC townsperson goes for the gun (`MM_NpcGunSeeker`) and, if it gets there, becomes
+  an NPC hero with the NPC sheriff's behaviour. An NPC that is stuck or too slow gives up and the next one
+  tries. Only the hero is told who it is; everyone else hears "Someone took the gun".
 
 NPC sheriffs are not told who the murderer is (`MM_NpcSheriff`): they wander with the gun holstered until
 they see a murderer with the knife out or see (or hear, within 14 m) a kill, then react after 0.9 to 1.6 s
@@ -42,7 +50,9 @@ If no player is left alive the round is cut to 25 s and the NPC murderers stop w
 ### Who gets the big roles
 
 `MM_RoleOdds` (unit-tested): players weigh 3 in the draw against 1 for an NPC, and every round a player
-misses a role adds 1.5 to their weight for it (up to 12 rounds), saved between sessions. The murderer is
+misses a role adds 1.5 to their weight for it (up to 12 rounds), saved between sessions. In a small lobby
+the NPCs' weight is lowered so the players together hold `playerShareOfBigRoles` (40%) of each big role,
+so a solo player is not "innocent among bots" almost every round. The murderer is
 drawn first, the sheriff from whoever is left. Players see their exact chance for the next round in the
 lobby and on the results card.
 
@@ -52,7 +62,10 @@ Coins appear round the house (30 at the start, then one every 0.8 s up to 45 on 
 holds 40 a round; the coin chip on the role chip counts it and a full bag says so. Coins are saved as a
 lifetime total that unlocks knife skins (`MM_KnifeSkins`): Rusty, Crimson (60), Jade (180), Gilded (400),
 Frost (750), Nightmare (1200), Inferno (2000). A murderer's knife, in the hand and in flight, wears their
-best skin for everyone to see. XP: 1 per coin, 10 per kill, 40 for stopping the murderer, 15 for surviving,
+best skin for everyone to see: the skin colours the blade only (a mask made from the knife texture), the
+higher tiers glow, and the trail matches. A sheriff or hero with a skin unlocked carries a gun tinted to
+match, so coins show in every role. Between rounds and on the role card a chip shows your skin and how many
+lifetime coins the next one needs. NPCs do not pick up coins. XP: 1 per coin, 10 per kill, 40 for stopping the murderer, 15 for surviving,
 25 for winning.
 
 All of these numbers live in one serializable block, **Classic Tuning** (`MM_ClassicTuning`) on the
@@ -82,12 +95,12 @@ does nothing in builds.
 | Role reveal | Pizzicato sting and a flash in the role's colour; again (at the top of the screen) when you become the hero. |
 | Knife throw | A whoosh, the knife spinning along its line with a trail in the skin's colour; a thud and dust where it sticks in a wall. |
 | Kill | Sparks, a shockwave ring under the victim and a kill sting where it happened, camera shake by distance (1.5x for the killer). Only players within earshot (`killAudibleDistance`, 45 m) are told. The victim gets a red flash and "YOU WERE KILLED". |
-| Coin | A coin sound that climbs in pitch while you pick them up in a row, a floating +1, the coin chip pops; "BAG FULL" when it is. |
-| Sheriff down | A horn and alarm, a blue flash, "The sheriff is down" with what it means for you, a beam and "SHERIFF'S GUN" over the gun. |
+| Coin | A gold coin (`CoinGold.mat` on the shared coin prefab) that bursts on pickup, a coin sound that climbs in pitch while you pick them up in a row, a floating +1, the bag chip pops; "BAG FULL" when it is. |
+| Sheriff down | A horn and alarm, a blue flash, "The sheriff is down" with what it means for you; the floating gun is shown larger with a blue glow (`Prefabs/MM_GunGlow.prefab`), a beam, and a compass chip for living innocents. |
 | Gun taken, last survivor, wrong shot | A banner at the top for everyone ("It's you" for the last survivor). |
 | Final 10 s | A beep every second, higher for the last three. |
 | Murderer cooldowns | The dagger chip counts the kill cooldown down, the throw prompt counts the throw down; a beep when the knife is ready. |
-| Results | A win or lose sting, confetti over you when you win, "NEW KNIFE SKIN" when this round's coins unlocked one. |
+| Results | A win or lose sting, confetti over you when you win, "NEW KNIFE SKIN" when this round's coins unlocked one, your win streak ("3 wins in a row · new best!"). |
 
 The HUD also applies the kit's **WarmIndoor** post-processing mood while the game is open. Shot tracers,
 impacts and footsteps come from the shared weapon and character code.
@@ -152,20 +165,29 @@ the same frame with the volume off is a smooth gradient. The post-processing loo
 
 ## Saved progress
 
-`Server/MM_SaveData.cs` (version 2): rounds played, Classic wins per role, rounds survived, murders and
-throw kills, murderers shot, guns picked up, lifetime coins (which unlock knife skins), and the luck that
-raises a player's odds of being murderer or sheriff after rounds without the role.
+`Server/MM_SaveData.cs` (version 3): rounds played, Classic wins per role, the current and best win
+streak, rounds survived, murders and throw kills, murderers shot, guns picked up, lifetime coins (which
+unlock knife skins), and the luck that raises a player's odds of being murderer or sheriff after rounds
+without the role.
 
 ## Code
 
 - `Server/MM_ServerRunner.cs` spawning, roles, tools, win conditions, mode vote; sends each player an `MM_StateBroadcast` twice a second.
 - `Server/MM_ClassicRound.cs` the Classic phases above: deaths, the gun drop and the hero, coins, knife throws, results, XP and saves.
 - `Server/MM_KnifeThrows.cs` server-simulated thrown knives. `Server/MM_NpcSheriff.cs` the NPC sheriff. `Server/MM_Sight.cs` line-of-sight checks.
-- `Shared/MM_Protocol.cs` broadcasts between server and client.
+- `Server/MM_NpcGunSeeker.cs` sends an NPC townsperson for a dropped gun nobody took.
+- `Shared/MM_Protocol.cs` broadcasts between server and client. Fields are only ever appended. (The one
+  exception was the MM2 rework, which removed the meeting and body-report messages and fields in the same
+  change that removed meetings; server and client ship together.)
 - `Shared/MM_ClassicTuning.cs`, `Shared/MM_KillClock.cs`, `Shared/MM_RoleOdds.cs`, `Shared/MM_RoundRules.cs`,
   `Shared/MM_DropRules.cs`, `Shared/MM_KnifeSkins.cs` Classic tuning and pure rules (tested in `Tests/`).
 - `Client/MM_ClientHUD.cs` role card and chip, coin bag, throw prompt, odds, announcements, results, sounds and effects.
   `Client/MM_KnifeFx.cs` thrown knives and knife skins.
-- `Editor/MM_Authoring.cs` (menu **Ryan > Murder Mystery > Rebuild HUD and Knife**) rebuilds `Prefabs/MM_HUD.prefab`
-  and `Prefabs/MM_ThrownKnife.prefab` and makes sure the HUD is in `murder_mystery_start.unity`. Run it from a client Editor.
+- `Editor/MM_Authoring.cs` (menu **Ryan > Murder Mystery > Rebuild HUD and Knife**) rebuilds `Prefabs/MM_HUD.prefab`,
+  `Prefabs/MM_ThrownKnife.prefab`, `Prefabs/MM_GunGlow.prefab`, one material per skin and the
+  blade mask they share in `Materials/KnifeSkins/`, and makes sure the HUD is in `murder_mystery_start.unity`. Run it from a client Editor.
   The same menu has **Apply Atmosphere** for the scene (lighting, lamps, backdrop); it does not touch the HUD.
+
+Outside this folder: the gold coin look (`CoinGold.mat`, coin scale 70) is on the shared
+`com.ryan.gameframework` coin prefab, which only this game uses, and `FloatingToolShared.HoverTransform`
+was exposed so the HUD can enlarge a dropped gun.

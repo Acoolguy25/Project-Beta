@@ -14,7 +14,8 @@
         "RyanAssets.UI",
         "RyanAssets.GameFeel",
         "RyanAssets.Tools.Shared",
-        "RyanAssets.Shared.Component"
+        "RyanAssets.Shared.Component",
+        "RyanAssets.Item.FloatingTool"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

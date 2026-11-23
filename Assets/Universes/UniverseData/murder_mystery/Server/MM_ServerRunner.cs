@@ -63,6 +63,14 @@ namespace Universes.murder_mystery.Server {
         [Tooltip("Editor only: deal the first player this Classic role every round (None = the normal draw), to play-test a role on your own.")]
         [SerializeField]
         MM_Role debugFirstPlayerRole = MM_Role.None;
+        [Header("Spawns")]
+        [Tooltip("Players spawn within this distance of a lamp whenever one of the sampled points allows it, so nobody " +
+                 "starts a round in a dark corner (metres). 0 = anywhere on the NavMesh.")]
+        [SerializeField, Min(0f)]
+        float litSpawnDistance = 16f;
+        [Tooltip("Random NavMesh points tried per spawn while looking for a lit one.")]
+        [SerializeField, Min(1)]
+        int spawnSamples = 24;
 
         public static float SpawnMultiplier;
         public static bool ForceEndGame;
@@ -80,6 +88,8 @@ namespace Universes.murder_mystery.Server {
         MM_Role[] classicRoles = Array.Empty<MM_Role>();
         MM_ClassicRound classic;
         int roundNumber;
+        // The map's lamps (point and spot lights), found once on the first spawn.
+        List<Vector3> lampPositions;
 
         protected override void Awake() {
             base.Awake();
@@ -88,6 +98,8 @@ namespace Universes.murder_mystery.Server {
             classic.EndgameStarted += OnClassicEndgame;
             if (InstanceFinder.ServerManager != null)
                 InstanceFinder.ServerManager.RegisterBroadcast<MM_ThrowKnifeRequest>(classic.OnThrowRequest, true);
+            else
+                Debug.LogError("[MM] No ServerManager when the runner woke: knife throws from players will be ignored.", this);
             CoinShared.CanCollect = classic.CanCollectCoin;
             CoinShared.Collected += classic.OnCoinCollected;
             BroadcastStateLoop(destroyCancellationToken).Forget(exception => Debug.LogException(exception, this));
@@ -118,7 +130,45 @@ namespace Universes.murder_mystery.Server {
         }
 
         Vector3 SpawnLocationFunction(NetworkConnection player) {
-            return DebugSingleNpc.Value ? new Vector3(1120.56995f, 12.12100029f, 1008.34003f) : ServerPathfinding.GetRandomPosition();
+            return DebugSingleNpc.Value ? new Vector3(1120.56995f, 12.12100029f, 1008.34003f) : LitSpawnPoint();
+        }
+
+        /// <summary>A random NavMesh point, preferring one near a lamp: the first frame of a round should never be black.</summary>
+        Vector3 LitSpawnPoint() {
+            Vector3 best = ServerPathfinding.GetRandomPosition();
+            if (litSpawnDistance <= 0f)
+                return best;
+            lampPositions ??= FindLamps();
+            if (lampPositions.Count == 0)
+                return best;
+            float wanted = litSpawnDistance * litSpawnDistance;
+            float bestDistance = NearestLampSqr(best);
+            for (int i = 1; i < spawnSamples && bestDistance > wanted; i++) {
+                Vector3 candidate = ServerPathfinding.GetRandomPosition();
+                float distance = NearestLampSqr(candidate);
+                if (distance < bestDistance) {
+                    best = candidate;
+                    bestDistance = distance;
+                }
+            }
+            return best;
+        }
+
+        float NearestLampSqr(Vector3 point) {
+            float nearest = float.PositiveInfinity;
+            foreach (Vector3 lamp in lampPositions)
+                nearest = Mathf.Min(nearest, (lamp - point).sqrMagnitude);
+            return nearest;
+        }
+
+        static List<Vector3> FindLamps() {
+            List<Vector3> lamps = new();
+            foreach (Light light in FindObjectsByType<Light>(FindObjectsInactive.Exclude))
+                if (light.type is LightType.Point or LightType.Spot)
+                    lamps.Add(light.transform.position);
+            if (lamps.Count == 0)
+                Debug.LogWarning("[MM] No lamps found in the map; players spawn anywhere on the NavMesh.");
+            return lamps;
         }
 
         protected void OnSetPlayerTeam(PlayerData player, TeamConfig teamConfig) {
@@ -300,7 +350,9 @@ namespace Universes.murder_mystery.Server {
                 LocalNPC npc = ServerNPC.SpawnNPC(RobotNPC_Prefab, location: DebugSingleNpc.Value ? new Vector3(1117.56995f, 12.12100029f, 1008.34003f) : null);
                 GameCharacter gameCharacter = npc.GetComponent<GameCharacter>();
                 gameCharacter.Init(100);
-                gameCharacter.InitDefaultEffects();
+                // Classic protects everyone during the role reveal anyway; its spawn shield would only glow.
+                if (mode != MM_Mode.Classic)
+                    gameCharacter.InitDefaultEffects();
                 RandomizeCharacterName(gameCharacter);
                 MM_LocalNPC body = npc.gameObject.AddComponent<MM_LocalNPC>();
                 switch (mode) {
@@ -346,7 +398,7 @@ namespace Universes.murder_mystery.Server {
             classic.AddParticipant(character, null, role);
             // Townsfolk only run from a murderer with the knife out, or one they just saw kill.
             npc.FleeThreatFilter = classic.IsVisibleThreat;
-            npc.ConfigureFleeRadii(classicTuning.npcPanicDistance, classicTuning.npcPanicDistance * 1.5f);
+            npc.ConfigureFleeRadii(classicTuning.npcPanicDistance, classicTuning.npcPanicDistance * classicTuning.npcPanicClearMultiplier);
             switch (role) {
                 case MM_Role.Murderer:
                     body.KillAllowed = () => classic.CanKill(character);
@@ -416,11 +468,14 @@ namespace Universes.murder_mystery.Server {
                     continue;
                 RandomizeCharacterName(character);
                 if (mode == MM_Mode.Classic) {
+                    // The role reveal is covered by the global invulnerability; the spawn shield's glow would
+                    // only mark players out from the NPCs.
+                    character.EffectsComponent.RemoveEffect(CharacterEffect.Invul);
                     classic.AddParticipant(character, player, classicRole);
                     if (classicRole == MM_Role.Murderer)
                         classic.ArmMurderer(character, player);
                     else if (classicRole == MM_Role.Sheriff)
-                        classic.ArmSheriff(character);
+                        classic.ArmSheriff(character, player);
                 } else {
                     SpawnOtherModeTools(player, character.NetworkObject);
                     ServerChat.SendSystemMessage(player.Owner, new($"Welcome to the {GetTeamName(player.team.Value.realTeam)} team!", SystemMessageSource.CustomMessage));

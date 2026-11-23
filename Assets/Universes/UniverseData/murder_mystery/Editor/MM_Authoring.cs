@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using RyanAssets.GameFeel;
 using RyanAssets.UI;
@@ -13,8 +14,9 @@ using Universes.UniverseData.murder_mystery.Client;
 
 namespace Universes.UniverseData.murder_mystery.Editor {
     /// <summary>
-    /// Rebuilds the murder mystery presentation prefabs (HUD and thrown knife), makes sure the HUD is in the
-    /// start scene, and applies the mansion's atmosphere (fog, ambient, warm lights) to that scene.
+    /// Rebuilds the murder mystery presentation prefabs (HUD, thrown knife, knife-skin materials and the
+    /// dropped gun's glow), makes sure the HUD is in the start scene, and applies the mansion's atmosphere
+    /// (fog, ambient, warm lights) to that scene.
     /// Run from Ryan/Murder Mystery in a client (non-server) Editor.
     /// </summary>
     public static class MM_Authoring {
@@ -30,6 +32,26 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         const float ThrownKnifeScale = 4f;
         const float ThrownKnifeTrailSeconds = 0.25f;
         const float ThrownKnifeTrailWidth = 0.45f;
+        // Knife skins: the plain knife's material, its texture (to find the blade in), and where the skins go.
+        const string KnifeMaterialPath = "Packages/com.ryan.gameframework/Runtime/Tools/Melees/One-Handed Melee Weapons Lite/Materials/RoughDagger02_Red.mat";
+        const string KnifeAlbedoPath = "Packages/com.ryan.gameframework/Runtime/Tools/Melees/One-Handed Melee Weapons Lite/Textures/RoughDagger02/RoughDagger2_Red_Albedo.png";
+        const string KnifeSkinFolder = Root + "/Materials/KnifeSkins";
+        const string BladeMaskPath = KnifeSkinFolder + "/MM_KnifeBladeMask.png";
+        // The blade is the grey steel in the knife's texture: pixels this unsaturated and this bright.
+        const float BladeMaxSaturation = 0.2f;
+        const float BladeMinValue = 0.45f;
+        const int BladeMaskSize = 512;
+        // A skin tints the whole knife this much and makes the blade glow in its colour: a little for
+        // every skin, more for the rarer ones (MM_KnifeSkins.glow).
+        const float SkinBaseTint = 0.45f;
+        const float SkinBladeGlow = 0.6f;
+        const float SkinGlowPerLevel = 2.2f;
+        // The dropped gun's light: sheriff blue, enough to pick the gun out of a dark room.
+        const string GunGlowPath = Root + "/Prefabs/MM_GunGlow.prefab";
+        const float GunGlowRange = 14f;
+        const float GunGlowIntensity = 40f;
+        // The announcement headline may shrink to this share of its size to fit on one line.
+        const float AnnouncementMinTitleScale = 0.7f;
         const string StartScene = Root + "/murder_mystery_start.unity";
         const string Sounds = "Assets/Universes/UniverseData/classic_horror/Flooded_Grounds/Content/Sounds/";
         const string OwnSounds = Root + "/Audio/";
@@ -38,8 +60,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         [MenuItem("Ryan/Murder Mystery/Rebuild HUD and Knife")]
         public static void BuildAll() {
             EnsureFolders();
+            Material[] knifeSkins = BuildKnifeSkins();
             GameObject thrownKnife = BuildThrownKnife();
-            BuildHud(thrownKnife);
+            GameObject gunGlow = BuildGunGlow();
+            BuildHud(thrownKnife, knifeSkins, gunGlow);
             AddHudToStartScene();
             AssetDatabase.SaveAssets();
         }
@@ -564,6 +588,89 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             foreach (string folder in new[] { "Prefabs", "Materials" })
                 if (!AssetDatabase.IsValidFolder(Root + "/" + folder))
                     AssetDatabase.CreateFolder(Root, folder);
+            if (!AssetDatabase.IsValidFolder(KnifeSkinFolder))
+                AssetDatabase.CreateFolder(Root + "/Materials", "KnifeSkins");
+        }
+
+        // ---------- knife skins ----------
+
+        /// <summary>
+        /// One material per <see cref="MM_KnifeSkins"/> entry (index 0 is the plain knife's own material). A skin
+        /// tints the knife a little and makes only the blade glow in its colour, through a mask of the blade
+        /// made from the knife's texture.
+        /// </summary>
+        static Material[] BuildKnifeSkins() {
+            Material plain = AssetDatabase.LoadAssetAtPath<Material>(KnifeMaterialPath);
+            if (plain == null)
+                throw new System.InvalidOperationException("Missing knife material: " + KnifeMaterialPath);
+            Texture2D mask = BuildBladeMask();
+            Material[] materials = new Material[MM_KnifeSkins.All.Length];
+            materials[0] = plain;
+            for (int i = 1; i < materials.Length; i++) {
+                MM_KnifeSkins.Skin skin = MM_KnifeSkins.All[i];
+                string path = $"{KnifeSkinFolder}/MM_KnifeSkin_{skin.name}.mat";
+                Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (material == null) {
+                    material = new Material(plain);
+                    AssetDatabase.CreateAsset(material, path);
+                }
+                material.CopyPropertiesFromMaterial(plain);
+                material.name = "MM_KnifeSkin_" + skin.name;
+                material.SetColor("_BaseColor", Color.Lerp(Color.white, skin.tint, SkinBaseTint));
+                material.EnableKeyword("_EMISSION");
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                material.SetTexture("_EmissionMap", mask);
+                material.SetColor("_EmissionColor", skin.tint.linear * (SkinBladeGlow + skin.glow * SkinGlowPerLevel));
+                EditorUtility.SetDirty(material);
+                AssetDatabase.SaveAssetIfDirty(material);
+                materials[i] = material;
+            }
+            return materials;
+        }
+
+        /// <summary>White where the knife's texture is grey steel (the blade), black elsewhere (guard, grip).</summary>
+        static Texture2D BuildBladeMask() {
+            Texture2D albedo = new(2, 2);
+            if (!albedo.LoadImage(File.ReadAllBytes(KnifeAlbedoPath)))
+                throw new System.InvalidOperationException("Could not read the knife texture: " + KnifeAlbedoPath);
+            try {
+                Texture2D mask = new(BladeMaskSize, BladeMaskSize, TextureFormat.RGB24, false);
+                Color[] pixels = new Color[BladeMaskSize * BladeMaskSize];
+                for (int y = 0; y < BladeMaskSize; y++)
+                    for (int x = 0; x < BladeMaskSize; x++) {
+                        Color c = albedo.GetPixelBilinear((x + 0.5f) / BladeMaskSize, (y + 0.5f) / BladeMaskSize);
+                        Color.RGBToHSV(c, out _, out float saturation, out float value);
+                        pixels[y * BladeMaskSize + x] = saturation <= BladeMaxSaturation && value >= BladeMinValue ? Color.white : Color.black;
+                    }
+                mask.SetPixels(pixels);
+                File.WriteAllBytes(BladeMaskPath, mask.EncodeToPNG());
+                Object.DestroyImmediate(mask);
+            } finally {
+                Object.DestroyImmediate(albedo);
+            }
+            AssetDatabase.ImportAsset(BladeMaskPath, ImportAssetOptions.ForceUpdate);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(BladeMaskPath);
+        }
+
+        // ---------- dropped gun ----------
+
+        /// <summary>A light in the sheriff's blue that MM_ClientHUD puts on a dropped gun, so it stands out in a dark room.</summary>
+        static GameObject BuildGunGlow() {
+            GameObject root = new("MM_GunGlow");
+            try {
+                GameObject bulb = new("Light");
+                bulb.transform.SetParent(root.transform, false);
+                bulb.transform.localPosition = Vector3.up * 1.5f;
+                Light light = bulb.AddComponent<Light>();
+                light.type = LightType.Point;
+                light.color = RoleColor(MM_Role.Sheriff);
+                light.range = GunGlowRange;
+                light.intensity = GunGlowIntensity;
+                light.shadows = LightShadows.None;
+                return PrefabUtility.SaveAsPrefabAsset(root, GunGlowPath);
+            } finally {
+                Object.DestroyImmediate(root);
+            }
         }
 
         // ---------- thrown knife ----------
@@ -643,7 +750,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         /// with the coin bag in the corner, the murderer's throw prompt, and cards that pop in only when
         /// something happens (role reveal, announcements, results).
         /// </summary>
-        static void BuildHud(GameObject thrownKnife) {
+        static void BuildHud(GameObject thrownKnife, Material[] knifeSkins, GameObject gunGlow) {
             // Above the spectate bar (5), below the top bar (50).
             RectTransform root = HudKit.Canvas("MM_HUD", 30);
             MM_ClientHUD hud = root.gameObject.AddComponent<MM_ClientHUD>();
@@ -677,11 +784,34 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             hud.oddsChip.label.richText = true;
             hud.oddsChip.label.font = UIKit.Theme.semiBoldFont;
 
-            // Announcements, top centre under the top bar: the moments everyone hears about.
-            hud.announcement = HudKit.Banner(root, "Announcement", new Vector2(0.5f, 1f), new Vector2(0f, -76f), 600f,
-                "pistol", RoleColor(MM_Role.Sheriff), 64f);
+            // Just above: your knife skin and the coins to the next one (between rounds and on the role card).
+            hud.skinChip = HudKit.Chip(root, "Skin", "dagger", "Knife skin", Gold, 40f, UIText.Small);
+            RectTransform skin = (RectTransform)hud.skinChip.transform;
+            skin.anchorMin = skin.anchorMax = skin.pivot = Vector2.zero;
+            skin.anchoredPosition = new Vector2(20f, 252f);
+            hud.skinChip.label.richText = true;
+
+            // Bottom centre, above the throw prompt: which way the dropped gun is, and how far.
+            hud.gunCompass = HudKit.Chip(root, "GunCompass", "pistol", "Sheriff's gun · 0 m", RoleColor(MM_Role.Sheriff), 44f);
+            RectTransform compass = (RectTransform)hud.gunCompass.transform;
+            compass.anchorMin = compass.anchorMax = compass.pivot = new Vector2(0.5f, 0f);
+            compass.anchoredPosition = new Vector2(0f, 300f);
+            hud.gunCompassArrow = (RectTransform)HudKit.Icon(compass, "navigation", 28f, RoleColor(MM_Role.Sheriff)).transform;
+            hud.gunCompassArrow.name = "Arrow";
+            hud.droppedGunGlowPrefab = gunGlow;
+
+            // Announcements, top centre under the top bar: the moments everyone hears about. Kept compact so
+            // it does not hide the room while the murderer may be close.
+            hud.announcement = HudKit.Banner(root, "Announcement", new Vector2(0.5f, 1f), new Vector2(0f, -76f), 520f,
+                "pistol", RoleColor(MM_Role.Sheriff), 52f);
             RectTransform card = (RectTransform)hud.announcement.transform;
             card.pivot = new Vector2(0.5f, 1f);
+            // Headlines stay on one line in the narrow card: the longest ones shrink a little instead of wrapping.
+            TMP_Text headline = hud.announcement.title;
+            headline.textWrappingMode = TextWrappingModes.NoWrap;
+            headline.enableAutoSizing = true;
+            headline.fontSizeMax = headline.fontSize;
+            headline.fontSizeMin = Mathf.Round(headline.fontSize * AnnouncementMinTitleScale);
 
             BuildResults(root, hud);
 
@@ -690,6 +820,12 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
             MM_KnifeFx knives = root.gameObject.AddComponent<MM_KnifeFx>();
             knives.thrownKnifePrefab = thrownKnife;
+            knives.knifeSkinMaterials = knifeSkins;
+
+            // Inter has no ellipsis glyph: clip long labels instead of logging a warning for every one.
+            foreach (TMP_Text text in root.GetComponentsInChildren<TMP_Text>(true))
+                if (text.overflowMode == TextOverflowModes.Ellipsis)
+                    text.overflowMode = TextOverflowModes.Truncate;
 
             UIKit.SavePrefab(root.gameObject, HudPath);
         }
@@ -713,7 +849,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             return new SfxSound { clips = clips, volume = volume };
         }
 
-        /// <summary>Bottom-left: your role as a small emblem and name, your coin bag and (murderers) the kill cooldown.</summary>
+        /// <summary>Bottom-left: your role as a small emblem and name, and your coin bag (the throw prompt counts a murderer's cooldowns).</summary>
         static void BuildRoleChip(RectTransform root, MM_ClientHUD hud) {
             RectTransform chip = UIKit.Pinned(root, "RoleChip", Vector2.zero, new Vector2(20f, 200f), new Vector2(260f, 64f));
             HudKit.Glass(chip, 16f);
@@ -732,12 +868,8 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             UIKit.Size(divider, 1f, 36f);
             UIKit.Paint(divider.gameObject.AddComponent<Image>(), UIColorRole.Stroke).raycastTarget = false;
 
-            hud.coinChip = HudKit.Chip(chip, "Coins", "coins", "0/40", Gold, 30f);
+            hud.coinChip = HudKit.Chip(chip, "Coins", "coins", "Bag 0/40", Gold, 30f);
             hud.coinChip.background.enabled = false;
-            // Murderers only: the knife is not ready yet (grace period or kill cooldown).
-            hud.killCooldown = HudKit.Chip(chip, "KillCooldown", "dagger", "8s", RoleColor(MM_Role.Murderer), 30f);
-            hud.killCooldown.background.enabled = false;
-            hud.killCooldown.SetVisible(false);
             hud.roleChip = HudKit.Popup(chip, false);
         }
 
@@ -775,6 +907,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             hud.resultsOutcome = HudKit.Chip(you, "Outcome", "trophy", "Victory", Gold, 36f);
             hud.resultsCoins = HudKit.Chip(you, "Coins", "coins", "+0 coins", Gold, 36f);
             hud.resultsXp = HudKit.Chip(you, "Xp", "trending_up", "+0 XP", RoleColor(MM_Role.Innocent), 36f);
+            hud.resultsStreak = HudKit.Chip(you, "Streak", "local_fire_department", "1 win in a row", new Color(1f, 0.71f, 0.28f), 36f);
 
             // Lifetime coins towards the next knife skin.
             RectTransform skin = UIKit.Node(card, "SkinProgress");
@@ -797,7 +930,6 @@ namespace Universes.UniverseData.murder_mystery.Editor {
 
             RectTransform footer = UIKit.Node(card, "Footer");
             UIKit.Row(footer.gameObject, 10f, new RectOffset(0, 0, 6, 0), TextAnchor.MiddleCenter);
-            hud.resultsTimer = HudKit.Chip(footer, "NextRound", "hourglass_bottom", "Next round in 12s", UIKit.Theme.textSecondary, 32f, UIText.Small);
             hud.resultsOdds = HudKit.Chip(footer, "Odds", "dagger", "Next round", RoleColor(MM_Role.Murderer), 32f, UIText.Small);
             hud.resultsOdds.label.richText = true;
             hud.results = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();

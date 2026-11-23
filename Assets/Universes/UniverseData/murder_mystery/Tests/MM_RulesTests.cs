@@ -113,6 +113,20 @@ namespace Universes.UniverseData.murder_mystery.Tests {
         }
 
         [Test]
+        public void ASmallLobbyKeepsItsShareOfTheBigRoles() {
+            // One player at weight 3 among 17 NPCs: at least 40 % of the murderer draw.
+            float npc = MM_RoleOdds.NpcWeightFor(players: 1, npcs: 17, playerWeight: 3f, playerShare: 0.4f);
+            float[] weights = new float[18];
+            weights[0] = 3f;
+            for (int i = 1; i < weights.Length; i++) weights[i] = npc;
+            Assert.That(MM_RoleOdds.MurdererChance(weights, 0, 1), Is.EqualTo(0.4f).Within(0.001f));
+            // A full lobby (players already hold more than the share) keeps NPCs at their plain weight.
+            Assert.That(MM_RoleOdds.NpcWeightFor(players: 12, npcs: 6, playerWeight: 3f, playerShare: 0.4f), Is.EqualTo(MM_RoleOdds.NpcWeight));
+            Assert.That(MM_RoleOdds.NpcWeightFor(players: 1, npcs: 17, playerWeight: 3f, playerShare: 0f), Is.EqualTo(MM_RoleOdds.NpcWeight));
+            Assert.That(MM_RoleOdds.NpcWeightFor(players: 0, npcs: 17, playerWeight: 3f, playerShare: 0.4f), Is.EqualTo(MM_RoleOdds.NpcWeight));
+        }
+
+        [Test]
         public void DealGivesExactlyTheRequestedRolesToDifferentCharacters() {
             float[] weights = { 1f, 1f, 1f, 1f, 1f };
             var rng = new Random(1);
@@ -223,14 +237,21 @@ namespace Universes.UniverseData.murder_mystery.Tests {
         }
 
         [Test]
-        public void OnlyALivingEmptyHandedInnocentPlayerMayPickUp() {
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 0, isPlayer: true), Is.True);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: false, toolsHeld: 0, isPlayer: true), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 1, isPlayer: true), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 0, isPlayer: false), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Murderer, alive: true, toolsHeld: 0, isPlayer: true), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Sheriff, alive: true, toolsHeld: 0, isPlayer: true), Is.False);
-            Assert.That(MM_DropRules.CanPickUp(MM_Role.Spectator, alive: true, toolsHeld: 0, isPlayer: true), Is.False);
+        public void OnlyALivingEmptyHandedInnocentMayPickUp() {
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 0), Is.True);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: false, toolsHeld: 0), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Innocent, alive: true, toolsHeld: 1), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Murderer, alive: true, toolsHeld: 0), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Sheriff, alive: true, toolsHeld: 0), Is.False);
+            Assert.That(MM_DropRules.CanPickUp(MM_Role.Spectator, alive: true, toolsHeld: 0), Is.False);
+        }
+
+        [Test]
+        public void NpcsGoForTheGunOnlyAfterThePlayersHeadStart() {
+            Assert.That(MM_DropRules.NpcMayGoForGun(secondsOnFloor: 3f, playerHeadStart: 10f), Is.False);
+            Assert.That(MM_DropRules.NpcMayGoForGun(secondsOnFloor: 10f, playerHeadStart: 10f), Is.True);
+            Assert.That(MM_DropRules.NpcMayGoForGun(secondsOnFloor: 0f, playerHeadStart: 0f), Is.True);
+            Assert.That(MM_DropRules.NpcMayGoForGun(secondsOnFloor: 999f, playerHeadStart: -1f), Is.False, "a negative head start turns NPC heroes off");
         }
 
         [Test]
