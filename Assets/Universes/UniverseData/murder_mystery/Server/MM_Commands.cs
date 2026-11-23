@@ -5,7 +5,7 @@ using RyanAssets.Commands.Shared;
 using RyanAssets.Shared.Global;
 using System.Globalization;
 using UnityEngine;
-using Universes.UniverseData.murder_mystery.Server;
+using Universes.UniverseData.murder_mystery;
 
 namespace Universes.murder_mystery.Server
 {
@@ -79,79 +79,15 @@ namespace Universes.murder_mystery.Server
             new()
             {
                commandType = "Murderer",
-               commandName = "MurdererBaseChance",
-               description = "Sets the base chance for an NPC or player to become a Murderer",
+               commandName = "MurdererEvery",
+               description = "Classic: one murderer per this many characters (players + NPCs)",
                arguments = new[]
                 {
                     new CommandArgumentConfig
                     {
-                        name = "Chance",
-                        type = CommandArgumentType.Float,
-                        min = 0f,
-                        max = 1f
-                    }
-                }
-            },
-            new()
-            {
-               commandType = "Murderer",
-               commandName = "MurdererMin",
-               description = "Sets the minimum number of Murderers",
-               arguments = new[]
-                {
-                    new CommandArgumentConfig
-                    {
-                        name = "Count",
+                        name = "Characters",
                         type = CommandArgumentType.Int,
-                        min = 0f,
-                        max = 100f
-                    }
-                }
-            },
-            new()
-            {
-               commandType = "Murderer",
-               commandName = "MurdererMaxRatio",
-               description = "Sets the maximum fraction of the total pool that can be Murderers",
-               arguments = new[]
-                {
-                    new CommandArgumentConfig
-                    {
-                        name = "Ratio",
-                        type = CommandArgumentType.Float,
-                        min = 0f,
-                        max = 1f
-                    }
-                }
-            },
-            new()
-            {
-               commandType = "Sheriff",
-               commandName = "SheriffBaseChance",
-               description = "Sets the base chance for an eligible player to become a Sheriff",
-               arguments = new[]
-                {
-                    new CommandArgumentConfig
-                    {
-                        name = "Chance",
-                        type = CommandArgumentType.Float,
-                        min = 0f,
-                        max = 1f
-                    }
-                }
-            },
-            new()
-            {
-               commandType = "Sheriff",
-               commandName = "SheriffMin",
-               description = "Sets the minimum number of Sheriffs",
-               arguments = new[]
-                {
-                    new CommandArgumentConfig
-                    {
-                        name = "Count",
-                        type = CommandArgumentType.Int,
-                        min = 0f,
+                        min = 2f,
                         max = 100f
                     }
                 }
@@ -159,16 +95,48 @@ namespace Universes.murder_mystery.Server
             new()
             {
                commandType = "Sheriff",
-               commandName = "SheriffMaxRatio",
-               description = "Sets the maximum fraction of the player pool that can be Sheriffs",
+               commandName = "SheriffEvery",
+               description = "Classic: one sheriff per this many characters (players + NPCs)",
                arguments = new[]
                 {
                     new CommandArgumentConfig
                     {
-                        name = "Ratio",
+                        name = "Characters",
+                        type = CommandArgumentType.Int,
+                        min = 2f,
+                        max = 100f
+                    }
+                }
+            },
+            new()
+            {
+               commandType = "Roles",
+               commandName = "RolePlayerWeight",
+               description = "Classic: a player's weight in the murderer and sheriff draws (an NPC weighs 1)",
+               arguments = new[]
+                {
+                    new CommandArgumentConfig
+                    {
+                        name = "Weight",
+                        type = CommandArgumentType.Float,
+                        min = 0.1f,
+                        max = 20f
+                    }
+                }
+            },
+            new()
+            {
+               commandType = "Roles",
+               commandName = "RoleLuckPerRound",
+               description = "Classic: weight a player gains for a role each round they miss it",
+               arguments = new[]
+                {
+                    new CommandArgumentConfig
+                    {
+                        name = "Luck",
                         type = CommandArgumentType.Float,
                         min = 0f,
-                        max = 1f
+                        max = 20f
                     }
                 }
             }
@@ -190,36 +158,24 @@ namespace Universes.murder_mystery.Server
             (NetworkConnection caller, string commandName, string[] args) => {
                 MM_ServerRunner.SpawnMultiplier = float.Parse(args[0], CultureInfo.InvariantCulture);
             },
-            (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.murdererBaseChance = float.Parse(args[0], CultureInfo.InvariantCulture);
-            },
-            (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.minMurderers = int.Parse(args[0], CultureInfo.InvariantCulture);
-            },
-            (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.murdererMaxRatio = float.Parse(args[0], CultureInfo.InvariantCulture);
-            },
-            (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.sheriffBaseChance = float.Parse(args[0], CultureInfo.InvariantCulture);
-            },
-            (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.minSheriffs = int.Parse(args[0], CultureInfo.InvariantCulture);
-            },
-            (NetworkConnection caller, string commandName, string[] args) => {
-                MM_Roles.sheriffMaxRatio = float.Parse(args[0], CultureInfo.InvariantCulture);
-            }
+            (NetworkConnection caller, string commandName, string[] args) =>
+                MM_ServerRunner.TuneClassic(t => t.charactersPerMurderer = Mathf.Max(2, int.Parse(args[0], CultureInfo.InvariantCulture))),
+            (NetworkConnection caller, string commandName, string[] args) =>
+                MM_ServerRunner.TuneClassic(t => t.charactersPerSheriff = Mathf.Max(2, int.Parse(args[0], CultureInfo.InvariantCulture))),
+            (NetworkConnection caller, string commandName, string[] args) =>
+                MM_ServerRunner.TuneClassic(t => t.playerRoleWeight = Mathf.Max(0.1f, float.Parse(args[0], CultureInfo.InvariantCulture))),
+            (NetworkConnection caller, string commandName, string[] args) =>
+                MM_ServerRunner.TuneClassic(t => t.luckPerRound = Mathf.Max(0f, float.Parse(args[0], CultureInfo.InvariantCulture))),
         };
         static readonly ServerCommandService.CommandGetter[] commandGetters = {
             (_, _) => LocalNPC.WalkSpeedMultiplier,
             (_, _) => LocalNPC.FleeSpeedMultiplier,
             (_, _) => LocalNPC.AttackSpeedMultiplier,
             (_, _) => MM_ServerRunner.SpawnMultiplier,
-            (_, _) => MM_Roles.murdererBaseChance,
-            (_, _) => MM_Roles.minMurderers,
-            (_, _) => MM_Roles.murdererMaxRatio,
-            (_, _) => MM_Roles.sheriffBaseChance,
-            (_, _) => MM_Roles.minSheriffs,
-            (_, _) => MM_Roles.sheriffMaxRatio
+            (_, _) => MM_ServerRunner.ClassicTuning?.charactersPerMurderer,
+            (_, _) => MM_ServerRunner.ClassicTuning?.charactersPerSheriff,
+            (_, _) => MM_ServerRunner.ClassicTuning?.playerRoleWeight,
+            (_, _) => MM_ServerRunner.ClassicTuning?.luckPerRound
         };
 
         void Start() {

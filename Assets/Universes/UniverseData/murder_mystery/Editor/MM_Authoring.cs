@@ -13,26 +13,33 @@ using Universes.UniverseData.murder_mystery.Client;
 
 namespace Universes.UniverseData.murder_mystery.Editor {
     /// <summary>
-    /// Rebuilds the murder mystery presentation prefabs (HUD and body marker), makes sure the HUD is in the
+    /// Rebuilds the murder mystery presentation prefabs (HUD and thrown knife), makes sure the HUD is in the
     /// start scene, and applies the mansion's atmosphere (fog, ambient, warm lights) to that scene.
     /// Run from Ryan/Murder Mystery in a client (non-server) Editor.
     /// </summary>
     public static class MM_Authoring {
         public const string Root = "Assets/Universes/UniverseData/murder_mystery";
         const string HudPath = Root + "/Prefabs/MM_HUD.prefab";
-        const string MarkerPath = Root + "/Prefabs/MM_BodyMarker.prefab";
+        const string ThrownKnifePath = Root + "/Prefabs/MM_ThrownKnife.prefab";
+        const string TrailMaterialPath = Root + "/Materials/MM_KnifeTrail.mat";
+        // The dagger the murderers carry, as a standalone model (blade along +Y).
+        const string KnifeModelPath = "Packages/com.ryan.gameframework/Runtime/Tools/Melees/One-Handed Melee Weapons Lite/Prefabs/RoughDagger02_Red.prefab";
+        // Where the model's middle is along its blade (model units), so the flying knife spins round its centre.
+        const float KnifeModelCentreY = 0.19f;
+        // The model is 0.74 m long; next to the 5.6 m robots a thrown knife reads at about 2.2 m.
+        const float ThrownKnifeScale = 3f;
+        const float ThrownKnifeTrailSeconds = 0.18f;
+        const float ThrownKnifeTrailWidth = 0.35f;
         const string StartScene = Root + "/murder_mystery_start.unity";
-        const string QuickEffects = "Assets/GabrielAguiarProductions/FreeQuickEffectsVol1/Prefabs/";
         const string Sounds = "Assets/Universes/UniverseData/classic_horror/Flooded_Grounds/Content/Sounds/";
         const string OwnSounds = Root + "/Audio/";
 
-        static readonly Color Blood = new(0.9f, 0.08f, 0.06f, 0.85f);
 
-        [MenuItem("Ryan/Murder Mystery/Rebuild HUD and Markers")]
+        [MenuItem("Ryan/Murder Mystery/Rebuild HUD and Knife")]
         public static void BuildAll() {
             EnsureFolders();
-            GameObject marker = BuildMarker();
-            BuildHud(marker);
+            GameObject thrownKnife = BuildThrownKnife();
+            BuildHud(thrownKnife);
             AddHudToStartScene();
             AssetDatabase.SaveAssets();
         }
@@ -559,65 +566,58 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                     AssetDatabase.CreateFolder(Root, folder);
         }
 
-        // ---------- body marker ----------
+        // ---------- thrown knife ----------
 
-        static GameObject BuildMarker() {
-            GameObject root = new("MM_BodyMarker");
-            GameObject effect = PlaceEffect(QuickEffects + "vfx_LootDrop_01.prefab", root.transform, new Vector3(0, -0.9f, 0), 1.3f, Blood);
-            effect.name = "Beacon";
-            Light light = new GameObject("Glow").AddComponent<Light>();
-            light.transform.SetParent(root.transform, false);
-            light.transform.localPosition = new Vector3(0, 0.4f, 0);
-            light.type = LightType.Point;
-            light.color = new Color(1f, 0.15f, 0.1f);
-            light.range = 5f;
-            light.intensity = 2.5f;
-            light.shadows = LightShadows.None;
-            GameObject saved = PrefabUtility.SaveAsPrefabAsset(root, MarkerPath);
-            Object.DestroyImmediate(root);
-            return saved;
+        /// <summary>
+        /// The knife that flies when a murderer throws (drawn by MM_KnifeFx): the dagger model turned so its tip
+        /// points along +Z, sized to the 5.6 m robots, with a short trail and no collider (the server does the hits).
+        /// </summary>
+        static GameObject BuildThrownKnife() {
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(KnifeModelPath);
+            if (source == null)
+                throw new System.InvalidOperationException("Missing knife model: " + KnifeModelPath);
+            MeshFilter sourceMesh = source.GetComponentInChildren<MeshFilter>();
+            MeshRenderer sourceRenderer = source.GetComponentInChildren<MeshRenderer>();
+
+            GameObject root = new("MM_ThrownKnife");
+            try {
+                GameObject model = new("Model");
+                model.transform.SetParent(root.transform, false);
+                // The model's blade runs along +Y with its centre KnifeModelCentreY up the handle; centre it on the flight line.
+                model.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                model.transform.localScale = Vector3.one * ThrownKnifeScale;
+                model.transform.localPosition = model.transform.localRotation * (Vector3.down * (KnifeModelCentreY * ThrownKnifeScale));
+                model.AddComponent<MeshFilter>().sharedMesh = sourceMesh.sharedMesh;
+                MeshRenderer renderer = model.AddComponent<MeshRenderer>();
+                renderer.sharedMaterials = sourceRenderer.sharedMaterials;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+                TrailRenderer trail = root.AddComponent<TrailRenderer>();
+                trail.time = ThrownKnifeTrailSeconds;
+                trail.minVertexDistance = 0.2f;
+                trail.widthCurve = new AnimationCurve(new Keyframe(0f, ThrownKnifeTrailWidth), new Keyframe(1f, 0f));
+                trail.material = BuildTrailMaterial();
+                trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                trail.receiveShadows = false;
+                trail.startColor = new Color(1f, 1f, 1f, 0.55f);
+                trail.endColor = new Color(1f, 1f, 1f, 0f);
+                return PrefabUtility.SaveAsPrefabAsset(root, ThrownKnifePath);
+            } finally {
+                Object.DestroyImmediate(root);
+            }
         }
 
-        static GameObject PlaceEffect(string path, Transform parent, Vector3 position, float scale, Color tint) {
-            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (prefab == null)
-                throw new System.InvalidOperationException("Missing murder mystery presentation asset: " + path);
-            GameObject effect = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
-            effect.transform.localPosition = position;
-            effect.transform.localRotation = Quaternion.identity;
-            effect.transform.localScale = Vector3.one * scale;
-            foreach (ParticleSystem particle in effect.GetComponentsInChildren<ParticleSystem>(true)) {
-                ParticleSystem.MainModule main = particle.main;
-                main.startColor = tint;
-                main.loop = true;
-                main.playOnAwake = true;
-            }
-            foreach (ParticleSystemRenderer renderer in effect.GetComponentsInChildren<ParticleSystemRenderer>(true)) {
-                Material[] materials = renderer.sharedMaterials;
-                for (int i = 0; i < materials.Length; i++)
-                    if (materials[i] != null && !materials[i].shader.name.StartsWith("Universal Render Pipeline/"))
-                        materials[i] = UrpParticleMaterial(materials[i]);
-                renderer.sharedMaterials = materials;
-            }
-            return effect;
-        }
-
-        static Material UrpParticleMaterial(Material source) {
-            string path = Root + "/Materials/VFX_" + source.name + ".mat";
-            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        /// <summary>An additive URP particle material for the knife's trail; the trail's own colours tint it per skin.</summary>
+        static Material BuildTrailMaterial() {
             Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
             if (shader == null)
                 throw new System.InvalidOperationException("URP particle shader is missing.");
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(TrailMaterialPath);
             if (material == null) {
-                material = new Material(shader) { name = "VFX_" + source.name };
-                AssetDatabase.CreateAsset(material, path);
+                material = new Material(shader) { name = "MM_KnifeTrail" };
+                AssetDatabase.CreateAsset(material, TrailMaterialPath);
             }
             material.shader = shader;
-            // A texture that failed to import (e.g. an LFS pointer that was never pulled) must not wipe the
-            // one the material already has.
-            if (source.mainTexture == null)
-                throw new System.InvalidOperationException("Effect texture missing (run git lfs pull?): " + source.name);
-            material.SetTexture("_BaseMap", source.mainTexture);
             material.SetColor("_BaseColor", Color.white);
             material.SetFloat("_Surface", 1f);
             material.SetFloat("_Blend", 2f);
@@ -627,6 +627,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssetIfDirty(material);
             return material;
         }
 
@@ -635,68 +636,71 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         // Role colours mirror MM_Text.RoleColor, so the HUD, name tags and results agree.
         static Color RoleColor(MM_Role role) => MM_Text.RoleColor(role);
         static readonly Color Alarm = new(0.95f, 0.3f, 0.25f);
+        static readonly Color Gold = new(1f, 0.82f, 0.3f);
 
         /// <summary>
-        /// The HUD is made from the shared HudKit pieces so it matches the top bar and menus: a quiet
-        /// role chip in the corner, and cards that pop in only when something happens (role reveal,
-        /// body nearby, meeting, ejection, results).
+        /// The HUD is made from the shared HudKit pieces so it matches the top bar and menus: a quiet role chip
+        /// with the coin bag in the corner, the murderer's throw prompt, and cards that pop in only when
+        /// something happens (role reveal, announcements, results).
         /// </summary>
-        static void BuildHud(GameObject marker) {
-            // Above the spectate bar (5) and vote window (20), below the top bar (50).
+        static void BuildHud(GameObject thrownKnife) {
+            // Above the spectate bar (5), below the top bar (50).
             RectTransform root = HudKit.Canvas("MM_HUD", 30);
             MM_ClientHUD hud = root.gameObject.AddComponent<MM_ClientHUD>();
             hud.innocentIcon = HudKit.Icon("innocent");
             hud.sheriffIcon = HudKit.Icon("sheriff");
+            hud.heroIcon = HudKit.Icon("star_medal");
             hud.murdererIcon = HudKit.Icon("assassin");
             hud.spectatorIcon = HudKit.Icon("visibility");
-            hud.caughtIcon = HudKit.Icon("handcuffs");
-            hud.wrongIcon = HudKit.Icon("tombstone");
-            hud.nobodyIcon = HudKit.Icon("ballot");
             hud.diedIcon = HudKit.Icon("skull");
-            hud.survivedIcon = HudKit.Icon("check_circle");
-            hud.ejectedIcon = HudKit.Icon("gavel");
+            hud.gunIcon = HudKit.Icon("pistol");
+            hud.survivorIcon = HudKit.Icon("person");
+            hud.mistakeIcon = HudKit.Icon("warning");
+            hud.endgameIcon = HudKit.Icon("hourglass_bottom");
+            hud.innocentsWinIcon = HudKit.Icon("laurels_trophy");
+            hud.murdererWinsIcon = HudKit.Icon("crowned_skull");
+            hud.victoryIcon = HudKit.Icon("trophy");
+            hud.defeatIcon = HudKit.Icon("tombstone");
 
             // Role reveal, centre: who you are and what to do.
             hud.roleReveal = HudKit.Banner(root, "RoleReveal", new Vector2(0.5f, 0.5f), new Vector2(0f, 80f), 640f,
                 "innocent", RoleColor(MM_Role.Innocent), 96f, MM_ClientHUD.RoundStartKicker);
 
             BuildRoleChip(root, hud);
+            BuildThrowPrompt(root, hud);
 
-            // Body prompt, lower centre.
-            RectTransform prompt = HudKit.KeyPrompt(root, "ReportPrompt", "E", "Report the body", Alarm, out hud.reportText, out hud.reportKey, 48f);
-            prompt.anchorMin = prompt.anchorMax = prompt.pivot = new Vector2(0.5f, 0f);
-            prompt.anchoredPosition = new Vector2(0f, 230f);
-            HudKit.Icon(prompt, "dead_head", 26f, new Color(1f, 1f, 1f, 0.7f)).transform.SetSiblingIndex(prompt.childCount - 2);
-            hud.reportPrompt = HudKit.Popup(prompt, false);
+            // Between rounds, where the role chip sits during a round: your odds for the next one.
+            hud.oddsChip = HudKit.Chip(root, "Odds", "dagger", "Next round", RoleColor(MM_Role.Murderer), 40f, UIText.Small);
+            RectTransform odds = (RectTransform)hud.oddsChip.transform;
+            odds.anchorMin = odds.anchorMax = odds.pivot = Vector2.zero;
+            odds.anchoredPosition = new Vector2(20f, 200f);
+            hud.oddsChip.label.richText = true;
+            hud.oddsChip.label.font = UIKit.Theme.semiBoldFont;
 
-            BuildMeetingCard(root, hud);
-
-            // Ejection outcome, centre.
-            hud.ejection = HudKit.Banner(root, "Ejection", new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), 620f,
-                "ballot", Alarm, 88f, "The town has voted");
+            // Announcements, top centre under the top bar: the moments everyone hears about.
+            hud.announcement = HudKit.Banner(root, "Announcement", new Vector2(0.5f, 1f), new Vector2(0f, -76f), 600f,
+                "pistol", RoleColor(MM_Role.Sheriff), 64f);
+            RectTransform card = (RectTransform)hud.announcement.transform;
+            card.pivot = new Vector2(0.5f, 1f);
 
             BuildResults(root, hud);
 
-            hud.bodyMarkerPrefab = marker;
             hud.mood = MoodPreset.WarmIndoor;
             AssignSounds(hud);
+
+            MM_KnifeFx knives = root.gameObject.AddComponent<MM_KnifeFx>();
+            knives.thrownKnifePrefab = thrownKnife;
 
             UIKit.SavePrefab(root.gameObject, HudPath);
         }
 
-        /// <summary>The round's sounds (Kenney CC0, see CREDITS.md) played through the shared GameSfx kit.</summary>
+        /// <summary>The round's sounds (Kenney CC0 and the horror kit's horn, see CREDITS.md) played through the shared GameSfx kit.</summary>
         static void AssignSounds(MM_ClientHUD hud) {
             hud.roleRevealSound = Sound(0.8f, OwnSounds + "role_reveal.ogg");
             hud.killSting = Sound(0.75f, OwnSounds + "kill_sting.ogg");
             hud.killSting.minDistance = 8f;
             hud.killSting.maxDistance = 55f;
-            hud.bodyFoundSound = Sound(0.6f, Sounds + "Horn.mp3");
-            hud.gavelSound = Sound(1f, OwnSounds + "gavel_1.ogg", OwnSounds + "gavel_2.ogg", OwnSounds + "gavel_3.ogg");
-            hud.gavelSound.minInterval = 0.05f;
-            hud.drumSound = Sound(0.8f, OwnSounds + "drum_1.ogg", OwnSounds + "drum_2.ogg", OwnSounds + "drum_3.ogg", OwnSounds + "drum_4.ogg", OwnSounds + "drum_5.ogg");
-            hud.drumSound.minInterval = 0.02f;
-            hud.drumSound.pitchJitterSemitones = 0.4f;
-            hud.ejectionBell = Sound(0.85f, OwnSounds + "bell_toll.ogg");
+            hud.gunDroppedSound = Sound(0.55f, Sounds + "Horn.mp3");
         }
 
         static SfxSound Sound(float volume, params string[] paths) {
@@ -709,7 +713,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             return new SfxSound { clips = clips, volume = volume };
         }
 
-        /// <summary>Bottom-left: your role as a small emblem and name, and the meetings you have left.</summary>
+        /// <summary>Bottom-left: your role as a small emblem and name, your coin bag and (murderers) the kill cooldown.</summary>
         static void BuildRoleChip(RectTransform root, MM_ClientHUD hud) {
             RectTransform chip = UIKit.Pinned(root, "RoleChip", Vector2.zero, new Vector2(20f, 200f), new Vector2(260f, 64f));
             HudKit.Glass(chip, 16f);
@@ -722,76 +726,80 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             UIKit.Text(text, "Caption", "Your role", UIText.Caption, UIColorRole.TextMuted);
             hud.roleChipName = UIKit.Text(text, "Role", "Innocent", UIText.Title);
             hud.roleChipName.fontSize = 20f;
+            hud.roleChipName.richText = true;
 
             RectTransform divider = UIKit.Node(chip, "Divider");
             UIKit.Size(divider, 1f, 36f);
             UIKit.Paint(divider.gameObject.AddComponent<Image>(), UIColorRole.Stroke).raycastTarget = false;
 
-            hud.meetingsLeft = HudKit.Chip(chip, "Meetings", "megaphone", "2", Alarm, 30f);
-            hud.meetingsLeft.background.enabled = false;
-            // Murderers only: the dagger is not ready yet (grace period or kill cooldown).
-            hud.killCooldown = HudKit.Chip(chip, "KillCooldown", "dagger", "25s", RoleColor(MM_Role.Murderer), 30f);
+            hud.coinChip = HudKit.Chip(chip, "Coins", "coins", "0/40", Gold, 30f);
+            hud.coinChip.background.enabled = false;
+            // Murderers only: the knife is not ready yet (grace period or kill cooldown).
+            hud.killCooldown = HudKit.Chip(chip, "KillCooldown", "dagger", "8s", RoleColor(MM_Role.Murderer), 30f);
             hud.killCooldown.background.enabled = false;
             hud.killCooldown.SetVisible(false);
             hud.roleChip = HudKit.Popup(chip, false);
         }
 
-        /// <summary>Top centre, under the top bar: who found whom, who was seen nearby and the vote countdown.</summary>
-        static void BuildMeetingCard(RectTransform root, MM_ClientHUD hud) {
-            RectTransform card = HudKit.Card(root, "MeetingCard", new Vector2(0.5f, 1f), new Vector2(0f, -76f), new Vector2(640f, 150f));
-            HudKit.AccentStripe(card, Alarm);
-            UIKit.Row(card.gameObject, 18f, new RectOffset(22, 22, 20, 20), TextAnchor.MiddleLeft);
-            UIKit.FitContent(card.gameObject, false, true);
-            HudKit.Emblem(card, "Emblem", "megaphone", 76f, Alarm, out _, out _);
-
-            RectTransform text = UIKit.Node(card, "Text");
-            UIKit.Size(text, -1f, -1f, 1f);
-            UIKit.Column(text.gameObject, 4f, null, TextAnchor.MiddleLeft);
-            TextMeshProUGUI title = UIKit.Text(text, "Title", "Emergency meeting", UIText.Title);
-            title.color = Color.Lerp(Alarm, Color.white, 0.25f);
-            Object.DestroyImmediate(title.GetComponent<UIThemeColor>());
-            hud.meetingBody = UIKit.Text(text, "Body", string.Empty, UIText.Body);
-            hud.meetingBody.richText = true;
-            hud.meetingBody.textWrappingMode = TextWrappingModes.Normal;
-            hud.meetingSuspects = UIKit.Text(text, "Suspects", string.Empty, UIText.Small, UIColorRole.TextSecondary);
-            hud.meetingSuspects.richText = true;
-            hud.meetingSuspects.textWrappingMode = TextWrappingModes.Normal;
-
-            RectTransform footer = UIKit.Node(text, "Footer");
-            UIKit.Row(footer.gameObject, 8f, new RectOffset(0, 0, 6, 0), TextAnchor.MiddleLeft);
-            hud.meetingTimer = HudKit.Chip(footer, "Timer", "timer", "Voting in 15s", Alarm, 30f, UIText.Small);
-            hud.meetingTimer.label.font = UIKit.Theme.semiBoldFont;
-            HudKit.Chip(footer, "Hint", "chat_bubble", "Discuss in chat", UIKit.Theme.textSecondary, 30f, UIText.Small);
-            hud.meetingCard = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
+        /// <summary>Lower centre, murderers only: [E] Throw your knife (or when it will be ready).</summary>
+        static void BuildThrowPrompt(RectTransform root, MM_ClientHUD hud) {
+            RectTransform prompt = HudKit.KeyPrompt(root, "ThrowPrompt", "E", "Throw your knife", RoleColor(MM_Role.Murderer), out hud.throwText, out hud.throwKey, 48f);
+            prompt.anchorMin = prompt.anchorMax = prompt.pivot = new Vector2(0.5f, 0f);
+            prompt.anchoredPosition = new Vector2(0f, 230f);
+            HudKit.Icon(prompt, "dagger", 26f, new Color(1f, 1f, 1f, 0.7f)).transform.SetSiblingIndex(prompt.childCount - 2);
+            hud.throwPrompt = HudKit.Popup(prompt, false);
         }
 
-        /// <summary>The end-of-round reveal: the winner, how it ended, and everyone's role and fate.</summary>
+        /// <summary>
+        /// The end-of-round reveal: who won and how, who played the big parts, what this round earned you and how
+        /// close your next knife skin is, everyone's role and fate, and your odds for the next round.
+        /// </summary>
         static void BuildResults(RectTransform root, MM_ClientHUD hud) {
-            RectTransform card = HudKit.Card(root, "Results", new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(880f, 700f));
+            RectTransform card = HudKit.Card(root, "Results", new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(900f, 760f));
             hud.resultsStripe = HudKit.AccentStripe(card, RoleColor(MM_Role.Innocent), 5f);
-            UIKit.Column(card.gameObject, 8f, new RectOffset(36, 36, 28, 26), TextAnchor.UpperCenter);
+            UIKit.Column(card.gameObject, 8f, new RectOffset(36, 36, 24, 22), TextAnchor.UpperCenter);
             UIKit.FitContent(card.gameObject, false, true);
 
-            HudKit.Emblem(card, "Emblem", "laurels_trophy", 84f, RoleColor(MM_Role.Innocent), out hud.resultsDisc, out _);
+            HudKit.Emblem(card, "Emblem", "laurels_trophy", 76f, RoleColor(MM_Role.Innocent), out hud.resultsDisc, out hud.resultsIcon);
             UIKit.Text(card, "Kicker", "Round over · roles revealed", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
             hud.resultsTitle = UIKit.Text(card, "Winner", "Innocents win", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
             Object.DestroyImmediate(hud.resultsTitle.GetComponent<UIThemeColor>());
             hud.resultsSummary = UIKit.Text(card, "Summary", string.Empty, UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             hud.resultsSummary.textWrappingMode = TextWrappingModes.Normal;
+            hud.resultsCast = UIKit.Text(card, "Cast", string.Empty, UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            hud.resultsCast.richText = true;
+
+            // Your round: win or loss, coins bagged, XP earned.
+            RectTransform you = UIKit.Node(card, "You");
+            UIKit.Row(you.gameObject, 10f, new RectOffset(0, 0, 6, 0), TextAnchor.MiddleCenter);
+            hud.resultsOutcome = HudKit.Chip(you, "Outcome", "trophy", "Victory", Gold, 36f);
+            hud.resultsCoins = HudKit.Chip(you, "Coins", "coins", "+0 coins", Gold, 36f);
+            hud.resultsXp = HudKit.Chip(you, "Xp", "trending_up", "+0 XP", RoleColor(MM_Role.Innocent), 36f);
+
+            // Lifetime coins towards the next knife skin.
+            RectTransform skin = UIKit.Node(card, "SkinProgress");
+            UIKit.Size(skin, 520f, -1f);
+            UIKit.Column(skin.gameObject, 4f, new RectOffset(0, 0, 4, 2), TextAnchor.MiddleCenter);
+            hud.skinText = UIKit.Text(skin, "Label", "Knife skin", UIText.Small, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            hud.skinText.richText = true;
+            hud.skinBar = HudKit.Bar(skin, "Bar", 10f, Gold);
 
             RectTransform gap = UIKit.Node(card, "Gap");
-            UIKit.Size(gap, -1f, 6f);
+            UIKit.Size(gap, -1f, 4f);
             hud.resultsRows = HudKit.Table(card, "Table", new[] {
                 new HudKit.Column("Name"),
-                new HudKit.Column("Role", 150f),
-                new HudKit.Column("Fate", 150f),
+                new HudKit.Column("Role", 140f),
+                new HudKit.Column("Fate", 120f),
                 new HudKit.Column("Kills", 70f, TextAlignmentOptions.MidlineRight),
-            }, 36f);
+                new HudKit.Column("Coins", 80f, TextAlignmentOptions.MidlineRight),
+            }, 34f);
             hud.resultsMore = UIKit.Text(card, "More", string.Empty, UIText.Small, UIColorRole.TextMuted, TextAlignmentOptions.Center);
 
             RectTransform footer = UIKit.Node(card, "Footer");
-            UIKit.Row(footer.gameObject, 0f, new RectOffset(0, 0, 8, 0), TextAnchor.MiddleCenter);
+            UIKit.Row(footer.gameObject, 10f, new RectOffset(0, 0, 6, 0), TextAnchor.MiddleCenter);
             hud.resultsTimer = HudKit.Chip(footer, "NextRound", "hourglass_bottom", "Next round in 12s", UIKit.Theme.textSecondary, 32f, UIText.Small);
+            hud.resultsOdds = HudKit.Chip(footer, "Odds", "dagger", "Next round", RoleColor(MM_Role.Murderer), 32f, UIText.Small);
+            hud.resultsOdds.label.richText = true;
             hud.results = card.GetComponent<RyanAssets.UI.GameHud.HudPopup>();
         }
 

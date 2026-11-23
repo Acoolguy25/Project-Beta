@@ -1,100 +1,80 @@
 ﻿using RyanAssets.DataService;
-using RyanAssets.Shared.Declarations;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
+using Universes.murder_mystery.Server;
 
 namespace Universes.UniverseData.murder_mystery.Server {
+    /// <summary>
+    /// Deals roles. Classic deals one murderer and one sheriff (more in big rounds) by weighted draw
+    /// (<see cref="MM_RoleOdds"/>): players weigh more than NPCs and gain luck every round they miss a
+    /// role, so everyone gets a turn. Infection only needs a share of infected NPCs.
+    /// </summary>
     public class MM_Roles : MonoBehaviour {
-        // NPCRoles can be one of three
-        // TeamColor.Red (Murderer, least common, at least 1)
-        // TeamColor.Blue (Sheriff, somewhat uncommon, at least 1) (MUST BE A PLAYER)
-        // TeamColor.Green (Innocent, default assignment if no special role)
-        [Header("Role Assignment Tuning")]
-        [Tooltip("Base chance any single NPC/player rolls Murderer, before min/max clamping.")]
-        [SerializeField] public static float murdererBaseChance = 0.08f;
+        [Header("Infection")]
+        [Tooltip("Share of the NPCs that start infected.")]
+        [SerializeField, Range(0f, 1f)] float infectedShare = 0.08f;
+        [Tooltip("At least this many start infected.")]
+        [SerializeField, Min(1)] int minInfected = 1;
+        [Tooltip("Never more than this share of the NPCs start infected.")]
+        [SerializeField, Range(0f, 1f)] float maxInfectedShare = 0.2f;
 
-        [Tooltip("Minimum number of Murderers, regardless of pool size.")]
-        [SerializeField] public static int minMurderers = 1;
-
-        [Tooltip("Murderers never exceed this fraction of the total pool (NPCs + players).")]
-        [SerializeField] public static float murdererMaxRatio = 0.2f;
-
-        [Tooltip("Base chance any single eligible player rolls Sheriff, before min/max clamping.")]
-        [SerializeField] public static float sheriffBaseChance = 0.15f;
-
-        [Tooltip("Minimum number of Sheriffs (requires at least this many players).")]
-        [SerializeField] public static int minSheriffs = 1;
-
-        [Tooltip("Sheriffs never exceed this fraction of the player pool.")]
-        [SerializeField] public static float sheriffMaxRatio = 0.34f;
-
-        /// <param name="npcSheriff">Deal the sheriff to an NPC instead of a player (the editor-only solo play-test switch).</param>
-        public void AssignRoles(int npcCount, int playerCount, bool npcSheriff, out List<TeamColor> NPCRoles, out List<TeamColor> PlayerRoles, out int startMurd, out int startSheriff, out int startInnocent) {
-            NPCRoles = Enumerable.Repeat(TeamColor.Green, npcCount).ToList();
-            PlayerRoles = Enumerable.Repeat(TeamColor.Green, playerCount).ToList();
-
-            startMurd = 0;
-            startSheriff = 0;
-            startInnocent = 0;
-
-            int totalCount = npcCount + playerCount;
-            if (totalCount <= 0) return;
-
-            // --- Sheriff: must be a player, so pick from PlayerRoles indices only ---
-            // TEST ONLY: the editor solo play-test switch (MM_ServerRunner.DebugSoloNpcSheriff) hands it to an NPC.
-            if (npcSheriff && npcCount > 0) {
-                NPCRoles[Random.Range(0, npcCount)] = TeamColor.Blue;
-            }
-            else if (playerCount > 0) {
-                int sheriffTarget = Mathf.RoundToInt(playerCount * sheriffBaseChance);
-                sheriffTarget = Mathf.Max(sheriffTarget, minSheriffs);
-                sheriffTarget = Mathf.Min(sheriffTarget, Mathf.FloorToInt(playerCount * sheriffMaxRatio));
-                sheriffTarget = Mathf.Clamp(sheriffTarget, minSheriffs, playerCount);
-
-                List<int> playerIndices = Enumerable.Range(0, playerCount).ToList();
-                Shuffle(playerIndices);
-                for (int i = 0; i < sheriffTarget; i++) {
-                    PlayerRoles[playerIndices[i]] = TeamColor.Blue;
-                }
-            }
-            else {
-                Debug.LogWarning("AssignRoles: no players available to assign Sheriff role.");
-            }
-
-            // --- Murderer: rarest role, can be NPC or player, at least 1 guaranteed ---
-            int murdererTarget = Mathf.RoundToInt(totalCount * murdererBaseChance);
-            murdererTarget = Mathf.Max(murdererTarget, minMurderers);
-            murdererTarget = Mathf.Min(murdererTarget, Mathf.Max(minMurderers, Mathf.FloorToInt(totalCount * murdererMaxRatio)));
-            murdererTarget = Mathf.Min(murdererTarget, totalCount);
-
-            // Build a combined pool of (isPlayer, index), excluding players already made Sheriff
-            List<(bool isPlayer, int index)> eligible = new List<(bool, int)>(totalCount);
-            for (int i = 0; i < npcCount; i++) {
-                if (NPCRoles[i] != TeamColor.Blue) eligible.Add((false, i));
-            }
-            for (int i = 0; i < playerCount; i++) {
-                if (PlayerRoles[i] != TeamColor.Blue) eligible.Add((true, i));
-            }
-
-            Shuffle(eligible);
-            int assigned = 0;
-            for (int i = 0; i < eligible.Count && assigned < murdererTarget; i++, assigned++) {
-                var (isPlayer, index) = eligible[i];
-                if (isPlayer) PlayerRoles[index] = TeamColor.Red;
-                else NPCRoles[index] = TeamColor.Red;
-            }
-
-            startMurd = NPCRoles.Count(r => r == TeamColor.Red) + PlayerRoles.Count(r => r == TeamColor.Red);
-            startSheriff = NPCRoles.Count(r => r == TeamColor.Blue) + PlayerRoles.Count(r => r == TeamColor.Blue);
-            startInnocent = totalCount - startMurd - startSheriff;
+        /// <summary>How many of <paramref name="npcCount"/> NPCs start an Infection round infected.</summary>
+        public int InfectedCount(int npcCount) {
+            int target = Mathf.Max(Mathf.RoundToInt(npcCount * infectedShare), minInfected);
+            target = Mathf.Min(target, Mathf.Max(minInfected, Mathf.FloorToInt(npcCount * maxInfectedShare)));
+            return Mathf.Min(target, npcCount);
         }
 
-        private void Shuffle<T>(List<T> list) {
-            for (int i = list.Count - 1; i > 0; i--) {
-                int j = Random.Range(0, i + 1);
-                (list[i], list[j]) = (list[j], list[i]);
+        /// <summary>
+        /// Classic: deals the roles to <paramref name="players"/> followed by <paramref name="npcCount"/> NPCs.
+        /// Returns one role per character in that order. <paramref name="forcedFirstPlayerRole"/> (editor
+        /// play-tests only) gives the first player a fixed role.
+        /// </summary>
+        public static MM_Role[] DealClassic(IReadOnlyList<PlayerData> players, int npcCount, MM_ClassicTuning tuning,
+            MM_Role forcedFirstPlayerRole = MM_Role.None) {
+            int characters = players.Count + npcCount;
+            BuildWeights(players, npcCount, tuning, out List<float> murdererWeights, out List<float> sheriffWeights);
+            int murderers = tuning.MurderersFor(characters);
+            int sheriffs = tuning.SheriffsFor(characters);
+            if (forcedFirstPlayerRole is MM_Role.Murderer or MM_Role.Sheriff or MM_Role.Innocent && players.Count > 0) {
+                // Take the first player out of the draw and give them the role directly.
+                murdererWeights[0] = 0f;
+                sheriffWeights[0] = 0f;
+                if (forcedFirstPlayerRole == MM_Role.Murderer) murderers--;
+                if (forcedFirstPlayerRole == MM_Role.Sheriff) sheriffs--;
+            }
+            MM_Role[] roles = MM_RoleOdds.Deal(murdererWeights, sheriffWeights, murderers, sheriffs, () => Random.value);
+            if (forcedFirstPlayerRole is MM_Role.Murderer or MM_Role.Sheriff or MM_Role.Innocent && players.Count > 0)
+                roles[0] = forcedFirstPlayerRole;
+            return roles;
+        }
+
+        /// <summary>Each player's chance (percent) of murderer and sheriff next round, with the NPCs that round would get.</summary>
+        public static Dictionary<PlayerData, (byte murderer, byte sheriff)> Odds(IReadOnlyList<PlayerData> players, MM_ClassicTuning tuning) {
+            int npcCount = tuning.NpcsFor(players.Count);
+            int characters = players.Count + npcCount;
+            BuildWeights(players, npcCount, tuning, out List<float> murdererWeights, out List<float> sheriffWeights);
+            int murderers = tuning.MurderersFor(characters);
+            int sheriffs = tuning.SheriffsFor(characters);
+            Dictionary<PlayerData, (byte, byte)> odds = new();
+            for (int i = 0; i < players.Count; i++)
+                odds[players[i]] = (MM_RoleOdds.Percent(MM_RoleOdds.MurdererChance(murdererWeights, i, murderers)),
+                    MM_RoleOdds.Percent(MM_RoleOdds.SheriffChance(murdererWeights, sheriffWeights, i, murderers, sheriffs)));
+            return odds;
+        }
+
+        static void BuildWeights(IReadOnlyList<PlayerData> players, int npcCount, MM_ClassicTuning tuning,
+            out List<float> murdererWeights, out List<float> sheriffWeights) {
+            murdererWeights = new List<float>(players.Count + npcCount);
+            sheriffWeights = new List<float>(players.Count + npcCount);
+            foreach (PlayerData player in players) {
+                MM_SaveData save = MM_SaveData.Of(player);
+                murdererWeights.Add(MM_RoleOdds.Weight(true, save.murdererLuck, tuning.playerRoleWeight, tuning.luckPerRound, tuning.maxLuckRounds));
+                sheriffWeights.Add(MM_RoleOdds.Weight(true, save.sheriffLuck, tuning.playerRoleWeight, tuning.luckPerRound, tuning.maxLuckRounds));
+            }
+            for (int i = 0; i < npcCount; i++) {
+                murdererWeights.Add(MM_RoleOdds.NpcWeight);
+                sheriffWeights.Add(MM_RoleOdds.NpcWeight);
             }
         }
     }

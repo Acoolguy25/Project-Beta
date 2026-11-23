@@ -254,6 +254,19 @@ namespace RyanAssets.Characters.Server {
                 AttackCooldown = attackCooldown;
         }
 
+        /// <summary>
+        /// Optional game-mode filter on flee threats: only characters of a flee team that it accepts scare
+        /// this NPC (for example a murderer only once the knife is out). Null = every living character of a
+        /// flee team within range.
+        /// </summary>
+        public Func<GameCharacter, bool> FleeThreatFilter;
+
+        /// <summary>How close a threat must come before this NPC runs, and how far away it must be before it stops.</summary>
+        public void ConfigureFleeRadii(float enterRadius, float clearRadius) {
+            FleeEnterRadius = Mathf.Max(0f, enterRadius);
+            ThreatClearRadius = Mathf.Max(FleeEnterRadius, clearRadius);
+        }
+
         public void SetFleeTeams(List<TeamColor> teams) {
             FleeTeams = teams ?? new List<TeamColor>();
             RebuildFleeTeamSet();
@@ -340,7 +353,7 @@ namespace RyanAssets.Characters.Server {
             // A hold order keeps combat active without letting avoidance move the troop.
             if (AutomaticTargeting && !HoldCombatPosition && TargetingType != NPCTargetingType.Flee
                 && _fleeTeamSet.Count > 0
-                && AnyCharacterInRange(_fleeTeamSet, FleeEnterRadius)) {
+                && AnyCharacterInRange(_fleeTeamSet, FleeEnterRadius, FleeThreatFilter)) {
                 SetTargetingType(NPCTargetingType.Flee);
             }
             else if (AutomaticTargeting && TargetingType != NPCTargetingType.Flee
@@ -360,7 +373,7 @@ namespace RyanAssets.Characters.Server {
                     break;
                 case NPCTargetingType.Flee:
                     // Destination is driven by FleeRoutine; only check threat-clear here.
-                    if (_fleeTeamSet.Count == 0 || !AnyCharacterInRange(_fleeTeamSet, ThreatClearRadius))
+                    if (_fleeTeamSet.Count == 0 || !AnyCharacterInRange(_fleeTeamSet, ThreatClearRadius, FleeThreatFilter))
                         RevertToPrevious();
                     break;
                 case NPCTargetingType.Attack:
@@ -438,12 +451,13 @@ namespace RyanAssets.Characters.Server {
         // native HashSet can be passed straight in - no more ToList() copies per call.
 
         // Cheap early-out check: is any matching character within radius? Safe to call every frame.
-        private bool AnyCharacterInRange(ICollection<TeamColor> teams, float radius) {
+        private bool AnyCharacterInRange(ICollection<TeamColor> teams, float radius, Func<GameCharacter, bool> filter = null) {
             if (teams == null || gameCharacter == null) return false;
             foreach (TeamColor team in teams) {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
                     if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
+                    if (filter != null && !filter(character)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         return true;
                 }
@@ -453,7 +467,7 @@ namespace RyanAssets.Characters.Server {
 
         // Full list of matching characters within radius. More expensive - use sparingly
         // (e.g. on a recalc interval), not every frame.
-        private List<GameCharacter> GetCharactersInRange(ICollection<TeamColor> teams, float radius) {
+        private List<GameCharacter> GetCharactersInRange(ICollection<TeamColor> teams, float radius, Func<GameCharacter, bool> filter = null) {
             List<GameCharacter> result = new List<GameCharacter>();
             if (teams == null) return result;
 
@@ -461,6 +475,7 @@ namespace RyanAssets.Characters.Server {
                 if (!GameCharacter.TeamToCharacter.ContainsKey(team)) continue;
                 foreach (GameCharacter character in GameCharacter.TeamToCharacter[team]) {
                     if (character == null || character.IsDead || character.IsProtected(gameCharacter, AttackDamageType)) continue;
+                    if (filter != null && !filter(character)) continue;
                     if (Vector3.Distance(transform.position, character.transform.position) < radius)
                         result.Add(character);
                 }
@@ -934,7 +949,7 @@ namespace RyanAssets.Characters.Server {
         }
 
         private void PickFleeDestination() {
-            List<GameCharacter> threats = GetCharactersInRange(_fleeTeamSet, ThreatClearRadius);
+            List<GameCharacter> threats = GetCharactersInRange(_fleeTeamSet, ThreatClearRadius, FleeThreatFilter);
             if (threats.Count == 0) return;
 
             Vector3 fleeDir = ComputeFleeVector(threats);

@@ -2,82 +2,85 @@ using Cysharp.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
 using FishNet.Object;
+using FishNet.Transporting;
 using RyanAssets.Characters.Server;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
 using RyanAssets.Item.FloatingTool;
+using RyanAssets.Levels.Server;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Tools.Shared;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using UnityEngine;
 using Universes.UniverseData.murder_mystery;
+using Universes.UniverseData.murder_mystery.Server;
 
 namespace Universes.murder_mystery.Server {
     /// <summary>
-    /// The Classic round structure on top of <see cref="MM_ServerRunner"/>: role reveal, the hunt, body
-    /// reports, emergency meetings with an accusation vote, ejections, the end-of-round reveal, the
-    /// murderers' grace period and kill cooldown, and weapons dropped by the dead.
-    /// The runner still owns spawning, roles, tools and win conditions. Numbers come from
+    /// A Classic round in the style of Murder Mystery 2: role reveal, then a timed hunt in which the
+    /// murderer stabs and throws a knife, the sheriff has a one-shot gun (shooting an innocent kills them),
+    /// a dead sheriff's gun can be picked up by an innocent who becomes the hero, and everyone fills a coin
+    /// bag; then the results. The runner owns spawning, tools and the mode vote; numbers come from
     /// <see cref="MM_ClassicTuning"/> on the runner.
     /// </summary>
     public sealed class MM_ClassicRound {
-        // The shared vote window fits three options in a row.
-        const int MaxWitnesses = 3;
-        const int MinSuspects = 3;
-        // A report is accepted from a little further than the prompt shows, to absorb movement lag.
-        const float ReportDistanceTolerance = 1.5f;
-        // Dropped weapons float at the middle of the body they fell from.
+        // Dropped guns float at the middle of the body they fell from.
         const float DropHeightFraction = 0.5f;
+        // A thrown knife only counts as a sign of the murderer for townsfolk this long.
+        const float ThrowPanicSeconds = 2.5f;
+        // Lethal for any character in this game (100 health), used if a thrower's knife tool is gone.
+        const long FallbackKnifeDamage = 1000;
 
-        sealed class Body {
-            public int id;
-            public Vector3 position;
-            public string victimName;
-            public List<GameCharacter> witnesses;
-            public bool reported;
-        }
-
-        /// <summary>Someone who had a role this round, kept for the final reveal.</summary>
+        /// <summary>Someone who had a role this round, kept for the results.</summary>
         sealed class Participant {
             public GameCharacter character;
             public PlayerData player; // null for NPCs
             public string alias, username;
             public MM_Role role;
-            public bool ejected;
+            public bool hero;
+            public int kills, coins, xp;
+            public bool Alive => character != null && !character.IsDead;
+            public bool IsPlayer => player != null;
         }
 
         readonly MM_ServerRunner runner;
         readonly MM_ClassicTuning tuning;
-        readonly List<Body> bodies = new();
         readonly List<Participant> participants = new();
-        readonly Dictionary<GameCharacter, int> kills = new();
-        int nextBodyId;
-        int meetingsHeld;
-        float reportAllowedAt;
-        bool ejecting;
-        UniTaskCompletionSource<Body> reportSignal = new();
+        readonly Dictionary<GameCharacter, Participant> byCharacter = new();
+        readonly Dictionary<GameCharacter, float> lastKillAt = new();
+        readonly Dictionary<GameCharacter, float> lastThrowAt = new();
+        readonly Dictionary<GameCharacter, float> nextThrowAt = new();
+        readonly Dictionary<int, byte> knifeSkins = new();
+        readonly List<NetworkObject> coins = new();
+        readonly Dictionary<GameCharacter, int> manhuntRanks = new();
+        Dictionary<PlayerData, (byte murderer, byte sheriff)> odds = new();
+        int oddsPlayerCount = -1;
         MM_KillClock killClock;
-        readonly Dictionary<GameCharacter, float> sheriffExposedUntil = new();
+        readonly MM_KnifeThrows throws;
         FloatingToolShared droppedGun;
+        float nextCoinAt;
+        int huntLength;
+        bool resolvingThrow, playersOut, lastSurvivorAnnounced, manhuntRanksStale = true;
+        string stoppedBy;
 
         public int Round { get; private set; }
         public MM_Phase Phase { get; private set; } = MM_Phase.Lobby;
         public bool Active { get; private set; }
-        public int SecondsLeft { get; set; }
-        public int MeetingsLeft => Mathf.Max(0, tuning.meetingsPerRound - meetingsHeld);
-        /// <summary>Innocents who took a dead sheriff's gun / a dead murderer's dagger this round.</summary>
-        public int GunTakeovers { get; private set; }
-        public int DaggerTakeovers { get; private set; }
+        public int SecondsLeft { get; private set; }
+        public MM_Outcome Outcome { get; private set; }
+
+        /// <summary>A murderer killed someone: (murderer, victim). NPC sheriffs listen to it as witnesses.</summary>
+        public event Action<GameCharacter, GameCharacter> MurderCommitted;
 
         public MM_ClassicRound(MM_ServerRunner runner, MM_ClassicTuning tuning) {
             this.runner = runner;
             this.tuning = tuning ?? throw new ArgumentNullException(nameof(tuning));
-            killClock = new MM_KillClock(tuning);
+            killClock = new MM_KillClock(tuning.murdererGraceSeconds);
+            throws = new MM_KnifeThrows(tuning) { KnifeHit = OnKnifeHit };
         }
 
         // ---------- lifecycle ----------
@@ -85,45 +88,52 @@ namespace Universes.murder_mystery.Server {
         public void Begin(int round) {
             Round = round;
             Active = true;
-            bodies.Clear();
-            participants.Clear();
-            manhuntRanksStale = true;
-            kills.Clear();
-            sheriffExposedUntil.Clear();
-            GunTakeovers = 0;
-            DaggerTakeovers = 0;
-            nextBodyId = 0;
-            meetingsHeld = 0;
-            ejecting = false;
-            reportSignal = new UniTaskCompletionSource<Body>();
+            Outcome = MM_Outcome.None;
+            ClearRoundState();
             // Rebuilt every round so Inspector changes to the tuning apply from the next round on.
-            killClock = new MM_KillClock(tuning);
-            droppedGun = null;
+            killClock = new MM_KillClock(tuning.murdererGraceSeconds);
             Phase = MM_Phase.RoleReveal;
         }
 
         public void End() {
             Active = false;
             Phase = MM_Phase.Lobby;
-            bodies.Clear();
-            participants.Clear();
-            kills.Clear();
+            ClearRoundState();
             killClock.Clear();
-            droppedGun = null;
-            reportSignal.TrySetCanceled();
         }
 
-        public void AddParticipant(GameCharacter character, PlayerData player, TeamColor team) {
+        void ClearRoundState() {
+            participants.Clear();
+            byCharacter.Clear();
+            lastKillAt.Clear();
+            lastThrowAt.Clear();
+            nextThrowAt.Clear();
+            knifeSkins.Clear();
+            coins.Clear();
+            throws.Clear();
+            droppedGun = null;
+            stoppedBy = null;
+            playersOut = false;
+            lastSurvivorAnnounced = false;
+            manhuntRanksStale = true;
+        }
+
+        /// <summary>Adds a character dealt <paramref name="role"/> this round (<paramref name="player"/> is null for NPCs).</summary>
+        public void AddParticipant(GameCharacter character, PlayerData player, MM_Role role) {
             if (character == null)
                 return;
-            manhuntRanksStale = true;
-            participants.Add(new Participant {
+            Participant participant = new() {
                 character = character,
                 player = player,
                 alias = character.DisplayName,
                 username = player != null ? player.username.Value : null,
-                role = RoleOf(team),
-            });
+                role = role,
+            };
+            participants.Add(participant);
+            byCharacter[character] = participant;
+            manhuntRanksStale = true;
+            if (player != null)
+                PlayerProgress.Modify<MM_SaveData>(player, save => save.RecordDealt(role));
         }
 
         public static MM_Role RoleOf(TeamColor team) => team switch {
@@ -140,11 +150,61 @@ namespace Universes.murder_mystery.Server {
             _ => TeamColor.None,
         };
 
+        /// <summary>The role this character was dealt (or took over) this round.</summary>
+        public MM_Role RoleIn(GameCharacter character) =>
+            character != null && byCharacter.TryGetValue(character, out Participant p) ? p.role : MM_Role.None;
+
+        // ---------- weapons ----------
+
+        /// <summary>Gives a sheriff (dealt, NPC or hero) the gun with this round's clip and reload.</summary>
+        public ToolBaseShared ArmSheriff(GameCharacter character) =>
+            ServerTool.Instance.SpawnTool(character.NetworkObject, ToolEnum.Pistol, tool => {
+                tool.maxClipAmmo = tuning.gunClip;
+                tool.reloadDurationSync.Value = tuning.gunReloadSeconds;
+            });
+
+        /// <summary>Gives a murderer the knife and records the skin everyone will see on it.</summary>
+        public ToolBaseShared ArmMurderer(GameCharacter character, PlayerData player) {
+            ToolBaseShared dagger = ServerTool.Instance.SpawnTool(character.NetworkObject, ToolEnum.Dagger);
+            if (dagger == null)
+                return null;
+            byte skin = player != null
+                ? MM_KnifeSkins.Unlocked(MM_SaveData.Of(player).coinsCollected)
+                : (byte)UnityEngine.Random.Range(0, 3);
+            knifeSkins[dagger.NetworkObject.ObjectId] = skin;
+            return dagger;
+        }
+
+        byte SkinOf(GameCharacter murderer) {
+            ToolBaseShared dagger = ServerTool.Instance.GetTool(murderer.NetworkObject, ToolEnum.Dagger);
+            return dagger != null && knifeSkins.TryGetValue(dagger.NetworkObject.ObjectId, out byte skin) ? skin : (byte)0;
+        }
+
+        /// <summary>Tells every client (or one) which skin each murderer's knife wears.</summary>
+        public void BroadcastKnifeSkins(NetworkConnection only = null) {
+            if (InstanceFinder.ServerManager == null || knifeSkins.Count == 0)
+                return;
+            MM_KnifeSkinsBroadcast message = new() {
+                toolObjectIds = new int[knifeSkins.Count],
+                skins = new byte[knifeSkins.Count],
+            };
+            int i = 0;
+            foreach (KeyValuePair<int, byte> entry in knifeSkins) {
+                message.toolObjectIds[i] = entry.Key;
+                message.skins[i] = entry.Value;
+                i++;
+            }
+            if (only != null)
+                InstanceFinder.ServerManager.Broadcast(only, message);
+            else
+                InstanceFinder.ServerManager.Broadcast(message);
+        }
+
         // ---------- murderer balance ----------
 
         /// <summary>
-        /// Whether this murderer may kill right now: only during the hunt, after the grace period, and once
-        /// their own kill cooldown has run out. NPC murderers ask before every attack.
+        /// Whether this murderer may kill right now: only during the hunt, after the grace period, and once their
+        /// own kill cooldown has run out. NPC murderers ask before every attack; knife throws ask too.
         /// </summary>
         public bool CanKill(GameCharacter murderer) =>
             Active && Phase == MM_Phase.Hunt && murderer != null && killClock.CanKill(KillerId(murderer), Time.time);
@@ -152,15 +212,31 @@ namespace Universes.murder_mystery.Server {
         static int KillerId(GameCharacter character) => character.NetworkObject.ObjectId;
 
         /// <summary>
-        /// A sheriff who just shot someone gave themselves away: NPC murderers notice them from further off
-        /// for <see cref="MM_ClassicTuning.sheriffExposedSeconds"/>.
+        /// Whether townsfolk should run from this murderer: the knife is out, or it just killed or threw.
+        /// Otherwise a murderer walking past is just another face in the crowd.
         /// </summary>
-        public bool IsSheriffExposed(GameCharacter sheriff) =>
-            sheriff != null && sheriffExposedUntil.TryGetValue(sheriff, out float until) && Time.time < until;
+        public bool IsVisibleThreat(GameCharacter murderer) {
+            if (murderer == null || murderer.IsDead || RoleIn(murderer) != MM_Role.Murderer)
+                return false;
+            float now = Time.time;
+            if (lastKillAt.TryGetValue(murderer, out float killedAt) && now - killedAt < tuning.npcPanicAfterKillSeconds)
+                return true;
+            if (lastThrowAt.TryGetValue(murderer, out float threwAt) && now - threwAt < ThrowPanicSeconds)
+                return true;
+            ToolBaseShared active = murderer.ActiveTool.Value;
+            return active != null && active.toolEnum == ToolEnum.Dagger && active.equipped;
+        }
 
-        /// <summary>How close this sheriff must be before this NPC murderer goes for them (<see cref="MM_ClassicTuning.SheriffNoticeDistance"/>).</summary>
-        public float SheriffNoticeDistance(GameCharacter hunter, GameCharacter sheriff) =>
-            tuning.SheriffNoticeDistance(IsSheriffExposed(sheriff), HuntSecondsElapsed, ManhuntRank(hunter));
+        /// <summary>Whether this murderer was seen killing or throwing in the last <paramref name="seconds"/>.</summary>
+        public bool RecentlyAttacked(GameCharacter murderer, float seconds) {
+            float now = Time.time;
+            return (lastKillAt.TryGetValue(murderer, out float k) && now - k < seconds)
+                || (lastThrowAt.TryGetValue(murderer, out float t) && now - t < seconds);
+        }
+
+        /// <summary>How close the sheriff must be before this NPC murderer goes for them (<see cref="MM_ClassicTuning.SheriffNoticeDistance"/>).</summary>
+        public float SheriffNoticeDistance(GameCharacter hunter) =>
+            tuning.SheriffNoticeDistance(HuntSecondsElapsed, ManhuntRank(hunter));
 
         /// <summary>The murderer's place in the manhunt: living murderers dealt before it this round.</summary>
         int ManhuntRank(GameCharacter hunter) {
@@ -169,163 +245,262 @@ namespace Universes.murder_mystery.Server {
                 manhuntRanks.Clear();
                 int rank = 0;
                 foreach (Participant participant in participants)
-                    if (participant.role == MM_Role.Murderer && IsAlive(participant.character))
+                    if (participant.role == MM_Role.Murderer && participant.Alive)
                         manhuntRanks[participant.character] = rank++;
                 manhuntRanksStale = false;
             }
             return manhuntRanks.TryGetValue(hunter, out int cached) ? cached : manhuntRanks.Count;
         }
-        readonly Dictionary<GameCharacter, int> manhuntRanks = new();
-        bool manhuntRanksStale = true;
 
-        /// <summary>Seconds of hunt played so far this round; meetings do not count.</summary>
+        /// <summary>Seconds of the hunt played so far this round.</summary>
         public float HuntSecondsElapsed => Phase == MM_Phase.Hunt ? huntLength - SecondsLeft : 0f;
-        int huntLength;
 
-        /// <summary>
-        /// Puts every living player murderer's dagger on the server cooldown the kill clock dictates, so their
-        /// client shows it and refuses to swing early. NPC murderers are held back through <see cref="CanKill"/>
-        /// before they swing; <see cref="OnCharacterDied"/> also locks their dagger after a kill.
-        /// </summary>
-        void SyncPlayerDaggers() {
-            foreach (Participant participant in participants)
-                if (participant.player != null && participant.role == MM_Role.Murderer)
-                    SyncDagger(participant.character);
-        }
+        float KillCooldownFor(GameCharacter murderer) =>
+            murderer.Owner.IsValid ? tuning.playerKillCooldownSeconds : tuning.npcKillCooldownSeconds;
 
-        /// <summary>
-        /// Locks the murderer's dagger for as long as the kill clock says. Applies to NPCs too: one swing of
-        /// an NPC's dagger can sweep several victims, and the server cooldown drops every hit after the first.
-        /// </summary>
+        /// <summary>Locks the murderer's knife for as long as the kill clock says, so their client shows and respects it.</summary>
         void SyncDagger(GameCharacter murderer) {
-            if (!IsAlive(murderer))
+            if (murderer == null || murderer.IsDead)
                 return;
             ToolBaseShared dagger = ServerTool.Instance.GetTool(murderer.NetworkObject, ToolEnum.Dagger);
             if (dagger != null)
                 dagger.UpdateServerCooldown(killClock.SecondsUntilReady(KillerId(murderer), Time.time));
         }
 
-        // ---------- deaths and reports ----------
+        void SyncAllDaggers() {
+            foreach (Participant participant in participants)
+                if (participant.role == MM_Role.Murderer)
+                    SyncDagger(participant.character);
+        }
 
-        public void OnCharacterDied(GameCharacter victim, GameCharacter killer) {
-            if (!Active || victim == null)
-                return;
-            manhuntRanksStale = true;
-            if (killer != null && killer != victim) {
-                kills[killer] = kills.TryGetValue(killer, out int k) ? k + 1 : 1;
-                MM_SaveData.RecordKill(killer, victim);
-                MM_Role killerRole = RoleOf(killer.GetTeam().realTeam);
-                if (killerRole == MM_Role.Murderer) {
-                    killClock.RecordKill(KillerId(killer), Time.time);
-                    SyncDagger(killer);
-                } else if (killerRole == MM_Role.Sheriff) {
-                    sheriffExposedUntil[killer] = Time.time + tuning.sheriffExposedSeconds;
-                }
+        // ---------- knife throws ----------
+
+        public void OnThrowRequest(NetworkConnection conn, MM_ThrowKnifeRequest request, Channel channel) {
+            if (TryGetLivingCharacter(conn, out GameCharacter thrower))
+                TryThrow(thrower, request.target);
+        }
+
+        /// <summary>Seconds until this murderer may throw (the throw cooldown or the kill clock, whichever is longer).</summary>
+        public float ThrowCooldown(GameCharacter murderer) {
+            float throwWait = nextThrowAt.TryGetValue(murderer, out float at) ? at - Time.time : 0f;
+            float killWait = killClock.Running ? killClock.SecondsUntilReady(KillerId(murderer), Time.time) : float.PositiveInfinity;
+            return Mathf.Max(0f, Mathf.Max(throwWait, killWait));
+        }
+
+        /// <summary>Throws a murderer's knife at <paramref name="target"/> if they may. Used by players and NPCs alike.</summary>
+        public bool TryThrow(GameCharacter thrower, Vector3 target) {
+            if (thrower == null || thrower.IsDead || RoleIn(thrower) != MM_Role.Murderer || !CanKill(thrower))
+                return false;
+            if (!float.IsFinite(target.x) || !float.IsFinite(target.y) || !float.IsFinite(target.z))
+                return false;
+            if (nextThrowAt.TryGetValue(thrower, out float readyAt) && Time.time < readyAt)
+                return false;
+            if (ServerTool.Instance.GetTool(thrower.NetworkObject, ToolEnum.Dagger) == null)
+                return false;
+            nextThrowAt[thrower] = Time.time + tuning.throwCooldownSeconds;
+            lastThrowAt[thrower] = Time.time;
+            throws.Launch(thrower, target, SkinOf(thrower));
+            return true;
+        }
+
+        /// <summary>Where a knife leaves this character's hand (for NPC aim).</summary>
+        public Vector3 ThrowOrigin(GameCharacter thrower) => throws.Origin(thrower);
+
+        bool OnKnifeHit(GameCharacter thrower, GameCharacter victim) {
+            if (!Active || Phase != MM_Phase.Hunt || thrower == null || victim == null)
+                return false;
+            ToolBaseShared dagger = ServerTool.Instance.GetTool(thrower.NetworkObject, ToolEnum.Dagger);
+            long damage = dagger != null ? dagger.hitDamage : FallbackKnifeDamage;
+            resolvingThrow = true;
+            try {
+                return victim.TakeDamage(damage, DamageType.Melee, thrower.NetworkObject);
+            } finally {
+                resolvingThrow = false;
             }
-            if (ejecting)
-                return;
+        }
 
-            Vector3 position = victim.transform.position;
-            // The registry only holds living characters, so this is "who was around".
-            List<GameCharacter> witnesses = LivingCharacters()
-                .Where(c => c != victim && (c.transform.position - position).sqrMagnitude <= tuning.witnessDistance * tuning.witnessDistance)
-                .OrderBy(c => (c.transform.position - position).sqrMagnitude)
-                .Take(MaxWitnesses)
-                .ToList();
-            bodies.Add(new Body {
-                id = nextBodyId++,
-                position = position,
-                victimName = victim.DisplayName,
-                witnesses = witnesses,
+        /// <summary>Per frame from the runner: flying knives and coin spawns.</summary>
+        public void Tick(float deltaTime) {
+            if (!Active)
+                return;
+            throws.Tick(deltaTime);
+            if (Phase == MM_Phase.Hunt && Time.time >= nextCoinAt) {
+                nextCoinAt = Time.time + tuning.coinSpawnInterval;
+                SpawnCoins(1);
+            }
+        }
+
+        // ---------- coins ----------
+
+        void SpawnCoins(int count) {
+            coins.RemoveAll(coin => coin == null || !coin.IsSpawned);
+            for (int i = 0; i < count && coins.Count < tuning.coinsOnMap; i++) {
+                GameObject coin = ServerCoin.SpawnCoin(null);
+                if (coin == null)
+                    return;
+                coins.Add(coin.GetComponent<NetworkObject>());
+            }
+        }
+
+        /// <summary>Server's pickup gate (<c>CoinShared.CanCollect</c>): living participants with room in their bag, during the hunt.</summary>
+        public bool CanCollectCoin(NetworkConnection conn) {
+            if (!Active)
+                return true; // other modes and the lobby keep the shared coin behaviour
+            if (Phase != MM_Phase.Hunt || !TryGetLivingCharacter(conn, out GameCharacter character))
+                return false;
+            return byCharacter.TryGetValue(character, out Participant p) && MM_RoundRules.BagHasRoom(p.coins, tuning.coinBagSize);
+        }
+
+        public void OnCoinCollected(NetworkConnection conn, ulong gold, Vector3 position) {
+            if (!Active || !TryGetLivingCharacter(conn, out GameCharacter character)
+                || !byCharacter.TryGetValue(character, out Participant p))
+                return;
+            p.coins++;
+            Award(p, tuning.xpPerCoin);
+            if (p.player != null)
+                PlayerProgress.Modify<MM_SaveData>(p.player, save => save.coinsCollected++);
+            InstanceFinder.ServerManager.Broadcast(conn, new MM_CoinBroadcast {
+                position = position, coins = p.coins, coinCap = tuning.coinBagSize,
             });
         }
 
-        public void OnReportRequest(NetworkConnection conn, MM_ReportRequest request, FishNet.Transporting.Channel channel) {
-            if (!Active || Phase != MM_Phase.Hunt || MeetingsLeft <= 0 || Time.time < reportAllowedAt)
+        // ---------- deaths ----------
+
+        public void OnCharacterDied(GameCharacter victim, DamageType source, GameCharacter killer) {
+            if (!Active || victim == null || !byCharacter.TryGetValue(victim, out Participant dead))
                 return;
-            if (!TryGetLivingCharacter(conn, out GameCharacter reporter))
-                return;
-            Body body = bodies.FirstOrDefault(b => b.id == request.bodyId && !b.reported);
-            if (body == null || (reporter.transform.position - body.position).sqrMagnitude > tuning.reportDistance * tuning.reportDistance * ReportDistanceTolerance)
-                return;
-            body.reported = true;
-            pendingReporter = reporter;
-            reportSignal.TrySetResult(body);
+            manhuntRanksStale = true;
+            float now = Time.time;
+            if (killer != null && killer != victim && byCharacter.TryGetValue(killer, out Participant attacker)) {
+                attacker.kills++;
+                if (attacker.role == MM_Role.Murderer) {
+                    killClock.RecordKill(KillerId(killer), now, playersOut ? 0f : KillCooldownFor(killer));
+                    lastKillAt[killer] = now;
+                    SyncDagger(killer);
+                    Award(attacker, tuning.xpPerKill);
+                    bool thrown = resolvingThrow;
+                    if (attacker.player != null)
+                        PlayerProgress.Modify<MM_SaveData>(attacker.player, save => {
+                            save.murders++;
+                            if (thrown) save.throwKills++;
+                        });
+                    MurderCommitted?.Invoke(killer, victim);
+                } else if (attacker.role == MM_Role.Sheriff) {
+                    if (dead.role == MM_Role.Murderer) {
+                        stoppedBy ??= attacker.alias;
+                        Award(attacker, tuning.xpForStoppingMurderer);
+                        if (attacker.player != null)
+                            PlayerProgress.Modify<MM_SaveData>(attacker.player, save => save.murderersShot++);
+                    } else if (MM_DropRules.IsWrongShot(attacker.role, dead.role)) {
+                        PunishWrongShot(attacker);
+                    }
+                }
+            }
+            if (MM_DropRules.DropsGun(dead.role))
+                DropGun(victim);
+            AnnounceMilestones();
         }
 
-        GameCharacter pendingReporter;
+        /// <summary>The sheriff shot an innocent: MM2 rules kill the sheriff too (their gun drops), or the gun jams.</summary>
+        void PunishWrongShot(Participant sheriff) {
+            if (tuning.wrongShotPenalty == MM_WrongShotPenalty.Jam) {
+                ToolBaseShared gun = ServerTool.Instance.GetTool(sheriff.character.NetworkObject, ToolEnum.Pistol);
+                if (gun != null)
+                    gun.UpdateServerCooldown(tuning.wrongShotJamSeconds);
+                return;
+            }
+            if (sheriff.player != null)
+                ServerChat.SendSystemMessage(sheriff.player.Owner, new("You shot an innocent. That was your last mistake.", SystemMessageSource.CustomMessage));
+            Announce(MM_Announcement.SheriffMistake, null);
+            // The victim's death is still being processed; the sheriff falls on the next frame.
+            KillNextFrame(sheriff.character, runner.destroyCancellationToken).Forget(e => Debug.LogException(e, runner));
+        }
 
-        // ---------- dropped weapons ----------
+        static async UniTask KillNextFrame(GameCharacter character, CancellationToken token) {
+            if (await UniTask.Yield(PlayerLoopTiming.Update, token).SuppressCancellationThrow())
+                return;
+            if (character != null && !character.IsDead)
+                character.Kill(DamageType.Command);
+        }
+
+        void AnnounceMilestones() {
+            if (Phase != MM_Phase.Hunt)
+                return;
+            int survivors = SurvivorsAlive();
+            if (!lastSurvivorAnnounced && survivors == 1 && MurderersAlive() > 0) {
+                lastSurvivorAnnounced = true;
+                Announce(MM_Announcement.LastSurvivor, null);
+            }
+            if (!playersOut && MM_RoundRules.Decide(MurderersAlive(), survivors, false) == MM_Outcome.None && !AnyPlayerAlive())
+                StartPlayersOutEndgame();
+        }
 
         /// <summary>
-        /// A character died: the sheriff's gun (and, when enabled, a murderer's dagger) drops where they fell for
-        /// an innocent player to take over. The role is read before the runner recolours the corpse.
+        /// No player is left alive and the NPCs are still at it: cut the clock and let the NPC murderers stop
+        /// waiting between kills, so spectators are not kept watching a long NPC chase.
         /// </summary>
-        public void DropWeapons(GameCharacter character) {
-            if (!Active || character == null)
-                return;
-            MM_DroppedWeapon weapon = MM_DropRules.WeaponLeftBy(RoleOf(character.GetTeam().realTeam), tuning.dropDaggerOnMurdererDeath, ejecting);
-            if (weapon == MM_DroppedWeapon.None)
-                return;
-            Vector3 position = character.transform.position + character.transform.lossyScale.y * DropHeightFraction * Vector3.up;
-            FloatingToolShared floating = ServerTool.Instance.SpawnFloatingTool(ToolFor(weapon), position);
-            floating.OnToolCollectedFunc = OnDroppedWeaponCollected;
-            if (weapon == MM_DroppedWeapon.Gun) {
-                droppedGun = floating;
-                ServerChat.SendSystemMessage(new("The sheriff is down! Their gun lies where they fell. An innocent can pick it up.", SystemMessageSource.CustomMessage));
-            }
+        void StartPlayersOutEndgame() {
+            playersOut = true;
+            SecondsLeft = Mathf.Min(SecondsLeft, tuning.secondsLeftWhenPlayersOut);
+            killClock.ReleaseAll(Time.time);
+            SyncAllDaggers();
+            Announce(MM_Announcement.PlayersOut, null);
+            EndgameStarted?.Invoke();
         }
 
-        static ToolEnum ToolFor(MM_DroppedWeapon weapon) => weapon == MM_DroppedWeapon.Gun ? ToolEnum.Pistol : ToolEnum.Dagger;
+        /// <summary>The players-out endgame began: the runner lets NPC murderers search the whole house.</summary>
+        public event Action EndgameStarted;
 
-        static MM_DroppedWeapon WeaponOf(ToolEnum tool) => tool switch {
-            ToolEnum.Pistol => MM_DroppedWeapon.Gun,
-            ToolEnum.Dagger => MM_DroppedWeapon.Dagger,
-            _ => MM_DroppedWeapon.None,
-        };
+        /// <summary>Whether the round has entered the endgame where only NPCs are left alive.</summary>
+        public bool PlayersOut => playersOut;
 
-        /// <summary>Server side of a pickup: the collector takes the weapon and, secretly, the role that goes with it.</summary>
-        bool OnDroppedWeaponCollected(NetworkBehaviour collector, ToolEnum tool) {
-            if (!Active || Phase != MM_Phase.Hunt || !collector.TryGetComponent(out GameCharacter character))
+        // ---------- the dropped gun ----------
+
+        void DropGun(GameCharacter sheriff) {
+            Vector3 position = sheriff.transform.position + sheriff.transform.lossyScale.y * DropHeightFraction * Vector3.up;
+            FloatingToolShared floating = ServerTool.Instance.SpawnFloatingTool(ToolEnum.Pistol, position);
+            floating.OnToolCollectedFunc = OnDroppedGunCollected;
+            droppedGun = floating;
+            Announce(MM_Announcement.GunDropped, null);
+        }
+
+        /// <summary>Server side of a pickup: an innocent player takes the gun and, secretly, becomes the hero.</summary>
+        bool OnDroppedGunCollected(NetworkBehaviour collector, ToolEnum tool) {
+            if (!Active || Phase != MM_Phase.Hunt || tool != ToolEnum.Pistol
+                || !collector.TryGetComponent(out GameCharacter character)
+                || !byCharacter.TryGetValue(character, out Participant p)
+                || !MM_DropRules.CanPickUp(p.role, p.Alive, character.Tools.Length, character.Owner.IsValid))
                 return false;
-            MM_DroppedWeapon weapon = WeaponOf(tool);
-            MM_Role current = RoleOf(character.GetTeam().realTeam);
-            if (weapon == MM_DroppedWeapon.None
-                || !MM_DropRules.CanPickUp(current, IsAlive(character), character.Tools.Length, character.Owner.IsValid))
-                return false;
 
-            // Weapon first: if it cannot be given, the collector keeps their old role and the pickup stays.
-            if (ServerTool.Instance.SpawnTool(character.NetworkObject, tool) == null) {
-                Debug.LogError($"[MM] Could not give {tool} to {character.name}; the dropped weapon stays on the floor.", character);
+            // Gun first: if it cannot be given, the collector stays innocent and the gun stays on the floor.
+            if (ArmSheriff(character) == null) {
+                Debug.LogError($"[MM] Could not give the gun to {character.name}; it stays on the floor.", character);
                 return false;
             }
-            MM_Role role = MM_DropRules.RoleFor(weapon);
             // The display team stays hidden, exactly like a role dealt at the start of the round.
-            character.SetTeam(new TeamConfig(TeamOf(role), TeamColor.None));
-            Participant participant = participants.FirstOrDefault(p => p.character == character);
-            if (participant != null)
-                participant.role = role;
+            character.SetTeam(new TeamConfig(TeamColor.Blue, TeamColor.None));
+            p.role = MM_Role.Sheriff;
+            p.hero = true;
+            droppedGun = null;
             manhuntRanksStale = true;
-            if (weapon == MM_DroppedWeapon.Gun) {
-                droppedGun = null;
-                GunTakeovers++;
-                MM_SaveData.RecordGunPickup(character);
-            } else {
-                DaggerTakeovers++;
+            if (p.player != null) {
+                PlayerProgress.Modify<MM_SaveData>(p.player, save => save.gunsPickedUp++);
+                ServerChat.SendSystemMessage(p.player.Owner, new("You picked up the gun. You are the hero now: stop the murderer.", SystemMessageSource.CustomMessage));
             }
-            if (role == MM_Role.Murderer)
-                SyncDagger(character);
-            if (character.Owner.IsValid)
-                ServerChat.SendSystemMessage(character.Owner, new(role == MM_Role.Sheriff
-                    ? "You picked up the gun. You are the Sheriff now: find the murderer."
-                    : "You picked up the dagger. You are a Murderer now: don't get caught.", SystemMessageSource.CustomMessage));
+            Announce(MM_Announcement.GunTaken, null);
             return true;
+        }
+
+        void Announce(MM_Announcement kind, string name) {
+            if (InstanceFinder.ServerManager != null)
+                InstanceFinder.ServerManager.Broadcast(new MM_AnnounceBroadcast { kind = kind, name = name });
         }
 
         // ---------- phases ----------
 
         public async UniTask RunRoleReveal(CancellationToken token) {
             Phase = MM_Phase.RoleReveal;
+            BroadcastKnifeSkins();
             for (int i = tuning.roleRevealSeconds; i > 0; i--) {
                 SecondsLeft = i;
                 ServerRunner.SetTopMessage($"Round {Round}: check your role! ({i})");
@@ -334,221 +509,220 @@ namespace Universes.murder_mystery.Server {
             }
         }
 
-        /// <summary>
-        /// Counts the hunt down, pausing it for meetings. Returns when time runs out, the round is decided,
-        /// or the timer is skipped.
-        /// </summary>
-        public async UniTask RunHunt(int seconds, Func<bool> roundOver, CancellationToken token) {
+        /// <summary>Counts the hunt down. Returns when time runs out, the round is decided, or the timer is skipped.</summary>
+        public async UniTask RunHunt(int seconds, CancellationToken token) {
             Phase = MM_Phase.Hunt;
             huntLength = seconds;
             SecondsLeft = seconds;
-            reportAllowedAt = Time.time + tuning.firstReportDelaySeconds;
             killClock.BeginHunt(Time.time);
-            SyncPlayerDaggers();
-            while (SecondsLeft > 0 && !roundOver()) {
-                ServerRunner.SetTopMessage($"Mystery In Progress ({SecondsLeft})");
-                UniTask<bool> tick = runner.AwaitTime(1000, token);
-                var (winner, report, skipped) = await UniTask.WhenAny(reportSignal.Task.SuppressCancellationThrow(), tick);
-                token.ThrowIfCancellationRequested();
-                if (winner == 0) {
-                    reportSignal = new UniTaskCompletionSource<Body>();
-                    if (report.IsCanceled || report.Result == null)
-                        continue;
-                    int huntLeft = SecondsLeft; // meetings count their own phases down in SecondsLeft
-                    await RunMeeting(report.Result, pendingReporter, token);
-                    SecondsLeft = huntLeft;
-                    Phase = MM_Phase.Hunt;
-                    reportAllowedAt = Time.time + tuning.reportCooldownSeconds;
-                    killClock.EndMeeting(Time.time);
-                    SyncPlayerDaggers();
-                    continue;
-                }
-                if (skipped)
+            SyncAllDaggers();
+            SpawnCoins(tuning.coinsAtStart);
+            nextCoinAt = Time.time + tuning.coinSpawnInterval;
+            bool skipped = false;
+            while (SecondsLeft > 0 && Decide(false) == MM_Outcome.None) {
+                ServerRunner.SetTopMessage(TopMessage());
+                if (await runner.AwaitTime(1000, token)) {
+                    skipped = true;
                     break;
+                }
                 SecondsLeft--;
             }
+            Outcome = Decide(timeUp: true);
+            if (skipped && Outcome == MM_Outcome.None)
+                Outcome = MM_Outcome.InnocentsSurvived;
+            throws.Clear();
+            ServerCoin.ClearAllCoins();
+            coins.Clear();
         }
 
-        async UniTask RunMeeting(Body body, GameCharacter reporter, CancellationToken token) {
-            meetingsHeld++;
-            string reporterName = reporter != null ? reporter.DisplayName : "Someone";
-            var freeze = FreezeEveryone();
-            try {
-                // Suspects: who was near the body when it happened and is still alive, padded with whoever
-                // is near it now so the killer is never the only name on the list.
-                List<GameCharacter> suspects = body.witnesses.Where(IsAlive).ToList();
-                foreach (GameCharacter extra in LivingCharacters()
-                             .Where(c => !suspects.Contains(c))
-                             .OrderBy(c => (c.transform.position - body.position).sqrMagnitude)) {
-                    if (suspects.Count >= MinSuspects)
-                        break;
-                    suspects.Add(extra);
-                }
-                suspects = suspects.OrderBy(_ => UnityEngine.Random.value).ToList();
-                string[] names = UniqueNames(suspects);
-
-                Phase = MM_Phase.Meeting;
-                InstanceFinder.ServerManager.Broadcast(new MM_MeetingBroadcast {
-                    round = Round,
-                    meeting = meetingsHeld,
-                    reporterName = reporterName,
-                    victimName = body.victimName,
-                    suspects = names,
-                    discussionSeconds = tuning.discussionSeconds,
-                });
-                ServerChat.SendSystemMessage(new($"EMERGENCY MEETING: {reporterName} found the body of {body.victimName}. Seen nearby: {string.Join(", ", names)}.", SystemMessageSource.CustomMessage));
-                for (int i = tuning.discussionSeconds; i > 0; i--) {
-                    SecondsLeft = i;
-                    ServerRunner.SetTopMessage($"Meeting: discuss who killed {body.victimName}! ({i})");
-                    if (await runner.AwaitTime(1000, token))
-                        break;
-                }
-
-                if (suspects.Count == 0) {
-                    await ShowEjection(new MM_EjectionBroadcast { round = Round, headline = "Nobody near the body is still alive." }, token);
-                    return;
-                }
-
-                Phase = MM_Phase.Voting;
-                SecondsLeft = tuning.voteSeconds;
-                // The same line for everyone: naming who is a player would single the human suspects out.
-                string[] descriptions = suspects.Select(_ => "Seen near the body").ToArray();
-                VoteResult result = await ServerVote.StartDynamicVote(
-                    $"Who killed {body.victimName}?",
-                    $"Reported by {reporterName}. These were seen near the body. Most votes is ejected; a tie ejects nobody.",
-                    names, descriptions, tuning.voteSeconds, token, CanVote);
-                MM_SaveData.RecordVotes(suspects);
-
-                MM_EjectionBroadcast ejection = new() { round = Round };
-                GameCharacter chosen = result.winner >= 0 && result.winner < suspects.Count ? suspects[result.winner] : null;
-                if (chosen != null && IsAlive(chosen)) {
-                    MM_Role role = RoleOf(chosen.GetTeam().realTeam);
-                    ejection.ejected = true;
-                    ejection.name = names[result.winner];
-                    ejection.role = role;
-                    ejection.wasPlayer = chosen.Owner.IsValid;
-                    ejection.headline = role == MM_Role.Murderer
-                        ? $"{ejection.name} was a Murderer!"
-                        : $"{ejection.name} was not a Murderer. They were {(role == MM_Role.Sheriff ? "the Sheriff" : "Innocent")}.";
-                    Participant p = participants.FirstOrDefault(x => x.character == chosen);
-                    if (p != null)
-                        p.ejected = true;
-                    ejecting = true;
-                    try {
-                        chosen.Kill(DamageType.Command);
-                    } finally {
-                        ejecting = false;
-                    }
-                } else {
-                    ejection.headline = result.tied ? "The vote was tied. Nobody was ejected." : "Nobody was ejected.";
-                }
-                ServerChat.SendSystemMessage(new(ejection.headline, SystemMessageSource.CustomMessage));
-                await ShowEjection(ejection, token);
-            } finally {
-                Unfreeze(freeze);
-            }
+        string TopMessage() {
+            int survivors = SurvivorsAlive();
+            string who = survivors == 1 ? "1 innocent left" : $"{survivors} innocents left";
+            return playersOut ? $"Finishing up · {who} · {MM_Text.Clock(SecondsLeft)}" : $"{who} · {MM_Text.Clock(SecondsLeft)}";
         }
 
-        async UniTask ShowEjection(MM_EjectionBroadcast ejection, CancellationToken token) {
-            Phase = MM_Phase.Ejection;
-            ejection.seconds = tuning.ejectionSeconds;
-            InstanceFinder.ServerManager.Broadcast(ejection);
-            for (int i = tuning.ejectionSeconds; i > 0; i--) {
-                SecondsLeft = i;
-                ServerRunner.SetTopMessage($"{ejection.headline} ({i})");
-                if (await runner.AwaitTime(1000, token))
-                    break;
-            }
-        }
+        MM_Outcome Decide(bool timeUp) => MM_RoundRules.Decide(MurderersAlive(), SurvivorsAlive(), timeUp);
 
-        public async UniTask RunResults(bool murderersWon, string headline, string summary, int seconds, CancellationToken token) {
+        /// <summary>The end of the round: XP and saves for everyone, then the reveal for <paramref name="seconds"/>.</summary>
+        public async UniTask RunResults(int seconds, CancellationToken token) {
             Phase = MM_Phase.Results;
-            MM_ResultEntry[] entries = participants
-                .Where(p => p.player != null || p.role == MM_Role.Murderer || p.role == MM_Role.Sheriff)
-                .OrderBy(p => p.player == null)
-                .ThenBy(p => p.role == MM_Role.Murderer ? 0 : p.role == MM_Role.Sheriff ? 1 : 2)
-                .Select(p => new MM_ResultEntry {
-                    name = p.alias,
-                    username = p.username,
-                    role = p.role,
-                    isPlayer = p.player != null,
-                    survived = p.character != null && !p.character.IsDead,
-                    ejected = p.ejected,
-                    kills = p.character != null && kills.TryGetValue(p.character, out int k) ? k : 0,
-                })
-                .ToArray();
+            if (Outcome == MM_Outcome.None)
+                Outcome = Decide(timeUp: true);
+            foreach (Participant p in participants) {
+                if (p.player == null)
+                    continue;
+                bool won = MM_RoundRules.IsWinner(p.role, Outcome);
+                bool survived = p.Alive;
+                if (won) Award(p, tuning.xpForWinning);
+                if (survived) Award(p, tuning.xpForSurviving);
+                MM_Role role = p.role;
+                PlayerProgress.Modify<MM_SaveData>(p.player, save => {
+                    if (won) save.RecordWin(role);
+                    if (survived) save.survivals++;
+                });
+            }
+            RefreshOdds(force: true);
+
+            string headline = MM_Text.OutcomeHeadline(Outcome);
+            string summary = Summary();
+            ServerChat.SendSystemMessage(new($"{headline}! {summary}", SystemMessageSource.CustomMessage));
+            MM_ResultEntry[] entries = BuildEntries();
+            string murderers = NamesWith(p => p.role == MM_Role.Murderer);
+            string sheriff = NamesWith(p => p.role == MM_Role.Sheriff && !p.hero);
+            string hero = NamesWith(p => p.hero);
             for (int i = seconds; i > 0; i--) {
                 SecondsLeft = i;
-                InstanceFinder.ServerManager.Broadcast(new MM_ResultsBroadcast {
-                    round = Round, winner = headline, summary = summary, entries = entries, secondsLeft = i, murderersWon = murderersWon,
-                });
+                foreach (PlayerData player in PlayerData.Players.Values) {
+                    if (player == null || !player.Owner.IsActive)
+                        continue;
+                    Participant me = FindPlayer(player);
+                    (byte murdererChance, byte sheriffChance) = OddsFor(player);
+                    InstanceFinder.ServerManager.Broadcast(player.Owner, new MM_ResultsBroadcast {
+                        round = Round,
+                        outcome = Outcome,
+                        headline = headline,
+                        summary = summary,
+                        entries = entries,
+                        secondsLeft = i,
+                        murdererName = murderers,
+                        sheriffName = sheriff,
+                        heroName = hero,
+                        stoppedBy = stoppedBy,
+                        youWon = me != null && MM_RoundRules.IsWinner(me.role, Outcome),
+                        yourCoins = me?.coins ?? 0,
+                        yourXp = me?.xp ?? 0,
+                        lifetimeCoins = MM_SaveData.Of(player).coinsCollected,
+                        murdererChance = murdererChance,
+                        sheriffChance = sheriffChance,
+                    });
+                }
                 ServerRunner.SetTopMessage($"{headline}! Next round in {i}");
                 if (await runner.AwaitTime(1000, token))
                     break;
             }
         }
 
+        string Summary() {
+            int survivors = SurvivorsAlive();
+            string reason = MM_RoundRules.Reason(Outcome, stoppedBy);
+            return Outcome == MM_Outcome.MurdererWon ? $"{reason}." : $"{reason}. {survivors} survived.";
+        }
+
+        MM_ResultEntry[] BuildEntries() {
+            List<MM_ResultEntry> entries = new(participants.Count);
+            foreach (Participant p in participants)
+                entries.Add(new MM_ResultEntry {
+                    name = p.alias,
+                    username = p.username,
+                    role = p.role,
+                    isPlayer = p.IsPlayer,
+                    survived = p.Alive,
+                    kills = p.kills,
+                    hero = p.hero,
+                    coins = p.coins,
+                });
+            return entries.ToArray();
+        }
+
+        string NamesWith(Predicate<Participant> match) {
+            List<string> names = new();
+            foreach (Participant p in participants)
+                if (match(p))
+                    names.Add(p.alias);
+            return names.Count == 0 ? null : string.Join(", ", names);
+        }
+
+        void Award(Participant p, int xp) {
+            if (xp <= 0)
+                return;
+            p.xp += xp;
+            if (p.player != null)
+                LevelsServer.AwardPlayerXP(p.player, (ulong)xp);
+        }
+
         // ---------- per-player state ----------
+
+        /// <summary>Recomputes everyone's role odds for the next round if the player count changed (or when forced).</summary>
+        public void RefreshOdds(bool force = false) {
+            int count = PlayerData.Players.Count;
+            if (!force && count == oddsPlayerCount)
+                return;
+            oddsPlayerCount = count;
+            List<PlayerData> players = new();
+            foreach (PlayerData player in PlayerData.Players.Values)
+                if (player != null && player.Owner.IsValid)
+                    players.Add(player);
+            odds = MM_Roles.Odds(players, tuning);
+        }
+
+        (byte, byte) OddsFor(PlayerData player) => odds.TryGetValue(player, out var o) ? o : ((byte)0, (byte)0);
 
         public MM_StateBroadcast BuildState(PlayerData player, bool classic) {
             bool gunDropped = Active && classic && droppedGun != null && droppedGun.IsSpawned;
+            (byte murdererChance, byte sheriffChance) = OddsFor(player);
             MM_StateBroadcast state = new() {
                 round = Round,
                 phase = Active ? Phase : MM_Phase.Lobby,
                 classic = classic,
                 secondsLeft = SecondsLeft,
-                meetingsLeft = MeetingsLeft,
-                reportCooldown = Mathf.Max(0, Mathf.CeilToInt(reportAllowedAt - Time.time)),
-                reportableBody = -1,
-                nearbyBodies = Array.Empty<Vector3>(),
+                coinCap = tuning.coinBagSize,
                 gunDropped = gunDropped,
                 gunPosition = gunDropped ? droppedGun.transform.position : Vector3.zero,
+                murdererChance = murdererChance,
+                sheriffChance = sheriffChance,
             };
-            bool alive = TryGetLivingCharacter(player.Owner, out GameCharacter character);
-            state.alive = alive;
-            // Death recolours the character, so prefer the role the player was dealt this round.
-            Participant dealt = null;
-            if (Active)
-                foreach (Participant p in participants)
-                    if (p.player == player) { dealt = p; break; }
-            MM_Role role = dealt != null ? dealt.role : RoleOf(player.team.Value.realTeam);
-            state.role = Active && classic && role == MM_Role.None ? MM_Role.Spectator : role;
-            if (!Active || !classic || !alive)
+            Participant me = Active ? FindPlayer(player) : null;
+            state.role = me != null ? me.role : Active && classic ? MM_Role.Spectator : MM_Role.None;
+            state.alive = me != null && me.Alive;
+            if (!Active || !classic)
                 return state;
-
-            if (state.role == MM_Role.Murderer && killClock.Running)
-                state.killCooldown = Mathf.CeilToInt(killClock.SecondsUntilReady(KillerId(character), Time.time));
-
-            Vector3 at = character.transform.position;
-            List<Vector3> markers = markerScratch;
-            markers.Clear();
-            float best = float.MaxValue;
-            foreach (Body body in bodies) {
-                if (body.reported)
-                    continue;
-                float sqr = (body.position - at).sqrMagnitude;
-                if (sqr <= tuning.markerDistance * tuning.markerDistance)
-                    markers.Add(body.position);
-                if (sqr <= tuning.reportDistance * tuning.reportDistance && sqr < best) {
-                    best = sqr;
-                    state.reportableBody = body.id;
-                    state.reportableBodyName = body.victimName;
-                }
+            state.survivorsLeft = SurvivorsAlive();
+            if (me == null)
+                return state;
+            state.hero = me.hero;
+            state.coins = me.coins;
+            if (me.role == MM_Role.Murderer && me.Alive && killClock.Running) {
+                state.killCooldown = Mathf.CeilToInt(killClock.SecondsUntilReady(KillerId(me.character), Time.time));
+                state.throwCooldown = ThrowCooldown(me.character);
             }
-            if (markers.Count > 0)
-                state.nearbyBodies = markers.ToArray();
             return state;
         }
 
-        // Reused by BuildState, which runs for every player twice a second.
-        readonly List<Vector3> markerScratch = new();
-
         // ---------- helpers ----------
 
-        static IEnumerable<GameCharacter> LivingCharacters() =>
-            GameCharacter.TeamToCharacter.Values.SelectMany(list => list).Where(c => c != null && !c.IsDead).Distinct().ToList();
+        Participant FindPlayer(PlayerData player) {
+            foreach (Participant p in participants)
+                if (p.player == player)
+                    return p;
+            return null;
+        }
 
-        static bool IsAlive(GameCharacter character) => character != null && !character.IsDead;
+        int MurderersAlive() {
+            int count = 0;
+            foreach (Participant p in participants)
+                if (p.role == MM_Role.Murderer && p.Alive) count++;
+            return count;
+        }
+
+        int SurvivorsAlive() {
+            int count = 0;
+            foreach (Participant p in participants)
+                if (p.role != MM_Role.Murderer && p.Alive) count++;
+            return count;
+        }
+
+        bool AnyPlayerAlive() {
+            foreach (Participant p in participants)
+                if (p.IsPlayer && p.Alive) return true;
+            return false;
+        }
+
+        /// <summary>The living murderers and sheriffs of the round, for NPC policies.</summary>
+        public IEnumerable<GameCharacter> LivingWithRole(MM_Role role) {
+            foreach (Participant p in participants)
+                if (p.role == role && p.Alive)
+                    yield return p.character;
+        }
 
         static bool TryGetLivingCharacter(NetworkConnection conn, out GameCharacter character) {
             character = null;
@@ -556,59 +730,6 @@ namespace Universes.murder_mystery.Server {
                 return false;
             character = local;
             return true;
-        }
-
-        /// <summary>Only players still alive in the round may accuse.</summary>
-        bool CanVote(PlayerData player) =>
-            TryGetLivingCharacter(player.Owner, out _) && RoleOf(player.team.Value.realTeam) != MM_Role.None;
-
-        static string[] UniqueNames(List<GameCharacter> characters) {
-            string[] names = new string[characters.Count];
-            Dictionary<string, int> seen = new();
-            for (int i = 0; i < characters.Count; i++) {
-                string name = string.IsNullOrWhiteSpace(characters[i].DisplayName) ? "Unknown" : characters[i].DisplayName;
-                seen[name] = seen.TryGetValue(name, out int n) ? n + 1 : 1;
-                names[i] = seen[name] > 1 ? $"{name} ({seen[name]})" : name;
-            }
-            return names;
-        }
-
-        struct FreezeState {
-            public float walk, flee, attack;
-            public Dictionary<PlayerData, (float walk, float sprint)> players;
-        }
-
-        /// <summary>Stops every NPC and player in place for the meeting and makes everyone invulnerable.</summary>
-        FreezeState FreezeEveryone() {
-            FreezeState state = new() {
-                walk = LocalNPC.WalkSpeedMultiplier,
-                flee = LocalNPC.FleeSpeedMultiplier,
-                attack = LocalNPC.AttackSpeedMultiplier,
-                players = new(),
-            };
-            LocalNPC.WalkSpeedMultiplier = LocalNPC.FleeSpeedMultiplier = LocalNPC.AttackSpeedMultiplier = 0f;
-            MM_ServerRunner.RefreshNPCSpeeds();
-            foreach (PlayerData player in PlayerData.Players.Values) {
-                state.players[player] = (player.walkSpeed.Value, player.sprintSpeed.Value);
-                player.walkSpeed.Value = 0f;
-                player.sprintSpeed.Value = 0f;
-            }
-            runner.SetGlobalInvul(true);
-            return state;
-        }
-
-        void Unfreeze(FreezeState state) {
-            LocalNPC.WalkSpeedMultiplier = state.walk;
-            LocalNPC.FleeSpeedMultiplier = state.flee;
-            LocalNPC.AttackSpeedMultiplier = state.attack;
-            MM_ServerRunner.RefreshNPCSpeeds();
-            foreach (var (player, speeds) in state.players) {
-                if (player == null)
-                    continue;
-                player.walkSpeed.Value = speeds.walk;
-                player.sprintSpeed.Value = speeds.sprint;
-            }
-            runner.SetGlobalInvul(false);
         }
     }
 }

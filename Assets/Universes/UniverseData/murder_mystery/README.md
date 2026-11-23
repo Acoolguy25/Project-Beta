@@ -3,101 +3,91 @@
 Server-authoritative murder mystery on the old mansion map. Mode is picked by a vote at the start of each
 round (`MM_VoteMode`): NPCs vs Players, Classic, or Infection.
 
-## Classic round flow
+## Classic (MM2-style)
+
+One murderer with a knife, one sheriff with a gun, everyone else innocent. Nobody reports bodies and there
+are no meetings: the round is a chase. The murderer wins by eliminating everyone; the innocents win if the
+murderer is shot or the clock runs out with anyone left.
 
 | Phase | Length | What happens |
 |---|---|---|
-| Role reveal | 6 s | Roles are dealt (`MM_Roles`), everyone is invulnerable, each player sees a private role card. |
-| Hunt | 180 s, paused during meetings | Murderers (players or NPCs) kill with daggers, sheriffs (players only) shoot. Bodies stay reportable. Murderers wait out a grace period first and a cooldown after every kill (below). |
-| Meeting | 15 s | A living player presses **E** (Interact) within 6 m of an unreported body. Everyone freezes and is invulnerable. The notice names the reporter, the victim, and who was seen near the body. |
-| Accusation vote | up to 25 s | Living players vote among the suspects (the 3 living characters closest to the body when it happened, padded with whoever is near it now; every card reads "Seen near the body", so a human suspect is not singled out). Most votes is ejected; a tie or no votes ejects nobody. Ends early once everyone voted. |
-| Ejection | 6 s | The ejected character dies and their role is revealed. The hunt resumes with the time it had left. |
-| Results | 12 s | "Murderers win" or "The town wins" (sheriffs and innocents win together), with how it was decided underneath ("Every murderer was caught", "The murderers ran out of time", "Nobody was left to stop the murderers"). The outcome travels as a flag (`MM_ResultsBroadcast.murderersWon`), not by reading the headline. Every player's role, fate and kill count plus the NPC murderers and sheriffs are revealed, then the next round starts. An innocent who took a dropped weapon is listed and counted with the role they ended with, so the summary adds up to everyone dealt in. |
+| Role reveal | 6 s | Roles are dealt (`MM_Roles.DealClassic`), everyone is invulnerable, each player sees a private role card with their goal. |
+| Hunt | 180 s | The murderer stabs up close or throws the knife (**E**). The sheriff has one bullet at a time (2.2 s reload). Coins spawn round the house for everyone to collect. The top bar shows how many innocents are left and the clock. |
+| Results | 12 s | "Innocents win" or "Murderer wins", who stopped the murderer, the cast (murderer, sheriff, hero), your own round (win or loss, coins, XP), progress to the next knife skin, every character's role, fate, kills and coins, and your odds for the next round. |
 
-Limits: 3 meetings per round, no report in the first 10 s of the hunt or within 20 s of the last meeting.
-If every player is eliminated while a murderer is still alive, the murderers win.
+The round fills to 18 characters with NPCs (at least 4). One murderer and one sheriff per 24 characters.
+
+### The roles
+
+- **Murderer**: 8 s grace at the start of the hunt, then may kill at will (1.5 s between player kills,
+  9 s for NPC murderers). Stab with the knife, or press **E** with the knife drawn to throw it at the
+  cursor: the server flies it (75 m/s, 90 m range, `MM_KnifeThrows`), so it can be dodged and it sticks in
+  walls. 3 s between throws.
+- **Sheriff**: shoot the murderer. Shoot an innocent and the sheriff dies too, dropping the gun
+  (`wrongShotPenalty`, MM2 rules; `Jam` instead jams the gun for 20 s).
+- **Innocent**: survive and collect coins. When the sheriff dies, their gun drops with a beam over it; the
+  first living, empty-handed innocent **player** to touch it becomes the **Hero** (a sheriff in gold). Only
+  the hero is told who it is; everyone else hears "Someone took the gun".
+
+NPC sheriffs are not told who the murderer is (`MM_NpcSheriff`): they wander with the gun holstered until
+they see a murderer with the knife out or see (or hear, within 14 m) a kill, then react after 0.9 to 1.6 s
+and fire with an aim that drifts with distance. A wrong shot kills them too. NPC townsfolk only run from a
+murderer who gives themselves away (knife out, a recent kill or throw: `LocalNPC.FleeThreatFilter`), so a
+murderer who keeps the knife away blends in. NPC murderers sometimes throw from mid range after a short
+wind-up (the sheriff's chance to react).
+
+If no player is left alive the round is cut to 25 s and the NPC murderers stop waiting between kills
+("No players left"), so spectators are not kept watching a long NPC chase.
+
+### Who gets the big roles
+
+`MM_RoleOdds` (unit-tested): players weigh 3 in the draw against 1 for an NPC, and every round a player
+misses a role adds 1.5 to their weight for it (up to 12 rounds), saved between sessions. The murderer is
+drawn first, the sheriff from whoever is left. Players see their exact chance for the next round in the
+lobby and on the results card.
+
+### Coins and knife skins
+
+Coins appear round the house (30 at the start, then one every 0.8 s up to 45 on the map). Each player's bag
+holds 40 a round; the coin chip on the role chip counts it and a full bag says so. Coins are saved as a
+lifetime total that unlocks knife skins (`MM_KnifeSkins`): Rusty, Crimson (60), Jade (180), Gilded (400),
+Frost (750), Nightmare (1200), Inferno (2000). A murderer's knife, in the hand and in flight, wears their
+best skin for everyone to see. XP: 1 per coin, 10 per kill, 40 for stopping the murderer, 15 for surviving,
+25 for winning.
 
 All of these numbers live in one serializable block, **Classic Tuning** (`MM_ClassicTuning`) on the
 `MM_ServerRunner` component, so they can be tuned in the Inspector without code changes. What ships today
-is the code defaults in `MM_ClassicTuning`: `MM_ServerRunner.prefab` (folder root) was last saved before the
-block existed and has no `classicTuning` values in it. The prefab only saves from an Editor in the Linux
-Server build profile; once it is saved there, the values in the prefab win over the code defaults.
+is the code defaults in `MM_ClassicTuning`: `MM_ServerRunner.prefab` (folder root) has no `classicTuning`
+values in it. The prefab only saves from an Editor in the Linux Server build profile; once it is saved
+there, the values in the prefab win over the code defaults.
 
-### Balance: grace period and kill cooldown
+### NPC murderers and the sheriff
 
-So a lone sheriff is not dead within seconds of the hunt starting (`MM_KillClock`, unit-tested in `Tests/`):
+`MM_NPC` lets NPC murderers prefer an armed sheriff over other targets: within `sheriffNoticeDistance`
+(30 m) at first, from anywhere after `sheriffManhuntAfterSeconds` (70 s), each further murderer joining
+`manhuntStaggerSeconds` (35 s) later. Inside `sheriffCreepDistance` (22 m) they creep (6 m/s) instead of
+charging, which is the sheriff's chance to see them coming.
 
-- **Grace period** (25 s): nobody can kill at the start of the hunt.
-- **Kill cooldown** (25 s): after a kill, that murderer waits before the next one.
-- **Post-meeting cooldown** (10 s): when a meeting ends, every murderer waits at least this long.
-
-The kill cooldown keeps running through meetings (it is wall-clock time, as in Among Us): a murderer who
-killed just before a 40 s meeting usually comes out of it with only the 10 s post-meeting wait left. That
-is deliberate, so a meeting is never a safe way for a murderer to bank time; the post-meeting cooldown is
-the floor.
-
-### Balance: how hard NPC murderers hunt the sheriff
-
-`MM_NPC` lets NPC murderers prefer an armed sheriff over other targets. The **NPC murderers and the
-sheriff** block of Classic Tuning sets how hard (`MM_ClassicTuning.SheriffNoticeDistance` combines the
-distances, `MM_ClassicRound.SheriffNoticeDistance` feeds it the round's state):
-
-| Field | Default | What it does |
-|---|---|---|
-| `sheriffNoticeDistance` | 45 m | Before the manhunt, a murderer that may kill only goes for a sheriff this close. |
-| `sheriffExposedSeconds`, `exposedSheriffNoticeDistance` | 8 s, 60 m | A sheriff who just fired is noticed from further away. |
-| `sheriffManhuntAfterSeconds`, `manhuntNoticeDistance` | 60 s, 1000 m | After this much hunt (meetings not counted) murderers go looking for the sheriff anywhere on the map. |
-| `manhuntStaggerSeconds` | 35 s | Each further living murderer joins the manhunt this much later, so they come one at a time. |
-| `sheriffCreepDistance`, `sheriffCreepSpeed` | 25 m, 4 m/s | Inside this distance of an armed sheriff a murderer creeps instead of charging (a charge is 20 m/s, 10 m in half a second): the sheriff's chance to see it coming. |
-| `sheriffDetectionMultiplier`, `sheriffTargetPriority` | 1.5, 1 | Range multiplier and priority bonus for a sheriff target over a plain innocent. |
-
-Measured on 2026-11-17 at these defaults (solo, the human is the sheriff and never moves, 28 NPC
-innocents, 2 NPC murderers, 180 s hunt). "Fight-back" is a server probe standing in for a player: it
-reacts 1.5 s after a murderer that is going for the sheriff comes within 20 m, then fires once a second
-with a 35 % chance to kill it and a 5 % chance to hit an innocent instead (a real wrong shot: the pistol
-jams). It reacts at 20 m rather than 10 m because at 10 m even a creeping murderer strikes before a 1.5 s
-reaction ends.
-
-- Fight-back, 5 rounds: the town won 3 (both murderers shot in all 3), the sheriff died at 89 s and 93 s
-  in the other two; murderers came for the sheriff 2 times per round on average.
-- AFK sheriff, 3 rounds: dead at 71 s, 82 s and 87 s (murderers won all 3), never before the manhunt.
-
-Before (same day): 45 m alone gave about one approach per round and a standing sheriff won 1 in 3; with
-the manhunt but no creep the probe never got a shot off (murderers charge 10 m in 0.5 s); with both
-murderers joining the manhunt together they arrived as a pair and the town lost 3 of 3.
-
-NPC murderers ask `MM_ClassicRound.CanKill` before every attack and holster while they may not kill (they
-wander like townsfolk instead of stalking). A player murderer's dagger is put on the matching server
-cooldown, which their client shows and respects, and their role chip counts the seconds down.
-
-### The sheriff's gun drops
-
-When the sheriff dies (shot, stabbed or voted out) their gun drops where they fell, with a beam over it
-and a small "SHERIFF'S GUN" label (`gunCalloutSize`, `gunCalloutHeight` on the HUD) for the living to
-see. The first living, empty-handed innocent **player** to touch it takes it and secretly becomes the
-Sheriff: their takeover card appears at the top of the screen (not over their own character), nobody else
-is told. NPCs never pick weapons up. Optionally (`dropDaggerOnMurdererDeath`, **off** by default) a dead
-murderer's dagger drops the same way and turns an innocent into a murderer; a murderer the town voted
-out never drops one, so a correct vote cannot be undone by whoever walks over the dagger. Dropped weapons
-are cleared when the round ends. Rules: `MM_DropRules` (unit-tested).
-
-Editor-only switch **DebugSoloNpcSheriff** on `MM_ServerRunner`: with a single player, the sheriff is
-dealt to an NPC (which carries the pistol but does not shoot), so one person can test the gun drop and
-takeover as an innocent. It does nothing in builds.
+Editor-only switch **Debug First Player Role** on `MM_ServerRunner`: deals the chosen role to the first
+player (for example Innocent, so an NPC gets the gun and one person can test the drop and the hero). It
+does nothing in builds.
 
 ## Presentation and feel (client)
 
-`MM_ClientHUD` reacts to the server's broadcasts with the shared game-feel kit (`RyanAssets.GameFeel`):
+`MM_ClientHUD` reacts to the server's broadcasts with the shared game-feel kit (`RyanAssets.GameFeel`), and
+`MM_KnifeFx` flies the thrown knives and paints the knife skins:
 
 | Moment | Feedback |
 |---|---|
-| Role reveal | Pizzicato sting and a flash in the role's colour; again when a role is taken over mid-round. |
-| Kill | Sparks, a shockwave ring under the victim and a kill sting where it happened, camera shake by distance (1.5x for the killer). Only players within earshot (`killAudibleDistance`, 45 m, in Classic Tuning) are told. The victim gets a red flash and "YOU WERE KILLED". |
-| Body found | Alarm and horn, red flash and a jolt, then three gavel knocks call the meeting. |
-| Accusation vote | A drumroll that speeds up and swells until the result. |
-| Ejection | A bell toll, then a win or lose sting and a flash in the outcome's colour. |
-| Gun dropped / taken | Beacon beam and a "SHERIFF'S GUN" callout; a pickup sound when someone takes it. |
-| Murderer cooldown | Dagger chip on the role chip counts down; a beep when the dagger is ready. |
+| Role reveal | Pizzicato sting and a flash in the role's colour; again (at the top of the screen) when you become the hero. |
+| Knife throw | A whoosh, the knife spinning along its line with a trail in the skin's colour; a thud and dust where it sticks in a wall. |
+| Kill | Sparks, a shockwave ring under the victim and a kill sting where it happened, camera shake by distance (1.5x for the killer). Only players within earshot (`killAudibleDistance`, 45 m) are told. The victim gets a red flash and "YOU WERE KILLED". |
+| Coin | A coin sound that climbs in pitch while you pick them up in a row, a floating +1, the coin chip pops; "BAG FULL" when it is. |
+| Sheriff down | A horn and alarm, a blue flash, "The sheriff is down" with what it means for you, a beam and "SHERIFF'S GUN" over the gun. |
+| Gun taken, last survivor, wrong shot | A banner at the top for everyone ("It's you" for the last survivor). |
+| Final 10 s | A beep every second, higher for the last three. |
+| Murderer cooldowns | The dagger chip counts the kill cooldown down, the throw prompt counts the throw down; a beep when the knife is ready. |
+| Results | A win or lose sting, confetti over you when you win, "NEW KNIFE SKIN" when this round's coins unlocked one. |
 
 The HUD also applies the kit's **WarmIndoor** post-processing mood while the game is open. Shot tracers,
 impacts and footsteps come from the shared weapon and character code.
@@ -162,18 +152,20 @@ the same frame with the volume off is a smooth gradient. The post-processing loo
 
 ## Saved progress
 
-`Server/MM_SaveData.cs`: rounds played, Classic wins per role, correct accusation votes, murders,
-murderers shot as sheriff, and sheriff guns picked up.
+`Server/MM_SaveData.cs` (version 2): rounds played, Classic wins per role, rounds survived, murders and
+throw kills, murderers shot, guns picked up, lifetime coins (which unlock knife skins), and the luck that
+raises a player's odds of being murderer or sheriff after rounds without the role.
 
 ## Code
 
 - `Server/MM_ServerRunner.cs` spawning, roles, tools, win conditions, mode vote; sends each player an `MM_StateBroadcast` twice a second.
-- `Server/MM_ClassicRound.cs` the Classic phases above: deaths, body reports, meetings, ejections, results.
+- `Server/MM_ClassicRound.cs` the Classic phases above: deaths, the gun drop and the hero, coins, knife throws, results, XP and saves.
+- `Server/MM_KnifeThrows.cs` server-simulated thrown knives. `Server/MM_NpcSheriff.cs` the NPC sheriff. `Server/MM_Sight.cs` line-of-sight checks.
 - `Shared/MM_Protocol.cs` broadcasts between server and client.
-- `Shared/MM_ClassicTuning.cs`, `Shared/MM_KillClock.cs`, `Shared/MM_DropRules.cs` Classic tuning and pure rules (tested in `Tests/`).
-- `Client/MM_ClientHUD.cs` role card and badge, report prompt, body markers, meeting notice, ejection banner, results, sounds and effects.
-- `Editor/MM_Authoring.cs` (menu **Ryan > Murder Mystery > Rebuild HUD and Markers**) rebuilds `Prefabs/MM_HUD.prefab`
-  and `Prefabs/MM_BodyMarker.prefab` and makes sure the HUD is in `murder_mystery_start.unity`. Run it from a client Editor.
+- `Shared/MM_ClassicTuning.cs`, `Shared/MM_KillClock.cs`, `Shared/MM_RoleOdds.cs`, `Shared/MM_RoundRules.cs`,
+  `Shared/MM_DropRules.cs`, `Shared/MM_KnifeSkins.cs` Classic tuning and pure rules (tested in `Tests/`).
+- `Client/MM_ClientHUD.cs` role card and chip, coin bag, throw prompt, odds, announcements, results, sounds and effects.
+  `Client/MM_KnifeFx.cs` thrown knives and knife skins.
+- `Editor/MM_Authoring.cs` (menu **Ryan > Murder Mystery > Rebuild HUD and Knife**) rebuilds `Prefabs/MM_HUD.prefab`
+  and `Prefabs/MM_ThrownKnife.prefab` and makes sure the HUD is in `murder_mystery_start.unity`. Run it from a client Editor.
   The same menu has **Apply Atmosphere** for the scene (lighting, lamps, backdrop); it does not touch the HUD.
-- Accusations use the shared vote window through `ServerVote.StartDynamicVote` (runtime options, voter filter,
-  tie-aware result), so other games can run the same kind of vote.

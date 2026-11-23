@@ -1,34 +1,24 @@
 namespace Universes.UniverseData.murder_mystery {
     /// <summary>
-    /// Classic rules for weapons dropped by the dead: the sheriff's gun (and, if enabled, a murderer's
-    /// dagger) falls where they died, and the first living, empty-handed innocent player to reach it
-    /// takes it over together with the role that goes with it.
+    /// The dropped gun: a sheriff's gun falls where they died, and the first living, empty-handed
+    /// innocent player to reach it takes it and becomes the hero (a sheriff in all but name).
     /// </summary>
     public static class MM_DropRules {
         /// <summary>
-        /// Whether a character in this state may pick up a dropped weapon: a living innocent player with
-        /// empty hands. NPCs never take one, whatever the pickup prefab's trigger settings are.
+        /// Whether a character in this state may pick up the dropped gun: a living innocent player with
+        /// empty hands. NPCs never take it, whatever the pickup prefab's trigger settings are.
         /// </summary>
         public static bool CanPickUp(MM_Role role, bool alive, int toolsHeld, bool isPlayer) =>
             isPlayer && alive && role == MM_Role.Innocent && toolsHeld == 0;
 
-        /// <summary>The role that comes with a dropped weapon: the gun makes a sheriff, the dagger a murderer.</summary>
-        public static MM_Role RoleFor(MM_DroppedWeapon weapon) => weapon switch {
-            MM_DroppedWeapon.Gun => MM_Role.Sheriff,
-            MM_DroppedWeapon.Dagger => MM_Role.Murderer,
-            _ => MM_Role.None,
-        };
+        /// <summary>Whether a character with this role leaves the gun behind when they die.</summary>
+        public static bool DropsGun(MM_Role role) => role == MM_Role.Sheriff;
 
         /// <summary>
-        /// Whether a character with this role leaves a weapon behind when they die. A murderer the town
-        /// voted out never leaves a dagger, so a correct vote cannot be undone by whoever walks over it.
+        /// Whether a sheriff's shot that killed <paramref name="victimRole"/> was a mistake (anyone but a
+        /// murderer), which the wrong-shot penalty punishes.
         /// </summary>
-        public static MM_DroppedWeapon WeaponLeftBy(MM_Role role, bool dropDaggers, bool ejected) => role switch {
-            MM_Role.Sheriff => MM_DroppedWeapon.Gun,
-            MM_Role.Murderer when dropDaggers && !ejected => MM_DroppedWeapon.Dagger,
-            _ => MM_DroppedWeapon.None,
-        };
+        public static bool IsWrongShot(MM_Role shooterRole, MM_Role victimRole) =>
+            shooterRole == MM_Role.Sheriff && victimRole != MM_Role.Murderer;
     }
-
-    public enum MM_DroppedWeapon : byte { None, Gun, Dagger }
 }

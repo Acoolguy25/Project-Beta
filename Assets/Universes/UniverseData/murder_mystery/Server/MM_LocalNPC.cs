@@ -1,21 +1,23 @@
-using RyanAssets.DataService;
-using System.Collections;
+using System;
 using System.Collections.Generic;
-using UnityEngine;
-using RyanAssets.Characters.Shared;
-using RyanAssets.Characters.Server;
-using RyanAssets.Shared.Global;
-using RyanAssets.Shared.Declarations;
-using RyanAssets.Server.ServerCore;
-using RyanAssets.Tools.Shared;
 using FishNet.Object;
+using RyanAssets.Characters.Server;
+using RyanAssets.Characters.Shared;
+using RyanAssets.Server.ServerCore;
+using RyanAssets.Shared.Declarations;
+using RyanAssets.Tools.Shared;
+using UnityEngine;
 
 namespace Universes.murder_mystery.Server {
+    /// <summary>
+    /// The murder mystery NPC body: townsfolk run from murderers, murderers carry the knife, stab what
+    /// LocalNPC brings them to and, in Classic, sometimes throw it at a target further off. The game mode
+    /// plugs its rules in through the hooks below (when kills are allowed, how the knife is issued, how a
+    /// throw is made).
+    /// </summary>
     public class MM_LocalNPC : NetworkBehaviour {
-        //[Header("Attack")]
-        //[SerializeField] public List<TeamColor> TargetTeams = new List<TeamColor>();
-        //[SerializeField] private float AttackEnterRadius = 6f;
-        float unequipAttackTime = 1f;
+        // How long the knife stays in hand after a strike before it is put away again.
+        const float UnequipAfterAttackSeconds = 1f;
 
         LocalNPC localNPC;
         GameCharacter gameCharacter;
@@ -23,8 +25,9 @@ namespace Universes.murder_mystery.Server {
         Animator animator;
 
         ToolBaseShared sharedWeapon;
-        ToolBaseShared sheriffPistol;
         GameCharacter pendingAttackTarget;
+        GameCharacter pendingThrowTarget;
+        float throwAt;
         float lastAttack = float.MinValue;
         bool holstered;
 
@@ -33,10 +36,22 @@ namespace Universes.murder_mystery.Server {
         /// holsters: it stops hunting and wanders like a townsperson until it may kill again. Null means
         /// the game mode puts no limit on kills.
         /// </summary>
-        public System.Func<bool> KillAllowed;
+        public Func<bool> KillAllowed;
+
+        /// <summary>Issues this murderer's knife. Null spawns a plain dagger.</summary>
+        public Func<GameCharacter, ToolBaseShared> IssueKnife;
+
+        /// <summary>Throws this NPC's knife at a point (returns false if the game mode refused). Null = this NPC never throws.</summary>
+        public Func<GameCharacter, Vector3, bool> ThrowKnife;
+
+        /// <summary>Chance per second to throw at the current target, the distances it throws from, and the wind-up.</summary>
+        public float ThrowChancePerSecond;
+        public Vector2 ThrowDistance;
+        public float ThrowWindupSeconds;
 
         /// <summary>Whether this NPC may strike right now.</summary>
         public bool CanKillNow => KillAllowed == null || KillAllowed();
+
         void Awake() {
             gameCharacter = GetComponent<GameCharacter>();
             localNPC = GetComponent<LocalNPC>();
@@ -49,6 +64,7 @@ namespace Universes.murder_mystery.Server {
             localNPC.AttackSpeed = 21f;
             localNPC.AttackFunction = AttackFunction;
         }
+
         void Start() {
             InitializeAttackState();
         }
@@ -59,18 +75,12 @@ namespace Universes.murder_mystery.Server {
         public void InitializeAttackState() {
             bool isMurderer = gameCharacter.GetTeam().realTeam == TeamColor.Red;
 
-            // Innocent and sheriff NPCs run from nearby murderers in both Classic and
-            // Infection. Infection can change an NPC's role at runtime, so always refresh
-            // this policy here and clear it as soon as that NPC joins the infected team.
+            // Townsfolk run from murderers (Classic narrows that to murderers that give themselves away,
+            // through LocalNPC.FleeThreatFilter). Infection can change an NPC's role at runtime, so always
+            // refresh this policy here and clear it as soon as that NPC joins the infected team.
             localNPC.SetFleeTeams(isMurderer
                 ? new List<TeamColor>()
                 : new List<TeamColor> { TeamColor.Red });
-
-            // TEST ONLY: a sheriff NPC (dealt only by the editor solo play-test switch,
-            // MM_ServerRunner.DebugSoloNpcSheriff) carries the pistol, so it can be
-            // recognised as armed and drop the gun when it dies. It does not shoot.
-            if (gameCharacter.GetTeam().realTeam == TeamColor.Blue && sheriffPistol == null)
-                sheriffPistol = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Pistol);
 
             if (!isMurderer)
                 return;
@@ -84,13 +94,16 @@ namespace Universes.murder_mystery.Server {
             if (sharedWeapon != null)
                 return;
 
-            sharedWeapon = ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
+            sharedWeapon = IssueKnife != null
+                ? IssueKnife(gameCharacter)
+                : ServerTool.Instance.SpawnTool(gameCharacter.NetworkObject, ToolEnum.Dagger);
             if (sharedWeapon == null)
                 return;
 
             localNPC.AttackDamageType = sharedWeapon.defaultDamageType;
             localNPC.SetTargetingType(NPCTargetingType.Attack);
         }
+
         void AttackFunction(GameCharacter targetCharacter) {
             if (sharedWeapon == null || targetCharacter == null || !CanKillNow)
                 return;
@@ -124,11 +137,49 @@ namespace Universes.murder_mystery.Server {
         }
 
         void Update() {
-            if (lastAttack + unequipAttackTime <= Time.time) {
+            UpdateThrow();
+            // Only the knife is managed here; an NPC sheriff's gun is drawn and holstered by MM_NpcSheriff.
+            if (sharedWeapon != null && lastAttack + UnequipAfterAttackSeconds <= Time.time) {
                 pendingAttackTarget = null;
                 gameCharacter.SwitchTool(null);
             }
             UpdateHolster();
+        }
+
+        /// <summary>
+        /// Now and then a murderer that may kill throws at a target it can see from mid range, after drawing
+        /// the knife for a short wind-up (the sheriff's chance to react). Targets dodge by moving: it aims
+        /// where they stand when it lets go.
+        /// </summary>
+        void UpdateThrow() {
+            if (ThrowKnife == null || sharedWeapon == null || gameCharacter.IsDead || !CanKillNow) {
+                pendingThrowTarget = null;
+                return;
+            }
+            if (pendingThrowTarget != null) {
+                if (Time.time < throwAt)
+                    return;
+                GameCharacter target = pendingThrowTarget;
+                pendingThrowTarget = null;
+                if (!target.IsDead && MM_Sight.HasLineOfSight(gameCharacter, target))
+                    ThrowKnife(gameCharacter, MM_Sight.Chest(target));
+                lastAttack = Time.time;
+                return;
+            }
+            GameCharacter current = localNPC.CurrentAttackTarget;
+            if (current == null || current.IsDead)
+                return;
+            float distance = Vector3.Distance(transform.position, current.transform.position);
+            if (distance < ThrowDistance.x || distance > ThrowDistance.y)
+                return;
+            if (UnityEngine.Random.value > ThrowChancePerSecond * Time.deltaTime)
+                return;
+            if (!MM_Sight.HasLineOfSight(gameCharacter, current))
+                return;
+            pendingThrowTarget = current;
+            throwAt = Time.time + ThrowWindupSeconds;
+            lastAttack = Time.time;
+            gameCharacter.SwitchTool(sharedWeapon);
         }
 
         /// <summary>
