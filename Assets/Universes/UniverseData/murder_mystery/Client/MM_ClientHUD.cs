@@ -276,6 +276,8 @@ namespace Universes.UniverseData.murder_mystery.Client {
             MoodVolume.Clear(moodFadeSeconds);
             ClearDroppedGun();
             gunOnFloor = false;
+            pendingAnnouncements.Clear();
+            ClientSpectate.SetBarHidden(false);
         }
 
         void OnDestroy() {
@@ -317,6 +319,8 @@ namespace Universes.UniverseData.murder_mystery.Client {
 
             if (next.phase == MM_Phase.RoleReveal && revealShownRound != next.round && next.role != MM_Role.None) {
                 revealShownRound = next.round;
+                // Last round's banners are stale once a new round is dealt.
+                ClearAnnouncements();
                 revealIsHero = false;
                 revealUntil = Time.unscaledTime + Mathf.Max(3, next.secondsLeft);
             }
