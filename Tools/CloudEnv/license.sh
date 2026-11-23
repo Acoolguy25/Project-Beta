@@ -1,19 +1,28 @@
 #!/usr/bin/env bash
-# Activate a Unity license for this session. Run after setup.sh, once per new container.
+# Restore (or activate) the Unity license for this container. Sessions run `license.sh auto` from
+# the repo SessionStart hook, so by hand this is only needed to renew it about once a month.
 # Environment setup scripts cannot read the environment's variables or secrets, so licensing is a
 # separate step.
 #
-# Usage: Tools/CloudEnv/license.sh [activate|save|restore]   (default: activate)
+# Usage: Tools/CloudEnv/license.sh [activate|save|restore|auto]   (default: activate)
 #   activate  restore a saved license if there is one, else activate (below), then save it
 #   save      copy the active license (and this Editor version's terms acceptance) to the store
 #   restore   only restore from the store; exit 3 if that doesn't give an active license
 #
-# A Unity Personal license is a file (UnityEntitlementLicense.xml) bound to the machine id in
-# /etc/machine-id, and it keeps working without being signed in. So once it's activated, it's
-# saved to $UNITY_LICENSE_STORE (default /mnt/project-files/project-beta/cloud-env/license, shared
-# by the project's sessions) and later sessions restore it instead of signing in again. The cloud
-# containers share one machine id; a file bound to another id isn't restored, and it falls through
-# to sign-in.
+# A Unity Personal license is a file (~/.local/share/unity3d/Unity/licenses/UnityEntitlementLicense.xml)
+# bound to the machine id in /etc/machine-id, and it keeps working without being signed in. So once
+# it's activated, it's saved to $UNITY_LICENSE_STORE (default
+# /mnt/project-files/project-beta/cloud-env/license, shared by the project's sessions) and later
+# sessions restore it instead of signing in again. Every cloud container gets a random machine id,
+# so in a disposable container (CLAUDE_CODE_REMOTE=true, or UNITY_ADOPT_MACHINE_ID=1) restore first
+# sets /etc/machine-id to the id the saved file is bound to. Elsewhere a file bound to another id
+# isn't restored, and it falls through to sign-in.
+#
+# Unity only renews the file (its UpdateDate, about 30 days after activation) while signed in, so
+# restore prints when it runs out. Renewing is one `license.sh` sign-in in any container; the new
+# file is saved to the store and every later session picks it up.
+#
+#   auto      what the repo's SessionStart hook runs: restore quietly, never sign in, never fail
 #
 # Activation, when nothing could be restored, uses the first of these that is available:
 #   UNITY_LICENSE_SERIAL         Plus/Pro serial            -> unity license activate (serial kept off argv)
@@ -39,7 +48,7 @@ log() { printf '[license] %s\n' "$*"; }
 
 [[ -f /etc/profile.d/project-beta-unity.sh ]] && source /etc/profile.d/project-beta-unity.sh
 STORE="${UNITY_LICENSE_STORE:-/mnt/project-files/project-beta/cloud-env/license}"
-LIC_DIR="$HOME/.config/unity3d/Unity/licenses"
+LIC_DIR="$HOME/.local/share/unity3d/Unity/licenses"   # where the Linux licensing client reads it
 LIC_FILE="UnityEntitlementLicense.xml"
 MACHINE_ID="$(cat /etc/machine-id 2>/dev/null || echo unknown)"
 
@@ -76,18 +85,51 @@ restore_terms() {
   fi
 }
 
+bound_id() { # machine id a license file is bound to
+  sed -nE 's/.*<Identifier Id="([0-9a-f]+)" Type="Legacy\.MachineBinding1".*/\1/p' "$1" | head -n1
+}
+
+renew_by() { # last UpdateDate in a license file, as YYYY-MM-DD
+  sed -nE 's/.*<UpdateDate>([0-9-]{10})T.*/\1/p' "$1" | sort | head -n1
+}
+
+adopt_machine_id() { # make this container's machine id match the saved license
+  local id="$1"
+  [[ "${UNITY_ADOPT_MACHINE_ID:-$([[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && echo 1 || echo 0)}" == 1 ]] || return 1
+  [[ $EUID -eq 0 && "$id" =~ ^[0-9a-f]{32}$ ]] || return 1
+  log "setting /etc/machine-id to $id (the id the saved license is bound to)"
+  echo "$id" >/etc/machine-id
+  [[ -f /var/lib/dbus/machine-id ]] && echo "$id" >/var/lib/dbus/machine-id
+  MACHINE_ID="$id"
+}
+
 cmd_restore() {
-  if ! active && [[ -f "$STORE/$LIC_FILE" ]]; then
-    if grep -q "Id=\"$MACHINE_ID\"" "$STORE/$LIC_FILE"; then
+  local saved="$STORE/$LIC_FILE" id
+  if ! active && [[ -f "$saved" ]]; then
+    id="$(bound_id "$saved")"
+    if [[ "$id" != "$MACHINE_ID" ]] && ! adopt_machine_id "$id"; then
+      log "saved license is bound to machine id $id, not $MACHINE_ID; not restoring it"
+    else
       log "restoring saved license from $STORE"
       mkdir -p "$LIC_DIR"
-      cp "$STORE/$LIC_FILE" "$LIC_DIR/$LIC_FILE"
-    else
-      log "saved license is bound to another machine id, not $MACHINE_ID; not restoring it"
+      cp "$saved" "$LIC_DIR/$LIC_FILE"
     fi
   fi
   restore_terms
-  active
+  active || return 1
+  report_expiry
+}
+
+report_expiry() {
+  local f="$LIC_DIR/$LIC_FILE" d days
+  [[ -f "$f" ]] || return 0
+  d="$(renew_by "$f")"; [[ -n "$d" ]] || return 0
+  days=$(( ( $(date -ud "$d" +%s) - $(date -u +%s) ) / 86400 ))
+  if (( days < 7 )); then
+    log "license is active but runs out on $d ($days days). Renew it: run $0 and sign in once."
+  else
+    log "license is active (renew by $d, $days days left)"
+  fi
 }
 
 activate() {
@@ -121,6 +163,10 @@ activate() {
 case "${1:-activate}" in
   save) cmd_save ;;
   restore) cmd_restore || { log "no usable saved license for machine $MACHINE_ID"; exit 3; } ;;
+  auto)
+    command -v unity >/dev/null 2>&1 && [[ -f "$STORE/$LIC_FILE" ]] || exit 0
+    cmd_restore || log "no Unity license restored; run Tools/CloudEnv/license.sh to sign in"
+    ;;
   activate)
     if cmd_restore; then
       log "A license is active."

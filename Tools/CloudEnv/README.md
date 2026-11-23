@@ -7,7 +7,7 @@ ParrelSync clone. UnityBackend isn't needed for this; it's optional.
 | Script | What it does | When |
 |---|---|---|
 | `setup.sh` | System libraries, Xvfb, the Unity Editor plus Linux Server, Windows Server and Windows Mono modules (version and changeset read from `ProjectSettings/ProjectVersion.txt`, md5-checked against Unity's release manifest), Git LFS assets, the Unity CLI (sha256-checked), and optionally the UnityBackend venv | Once per container (works as the environment's **Setup script**) |
-| `license.sh` | Activates a Unity license and, if the account owner agreed, accepts the Editor terms | Once per new container |
+| `license.sh` | Restores the saved Unity license (automatic at session start) or activates one, and accepts the Editor terms if the account owner agreed | Automatic; by hand about once a month to renew |
 | `local-multiplayer.sh` | Imports the project, creates the ParrelSync clone, starts a server Editor and a client Editor under Xvfb, enters Play mode, takes screenshots | Whenever you want a local client/server run |
 | `backend.sh` | Runs UnityBackend locally in debug mode on `127.0.0.1:8212` (`start`, `stop`, `status`, `log`) | Used by `local-multiplayer.sh` with `BACKEND=1`, or on its own |
 
@@ -60,7 +60,7 @@ else  # repo not cloned yet: fetch only the two folders the script needs
 fi
 ```
 
-Setup scripts can't read the environment's secrets, which is why licensing is a separate step.
+Setup scripts can't read the environment's secrets, so licensing doesn't depend on any: see "License" below.
 
 ## Unity version
 
@@ -82,12 +82,22 @@ under `/opt/unity/editors/<version>`.
 
 ## License
 
-Unity can't open a project without one. A Personal license is a file
-(`~/.config/unity3d/Unity/licenses/UnityEntitlementLicense.xml`) bound to `/etc/machine-id`, which
-the cloud containers share, and it works without being signed in. So `license.sh` first restores the
-copy saved in project files (`/mnt/project-files/project-beta/cloud-env/license/`, override with
-`UNITY_LICENSE_STORE`) and only falls back to activating when that doesn't give an active license.
-After activating it saves the file there. `license.sh save` / `license.sh restore` do just one half.
+Unity can't open a project without one, and nobody should have to sign in for every container.
+A Personal license is a file (`~/.local/share/unity3d/Unity/licenses/UnityEntitlementLicense.xml`)
+bound to `/etc/machine-id`, and it works without being signed in. The copy saved in project files
+(`/mnt/project-files/project-beta/cloud-env/license/`, override with `UNITY_LICENSE_STORE`) is
+restored automatically:
+
+- The repo's SessionStart hook (`.claude/settings.json`) runs `license.sh auto` when a session
+  starts, and `setup.sh` runs it too when the store is mounted. It never signs in and never fails.
+- Cloud containers get a random machine id, so in a disposable container (`CLAUDE_CODE_REMOTE=true`,
+  or `UNITY_ADOPT_MACHINE_ID=1`) restore sets `/etc/machine-id` to the id the saved file is bound to.
+- Unity renews the file only while signed in, about every 30 days. Restore prints the renew-by
+  date and warns in the last week. To renew, run `Tools/CloudEnv/license.sh` in any container and
+  sign in once; the new file is saved to the store and every later session uses it.
+
+There is no API key for this: Unity service accounts (`unity auth login --client-id`) can't
+activate licenses. `license.sh save` / `license.sh restore` do just one half of `activate`.
 
 Otherwise it uses the first of these that's set:
 

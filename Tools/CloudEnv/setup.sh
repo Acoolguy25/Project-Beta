@@ -241,5 +241,10 @@ if [[ "$INSTALL_BACKEND" == 1 ]]; then
   echo "export BACKEND_DIR=\"$BACKEND_DIR\"" >>/etc/profile.d/project-beta-unity.sh
 fi
 
+# ---------------------------------------------------------------- license (best effort)
+# Restores the saved Unity license when the project's shared files are mounted. Sessions also do
+# this themselves through the repo's SessionStart hook, so a miss here is fine.
+bash "$(dirname "${BASH_SOURCE[0]}")/license.sh" auto || true
+
 log "Done. Editor: $UNITY_BIN"
 "$UNITY_BIN" -version 2>/dev/null || true
