@@ -129,7 +129,10 @@ MonoBehaviour:
   activeFraction: 0.6
   phaseOffset: 0
   warnSeconds: 0.6
+  warnBeforeSolidSeconds: 0
+  blinkRate: 8
   visuals:
   - {fileID: 117786023217201036}
   solidMaterial: {fileID: 2100000, guid: 14035875996dcb7c4a86a03c2736e7c5, type: 2}
   ghostMaterial: {fileID: 2100000, guid: 657afad947dcb5a55a37eafce7f00e9b, type: 2}
+  warnMaterial: {fileID: 0}

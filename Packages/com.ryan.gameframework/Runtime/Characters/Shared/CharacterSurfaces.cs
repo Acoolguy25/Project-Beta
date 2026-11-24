@@ -9,6 +9,15 @@ namespace RyanAssets.Characters.Shared {
         Vector3 GetSurfaceVelocity(Vector3 characterPosition);
     }
 
+    /// <summary>
+    /// Ground with less grip than normal (ice). While a character stands on it, steering changes its
+    /// planar velocity only gradually, so it slides when it starts, stops or turns.
+    /// </summary>
+    public interface ISurfaceTraction {
+        /// <summary>Share of normal grip, from 0 (none) to 1 (normal ground).</summary>
+        float Traction { get; }
+    }
+
     /// <summary>A wall an airborne character can kick off with a fresh jump press.</summary>
     public interface IWallJumpSurface {
         /// <summary>Vertical speed a wall jump starts with.</summary>

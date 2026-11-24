@@ -32,6 +32,8 @@ namespace Universes.UniverseData.obby {
         public static readonly Color Go = Hex(0x5BE38A);
         public static readonly Color Silver = Hex(0xD3DCEF);
         public static readonly Color Bronze = Hex(0xE89A5E);
+        /// <summary>Stars (pro-route collectibles): a whiter gold than coins, so the two never read alike.</summary>
+        public static readonly Color Star = Hex(0xFFE98A);
 
         /// <summary>The colour of a medal (gold, silver, bronze), or soft ink for none.</summary>
         public static Color Medal(OB_Medal medal) => medal switch {
@@ -52,6 +54,26 @@ namespace Universes.UniverseData.obby {
             Hex(0xFF6FB5), // bubblegum
             Hex(0xFFE066)  // lemon
         };
+
+        // Mechanics: each has its own colour, the same in every theme, so a mechanic reads at a glance.
+        public static readonly Color OnOffRed = Hex(0xFF4F6A);
+        public static readonly Color OnOffBlue = Hex(0x3F7BFF);
+        public static readonly Color Laser = Hex(0xFF2E6E);
+        public static readonly Color Steel = Hex(0x6E7A96);
+        public static readonly Color Warning = Hex(0xFFD23F);
+        public static readonly Color Wood = Hex(0xB0743F);
+        public static readonly Color WoodDark = Hex(0x7A4A24);
+        public static readonly Color MushroomCap = Hex(0xFF5FA2);
+        public static readonly Color MushroomSpots = Hex(0xFFF4F8);
+        public static readonly Color MushroomStalk = Hex(0xF3E3C8);
+        public static readonly Color Cannon = Hex(0x39415E);
+        public static readonly Color Turntable = Hex(0x8B6CFF);
+        public static readonly Color Flip = Hex(0xB36BFF);
+        public static readonly Color Beam = Hex(0xF2F5FF);
+        public static readonly Color Ice = Hex(0xBFEFFF);
+        public static readonly Color IceDeep = Hex(0x7FCBF2);
+        public static readonly Color Wind = Hex(0x73B8FF);
+        public static readonly Color CrusherStone = Hex(0x8E97B0);
 
         // Neutral blocks (lobby, checkpoint pads, movers)
         public static readonly Color Stone = Hex(0xE4E9F5);

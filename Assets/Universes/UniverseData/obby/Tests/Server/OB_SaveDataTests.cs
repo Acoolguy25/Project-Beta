@@ -40,5 +40,36 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.AreEqual(0, save.wins);
             Assert.AreEqual(0, save.totalCoins);
         }
+
+        [Test] public void VersionOneSavesGainEmptyStarsTiersAndRetention() {
+            var old = new OB_SaveData { retention = null, tierBestTimes = null, tierBestStars = new[] { 2, 1 }, totalStars = -4 };
+            old.Validate();
+            Assert.IsNotNull(old.retention);
+            Assert.AreEqual(OB_Tiers.Count, old.tierBestTimes.Length);
+            Assert.AreEqual(OB_Tiers.Count, old.tierBestStars.Length);
+            Assert.AreEqual((2, 1, 0), (old.tierBestStars[0], old.tierBestStars[1], old.tierBestStars[2]), "existing entries are kept");
+            Assert.AreEqual(0, old.totalStars);
+            Assert.AreEqual(2, new OB_SaveData().LatestVersion);
+        }
+
+        [Test] public void TierRecordsKeepTheFastestAndReportThePreviousBest() {
+            var save = new OB_SaveData();
+            Assert.AreEqual(0f, save.RecordTier(OB_Tier.Hard, 80f, 1, clean: true, perfect: false), "no best before the first clear");
+            Assert.AreEqual(80f, save.RecordTier(OB_Tier.Hard, 90f, 3, clean: false, perfect: false));
+            Assert.AreEqual(80f, save.RecordTier(OB_Tier.Hard, 70f, 0, clean: true, perfect: true));
+            Assert.AreEqual(70f, save.TierBest(OB_Tier.Hard));
+            Assert.AreEqual(3, save.tierBestStars[(int)OB_Tier.Hard]);
+            Assert.AreEqual((2, 1), (save.cleanTiers, save.perfectTiers));
+            Assert.AreEqual(0f, save.TierBest(OB_Tier.Basic));
+        }
+
+        [Test] public void StarsAddUpAndTheBestRunIsKept() {
+            var save = new OB_SaveData();
+            save.RecordStar(1);
+            save.RecordStar(2);
+            save.RecordStar(1);
+            Assert.AreEqual(3, save.totalStars);
+            Assert.AreEqual(2, save.bestRunStars);
+        }
     }
 }

@@ -16,6 +16,8 @@ using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UI;
 #if !UNITY_SERVER
 using RyanAssets.Characters.Client;
+using RyanAssets.Retention.Client;
+using RyanAssets.Retention.Editor;
 using Universes.UniverseData.obby.Client;
 #endif
 
@@ -27,7 +29,7 @@ namespace Universes.UniverseData.obby.Editor {
     /// in place, keeping their GUIDs.
     /// Run "Build Server Assets" from an Editor in the Linux Server profile for the server runner.
     /// </summary>
-    public static class OB_Authoring {
+    public static partial class OB_Authoring {
         public const string Root = "Assets/Universes/UniverseData/obby";
         const string Pieces = Root + "/Prefabs/Pieces";
         const string StartScene = Root + "/obby_start.unity";
@@ -38,6 +40,10 @@ namespace Universes.UniverseData.obby.Editor {
         const string Backdrop = Root + "/Prefabs/Backdrop";
         const string Icons = "Packages/com.ryan.ui/Runtime/UI/Icons/Material/";
         const string ThumbnailPath = Root + "/Resources/UniverseDataPub/obby/thumbnail.png";
+        const string ThemeIcons = "Packages/com.ryan.ui/Runtime/UI/Theme/Icons/";
+        /// <summary>HUD layout (1920x1080 canvas units): the star pill right of the coin pill, the results board right of centre,
+        /// and the challenges panel's height above the bottom edge (over the level chip).</summary>
+        const float StarPillX = 275f, ResultsOffsetX = 230f, LevelChipClearance = 104f;
         const float LobbyTop = 100f;
         const float LobbySize = 18f;
 
@@ -344,12 +350,6 @@ namespace Universes.UniverseData.obby.Editor {
             return mat;
         }
 
-        static Material CloudMat() => SimpleMat("Cloud", "Universes/Obby/Cloud", m => {
-            m.SetColor("_TopColor", OB_Palette.Cloud);
-            m.SetColor("_ShadeColor", OB_Palette.CloudShade);
-            m.enableInstancing = true;
-        });
-
         // ---------------------------------------------------------------- effects
         sealed class FxPrefabs {
             public ParticleSystem checkpointBurst, lavaEmbers, gravityDrift;
@@ -550,11 +550,7 @@ namespace Universes.UniverseData.obby.Editor {
             return go;
         }
 
-        static GameObject Save(GameObject go, string name) {
-            var prefab = PrefabUtility.SaveAsPrefabAsset(go, Pieces + "/" + name + ".prefab");
-            Object.DestroyImmediate(go);
-            return prefab;
-        }
+        static GameObject Save(GameObject go, string name) => OB_StablePrefab.Save(go, Pieces + "/" + name + ".prefab");
 
         static BoxCollider Trigger(GameObject owner, Vector3 centre, Vector3 size) {
             var box = owner.AddComponent<BoxCollider>();
@@ -570,6 +566,8 @@ namespace Universes.UniverseData.obby.Editor {
             public Material[] palette;
             public OB_Course.TierMaterials[] tierPlatforms;
             public Material beatSolidA, beatGhostA, beatSolidB, beatGhostB;
+            /// <summary>The overhaul's mechanics (OB_Authoring.Mechanics.cs).</summary>
+            public MechanicPrefabs mechanics;
         }
 
         // ---------------------------------------------------------------- pieces
@@ -612,7 +610,7 @@ namespace Universes.UniverseData.obby.Editor {
             var coil = Mat("SpringCoil", OB_Palette.StoneDark, smoothness: 0.8f, metallic: 0.9f);
             var boostMat = Mat("Boost", OB_Palette.Gravity, Tex("Arrows"), 1.2f);
             var belt = Mat("Belt", Color.white, Tex("Arrows"), smoothness: 0.2f);
-            var zone = Mat("GravityZone", OB_Palette.Blocks[4], emission: 0.3f, alpha: 0.07f);
+            var zone = OB_EnvironmentAuthoring.GravityFieldMaterial(Root + "/Materials/GravityZone.mat");
             var cracks = BlockMat("Crumble", OB_Palette.Hex(0xF2C98B), 0f, detail: Tex("Cracks"), detailStrength: 1f);
             var stripes = Mat("WallJump", Color.white, Tex("Stripes"), 0.15f);
             var moverMat = BlockMat("Mover", OB_Palette.Paper, 0.06f, 0.12f);
@@ -785,6 +783,7 @@ namespace Universes.UniverseData.obby.Editor {
                 tmp.rectTransform.sizeDelta = new Vector2(LobbySize - 2f, signHeight);
                 p.lobby = Save(root, "Lobby");
             }
+            p.mechanics = BuildMechanics(fx, lavaMat);
             return p;
         }
 
@@ -1008,16 +1007,16 @@ namespace Universes.UniverseData.obby.Editor {
             fxRoot.transform.SetParent(root.transform, false);
             client.fx = fxRoot.AddComponent<OB_Fx>();
             client.feel = fxRoot.AddComponent<OB_PlayerFeel>();
+            // Level unlocks (trails, star radar, gold flags, finish fireworks); the retention HUD below gives the level.
+            client.cosmetics = fxRoot.AddComponent<OB_Cosmetics>();
+            client.cosmetics.goldFlagMaterial = Mat("FlagGold", OB_Palette.Gold, emission: 1.2f, smoothness: 0.7f, metallic: 0.6f);
 
-            var skyRoot = new GameObject("Backdrop");
-            skyRoot.transform.SetParent(root.transform, false);
-            client.backdrop = skyRoot.AddComponent<OB_Backdrop>();
-            BuildBackdrop(client.backdrop);
+            // The world around the course (sky, landmarks, scenery, dressing, weather): OB_EnvironmentAuthoring.
+            var world = OB_EnvironmentAuthoring.BuildWorld(root.transform);
+            client.backdrop = world.backdrop;
+            client.atmosphere = world.atmosphere;
             // Parkour and ragdoll physics for the local player while in the obby.
             client.parkour = root.AddComponent<CharacterParkour>();
-            client.atmosphere = skyRoot.AddComponent<OB_Atmosphere>();
-            client.atmosphere.moods = Enumerable.Range(0, OB_Tiers.Count)
-                .Select(t => OB_Atmosphere.Mood.From(OB_Themes.Get((OB_Tier)t).mood)).ToArray();
 
             var canvasGo = new GameObject("HUD", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
             canvasGo.transform.SetParent(root.transform, false);
@@ -1052,6 +1051,10 @@ namespace Universes.UniverseData.obby.Editor {
                 client.stageNameLabel = Label(Box("StageName", body, topLeft, topLeft, new Vector2(20f, -42f), new Vector2(250f, 44f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
                 client.stageNameLabel.textWrappingMode = TextWrappingModes.NoWrap;
                 client.stageNameLabel.overflowMode = TextOverflowModes.Ellipsis;
+                // Segment names with their "2/3" can run long: shrink before cutting.
+                client.stageNameLabel.enableAutoSizing = true;
+                client.stageNameLabel.fontSizeMin = 24f;
+                client.stageNameLabel.fontSizeMax = 34f;
                 // Your place in the race, right of the stage name; empty when racing alone. Passes pop it.
                 var strip = card.gameObject.AddComponent<OB_RaceStrip>();
                 client.raceStrip = strip;
@@ -1068,8 +1071,34 @@ namespace Universes.UniverseData.obby.Editor {
                 var dot = Box("RacerDot", track, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.one * 12f);
                 strip.racerDotTemplate = Panel(dot, OB_Palette.Paper, 6f);
             }
-            {   // Stage hint: plain outlined text above the card that fades out once read.
-                client.hintLabel = Label(Box("Hint", hud, bottomLeft, bottomLeft, new Vector2(30f, 146f), new Vector2(560f, 60f)), semi, semi.outline, 20, muted, TextAlignmentOptions.BottomLeft);
+            {   // Stamina, bottom centre: a captioned bar that shows while stamina is spent and warns when a jump
+                // cannot be paid (it replaces the kit's thin unlabelled strip along the bottom edge).
+                var bottom = new Vector2(0.5f, 0f);
+                var meterRoot = Box("Stamina", hud, bottom, bottom, new Vector2(0f, 26f), new Vector2(320f, 42f));
+                var meter = meterRoot.gameObject.AddComponent<OB_StaminaMeter>();
+                meter.group = meterRoot.gameObject.AddComponent<CanvasGroup>();
+                meter.group.interactable = meter.group.blocksRaycasts = false;
+                meter.group.alpha = 0f;
+                meter.label = Label(Box("Caption", meterRoot, top, top, Vector2.zero, new Vector2(320f, 22f)), bold, bold.shadow, 16, OB_Palette.Paper, TextAlignmentOptions.Center);
+                meter.label.characterSpacing = 3f;
+                meter.label.textWrappingMode = TextWrappingModes.NoWrap;
+                meter.label.text = "STAMINA";
+                var meterTrack = Box("Track", meterRoot, bottom, bottom, Vector2.zero, new Vector2(320f, 14f));
+                Panel(meterTrack, panel, 7f);
+                var meterFill = Stretch("Fill", meterTrack, Vector2.zero, Vector2.one);
+                meter.fill = meterFill;
+                meter.fillImage = Panel(meterFill, OB_Palette.Gold, 7f);
+                meter.fullColor = OB_Palette.Gold;
+                meter.lowColor = OB_Palette.Lava;
+            }
+            {   // Stage hint above the card: white text on a dark pill fitted to it, fading out once read.
+                var hint = Box("Hint", hud, bottomLeft, bottomLeft, new Vector2(38f, 154f), new Vector2(560f, 60f));
+                client.hintGroup = hint.gameObject.AddComponent<CanvasGroup>();
+                client.hintGroup.interactable = client.hintGroup.blocksRaycasts = false;
+                var backing = Box("Backing", hint, bottomLeft, bottomLeft, new Vector2(-14f, -8f), new Vector2(588f, 76f));
+                Panel(backing, panel, 16f);
+                client.hintBacking = backing;
+                client.hintLabel = Label(Stretch("Label", hint, Vector2.zero, Vector2.one), semi, semi.outline, 21, OB_Palette.Paper, TextAlignmentOptions.BottomLeft);
                 client.hintLabel.lineSpacing = -6f;
             }
             {   // Race clock, top centre, with its status underneath.
@@ -1098,6 +1127,18 @@ namespace Universes.UniverseData.obby.Editor {
                 client.coinsLabel = Label(Stretch("Coins", body, Vector2.zero, Vector2.one, new Vector2(56f, 0f), new Vector2(-12f, 0f)), bold, bold.shadow, 30, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
                 client.coinsLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
+            {   // Stars in this tier, beside the coins; hidden on tiers without stars.
+                var pill = Card("StarPill", hud, top, top, new Vector2(StarPillX, clockTop), new Vector2(170f, 56f), panel, 28f, shadow);
+                client.starPill = pill;
+                var body = pill.Find("Body");
+                var icon = Box("Star", body, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(30f, 0f), Vector2.one * 32f).gameObject.AddComponent<Image>();
+                icon.sprite = SpriteAt(ThemeIcons + "icon_star.png");
+                icon.color = OB_Palette.Star;
+                icon.preserveAspect = true;
+                icon.raycastTarget = false;
+                client.starsLabel = Label(Stretch("Stars", body, Vector2.zero, Vector2.one, new Vector2(52f, 0f), new Vector2(-12f, 0f)), bold, bold.shadow, 30, OB_Palette.Star, TextAlignmentOptions.MidlineLeft);
+                client.starsLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            }
             {   // Toast: a small coloured pill, high above the player so it never hides the next jump.
                 var toast = Box("Toast", hud, new Vector2(0.5f, 0.7f), centre, Vector2.zero, new Vector2(500f, 50f));
                 client.toast = toast;
@@ -1120,7 +1161,8 @@ namespace Universes.UniverseData.obby.Editor {
             {   // Results board.
                 // Opaque so the world (the FINISH arch and its beams) never reads through the rows. The controller sizes
                 // the board's height to its rows at runtime (resultsFrameHeight + the rows' height).
-                var results = Card("Results", hud, centre, centre, new Vector2(0f, -40f), new Vector2(980f, 600f), OB_Palette.Ink, 36f);
+                // Right of centre, so the retention kit's summary card (left edge) and the board show side by side.
+                var results = Card("Results", hud, centre, centre, new Vector2(ResultsOffsetX, -40f), new Vector2(980f, 600f), OB_Palette.Ink, 36f);
                 client.resultsPanel = results.gameObject;
                 var body = results.Find("Body");
                 var header = Stretch("Header", body, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -104f), Vector2.zero);
@@ -1139,9 +1181,16 @@ namespace Universes.UniverseData.obby.Editor {
                 client.resultsFooter.textWrappingMode = TextWrappingModes.NoWrap;
             }
 
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, ClientPrefab);
-            Object.DestroyImmediate(root);
-            return prefab;
+            {   // The shared retention HUD: level chip bottom right (the stage card owns bottom left), the
+                // challenges panel (J) above it, toasts and the summary card where the kit puts them.
+                client.retentionHud = RetentionHudAuthoring.AddTo(hud);
+                client.cosmetics.retentionHud = client.retentionHud;
+                client.retentionHud.SetPlacement(RetentionHudPart.LevelChip, new RetentionPlacement(new Vector2(1f, 0f), new Vector2(-24f, 24f)));
+                client.retentionHud.SetPlacement(RetentionHudPart.ChallengesPanel, new RetentionPlacement(new Vector2(1f, 0f), new Vector2(-24f, LevelChipClearance)));
+            }
+
+            // Copied onto the existing prefab when its shape is unchanged, so a rebuild keeps its fileIDs.
+            return OB_StablePrefab.Save(root, ClientPrefab);
 #endif
         }
 
@@ -1182,201 +1231,13 @@ namespace Universes.UniverseData.obby.Editor {
             return profile;
         }
 
-        // ---------------------------------------------------------------- sky backdrop
-#if !UNITY_SERVER
-        static void BuildBackdrop(OB_Backdrop backdrop) {
-            var cloud = CloudMat();
-            var sea = SimpleMat("CloudSea", "Universes/Obby/Cloud Sea", m => {
-                m.SetColor("_TopColor", OB_Palette.Cloud);
-                m.SetColor("_ShadeColor", OB_Palette.CloudShade);
-            });
-
-            var random = new System.Random(1337);
-            float Range(float a, float b) => Mathf.Lerp(a, b, (float)random.NextDouble());
-
-            var clouds = new List<GameObject>();
-            for (int v = 0; v < 4; v++) {
-                // A flat-bottomed cumulus: a row of overlapping puffs, biggest in the middle, on a squashed base.
-                var root = new GameObject($"Cloud{v}");
-                int puffs = 4 + v;
-                float width = 14f + v * 5f;
-                for (int i = 0; i < puffs; i++) {
-                    float t = puffs == 1 ? 0.5f : i / (puffs - 1f);
-                    float x = (t - 0.5f) * width;
-                    float size = Mathf.Lerp(7f, 13f, 1f - Mathf.Abs(t - 0.5f) * 2f) * Range(0.85f, 1.15f);
-                    Puff(root.transform, new Vector3(x, size * 0.25f + Range(0f, 1.5f), Range(-2.5f, 2.5f)), Vector3.one * size, cloud);
-                }
-                Puff(root.transform, new Vector3(0f, 0f, 0f), new Vector3(width + 8f, 4.5f, 10f), cloud);
-                clouds.Add(SaveAt(root, Backdrop + $"/Cloud{v}.prefab"));
-            }
-
-            var tierIslands = new OB_Backdrop.TierPrefabs[OB_Tiers.Count];
-            for (int t = 0; t < OB_Tiers.Count; t++) {
-                var theme = OB_Themes.Get((OB_Tier)t);
-                var set = new GameObject[2];
-                for (int v = 0; v < set.Length; v++) set[v] = BuildIsland(theme, v, random, cloud);
-                tierIslands[t].prefabs = set;
-            }
-
-            var seaGo = Primitive(PrimitiveType.Plane, "CloudSea", null, Vector3.zero, new Vector3(260f, 1f, 260f), sea, false);
-            var seaRenderer = seaGo.GetComponent<Renderer>();
-            seaRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            seaRenderer.receiveShadows = false;
-            var seaPrefab = SaveAt(seaGo, Backdrop + "/CloudSea.prefab");
-
-            backdrop.cloudPrefabs = clouds.ToArray();
-            backdrop.tierIslands = tierIslands;
-            backdrop.cloudSea = ((GameObject)PrefabUtility.InstantiatePrefab(seaPrefab, backdrop.transform)).transform;
-        }
-
-        /// <summary>
-        /// A floating island in a tier's style: a capped slab on stepped rock, dressed with the tier's
-        /// props, with a couple of cloud puffs clinging underneath.
-        /// </summary>
-        static GameObject BuildIsland(OB_Theme theme, int variant, System.Random random, Material cloud) {
-            float Range(float a, float b) => Mathf.Lerp(a, b, (float)random.NextDouble());
-            string tier = theme.tier.ToString();
-            var top = ThemeMat($"Island{tier}Top", theme.islandTop, 0.25f);
-            var rock = ThemeMat($"Island{tier}Base", theme.islandBase, 0.15f);
-            bool glowing = theme.prop is OB_IslandProp.LavaVents or OB_IslandProp.Crystals;
-            var prop = BlockMat($"Island{tier}Prop", theme.propColor, 0f, emission: theme.prop == OB_IslandProp.Crystals ? 1.6f : 0f,
-                smoothness: theme.prop is OB_IslandProp.IceSpikes or OB_IslandProp.Crystals ? 0.85f : 0.25f, bevel: 0.25f);
-            var accent = BlockMat($"Island{tier}Accent", theme.propAccent, 0f, emission: glowing ? 2.4f : 0f, bevel: 0.3f);
-
-            var root = new GameObject($"Island{tier}{variant}").transform;
-            float w = variant == 0 ? 26f : 38f, d = variant == 0 ? 20f : 28f;
-            Cube("Top", root, Vector3.zero, new Vector3(w, 2.5f, d), top, false);
-            float y = -2.75f;
-            for (int step = 0; step < 3; step++) {
-                float shrink = 0.82f - step * 0.2f, h = 3.5f - step * 0.5f;
-                var block = Cube($"Rock{step}", root, new Vector3(Range(-1f, 1f), y - h * 0.5f + 1.5f, Range(-1f, 1f)), new Vector3(w * shrink, h, d * shrink), rock, false);
-                block.transform.localRotation = Quaternion.Euler(0f, Range(-6f, 6f), 0f);
-                y -= h;
-            }
-
-            Vector3 Spot(float margin = 0.35f) => new(Range(-w * margin, w * margin), 1.25f, Range(-d * margin, d * margin));
-            GameObject Piece(string name, Vector3 at, Vector3 size, Material material, float tilt = 0f) {
-                var piece = Cube(name, root, at + Vector3.up * size.y * 0.5f, size, material, false);
-                piece.transform.localRotation = Quaternion.Euler(Range(-tilt, tilt), Range(0f, 90f), Range(-tilt, tilt));
-                return piece;
-            }
-            int count = variant == 0 ? 3 : 5;
-            switch (theme.prop) {
-                case OB_IslandProp.Columns:
-                    // Ruined white columns with coloured capitals, and a few fallen blocks.
-                    for (int i = 0; i < count; i++) {
-                        var at = Spot();
-                        float h = Range(3f, 9f);
-                        Cube($"Column{i}", root, at + Vector3.up * h * 0.5f, new Vector3(1.6f, h, 1.6f), prop, false);
-                        if (h > 5f) Cube($"Capital{i}", root, at + Vector3.up * (h + 0.4f), new Vector3(2.4f, 0.8f, 2.4f), accent, false);
-                    }
-                    for (int i = 0; i < count; i++) Piece($"Block{i}", Spot(0.4f), Vector3.one * Range(1f, 2.2f), prop, 10f);
-                    break;
-                case OB_IslandProp.Trees:
-                    for (int i = 0; i < count - 1; i++) {
-                        var at = Spot();
-                        float height = Range(4f, 7f);
-                        Cube($"Trunk{i}", root, at + Vector3.up * height * 0.5f, new Vector3(1.2f, height, 1.2f), prop, false);
-                        float crown = Range(4.5f, 6.5f);
-                        var leaves = Cube($"Leaves{i}", root, at + Vector3.up * (height + crown * 0.35f), Vector3.one * crown, accent, false);
-                        leaves.transform.localRotation = Quaternion.Euler(0f, Range(0f, 90f), 0f);
-                    }
-                    break;
-                case OB_IslandProp.Cacti:
-                    // A raised mesa and block cacti with arms and a flower.
-                    Cube("Mesa", root, new Vector3(Range(-w * 0.2f, w * 0.2f), 2.5f, Range(-d * 0.15f, d * 0.15f)), new Vector3(w * 0.4f, 3f, d * 0.4f), top, false);
-                    for (int i = 0; i < count - 1; i++) {
-                        var at = Spot(0.4f);
-                        float h = Range(4f, 7f);
-                        Cube($"Cactus{i}", root, at + Vector3.up * h * 0.5f, new Vector3(1.3f, h, 1.3f), prop, false);
-                        float side = i % 2 == 0 ? 1f : -1f, armY = h * Range(0.45f, 0.65f);
-                        Cube($"ArmOut{i}", root, at + new Vector3(side * 1.2f, armY, 0f), new Vector3(1.4f, 0.9f, 0.9f), prop, false);
-                        Cube($"ArmUp{i}", root, at + new Vector3(side * 1.6f, armY + 1.1f, 0f), new Vector3(0.9f, 2.2f, 0.9f), prop, false);
-                        Cube($"Flower{i}", root, at + Vector3.up * (h + 0.3f), new Vector3(0.8f, 0.6f, 0.8f), accent, false);
-                    }
-                    break;
-                case OB_IslandProp.IceSpikes:
-                    for (int i = 0; i < count + 2; i++) {
-                        float h = Range(4f, 12f), thick = Range(1f, 1.8f);
-                        Piece($"Spike{i}", Spot(0.4f), new Vector3(thick, h, thick), prop, 14f);
-                    }
-                    for (int i = 0; i < count; i++) Piece($"Drift{i}", Spot(0.42f) - Vector3.up * 0.4f, new Vector3(Range(2f, 4f), 1.2f, Range(2f, 4f)), accent, 4f);
-                    break;
-                case OB_IslandProp.LavaVents:
-                    // Basalt vents with glowing magma cores, and a lava pool set into the slab.
-                    for (int i = 0; i < count - 1; i++) {
-                        var at = Spot();
-                        float h = Range(2f, 4.5f), size = Range(3f, 4.5f);
-                        Cube($"Vent{i}", root, at + Vector3.up * h * 0.5f, new Vector3(size, h, size), prop, false);
-                        Cube($"Magma{i}", root, at + Vector3.up * (h + 0.05f), new Vector3(size * 0.55f, 0.3f, size * 0.55f), accent, false);
-                    }
-                    Cube("Pool", root, new Vector3(Range(-w * 0.2f, w * 0.2f), 1.2f, Range(-d * 0.2f, d * 0.2f)), new Vector3(w * 0.28f, 0.2f, d * 0.22f), accent, false);
-                    break;
-                case OB_IslandProp.Crystals:
-                    // Neon crystal clusters, with shards floating above.
-                    for (int i = 0; i < count + 2; i++) {
-                        float h = Range(3f, 10f), thick = Range(0.8f, 1.6f);
-                        Piece($"Crystal{i}", Spot(0.4f), new Vector3(thick, h, thick), i % 2 == 0 ? prop : accent, 22f);
-                    }
-                    for (int i = 0; i < count; i++)
-                        Piece($"Shard{i}", Spot(0.45f) + Vector3.up * Range(8f, 16f), Vector3.one * Range(0.8f, 1.8f), accent, 45f);
-                    break;
-            }
-            Puff(root, new Vector3(w * 0.4f, -3f, 0f), new Vector3(10f, 6f, 9f), cloud);
-            Puff(root, new Vector3(-w * 0.45f, -5f, d * 0.2f), new Vector3(8f, 5f, 8f), cloud);
-            return SaveAt(root.gameObject, Backdrop + $"/{root.name}.prefab");
-        }
-
-        static void Puff(Transform parent, Vector3 position, Vector3 scale, Material cloud) {
-            var puff = Primitive(PrimitiveType.Sphere, "Puff", parent, position, scale, cloud, false);
-            var renderer = puff.GetComponent<Renderer>();
-            renderer.shadowCastingMode = ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-        }
-
-        static GameObject SaveAt(GameObject go, string path) {
-            var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);
-            Object.DestroyImmediate(go);
-            return prefab;
-        }
-#endif
-
         // ---------------------------------------------------------------- scenes
         static void BuildStartScene(PiecePrefabs p, GameObject client) {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             {
-                // Warm late-morning key light at 42 degrees, cool periwinkle bounce from the clouds below.
-                // This is the Basic tier's mood; OB_Atmosphere shifts it as players climb the tiers.
-                var mood = OB_Themes.Get(OB_Tier.Basic).mood;
-                var sun = new GameObject("Sun", typeof(Light));
-                var light = sun.GetComponent<Light>();
-                light.type = LightType.Directional;
-                light.intensity = mood.sunIntensity;
-                light.color = mood.sun;
-                light.shadows = LightShadows.Soft;
-                light.shadowStrength = 0.75f;
-                sun.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
-                RenderSettings.sun = light;
-
-                var sky = SimpleMat("Sky", "Universes/Obby/Sky", m => {
-                    m.SetColor("_ZenithColor", mood.zenith);
-                    m.SetColor("_HorizonColor", mood.horizon);
-                    m.SetColor("_BelowColor", mood.below);
-                    m.SetColor("_SunColor", mood.sun);
-                    m.SetVector("_SunDirection", -sun.transform.forward);
-                });
-                RenderSettings.skybox = sky;
-                RenderSettings.ambientMode = AmbientMode.Trilight;
-                RenderSettings.ambientSkyColor = mood.ambientSky;
-                RenderSettings.ambientEquatorColor = mood.ambientEquator;
-                RenderSettings.ambientGroundColor = mood.ambientGround;
-                RenderSettings.fog = true;
-                RenderSettings.fogMode = FogMode.Linear;
-                RenderSettings.fogColor = mood.fog;
-                RenderSettings.fogStartDistance = mood.fogStart;
-                RenderSettings.fogEndDistance = mood.fogEnd;
-                Lightmapping.bakeOnSceneLoad = Lightmapping.BakeOnSceneLoadMode.Never;
+                // The Basic tier's sun, sky, ambient and fog; OB_Atmosphere shifts them as players climb the tiers.
+                OB_EnvironmentAuthoring.LightScene();
 
                 var courseGo = new GameObject("Course");
                 var course = courseGo.AddComponent<OB_Course>();
@@ -1400,6 +1261,7 @@ namespace Universes.UniverseData.obby.Editor {
                 course.lava = p.lava; course.spring = p.spring; course.boost = p.boost; course.gravityZone = p.gravityZone;
                 course.conveyor = p.conveyor; course.crumble = p.crumble; course.beat = p.beat; course.wallJumpWall = p.wallJumpWall;
                 course.mover = p.mover; course.spinnerBar = p.spinnerBar; course.spinnerCross = p.spinnerCross; course.coin = p.coin;
+                AssignMechanics(course, p.mechanics);
                 course.tierPlatforms = p.tierPlatforms;
                 course.beatSolidA = p.beatSolidA; course.beatGhostA = p.beatGhostA; course.beatSolidB = p.beatSolidB; course.beatGhostB = p.beatGhostB;
                 course.clientPrefab = client;
@@ -1444,14 +1306,20 @@ namespace Universes.UniverseData.obby.Editor {
                 // Dress the shot like the game: the client prefab brings the sky backdrop and post-processing.
                 var client = course.clientPrefab != null ? (GameObject)PrefabUtility.InstantiatePrefab(course.clientPrefab) : null;
 #if !UNITY_SERVER
-                if (client != null) client.GetComponentInChildren<OB_Backdrop>().Arrange(layout, course.LobbySpawn);
+                var backdrop = client != null ? client.GetComponentInChildren<OB_Backdrop>() : null;
+                if (backdrop != null) {
+                    backdrop.Arrange(layout, course.LobbySpawn);
+                    OB_EnvironmentAuthoring.PreviewTier(backdrop, OB_Tier.Basic);
+                    // Instanced scenery and dressing are queued per camera render; the horizon and weather follow the camera.
+                    beforeShot = cam => OB_EnvironmentAuthoring.PrepareShot(backdrop, cam);
+                }
 #endif
                 string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "../Logs/obby-previews"));
                 Directory.CreateDirectory(outDir);
                 var camGo = new GameObject("PreviewCamera", typeof(Camera));
                 var cam = camGo.GetComponent<Camera>();
                 cam.fieldOfView = 55f;
-                cam.farClipPlane = 1000f;
+                cam.farClipPlane = 5000f;   // as far as the game cameras: the horizon rings stand 2.4 to 3.4 km out
                 cam.clearFlags = CameraClearFlags.Skybox;
                 cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
                 Vector3 start = course.LobbySpawn, end = layout.finishTop;
@@ -1468,6 +1336,7 @@ namespace Universes.UniverseData.obby.Editor {
                 Shoot(cam, start + new Vector3(-9f, 7f, -14f), start + new Vector3(0f, 2f, 18f), Path.Combine(outDir, "thumbnail.png"), 640, 360);
                 File.Copy(Path.Combine(outDir, "thumbnail.png"), ThumbnailPath, true);
                 Object.DestroyImmediate(camGo);
+                beforeShot = null;
                 if (client != null) Object.DestroyImmediate(client);
                 course.Clear();
             }
@@ -1478,9 +1347,13 @@ namespace Universes.UniverseData.obby.Editor {
             importer.SaveAndReimport();
         }
 
+        /// <summary>Called with the camera right before each preview render (queues per-camera draws).</summary>
+        static System.Action<Camera> beforeShot;
+
         static void Shoot(Camera cam, Vector3 position, Vector3 target, string path, int width, int height) {
             cam.transform.position = position;
             cam.transform.LookAt(target);
+            beforeShot?.Invoke(cam);
             var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32) { antiAliasing = 4 };
             cam.targetTexture = rt;
             cam.Render();

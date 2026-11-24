@@ -93,6 +93,8 @@ namespace RyanAssets.Retention.Client {
         public bool Visible => Popup.Visible;
         /// <summary>Raised when the card reaches the match's final level (after the fill, or on skip).</summary>
         public event Action FinalLevelShown;
+        /// <summary>Raised each time the fill crosses into a new level, with that level (before <see cref="FinalLevelShown"/>).</summary>
+        public event Action<int> LevelShown;
 
         void Awake() {
             if (closeButton != null) closeButton.onClick.AddListener(OnClose);
@@ -260,6 +262,7 @@ namespace RyanAssets.Retention.Client {
 
         void LevelReached() {
             SetLevel(summary.levelBefore + crossed);
+            LevelShown?.Invoke(summary.levelBefore + crossed);
             if (levelDisc != null) levelDisc.color = style.levelUp;
             if (levelEmblem != null) Punch.Scale(levelEmblem, feel.levelPunch, feel.punchSeconds);
             GameSfx.Play(feel.levelUp);

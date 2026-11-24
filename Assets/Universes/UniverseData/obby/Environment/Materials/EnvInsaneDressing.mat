@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: EnvInsaneDressing
+  m_Shader: {fileID: 4800000, guid: 75d55f18c9924caa9f95298ea4b08eaf, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 1
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _CameraFadeFar: 3.2
+    - _CameraFadeNear: 2
+    - _Cull: 2
+    - _EmissionBoost: 3
+    - _Fade: 1
+    - _FogScale: 1
+    - _RimPower: 3
+    - _Smoothness: 0.15
+    - _SwayAmplitude: 0
+    - _SwayFrequency: 2
+    - _SwayPhaseByInstance: 0
+    m_Colors:
+    - _RimColor: {r: 1, g: 0.41568628, b: 0.18039216, a: 0.25}
+    - _SwayAxis: {r: 0, g: 0, b: 0, a: 0}
+    - _SwayWave: {r: 0, g: 0, b: 0, a: 0}
+    - _Tint: {r: 1, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

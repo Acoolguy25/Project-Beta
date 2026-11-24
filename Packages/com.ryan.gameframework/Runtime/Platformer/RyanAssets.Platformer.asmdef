@@ -5,7 +5,8 @@
         "RyanAssets.Core",
         "RyanAssets.Characters.Shared",
         "RyanAssets.Characters.Client",
-        "FishNet.Runtime"
+        "FishNet.Runtime",
+        "RyanAssets.Shared.Component"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

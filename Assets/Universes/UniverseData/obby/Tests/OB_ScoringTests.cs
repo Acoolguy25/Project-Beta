@@ -14,20 +14,52 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.AreEqual(100f, OB_Scoring.ScoredTime(100f, 10, -1f), "a negative bonus is ignored");
         }
 
-        [Test] public void MedalsScaleWithCourseLength() {
-            var times = new OB_MedalTimes { goldPerStage = 10f, silverPerStage = 15f, bronzePerStage = 20f };
-            Assert.AreEqual(300f, times.Target(OB_Medal.Gold, 30));
-            Assert.AreEqual(OB_Medal.Gold, times.Award(300f, 30));
-            Assert.AreEqual(OB_Medal.Silver, times.Award(300.1f, 30));
-            Assert.AreEqual(OB_Medal.Bronze, times.Award(600f, 30));
-            Assert.AreEqual(OB_Medal.None, times.Award(600.1f, 30));
-            Assert.AreEqual(OB_Medal.Gold, times.Award(100f, 10));
+        [Test] public void StarsTakeMoreTimeOffThanCoins() {
+            Assert.AreEqual(86f, OB_Scoring.ScoredTime(100f, 10, 0.5f, 3, 3f), 1e-4f);
+            Assert.AreEqual(OB_Scoring.ScoredTime(100f, 4, 0.5f), OB_Scoring.ScoredTime(100f, 4, 0.5f, 0, 3f), 1e-4f);
+            Assert.AreEqual(0f, OB_Scoring.ScoredTime(10f, 4, 0.5f, 9, 3f));
+            Assert.AreEqual(98f, OB_Scoring.ScoredTime(100f, 4, 0.5f, 2, -3f), 1e-4f, "a negative star bonus is ignored");
         }
 
-        [Test] public void DefaultMedalTargetsAreOrdered() {
+        [Test] public void MedalsScaleWithTheCoursePar() {
+            var times = new OB_MedalTimes { goldFactor = 1.25f, silverFactor = 1.5f, bronzeFactor = 2f };
+            Assert.AreEqual(250f, times.Target(OB_Medal.Gold, 200f), 1e-3f);
+            Assert.AreEqual(OB_Medal.Gold, times.Award(250f, 200f));
+            Assert.AreEqual(OB_Medal.Silver, times.Award(250.1f, 200f));
+            Assert.AreEqual(OB_Medal.Silver, times.Award(300f, 200f));
+            Assert.AreEqual(OB_Medal.Bronze, times.Award(400f, 200f));
+            Assert.AreEqual(OB_Medal.None, times.Award(400.1f, 200f));
+            Assert.AreEqual(OB_Medal.Gold, times.Award(125f, 100f), "a shorter course has a lower target");
+            Assert.AreEqual(float.PositiveInfinity, times.Target(OB_Medal.None, 200f));
+            Assert.AreEqual(1.25f, times.Target(OB_Medal.Gold, 0f), 1e-4f, "a zero par still has a target");
+        }
+
+        [Test] public void DefaultMedalTargetsAreOrderedAndBeatablePar() {
             var times = OB_MedalTimes.Default;
-            Assert.Less(times.goldPerStage, times.silverPerStage);
-            Assert.Less(times.silverPerStage, times.bronzePerStage);
+            Assert.Greater(times.goldFactor, 1f, "gold allows a little slack over the generator's par");
+            Assert.Less(times.goldFactor, times.silverFactor);
+            Assert.Less(times.silverFactor, times.bronzeFactor);
+        }
+
+        [Test] public void GeneratedCoursesHaveMedalTargetsThatGrowWithLength() {
+            var times = OB_MedalTimes.Default;
+            var lobby = new UnityEngine.Vector3(0f, 100f, -3f);
+            var shortCourse = OB_CourseGenerator.Generate(3, 10, OB_Movement.Default, new UnityEngine.Vector3(0f, 100f, 9f), 0f, lobby, OB_CourseRules.Default);
+            var longCourse = OB_CourseGenerator.Generate(3, 30, OB_Movement.Default, new UnityEngine.Vector3(0f, 100f, 9f), 0f, lobby, OB_CourseRules.Default);
+            Assert.Greater(times.Target(OB_Medal.Gold, longCourse.TotalPar), times.Target(OB_Medal.Gold, shortCourse.TotalPar));
+            Assert.Greater(times.Target(OB_Medal.Gold, longCourse.TotalPar), 60f, "a full course is minutes, not seconds");
+        }
+
+        /// <summary>The server's default race length (OB_ServerRunner.raceSeconds); a slower bronze could never be won.</summary>
+        const float ShippedRaceSeconds = 1500f;
+
+        [Test] public void BronzeOnTheShippedCourseFitsInsideTheRace() {
+            var times = OB_MedalTimes.Default;
+            for (int seed = 1; seed <= 100; seed++) {
+                var course = OB_CourseGenerator.Generate(seed, OB_CourseGenerator.DefaultStageCount, OB_Movement.Default, new UnityEngine.Vector3(0f, 100f, 9f), 0f,
+                    new UnityEngine.Vector3(0f, 100f, -3f), OB_CourseRules.Default);
+                Assert.Less(times.Target(OB_Medal.Bronze, course.TotalPar), ShippedRaceSeconds, $"seed {seed}");
+            }
         }
 
         [Test] public void FinishersAreAheadOfRacersAndRankedByScoredTime() {
@@ -130,10 +162,10 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.AreEqual((1, 0), (gained, lost));
         }
 
-        [Test] public void GoldPaceCountsCoinsAndStages() {
-            Assert.AreEqual(-5f, OB_Scoring.GoldPaceDelta(25f, 0, 0.5f, 3, 10f), 1e-4f);
-            Assert.AreEqual(4f, OB_Scoring.GoldPaceDelta(35f, 2, 0.5f, 3, 10f), 1e-4f);
-            Assert.AreEqual(0f, OB_Scoring.GoldPaceDelta(0f, 0, 0.5f, 0, 10f), 1e-4f);
+        [Test] public void GoldPaceIsTheScoredTimeAgainstTheGoldTarget() {
+            Assert.AreEqual(-5f, OB_Scoring.GoldPaceDelta(25f, 30f), 1e-4f);
+            Assert.AreEqual(4f, OB_Scoring.GoldPaceDelta(OB_Scoring.ScoredTime(35f, 2, 0.5f), 30f), 1e-4f);
+            Assert.AreEqual(12f, OB_Scoring.GoldPaceDelta(12f, -3f), 1e-4f, "a negative pace counts as zero");
         }
 
         [Test] public void OrdinalsReadNaturally() {

@@ -9,6 +9,13 @@ The shared "one more match" loop for every Project Beta game:
 
 The server owns all of the rules. The client only draws the state the server sends.
 
+## Changes in the Sky Obby overhaul
+
+Additions only; every game builds and behaves as before unless noted.
+
+- **Level chip never steps back.** A game that grants XP during a match (Sky Obby pays per checkpoint) already showed part of it on the chip; when the summary arrives, the chip is held on the higher of the match's starting level and the level it already shows, and it follows the card's level-ups as the fill crosses them (`RetentionSummaryCard.LevelShown`, `RetentionLevelChip.ShownLevel` / `ShownFraction`). Games with no in-match XP see no change.
+- **Unlock placeholder teaser.** The reserved unlock space shows a lock and "NEW UNLOCK COMING UP" until the reveal, instead of an empty outline. The shipped `Generated/RetentionHUD.prefab` was patched in place (the teaser objects were added; every existing fileID is kept, so the games' nested HUD overrides stay valid). A full rebuild builds the same teaser, but it currently gives every object a new fileID, so avoid it unless the games' HUD prefabs are rebuilt too.
+
 ## Changes in try 3
 
 No public names changed. These are fixes plus a few additions (`RetentionSummaryCard.rewardIcon`, `infoIcon`, `unlockPlaceholder`, `FinalLevelShown`).

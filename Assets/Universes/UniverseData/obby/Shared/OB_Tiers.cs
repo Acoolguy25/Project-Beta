@@ -32,6 +32,14 @@ namespace Universes.UniverseData.obby {
             return Mathf.Clamp01((tier + within * (1f + Breather)) / (Count + Breather));
         }
 
+        /// <summary>0..1 position of <paramref name="stage"/> inside its tier (0 on its first stage, 1 on its last).</summary>
+        public static float ProgressInTier(int stage, int stageCount) {
+            if (stageCount <= 1) return 0f;
+            int tier = (int)TierOf(stage, stageCount);
+            int first = FirstStage(tier, stageCount), last = FirstStage(tier + 1, stageCount) - 1;
+            return last > first ? Mathf.Clamp01((stage - first) / (float)(last - first)) : 0f;
+        }
+
         /// <summary>First stage index of <paramref name="tier"/> (or stageCount past the last tier).</summary>
         public static int FirstStage(int tier, int stageCount) {
             if (tier >= Count) return stageCount;

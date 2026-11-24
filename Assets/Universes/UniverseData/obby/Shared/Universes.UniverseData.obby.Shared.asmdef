@@ -6,7 +6,8 @@
         "RyanAssets.Core",
         "RyanAssets.Platformer",
         "RyanAssets.Items.Platform",
-        "RyanAssets.Characters.Shared"
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.Retention"
     ],
     "autoReferenced": true
 }

@@ -1,136 +1,246 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Universes.UniverseData.obby.Client {
     /// <summary>
-    /// Dresses the sky around the generated course: cloud clusters at the course's height and below it,
-    /// distant floating islands themed after the difficulty tier of the course beside them (white
-    /// columns, grass and trees, desert mesas, snow and ice, volcanic vents, void crystals), and a
-    /// cloud sea under everything. Placement is seeded by the course,
-    /// so every racer sees the same sky, and it keeps clear of the course so it never blocks a jump.
-    /// Instances are created once and moved for each new course.
+    /// Builds the world around the generated course, in the style of the tier each stretch belongs to:
+    /// big landmarks standing off the route (floating castle, giant tree, pyramids, ice mountain,
+    /// volcano, shattered planet), dense floating rocks and small islands, clouds over a cloud sea, bird
+    /// flocks, the far horizon rings, ambient weather, and the course dressing that makes the route look
+    /// built (rock under every floor, towers, arches over checkpoints, lamps, ropes and pennants).
+    /// <para>
+    /// Placement is planned from the course seed (<see cref="OB_ScenePlanner"/>,
+    /// <see cref="OB_DressingPlanner"/>), so every racer sees the same world, and everything keeps clear
+    /// of the space the course needs (<see cref="OB_CourseClearance"/>), so nothing blocks a jump or the
+    /// chase camera. Rocks, islands and dressing are GPU-instanced (<see cref="OB_InstancedLayer"/>);
+    /// landmarks and clouds are pooled objects moved for each course.
+    /// </para>
     /// </summary>
     public sealed class OB_Backdrop : MonoBehaviour {
+        [Serializable]
+        public struct TierScenery {
+            [Tooltip("Floating rock meshes (radius 1), picked at random.")]
+            public Mesh[] rocks;
+            [Tooltip("Small island meshes with the tier's props, picked at random.")]
+            public Mesh[] islands;
+            public Material material;
+        }
+
+        [Serializable]
+        public struct TierDressing {
+            [Tooltip("Rock under a floor: unit footprint, top at 0, bottom at -1 (scaled to the floor and its depth).")]
+            public Mesh[] keels;
+            [Tooltip("Band along a floor's bottom edge (unit cube).")]
+            public Mesh trim;
+            [Tooltip("Tower shaft (width 1, top at 0, bottom at -1) and the finial at its foot.")]
+            public Mesh pillar, pillarCap;
+            [Tooltip("Arch over a 6 m checkpoint pad, origin at the middle of its entry edge.")]
+            public Mesh arch;
+            [Tooltip("Banners down the arch posts, hanging from their origin.")]
+            public Mesh[] banners;
+            [Tooltip("Lamp post, origin at the pad's top level.")]
+            public Mesh lamp;
+            [Tooltip("Rope or chain, one metre along +Z (stretched per segment).")]
+            public Mesh rope;
+            [Tooltip("Pennants, icicles, lanterns or shards hanging from ropes, cycled.")]
+            public Mesh[] pennants;
+            [Tooltip("Stone, wood and metal.")]
+            public Material solid;
+            [Tooltip("Cloth that sways in the wind (banners, pennants).")]
+            public Material cloth;
+        }
+
+        [Header("Layers")]
+        public OB_InstancedLayer scenery;
+        public OB_InstancedLayer dressing;
+        public OB_Landmarks landmarks;
+        public OB_HorizonLayers horizon;
+        public OB_AmbientWeather weather;
+        public OB_BirdFlocks birds;
+        [Tooltip("Tells the horizon and weather when the player's tier changes.")]
+        public OB_Atmosphere atmosphere;
+
         [Header("Authored pieces")]
-        [Tooltip("Cloud cluster prefabs, picked at random.")]
+        [Tooltip("Rock, island and dressing meshes per difficulty tier (indexed by OB_Tier).")]
+        public TierScenery[] tierScenery;
+        public TierDressing[] tierDressing;
+        [Tooltip("Cloud cluster prefabs, cycled.")]
         public GameObject[] cloudPrefabs;
-        [Tooltip("Floating island prefabs per difficulty tier (indexed by OB_Tier).")]
-        public TierPrefabs[] tierIslands;
-        [Tooltip("The cloud sea; centred under the course and placed below its lowest point.")]
+        [Tooltip("The cloud sea; kept under the camera, below the course's lowest point (its billows are in world space, so they hold still).")]
         public Transform cloudSea;
-
-        [Header("Clouds")]
-        [Min(0)] public int cloudCount = 50;
-        [Tooltip("Horizontal distance from the nearest course piece (m).")]
-        public Vector2 cloudDistance = new(45f, 320f);
-        [Tooltip("Height relative to the course's lowest and highest points (m).")]
-        public Vector2 cloudHeight = new(-75f, 10f);
-        public Vector2 cloudScale = new(0.6f, 1.7f);
-
-        [Header("Islands")]
-        [Min(0)] public int islandCount = 14;
-        public Vector2 islandDistance = new(110f, 420f);
-        [Tooltip("Height relative to the stretch of course an island floats beside (m).")]
-        public Vector2 islandHeight = new(-60f, 5f);
-        public Vector2 islandScale = new(0.8f, 1.8f);
-
-        [Header("Cloud sea")]
         [Tooltip("How far below the course's lowest point the cloud sea sits (m).")]
         [Min(0f)] public float seaDepth = 80f;
+        [Tooltip("Least far clip of the game camera while this world is up (m): the horizon rings stand 2.4 to 3.4 km out, and landmarks stay in view across tiers instead of popping in.")]
+        [Min(100f)] public float cameraFarClip = 3800f;
 
-        [System.Serializable]
-        public struct TierPrefabs {
-            public GameObject[] prefabs;
-        }
+        [Header("Placement")]
+        [Tooltip("A course with fewer stages than this per tier draws all its rocks, islands and clouds in the style of the tier the player is in (the one the sky shows): its tiers' stretches are too short to have scenery of their own.")]
+        [Min(1)] public int stagesPerTierStretch = 3;
+        public OB_ClearanceSettings clearanceSettings = OB_ClearanceSettings.Default;
+        public OB_SceneSettings sceneSettings = OB_SceneSettings.Default;
+        public OB_DressingSettings dressingSettings = OB_DressingSettings.Default;
 
+        /// <summary>Seed for the lobby's sky before the first course arrives.</summary>
+        const int LobbySeed = 7;
+
+        readonly OB_CourseClearance clearance = new();
+        readonly OB_ScenePlanner scenePlanner = new();
+        readonly OB_DressingPlanner dressingPlanner = new();
         readonly List<Transform> clouds = new();
-        readonly List<Transform> islands = new();
-        readonly List<Vector3> obstacles = new();
-        readonly List<OB_Tier> obstacleTiers = new();
-        readonly GameObject[] single = new GameObject[1];
+        float seaLevel;
+        /// <summary>The course and lobby last arranged around, kept to restyle a short course's scenery when the tier changes.</summary>
+        OB_CourseLayout arranged;
+        Vector3 arrangedLobby;
+        /// <summary>The tier all scenery is styled in on a short course, or null when each tier's stretch has its own.</summary>
+        OB_Tier? sceneryStyle;
+        Camera farView;
+        float farViewOriginalClip;
 
-        /// <summary>Arranges the sky around <paramref name="layout"/>, or around <paramref name="fallbackCentre"/> when there is no course yet.</summary>
-        public void Arrange(OB_CourseLayout layout, Vector3 fallbackCentre) {
-            obstacles.Clear();
-            obstacleTiers.Clear();
-            obstacles.Add(fallbackCentre);
-            obstacleTiers.Add(OB_Tier.Basic);
-            if (layout != null)
-                foreach (var piece in layout.pieces) {
-                    obstacles.Add(piece.position);
-                    obstacleTiers.Add(layout.stages[Mathf.Clamp(piece.stage, 0, layout.StageCount - 1)].tier);
+        /// <summary>The free space of the current course (for diagnostics and tests).</summary>
+        public OB_CourseClearance Clearance => clearance;
+        public IReadOnlyList<OB_Placement> ScenePlacements => scenePlanner.Placements;
+        public IReadOnlyList<OB_Placement> DressingPlacements => dressingPlanner.Placements;
+
+        void OnEnable() {
+            if (atmosphere != null) atmosphere.TierChanged += OnTierChanged;
+        }
+
+        void OnDisable() {
+            if (atmosphere != null) atmosphere.TierChanged -= OnTierChanged;
+            // The camera outlives the obby; hand it back as it was.
+            if (farView != null) farView.farClipPlane = farViewOriginalClip;
+            farView = null;
+        }
+
+        void LateUpdate() {
+            Camera view = Camera.main;
+            if (view == null) return;
+            ReachHorizon(view);
+            Follow(view.transform.position);
+        }
+
+        /// <summary>Lets the game camera see as far as the horizon rings, remembering its own clip to restore.</summary>
+        void ReachHorizon(Camera view) {
+            if (view != farView) {
+                if (farView != null) farView.farClipPlane = farViewOriginalClip;
+                farView = view;
+                farViewOriginalClip = view.farClipPlane;
+            }
+            if (view.farClipPlane < cameraFarClip) view.farClipPlane = cameraFarClip;
+        }
+
+        /// <summary>Keeps the cloud sea under <paramref name="eye"/>, so its edge never shows however far the course runs (also called by preview renders).</summary>
+        public void Follow(Vector3 eye) {
+            if (cloudSea != null) cloudSea.position = new Vector3(eye.x, seaLevel, eye.z);
+        }
+
+        void OnTierChanged(OB_Tier tier, bool instant) {
+            if (horizon != null) horizon.SetTier(tier, instant);
+            if (weather != null) weather.SetTier(tier, instant);
+            if (landmarks != null) landmarks.ShowTier(tier, instant);
+            if (sceneryStyle.HasValue && sceneryStyle.Value != tier) Arrange(arranged, arrangedLobby);
+        }
+
+        /// <summary>Arranges the world around <paramref name="layout"/>, or around the lobby at <paramref name="lobby"/> when there is no course yet.</summary>
+        public void Arrange(OB_CourseLayout layout, Vector3 lobby) {
+            arranged = layout;
+            arrangedLobby = lobby;
+            sceneryStyle = HasTierStretches(layout) ? null : atmosphere != null ? atmosphere.Tier : OB_Tier.Basic;
+            clearance.Build(layout, lobby, clearanceSettings);
+            dressingPlanner.Plan(layout, clearance, dressingSettings);
+            int seed = layout != null ? layout.seed : LobbySeed;
+            scenePlanner.Plan(seed, layout?.StageCount ?? 1, clearance, sceneSettings, landmarks != null ? landmarks.Size : null, sceneryStyle);
+
+            FillScenery();
+            FillDressing();
+            if (landmarks != null) landmarks.Arrange(scenePlanner.Placements);
+            if (birds != null) birds.Arrange(scenePlanner.Placements);
+            PlaceClouds();
+
+            Bounds course = clearance.CourseBounds;
+            seaLevel = course.min.y - seaDepth;
+            Follow(course.center);
+            if (horizon != null) horizon.SetAnchor(course.center);
+        }
+
+        /// <summary>True when every tier on <paramref name="layout"/> runs long enough to be dressed in its own style where it stands.</summary>
+        bool HasTierStretches(OB_CourseLayout layout) {
+            if (layout == null || layout.StageCount == 0) return true;
+            Span<int> stages = stackalloc int[OB_Tiers.Count];
+            foreach (var stage in layout.stages) stages[(int)stage.tier]++;
+            foreach (int count in stages)
+                if (count > 0 && count < stagesPerTierStretch) return false;
+            return true;
+        }
+
+        /// <summary>Queues the instanced layers for <paramref name="view"/> only (editor preview renders, where Update does not run).</summary>
+        public void DrawNow(Camera view) {
+            if (scenery != null) scenery.Draw(view);
+            if (dressing != null) dressing.Draw(view);
+            if (birds != null) birds.Draw(view);
+        }
+
+        void FillScenery() {
+            if (scenery == null) return;
+            scenery.Clear();
+            if (tierScenery == null) return;
+            foreach (var placement in scenePlanner.Placements) {
+                if ((int)placement.tier >= tierScenery.Length) continue;
+                var set = tierScenery[(int)placement.tier];
+                Mesh[] meshes = placement.kind switch {
+                    (byte)OB_SceneryKind.Rock => set.rocks,
+                    (byte)OB_SceneryKind.Island => set.islands,
+                    _ => null
+                };
+                if (meshes == null || meshes.Length == 0) continue;
+                scenery.Add(meshes[placement.variant % meshes.Length], set.material, placement.matrix);
+            }
+        }
+
+        void FillDressing() {
+            if (dressing == null) return;
+            dressing.Clear();
+            if (tierDressing == null) return;
+            foreach (var placement in dressingPlanner.Placements) {
+                if ((int)placement.tier >= tierDressing.Length) continue;
+                var set = tierDressing[(int)placement.tier];
+                var prop = (OB_DressingProp)placement.kind;
+                Mesh mesh = prop switch {
+                    OB_DressingProp.Keel => Pick(set.keels, placement.variant),
+                    OB_DressingProp.Trim => set.trim,
+                    OB_DressingProp.Pillar => set.pillar,
+                    OB_DressingProp.PillarCap => set.pillarCap,
+                    OB_DressingProp.Arch => set.arch,
+                    OB_DressingProp.Banner => Pick(set.banners, placement.variant),
+                    OB_DressingProp.Lamp => set.lamp,
+                    OB_DressingProp.Rope => set.rope,
+                    OB_DressingProp.Pennant => Pick(set.pennants, placement.variant),
+                    _ => null
+                };
+                bool sways = prop is OB_DressingProp.Banner or OB_DressingProp.Pennant;
+                dressing.Add(mesh, sways ? set.cloth : set.solid, placement.matrix);
+            }
+        }
+
+        static Mesh Pick(Mesh[] meshes, int variant) => meshes == null || meshes.Length == 0 ? null : meshes[(variant & int.MaxValue) % meshes.Length];
+
+        void PlaceClouds() {
+            int used = 0;
+            if (cloudPrefabs != null && cloudPrefabs.Length > 0)
+                foreach (var placement in scenePlanner.Placements) {
+                    if (placement.kind != (byte)OB_SceneryKind.Cloud) continue;
+                    if (used == clouds.Count) {
+                        var prefab = cloudPrefabs[used % cloudPrefabs.Length];
+                        if (prefab == null) break;
+                        clouds.Add(Instantiate(prefab, transform).transform);
+                    }
+                    var cloud = clouds[used++];
+                    cloud.SetPositionAndRotation(placement.matrix.GetColumn(3), placement.matrix.rotation);
+                    cloud.localScale = placement.matrix.lossyScale;
+                    cloud.gameObject.SetActive(true);
                 }
-            var bounds = new Bounds(obstacles[0], Vector3.zero);
-            foreach (var point in obstacles) bounds.Encapsulate(point);
-
-            var random = new System.Random(layout != null ? layout.seed : 7);
-            Scatter(clouds, cloudPrefabs, cloudCount, cloudDistance, cloudHeight, cloudScale, bounds, random, true);
-            PlaceIslands(bounds, random);
-
-            if (cloudSea != null) {
-                Vector3 centre = bounds.center;
-                cloudSea.position = new Vector3(centre.x, bounds.min.y - seaDepth, centre.z);
-            }
-        }
-
-        void Scatter(List<Transform> pool, GameObject[] prefabs, int count, Vector2 distance, Vector2 height, Vector2 scale,
-            Bounds bounds, System.Random random, bool faceCamera, int anchorIndex = -1) {
-            if (prefabs == null || prefabs.Length == 0) count = 0;
-            while (pool.Count < count) {
-                var prefab = prefabs[pool.Count % prefabs.Length];
-                if (prefab == null) break;
-                pool.Add(Instantiate(prefab, transform).transform);
-            }
-            for (int i = 0; i < pool.Count; i++) {
-                bool used = i < count;
-                pool[i].gameObject.SetActive(used);
-                if (!used) continue;
-                // Anchor on a random course point and push outwards until clear of every piece.
-                Vector3 anchor = obstacles[anchorIndex >= 0 ? anchorIndex : random.Next(obstacles.Count)];
-                Vector3 position = anchor;
-                for (int attempt = 0; attempt < 8; attempt++) {
-                    float angle = (float)random.NextDouble() * Mathf.PI * 2f;
-                    float radius = Mathf.Lerp(distance.x, distance.y, Mathf.Pow((float)random.NextDouble(), 1.6f));
-                    position = anchor + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
-                    if (Clearance(position) >= distance.x) break;
-                }
-                // Anchored pieces (islands) float near their own stretch of course; clouds span the whole course.
-                position.y = anchorIndex >= 0
-                    ? anchor.y + Mathf.Lerp(height.x, height.y, (float)random.NextDouble())
-                    : Mathf.Lerp(bounds.min.y + height.x, bounds.max.y + height.y, (float)random.NextDouble());
-                float size = Mathf.Lerp(scale.x, scale.y, (float)random.NextDouble());
-                pool[i].SetPositionAndRotation(position, Quaternion.Euler(0f, (float)random.NextDouble() * 360f, 0f));
-                pool[i].localScale = Vector3.one * size;
-                if (faceCamera) pool[i].rotation = Quaternion.Euler(0f, Mathf.Atan2(position.x - bounds.center.x, position.z - bounds.center.z) * Mathf.Rad2Deg, 0f);
-            }
-        }
-
-        /// <summary>
-        /// Islands match the tier of the course point they float beside, so they are rebuilt for each
-        /// course (a handful of objects once per round).
-        /// </summary>
-        void PlaceIslands(Bounds bounds, System.Random random) {
-            foreach (var island in islands) Destroy(island.gameObject);
-            islands.Clear();
-            if (tierIslands == null || tierIslands.Length == 0) return;
-            for (int i = 0; i < islandCount; i++) {
-                int anchor = random.Next(obstacles.Count);
-                var set = tierIslands[Mathf.Min((int)obstacleTiers[anchor], tierIslands.Length - 1)].prefabs;
-                if (set == null || set.Length == 0) continue;
-                single[0] = set[random.Next(set.Length)];
-                var placed = new List<Transform>(1);
-                Scatter(placed, single, 1, islandDistance, islandHeight, islandScale, bounds, random, false, anchor);
-                islands.AddRange(placed);
-            }
-        }
-
-        float Clearance(Vector3 position) {
-            float nearest = float.MaxValue;
-            foreach (var point in obstacles) {
-                float dx = point.x - position.x, dz = point.z - position.z;
-                nearest = Mathf.Min(nearest, dx * dx + dz * dz);
-            }
-            return Mathf.Sqrt(nearest);
+            for (int i = used; i < clouds.Count; i++) clouds[i].gameObject.SetActive(false);
         }
     }
 }

@@ -14,6 +14,8 @@ namespace Universes.UniverseData.obby {
         [Tooltip("Movement the generator designs gaps and heights around. The server applies the same values to players.")]
         public OB_Movement movement = OB_Movement.Default;
         [Min(0f)] public float sprintSpeed = 15f;
+        [Tooltip("The difficulty curve: per-tier segments, jump reach, platform sizes and which mechanics each tier introduces.")]
+        public OB_CourseRules rules = new();
         [Tooltip("Lobby floor point players spawn on before reaching a checkpoint.")]
         public Transform lobbySpawn;
         [Tooltip("Course starts at this point (the lobby exit), heading along its forward axis.")]
@@ -25,12 +27,18 @@ namespace Universes.UniverseData.obby {
         public GameObject platform;
         public GameObject checkpointPad, finishPad, lava, spring, boost, gravityZone, conveyor;
         public GameObject crumble, beat, wallJumpWall, mover, spinnerBar, spinnerCross, coin;
+        [Tooltip("Overhaul mechanics (OB_Authoring assigns them; rebuild the scene after adding a slot).")]
+        public GameObject beam, onOffBlock, onOffSwitchPad, onOffSwitchBlock, pendulum, crusher, laser, rollingLog, turntable;
+        public GameObject cannon, mushroom, gravityFlipPad, gravityFlipOrb, risingLava, star;
+        public GameObject ice, wind;
 
         [Header("Presentation")]
         [Tooltip("Platform materials per difficulty tier (indexed by OB_Tier), cycled per stage inside the tier.")]
         public TierMaterials[] tierPlatforms;
         [Tooltip("Beat block materials per group: solid then ghost.")]
         public Material beatSolidA, beatGhostA, beatSolidB, beatGhostB;
+        [Tooltip("ON/OFF block materials: colour A (solid from the start) and colour B (solid once switched), each solid then ghost.")]
+        public Material onOffSolidA, onOffGhostA, onOffSolidB, onOffGhostB;
         [Min(0.1f)] public float tileMetres = 2f;
         [Tooltip("Tint for gravity fields that turn gravity (strength-only fields keep their material colour).")]
         public Color directionalFieldTint = new(0.3f, 0.85f, 1f, 0.09f);
@@ -47,10 +55,14 @@ namespace Universes.UniverseData.obby {
         MaterialPropertyBlock tiling;
         static readonly int BaseMapST = Shader.PropertyToID("_BaseMap_ST");
         static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+        /// <summary>Name of the mushroom prefab's stalk child, stretched down to the piece's stalk length.</summary>
+        public const string MushroomStalk = "Stalk";
 
         public OB_CourseLayout Layout { get; private set; }
         /// <summary>Spawned objects, index-aligned with <see cref="OB_CourseLayout.pieces"/>.</summary>
         public IReadOnlyList<GameObject> Instances => instances;
+        /// <summary>Parent of the built course's pieces (null before a build).</summary>
+        public Transform Root => root;
         public Vector3 LobbySpawn => lobbySpawn != null ? lobbySpawn.position : transform.position;
 
         void Start() {
@@ -62,10 +74,22 @@ namespace Universes.UniverseData.obby {
         public bool IsConfigured => lobbySpawn != null && courseStart != null && platform != null && checkpointPad != null
             && finishPad != null && lava != null && spring != null && boost != null && gravityZone != null && conveyor != null
             && crumble != null && beat != null && wallJumpWall != null && mover != null && spinnerBar != null
-            && spinnerCross != null && coin != null;
+            && spinnerCross != null && coin != null && beam != null && onOffBlock != null && onOffSwitchPad != null
+            && onOffSwitchBlock != null && pendulum != null && crusher != null && laser != null && rollingLog != null
+            && turntable != null && cannon != null && mushroom != null && gravityFlipPad != null && gravityFlipOrb != null
+            && risingLava != null && star != null && ice != null && wind != null;
 
-        public OB_CourseLayout Generate(int seed, int stageCount) => OB_CourseGenerator.Generate(seed, stageCount, movement,
-            courseStart.position, courseStart.eulerAngles.y, LobbySpawn);
+        /// <summary>The movement the course is designed around, with the sprint speed the server applies.</summary>
+        public OB_Movement DesignMovement {
+            get {
+                var design = movement;
+                design.sprintSpeed = sprintSpeed;
+                return design;
+            }
+        }
+
+        public OB_CourseLayout Generate(int seed, int stageCount) => OB_CourseGenerator.Generate(seed, stageCount, DesignMovement,
+            courseStart.position, courseStart.eulerAngles.y, LobbySpawn, rules ?? OB_CourseRules.Default);
 
         public OB_CourseLayout Build(int seed, int stageCount) {
             if (!IsConfigured) throw new InvalidOperationException("OB_Course is missing piece prefabs or anchors.");
@@ -108,11 +132,34 @@ namespace Universes.UniverseData.obby {
             OB_PieceKind.SpinnerBar => spinnerBar,
             OB_PieceKind.SpinnerCross => spinnerCross,
             OB_PieceKind.Coin => coin,
+            OB_PieceKind.Beam => beam,
+            OB_PieceKind.OnOffBlock => onOffBlock,
+            OB_PieceKind.OnOffSwitch => null, // two prefabs: see Spawn
+            OB_PieceKind.Pendulum => pendulum,
+            OB_PieceKind.Crusher => crusher,
+            OB_PieceKind.Laser => laser,
+            OB_PieceKind.RollingLog => rollingLog,
+            OB_PieceKind.Turntable => turntable,
+            OB_PieceKind.Cannon => cannon,
+            OB_PieceKind.Mushroom => mushroom,
+            OB_PieceKind.GravityFlip => null, // two prefabs: see Spawn
+            OB_PieceKind.RisingLava => risingLava,
+            OB_PieceKind.Star => star,
+            OB_PieceKind.Ice => ice,
+            OB_PieceKind.Wind => wind,
             _ => null
         };
 
+        GameObject PrefabFor(in OB_Piece piece) => piece.kind switch {
+            OB_PieceKind.OnOffSwitch => piece.group == 0 ? onOffSwitchPad : onOffSwitchBlock,
+            OB_PieceKind.GravityFlip => piece.group == 0 ? gravityFlipPad : gravityFlipOrb,
+            _ => PrefabFor(piece.kind)
+        };
+
         static bool IsScaledBox(OB_PieceKind kind) => kind is OB_PieceKind.Platform or OB_PieceKind.Lava or OB_PieceKind.GravityZone
-            or OB_PieceKind.Conveyor or OB_PieceKind.Crumble or OB_PieceKind.Beat or OB_PieceKind.WallJumpWall or OB_PieceKind.Mover;
+            or OB_PieceKind.Conveyor or OB_PieceKind.Crumble or OB_PieceKind.Beat or OB_PieceKind.WallJumpWall or OB_PieceKind.Mover
+            or OB_PieceKind.Beam or OB_PieceKind.OnOffBlock or OB_PieceKind.Laser or OB_PieceKind.Crusher or OB_PieceKind.RisingLava
+            or OB_PieceKind.Ice;
 
         GameObject Spawn(OB_Piece piece) {
             float yaw = piece.yaw;
@@ -123,7 +170,8 @@ namespace Universes.UniverseData.obby {
                 yaw += turn;
                 if (Mathf.Abs(piece.vector.x) > Mathf.Abs(piece.vector.z)) size = new Vector3(size.z, size.y, size.x);
             }
-            var go = Instantiate(PrefabFor(piece.kind), piece.position, Quaternion.Euler(0f, yaw, 0f), root);
+            GameObject prefab = PrefabFor(piece);
+            var go = Instantiate(prefab, piece.position, Quaternion.Euler(0f, yaw, 0f), root);
             go.name = $"{piece.stage:00} {piece.kind}";
             if (IsScaledBox(piece.kind)) go.transform.localScale = size;
             switch (piece.kind) {
@@ -178,8 +226,86 @@ namespace Universes.UniverseData.obby {
                     break;
                 case OB_PieceKind.SpinnerBar:
                 case OB_PieceKind.SpinnerCross:
+                case OB_PieceKind.Turntable:
                     go.GetComponent<NetworkPlatform>().Configure(Vector3.zero, 0f, new Vector3(0f, 360f * Mathf.Sign(piece.speed), 0f),
                         Mathf.Abs(piece.speed), false, false, piece.phase);
+                    if (piece.kind == OB_PieceKind.Turntable && go.TryGetComponent(out Turntable table))
+                        table.Build(piece.size.x, piece.size.y, piece.group);
+                    break;
+                case OB_PieceKind.Beam:
+                    Tile(go, piece.size);
+                    break;
+                case OB_PieceKind.OnOffBlock:
+                    if (go.TryGetComponent(out OnOffBlock onOff)) {
+                        bool second = piece.group == 1;
+                        onOff.Configure(piece.channel, second, second ? onOffSolidB : onOffSolidA, second ? onOffGhostB : onOffGhostA);
+                    }
+                    break;
+                case OB_PieceKind.OnOffSwitch:
+                    if (go.TryGetComponent(out OnOffSwitch button)) button.Configure(piece.channel);
+                    break;
+                case OB_PieceKind.Pendulum:
+                    if (go.TryGetComponent(out Pendulum hammer)) {
+                        hammer.Configure(piece.vector.x, piece.period, piece.phase, piece.size.y);
+                        if (hammer.head != null) hammer.head.localScale = new Vector3(piece.size.x, piece.size.x, piece.size.z);
+                    }
+                    break;
+                case OB_PieceKind.Crusher:
+                    if (go.TryGetComponent(out Crusher thwomp)) thwomp.Configure(piece.vector.y, piece.period, piece.phase, piece.speed);
+                    break;
+                case OB_PieceKind.Laser:
+                    if (go.TryGetComponent(out TimedToggleBlock beamCycle)) {
+                        // Period 0 is a beam that is always on.
+                        if (piece.period > 0f) beamCycle.Configure(piece.period, piece.speed, piece.phase);
+                        else beamCycle.Configure(1f, 1f, 0f);
+                    }
+                    break;
+                case OB_PieceKind.RollingLog:
+                    if (go.TryGetComponent(out RollingLog log)) {
+                        float radius = piece.size.x * 0.5f;
+                        log.Configure(piece.speed, radius);
+                        if (go.TryGetComponent(out BoxCollider top))
+                            top.size = new Vector3(radius * OB_CourseGenerator.LogStandFraction * 2f, piece.size.y, piece.size.z);
+                        if (log.spinVisual != null) log.spinVisual.localScale = piece.size;
+                    }
+                    break;
+                case OB_PieceKind.Cannon:
+                    go.GetComponentInChildren<LaunchPad>().Configure(piece.vector);
+                    break;
+                case OB_PieceKind.Mushroom: {
+                    go.GetComponentInChildren<LaunchPad>().Configure(piece.vector);
+                    go.transform.localScale = new Vector3(piece.size.x, 1f, piece.size.x);
+                    Transform stalk = go.transform.Find(MushroomStalk);
+                    if (stalk != null) {
+                        // The stalk hangs from the cap down to the stalk length, whatever the cap's width.
+                        stalk.localScale = new Vector3(stalk.localScale.x, piece.size.y, stalk.localScale.z);
+                        stalk.localPosition = Vector3.down * (piece.size.y * 0.5f);
+                    }
+                    break;
+                }
+                case OB_PieceKind.GravityFlip:
+                    // A pad's local up is the gravity it gives, so its arrow plate lies on the surface the player stands on now.
+                    if (piece.group == 0 && piece.vector != Vector3.zero)
+                        go.transform.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, yaw, 0f) * Vector3.forward, piece.vector);
+                    if (go.TryGetComponent(out BoxCollider trigger)) trigger.size = piece.size;
+                    go.GetComponentInChildren<GravityFlipPad>().Configure(piece.vector);
+                    break;
+                case OB_PieceKind.Ice:
+                    if (go.TryGetComponent(out IceSurface iceSurface)) iceSurface.Configure(piece.speed);
+                    Tile(go, piece.size);
+                    break;
+                case OB_PieceKind.Wind:
+                    if (go.TryGetComponent(out WindVolume gusts)) {
+                        float calm = piece.vector.magnitude;
+                        Vector3 local = Quaternion.Inverse(go.transform.rotation) * (calm > 0f ? piece.vector / calm : Vector3.right);
+                        gusts.Resize(piece.size);
+                        gusts.Configure(local, calm, calm > 0f ? piece.speed / calm : 0f, piece.period, piece.phase);
+                    }
+                    break;
+                case OB_PieceKind.RisingLava:
+                    if (go.TryGetComponent(out RisingLava rising))
+                        rising.Configure(piece.speed, piece.period, piece.vector.y, new Vector2(piece.size.x, piece.size.z));
+                    Tile(go, piece.size);
                     break;
             }
             if (piece.kind == OB_PieceKind.Crumble)

@@ -4,36 +4,44 @@ using UnityEngine;
 
 namespace Universes.UniverseData.obby {
     /// <summary>
-    /// Medal targets for a course, as seconds per stage so they scale with the course length.
-    /// A finish earns the best medal whose target its scored time (after the coin bonus) beats.
-    /// Defaults are measured: a no-skip run of stages 1-10 (Basic and Easy tiers) took 76 s, 7.6 s a
-    /// stage, and clean single stages in the Medium to Extreme tiers took 3-12 s (7.8 s a stage over
-    /// 16 clean stages). Gold at 9 s leaves a clean run a small margin; the same runs with their
-    /// knockbacks and retries counted averaged 13.4 s, between silver (13 s) and bronze (18 s).
+    /// Medal targets for a course, as multiples of its par: the generator's estimate of a clean,
+    /// confident run of each stage (<see cref="OB_Stage.par"/>), so a course of hard stages allows more
+    /// time than one of easy stages. A finish earns the best medal whose target its scored time (after
+    /// the coin and star bonuses) beats.
+    /// <para>
+    /// The factors are first estimates (phase-B play-tests re-measure them): par adds a run-up and
+    /// landing per hop to the flight times, so a clean run lands near 1.0x par; gold allows a quarter
+    /// more for hesitation, silver a few retries, bronze a steady, careful run. Bronze must stay inside
+    /// the race time: the shipped 24-stage course has a mean par of about 636 s against a 1500 s race
+    /// (606 to 668 s over seeds 1 to 100, so the race is about 2.2 to 2.5 times par), and the bronze factor
+    /// stays well under that.
+    /// </para>
     /// </summary>
     [Serializable]
     public struct OB_MedalTimes {
-        [Tooltip("Scored seconds per stage for a gold medal.")]
-        [Min(1f)] public float goldPerStage;
-        [Tooltip("Scored seconds per stage for a silver medal.")]
-        [Min(1f)] public float silverPerStage;
-        [Tooltip("Scored seconds per stage for a bronze medal.")]
-        [Min(1f)] public float bronzePerStage;
+        [Tooltip("Gold: scored time at most this many times the course par.")]
+        [Min(0.5f)] public float goldFactor;
+        [Tooltip("Silver: scored time at most this many times the course par.")]
+        [Min(0.5f)] public float silverFactor;
+        [Tooltip("Bronze: scored time at most this many times the course par.")]
+        [Min(0.5f)] public float bronzeFactor;
 
-        public static OB_MedalTimes Default => new() { goldPerStage = 9f, silverPerStage = 13f, bronzePerStage = 18f };
+        public static OB_MedalTimes Default => new() { goldFactor = 1.25f, silverFactor = 1.5f, bronzeFactor = 1.7f };
 
-        /// <summary>The scored time to beat for <paramref name="medal"/> on a course of <paramref name="stageCount"/> stages.</summary>
-        public float Target(OB_Medal medal, int stageCount) => Mathf.Max(1, stageCount) * medal switch {
-            OB_Medal.Gold => goldPerStage,
-            OB_Medal.Silver => silverPerStage,
-            OB_Medal.Bronze => bronzePerStage,
+        public float Factor(OB_Medal medal) => medal switch {
+            OB_Medal.Gold => goldFactor,
+            OB_Medal.Silver => silverFactor,
+            OB_Medal.Bronze => bronzeFactor,
             _ => float.PositiveInfinity
         };
 
-        /// <summary>The medal a finish with <paramref name="scoredTime"/> earns.</summary>
-        public OB_Medal Award(float scoredTime, int stageCount) {
+        /// <summary>The scored time to beat for <paramref name="medal"/> on a course whose par is <paramref name="par"/> seconds.</summary>
+        public float Target(OB_Medal medal, float par) => medal == OB_Medal.None ? float.PositiveInfinity : Mathf.Max(1f, par) * Factor(medal);
+
+        /// <summary>The medal a finish with <paramref name="scoredTime"/> earns on a course of <paramref name="par"/> seconds.</summary>
+        public OB_Medal Award(float scoredTime, float par) {
             for (OB_Medal medal = OB_Medal.Gold; medal > OB_Medal.None; medal--)
-                if (scoredTime <= Target(medal, stageCount)) return medal;
+                if (scoredTime <= Target(medal, par)) return medal;
             return OB_Medal.None;
         }
     }
@@ -43,6 +51,10 @@ namespace Universes.UniverseData.obby {
         /// <summary>Finish time with <paramref name="secondsPerCoin"/> taken off for every coin, never below zero.</summary>
         public static float ScoredTime(float finishTime, int coins, float secondsPerCoin) =>
             Mathf.Max(0f, finishTime - Mathf.Max(0, coins) * Mathf.Max(0f, secondsPerCoin));
+
+        /// <summary>Finish time with the coin bonus and <paramref name="secondsPerStar"/> for every star taken off, never below zero.</summary>
+        public static float ScoredTime(float finishTime, int coins, float secondsPerCoin, int stars, float secondsPerStar) =>
+            Mathf.Max(0f, ScoredTime(finishTime, coins, secondsPerCoin) - Mathf.Max(0, stars) * Mathf.Max(0f, secondsPerStar));
 
         /// <summary>
         /// Whether <paramref name="a"/> is strictly ahead of <paramref name="b"/>: finishers beat
@@ -104,13 +116,12 @@ namespace Universes.UniverseData.obby {
         }
 
         /// <summary>
-        /// Race time (scored, so coins count) minus the gold medal pace after <paramref name="stagesDone"/>
-        /// stages: negative means ahead of gold.
+        /// Scored race time minus the gold pace at the same point (<paramref name="goldPace"/>: the gold
+        /// factor times the par of the stages done): negative means ahead of gold.
         /// </summary>
-        public static float GoldPaceDelta(float raceTime, int coins, float secondsPerCoin, int stagesDone, float goldPerStage) =>
-            ScoredTime(raceTime, coins, secondsPerCoin) - Mathf.Max(0, stagesDone) * goldPerStage;
+        public static float GoldPaceDelta(float scoredTime, float goldPace) => scoredTime - Mathf.Max(0f, goldPace);
 
-        /// <summary>Number of collected coins in a per-stage coin bit mask.</summary>
+        /// <summary>Number of collected coins (or stars) in a per-stage bit mask.</summary>
         public static int CountCoins(ulong mask) {
             int count = 0;
             for (; mask != 0; mask &= mask - 1) count++;
