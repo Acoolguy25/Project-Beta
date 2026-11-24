@@ -367,10 +367,64 @@ namespace RyanAssets.Retention.Tests {
             Assert.AreEqual(20, summary.Lines[0].Xp);
             Assert.AreEqual(2, summary.TotalGold);
 
-            for (int i = 0; i < MatchSummary.MaxLines + 3; i++) summary.Add(new RewardLine("Line " + i, 1));
+            for (int i = 0; i < MatchSummary.MaxLines + 3; i++) summary.Add(new RewardLine("Line " + i, 1, 0, 3));
             Assert.AreEqual(MatchSummary.MaxLines, summary.Lines.Count);
-            Assert.AreEqual(MatchSummary.OtherLabel, summary.Lines[MatchSummary.MaxLines - 1].Label);
+            RewardLine folded = summary.Lines[MatchSummary.MaxLines - 1];
+            // 12 lines: Kill and the first six 1-XP lines stay, the last five fold.
+            Assert.AreEqual("+5 more rewards", folded.Label);
+            Assert.AreEqual(1, folded.Count, "the folded line never sums unrelated counts");
+            Assert.AreEqual(5, folded.Xp);
+            Assert.AreEqual("Line 5", summary.Lines[MatchSummary.MaxLines - 2].Label);
             Assert.AreEqual(20 + MatchSummary.MaxLines + 3, summary.TotalXp, "folding never loses XP");
+            int shownXp = 0;
+            foreach (RewardLine line in summary.Lines) shownXp += line.Xp;
+            Assert.AreEqual(summary.TotalXp, shownXp, "the card's lines add up to the total");
+        }
+
+        [Test]
+        public void HeadlinesShowFirstAndTheLeastValuableLinesFold() {
+            var summary = new MatchSummary(new LevelProgress(1, 0, 100));
+            summary.Add(RewardLine.Info("Waves", "12 / 12"));
+            for (int i = 0; i < 6; i++) summary.Add(new RewardLine("Small " + i, 1 + i));
+            summary.Add(new RewardLine("Kills", 50, 0, 40));
+            summary.Add(new RewardLine("Boss", 30, 5));
+            // Added last, as games do once the result is known.
+            summary.Add(RewardLine.Headline("3-star defence", 100, 0, "3 stars"));
+
+            IReadOnlyList<RewardLine> lines = summary.Lines;
+            Assert.AreEqual(MatchSummary.MaxLines, lines.Count);
+            Assert.AreEqual("3-star defence", lines[0].Label, "the headline shows first");
+            Assert.IsTrue(lines[0].Pinned);
+            Assert.AreEqual("3 stars", lines[0].Detail);
+            // Room for six other lines: Kills, Boss and Small 2..5 stay (in the order added); the info
+            // line and Small 0, 1 (the least valuable) fold.
+            CollectionAssert.AreEqual(
+                new[] { "3-star defence", "Small 2", "Small 3", "Small 4", "Small 5", "Kills", "Boss", "+3 more rewards" },
+                lines.Select(l => l.Label).ToArray());
+            Assert.AreEqual(40, lines[5].Count, "kept lines keep their own count");
+            Assert.AreEqual(1 + 2, lines[7].Xp);
+            Assert.AreEqual(1, lines[7].Count);
+            Assert.IsNull(lines[7].Detail);
+
+            // More headlines than room: every headline shows, the rest folds into one line.
+            for (int i = 0; i < MatchSummary.MaxLines; i++) summary.Add(RewardLine.Headline("Head " + i, 1));
+            lines = summary.Lines;
+            Assert.AreEqual(MatchSummary.MaxLines + 2, lines.Count);
+            Assert.IsTrue(lines.Take(MatchSummary.MaxLines + 1).All(l => l.Pinned));
+            Assert.AreEqual("+9 more rewards", lines[lines.Count - 1].Label);
+        }
+
+        [Test]
+        public void AHeadlineMergedWithAPlainLineStaysPinned() {
+            var summary = new MatchSummary(new LevelProgress(1, 0, 100));
+            summary.Add(new RewardLine("Rebirth 4", 10));
+            summary.Add(new RewardLine("Rebirth 4", 5).AsHeadline().WithDetail("x2 income"));
+            for (int i = 0; i < MatchSummary.MaxLines + 4; i++) summary.Add(new RewardLine("Sale " + i, 100));
+            Assert.AreEqual("Rebirth 4", summary.Lines[0].Label);
+            Assert.IsTrue(summary.Lines[0].Pinned, "WithDetail keeps the pin, merging keeps it");
+            Assert.AreEqual(15, summary.Lines[0].Xp);
+            Assert.AreEqual("x2 income", summary.Lines[0].Detail);
+            Assert.IsFalse(new RewardLine("Plain", 1).Pinned);
         }
 
         // ------------------------------------------------------------ save repair

@@ -11,11 +11,13 @@ namespace Universes.UniverseData.tycoon.Tests {
         [Test]
         public void EveryItemIsReachableAndLanesAreChains() {
             var random = new System.Random(7);
+            // With enough rebirths every landmark is for sale too, so the whole catalog must be reachable.
+            int rebirths = TY_Catalog.Items.Max(i => i.rebirths);
             for (int run = 0; run < 200; run++) {
                 ulong purchased = TY_Catalog.StarterMask;
                 int guard = 0;
                 while ((purchased & TY_Catalog.AllButRebirth) != TY_Catalog.AllButRebirth) {
-                    var available = TY_Catalog.AvailableItems(purchased).Where(i => i != TY_Catalog.RebirthIndex).ToList();
+                    var available = TY_Catalog.AvailableItems(purchased, rebirths).Where(i => i != TY_Catalog.RebirthIndex).ToList();
                     Assert.IsNotEmpty(available, "build order dead-ends");
                     // One pad per lane: at most one available item per lane, and it is the lane's next item.
                     foreach (var lane in available.GroupBy(i => TY_Catalog.Items[i].kind)) {
@@ -25,16 +27,25 @@ namespace Universes.UniverseData.tycoon.Tests {
                     purchased |= 1ul << available[random.Next(available.Count)];
                     Assert.Less(++guard, 100);
                 }
-                Assert.IsTrue(TY_Catalog.Available(purchased, TY_Catalog.RebirthIndex), "rebirth unlocks once everything is built");
+                Assert.IsTrue(TY_Catalog.Available(purchased, TY_Catalog.RebirthIndex, rebirths), "rebirth unlocks once everything is built");
             }
             Assert.Less(TY_Catalog.Count, 64, "purchases are a 64-bit mask");
+            Assert.AreEqual(22, TY_Catalog.BaseCount, "the factory a rebirth needs");
+        }
+
+        [Test]
+        public void TheRebirthNeedsTheFactoryButNotTheLandmarks() {
+            Assert.IsFalse(TY_Catalog.Available(TY_Catalog.BaseMask & ~(1ul << 6), TY_Catalog.RebirthIndex, 0), "a missing dropper blocks the rebirth");
+            Assert.IsTrue(TY_Catalog.Available(TY_Catalog.BaseMask, TY_Catalog.RebirthIndex, 0), "landmarks are never required");
+            Assert.AreEqual(0ul, TY_Catalog.BaseMask & TY_Catalog.LandmarkMask);
+            Assert.AreEqual(0ul, TY_Catalog.BaseMask & (1ul << TY_Catalog.RebirthIndex));
         }
 
         [Test]
         public void PricesRiseAndIncomeGrows() {
             double income = TY_Catalog.Income(TY_Catalog.StarterMask, 0, NoPerks);
             Assert.Greater(income, 0);
-            ulong all = TY_Catalog.AllButRebirth;
+            ulong all = TY_Catalog.BaseMask;
             Assert.Greater(TY_Catalog.Income(all, 0, NoPerks), income * 50);
             Assert.AreEqual(TY_Catalog.Income(all, 0, NoPerks) * 1.5, TY_Catalog.Income(all, 1, NoPerks), 1e-6);
             Assert.AreEqual(3.75, TY_Catalog.UpgradeMultiplier(all), 1e-6);
@@ -50,7 +61,7 @@ namespace Universes.UniverseData.tycoon.Tests {
         [Test]
         public void CollectorCapacityGrowsWithVaultsAndPerks() {
             Assert.AreEqual(TY_Catalog.BaseCapacity, TY_Catalog.Capacity(TY_Catalog.StarterMask, NoPerks));
-            ulong all = TY_Catalog.AllButRebirth;
+            ulong all = TY_Catalog.BaseMask;
             Assert.Greater(TY_Catalog.Capacity(all, NoPerks), TY_Catalog.Items[TY_Catalog.RebirthIndex].price, "the last vault holds a rebirth");
             Assert.AreEqual(TY_Catalog.Capacity(all, NoPerks) * 2, TY_Catalog.Capacity(all, new TY_PerkLevels { vault = 2 }));
             Assert.IsFalse(TY_Catalog.AutoCollects(TY_Catalog.StarterMask));
@@ -63,10 +74,10 @@ namespace Universes.UniverseData.tycoon.Tests {
             ulong purchased = TY_Catalog.StarterMask;
             double cash = 0, seconds = 0;
             while (true) {
-                int next = TY_Catalog.AvailableItems(purchased).OrderBy(i => TY_Catalog.Items[i].price).First();
-                double need = TY_Catalog.Items[next].price - cash;
+                int next = TY_Catalog.AvailableItems(purchased, 0).OrderBy(i => TY_Catalog.Price(i, 0)).First();
+                double need = TY_Catalog.Price(next, 0) - cash;
                 if (need > 0) { double dt = need / TY_Catalog.Income(purchased, 0, NoPerks); seconds += dt; cash += need; }
-                cash -= TY_Catalog.Items[next].price;
+                cash -= TY_Catalog.Price(next, 0);
                 if (next == TY_Catalog.RebirthIndex) break;
                 purchased |= 1ul << next;
             }

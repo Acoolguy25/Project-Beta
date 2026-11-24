@@ -22,6 +22,8 @@ namespace RyanAssets.Retention.Client {
         enum Phase { Idle, Lines, Fill, Unlocks, Done }
 
         const int LabelCell = 0, GoldCell = 1, XpCell = 2;
+        /// <summary>Smallest size a long label shrinks to, as a share of its size (two lines fit a row).</summary>
+        const float LabelMinScale = 0.75f;
 
         public TMP_Text title;
         [Header("Level")]
@@ -326,10 +328,11 @@ namespace RyanAssets.Retention.Client {
                 else row.Set(XpCell, reward.xp > 0 ? $"+{reward.xp} XP" : string.Empty, style.xp);
                 TMP_Text[] cells = row.cells;
                 if (cells != null && cells.Length > XpCell) {
+                    if (cells[LabelCell] != null) FitLabel(cells[LabelCell]);
                     // An info line's detail may run on, right-aligned, over the empty gold cell.
                     if (cells[XpCell] != null) cells[XpCell].overflowMode = info ? TextOverflowModes.Overflow : TextOverflowModes.Ellipsis;
-                    // A reward line with a detail and no gold gives the gold cell's width to its label.
-                    if (cells[GoldCell] != null) cells[GoldCell].gameObject.SetActive(!(hasDetail && hasReward && reward.gold <= 0));
+                    // A reward line without gold gives the gold cell's width to its label.
+                    if (cells[GoldCell] != null) cells[GoldCell].gameObject.SetActive(!(hasReward && reward.gold <= 0));
                 }
                 Sprite icon = info ? infoIcon : rewardIcon;
                 if (icon != null && row.icon != null) {
@@ -339,6 +342,22 @@ namespace RyanAssets.Retention.Client {
                 if (rowGroups[i] == null) row.TryGetComponent(out rowGroups[i]);
                 SetRowShown(i, false);
             }
+        }
+
+        /// <summary>
+        /// Lets a long label ("Hold 8 waves without a leak") wrap to a second line and shrink to fit the
+        /// row before it is cut with an ellipsis. Short labels keep their size. A label the prefab already
+        /// auto-sizes is left as authored.
+        /// </summary>
+        static void FitLabel(TMP_Text cell) {
+            if (cell.enableAutoSizing) return;
+            float size = cell.fontSize;
+            cell.textWrappingMode = TextWrappingModes.Normal;
+            cell.overflowMode = TextOverflowModes.Ellipsis;
+            cell.fontSizeMax = size;
+            cell.fontSizeMin = Mathf.Min(size, Mathf.Max(10f, Mathf.Round(size * LabelMinScale)));
+            cell.lineSpacing = -10f;
+            cell.enableAutoSizing = true;
         }
 
         /// <summary>Hides or shows a line without changing the layout (fades its CanvasGroup; rows without one fall back to deactivating).</summary>

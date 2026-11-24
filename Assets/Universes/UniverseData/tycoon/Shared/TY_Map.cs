@@ -20,9 +20,14 @@ namespace Universes.UniverseData.tycoon {
         [Tooltip("Buy pad per lane, indexed by TY_ItemKind.")]
         public GameObject[] padPrefabs;
         public GameObject orePrefab, goldCoinPrefab;
+        [Tooltip("The daily reward chest (with a TY_ChestView), placed on the local player's own plot.")]
+        public GameObject chestPrefab;
         public Material[] oreMaterials;
         [Tooltip("Client-only HUD and plot presentation.")]
         public GameObject clientPrefab;
+
+        /// <summary>Footprint of a pickup (gold coin, daily chest) the player walks into.</summary>
+        static readonly Vector3 PickupSize = new(2.4f, 3f, 2.4f);
 
         public int PlotCount => plots?.Length ?? 0;
         public bool IsConfigured => PlotCount > 0 && plazaSpawn != null && itemPrefabs != null && itemPrefabs.Length == TY_Catalog.Count
@@ -41,7 +46,8 @@ namespace Universes.UniverseData.tycoon {
         ZoneBox Zone(int plot, Vector3 local, Vector3 size) => new(World(plot, local) + Vector3.up * 0.5f, size, Yaw(plot));
 
         public ZoneBox ButtonZone(int plot, int item) => Zone(plot, TY_Catalog.LanePosition(TY_Catalog.Items[item].kind), TY_Catalog.ButtonSize);
-        public ZoneBox GoldenZone(int plot, Vector3 local) => Zone(plot, local, new Vector3(2.4f, 3f, 2.4f));
+        public ZoneBox GoldenZone(int plot, Vector3 local) => Zone(plot, local, PickupSize);
+        public ZoneBox ChestZone(int plot) => Zone(plot, TY_Catalog.ChestPosition, PickupSize);
         public ZoneBox ClaimZone(int plot) => Zone(plot, TY_Catalog.ClaimPosition, TY_Catalog.PadSize);
         public ZoneBox CollectZone(int plot) => Zone(plot, TY_Catalog.CollectPosition, TY_Catalog.PadSize);
         public ZoneBox PlotZone(int plot) => Zone(plot, Vector3.zero, new Vector3(TY_Catalog.PlotSize, 30f, TY_Catalog.PlotSize));

@@ -118,6 +118,34 @@ namespace Universes.UniverseData.tycoon.Client {
         [Tooltip("Punch on a pad that has just become affordable.")]
         [Range(0f, 1f)] public float affordablePunch = 0.2f;
 
+        [Header("Goals, chest and welcome back")]
+        [Tooltip("Screen flash when a goal is completed; alpha is the peak opacity.")]
+        public Color goalFlash = new(0.36f, 0.85f, 1f, 0.18f);
+        [Range(0f, 1f)] public float goalVolume = 0.8f;
+        [Header("Landmarks and the Brick Rocket")]
+        public Color landmarkColor = new(1f, 0.82f, 0.3f);
+        public Color landmarkFlash = new(1f, 0.82f, 0.3f, 0.3f);
+        [Min(0f)] public float landmarkConfettiScale = 3.5f;
+        [Range(0f, 1f)] public float landmarkShake = 0.45f;
+        [Tooltip("Seconds after landing before the rocket's countdown starts.")]
+        [Min(0f)] public float rocketPause = 1.2f;
+        [Min(0.1f)] public float rocketCountStep = 0.7f;
+        [Tooltip("Seconds of the climb, and how high the rocket goes before it vanishes in fireworks.")]
+        [Min(0.5f)] public float rocketClimbSeconds = 4f;
+        [Min(5f)] public float rocketHeight = 90f;
+        public Color rocketFlame = new(1f, 0.55f, 0.15f);
+        [Min(0f)] public float rocketTrailScale = 3f;
+        [Tooltip("Seconds the rocket is away before it lands back on its pad.")]
+        [Min(0f)] public float rocketAwaySeconds = 1.6f;
+        [Min(1f)] public float rocketShakeRadius = 70f;
+
+        public Color chestColor = new(1f, 0.85f, 0.3f);
+        [Min(0f)] public float chestBurstScale = 2.2f;
+        [Min(0f)] public float chestConfettiScale = 2f;
+        [Range(1, 12)] public int chestRegisterCoins = 6;
+        [Tooltip("Coins in the cash-register run when the offline earnings are collected.")]
+        [Range(1, 12)] public int offlineRegisterCoins = 8;
+
         [Header("Volumes")]
         [Range(0f, 1f)] public float deniedVolume = 0.7f;
         [Range(0f, 1f)] public float collectorFullVolume = 0.5f;
@@ -374,5 +402,113 @@ namespace Universes.UniverseData.tycoon.Client {
         }
 
         public void RushEnded() => GameSfx.Play(SfxCue.Whoosh, rushEndVolume);
+
+        // ---------------------------------------------------------------- landmarks and the Brick Rocket
+        /// <summary>The local player built a landmark (a rebirth milestone's reward): banner, flash, gold confetti, a punch.</summary>
+        public void LandmarkBuilt(Vector3 landmark, string name) {
+            ScreenFx.Flash(landmarkFlash);
+            ScreenFx.ShowText($"{name.ToUpperInvariant()}!", landmarkColor, bannerSeconds, bannerSize);
+            GameSfx.Play(SfxCue.Win);
+            StartCoroutine(LandmarkLanded(landmark));
+        }
+
+        IEnumerator LandmarkLanded(Vector3 landmark) {
+            // When the model lands (it drops in once the plot update arrives).
+            yield return new WaitForSeconds(dropSeconds + 0.15f);
+            GameFx.Play(FxKind.Confetti, landmark + Vector3.up * 3f, landmarkColor, landmarkConfettiScale);
+            GameFx.Play(FxKind.ShockwaveRing, landmark, landmarkColor, shockwaveScale * 0.6f);
+            CameraShake.Explosion(landmark, landingShakeRadius, landmarkShake);
+        }
+
+        /// <summary>
+        /// The Brick Rocket's launch: once it has landed, a countdown, ignition, a climb on a trail of fire,
+        /// fireworks at the top, and then it lands back on its pad (it is a landmark: it stays).
+        /// </summary>
+        public void LaunchRocket(TY_RocketView view) {
+            if (view != null && view.rocket != null) StartCoroutine(LaunchRoutine(view));
+        }
+
+        IEnumerator LaunchRoutine(TY_RocketView view) {
+            Transform root = view.transform, rocket = view.rocket;
+            while (root != null && pendingDrops.ContainsKey(root)) yield return null;
+            yield return new WaitForSeconds(rocketPause);
+            for (int n = 3; n >= 1; n--) {
+                if (rocket == null) yield break;
+                ScreenFx.ShowText(n.ToString(), landmarkColor, rocketCountStep * 0.9f, bannerSize);
+                GameSfx.PlayAt(SfxCue.CountdownBeep, rocket.position);
+                yield return new WaitForSeconds(rocketCountStep);
+            }
+            if (rocket == null) yield break;
+            Vector3 rest = rocket.localPosition;
+            Vector3 pad = rocket.position;
+            Transform nozzle = view.nozzle != null ? view.nozzle : rocket;
+            ScreenFx.ShowText("LIFTOFF!", landmarkColor, bannerSeconds, bannerSize);
+            GameSfx.PlayAt(SfxCue.Go, pad);
+            GameSfx.PlayAt(SfxCue.ExplosionLarge, pad);
+            GameFx.Play(FxKind.ExplosionSmall, nozzle.position, rocketFlame, 1.5f);
+            for (int i = 0; i < 4; i++) {
+                Vector2 o = Random.insideUnitCircle * 2.2f;
+                GameFx.Play(FxKind.Smoke, pad + new Vector3(o.x, 0.2f, o.y), teardownSmokeColor, 2.5f);
+            }
+            GameFx.Play(FxKind.ShockwaveRing, pad, rocketFlame, shockwaveScale);
+            CameraShake.Explosion(pad, rocketShakeRadius, 0.9f, 1.2f);
+            FxHandle trail = GameFx.Attach(FxKind.Trail, nozzle, Vector3.zero, rocketFlame, rocketTrailScale);
+            Vector3 up = rocket.parent != null ? rocket.parent.InverseTransformDirection(Vector3.up) : Vector3.up;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / rocketClimbSeconds) {
+                if (rocket == null) { trail.Stop(); yield break; }
+                // Slow off the pad, then faster and faster, with a slight wobble.
+                float wobble = Mathf.Sin(t * 40f) * 0.04f * (1f - t);
+                rocket.localPosition = rest + up * (rocketHeight * t * t * t);
+                rocket.localRotation = Quaternion.Euler(wobble * 30f, 0f, wobble * 20f);
+                yield return null;
+            }
+            trail.Stop();
+            if (rocket == null) yield break;
+            Vector3 top = rocket.position;
+            GameFx.Play(FxKind.ExplosionLarge, top, landmarkColor, 3f);
+            GameFx.Play(FxKind.Confetti, top, landmarkColor, landmarkConfettiScale * 2f);
+            GameSfx.Play(SfxCue.ExplosionLarge, 0.8f);
+            GameSfx.Play(SfxCue.Win);
+            rocket.gameObject.SetActive(false);
+            rocket.localRotation = Quaternion.identity;
+            yield return new WaitForSeconds(rocketAwaySeconds);
+            if (rocket == null) yield break;
+            rocket.localPosition = rest;
+            rocket.gameObject.SetActive(true);
+            DropIn(rocket, rest, 0f, true);
+        }
+
+        // ---------------------------------------------------------------- goals, chest, welcome back
+        /// <param name="paidTokens">The goal paid perk tokens: the bigger fanfare.</param>
+        public void GoalCompleted(bool paidTokens) {
+            ScreenFx.Flash(goalFlash);
+            GameSfx.Play(paidTokens ? SfxCue.LevelUp : SfxCue.Purchase, goalVolume);
+        }
+
+        /// <summary>The local player opened today's chest: a gold burst, confetti and a long cash-register run.</summary>
+        public void ChestOpened(Vector3 chest, long amount) {
+            MoneyPopup(chest, amount, popupSize * coinPopupScale);
+            GameFx.Play(FxKind.CoinBurst, chest + Vector3.up, chestColor, chestBurstScale);
+            GameFx.Play(FxKind.Confetti, chest + Vector3.up * confettiHeight, chestColor, chestConfettiScale);
+            GameSfx.PlayAt(SfxCue.Win, chest);
+            StartCoroutine(RegisterRun(chest, chestRegisterCoins));
+        }
+
+        /// <summary>The "while you were away" card opened.</summary>
+        public void WelcomeBack() => GameSfx.Play(SfxCue.LevelUp);
+
+        /// <summary>The "while you were away" card closed: the cash lands in the wallet.</summary>
+        public void OfflineCollected(long amount) {
+            if (amount > 0) StartCoroutine(ScreenRegisterRun(offlineRegisterCoins));
+        }
+
+        /// <summary>A cash-register run heard on screen (2D), for money that lands in the wallet, not on the plot.</summary>
+        IEnumerator ScreenRegisterRun(int coins) {
+            var wait = new WaitForSeconds(registerCoinSpacing);
+            for (int i = 0; i < coins; i++) {
+                register.Play();
+                yield return wait;
+            }
+        }
     }
 }

@@ -8,8 +8,8 @@ using UnityEngine;
 namespace Universes.UniverseData.tycoon.Client {
     /// <summary>
     /// Draws Brick Tycoon from server state: who owns each plot, bought items, lane buy pads,
-    /// collector totals, gold coins and the bricks that ride each belt, and feeds the HUD and the
-    /// game feel. Bricks are cosmetic; cash is counted on the server.
+    /// collector totals, gold coins, the local player's daily chest and the bricks that ride each belt,
+    /// and feeds the HUD and the game feel. Bricks are cosmetic; cash is counted on the server.
     /// </summary>
     public sealed class TY_ClientController : MonoBehaviour {
         [Tooltip("The HUD on this prefab.")]
@@ -42,7 +42,7 @@ namespace Universes.UniverseData.tycoon.Client {
         [Tooltip("Seconds between the '+$' popups of an auto-collecting plot.")]
         [SerializeField, Min(0.5f)] float autoPopupSeconds = 3f;
 
-        static readonly TY_ItemKind[] PadLanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Rebirth };
+        static TY_ItemKind[] PadLanes => TY_Lanes.PadLanes;
 
         sealed class Ore { public Transform t; public TY_OreView view; public float distance; public int stage; public float scale; }
 
@@ -58,6 +58,8 @@ namespace Universes.UniverseData.tycoon.Client {
             public readonly List<Ore> ores = new();
             public GameObject golden;
             public FxHandle beacon;
+            /// <summary>The daily chest: shown on the local player's own plot only.</summary>
+            public TY_ChestView chest;
             public bool hasState;
         }
 
@@ -79,6 +81,8 @@ namespace Universes.UniverseData.tycoon.Client {
         long autoEarned;
         float nextAutoPopup;
         float brickHalfHeight;
+        /// <summary>Unscaled time when the daily chest comes back (from the last wallet).</summary>
+        float chestBackAt;
 
         void Awake() {
             map = GetComponentInParent<TY_Map>();
@@ -119,12 +123,21 @@ namespace Universes.UniverseData.tycoon.Client {
                     v.golden = Instantiate(map.goldCoinPrefab, view.itemRoot);
                     v.golden.SetActive(false);
                 }
+                if (map.chestPrefab != null) {
+                    var chest = Instantiate(map.chestPrefab, view.itemRoot);
+                    chest.transform.localPosition = TY_Catalog.ChestPosition;
+                    chest.transform.localRotation = Quaternion.identity;
+                    v.chest = chest.GetComponent<TY_ChestView>();
+                    chest.SetActive(false);
+                }
                 ApplyPlot(i, new TY_PlotState { plot = (byte)i, ownerId = -1 }, false);
             }
             SetUpBelt();
+            hud.offlineCard.Closed += feedback.OfflineCollected;
         }
 
         void OnDestroy() {
+            if (hud != null && hud.offlineCard != null && feedback != null) hud.offlineCard.Closed -= feedback.OfflineCollected;
             // The game-feel kit outlives this scene: stop the coin beacons.
             if (visuals != null) foreach (var v in visuals) v.beacon.Stop(true);
             if (manager == null) return;
@@ -149,6 +162,7 @@ namespace Universes.UniverseData.tycoon.Client {
             for (int i = 0; i < visuals.Length; i++) AnimateOre(i, Time.deltaTime, visuals[i].state.ownerId == local);
             ScrollBelts(Time.deltaTime);
             PopAutoEarnings();
+            RefreshChest();
         }
 
         // ---------------------------------------------------------------- state
@@ -169,6 +183,7 @@ namespace Universes.UniverseData.tycoon.Client {
                 autoEarned += message.lifetime - wallet.lifetime;
             wallet = message;
             hasWallet = true;
+            chestBackAt = Time.unscaledTime + message.chestSeconds;
             RefreshPads();
             RefreshHud();
         }
@@ -177,6 +192,7 @@ namespace Universes.UniverseData.tycoon.Client {
             hud.ShowEvent(e);
             bool onPlot = e.plot >= 0 && e.plot < visuals.Length;
             switch (e.kind) {
+                case TY_EventKind.Bought when onPlot && IsLandmark(e.item): LandmarkBuilt(e.plot, e.item); break;
                 case TY_EventKind.Bought: feedback.Bought(); break;
                 case TY_EventKind.Claimed when onPlot: feedback.Claimed(map.World(e.plot, TY_Catalog.ClaimPosition)); break;
                 case TY_EventKind.TooPoor: feedback.Denied(); break;
@@ -200,6 +216,36 @@ namespace Universes.UniverseData.tycoon.Client {
                 // The server sends wallets (with its multiplier) before this event.
                 case TY_EventKind.RushHour: feedback.RushStarted(hasWallet ? wallet.rushMultiplier : 0f); break;
                 case TY_EventKind.RushHourOver: feedback.RushEnded(); break;
+                case TY_EventKind.Goal: feedback.GoalCompleted(e.extra > 0); break;
+                case TY_EventKind.DailyChest when onPlot:
+                    feedback.ChestOpened(map.World(e.plot, TY_Catalog.ChestPosition), e.amount);
+                    hud.PunchCash();
+                    break;
+                case TY_EventKind.OfflineEarnings: feedback.WelcomeBack(); break;
+            }
+        }
+
+        static bool IsLandmark(int item) => item >= 0 && item < TY_Catalog.Count && TY_Catalog.Items[item].kind == TY_ItemKind.Landmark;
+
+        /// <summary>
+        /// A landmark is the reward of a rebirth milestone: a banner and fanfare as it lands, and the Brick
+        /// Rocket (the last one) takes off once it has landed, then comes back to its pad.
+        /// </summary>
+        void LandmarkBuilt(int plot, int item) {
+            TY_Item data = TY_Catalog.Items[item];
+            feedback.LandmarkBuilt(map.World(plot, data.itemPosition), data.name);
+            // The event comes before the plot update that places the model: launch once it is there.
+            StartCoroutine(LaunchWhenPlaced(plot, item));
+        }
+
+        System.Collections.IEnumerator LaunchWhenPlaced(int plot, int item) {
+            for (float waited = 0f; waited < 5f; waited += Time.deltaTime) {
+                GameObject built = visuals[plot].items[item];
+                if (built != null) {
+                    if (built.TryGetComponent(out TY_RocketView rocket)) feedback.LaunchRocket(rocket);
+                    yield break;
+                }
+                yield return null;
             }
         }
 
@@ -230,9 +276,10 @@ namespace Universes.UniverseData.tycoon.Client {
                     : $"${TY_Catalog.Money(state.bank)}<size=55%> / ${TY_Catalog.Money(state.capacity)}</size>\n<size=55%>{(state.bank >= state.capacity ? "<color=#FF6B6B>FULL! step here</color>" : "step here to collect")}</size>";
             if (reborn) feedback.RebirthWorld(map.World(index, Vector3.zero));
             int dropped = 0, torn = 0;
-            // On a rebirth the kept items collapse with the rest, so they share the tear-down spread.
-            int collapsing = TY_Catalog.OwnedCount(previous.purchased & ~state.purchased)
-                + (reborn ? TY_Catalog.OwnedCount(previous.purchased & state.purchased) : 0);
+            // On a rebirth the starter collapses with the rest of the build and drops back in, so it shares the
+            // tear-down spread; what the rebirth keeps (landmarks, a Head Office collector lane) stands still.
+            ulong rebuilt = reborn ? previous.purchased & state.purchased & TY_Catalog.StarterMask : 0ul;
+            int collapsing = TY_Catalog.OwnedCount(previous.purchased & ~state.purchased) + TY_Catalog.OwnedCount(rebuilt);
             float rebuildDelay = reborn ? feedback.rebuildDelay : 0f;
             for (int item = 0; item < TY_Catalog.Count; item++) {
                 var data = TY_Catalog.Items[item];
@@ -244,8 +291,8 @@ namespace Universes.UniverseData.tycoon.Client {
                     go.name = data.name;
                     v.items[item] = go;
                     if (animate) DropIn(go.transform, data.itemPosition, dropped++);
-                } else if (has && reborn) {
-                    // Kept through the rebirth: it collapses with the rest of the build, then drops back in.
+                } else if (has && TY_Catalog.Owns(rebuilt, item)) {
+                    // Restored by the rebirth: it collapses with the rest of the build, then drops back in.
                     int order = dropped++;
                     feedback.Rebuild(v.items[item].transform, data.itemPosition, feedback.TearDownDelay(torn++, collapsing),
                         rebuildDelay + feedback.DropDelay(order), mine && order == 0);
@@ -267,6 +314,7 @@ namespace Universes.UniverseData.tycoon.Client {
                 else if (!beacon && v.beacon.IsPlaying) v.beacon.Stop();
             }
             if (!owned) ClearOre(v);
+            if (v.chest != null && v.chest.gameObject.activeSelf != mine) v.chest.gameObject.SetActive(mine);
             RefreshPads(index);
 
             // Only the first of several drops shakes the camera, so a restored build doesn't rattle for seconds.
@@ -285,21 +333,23 @@ namespace Universes.UniverseData.tycoon.Client {
             for (int lane = 0; lane < PadLanes.Length; lane++) {
                 var pad = v.pads[lane];
                 if (pad == null) continue;
-                int item = PadLanes[lane] == TY_ItemKind.Rebirth
-                    ? (TY_Catalog.Available(v.state.purchased, TY_Catalog.RebirthIndex) ? TY_Catalog.RebirthIndex : -1)
-                    : TY_Catalog.NextInLane(v.state.purchased, PadLanes[lane]);
-                bool show = owned && item >= 0;
+                ulong purchased = v.state.purchased;
+                int rebirths = v.state.rebirths;
+                int item = TY_Catalog.PadItem(purchased, PadLanes[lane], rebirths);
+                // Investments are the owner's own business: other players' plots do not show the pad.
+                bool show = owned && item >= 0 && (mine || PadLanes[lane] != TY_ItemKind.Invest);
                 if (pad.gameObject.activeSelf != show) pad.gameObject.SetActive(show);
                 if (!show) continue;
                 var data = TY_Catalog.Items[item];
-                bool locked = !TY_Catalog.Available(v.state.purchased, item);
+                long price = TY_Catalog.Price(item, rebirths, mine && hasWallet ? wallet.invested : 0);
+                bool locked = !TY_Catalog.Available(purchased, item, rebirths);
                 TY_ButtonLook look = !mine ? TY_ButtonLook.Foreign
                     : locked ? TY_ButtonLook.Locked
-                    : hasWallet && wallet.cash >= data.price ? TY_ButtonLook.Affordable
+                    : hasWallet && wallet.cash >= price ? TY_ButtonLook.Affordable
                     : TY_ButtonLook.Expensive;
-                float saved = data.price <= 0 ? 1f : hasWallet ? Mathf.Clamp01((float)wallet.cash / data.price) : 0f;
+                float saved = price <= 0 ? 1f : hasWallet ? Mathf.Clamp01((float)wallet.cash / price) : 0f;
                 TY_ButtonLook before = pad.Look;
-                pad.Show(data, map.Picture(item), look, TY_Hud.LockedNote(item), saved);
+                pad.Show(data, price, TY_Catalog.Effect(item, rebirths), map.Picture(item), look, TY_Catalog.LockReason(purchased, item, rebirths), saved);
                 if (before == TY_ButtonLook.Expensive && look == TY_ButtonLook.Affordable) feedback.PadAffordable(pad.transform);
             }
         }
@@ -464,6 +514,15 @@ namespace Universes.UniverseData.tycoon.Client {
                 Renderer belt = map.plots[i].belt;
                 if (belt != null && visuals[i].state.ownerId >= 0) belt.SetPropertyBlock(beltBlock);
             }
+        }
+
+        // ---------------------------------------------------------------- daily chest
+        /// <summary>Keeps the local player's chest ready or counting down to the next UTC day.</summary>
+        void RefreshChest() {
+            if (!hasWallet || wallet.plot < 0 || wallet.plot >= visuals.Length) return;
+            TY_ChestView chest = visuals[wallet.plot].chest;
+            if (chest != null && chest.gameObject.activeSelf)
+                chest.Show(wallet.chestReady, chestBackAt - Time.unscaledTime, wallet.chestStreak, TY_DailyChest.PrizeText(wallet.chestMinutes, wallet.chestTokens));
         }
 
         // ---------------------------------------------------------------- auto-collector popups

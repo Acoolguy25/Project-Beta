@@ -16,17 +16,17 @@ namespace Universes.UniverseData.tycoon.Client {
         public GameObject lockedBadge, doneBadge, readyBadge;
         public CanvasGroup group;
 
-        /// <summary>Shows the lane's next item.</summary>
-        public void Show(int item, Sprite itemPicture, long cash, bool locked, string lockedNote, int built, int total) {
+        /// <summary>Shows the lane's next item, costing <paramref name="itemPrice"/>.</summary>
+        public void Show(int item, long itemPrice, Sprite itemPicture, long cash, bool locked, string lockedNote, int built, int total) {
             gameObject.SetActive(true);
             var data = TY_Catalog.Items[item];
             picture.sprite = itemPicture;
             picture.enabled = itemPicture != null;
             title.text = data.name;
             effect.text = locked ? lockedNote : data.Effect;
-            price.text = data.price > 0 ? $"${TY_Catalog.Money(data.price)}" : "FREE";
+            price.text = itemPrice > 0 ? $"${TY_Catalog.Money(itemPrice)}" : "FREE";
             step.text = $"{built}/{total}";
-            float progress = data.price <= 0 ? 1f : Mathf.Clamp01((float)cash / data.price);
+            float progress = itemPrice <= 0 ? 1f : Mathf.Clamp01((float)cash / itemPrice);
             progressFill.fillAmount = locked ? 0f : progress;
             bool ready = !locked && progress >= 1f;
             lockedBadge.SetActive(locked);

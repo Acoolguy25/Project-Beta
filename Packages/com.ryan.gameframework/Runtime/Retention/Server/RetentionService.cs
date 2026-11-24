@@ -64,10 +64,6 @@ namespace RyanAssets.Retention.Server {
             public TSave Detached;
             public float NextRequestTime;
             public bool Left, IsReady, SaveDue, Queued;
-            /// <summary>Account level last announced in chat (0 = not known yet).</summary>
-            public int AnnouncedLevel;
-            /// <summary>True while FinishMatch pays its lines (the match is already closed then).</summary>
-            public bool Finishing;
 
             public Player(PlayerData data) {
                 Data = data;
@@ -95,10 +91,10 @@ namespace RyanAssets.Retention.Server {
                 // LevelsServer warns on zero amounts.
                 if (gold > 0) LevelsServer.AwardPlayerGold(data, (ulong)gold);
                 if (accountXp <= 0) return;
-                if (state.AnnouncedLevel <= 0) state.AnnouncedLevel = LevelsCalc.GetRank(data.xp.Value);
+                state.NoteAccountLevel(LevelsCalc.GetRank(data.xp.Value));
                 AddAccountXp(data, (ulong)accountXp);
                 // One chat line per match: inside a match, the level is announced when it finishes.
-                if (state.Match == null && !state.Finishing) AnnounceLevel(state);
+                if (!state.InMatch) AnnounceLevel(state);
             }
 
             public void SaveSoon(RetentionPlayer player) => service.MarkSaveDue((Player)player);
@@ -123,10 +119,9 @@ namespace RyanAssets.Retention.Server {
         /// <summary>Says in chat that the player reached a new account level (the highest one only).</summary>
         static void AnnounceLevel(Player state) {
             PlayerData data = state.Data;
-            if (data == null || state.AnnouncedLevel <= 0) return;
+            if (data == null) return;
             int level = LevelsCalc.GetRank(data.xp.Value);
-            if (level <= state.AnnouncedLevel) return;
-            state.AnnouncedLevel = level;
+            if (!state.TryAnnounceAccountLevel(level)) return;
             if (InstanceFinder.ServerManager != null && InstanceFinder.ServerManager.Started)
                 ServerChat.SendSystemMessage(new($"{data.GetPlayerName()} has reached level {level}!", SystemMessageSource.PlayerLevelUp));
         }
@@ -270,12 +265,7 @@ namespace RyanAssets.Retention.Server {
             // Copy now: the change may run later (while the document loads) and the caller may reuse the list.
             RewardLine[] lines = rewards == null ? Array.Empty<RewardLine>() : new List<RewardLine>(rewards).ToArray();
             Change(connection, (state, block) => {
-                state.Finishing = true;
-                try {
-                    ledger.FinishMatch(state, block, Today, utcNow(), title, lines);
-                } finally {
-                    state.Finishing = false;
-                }
+                ledger.FinishMatch(state, block, Today, utcNow(), title, lines);
                 AnnounceLevel(state);
             });
         }

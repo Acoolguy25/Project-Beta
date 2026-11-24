@@ -51,12 +51,14 @@ namespace Universes.UniverseData.tycoon {
         /// <summary>The look of the last <see cref="Show"/>.</summary>
         public TY_ButtonLook Look => look;
 
+        /// <param name="itemPrice">What the item costs its owner (<see cref="TY_Catalog.Price"/>: the rebirth gets dearer).</param>
+        /// <param name="effectText">The item's effect line (<see cref="TY_Catalog.Effect"/>).</param>
         /// <param name="saved">Cash / price, 0..1: how far the owner has saved towards this item.</param>
-        public void Show(in TY_Item item, Sprite itemPicture, TY_ButtonLook state, string lockedNote, float saved) {
+        public void Show(in TY_Item item, long itemPrice, string effectText, Sprite itemPicture, TY_ButtonLook state, string lockedNote, float saved) {
             look = state;
             title.text = item.name;
-            effect.text = state == TY_ButtonLook.Locked && !string.IsNullOrEmpty(lockedNote) ? lockedNote : item.Effect;
-            price.text = item.price > 0 ? $"${TY_Catalog.Money(item.price)}" : "FREE";
+            effect.text = state == TY_ButtonLook.Locked && !string.IsNullOrEmpty(lockedNote) ? lockedNote : effectText;
+            price.text = itemPrice > 0 ? $"${TY_Catalog.Money(itemPrice)}" : "FREE";
             price.color = state switch {
                 TY_ButtonLook.Affordable => affordablePrice,
                 TY_ButtonLook.Expensive => expensivePrice,

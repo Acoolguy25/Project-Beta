@@ -9,6 +9,15 @@ The shared "one more match" loop for every Project Beta game:
 
 The server owns all of the rules. The client only draws the state the server sends.
 
+## Changes in try 4
+
+No public names changed or removed. These are additions: `RewardLine.Pinned`, `RewardLine.Headline(...)`, `RewardLine.AsHeadline()`, `MatchSummary.FoldedFormat`, and on `RetentionPlayer` the members `InMatch`, `AnnouncedAccountLevel`, `NoteAccountLevel(int)` and `TryAnnounceAccountLevel(int)`.
+
+- **Headline lines.** `RewardLine.Headline("3-star defence", xp)` (or `line.AsHeadline()`) pins a line. It shows first on the card and never folds, even when it is added last. A headline stays pinned when it merges with a plain line of the same label. Keep it to one or two per match.
+- **Folding.** Past `MatchSummary.MaxLines` (8), the least valuable lines fold first. Info lines go first, then the lowest XP + gold. The lines that stay keep the order they were added in. The folded line reads "+N more rewards" (`FoldedFormat`). It has a count of 1 and no detail, and it pays the folded total, so the card's lines still add up to `TotalXp`. It no longer shows a summed "x1065". `OtherLabel` is kept for compatibility but is no longer used.
+- **First account level-up.** The level seen before the first payout is now recorded with -1 meaning "unknown", so level 0 counts as a known level. A new player going from account rank 0 to 1 in one payout now gets the chat line. The tracking moved into `RetentionPlayer` so the ledger tests cover it. `InMatch` is also true while `FinishMatch` pays its lines.
+- **Long labels.** A reward line with no gold now always gives the gold column's width to its label, with or without a detail. A label that still does not fit, such as "Hold 8 waves without a leak", wraps to a second line and shrinks to fit the row, down to 75% of its size, before it is cut. A label the prefab already auto-sizes is left as authored. No HUD rebuild is needed.
+
 ## Changes in try 3
 
 No public names changed. These are fixes plus a few additions (`RetentionSummaryCard.rewardIcon`, `infoIcon`, `unlockPlaceholder`, `FinalLevelShown`).
