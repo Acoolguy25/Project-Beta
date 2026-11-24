@@ -364,6 +364,10 @@ MonoBehaviour:
   healthFill: {fileID: 8799612709990608773}
   healthRenderer: {fileID: 5193277022852707284}
   slowTint: {fileID: 4451141282132411498}
+  shieldBubble: {fileID: 0}
+  shieldFill: {fileID: 0}
+  shield: 0
+  nextHealFx: 0
   shownDistance: 0
   targetDistance: 0
   speed: 0

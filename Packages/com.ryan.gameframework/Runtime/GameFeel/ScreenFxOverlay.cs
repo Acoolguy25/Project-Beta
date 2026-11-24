@@ -144,9 +144,15 @@ namespace RyanAssets.GameFeel {
             dangerFlashAge = 0f;
         }
 
+        /// <summary>Removes the danger vignette at once, including a flash that is still playing.</summary>
         public void ClearDanger() {
             dangerTarget = 0f;
+            dangerCurrent = 0f;
+            dangerPhase = 0f;
             dangerFlashAge = float.PositiveInfinity;
+            // UpdateDanger stops touching the vignette once nothing is active, so zero it here:
+            // otherwise a flash cut short stays on screen at the alpha it had.
+            SetAlpha(dangerVignette, 0f);
         }
 
         public void SetSpeedLines(float intensity) => speedTarget = Mathf.Clamp01(intensity);

@@ -1,0 +1,27 @@
+{
+    "name": "RyanAssets.Retention.Editor",
+    "rootNamespace": "RyanAssets.Retention.Editor",
+    "references": [
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "FishNet.Runtime",
+        "RyanAssets.GameFeel",
+        "RyanAssets.UI",
+        "RyanAssets.UI.Editor",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

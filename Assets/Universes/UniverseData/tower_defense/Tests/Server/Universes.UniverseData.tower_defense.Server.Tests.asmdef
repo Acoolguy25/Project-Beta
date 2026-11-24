@@ -1,0 +1,30 @@
+{
+    "name": "Universes.UniverseData.tower_defense.Server.Tests",
+    "rootNamespace": "Universes.UniverseData.tower_defense.Server.Tests",
+    "references": [
+        "Universes.UniverseData.tower_defense.Server",
+        "Universes.UniverseData.tower_defense.Shared",
+        "RyanAssets.Core",
+        "RyanAssets.Progress",
+        "RyanAssets.Retention",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

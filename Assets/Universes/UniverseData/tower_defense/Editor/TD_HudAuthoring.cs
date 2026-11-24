@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using TMPro;
@@ -6,6 +7,8 @@ using UnityEngine;
 using UnityEngine.UI;
 #if !UNITY_SERVER
 using RyanAssets.GameFeel;
+using RyanAssets.Retention.Client;
+using RyanAssets.Retention.Editor;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using static RyanAssets.UI.Editor.UIKit;
@@ -15,8 +18,10 @@ using Universes.UniverseData.tower_defense.Client;
 namespace Universes.UniverseData.tower_defense.Editor {
     /// <summary>
     /// Generates TowerDefenseHUD.prefab on the shared <see cref="UITheme"/> (UIKit): status bar (cash,
-    /// wave, base), next-wave preview, fast-forward pill, boss bar, tower shop, focus card, prompt,
-    /// toasts, wave banner and result; plus the client controller's sounds and effect tuning.
+    /// mode and wave, base), mode vote, next-wave preview, fast-forward pill, boss bar, tower shop (with
+    /// locked cards), ability pills, focus card, prompt, toasts, wave banner and result (with its star
+    /// rating), the nested shared retention HUD (level chip, daily challenges, match summary); plus the
+    /// client controller's sounds and effect tuning.
     /// Edit this script, not the prefab, then run Ryan > Tower Defense > Build Client Assets.
     /// </summary>
     static class TD_HudAuthoring {
@@ -25,7 +30,13 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const int SortingOrder = 20;
         const float Gap = 12f;
         const float CardRadius = 14f;
-        static readonly Vector2 CardSize = new(200f, 196f);
+        /// <summary>Shop card size: six cards fit between the level chip (bottom left) and the tower card (bottom right) at 1920 wide.</summary>
+        static readonly Vector2 CardSize = new(168f, 196f);
+        static readonly Vector2 ModeCardSize = new(264f, 292f);
+        /// <summary>Top of the retention toasts (canvas units from the top): below the leaderboard with four rows.</summary>
+        const float ToastsTop = 260f;
+        static readonly Vector2 AbilityPillSize = new(236f, 54f);
+        const float InfoHeight = 290f;
         const float StatusTop = -60f;
         /// <summary>Top of the pill row under the status bar (next wave, fast forward, boss).</summary>
         const float PillRowTop = StatusTop - 112f;
@@ -49,7 +60,26 @@ namespace Universes.UniverseData.tower_defense.Editor {
             importer.SaveAndReimport();
         }
 
-        public static Sprite IconSprite(string name) => AssetDatabase.LoadAssetAtPath<Sprite>($"{TD_Authoring.IconFolder}/{name}.png");
+        /// <summary>
+        /// Shared theme icons for pictures Tower Defense has no own icon for (UI/Icons holds the
+        /// game-icons.net set of the original towers and enemies); see the theme's CREDITS.md.
+        /// </summary>
+        static readonly Dictionary<string, string> ThemeIcons = new() {
+            ["tower_tesla"] = "bolt", ["tower_mortar"] = "my_location",
+            ["enemy_shield"] = "shield", ["enemy_medic"] = "favorite", ["enemy_carrier"] = "meeple_army", ["enemy_drone"] = "navigation",
+            ["mode_normal"] = "flag", ["mode_hard"] = "local_fire_department", ["mode_endless"] = "hourglass_bottom",
+            ["ability_airstrike"] = "jet_fighter", ["ability_emp"] = "power", ["level"] = "military_tech",
+            ["lock"] = "lock",
+        };
+
+        /// <summary>Tower Defense's own icon <paramref name="name"/>, else its shared theme icon (<see cref="ThemeIcons"/>).</summary>
+        public static Sprite IconSprite(string name) {
+            var own = AssetDatabase.LoadAssetAtPath<Sprite>($"{TD_Authoring.IconFolder}/{name}.png");
+#if !UNITY_SERVER
+            if (own == null && ThemeIcons.TryGetValue(name, out string theme)) return UIThemeAssets.Icon(theme);
+#endif
+            return own;
+        }
         public static Texture2D IconTexture(string name) => AssetDatabase.LoadAssetAtPath<Texture2D>($"{TD_Authoring.IconFolder}/{name}.png");
         public static string PortraitPath(string name) => $"{PortraitFolder}/{name}.png";
         static Sprite Portrait(string name) => AssetDatabase.LoadAssetAtPath<Sprite>(PortraitPath(name));
@@ -64,6 +94,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             var client = root.gameObject.AddComponent<TD_ClientController>();
             hud.towerPortraits = Enumerable.Range(0, TD_Rules.Towers.Length)
                 .Select(i => Portrait("tower_" + ((TD_TowerKind)i).ToString().ToLowerInvariant()) ?? IconSprite(TD_Palette.TowerIcon((TD_TowerKind)i))).ToArray();
+            hud.enemyPortraits = Enumerable.Range(0, TD_Rules.Enemies.Length)
+                .Select(i => Portrait("enemy_" + ((TD_EnemyKind)i).ToString().ToLowerInvariant()) ?? IconSprite(TD_Palette.EnemyIcon((TD_EnemyKind)i))).ToArray();
             hud.timerIcon = IconSprite("timer");
             hud.enemiesIcon = IconSprite("skull");
             hud.coinIcon = IconSprite("coins");
@@ -80,12 +112,32 @@ namespace Universes.UniverseData.tower_defense.Editor {
             BossBar(root, hud);
             Shop(root, hud);
             Info(root, hud);
+            Abilities(root, hud);
             PromptPill(root, hud);
             ToastPill(root, hud);
             WaveBanner(root, hud);
+            EnemyIntro(root, hud);
+            ModeVote(root, hud);
             Result(root, hud);
 
             client.tuning = Tuning();
+            // The shared retention HUD (level chip bottom left, challenges on J, toasts top right, the
+            // match summary at the left edge beside the result card). Its level gates the shop and abilities.
+            client.retentionHud = RetentionHudAuthoring.AddTo(root);
+            // The kit prefab's root is a root canvas saved at scale 0 (Unity drives a root canvas's scale);
+            // nested here it is a sub-canvas, so it needs a real scale or none of it is drawn.
+            client.retentionHud.transform.localScale = Vector3.one;
+            // Its toasts sit under the shared top bar by default, which is where this game's leaderboard
+            // (Kills / Built) is: move them below room for four player rows, above the ability pills.
+            client.retentionHud.SetPlacement(RetentionHudPart.Toasts, new RetentionPlacement(new Vector2(1f, 1f), new Vector2(-Theme.screenMargin, -ToastsTop)));
+            // The challenges panel (J) opens above the level chip, where its right edge ran 10 units into the
+            // shop's first card: open it above the shop row instead.
+            client.retentionHud.SetPlacement(RetentionHudPart.ChallengesPanel, new RetentionPlacement(Vector2.zero, new Vector2(16f, 18f + CardSize.y + 14f + Gap)));
+            client.retentionHud.ApplyPlacement();
+            // World popups (kill cash, SHIELD DOWN, BLOCKED) are kept off these panels and the kit's toasts (TD_ScreenGuard).
+            hud.keepClear = new[] { "StatusBar", "NextWave", "FastForward", "Boss", "Toast", "WaveBanner" }
+                .Select(name => root.Find(name) as RectTransform).Where(rect => rect != null).ToArray();
+            Debug.Assert(hud.keepClear.Length == 6, "[TowerDefense] A top-band panel was renamed; TD_Hud.keepClear misses it.");
             return SavePrefab(root.gameObject, PrefabPath);
 #endif
         }
@@ -117,6 +169,10 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     new TD_FxTuning.TowerFx { fire = Sound(0.28f, 1.3f, 1f, 0.1f, Numbered(game, "frost", 3)), impact = new SfxSound(), muzzleSparks = 0.3f },
                     // Sniper: a deep crack and a solid hit.
                     new TD_FxTuning.TowerFx { fire = Sound(0.6f, 0.7f, 0.5f, 0.12f, TD_Authoring.FireClip), impact = Sound(0.5f, 1f, 1f, 0.1f, Numbered(KitAudio, "hit", 5)), muzzleSparks = 0.6f },
+                    // Tesla: the frost zap pitched up into a crackle, a bright tick on every enemy it jumps to.
+                    new TD_FxTuning.TowerFx { fire = Sound(0.32f, 1.7f, 2f, 0.08f, Numbered(game, "frost", 3)), impact = Sound(0.22f, 1.6f, 2f, 0.06f, Numbered(KitAudio, "hit", 5)), muzzleSparks = 0.5f },
+                    // Mortar: a deep, slow cannon thump out, a heavy blast where the round lands.
+                    new TD_FxTuning.TowerFx { fire = Sound(0.65f, 0.6f, 1f, 0.15f, Numbered(game, "cannon", 3)), impact = Sound(0.55f, 0.85f, 1.5f, 0.1f, Numbered(KitAudio, "explosion_large", 2)), muzzleSparks = 0.8f },
                 },
                 enemies = new[] {
                     // Blasts are sized to the vehicles (3.6-8.5 m), so a kill reads from the top-down camera.
@@ -125,7 +181,16 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 1.5f, shake = 0.4f, debrisScale = 2f },     // Tank
                     new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 2.2f, shake = 0.3f, debrisScale = 1.6f },  // Chopper
                     new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 2.6f, shake = 0.9f, debrisScale = 3f },     // Heavy Tank (boss)
+                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 1.6f, shake = 0.4f, debrisScale = 2f },     // Shield Tank
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 2f, shake = 0.22f, debrisScale = 1.4f },   // Medic
+                    new TD_FxTuning.EnemyFx { largeExplosion = true, explosionScale = 2.1f, shake = 0.5f, debrisScale = 2.4f },   // Carrier (its drones fly out of the blast)
+                    new TD_FxTuning.EnemyFx { largeExplosion = false, explosionScale = 0.9f, shake = 0.04f, debrisScale = 0.5f }, // Drone (swarms: small and quiet)
                 },
+                shieldBreakSound = Sound(0.6f, 1.45f, 1f, 0.08f, Numbered(KitAudio, "hit", 5)),
+                // A bounce off a shield: the hit sound pitched way up and quiet, a thin "tink" (rate-limited: many Gunners fire 5 times a second).
+                ricochetSound = Sound(0.22f, 2.1f, 1.5f, 0.15f, Numbered(KitAudio, "hit", 5)),
+                jetSound = Sound(0.9f, 0.75f, 0.5f, 0.3f, Numbered(KitAudio, "whoosh", 2)),
+                empSound = Sound(0.8f, 0.55f, 0.5f, 0.3f, Numbered(KitAudio, "whoosh", 2)),
             };
             Debug.Assert(tuning.towers.Length == TD_Rules.Towers.Length && tuning.enemies.Length == TD_Rules.Enemies.Length, "[TowerDefense] Fx tuning arrays must match the tower and enemy kinds.");
             return tuning;
@@ -204,7 +269,11 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Separator(bar);
 
             // Wave
-            RectTransform wave = Group(bar, "Wave", true, 4f, TextAnchor.MiddleCenter, 260f);
+            RectTransform wave = Group(bar, "Wave", true, 2f, TextAnchor.MiddleCenter, 260f);
+            hud.modeLabel = Label(wave, "Mode", "", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            Object.DestroyImmediate(hud.modeLabel.GetComponent<UIThemeColor>()); // the mode's colour, set at runtime
+            hud.modeLabel.fontSize = 11f;
+            hud.modeLabel.characterSpacing = 3f;
             hud.waveTitle = Label(wave, "Title", "TOWER DEFENSE", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
             hud.waveTitle.fontSize = 26f;
             RectTransform status = Group(wave, "Status", false, 6f, TextAnchor.MiddleCenter);
@@ -256,7 +325,11 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 Image image = TdIcon(chip, TD_Palette.EnemyIcon(kind), 32f, portrait != null ? Color.white : TD_Palette.Enemy(kind));
                 if (portrait != null) image.sprite = portrait;
                 var count = Label(chip, "Count", "×0", UIText.Strong, UIColorRole.TextPrimary);
-                hud.enemyChips[i] = new TD_EnemyChip { root = chip.gameObject, icon = image, count = count };
+                // "NEW  Shielded": only on the wave that introduces the kind (TD_Hud.ShowNextWave).
+                var trait = Label(chip, "Trait", "NEW", UIText.Caption, UIColorRole.TextPrimary);
+                trait.fontSize = 12f;
+                trait.gameObject.SetActive(false);
+                hud.enemyChips[i] = new TD_EnemyChip { root = chip.gameObject, icon = image, count = count, trait = trait };
             }
             RectTransform ready = Node(panel, "Ready");
             hud.readyBack = Rounded(ready, UIColorRole.SurfaceHover, 16f, raycast: false);
@@ -360,15 +433,28 @@ namespace Universes.UniverseData.tower_defense.Editor {
             badge.rectTransform.anchoredPosition = new Vector2(-8f, -8f);
             badge.rectTransform.sizeDelta = new Vector2(22f, 22f);
 
+            // Locked: a level badge over the darkened portrait (TD_ShopCard.Set shows it, with the level).
+            RectTransform locked = Fill(art, "Locked");
+            Image lockBack = Rounded(locked, UIColorRole.Scrim, CardRadius - 4f, 0.55f, raycast: false);
+            lockBack.raycastTarget = false;
+            Column(locked.gameObject, 2f, null, TextAnchor.MiddleCenter);
+            TdIcon(locked, IconSprite("lock") != null ? "lock" : "level", 34f, Theme.textPrimary);
+            card.lockLabel = Overlay(Label(locked, "Level", "LV 3", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
+            card.lockLabel.fontSize = 20f;
+            card.lockGroup = locked.gameObject;
+            locked.gameObject.SetActive(false);
+
             // Name, price and capabilities.
             RectTransform info = Fill(body, "Info", 14f, CardSize.y - 80f, 14f, 10f);
             Column(info.gameObject, 2f, null, TextAnchor.UpperLeft);
             RectTransform head = Group(info, "Head", false, 6f, TextAnchor.MiddleLeft);
             var title = Label(head, "Name", stats.name, UIText.Title, UIColorRole.TextPrimary);
-            title.fontSize = 19f;
+            title.fontSize = 16f;
             Size(title, -1f, -1f, 1f);
-            card.costIcon = TdIcon(head, "coins", 16f, Theme.currency);
-            card.costLabel = Label(head, "Cost", $"${stats.cost}", UIText.Strong, UIColorRole.Currency, TextAlignmentOptions.MidlineRight);
+            RectTransform cost = Group(head, "Cost", false, 3f, TextAnchor.MiddleRight);
+            card.costGroup = cost.gameObject;
+            card.costIcon = TdIcon(cost, "coins", 16f, Theme.currency);
+            card.costLabel = Label(cost, "Cost", $"${stats.cost}", UIText.Strong, UIColorRole.Currency, TextAlignmentOptions.MidlineRight);
             Object.DestroyImmediate(card.costLabel.GetComponent<UIThemeColor>());
             var blurb = Label(info, "Blurb", stats.blurb, UIText.Small, UIColorRole.TextSecondary);
             blurb.enableAutoSizing = true;
@@ -377,8 +463,12 @@ namespace Universes.UniverseData.tower_defense.Editor {
             RectTransform tags = Group(info, "Stats", false, 10f, TextAnchor.MiddleLeft);
             Stat(tags, "damage", TD_Rules.Damage(kind, 1).ToString("0"));
             Stat(tags, "range", TD_Rules.Range(kind, 1).ToString("0") + "m");
-            Stat(tags, kind == TD_TowerKind.Frost ? "slow" : stats.splash > 0f ? "splash" : stats.hitsAir ? "air" : "rate",
-                kind == TD_TowerKind.Frost ? $"{TD_Rules.SlowPercent(kind, 1)}%" : stats.splash > 0f ? $"{stats.splash:0}m" : stats.hitsAir ? "Air" : stats.fireRate.ToString("0.0"));
+            // The third stat is what sets the tower apart: slow, chain, splash, air or fire rate.
+            if (stats.slow > 0f) Stat(tags, "slow", $"{TD_Rules.SlowPercent(kind, 1)}%");
+            else if (stats.chain > 0) Stat(tags, "air", $"×{TD_Rules.ChainTargets(kind, 1)}");
+            else if (stats.splash > 0f) Stat(tags, "splash", $"{stats.splash:0}m");
+            else if (stats.hitsAir) Stat(tags, "air", "Air");
+            else Stat(tags, "rate", stats.fireRate.ToString("0.0"));
             return card;
         }
 
@@ -391,7 +481,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         // ---------------------------------------------------------------- focus card
         static void Info(RectTransform root, TD_Hud hud) {
-            RectTransform holder = Pinned(root, "TowerInfo", new Vector2(1f, 0f), new Vector2(-18f, 18f), new Vector2(360f, 290f));
+            RectTransform holder = Pinned(root, "TowerInfo", new Vector2(1f, 0f), new Vector2(-18f, 18f), new Vector2(360f, InfoHeight));
             holder.gameObject.AddComponent<CanvasGroup>();
             var info = holder.gameObject.AddComponent<TD_InfoPanel>();
             info.fader = holder.gameObject.AddComponent<TD_Fader>();
@@ -492,6 +582,169 @@ namespace Universes.UniverseData.tower_defense.Editor {
             hud.bannerSubtitle = Overlay(Label(banner, "Subtitle", "", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
         }
 
+        // ---------------------------------------------------------------- new enemies
+        /// <summary>
+        /// The new-enemy card at the left edge, centred a little high (clear of the shop, the level chip and the
+        /// banner; the match summary that also uses this edge only shows after the game): a heading and up to
+        /// two rows (wave 6 brings Shield Tanks and Tanks together), each portrait, name and trait, and its counter.
+        /// </summary>
+        static void EnemyIntro(RectTransform root, TD_Hud hud) {
+            const float width = 440f, portrait = 56f;
+            // The fader sits on an outer holder with the shadow and the card inside it, so the shadow fades
+            // with the card (UIKit.Shadow makes the shadow a sibling of the panel it is given).
+            RectTransform outer = Pinned(root, "EnemyIntro", new Vector2(0f, 0.5f), new Vector2(Theme.screenMargin, 70f), new Vector2(width, 0f));
+            outer.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
+            var intro = outer.gameObject.AddComponent<TD_EnemyIntro>();
+            intro.fader = outer.gameObject.AddComponent<TD_Fader>();
+            hud.enemyIntro = intro;
+            RectTransform holder = Pinned(outer, "Card", new Vector2(0f, 0.5f), Vector2.zero, new Vector2(width, 0f));
+            Shadow(holder, 22f, 6f, 0.4f);
+            Rounded(holder, UIColorRole.SurfaceRaised, CardRadius, raycast: false);
+            Column(holder.gameObject, 10f, Pad(16, 14), TextAnchor.UpperLeft);
+            FitContent(holder.gameObject, false, true);
+
+            RectTransform head = Group(holder, "Head", false, 8f, TextAnchor.MiddleLeft);
+            TdIcon(head, "skull", 20f, Theme.warning);
+            intro.heading = Label(head, "Heading", "NEW ENEMY", UIText.Caption, UIColorRole.Warning);
+            intro.heading.characterSpacing = 2f;
+
+            intro.rows = new TD_EnemyIntro.Row[2];
+            for (int i = 0; i < intro.rows.Length; i++) {
+                RectTransform row = Group(holder, $"Row{i + 1}", false, 12f, TextAnchor.UpperLeft);
+                RectTransform frame = Node(row, "Frame");
+                Size(frame, portrait, portrait);
+                Rounded(frame, UIColorRole.SurfaceInset, 10f, raycast: false);
+                RectTransform picture = Fill(frame, "Portrait", 3f, 3f, 3f, 3f);
+                var image = picture.gameObject.AddComponent<Image>();
+                image.preserveAspect = true;
+                image.raycastTarget = false;
+                RectTransform text = Group(row, "Text", true, 2f, TextAnchor.UpperLeft);
+                var title = Label(text, "Title", "Shield Tank", UIText.Strong, UIColorRole.TextPrimary);
+                var counter = Label(text, "Counter", "", UIText.Small, UIColorRole.TextSecondary);
+                counter.textWrappingMode = TextWrappingModes.Normal;
+                Size(title, width - 32f - portrait - 12f, -1f);
+                Size(counter, width - 32f - portrait - 12f, -1f);
+                intro.rows[i] = new TD_EnemyIntro.Row { root = row.gameObject, portrait = image, title = title, counter = counter };
+            }
+        }
+
+        // ---------------------------------------------------------------- abilities
+        /// <summary>The ability pills on the right edge, stacked above the tower card (index-aligned with TD_Ability).</summary>
+        static void Abilities(RectTransform root, TD_Hud hud) {
+            hud.abilityPills = new TD_AbilityPill[TD_Abilities.Count];
+            for (int i = 0; i < hud.abilityPills.Length; i++) {
+                var ability = (TD_Ability)i;
+                float y = 18f + InfoHeight + Gap + i * (AbilityPillSize.y + 8f);
+                RectTransform holder = Pinned(root, TD_Abilities.Get(ability).name, new Vector2(1f, 0f), new Vector2(-18f, y), AbilityPillSize);
+                var pill = new TD_AbilityPill { group = holder.gameObject.AddComponent<CanvasGroup>() };
+                pill.group.blocksRaycasts = false;
+                RectTransform body = Fill(holder, "Body");
+                pill.punch = body;
+                Shadow(body, 18f, 5f, 0.35f);
+                pill.back = Rounded(body, UIColorRole.Surface, AbilityPillSize.y * 0.5f, raycast: false);
+                Object.DestroyImmediate(body.GetComponent<UIThemeColor>()); // coloured by state at runtime
+                Row(body.gameObject, 10f, Pad(14, 6), TextAnchor.MiddleLeft);
+                RectTransform key = KeyHint(body, i == 0 ? "F" : "V", UIColorRole.TextPrimary);
+                pill.keyLabel = key.GetComponentInChildren<TextMeshProUGUI>();
+                pill.icon = TdIcon(body, TD_Palette.AbilityIcon(ability), 28f, TD_Palette.Ability(ability));
+                RectTransform text = Group(body, "Text", true, 0f, TextAnchor.MiddleLeft);
+                Size(text, -1f, -1f, 1f);
+                pill.nameLabel = Label(text, "Name", TD_Abilities.Get(ability).name, UIText.Strong, UIColorRole.TextPrimary);
+                pill.stateLabel = Label(text, "State", "", UIText.Small, UIColorRole.TextSecondary);
+                pill.stateLabel.fontSize = 13f;
+                hud.abilityPills[i] = pill;
+            }
+        }
+
+        // ---------------------------------------------------------------- mode vote
+        /// <summary>The vote before wave 1: a title with the countdown, one card per mode (keys 1-3) and a hint line.</summary>
+        static void ModeVote(RectTransform root, TD_Hud hud) {
+            float width = TD_Modes.Count * ModeCardSize.x + (TD_Modes.Count - 1) * 16f;
+            RectTransform panel = Pinned(root, "ModeVote", new Vector2(0.5f, 0.5f), new Vector2(0f, 30f), new Vector2(width, ModeCardSize.y + 150f));
+            panel.gameObject.AddComponent<CanvasGroup>();
+            hud.votePanel = panel.gameObject.AddComponent<TD_Fader>();
+            hud.votePanel.popScale = 0.9f;
+            Column(panel.gameObject, 12f, null, TextAnchor.UpperCenter);
+            hud.voteTitle = Overlay(Label(panel, "Title", "CHOOSE A MODE", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
+            hud.voteTitle.fontSize = 38f;
+            hud.voteTitle.characterSpacing = 3f;
+            // What today's modifier does, under the title, so the vote is made knowing it.
+            hud.voteToday = Overlay(Label(panel, "Today", "", UIText.Body, UIColorRole.Warning, TextAlignmentOptions.Center));
+            hud.voteToday.fontSize = 18f;
+            RectTransform row = Group(panel, "Modes", false, 16f, TextAnchor.LowerCenter);
+            Size(row, width, ModeCardSize.y + 14f);
+            hud.modeCards = new TD_ModeCard[TD_Modes.Count];
+            for (int i = 0; i < hud.modeCards.Length; i++) hud.modeCards[i] = ModeCard(row, (TD_Difficulty)i, i);
+            hud.voteHint = Overlay(Label(panel, "Hint", "Press 1-3 to vote.", UIText.Body, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
+            hud.voteHint.fontSize = 17f;
+        }
+
+        static TD_ModeCard ModeCard(Transform parent, TD_Difficulty mode, int index) {
+            var stats = TD_Modes.Get(mode);
+            Color accent = TD_Palette.Mode(mode);
+            RectTransform slot = Node(parent, stats.name);
+            Size(slot, ModeCardSize.x, ModeCardSize.y + 14f);
+            var card = slot.gameObject.AddComponent<TD_ModeCard>();
+            card.group = slot.gameObject.AddComponent<CanvasGroup>();
+            card.group.blocksRaycasts = false;
+
+            RectTransform body = Node(slot, "Body");
+            body.anchorMin = new Vector2(0f, 0f);
+            body.anchorMax = new Vector2(1f, 0f);
+            body.pivot = new Vector2(0.5f, 0f);
+            body.sizeDelta = new Vector2(0f, ModeCardSize.y);
+            card.body = body;
+            Shadow(body, 22f, 6f, 0.45f);
+            RectTransform outline = Fill(body, "Outline", -3f, -3f, -3f, -3f);
+            card.outline = outline.gameObject.AddComponent<Image>();
+            card.outline.sprite = Theme.roundedSprite;
+            card.outline.type = Image.Type.Sliced;
+            card.outline.pixelsPerUnitMultiplier = UIThemeAssets.RoundedSpriteRadius / (CardRadius + 3f);
+            card.outline.raycastTarget = false;
+            Rounded(Fill(body, "Background"), UIColorRole.SurfaceRaised, CardRadius, raycast: false);
+            RectTransform bar = Node(body, "Accent");
+            bar.anchorMin = new Vector2(0f, 1f);
+            bar.anchorMax = new Vector2(1f, 1f);
+            bar.pivot = new Vector2(0.5f, 1f);
+            bar.offsetMin = new Vector2(18f, -5f);
+            bar.offsetMax = new Vector2(-18f, 0f);
+            card.accentBar = bar.gameObject.AddComponent<Image>();
+            card.accentBar.raycastTarget = false;
+            card.accentBar.color = accent;
+
+            RectTransform content = Fill(body, "Content", 20f, 22f, 20f, 18f);
+            Column(content.gameObject, 8f, null, TextAnchor.UpperCenter);
+            RectTransform head = Group(content, "Head", false, 10f, TextAnchor.MiddleCenter);
+            RectTransform key = KeyHint(head, (index + 1).ToString(), UIColorRole.TextPrimary);
+            card.keyLabel = key.GetComponentInChildren<TextMeshProUGUI>();
+            card.icon = TdIcon(head, TD_Palette.ModeIcon(mode), 40f, accent);
+            card.title = Label(content, "Title", stats.name.ToUpperInvariant(), UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            card.title.fontSize = 26f;
+            card.title.characterSpacing = 2f;
+            card.blurb = Label(content, "Blurb", stats.blurb, UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            card.blurb.textWrappingMode = TextWrappingModes.Normal;
+            card.blurb.fontSize = 14f;
+            Size(card.blurb, ModeCardSize.x - 40f, 58f);
+            RectTransform starRow = Group(content, "Stars", false, 6f, TextAnchor.MiddleCenter);
+            card.stars = new Image[TD_Rules.MaxStars];
+            for (int i = 0; i < card.stars.Length; i++) card.stars[i] = TdIcon(starRow, "star", 26f, card.starOff);
+            card.best = Label(content, "Best", "", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            card.votes = Label(content, "Votes", "", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+
+            // The lock sits where the blurb, stars and votes were (all hidden while locked), under the
+            // dimmed title, so nothing overlaps.
+            RectTransform locked = Fill(body, "Locked");
+            locked.anchorMax = new Vector2(1f, 0.6f);
+            Column(locked.gameObject, 6f, Pad(18, 0), TextAnchor.MiddleCenter);
+            TdIcon(locked, IconSprite("lock") != null ? "lock" : "level", 44f, Theme.textPrimary);
+            card.lockLabel = Overlay(Label(locked, "Hint", stats.lockedHint, UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.Center));
+            card.lockLabel.textWrappingMode = TextWrappingModes.Normal;
+            Size(card.lockLabel, ModeCardSize.x - 40f, -1f);
+            card.lockGroup = locked.gameObject;
+            locked.gameObject.SetActive(false);
+            return card;
+        }
+
         static void Result(RectTransform root, TD_Hud hud) {
             RectTransform scrimRect = Fill(root, "Result");
             var scrim = scrimRect.gameObject.AddComponent<Image>();
@@ -500,11 +753,17 @@ namespace Universes.UniverseData.tower_defense.Editor {
             scrimRect.gameObject.AddComponent<CanvasGroup>();
             hud.result = scrimRect.gameObject.AddComponent<TD_Fader>();
 
-            RectTransform card = Panel(scrimRect, "Card", new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(560f, 330f), UIColorRole.SurfaceRaised, 18f);
-            Column(card.gameObject, 10f, Pad(32, 28), TextAnchor.MiddleCenter);
-            hud.resultIcon = TdIcon(card, "trophy", 84f, Theme.currency);
+            RectTransform card = Panel(scrimRect, "Card", new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(560f, 410f), UIColorRole.SurfaceRaised, 18f);
+            Column(card.gameObject, 10f, Pad(32, 26), TextAnchor.MiddleCenter);
+            hud.resultMode = Label(card, "Mode", "NORMAL", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            Object.DestroyImmediate(hud.resultMode.GetComponent<UIThemeColor>()); // the mode's colour, set at runtime
+            hud.resultMode.characterSpacing = 4f;
+            hud.resultIcon = TdIcon(card, "trophy", 76f, Theme.currency);
             hud.resultTitle = Label(card, "Title", "VICTORY", UIText.Display, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
             hud.resultTitle.fontSize = 44f;
+            RectTransform stars = Group(card, "Stars", false, 10f, TextAnchor.MiddleCenter);
+            hud.resultStars = new Image[TD_Rules.MaxStars];
+            for (int i = 0; i < hud.resultStars.Length; i++) hud.resultStars[i] = TdIcon(stars, "star", 46f, hud.starOff);
             hud.resultSubtitle = Label(card, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             hud.resultSubtitle.fontSize = 18f;
             hud.resultRecord = Label(card, "Record", "", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);

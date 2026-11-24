@@ -1,0 +1,25 @@
+{
+    "name": "RyanAssets.Retention.Client",
+    "rootNamespace": "RyanAssets.Retention.Client",
+    "references": [
+        "RyanAssets.Retention",
+        "RyanAssets.UI",
+        "RyanAssets.GameFeel",
+        "RyanAssets.Input",
+        "FishNet.Runtime",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -5,6 +5,8 @@ using FishNet.Transporting;
 using RyanAssets.Characters.Client;
 using RyanAssets.GameFeel;
 using RyanAssets.Input;
+using RyanAssets.Retention;
+using RyanAssets.Retention.Client;
 using RyanAssets.Rounds;
 using TMPro;
 using UnityEngine;
@@ -13,11 +15,13 @@ using UnityEngine.InputSystem;
 
 namespace Universes.UniverseData.tower_defense.Client {
     /// <summary>
-    /// Draws the defence from server snapshots (enemies, towers, shots), feeds the <see cref="TD_Hud"/>
-    /// and sends build, upgrade, sell, ready and fast-forward requests. Keys: 1-4 pick a tower, E
-    /// builds or upgrades the pad in front of you, X (twice) sells the tower there, R votes to start
-    /// the next wave early, G votes for fast forward. All feedback (blasts, popups, shake, sounds,
-    /// base alarm) is a reaction to server broadcasts. The key names the HUD shows come from here.
+    /// Draws the defence from server snapshots (enemies, shields, heals, towers, shots, chains), feeds
+    /// the <see cref="TD_Hud"/> and sends mode-vote, build, upgrade, sell, ready, fast-forward and
+    /// ability requests. Keys: 1-3 vote for a mode before wave 1; then 1-6 pick a tower, E builds or
+    /// upgrades the pad in front of you, X (twice) sells the tower there, R votes to start the next
+    /// wave early, G votes for fast forward, F calls an Airstrike and V fires an EMP. All feedback
+    /// (blasts, popups, shake, sounds, base alarm) is a reaction to server broadcasts. The key names
+    /// the HUD shows come from here. Unlocks come from the shared retention HUD's level.
     /// </summary>
     [RequireComponent(typeof(TD_Hud))]
     public sealed class TD_ClientController : MonoBehaviour {
@@ -29,6 +33,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Header("Keys")]
         public Key sellKey = Key.X;
         public Key fastForwardKey = Key.G;
+        [Tooltip("Fires the EMP (the Airstrike is on the Tool map's Journal action, F).")]
+        public Key empKey = Key.V;
         [Tooltip("Selling needs a second press of the sell key within this many seconds.")]
         [Min(0.5f)] public float sellConfirmSeconds = 2.5f;
 
@@ -51,6 +57,10 @@ namespace Universes.UniverseData.tower_defense.Client {
         public float markerHeight = 2.6f;
         [Tooltip("Extra height of the marker above a pad while its build ghost shows.")]
         public float markerGhostLift = 3.2f;
+
+        [Header("Retention")]
+        [Tooltip("The nested shared retention HUD: its level decides which towers and abilities show as locked.")]
+        public RetentionHud retentionHud;
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -84,7 +94,18 @@ namespace Universes.UniverseData.tower_defense.Client {
         MaterialPropertyBlock block;
         int lastBase = TD_Rules.BaseHealth;
         TD_Phase lastPhase;
-        int bannerWave, lastSecondsLeft;
+        int bannerWave, lastSecondsLeft, myVote = -1;
+        TD_ProfileBroadcast profile;
+        TD_AbilityStateBroadcast abilities;
+        bool hasProfile, hasAbilities, toldEndlessRecord, toldBlocked;
+        float introUntil;
+        readonly List<Vector3> empTargets = new();
+
+        /// <summary>The player's Tower Defense level (1 until the retention HUD has its first snapshot).</summary>
+        int Level => retentionHud != null ? retentionHud.Level : 1;
+        TD_TowerPerks Perks => TD_Retention.PerksFor(Level);
+        /// <summary>The day's modifier of the game being drawn (ranges, speeds and rewards as the server plays them).</summary>
+        TD_Modifier Modifier => hasState ? state.modifier : TD_Modifier.None;
 
         void Awake() {
             hud = GetComponent<TD_Hud>();
@@ -97,26 +118,50 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void Start() {
+            // World popups stay off the status bar, pill row, toast and banner, and the kit's toast column.
+            fx.guard = new TD_ScreenGuard(hud.keepClear, FindChild(retentionHud != null ? retentionHud.transform : null, "Toasts") as RectTransform, tuning);
             hud.SetKeys(BindingLabel("ReloadTool", "R"), fastForwardKey.ToString(), BindingLabel("Interact", "E"));
+            hud.SetAbilityKeys(BindingLabel("Journal", "F"), empKey.ToString());
             for (int i = 0; i < TD_Rules.Slots.Length; i++) {
                 var go = Instantiate(map.slotPrefab, TD_Rules.Slots[i], Quaternion.identity, map.transform);
                 go.name = $"Slot {i + 1}";
                 slotViews[i] = go.GetComponent<TD_SlotView>();
                 slotViews[i].Refresh();
             }
-            hud.ShowShop(selected, 0, false);
+            ShowShop();
         }
 
         void OnEnable() {
             ToolControls.interactPressed += Interact;
             ToolControls.toolBarHotkeyPressed += Select;
             ToolControls.reloadToolPressed += ToggleReady;
+            ToolControls.journalPressed += CallAirstrike;
+            if (retentionHud != null) retentionHud.LevelChanged += OnLevelChanged;
         }
 
         void OnDisable() {
             ToolControls.interactPressed -= Interact;
             ToolControls.toolBarHotkeyPressed -= Select;
             ToolControls.reloadToolPressed -= ToggleReady;
+            ToolControls.journalPressed -= CallAirstrike;
+            if (retentionHud != null) retentionHud.LevelChanged -= OnLevelChanged;
+        }
+
+        /// <summary>A level-up may have unlocked a tower or an ability: refresh the shop and the focus card.</summary>
+        void OnLevelChanged(int level) {
+            ShowShop();
+            if (focusedSlot >= 0) Highlight(focusedSlot, true);
+            RefreshFocusCard();
+            if (hasAbilities) hud.ShowAbilities(abilities, hasState ? state.phase : TD_Phase.Waiting, level);
+        }
+
+        void ShowShop() => hud.ShowShop(selected, hasState ? state.cash : 0, hasState, Level);
+
+        static Transform FindChild(Transform root, string name) {
+            if (root == null) return null;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == name) return t;
+            return null;
         }
 
         /// <summary>The keyboard key bound to a tool action (ready = ReloadTool, build = Interact), for labels.</summary>
@@ -131,13 +176,15 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void OnDestroy() {
-            ScreenFx.ClearDanger();
+            ScreenFx.SetDanger(0f); // not ClearDanger, which can freeze a running flash on screen (see OnState)
             if (manager == null) return;
             manager.UnregisterBroadcast<TD_StateBroadcast>(OnState);
             manager.UnregisterBroadcast<TD_SnapshotBroadcast>(OnSnapshot);
             manager.UnregisterBroadcast<TD_ResultBroadcast>(OnResult);
             manager.UnregisterBroadcast<TD_TowerEventBroadcast>(OnTowerEvent);
             manager.UnregisterBroadcast<TD_ProfileBroadcast>(OnProfile);
+            manager.UnregisterBroadcast<TD_AbilityBroadcast>(OnAbility);
+            manager.UnregisterBroadcast<TD_AbilityStateBroadcast>(OnAbilityState);
         }
 
         void Update() {
@@ -148,10 +195,18 @@ namespace Universes.UniverseData.tower_defense.Client {
                 manager.RegisterBroadcast<TD_ResultBroadcast>(OnResult);
                 manager.RegisterBroadcast<TD_TowerEventBroadcast>(OnTowerEvent);
                 manager.RegisterBroadcast<TD_ProfileBroadcast>(OnProfile);
+                manager.RegisterBroadcast<TD_AbilityBroadcast>(OnAbility);
+                manager.RegisterBroadcast<TD_AbilityStateBroadcast>(OnAbilityState);
             }
-            if (manager != null && manager.Started && !hasState && Time.unscaledTime > nextRequest) {
+            // Ask until both the game state and this player's profile are here (a profile the server sent
+            // before these handlers were registered is lost; the request makes it send it again).
+            if (manager != null && manager.Started && (!hasState || !hasProfile) && Time.unscaledTime > nextRequest) {
                 nextRequest = Time.unscaledTime + 2f;
                 manager.Broadcast(new TD_StateRequest());
+            }
+            if (introUntil > 0f && Time.unscaledTime > introUntil) {
+                introUntil = 0f;
+                hud.HideIntro();
             }
             ReadKeys();
             MoveEnemies(Time.deltaTime);
@@ -166,11 +221,44 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         // ---------------------------------------------------------------- input
         void Select(int key) {
+            if (hasState && state.phase == TD_Phase.Vote) {
+                Vote(key - 1);
+                return;
+            }
             if (key < 1 || key > TD_Rules.Towers.Length) return;
             selected = key - 1;
-            hud.ShowShop(selected, state.cash, hasState);
+            ShowShop();
             if (focusedSlot >= 0) Highlight(focusedSlot, true); // re-preview the range of the new pick
             RefreshFocusCard();
+        }
+
+        /// <summary>Votes for a mode before wave 1 (keys 1-3). Locked modes say what opens them instead.</summary>
+        void Vote(int index) {
+            if (index < 0 || index >= TD_Modes.Count || manager == null || !manager.Started) return;
+            var mode = (TD_Difficulty)index;
+            if (!hud.ModeOpen(mode)) {
+                hud.Toast($"{TD_Modes.Get(mode).name} is locked: {TD_Modes.Get(mode).lockedHint}.", TD_Hud.ToastKind.Bad, tuning.toastSeconds);
+                GameSfx.Play(SfxCue.Error);
+                return;
+            }
+            myVote = index;
+            hud.SetMyVote(index);
+            manager.Broadcast(new TD_ModeVoteRequest { mode = mode });
+            GameSfx.Play(SfxCue.UiClick);
+            hud.ShowState(state, ready, fastVote);
+        }
+
+        void CallAirstrike() => UseAbility(TD_Ability.Airstrike);
+
+        /// <summary>Asks the server to use an ability; a locked one says its level at once (the server checks again and explains any refusal).</summary>
+        void UseAbility(TD_Ability ability) {
+            if (manager == null || !manager.Started || !hasState) return;
+            var stats = TD_Abilities.Get(ability);
+            if (!TD_Retention.Owns(Level, stats.unlockId)) {
+                hud.Toast($"{stats.name} unlocks at level {TD_Retention.LevelOf(stats.unlockId)}.", TD_Hud.ToastKind.Info, tuning.toastSeconds);
+                return;
+            }
+            manager.Broadcast(new TD_AbilityRequest { ability = ability });
         }
 
         void ToggleReady() {
@@ -192,6 +280,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (keyboard == null || !Application.isFocused || TextFieldFocused()) return;
             if (keyboard[sellKey].wasPressedThisFrame) Sell();
             if (keyboard[fastForwardKey].wasPressedThisFrame) ToggleFastForward();
+            if (keyboard[empKey].wasPressedThisFrame) UseAbility(TD_Ability.Emp);
         }
 
         static bool TextFieldFocused() {
@@ -216,7 +305,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             }
             sellSlot = focusedSlot;
             sellConfirmUntil = Time.unscaledTime + sellConfirmSeconds;
-            hud.Toast($"Press {sellKey} again to sell the {TD_Rules.Tower(tower.kind).name} for ${TD_Rules.SellRefund(tower.kind, tower.level)}", TD_Hud.ToastKind.Money, sellConfirmSeconds);
+            hud.Toast($"Press {sellKey} again to sell the {TD_Rules.Tower(tower.kind).name} for ${TD_InfoPanel.RefundOf(tower)}", TD_Hud.ToastKind.Money, sellConfirmSeconds);
         }
 
         /// <summary>Whether this client may sell <paramref name="tower"/>: unclaimed, or built by this player (same rule as the server).</summary>
@@ -244,11 +333,12 @@ namespace Universes.UniverseData.tower_defense.Client {
             RefreshFocusCard();
         }
 
-        /// <summary>Whether the selected tower can go on an empty pad right now (money and phase).</summary>
-        bool CanBuildSelected => hasState && state.phase is not (TD_Phase.Victory or TD_Phase.Defeat) && state.cash >= TD_Rules.Towers[selected].cost;
+        /// <summary>Whether the selected tower can go on an empty pad right now (unlocked, money and phase).</summary>
+        bool CanBuildSelected => hasState && state.phase is TD_Phase.Build or TD_Phase.Wave && state.cash >= TD_Rules.Towers[selected].cost
+            && TD_Retention.CanBuild(Level, (TD_TowerKind)selected);
 
-        bool CanUpgrade(int slot) => hasState && state.phase is not (TD_Phase.Victory or TD_Phase.Defeat)
-            && towerSnaps[slot].level < TD_Rules.MaxLevel && state.cash >= TD_Rules.UpgradeCost(towerSnaps[slot].kind, towerSnaps[slot].level);
+        bool CanUpgrade(int slot) => hasState && state.phase is TD_Phase.Build or TD_Phase.Wave
+            && towerSnaps[slot].level < TD_Rules.MaxLevel && state.cash >= TD_Rules.UpgradeCost(towerSnaps[slot].kind, towerSnaps[slot].level, Perks.upgradeDiscount);
 
         void Highlight(int slot, bool on) {
             var pad = slotViews[slot];
@@ -260,7 +350,7 @@ namespace Universes.UniverseData.tower_defense.Client {
                     pad.rangeRing.gameObject.SetActive(on && empty);
                     if (on && empty) {
                         var kind = (TD_TowerKind)selected;
-                        SetRing(pad.rangeRing, TD_Rules.Range(kind, 1), CanBuildSelected ? TD_Palette.Tower(kind) : invalidColor, rangeRingAlpha);
+                        SetRing(pad.rangeRing, TD_Daily.Range(kind, 1, Modifier), CanBuildSelected ? TD_Palette.Tower(kind) : invalidColor, rangeRingAlpha);
                     }
                 }
             }
@@ -270,12 +360,12 @@ namespace Universes.UniverseData.tower_defense.Client {
             Color color = TD_Palette.Tower(snap.kind);
             if (tower.rangeRing != null) {
                 tower.rangeRing.gameObject.SetActive(on);
-                if (on) SetRing(tower.rangeRing, TD_Rules.Range(snap.kind, snap.level), color, rangeRingAlpha);
+                if (on) SetRing(tower.rangeRing, TD_Daily.Range(snap.kind, snap.level, Modifier), color, rangeRingAlpha);
             }
             if (tower.nextRangeRing != null) {
                 bool next = on && snap.level < TD_Rules.MaxLevel;
                 tower.nextRangeRing.gameObject.SetActive(next);
-                if (next) SetRing(tower.nextRangeRing, TD_Rules.Range(snap.kind, snap.level + 1), CanUpgrade(slot) ? color : invalidColor, nextRangeRingAlpha);
+                if (next) SetRing(tower.nextRangeRing, TD_Daily.Range(snap.kind, snap.level + 1, Modifier), CanUpgrade(slot) ? color : invalidColor, nextRangeRingAlpha);
             }
         }
 
@@ -322,8 +412,11 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         void RefreshFocusCard() {
             if (focusedSlot < 0 || !hasState) hud.ClearFocus();
-            else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), CanSell(towerSnaps[focusedSlot]));
-            else hud.ShowFocusPad((TD_TowerKind)selected, state.cash);
+            else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), CanSell(towerSnaps[focusedSlot]), Perks.upgradeDiscount);
+            else {
+                var kind = (TD_TowerKind)selected;
+                hud.ShowFocusPad(kind, state.cash, TD_Retention.CanBuild(Level, kind) ? 0 : TD_Retention.LevelOf(TD_Rules.Tower(kind).unlockId));
+            }
         }
 
         // ---------------------------------------------------------------- state
@@ -336,36 +429,64 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (!first) {
                 if (message.phase == TD_Phase.Wave && message.wave != bannerWave) WaveStarted(message);
                 if (message.phase == TD_Phase.Build && previousPhase == TD_Phase.Wave && message.wave > 1) {
-                    hud.Toast($"Wave {message.wave - 1} cleared!  +${TD_Rules.WaveBonus(message.wave - 1)}", TD_Hud.ToastKind.Money, tuning.toastSeconds);
+                    hud.Toast($"Wave {message.wave - 1} cleared!  +${TD_Daily.WaveBonus(message.wave - 1, message.mode, message.modifier)}", TD_Hud.ToastKind.Money, tuning.toastSeconds);
                     GameSfx.Play(SfxCue.Purchase);
                 }
                 if (message.phase == TD_Phase.Build && message.secondsLeft != lastSecondsLeft && message.secondsLeft <= countdownBeeps && message.secondsLeft > 0)
                     GameSfx.Play(SfxCue.CountdownBeep);
                 if (message.baseHealth < lastBase) BaseHit(lastBase - message.baseHealth, message.baseHealth);
                 if (message.phase != previousPhase && message.phase is TD_Phase.Victory or TD_Phase.Defeat) GameOver(message.phase == TD_Phase.Victory);
+                if (message.phase == TD_Phase.Build && previousPhase == TD_Phase.Vote) ModeChosen(message.mode);
+            }
+            if (message.phase == TD_Phase.Vote && previousPhase != TD_Phase.Vote) {
+                myVote = -1; // a fresh vote
+                hud.SetMyVote(-1);
             }
             if (message.phase is TD_Phase.Waiting or TD_Phase.Victory or TD_Phase.Defeat) {
-                ScreenFx.ClearDanger();
+                // Not ClearDanger: called during the leak flash of the final hit, it stops the flash but leaves
+                // the vignette at that frame's alpha (a red edge into the next game). The flash ends by itself.
+                ScreenFx.SetDanger(0f);
                 fastVote = false;
             }
             if (message.phase is TD_Phase.Victory or TD_Phase.Defeat) bannerWave = 0; // a new game starts again at wave 1
-            if (message.phase == TD_Phase.Build && message.wave == 1) toldRecord = false; // a new game: its best may be told once
+            // New enemies: their card shows through the build phase before their wave (and into it, see WaveStarted).
+            if (message.phase == TD_Phase.Build) hud.ShowIntro(message.wave);
+            if (message.phase is TD_Phase.Vote or TD_Phase.Victory or TD_Phase.Defeat or TD_Phase.Waiting) {
+                hud.ResetIntro();
+                introUntil = 0f;
+                toldBlocked = false;
+            }
+            if (message.phase is TD_Phase.Vote || (message.phase == TD_Phase.Build && message.wave == 1)) toldRecord = toldEndlessRecord = false; // a new game: its bests may be told once
             if (!message.fastForwardAllowed) fastVote = false;
             lastBase = message.baseHealth;
             lastPhase = message.phase;
             lastSecondsLeft = message.secondsLeft;
             ApplyTowers(message.towers);
             hud.ShowState(message, ready, fastVote);
-            hud.ShowShop(selected, message.cash, true);
+            ShowShop();
+            if (hasAbilities && message.phase != previousPhase) hud.ShowAbilities(abilities, message.phase, Level);
             if (focusedSlot >= 0) Highlight(focusedSlot, true); // affordability may have changed the ring colours
             RefreshFocusCard();
+        }
+
+        /// <summary>The vote is over: a banner names the mode everyone plays.</summary>
+        void ModeChosen(TD_Difficulty mode) {
+            var stats = TD_Modes.Get(mode);
+            var day = TD_Daily.Get(Modifier);
+            hud.Banner($"{stats.name.ToUpperInvariant()} MODE", day.name.Length > 0 ? $"{stats.blurb}  Today: {day.name}. {day.blurb}" : stats.blurb, mode == TD_Difficulty.Hard);
+            GameSfx.Play(SfxCue.Go);
         }
 
         void WaveStarted(in TD_StateBroadcast message) {
             bannerWave = message.wave;
             bool boss = TD_Rules.HasBoss(message.wave);
-            hud.Banner($"WAVE {message.wave}", (boss ? "BOSS WAVE  ·  " : "") + Describe(message.wave), boss);
+            string title = message.waveCount > 0 && message.wave >= message.waveCount ? "FINAL WAVE" : message.waveCount <= 0 ? $"ENDLESS WAVE {message.wave}" : $"WAVE {message.wave}";
+            string fresh = NewKinds(message.wave);
+            hud.Banner(title, (boss ? "BOSS WAVE  ·  " : "") + (fresh.Length > 0 ? $"NEW: {fresh}  ·  " : "") + Describe(message.wave), boss);
             GameSfx.Play(SfxCue.Horn);
+            // The new-enemy card (up since the build phase, or from now for someone who just joined) stays a few seconds more.
+            hud.ShowIntro(message.wave);
+            introUntil = Time.unscaledTime + tuning.introWaveSeconds;
             if (message.earlyBonus > 0) {
                 hud.Toast($"Called early!  +${message.earlyBonus}", TD_Hud.ToastKind.Money, tuning.toastSeconds);
                 GameSfx.Play(SfxCue.Coin);
@@ -419,6 +540,14 @@ namespace Universes.UniverseData.tower_defense.Client {
             nextConfetti = Time.unscaledTime + tuning.victoryScreenBurstInterval;
         }
 
+        /// <summary>The enemies <paramref name="wave"/> brings for the first time, by name ("" for none).</summary>
+        static string NewKinds(int wave) {
+            var names = new List<string>();
+            for (int i = 0; i < TD_Rules.Enemies.Length; i++)
+                if (TD_Rules.IsNew((TD_EnemyKind)i, wave)) names.Add(TD_Rules.Enemies[i].name);
+            return string.Join(", ", names);
+        }
+
         static string Describe(int wave) {
             int[] counts = TD_Rules.WaveCounts(wave);
             var parts = new List<string>();
@@ -446,6 +575,7 @@ namespace Universes.UniverseData.tower_defense.Client {
                     }
                     pendingPop[t.slot] = false;
                     towerSnaps[t.slot] = t;
+                    if (view.goldTrim != null && view.goldTrim.activeSelf != t.gold) view.goldTrim.SetActive(t.gold);
                     if (view.shownLevel != t.level) {
                         view.ShowLevel(t.level);
                         if (t.slot == focusedSlot) Highlight(t.slot, true);
@@ -493,12 +623,48 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void OnProfile(TD_ProfileBroadcast message, Channel channel) {
+            profile = message;
+            hasProfile = true;
             hud.ShowRecord(message);
+            if (hasState && state.phase == TD_Phase.Vote) hud.ShowState(state, ready, fastVote); // the cards' locks and bests
             // The server announces a new best once per game; the result card repeats it as "New best!".
-            if (!message.newBestWave || toldRecord || state.phase is TD_Phase.Victory or TD_Phase.Defeat) return;
-            toldRecord = true;
-            hud.Toast($"New personal best: wave {message.bestWave}!", TD_Hud.ToastKind.Good, tuning.toastSeconds);
-            GameSfx.Play(SfxCue.LevelUp);
+            if (state.phase is TD_Phase.Victory or TD_Phase.Defeat) return;
+            if (message.newBestEndless && !toldEndlessRecord) {
+                toldEndlessRecord = toldRecord = true;
+                hud.Toast($"New Endless best: wave {message.bestEndlessWave}!", TD_Hud.ToastKind.Good, tuning.toastSeconds);
+                GameSfx.Play(SfxCue.LevelUp);
+            } else if (message.newBestWave && !toldRecord) {
+                toldRecord = true;
+                hud.Toast($"New personal best: wave {message.bestWave}!", TD_Hud.ToastKind.Good, tuning.toastSeconds);
+                GameSfx.Play(SfxCue.LevelUp);
+            }
+        }
+
+        void OnAbilityState(TD_AbilityStateBroadcast message, Channel channel) {
+            abilities = message;
+            hasAbilities = true;
+            hud.ShowAbilities(message, hasState ? state.phase : TD_Phase.Waiting, Level);
+        }
+
+        /// <summary>Someone used an ability: the jet and bombs, or the EMP shockwave (the server already did the damage or the stun).</summary>
+        void OnAbility(TD_AbilityBroadcast message, Channel channel) {
+            var stats = TD_Abilities.Get(message.ability);
+            string caster = string.IsNullOrEmpty(message.caster) ? "A player" : message.caster;
+            // The toast first, so the ability's world callout below is kept clear of it (TD_ScreenGuard).
+            // A second call in the same wave is weaker (TD_Abilities.RepeatScale); say so, so it is not a surprise.
+            string weaker = message.power > 0f && message.power < 0.99f ? $"  ({Mathf.RoundToInt(message.power * 100f)}%: already used this wave)" : "";
+            hud.Toast($"{caster}: {stats.name}!" + (message.hits > 0 && message.ability == TD_Ability.Emp ? $"  {message.hits} stopped" : "") + weaker, TD_Hud.ToastKind.Info, tuning.shortToastSeconds);
+            fx.guard?.Invalidate();
+            if (message.ability == TD_Ability.Airstrike) {
+                Vector3 target = TD_Rules.LaneTrack.Evaluate(message.distance, out Vector3 forward);
+                float speed = hasState && state.speed > 0f ? state.speed : 1f;
+                fx.Airstrike(target, forward, stats.radius, message.delay / speed, caster);
+            } else {
+                empTargets.Clear();
+                foreach (var view in enemyViews.Values) empTargets.Add(view.transform.position + Vector3.up * tuning.aimHeight);
+                Vector3 origin = map.baseModel != null ? map.baseModel.position : TD_Rules.Lane[^1];
+                fx.Emp(origin, empTargets, caster);
+            }
         }
 
         // ---------------------------------------------------------------- snapshots
@@ -520,16 +686,31 @@ namespace Universes.UniverseData.tower_defense.Client {
                     }
                     view.targetDistance = e.distance;
                     float slow = e.slow > 0 ? e.slow / 255f : 1f; // TD_Rules.SlowFactor, as the server applied it
-                    view.speed = TD_Rules.Enemy(e.kind).speed * slow * speed;
+                    view.speed = TD_Daily.Speed(e.kind, Modifier) * slow * speed;
                     view.slowed = e.slowed;
                     SetHealth(view, e.health / 255f);
-                    if (view.slowTint != null && view.slowTint.gameObject.activeSelf != e.slowed) view.slowTint.gameObject.SetActive(e.slowed);
+                    SetShield(view, e.shield / 255f);
+                    // Frost shell only for real slows; a shield bubble and frost never show together (shields shrug off frost).
+                    bool frosted = e.slowed && e.shield == 0 && e.slow > 0;
+                    if (view.slowTint != null && view.slowTint.gameObject.activeSelf != frosted) view.slowTint.gameObject.SetActive(frosted);
                     if (TD_Rules.IsBoss(e.kind)) {
                         bosses++;
                         if (boss == null) boss = view; // the one furthest along the road
                     }
                 }
             hud.ShowBoss(bosses, boss != null ? boss.health : 0f);
+
+            // Shots, chains, breaks and heals first, while the enemies they touch still have their views.
+            if (message.shots != null) foreach (var shot in message.shots) DrawShot(shot);
+            if (message.shieldsBroken != null)
+                foreach (var id in message.shieldsBroken)
+                    if (enemyViews.TryGetValue(id, out var broken) && broken.seen) fx.ShieldBroken(broken.transform.position + Vector3.up * tuning.aimHeight);
+            if (message.healed != null)
+                foreach (var id in message.healed) {
+                    if (!enemyViews.TryGetValue(id, out var healed) || !healed.seen || Time.time < healed.nextHealFx) continue;
+                    healed.nextHealFx = Time.time + tuning.healFxInterval;
+                    fx.Healed(healed.transform.position + Vector3.up * tuning.aimHeight);
+                }
 
             Fill(killedIds, message.killed);
             Fill(leakedIds, message.leaked);
@@ -539,14 +720,13 @@ namespace Universes.UniverseData.tower_defense.Client {
                 var view = enemyViews[id];
                 var kind = enemyKinds[id];
                 if (view.seen) {
-                    if (killedIds.Contains(id)) fx.Destroyed(kind, view.transform.position, TD_Rules.Enemy(kind).reward);
+                    if (killedIds.Contains(id)) fx.Destroyed(kind, view.transform.position, TD_Daily.KillReward(kind, hasState ? state.mode : TD_Difficulty.Normal, Modifier));
                     else if (leakedIds.Contains(id)) fx.Leaked(kind, view.transform.position);
                 }
                 Return(kind, view);
                 enemyViews.Remove(id);
                 enemyKinds.Remove(id);
             }
-            if (message.shots != null) foreach (var shot in message.shots) DrawShot(shot);
         }
 
         static void Fill(HashSet<ushort> set, ushort[] ids) {
@@ -563,6 +743,16 @@ namespace Universes.UniverseData.tower_defense.Client {
                 block.SetColor(BaseColorId, Color.Lerp(tuning.enemyBarEmpty, tuning.enemyBarFull, fraction));
                 view.healthRenderer.SetPropertyBlock(block);
             }
+        }
+
+        /// <summary>The shield bubble shows while the shield holds; its bar shows what is left of it.</summary>
+        static void SetShield(TD_EnemyView view, float fraction) {
+            view.shield = fraction;
+            bool on = fraction > 0f;
+            if (view.shieldBubble != null && view.shieldBubble.activeSelf != on) view.shieldBubble.SetActive(on);
+            if (view.shieldFill == null) return;
+            if (view.shieldFill.parent != null && view.shieldFill.parent.gameObject.activeSelf != on) view.shieldFill.parent.gameObject.SetActive(on);
+            view.shieldFill.localScale = new Vector3(Mathf.Max(0.001f, fraction), 1f, 1f);
         }
 
         /// <summary>Slowed enemies are tinted frost blue; hits flash them bright for a moment.</summary>
@@ -595,6 +785,7 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         void Return(TD_EnemyKind kind, TD_EnemyView view) {
             view.slowed = false;
+            view.nextHealFx = 0f;
             view.hitFlash = 0f;
             PaintBody(view);
             view.gameObject.SetActive(false);
@@ -673,6 +864,15 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (shot.slot >= towerViews.Length || towerViews[shot.slot] == null || !enemyViews.TryGetValue(shot.enemy, out var target)) return;
             var tower = towerViews[shot.slot];
             Vector3 aim = target.transform.position + Vector3.up * tuning.aimHeight;
+            // A Tesla bolt jumping on from an enemy it already hit.
+            if (shot.from != 0) {
+                if (enemyViews.TryGetValue(shot.from, out var source)) {
+                    Vector3 start = source.transform.position + Vector3.up * tuning.aimHeight;
+                    fx.Chain(start, aim);
+                    if (shot.blocked) Blocked(aim, start, towerSnaps[shot.slot].kind);
+                }
+                return;
+            }
             if (tower.head != null) {
                 Vector3 flat = aim - tower.head.position;
                 flat.y = 0f;
@@ -683,8 +883,22 @@ namespace Universes.UniverseData.tower_defense.Client {
             }
             towerLastShot[shot.slot] = Time.time;
             tower.recoil = 1f;
-            Vector3 from = tower.muzzle != null ? tower.muzzle.position : tower.transform.position + Vector3.up * tuning.fallbackMuzzleHeight;
-            fx.Shot(towerSnaps[shot.slot].kind, from, target.transform, aim);
+            var muzzle = tower.Muzzle;
+            Vector3 from = muzzle != null ? muzzle.position : tower.transform.position + Vector3.up * tuning.fallbackMuzzleHeight;
+            var kind = towerSnaps[shot.slot].kind;
+            fx.Shot(kind, from, target.transform, aim);
+            // A hit that bounced off the shield (it did nothing) looks and sounds unlike one the shield soaked.
+            if (shot.blocked) Blocked(aim, from, kind);
+            // Instant hits the shield soaked spark in the shield colour (shells show it where they land).
+            else if (target.shield > 0f && kind is TD_TowerKind.Gunner or TD_TowerKind.Sniper or TD_TowerKind.Tesla) fx.ShieldSpark(aim);
+        }
+
+        /// <summary>A shot that bounced off a shield: a ricochet, and the first time in a game a toast that says why and what to build.</summary>
+        void Blocked(Vector3 at, Vector3 from, TD_TowerKind kind) {
+            fx.Ricochet(at, from);
+            if (toldBlocked) return;
+            toldBlocked = true;
+            hud.Toast($"{TD_Rules.Tower(kind).name} shots bounce off shields! Break them with a Cannon, Sniper or Tesla.", TD_Hud.ToastKind.Bad, tuning.blockedHintSeconds);
         }
     }
 }

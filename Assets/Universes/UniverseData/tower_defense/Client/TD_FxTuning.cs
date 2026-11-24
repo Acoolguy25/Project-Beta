@@ -54,6 +54,16 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Min(0f)] public float projectileGlow = 2f;
         [Tooltip("Shots aim this high above an enemy's pivot; towers without a muzzle fire from this high.")]
         public float aimHeight = 1f, fallbackMuzzleHeight = 3f;
+        [Tooltip("Tesla lightning: width (m), life (s) and how far the bolt's kinks stray from a straight line (m).")]
+        [Min(0.01f)] public float arcWidth = 0.28f, arcSeconds = 0.16f;
+        [Min(0f)] public float arcJitter = 0.9f;
+        [Tooltip("How often a living bolt re-jitters (times per second), so it crackles instead of hanging still.")]
+        [Min(1f)] public float arcFlickerRate = 30f;
+        [Min(0f)] public float arcHitScale = 0.8f;
+        [Tooltip("Mortar shells: flight seconds, arc height (m), shell scale, blast scale and shake (0..1).")]
+        [Min(0.05f)] public float mortarFlight = 1.05f;
+        [Min(0f)] public float mortarArc = 16f, mortarShellScale = 1.1f, mortarBlastScale = 1.7f;
+        [Range(0f, 1f)] public float mortarShake = 0.22f;
 
         [Header("Kills")]
         [Tooltip("Shake from a blast fades out over this many metres.")]
@@ -96,6 +106,75 @@ namespace Universes.UniverseData.tower_defense.Client {
         public Color hitFlashColor = Color.white;
         [Range(0f, 1f)] public float hitFlashStrength = 0.55f;
         [Range(1f, 6f)] public float hitFlashBrightness = 2.5f;
+
+        [Header("Shields and medics")]
+        [Tooltip("Burst when a shield breaks (shield colour) and its callout.")]
+        [Min(0f)] public float shieldBreakScale = 2.2f;
+        public string shieldBreakText = "SHIELD DOWN";
+        [Min(0.1f)] public float shieldBreakTextSize = 0.6f;
+        [Tooltip("Shields that break together (an EMP, a Tesla chain) share one callout: no new one for this many seconds.")]
+        [Min(0f)] public float shieldBreakTextGap = 0.8f;
+        public SfxSound shieldBreakSound = new();
+        [Tooltip("Hits a shield soaks (the shield bar drops) spark in the shield colour at this scale.")]
+        [Min(0f)] public float shieldSparkScale = 0.5f;
+        [Tooltip("Hits too weak to touch a shield (TD_Rules.ShieldBlockBelow): a grey ricochet glancing off, a dull ping and, now and then, a callout.")]
+        public Color ricochetColor = new(0.78f, 0.8f, 0.84f);
+        [Min(0f)] public float ricochetScale = 0.6f;
+        public SfxSound ricochetSound = new();
+        public string blockedText = "BLOCKED";
+        [Min(0.1f)] public float blockedTextSize = 0.55f;
+        [Tooltip("At most one BLOCKED callout this often (seconds), however many Gunners are bouncing.")]
+        [Min(0f)] public float blockedTextGap = 2.5f;
+        [Tooltip("A BLOCKED callout the HUD guard would move further than this (fraction of screen height) is skipped, so it never lands on a different enemy or tower.")]
+        [Range(0f, 1f)] public float blockedMaxShift = 0.06f;
+        [Tooltip("Heal sparkles on an enemy a medic is repairing: at most one per enemy every this many seconds.")]
+        [Min(0.05f)] public float healFxInterval = 0.7f;
+        [Min(0f)] public float healFxScale = 0.9f;
+
+        [Header("Abilities")]
+        [Tooltip("Airstrike jet: flying height and speed (m, m/s), how far before the target it appears and its scale.")]
+        [Min(1f)] public float jetHeight = 24f, jetSpeed = 95f, jetLeadIn = 140f;
+        [Min(0.1f)] public float jetScale = 1f;
+        [Tooltip("Bombs: how many blasts, spread over the strike radius, and the time between them.")]
+        [Min(1)] public int strikeBlasts = 6;
+        [Tooltip("The stick of bombs covers this share of the strike's diameter along the road, each blast jittered by this share of the radius.")]
+        [Range(0f, 1f)] public float strikeSpread = 0.8f, strikeJitter = 0.25f;
+        [Tooltip("The ring marking the strike, as a share of its radius.")]
+        [Min(0f)] public float strikeRingScale = 0.5f;
+        [Min(0f)] public float strikeBlastInterval = 0.07f, strikeBlastScale = 2.2f;
+        [Range(0f, 1f)] public float strikeShake = 0.85f;
+        [Tooltip("Ground marker where the strike lands, shown from the call until the bombs fall.")]
+        [Min(0f)] public float strikeMarkerScale = 3f;
+        public SfxSound jetSound = new();
+        [Tooltip("EMP: ring size at the base and on each enemy, the screen flash and its length.")]
+        [Min(0f)] public float empRingScale = 14f, empEnemyScale = 1.6f;
+        public Color empFlash = new(0.45f, 0.75f, 1f, 0.35f);
+        [Min(0.05f)] public float empFlashSeconds = 0.35f;
+        public SfxSound empSound = new();
+        [Tooltip("Callout over the strike or the base (the toast pill names who called it). Kept low and short: "
+            + "at 8 m and with the caster's name it ran over the top panel.")]
+        [Min(0.1f)] public float abilityCalloutSize = 0.9f;
+        [Min(0f)] public float abilityCalloutHeight = 4f;
+
+        [Header("Carrier")]
+        [Tooltip("A destroyed Carrier bursts in the drone colour (ring and sparks) so the swarm it lets loose reads, with a short callout.")]
+        [Min(0f)] public float carrierBurstScale = 3f;
+        public string carrierBurstText = "DRONES!";
+        [Min(0.1f)] public float carrierBurstTextSize = 0.6f;
+
+        [Header("Popups and the HUD")]
+        [Tooltip("Popups are kept below the HUD's top band (TD_ScreenGuard): their half height and the gap kept, as shares of the screen height.")]
+        [Range(0f, 0.2f)] public float popupGuardHalfHeight = 0.04f, popupGuardMargin = 0.012f;
+        [Tooltip("Half width per character of a popup, and the least half width (shares of the screen height).")]
+        [Range(0f, 0.1f)] public float popupGuardCharWidth = 0.012f, popupGuardMinHalfWidth = 0.035f;
+        [Tooltip("The retention kit's toast column (top right) is kept clear this far down from its top (canvas units).")]
+        [Min(0f)] public float kitToastColumnHeight = 180f;
+
+        [Header("New enemies")]
+        [Tooltip("The new-enemy card stays up this long into the wave it introduces (it shows from the build phase before).")]
+        [Min(0f)] public float introWaveSeconds = 10f;
+        [Tooltip("The first blocked hit of a game also says why in a toast, for this long.")]
+        [Min(0.3f)] public float blockedHintSeconds = 4f;
 
         [Header("Base")]
         public Color baseHitFlash = new(1f, 0.25f, 0.2f);

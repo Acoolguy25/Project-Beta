@@ -33,14 +33,23 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// <summary>
         /// Turret model per level (index 0 = level 1) and plinth-relative size per tower, index-aligned
         /// with <see cref="TD_TowerKind"/>. Every upgrade swaps to a different, heavier model (and adds a
-        /// trim band, see <see cref="TrimBands"/>), so each level reads at a glance.
+        /// trim band, see <see cref="TrimBands"/>), so each level reads at a glance. A bare name is a
+        /// turret part; a name with a folder is any Cartoon Military prefab (the Tesla's masts and the
+        /// Artillery's vehicles: every turret part is already taken by the first four towers).
         /// </summary>
         static readonly (string[] models, float size)[] TowerModels = {
             (new[] { "Turret_08_Prefeb", "Turret_09_Prefeb", "Turret_07_Prefeb" }, 4.4f), // Gunner: gatling, rifle, armoured gatling
             (new[] { "Turret_12_Prefeb", "Turret_06_Prefeb", "Turret_01_Prefeb" }, 4.8f), // Cannon: low triple gun, armoured gun, twin pods
             (new[] { "Turret_10_Prefeb", "Turret_13_Prefeb", "Turret_11_Prefeb" }, 4.6f), // Frost: emitter, twin prong, cryo tank
             (new[] { "Turret_04_Prefeb", "Turret_02_Prefeb", "Turret_03_Prefeb" }, 5.2f), // Sniper: long gun, sensor gun, heavy battery
+            (new[] { "Building_Prefebs/GuardPoint_01_Prefeb", "Building_Prefebs/GuardPoint_03_Prefeb", "Building_Prefebs/GuardPoint_02_Prefeb" }, 4.6f), // Tesla: stilt tower, tall tower, armoured tower (a coil orb on top)
+            (new[] { "SelfPropelledArtillery_Prefebs/SelfPropelledArtillery_01_Prefeb", "SelfPropelledArtillery_Prefebs/SelfPropelledArtillery_02_Prefeb", "MLRS_Prefebs/MLRS_01_Prefeb" }, 6f), // Artillery: light gun, heavy gun, rocket battery (team-painted, see TeamPaint)
         };
+
+        /// <summary>The Tesla's glowing coil orb: size (m) and how far above the mast's top it floats.</summary>
+        const float CoilSize = 1.1f, CoilLift = 0.4f;
+        /// <summary>Gold Trim: a ring of this radius (fraction of the pad) around the tower's foot.</summary>
+        const float GoldTrimRadius = 0.46f;
 
         /// <summary>How far each level's paint leans toward the tower's colour (index 0 = level 1; 0 = the model's own colours).</summary>
         static readonly float[] LevelPaint = { 0f, 0.38f, 0.6f };
@@ -48,10 +57,22 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const float FrostBasePaint = 0.3f;
         /// <summary>Faint glow of a frost tower's paint (an HDR multiple of its colour).</summary>
         const float FrostGlow = 0.12f;
+        /// <summary>
+        /// The Artillery's models are army vehicles like the enemies (green and desert tan), so every level
+        /// is repainted in the tower's own blue from level 1: its textures are swapped for desaturated
+        /// copies (<see cref="TeamTextureFolder"/>) and painted this strongly, with a faint glow.
+        /// </summary>
+        const float TeamPaint = 0.8f, TeamGlow = 0.1f;
+        /// <summary>Greyscale copies of the pack textures the Artillery uses, named "{texture}_Team.png".</summary>
+        const string TeamTextureFolder = Root + "/Textures/Team";
         /// <summary>Glowing trim bands in the tower's colour around the turret's base, per level (index 0 = level 1): the colour says which tower, the count which level.</summary>
         static readonly int[] TrimBands = { 1, 2, 3 };
         /// <summary>Extra fit size for models whose long barrel makes them read small at the tower's size.</summary>
-        static readonly Dictionary<string, float> ModelFit = new() { ["Turret_04_Prefeb"] = 1.4f, ["Turret_01_Prefeb"] = 1.1f };
+        static readonly Dictionary<string, float> ModelFit = new() {
+            ["Turret_04_Prefeb"] = 1.4f, ["Turret_01_Prefeb"] = 1.1f,
+            ["Building_Prefebs/GuardPoint_03_Prefeb"] = 1.2f, ["Building_Prefebs/GuardPoint_02_Prefeb"] = 1.3f,
+            ["SelfPropelledArtillery_Prefebs/SelfPropelledArtillery_02_Prefeb"] = 1.05f, ["MLRS_Prefebs/MLRS_01_Prefeb"] = 1.1f,
+        };
         /// <summary>Gap in metres between a turret's top and its level stars.</summary>
         const float BadgeGap = 1f;
         /// <summary>Uniform tower scale per level (index 0 = level 1).</summary>
@@ -61,7 +82,15 @@ namespace Universes.UniverseData.tower_defense.Editor {
         static readonly (string model, float size)[] EnemyModels = {
             ("APC_Prefebs/APC_01_Prefeb.prefab", 3.6f), ("APC_Prefebs/APC_03_Prefeb.prefab", 4.6f), ("Tank_Prefebs/Tank_01_Prefeb.prefab", 5.2f),
             ("Chopper_Prefebs/Chopper_01_Prefeb.prefab", 6f), ("Tank_Prefebs/Tank_05_Prefeb.prefab", 8.5f),
+            ("Tank_Prefebs/Tank_03_Prefeb.prefab", 5.6f), ("APC_Prefebs/APC_02_Prefeb.prefab", 4.8f),
+            ("HoverCraft_Prefeb/HoverCraft_Prefeb.prefab", 6.8f), ("UAV_Prefebs/UAV_01_Prefeb.prefab", 2.8f),
         };
+
+        /// <summary>The Airstrike jet (flies along +Z over the road) and its length in metres.</summary>
+        const string JetModel = "Jet_Prefebs/Jet_02_Prefeb.prefab";
+        const float JetSize = 11f;
+        /// <summary>Points of a Tesla bolt (more = finer kinks).</summary>
+        const int ArcPoints = 12;
 
         /// <summary>Width of a tower pad (the helipad model) in metres.</summary>
         const float PadSize = 5.4f;
@@ -159,6 +188,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         internal sealed class Materials {
             public Material barBack, barFill, frost, blob, star, marker, ring, rangeRing, bossRing, tracer, projectile, ghost;
+            public Material shield, shieldFill, healRing, gold, coil;
             public Material[] trims;
         }
 
@@ -177,6 +207,11 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 tracer = Unlit("Tracer", Color.white, additive: true),
                 projectile = Kit.Mat("Projectile", Color.white, emission: 2f),
                 ghost = Unlit("Ghost", new Color(1f, 1f, 1f, 0.45f), transparent: true),
+                shield = Kit.Mat("ShieldBubble", TD_Palette.Shield, emission: 0.5f, alpha: 0.22f, smoothness: 0.95f),
+                shieldFill = Unlit("ShieldFill", TD_Palette.Shield),
+                healRing = Unlit("HealRing", new Color(TD_Palette.Heal.r, TD_Palette.Heal.g, TD_Palette.Heal.b, 0.45f), transparent: true),
+                gold = Kit.Mat("GoldTrim", TD_Palette.Star, emission: 0.8f, smoothness: 0.7f),
+                coil = Kit.Mat("TeslaCoil", TD_Palette.Tower(TD_TowerKind.Tesla), emission: 1.1f, smoothness: 0.6f),
                 trims = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>()
                     .Select(k => Kit.Mat("Trim" + k, TD_Palette.Tower(k), emission: 0.6f, smoothness: 0.5f)).ToArray(),
             };
@@ -246,7 +281,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         static GameObject Tower(TD_TowerKind kind, Materials m) {
             var stats = TD_Rules.Tower(kind);
             var (models, size) = TowerModels[(int)kind];
-            var root = new GameObject(stats.name);
+            var root = new GameObject(FileName(kind));
             var view = root.AddComponent<TD_TowerView>();
             var head = Empty("Head", root.transform);
             view.head = head.transform;
@@ -275,6 +310,24 @@ namespace Universes.UniverseData.tower_defense.Editor {
             }
             CheckTiers(kind, tierBounds);
             view.muzzle = Empty("Muzzle", head.transform, new Vector3(0f, size * 0.45f, size * 0.55f)).transform;
+            if (kind == TD_TowerKind.Tesla) {
+                // Bolts leave from a glowing coil floating on top of each level's mast (its own muzzle),
+                // and the level stars move up above the coil.
+                view.tierMuzzles = new Transform[TD_Rules.MaxLevel];
+                for (int level = 1; level <= TD_Rules.MaxLevel; level++) {
+                    float top = view.badgeHeight[level - 1] > 0f ? view.badgeHeight[level - 1] - BadgeGap : size;
+                    var coil = Primitive(PrimitiveType.Sphere, "Coil", view.tiers[level - 1].transform, new Vector3(0f, top + CoilLift + CoilSize * 0.5f, 0f), Vector3.one * CoilSize, m.coil, false);
+                    NoShadows(coil);
+                    view.tierMuzzles[level - 1] = coil.transform;
+                    view.badgeHeight[level - 1] = top + CoilLift + CoilSize + BadgeGap;
+                }
+            }
+
+            // Gold Trim unlock: a gold ring at the tower's foot (the client shows it for its owners' towers).
+            var trim = FlatRing("GoldTrim", root.transform, PadSize * GoldTrimRadius, 0.12f, m.gold, 56);
+            trim.widthMultiplier = 0.35f;
+            trim.gameObject.SetActive(false);
+            view.goldTrim = trim.gameObject;
 
             // Level stars only (the builder's name is on the info card): flat to the camera plane and
             // never taller than a few percent of the screen; the client hides them near the camera and
@@ -293,7 +346,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             view.rangeRing = Ring(root.transform, m.rangeRing);
             view.nextRangeRing = Ring(root.transform, m.rangeRing, "NextRangeRing");
             view.nextRangeRing.widthMultiplier = 0.3f;
-            return Kit.Save(root, "Towers", stats.name);
+            return Kit.Save(root, "Towers", FileName(kind));
         }
 
         /// <summary>
@@ -309,9 +362,17 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     Debug.LogError($"[TowerDefense] {kind} level {i + 1} turret is smaller than level {i} (height {sizes[i].y:0.00} vs {sizes[i - 1].y:0.00} m, volume {Volume(sizes[i]):0} vs {Volume(sizes[i - 1]):0} m3). Pick a bigger model or add a ModelFit entry.");
         }
 
+        /// <summary>
+        /// The asset name of a tower's prefab (and its ghost): the kind's enum name, not its display name, so
+        /// renaming a tower (Mortar to Artillery) keeps its files and their references.
+        /// </summary>
+        internal static string FileName(TD_TowerKind kind) => kind.ToString();
+
         /// <summary>The turret model for one level, with the pack's own textured materials.</summary>
+        static string ModelPath(string model) => model.Contains('/') ? Military + model + ".prefab" : Turrets + model + ".prefab";
+
         static GameObject TurretModel(TD_TowerKind kind, string model, Transform parent, float size, Materials m) {
-            var turret = Model(Turrets + model + ".prefab", parent, size * (ModelFit.TryGetValue(model, out float fit) ? fit : 1f));
+            var turret = Model(ModelPath(model), parent, size * (ModelFit.TryGetValue(model, out float fit) ? fit : 1f));
             if (turret == null) Debug.LogWarning($"[TowerDefense] Turret model {model} missing; {TD_Rules.Tower(kind).name} has no model at this level.");
             return turret;
         }
@@ -323,15 +384,30 @@ namespace Universes.UniverseData.tower_defense.Editor {
         static void Paint(GameObject turret, TD_TowerKind kind, int level) {
             float amount = LevelPaint[level - 1];
             float glow = 0f;
+            bool team = kind == TD_TowerKind.Mortar;
             if (kind == TD_TowerKind.Frost) {
                 amount = Mathf.Max(amount, FrostBasePaint);
                 glow = FrostGlow;
+            }
+            if (team) {
+                amount = Mathf.Max(amount, TeamPaint);
+                glow = TeamGlow;
             }
             if (amount <= 0f) return;
             Color paint = Color.Lerp(Color.white, TD_Palette.Tower(kind), amount);
             Color emission = TD_Palette.Tower(kind) * glow;
             foreach (var r in turret.GetComponentsInChildren<Renderer>())
-                r.sharedMaterials = r.sharedMaterials.Select(source => source == null ? null : Painted(source, $"{kind}_L{level}_{source.name}", paint, emission)).ToArray();
+                r.sharedMaterials = r.sharedMaterials.Select(source => source == null ? null
+                    : Painted(source, $"{kind}_L{level}_{source.name}", paint, emission, team ? TeamTexture(source) : null)).ToArray();
+        }
+
+        /// <summary>The desaturated copy of <paramref name="source"/>'s main texture in <see cref="TeamTextureFolder"/>, or null (a warning: the model keeps its army colours).</summary>
+        static Texture TeamTexture(Material source) {
+            var texture = source.HasProperty("_BaseMap") ? source.GetTexture("_BaseMap") : source.mainTexture;
+            if (texture == null) return null;
+            var team = AssetDatabase.LoadAssetAtPath<Texture2D>($"{TeamTextureFolder}/{texture.name}_Team.png");
+            if (team == null) Debug.LogWarning($"[TowerDefense] No team texture for {texture.name} in {TeamTextureFolder}; the Artillery keeps its army colours there.");
+            return team;
         }
 
         /// <summary>Glowing bands in the tower's colour stacked around the turret's base, <see cref="TrimBands"/> per level (1/2/3).</summary>
@@ -348,7 +424,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             }
         }
 
-        static Material Painted(Material source, string name, Color paint, Color emission = default) {
+        static Material Painted(Material source, string name, Color paint, Color emission = default, Texture baseMap = null) {
             string path = $"{Root}/Materials/Tiers/{name}.mat";
             var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (mat == null) {
@@ -363,6 +439,9 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     mat.SetColor(property, source.GetColor(property) * paint);
                     break;
                 }
+            if (baseMap != null)
+                foreach (string property in new[] { "_BaseMap", "_MainTex" })
+                    if (mat.HasProperty(property)) mat.SetTexture(property, baseMap);
             if (emission.maxColorComponent > 0f && mat.HasProperty("_EmissionColor")) {
                 mat.EnableKeyword("_EMISSION");
                 mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
@@ -375,7 +454,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// <summary>A see-through copy of a tower's level-1 model, previewed on a pad before building (tinted by the client).</summary>
         static GameObject Ghost(TD_TowerKind kind, Materials m) {
             var (models, size) = TowerModels[(int)kind];
-            var root = new GameObject(TD_Rules.Tower(kind).name + " Ghost");
+            var root = new GameObject(FileName(kind) + " Ghost");
             var turret = TurretModel(kind, models[0], root.transform, size, m);
             if (turret != null) {
                 foreach (var r in turret.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => m.ghost).ToArray();
@@ -417,6 +496,22 @@ namespace Universes.UniverseData.tower_defense.Editor {
             view.healthFill = pivot.transform;
             view.healthRenderer = fill.GetComponent<Renderer>();
 
+            if (stats.shield > 0f) {
+                // Shield: a translucent bubble around the hull and a thin cyan bar above the health bar.
+                var bubble = Primitive(PrimitiveType.Sphere, "ShieldBubble", root.transform, new Vector3(0f, size * 0.28f, 0f), Vector3.one * size * 1.05f, m.shield, false);
+                NoShadows(bubble);
+                view.shieldBubble = bubble;
+                var shieldBar = Empty("ShieldBar", bar.transform, new Vector3(-barWidth * 0.5f, 0.32f, -0.03f));
+                var shieldFill = Cube("Fill", shieldBar.transform, new Vector3(barWidth * 0.5f, 0f, 0f), new Vector3(barWidth, 0.16f, 0.02f), m.shieldFill, false);
+                NoShadows(shieldFill);
+                view.shieldFill = shieldBar.transform;
+            }
+            if (stats.heal > 0f) {
+                // Medic: its repair radius drawn on the ground in heal green, so players see what to kill first.
+                var heal = FlatRing("HealRing", root.transform, TD_Rules.HealRadius, 0.18f, m.healRing, 72);
+                heal.widthMultiplier = 0.3f;
+            }
+
             if (TD_Rules.IsBoss(kind)) {
                 // Boss marker: a red ring on the ground around the heavy tank, readable from above.
                 var ring = FlatRing("BossRing", root.transform, size * 0.62f, 0.2f, m.bossRing, 64);
@@ -451,9 +546,24 @@ namespace Universes.UniverseData.tower_defense.Editor {
             trail.shadowCastingMode = ShadowCastingMode.Off;
             trail.minVertexDistance = 0.2f;
 
+            var arc = new GameObject("TeslaArc");
+            var bolt = arc.AddComponent<LineRenderer>();
+            bolt.positionCount = ArcPoints;
+            bolt.useWorldSpace = true;
+            bolt.widthMultiplier = 0.28f;
+            bolt.sharedMaterial = m.tracer;
+            bolt.shadowCastingMode = ShadowCastingMode.Off;
+            bolt.numCapVertices = 2;
+            bolt.numCornerVertices = 1;
+
+            var jet = new GameObject("AirstrikeJet");
+            if (Model(Military + JetModel, jet.transform, JetSize) == null) Debug.LogWarning("[TowerDefense] Jet model missing; the Airstrike shows bombs without a jet.");
+
             return new TD_EffectSet {
                 tracer = Kit.Save(tracer, "Fx", "Tracer"),
                 projectile = Kit.Save(projectile, "Fx", "Projectile"),
+                arc = Kit.Save(arc, "Fx", "TeslaArc"),
+                jet = jet.transform.childCount > 0 ? Kit.Save(jet, "Fx", "AirstrikeJet") : null,
             };
         }
 
@@ -548,7 +658,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 tower.transform.position = TD_Rules.Slots[i] + Vector3.up * slot.topHeight;
                 tower.ShowLevel(1 + k % TD_Rules.MaxLevel);
             }
-            var kinds = new[] { TD_EnemyKind.Scout, TD_EnemyKind.Scout, TD_EnemyKind.Apc, TD_EnemyKind.Tank, TD_EnemyKind.Chopper, TD_EnemyKind.Apc, TD_EnemyKind.Boss, TD_EnemyKind.Scout };
+            var kinds = new[] { TD_EnemyKind.Scout, TD_EnemyKind.Drone, TD_EnemyKind.Apc, TD_EnemyKind.Shield, TD_EnemyKind.Medic, TD_EnemyKind.Chopper, TD_EnemyKind.Boss, TD_EnemyKind.Carrier };
             for (int i = 0; i < kinds.Length; i++) {
                 var go = (GameObject)PrefabUtility.InstantiatePrefab(map.enemyPrefabs[(int)kinds[i]], map.transform);
                 Vector3 p = TD_Rules.EnemyPosition(kinds[i], 40f + i * 22f, out Vector3 f);

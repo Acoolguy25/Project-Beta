@@ -13,7 +13,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
     public static class TD_Portraits {
         const int Size = 256;
         /// <summary>Children hidden while rendering (badges, bars, rings, trim bands, shadows).</summary>
-        static readonly string[] Hidden = { "Badge", "RangeRing", "NextRangeRing", "HealthBar", "FrostShell", "Shadow", "BossRing", "TrimBand1", "TrimBand2", "TrimBand3" };
+        static readonly string[] Hidden = { "Badge", "RangeRing", "NextRangeRing", "HealthBar", "FrostShell", "Shadow", "BossRing", "TrimBand1", "TrimBand2", "TrimBand3", "GoldTrim", "HealRing", "ShieldBar" };
 
         [MenuItem("Ryan/Tower Defense/Render Portraits")]
         public static void RenderAll() {
@@ -35,7 +35,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = false;
 
             foreach (TD_TowerKind kind in System.Enum.GetValues(typeof(TD_TowerKind)))
-                Render(cam, $"{TD_Authoring.Root}/Prefabs/Towers/{TD_Rules.Tower(kind).name}.prefab", $"{folder}/tower_{kind.ToString().ToLowerInvariant()}.png", 25f);
+                Render(cam, $"{TD_Authoring.Root}/Prefabs/Towers/{TD_Authoring.FileName(kind)}.prefab", $"{folder}/tower_{kind.ToString().ToLowerInvariant()}.png", 25f);
             foreach (TD_EnemyKind kind in System.Enum.GetValues(typeof(TD_EnemyKind)))
                 Render(cam, $"{TD_Authoring.Root}/Prefabs/Enemies/{TD_Rules.Enemy(kind).name}.prefab", $"{folder}/enemy_{kind.ToString().ToLowerInvariant()}.png", 20f);
             Object.DestroyImmediate(cam.gameObject);

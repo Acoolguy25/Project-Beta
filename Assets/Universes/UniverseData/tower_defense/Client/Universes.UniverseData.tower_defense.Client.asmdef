@@ -14,7 +14,9 @@
         "Unity.ugui",
         "RyanAssets.UI",
         "RyanAssets.GameFeel",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

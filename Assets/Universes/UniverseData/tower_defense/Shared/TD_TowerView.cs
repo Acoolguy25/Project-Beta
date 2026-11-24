@@ -23,6 +23,13 @@ namespace Universes.UniverseData.tower_defense {
         public LineRenderer nextRangeRing;
         [Tooltip("Degrees per second the head turns toward its target.")]
         [Min(1f)] public float turnSpeed = 540f;
+        [Tooltip("Gold trim shown on towers built by a player who owns the Gold Trim unlock.")]
+        public GameObject goldTrim;
+        [Tooltip("Optional muzzle per level (index 0 = level 1), for towers whose models put the muzzle at different heights (Tesla coils); else muzzle.")]
+        public Transform[] tierMuzzles;
+
+        /// <summary>Where the current level's shots leave from.</summary>
+        public Transform Muzzle => tierMuzzles != null && shownLevel >= 1 && shownLevel <= tierMuzzles.Length && tierMuzzles[shownLevel - 1] != null ? tierMuzzles[shownLevel - 1] : muzzle;
 
         [HideInInspector] public Quaternion aim = Quaternion.identity;
         [HideInInspector] public float recoil;

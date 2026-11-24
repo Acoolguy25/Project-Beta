@@ -52,11 +52,33 @@ MonoBehaviour:
     _editor_value: 10
   firstBuildSeconds: 30
   buildSeconds: 12
-  resultsSeconds: 12
+  resultsSeconds: 14
+  voteSeconds: 15
+  voteMinSeconds: 4
   waveCount: 20
   snapshotInterval: 0.1
   allowFastForward: 1
-  waveXP: 6
-  victoryXP: 120
-  victoryGold: 60
   voteInterval: 0.25
+  airstrikeDelay: 1.1
+  retentionTuning:
+    levels:
+      maxLevel: 50
+      firstLevelXp: 100
+      extraXpPerLevel: 25
+      growth: 1
+    streak:
+      firstDayXp: 25
+      xpPerExtraDay: 15
+      firstDayGold: 10
+      goldPerExtraDay: 5
+      maxBonusDays: 7
+      lineFormat: Daily streak (day {0})
+    dailyChallengeCount: 3
+    accountXpScale: 1
+  waveXp: 8
+  victoryXp: 150
+  victoryGold: 60
+  killsPerXp: 5
+  bossXp: 25
+  starXp: 20
+  recordXp: 30
