@@ -9,7 +9,10 @@
         "Unity.TextMeshPro",
         "Unity.ugui",
         "Unity.RenderPipelines.Core.Runtime",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Retention.Editor"
     ],
     "includePlatforms": [
         "Editor"

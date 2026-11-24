@@ -9,7 +9,10 @@
         "RyanAssets.UI",
         "RyanAssets.UI.Editor",
         "Unity.TextMeshPro",
-        "Unity.ugui"
+        "Unity.ugui",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Retention.Editor"
     ],
     "includePlatforms": [
         "Editor"

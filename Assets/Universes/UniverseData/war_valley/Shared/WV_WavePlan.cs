@@ -22,6 +22,11 @@ namespace Universes.UniverseData.war_valley.Shared {
         [Tooltip("Extra strength that compounds: later waves grow faster than early ones.")]
         [Min(0f)] public float StrengthAcceleration = 0.06f;
 
+        [Tooltip("Most an ordinary wave's threat may rise over the wave before it, as a fraction: 0.2 is " +
+                 "+20%. Surges and boss waves are announced and may jump further. Stops a themed wave " +
+                 "(a second Swarm, say) landing on top of a new troop kind as one cliff.")]
+        [Range(0.05f, 1f)] public float MaxStepUp = 0.2f;
+
         [Tooltip("Every Nth wave is a surge: bigger, and announced. 0 turns surges off.")]
         [Min(0)] public int SurgeEvery = 5;
 
@@ -212,6 +217,19 @@ namespace Universes.UniverseData.war_valley.Shared {
         }
     }
 
+    /// <summary>The round's difficulty as it applies to one wave: multipliers on strength and enemy health.</summary>
+    public readonly struct WV_WaveScaling {
+        public static readonly WV_WaveScaling None = new(1f, 1f);
+
+        public readonly float StrengthMultiplier;
+        public readonly float HealthMultiplier;
+
+        public WV_WaveScaling(float strengthMultiplier, float healthMultiplier) {
+            StrengthMultiplier = strengthMultiplier;
+            HealthMultiplier = healthMultiplier;
+        }
+    }
+
     /// <summary>
     /// Builds each wave from its number, so the round gets progressively harder without a hand-
     /// written table.
@@ -289,7 +307,13 @@ namespace Universes.UniverseData.war_valley.Shared {
             WV_WaveTheme.Standard, WV_WaveTheme.Swarm, WV_WaveTheme.Marksmen, WV_WaveTheme.Blitz
         };
 
-        public static WV_Wave Build(int waveNumber, WV_WaveTuning tuning) {
+        public static WV_Wave Build(int waveNumber, WV_WaveTuning tuning) => Build(waveNumber, tuning, WV_WaveScaling.None);
+
+        /// <summary>
+        /// Builds wave <paramref name="waveNumber"/> with the round's difficulty applied on top of
+        /// the tuning: <paramref name="scaling"/> multiplies the strength budget and enemy health.
+        /// </summary>
+        public static WV_Wave Build(int waveNumber, WV_WaveTuning tuning, WV_WaveScaling scaling) {
             if (tuning == null)
                 throw new ArgumentNullException(nameof(tuning));
 
@@ -299,13 +323,11 @@ namespace Universes.UniverseData.war_valley.Shared {
             bool boss = IsBossWave(waveNumber, tuning);
             WV_WaveTheme theme = GetTheme(waveNumber, tuning);
 
-            float strength = GetStrength(waveNumber, tuning);
-            if (theme == WV_WaveTheme.Swarm && !IsFirstSwarm(waveNumber, tuning))
-                strength *= SwarmStrengthBonus;
+            float strength = GetBudget(waveNumber, tuning) * Mathf.Max(0.1f, scaling.StrengthMultiplier);
             List<WV_WaveGroup> groups = Compose(waveNumber, strength, GetFeaturedKinds(theme));
             groups = CapCount(groups, Mathf.Max(1, tuning.MaxEnemiesPerWave - (boss ? 1 : 0)));
 
-            float health = 1f + Mathf.Max(0f, tuning.HealthGrowthPerWave) * step;
+            float health = (1f + Mathf.Max(0f, tuning.HealthGrowthPerWave) * step) * Mathf.Max(0.1f, scaling.HealthMultiplier);
             int intermission = Mathf.Max(
                 Mathf.Max(5, tuning.MinimumIntermissionSeconds),
                 Mathf.RoundToInt(tuning.FirstIntermissionSeconds - tuning.IntermissionShrinkPerWave * step));
@@ -325,6 +347,27 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return 1f;
             float first = Mathf.Clamp(firstWaveScale, 0.1f, 1f);
             return Mathf.Lerp(first, 1f, Mathf.Max(0, waveNumber - 1) / (float)earlyWaves);
+        }
+
+        /// <summary>
+        /// The strength a wave actually spends: the curve, plus a later Swarm's bonus, held to at most
+        /// <see cref="WV_WaveTuning.MaxStepUp"/> over the wave before for any wave that is not an
+        /// announced surge or boss wave. Before this cap, wave 8 - the second Swarm, the wave the
+        /// Skinny Legend joins - spent 44% more than wave 7 and fielded half as many bodies again.
+        /// </summary>
+        public static float GetBudget(int waveNumber, WV_WaveTuning tuning) {
+            float strength = GetUncappedBudget(waveNumber, tuning);
+            if (waveNumber <= 1 || IsSurge(waveNumber, tuning) || IsBossWave(waveNumber, tuning))
+                return strength;
+            float ceiling = GetStrength(waveNumber - 1, tuning) * (1f + Mathf.Max(0f, tuning.MaxStepUp));
+            return Mathf.Min(strength, Mathf.Max(ceiling, GetStrength(waveNumber, tuning)));
+        }
+
+        static float GetUncappedBudget(int waveNumber, WV_WaveTuning tuning) {
+            float strength = GetStrength(waveNumber, tuning);
+            if (GetTheme(waveNumber, tuning) == WV_WaveTheme.Swarm && !IsFirstSwarm(waveNumber, tuning))
+                strength *= SwarmStrengthBonus;
+            return strength;
         }
 
         /// <summary>True when no wave before <paramref name="waveNumber"/> was a Swarm.</summary>
@@ -467,10 +510,11 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// wave. Kept short because the client's wave banner, hanging just under it, carries the
         /// enemy count, sides, boss and advice.
         /// </summary>
-        public static string DescribeTopBar(WV_Wave wave, int waveCount) =>
-            wave.Theme == WV_WaveTheme.Standard
-                ? $"Wave {wave.Number}/{waveCount}"
-                : $"Wave {wave.Number}/{waveCount} - {GetThemeName(wave.Theme)}";
+        public static string DescribeTopBar(WV_Wave wave, int waveCount) {
+            // A wave count of 0 or less is an Endless round: there is no last wave to count to.
+            string number = waveCount > 0 ? $"Wave {wave.Number}/{waveCount}" : $"Endless wave {wave.Number}";
+            return wave.Theme == WV_WaveTheme.Standard ? number : $"{number} - {GetThemeName(wave.Theme)}";
+        }
 
         /// <summary>The wave's strength budget, in knifemen, eased for the opening waves.</summary>
         public static float GetStrength(int waveNumber, WV_WaveTuning tuning) {

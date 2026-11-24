@@ -102,6 +102,12 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("The flag's bar and name.")]
         [SerializeField] Color flagColor = new(1f, 0.84f, 0.3f, 1f);
 
+        [Header("Doctrine Boost")]
+        [Tooltip("Seconds a bar stays up, grown and tinted, after a doctrine strengthens what it belongs to.")]
+        [SerializeField, Min(0.5f)] float boostSeconds = 3.5f;
+        [Tooltip("How much bigger a boosted bar is drawn at the start of its boost.")]
+        [SerializeField, Range(0f, 1f)] float boostGrowth = 0.45f;
+
         sealed class Entry {
             public EntityBase Entity;
             public Kind Kind;
@@ -119,6 +125,8 @@ namespace Universes.UniverseData.war_valley.Client {
         readonly Dictionary<EntityBase, Entry> byEntity = new();
         readonly Stack<WV_HealthBar> pool = new();
         readonly List<Vector2> namesPlaced = new();
+        /// <summary>Entities a doctrine just strengthened, until when their bar shows its boost.</summary>
+        readonly Dictionary<EntityBase, float> boostedUntil = new();
 
         Func<EntityBase, bool> isSelected;
         Func<EntityBase, bool> isOwn;
@@ -250,6 +258,8 @@ namespace Universes.UniverseData.war_valley.Client {
             Release(entry);
             entries.Remove(entry);
             byEntity.Remove(entry.Entity);
+            boostedUntil.Remove(entry.Entity);
+            boostTint.Remove(entry.Entity);
         }
 
         void Release(Entry entry) {
@@ -296,10 +306,36 @@ namespace Universes.UniverseData.war_valley.Client {
             }
         }
 
+        /// <summary>
+        /// A doctrine just strengthened <paramref name="entity"/>: its bar shows for a few seconds, grown
+        /// and tinted in <paramref name="tint"/> (the commander's colour), so the pick is seen on the army.
+        /// </summary>
+        public void Boost(EntityBase entity, Color tint) {
+            if (entity == null)
+                return;
+            boostedUntil[entity] = Time.unscaledTime + boostSeconds;
+            boostTint[entity] = tint;
+        }
+
+        readonly Dictionary<EntityBase, Color> boostTint = new();
+
+        /// <summary>0 when <paramref name="entity"/> has no boost, rising to 1 just after a doctrine strengthened it.</summary>
+        float BoostOf(EntityBase entity) {
+            if (boostedUntil.Count == 0 || !boostedUntil.TryGetValue(entity, out float until))
+                return 0f;
+            float left = until - Time.unscaledTime;
+            if (left > 0f)
+                return Mathf.Clamp01(left / boostSeconds);
+            boostedUntil.Remove(entity);
+            boostTint.Remove(entity);
+            return 0f;
+        }
+
         bool TryPlace(Entry entry, Camera camera, Vector3 cameraPosition, float scaleFactor, int selected) {
             EntityBase entity = entry.Entity;
             if (entity.IsDead || !entity.isActiveAndEnabled)
                 return false;
+            float boost = BoostOf(entity);
 
             RefreshNames(entry);
             long max = entity.MaxHealth.Value;
@@ -333,15 +369,18 @@ namespace Universes.UniverseData.war_valley.Client {
                     size = entry.Kind == Kind.Vehicle ? vehicleBarScale : 1f;
                     break;
             }
+            show |= boost > 0f;
             if (!show)
                 return false;
+            // A fresh boost springs the bar up and settles it back over the boost.
+            size *= 1f + boostGrowth * boost * boost;
 
             bool large = entry.Kind is Kind.Structure or Kind.Flag;
             float reach = large ? maxDistance * structureDistanceScale : maxDistance;
             float fadeStart = large ? fadeStartDistance * structureDistanceScale : fadeStartDistance;
             Vector3 position = entity.transform.position;
             float distance = Vector3.Distance(cameraPosition, position);
-            if (distance > reach && !isHovered)
+            if (distance > reach && !isHovered && boost <= 0f)
                 return false;
 
             float top = entry.Body != null ? entry.Body.bounds.max.y : position.y + fallbackHeight;
@@ -361,6 +400,8 @@ namespace Universes.UniverseData.war_valley.Client {
             if (named && !ClaimNameSpace(canvasPosition) && !isHovered && !entry.IsBoss)
                 named = false;
             Color color = entry.Kind == Kind.Flag ? flagColor : entry.IsBoss ? bossColor : GetSideColor(entity);
+            if (boost > 0f && boostTint.TryGetValue(entity, out Color tint))
+                color = Color.Lerp(color, Color.Lerp(tint, Color.white, 0.35f), Mathf.Clamp01(boost * 1.5f));
             bar.SetHealth(health, color);
             bar.SetName(named ? GetLabel(entry) : null,
                 entry.Kind == Kind.Flag ? flagColor : entry.IsBoss ? bossColor : nameColor);

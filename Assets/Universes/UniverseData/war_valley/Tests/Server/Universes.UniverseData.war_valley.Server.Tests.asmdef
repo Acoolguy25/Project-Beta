@@ -6,7 +6,8 @@
         "Universes.UniverseData.war_valley.Server",
         "RyanAssets.Progress",
         "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner"
+        "UnityEditor.TestRunner",
+        "RyanAssets.Retention"
     ],
     "includePlatforms": [
         "Editor"

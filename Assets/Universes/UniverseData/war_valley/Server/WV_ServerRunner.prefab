@@ -50,6 +50,98 @@ MonoBehaviour:
     _editor_value: 1
   DebugTimerSpeed:
     _editor_value: 10
+  DifficultyTuning:
+    Recruit:
+      DisplayName: Recruit
+      Description: The standard war. Win it to unlock Veteran.
+      StrengthMultiplier: 1
+      HealthMultiplier: 1
+      FlagDamageMultiplier: 1
+      StartingFundsMultiplier: 1
+      BountyMultiplier: 1
+      XpMultiplier: 1
+    Veteran:
+      DisplayName: Veteran
+      Description: Bigger, tougher waves. Pays 30% more XP.
+      StrengthMultiplier: 1.25
+      HealthMultiplier: 1.15
+      FlagDamageMultiplier: 1.1
+      StartingFundsMultiplier: 1
+      BountyMultiplier: 1.1
+      XpMultiplier: 1.3
+    Elite:
+      DisplayName: Elite
+      Description: Hard waves and a fragile flag. Pays 60% more XP.
+      StrengthMultiplier: 1.5
+      HealthMultiplier: 1.3
+      FlagDamageMultiplier: 1.25
+      StartingFundsMultiplier: 1.1
+      BountyMultiplier: 1.2
+      XpMultiplier: 1.6
+    Nightmare:
+      DisplayName: Nightmare
+      Description: Only the best defences hold. Double XP.
+      StrengthMultiplier: 1.8
+      HealthMultiplier: 1.5
+      FlagDamageMultiplier: 1.4
+      StartingFundsMultiplier: 1.2
+      BountyMultiplier: 1.3
+      XpMultiplier: 2
+    Endless:
+      DisplayName: Endless
+      Description: Veteran waves that never stop. How far can you go?
+      StrengthMultiplier: 1.25
+      HealthMultiplier: 1.15
+      FlagDamageMultiplier: 1.1
+      StartingFundsMultiplier: 1
+      BountyMultiplier: 1.1
+      XpMultiplier: 1.4
+    EndlessHealthPerExtraWave: 0.08
+    ThreeStarFlagFraction: 0.75
+    TwoStarFlagFraction: 0.35
+    VoteSeconds: 15
+    VoteAfterSummarySeconds: 22
+  DoctrineTuning:
+    EveryWaves: 2
+    HandSize: 3
+    CouncilHandSize: 4
+    EliteChance: 0.15
+    MedicTickSeconds: 1
+  Rewards:
+    XpPerWaveHeld: 15
+    XpPerKill: 1
+    VictoryXp: 250
+    VictoryGold: 40
+    XpPerStar: 40
+    FirstWinXp: 200
+    FirstWinGold: 60
+    EndlessXpPerWave: 10
+    WinAttendanceShare: 0.5
+  FrontTuning:
+    PreviewDayOffset: 0
+    ProfiteersBountyBonus: 0.25
+    IronStormEnemyHealth: 0.15
+    IronStormXpBonus: 0.25
+    SupplyLinesFunds: 300
+    SupplyLinesIncome: 0.1
+    EngineerStructureHealth: 0.2
+    RapidProductionSpeed: 0.2
+    ArmoredVehicleHealth: 0.25
+  RetentionTuning:
+    levels:
+      maxLevel: 20
+      firstLevelXp: 120
+      extraXpPerLevel: 40
+      growth: 1.08
+    streak:
+      firstDayXp: 25
+      xpPerExtraDay: 15
+      firstDayGold: 10
+      goldPerExtraDay: 5
+      maxBonusDays: 7
+      lineFormat: Daily streak (day {0})
+    dailyChallengeCount: 3
+    accountXpScale: 1
   _buildableStructures:
   - {fileID: 6833282079580836474, guid: 53a0525c09a3ef446a2b214054881b98, type: 3}
   - {fileID: 816667712998810890, guid: 88381a80ab9a1bc4cb0b2a639a5915f1, type: 3}
@@ -72,6 +164,7 @@ MonoBehaviour:
     BaseStrength: 4
     StrengthPerWave: 1.5
     StrengthAcceleration: 0.06
+    MaxStepUp: 0.2
     SurgeEvery: 5
     SurgeMultiplier: 1.3
     HealthGrowthPerWave: 0.03

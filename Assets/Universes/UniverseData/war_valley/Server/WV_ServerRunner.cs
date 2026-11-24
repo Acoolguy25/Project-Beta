@@ -28,7 +28,7 @@ namespace Universes.UniverseData.war_valley.Server
         /// <summary>Every wave was beaten with the flag standing. Only the victory epilogue is left.</summary>
         Victory
     }
-    public class WV_ServerRunner : ServerRunner
+    public partial class WV_ServerRunner : ServerRunner
     {
         // The half-scale terrain's central playable ground is around Y=75. Keep
         // players clear of the terrain while their client Rigidbody initializes.
@@ -138,6 +138,7 @@ namespace Universes.UniverseData.war_valley.Server
             serverArmy = gameObject.AddComponent<WV_ServerArmy>();
             serverTroops = gameObject.AddComponent<WV_ServerTroops>();
             serverTroops.Initialize(GetTroopPrefab());
+            InitializeCampaign();
 
             // Applied here rather than read per timer so that a building which starts its queue
             // mid-round uses the same pace as one that started at the opening whistle. The economy
@@ -214,14 +215,14 @@ namespace Universes.UniverseData.war_valley.Server
                 case WV_ActiveGameState.Wave:
                     // Kept short: the client's wave banner and edge arrows carry the detail, and a
                     // long pill here would repeat the banner hanging just under it.
-                    SetTopMessage(currentWave == null
+                    SetTopMessage((currentWave == null
                         ? $"Wave {WaveNumber + 1}"
-                        : WV_WavePlan.DescribeTopBar(currentWave, WaveTuning.WaveCount));
+                        : WV_WavePlan.DescribeTopBar(currentWave, AnnouncedWaveCount)) + TierBadge);
                     break;
                 case WV_ActiveGameState.AdvanceWave:
-                    SetTopMessage(WaveNumber + 2 > WaveTuning.WaveCount
+                    SetTopMessage((!IsEndless && WaveNumber + 2 > WaveTuning.WaveCount
                         ? $"Final wave - hold for {durationLeft} seconds"
-                        : $"Next wave in {durationLeft} s");
+                        : $"Next wave in {durationLeft} s") + TierBadge);
                     break;
                 case WV_ActiveGameState.FinishEnemiesOff:
                     int npcs = GameCharacter.TeamCount(WV_Alliances.GetWaveSide());
@@ -249,6 +250,7 @@ namespace Universes.UniverseData.war_valley.Server
                 new TeamConfig(WV_Alliances.GetCommanderSide(clientId), WV_Rules.GetCommanderColor(clientId)));
             playerData.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
             PlayerProgress.Load<WV_SaveData>(playerData, WV_SaveData.Universe).Forget();
+            CampaignPlayerJoined(playerData);
         }
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
@@ -298,17 +300,20 @@ namespace Universes.UniverseData.war_valley.Server
         protected void SpawnBoss(WV_Wave wave, Vector3 center) {
             WV_WaveBoss boss = wave.Boss;
             SpawnNpc(boss.Kind, boss.DisplayName, WithMarchSpeed(boss.Build, wave), center,
-                wave.HealthMultiplier * boss.HealthMultiplier);
+                wave.HealthMultiplier * boss.HealthMultiplier, isBoss: true);
         }
 
         /// <summary>The build with its speed scaled by the wave's march multiplier (1 after the opening waves).</summary>
-        private static CharacterBuild WithMarchSpeed(CharacterBuild build, WV_Wave wave) {
+        private CharacterBuild WithMarchSpeed(CharacterBuild build, WV_Wave wave) {
             build = build.OrStandard;
             build.SpeedMultiplier *= wave.MarchSpeedMultiplier;
+            // A front's plating (Iron Storm) makes every enemy of the day bigger, so the day shows on the field.
+            build.Proportions *= Mathf.Max(0.5f, frontEffect.EnemyScale);
             return build;
         }
 
-        private void SpawnNpc(WV_TroopKind kind, string displayName, CharacterBuild build, Vector3 center, float healthMultiplier) {
+        private void SpawnNpc(WV_TroopKind kind, string displayName, CharacterBuild build, Vector3 center,
+            float healthMultiplier, bool isBoss = false) {
             GameObject prefab = GetTroopPrefab();
             if (prefab == null)
                 return;
@@ -334,8 +339,10 @@ namespace Universes.UniverseData.war_valley.Server
             WV_Corpses.DespawnWhenDead(this, character);
             character.OnDied += (DamageType source, IEntity sourceEntity) =>
             {
-                if (source is not (DamageType.Reset or DamageType.Despawn))
+                if (source is not (DamageType.Reset or DamageType.Despawn)) {
                     enemiesDefeated++;
+                    CreditKill(sourceEntity, isBoss);
+                }
                 if (GameState == WV_ActiveGameState.FinishEnemiesOff) {
                     RefreshInGameBar();
                 }
@@ -355,6 +362,11 @@ namespace Universes.UniverseData.war_valley.Server
                 Vector3 center = GetSpawnLocation(wave.Approaches[groupIndex]);
                 if (groupIndex == 0 && wave.Boss != null && !flagDown && !token.IsCancellationRequested)
                     SpawnBoss(wave, center);
+                // The day's front may put extra heavies at the head of every wave (Iron Storm).
+                if (groupIndex == 0 && !flagDown && !token.IsCancellationRequested) {
+                    for (int heavy = 0; heavy < frontEffect.ExtraHeavies; heavy++)
+                        SpawnNpc(WV_TroopKind.Punk, center, wave);
+                }
                 for (int i = 0; i < group.Count; i++) {
                     // Backpressure prevents fast countdowns from accumulating an unwinnable army.
                     while (!flagDown && !token.IsCancellationRequested
@@ -384,29 +396,42 @@ namespace Universes.UniverseData.war_valley.Server
 
             SpawnEconomy();
             SpawnFlag();
+            BeginCampaignRound();
 
             SharedGlobalEvents.Instance.CanBuild.Value = true;
-            await Intermission(Math.Max(5, WaveTuning.PreparationSeconds), token);
+            // The commanders pick the round's tier while they start building; the preparation
+            // countdown begins once it is settled.
+            await ChooseDifficulty(token);
             if (token.IsCancellationRequested)
                 return;
+            ApplyDifficulty();
+            // The preparation pill names the day's front, so the round's rules are on screen from the start.
+            await TimerCountdown(front != WV_Front.None
+                ? $"{WV_DailyFront.Title(front)} - first wave in {{0}}{TierBadge}"
+                : $"First wave in {{0}}{TierBadge}", Math.Max(5, WaveTuning.PreparationSeconds), token);
+            if (token.IsCancellationRequested)
+                return;
+            preparing = false;
             SetGlobalInvul(false);
-            for (WaveNumber = 0; WaveNumber < WaveTuning.WaveCount && !flagDown && !token.IsCancellationRequested; WaveNumber++) {
+            for (WaveNumber = 0; (IsEndless || WaveNumber < WaveTuning.WaveCount) && !flagDown && !token.IsCancellationRequested; WaveNumber++) {
                 // Reaching the next wave with the flag up means the last one was held.
                 if (currentWave != null)
                     PayWaveBounty(currentWave.Number);
                 // Each wave is built from its number, so the round hardens as it goes.
-                currentWave = WV_WavePlan.Build(WaveNumber + 1, WaveTuning);
+                currentWave = WV_WavePlan.Build(WaveNumber + 1, WaveTuning, GetWaveScaling(WaveNumber + 1));
                 GameState = WV_ActiveGameState.Wave;
                 int waveNumber = currentWave.Number;
                 PlayerProgress.ModifyAll<WV_SaveData>(save => save.RecordWave(waveNumber));
+                RecordWaveReached(waveNumber);
                 BroadcastToAll(new WV_WaveStarted {
                     waveNumber = currentWave.Number,
-                    waveCount = WaveTuning.WaveCount,
+                    waveCount = AnnouncedWaveCount,
                     theme = (byte)currentWave.Theme,
                     approaches = WV_WavePlan.EncodeApproaches(currentWave.Approaches),
-                    enemyCount = currentWave.EnemyCount,
+                    enemyCount = currentWave.EnemyCount + frontEffect.ExtraHeavies,
                     isSurge = currentWave.IsSurge,
-                    hasBoss = currentWave.Boss != null
+                    hasBoss = currentWave.Boss != null,
+                    difficulty = (byte)difficulty
                 });
                 // No countdown runs while a wave streams in, so nothing else would replace the
                 // previous intermission's "next wave in N seconds" on the top bar.
@@ -418,6 +443,9 @@ namespace Universes.UniverseData.war_valley.Server
                 await SpawnWaveAsync(currentWave, token);
                 if (token.IsCancellationRequested)
                     return;
+                // With the whole wave on the field, the lull before the next is when a doctrine
+                // hand is dealt, so the pick lands before the next wave arrives.
+                OfferDoctrines(currentWave.Number);
                 int waveAdvanceSec = Math.Max(0,
                     currentWave.IntermissionSeconds - Mathf.CeilToInt(Time.time - startedAt));
                 if (waveAdvanceSec > 0 && !flagDown) {
@@ -446,7 +474,8 @@ namespace Universes.UniverseData.war_valley.Server
             wavesHeld = waveNumber;
             long bounty = WV_WavePlan.GetWaveBounty(waveNumber, WaveTuning);
             if (bounty > 0)
-                serverEconomy.PayEveryone(bounty, $"Wave {waveNumber} held: +{bounty:N0} funds");
+                serverEconomy.PayBounty(bounty, Profile.BountyMultiplier, $"Wave {waveNumber} held: +{{0:N0}} funds");
+            HoldWave(waveNumber);
         }
 
         /// <summary>
@@ -454,14 +483,17 @@ namespace Universes.UniverseData.war_valley.Server
         /// victory bounty and holds the summary on the top bar before the next round begins.
         /// </summary>
         private async UniTask AnnounceVictory(CancellationToken token) {
-            if (currentWave != null)
+            if (currentWave != null) {
                 wavesHeld = currentWave.Number;
+                // The last wave is held too: its XP, and its place in every commander's attendance.
+                HoldWave(currentWave.Number);
+            }
             GameState = WV_ActiveGameState.Victory;
-            PlayerProgress.ModifyAll<WV_SaveData>(save => save.victories++);
+            // Each commander's saved win count is raised in FinishCampaignRound, only where the win counts.
             EndRound(victory: true);
             SharedGlobalEvents.Instance.CanBuild.Value = false;
             if (WaveTuning.VictoryBounty > 0)
-                serverEconomy.PayEveryone(WaveTuning.VictoryBounty, $"Victory bonus: +{WaveTuning.VictoryBounty:N0} funds");
+                serverEconomy.PayBounty(WaveTuning.VictoryBounty, Profile.BountyMultiplier, "Victory bonus: +{0:N0} funds");
             // The client's result banner carries the summary; the top bar only counts down.
             await TimerCountdown("Victory - next round in {0}", VictorySeconds, token);
         }
@@ -475,11 +507,19 @@ namespace Universes.UniverseData.war_valley.Server
             int held = wavesHeld;
             int defeated = enemiesDefeated;
             PlayerProgress.ModifyAll<WV_SaveData>(save => save.RecordRound(held, defeated));
-            BroadcastToAll(new WV_RoundEnded {
+            int stars = WV_Campaign.HasStars(difficulty) ? WV_Campaign.Stars(victory, lowestFlagFraction, DifficultyTuning) : 0;
+            // Each commander is sent their own result (a late joiner's win does not count), with their summary.
+            FinishCampaignRound(new WV_RoundEnded {
                 victory = victory,
                 waveReached = reached,
                 wavesHeld = held,
-                enemiesDefeated = defeated
+                enemiesDefeated = defeated,
+                difficulty = (byte)difficulty,
+                stars = (byte)stars,
+                endless = IsEndless,
+                threeStarPercent = (byte)Mathf.RoundToInt(DifficultyTuning.ThreeStarFlagFraction * 100f),
+                twoStarPercent = (byte)Mathf.RoundToInt(DifficultyTuning.TwoStarFlagFraction * 100f),
+                lowestFlagPercent = (byte)Mathf.Clamp(Mathf.FloorToInt(lowestFlagFraction * 100f), 0, 100)
             });
         }
 
@@ -495,6 +535,8 @@ namespace Universes.UniverseData.war_valley.Server
         /// </summary>
         private async UniTask AnnounceFlagLost(CancellationToken token) {
             GameState = WV_ActiveGameState.GameOver;
+            // The round is over: the waves stop where they stand rather than wreck the base under the banner.
+            WV_NPC.StandDownAll();
             EndRound(victory: false);
             SharedGlobalEvents.Instance.CanBuild.Value = false;
             // The client's result banner carries the summary; the top bar only counts down.
@@ -528,6 +570,7 @@ namespace Universes.UniverseData.war_valley.Server
             flagDown = false;
             enemiesDefeated = 0;
             wavesHeld = 0;
+            ResetCampaignRound();
             base.Restart();
         }
 
@@ -543,6 +586,7 @@ namespace Universes.UniverseData.war_valley.Server
             spawnedFlag = clone.GetComponent<WV_Flag>();
             InstanceFinder.ServerManager.Spawn(clone);
             spawnedFlag.OnDied += HandleFlagDied;
+            spawnedFlag.Health.OnChange += HandleFlagHealthChanged;
         }
 
         private void DespawnFlag() {
@@ -550,6 +594,7 @@ namespace Universes.UniverseData.war_valley.Server
                 return;
 
             spawnedFlag.OnDied -= HandleFlagDied;
+            spawnedFlag.Health.OnChange -= HandleFlagHealthChanged;
             if (InstanceFinder.IsServerStarted && spawnedFlag.IsSpawned)
                 spawnedFlag.Despawn();
             else
@@ -565,6 +610,7 @@ namespace Universes.UniverseData.war_valley.Server
 
         protected override void OnDestroy() {
             WV_ServerCommand.Unregister();
+            DisposeCampaign();
             base.OnDestroy();
         }
 

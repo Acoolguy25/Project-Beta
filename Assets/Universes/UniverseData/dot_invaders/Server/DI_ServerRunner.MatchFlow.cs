@@ -50,6 +50,8 @@ namespace Universes.UniverseData.dot_invaders {
                     continue;
 
                 announcedEliminations.Add(teamId);
+                RecordElimination(teamId);
+                CreditElimination(teamId);
                 SendTeamChatMessage(teamId, "eliminated.");
             }
         }
@@ -66,29 +68,20 @@ namespace Universes.UniverseData.dot_invaders {
             return false;
         }
 
+        /// <summary>The team with the best board score (see <see cref="TeamScore"/>), or -1 on a tie.</summary>
         int DetermineLeadingTeam() {
-            var scores = new Dictionary<int, int>();
-            for (int i = 0; i < bases.Count; i++) {
-                BaseState state = bases[i];
-                if (state.teamId < 0)
-                    continue;
-                scores.TryGetValue(state.teamId, out int score);
-                scores[state.teamId] = score + 10000 + state.troops;
-            }
-            for (int i = 0; i < dots.Count; i++) {
-                scores.TryGetValue(dots[i].teamId, out int score);
-                scores[dots[i].teamId] = score + 1;
-            }
-
             int leader = -1;
-            int bestScore = int.MinValue;
+            long bestScore = long.MinValue;
             bool tied = false;
-            foreach (KeyValuePair<int, int> entry in scores) {
-                if (entry.Value > bestScore) {
-                    leader = entry.Key;
-                    bestScore = entry.Value;
+            foreach (int team in dotInvadersTeams) {
+                if (!HasTeamPresence(team))
+                    continue;
+                long score = TeamScore(team);
+                if (score > bestScore) {
+                    leader = team;
+                    bestScore = score;
                     tied = false;
-                } else if (entry.Value == bestScore) {
+                } else if (score == bestScore) {
                     tied = true;
                 }
             }
@@ -105,14 +98,7 @@ namespace Universes.UniverseData.dot_invaders {
             for (int i = 0; i < bases.Count; i++)
                 ClearSend(bases[i]);
 
-            if (winnerTeamId >= 0 && winnerTeamId < NpcTeamIdStart) {
-                foreach (NetworkConnection connection in InstanceFinder.ServerManager.Clients.Values) {
-                    if (connection.IsValid && playerTeams.TryGetValue(connection.ClientId, out int playerTeam) &&
-                        playerTeam == winnerTeamId)
-                        ServerReward.AddReward(connection, WinnerXPReward, WinnerGoldReward);
-                }
-            }
-
+            // Rewards (XP and gold) are paid through the retention kit's summary card.
             RecordMatchProgress(winnerTeamId);
             if (winnerTeamId >= 0)
                 SendTeamChatMessage(winnerTeamId, "wins the game!");
@@ -122,8 +108,10 @@ namespace Universes.UniverseData.dot_invaders {
         }
 
         /// <summary>Marks the start of a board in chat, so the previous match's eliminations cannot be read as this one's.</summary>
-        static void AnnounceNewMatch() {
-            ServerChat.SendSystemMessage(new SystemMessageBroadcast(NewMatchMessage, SystemMessageSource.CustomMessage));
+        void AnnounceNewMatch() {
+            string message = $"<color={DI_Rules.ChatMutedHex}>New match on </color><color={DI_Rules.ChatAccentHex}>{layout.title}</color>" +
+                             $"<color={DI_Rules.ChatMutedHex}> against {NpcTierName} bots. {layout.tagline}</color>";
+            ServerChat.SendSystemMessage(new SystemMessageBroadcast(message, SystemMessageSource.CustomMessage));
         }
 
         static void SendTeamChatMessage(int teamId, string message) {
@@ -147,21 +135,22 @@ namespace Universes.UniverseData.dot_invaders {
             if (matchInProgress) {
                 int minutes = Mathf.Max(0, secondsRemaining) / 60;
                 int seconds = Mathf.Max(0, secondsRemaining) % 60;
-                return $"Dot Invaders - {minutes}:{seconds:00}";
+                return $"Dot Invaders - {layout.title} - {minutes}:{seconds:00}";
             }
 
             if (winningTeamId < 0)
                 return "Dot Invaders - Draw";
             if (winningTeamId >= NpcTeamIdStart)
                 return $"{GetDotInvadersTeamName(winningTeamId, true)} wins!";
-            return $"{GetDotInvadersTeamName(winningTeamId, false)} wins! +{WinnerXPReward} XP / +{WinnerGoldReward} gold";
+            return $"{GetDotInvadersTeamName(winningTeamId, false)} wins! +{rewards.victoryXp} XP / +{rewards.victoryGold} gold";
         }
 
         // Leaderboard hook: each player's team standing (bases held and troops stationed in them).
         void UpdateLeaderboard() {
             int basesIndex = SharedGlobalEvents.GetLeaderboardIndex(BasesColumn);
             int troopsIndex = SharedGlobalEvents.GetLeaderboardIndex(TroopsColumn);
-            if (basesIndex < 0 && troopsIndex < 0)
+            int ratingIndex = SharedGlobalEvents.GetLeaderboardIndex(RatingColumn);
+            if (basesIndex < 0 && troopsIndex < 0 && ratingIndex < 0)
                 return;
 
             foreach (PlayerData player in PlayerData.Players.Values) {
@@ -178,6 +167,8 @@ namespace Universes.UniverseData.dot_invaders {
 
                 SetLeaderboardValue(player, basesIndex, baseTotal);
                 SetLeaderboardValue(player, troopsIndex, troopTotal);
+                if (player.Owner.IsValid)
+                    SetLeaderboardValue(player, ratingIndex, RatingOf(player.Owner));
             }
         }
 
@@ -200,6 +191,10 @@ namespace Universes.UniverseData.dot_invaders {
                 state.yourTeamId = playerTeams.TryGetValue(connection.ClientId, out int teamId) ? teamId : -1;
                 state.yourSummary = matchSummaries.TryGetValue(connection.ClientId, out DI_MatchSummary summary)
                     ? summary : default;
+                DI_AbilityState ability = AbilityStateOf(state.yourTeamId);
+                state.yourAbilityState = (int)ability;
+                state.yourAbilitySeconds = ability == DI_AbilityState.None ? 0f : AbilitySecondsOf(state.yourTeamId, ability);
+                state.yourMatchRated = IsRated(connection.ClientId);
                 InstanceFinder.ServerManager.Broadcast(connection, state);
             }
             // Clashes are events, not state: each one is sent in exactly one snapshot.
@@ -251,7 +246,10 @@ namespace Universes.UniverseData.dot_invaders {
                 baseFortresses = new bool[baseCount],
                 clashPositions = clashPositions.ToArray(),
                 factoryMultiplier = factoryMultiplier,
-                fortressMultiplier = fortressMultiplier
+                fortressMultiplier = fortressMultiplier,
+                layoutId = layout.id,
+                npcTierName = NpcTierName,
+                overdriveTeams = OverdriveTeams(),
             };
 
             for (int i = 0; i < baseCount; i++) {

@@ -81,7 +81,16 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return new Bounds(placementCollider.center, placementCollider.size);
             }
         }
+        /// <summary>The authored health of the finished structure.</summary>
         public long MaxHealth => maxHealth;
+
+#if UNITY_SERVER
+        /// <summary>
+        /// Server: the health this structure is built to, fixed when construction begins - the
+        /// authored health raised by its builder's doctrines (Fortifications).
+        /// </summary>
+        long builtMaxHealth;
+#endif
 
         /// <summary>True once the build timer has elapsed. Every gameplay behaviour checks this first.</summary>
         public bool IsOperational => complete.Value;
@@ -128,9 +137,12 @@ namespace Universes.UniverseData.war_valley.Shared {
             get {
                 if (structure.IsDead)
                     return 0f;
+                // Measured against the replicated maximum so a doctrine-raised building is not
+                // reported as above full health, or as damaged when it is not.
+                long full = structure.MaxHealth.Value > 0 ? structure.MaxHealth.Value : maxHealth;
                 float expected = complete.Value
-                    ? maxHealth
-                    : maxHealth * Mathf.Lerp(WV_Rules.UnderConstructionHealthFraction, 1f, Progress);
+                    ? full
+                    : full * Mathf.Lerp(WV_Rules.UnderConstructionHealthFraction, 1f, Progress);
                 return expected <= 0f ? 1f : Mathf.Clamp01(structure.Health.Value / expected);
             }
         }
@@ -294,17 +306,40 @@ namespace Universes.UniverseData.war_valley.Shared {
             float duration = Mathf.Max(
                 0.1f,
                 Mathf.Max(WV_Rules.MinConstructionSeconds, structure.Duration)
-                    * Mathf.Max(0f, ConstructionDurationMultiplier));
+                    * Mathf.Max(0f, ConstructionDurationMultiplier)
+                    * WV_CommanderBonuses.For(owned != null ? owned.OwnerClientId : WV_Owned.NoOwner).ConstructionTimeMultiplier);
             buildDuration.Value = duration;
             completionTime.Value = NetworkHelper.ServerTime + duration;
             complete.Value = false;
 
             // A site under construction is deliberately fragile: it is worth attacking before it
             // finishes. Health scales back up to the authored maximum as the build completes.
-            long startingHealth = System.Math.Max(1L, (long)(maxHealth * WV_Rules.UnderConstructionHealthFraction));
+            int builder = owned != null ? owned.OwnerClientId : WV_Owned.NoOwner;
+            builtMaxHealth = WV_CommanderModifiers.Scale(maxHealth,
+                WV_CommanderBonuses.For(builder).StructureHealthMultiplier);
+            long startingHealth = System.Math.Max(1L, (long)(builtMaxHealth * WV_Rules.UnderConstructionHealthFraction));
             constructionHealthGranted = startingHealth;
-            structure.Init(startingHealth, maxHealth);
+            structure.Init(startingHealth, builtMaxHealth);
             ApplyPresentation();
+        }
+
+        /// <summary>
+        /// Server: a structure doctrine picked while this stands (Fortifications, Iron Citadel) raises the
+        /// health it is built to by <paramref name="ratio"/>, and heals the added share. Returns the health added.
+        /// </summary>
+        [Server]
+        public long Reinforce(float ratio) {
+            if (ratio <= 1.0001f || structure == null || structure.IsDead || builtMaxHealth <= 0)
+                return 0;
+            long added = WV_CommanderModifiers.Scale(builtMaxHealth, ratio) - builtMaxHealth;
+            if (added <= 0)
+                return 0;
+            builtMaxHealth += added;
+            structure.HealMaxHealth(added);
+            // A site still going up has been granted its share of the new health already.
+            if (!complete.Value)
+                constructionHealthGranted += added;
+            return added;
         }
 
         void HandleHealthChanged(long previous, long next, bool asServer) {
@@ -341,7 +376,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 
             // Grant only newly built health. Filling back up to the progress ceiling every frame
             // erased damage and made a construction site regenerate through incoming fire.
-            long floor = (long)(maxHealth * Mathf.Lerp(WV_Rules.UnderConstructionHealthFraction, 1f, Progress));
+            long floor = (long)(builtMaxHealth * Mathf.Lerp(WV_Rules.UnderConstructionHealthFraction, 1f, Progress));
             long growth = System.Math.Max(0L, floor - constructionHealthGranted);
             constructionHealthGranted = floor;
             if (growth > 0)

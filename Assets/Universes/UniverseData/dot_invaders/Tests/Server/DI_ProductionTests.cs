@@ -710,11 +710,7 @@ namespace Universes.UniverseData.dot_invaders.Tests {
 
         [Test]
         public void MapGeneratorPlacesFactoriesAndFortressesOnSeparatePlainBases() {
-            Call("GenerateBases");
-            Call("AssignTurrets");
-            Call("AssignSuperBases");
-            Call("AssignSpeedBases");
-            Call("AssignFactoriesAndFortresses");
+            Call("BuildBoard", DI_BoardLayouts.Find(DI_BoardLayouts.OpenFieldId), 3);
             int factories = 0, fortresses = 0;
             foreach (object state in bases) {
                 bool factory = (bool)Get(state, "isFactory"), fortress = (bool)Get(state, "isFortress");
@@ -790,6 +786,102 @@ namespace Universes.UniverseData.dot_invaders.Tests {
             Assert.That(records.Count, Is.EqualTo(1));
             Assert.That(Get(records[7], "captures"), Is.EqualTo(1));
             Assert.That(Get(records[7], "mostBasesHeld"), Is.EqualTo(2));
+        }
+
+        // --- Perks, Overdrive and standings (retention pass) --------------------------------
+
+        void GiveTeamPerks(int team, params string[] perks) =>
+            ((IDictionary)Get(runner, "teamEffects"))[team] = DI_Perks.EffectsOf(perks);
+
+        object GiveOverdrive(int team) {
+            object state = Activator.CreateInstance(typeof(DI_ServerRunner).GetNestedType("OverdriveState", Members), true);
+            ((IDictionary)Get(runner, "overdrives"))[team] = state;
+            return state;
+        }
+
+        [Test]
+        public void IronWallsMakeAGarrisonNeedMoreAttackers() {
+            AddBase();
+            object walled = AddBase(team: 1, troops: 4);
+            GiveTeamPerks(1, DI_Perks.IronWalls);
+            object dot = AddDot(0, 0, 1);
+            int needed = DI_Rules.AttackersToDefeat(4, DI_Perks.EffectsOf(new[] { DI_Perks.IronWalls }).defence);
+            Assert.That(needed, Is.GreaterThan(4));
+            for (int i = 0; i < needed - 1; i++) Call("ResolveArrival", dot);
+            Assert.That(Get(walled, "troops"), Is.GreaterThan(0), "One attacker short still leaves a defender.");
+            Call("ResolveArrival", dot);
+            Assert.That(Get(walled, "troops"), Is.Zero);
+            Assert.That(Get(walled, "teamId"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SiegeBreakersEmptyAGarrisonWithFewerTroops() {
+            AddBase();
+            object target = AddBase(team: 1, troops: 13);
+            GiveTeamPerks(0, DI_Perks.SiegeBreakers);
+            object dot = AddDot(0, 0, 1);
+            for (int i = 0; i < 10; i++) Call("ResolveArrival", dot);
+            Assert.That(Get(target, "troops"), Is.Zero, "Ten troops at 1.3x take thirteen defenders.");
+        }
+
+        [Test]
+        public void OverdriveIsLockedThenReadyThenRunsOnce() {
+            float locked = ((DI_OverdriveTuning)Get(runner, "overdrive")).lockedSeconds;
+            float seconds = ((DI_OverdriveTuning)Get(runner, "overdrive")).seconds;
+            object state = GiveOverdrive(0);
+            Set(runner, "matchElapsed", locked * 0.5f);
+            Assert.That(Call("AbilityStateOf", 0), Is.EqualTo(DI_AbilityState.Locked));
+            Set(runner, "matchElapsed", locked + 1f);
+            Assert.That(Call("AbilityStateOf", 0), Is.EqualTo(DI_AbilityState.Ready));
+            Assert.That(Call("TeamProductionMultiplier", 0), Is.EqualTo(1f));
+
+            Set(state, "used", true);
+            Set(state, "endsAt", locked + 1f + seconds);
+            Assert.That(Call("AbilityStateOf", 0), Is.EqualTo(DI_AbilityState.Active));
+            Assert.That(Call("TeamProductionMultiplier", 0), Is.EqualTo(((DI_OverdriveTuning)Get(runner, "overdrive")).productionMultiplier));
+            Set(runner, "matchElapsed", locked + 2f + seconds);
+            Assert.That(Call("AbilityStateOf", 0), Is.EqualTo(DI_AbilityState.Spent));
+            Assert.That(Call("TeamProductionMultiplier", 0), Is.EqualTo(1f));
+            Assert.That(Call("AbilityStateOf", 5), Is.EqualTo(DI_AbilityState.None), "No perk, no ability.");
+        }
+
+        [Test]
+        public void SupplyLinesTrainFaster() {
+            object plain = AddBase(troops: 0);
+            object supplied = AddBase(team: 1, troops: 0);
+            GiveTeamPerks(1, DI_Perks.SupplyLines);
+            Advance(20f);
+            Assert.That((int)Get(supplied, "troops"), Is.GreaterThan((int)Get(plain, "troops")));
+        }
+
+        [Test]
+        public void EliminatedTeamsFinishBehindEveryTeamStillIn() {
+            var teams = (System.Collections.Generic.HashSet<int>)Get(runner, "dotInvadersTeams");
+            foreach (int team in new[] { 0, 1, 100 }) teams.Add(team);
+            AddBase(team: 0, troops: 5);
+            AddBase(team: 0, troops: 5);
+            AddBase(team: 100, troops: 50);
+            Call("RecordElimination", 1);
+            var results = (System.Collections.Generic.List<DI_TeamResult>)Call("BuildResults", -1);
+            Assert.That(DI_Rating.Placement(0, results), Is.EqualTo(1), "Two bases beat one.");
+            Assert.That(DI_Rating.Placement(100, results), Is.EqualTo(2));
+            Assert.That(DI_Rating.Placement(1, results), Is.EqualTo(3));
+            results = (System.Collections.Generic.List<DI_TeamResult>)Call("BuildResults", 100);
+            Assert.That(DI_Rating.Placement(100, results), Is.EqualTo(1), "The winner is first whatever the score.");
+        }
+
+        [Test]
+        public void SaveRepairsKeepRatingsAndOnlyKnownPerks() {
+            var save = new DI_SaveData { retention = null, rating = -5, peakRating = 0, perks = new System.Collections.Generic.List<string> { "gone", DI_Perks.HeadStart, DI_Perks.Vanguard, DI_Perks.IronWalls } };
+            save.Validate();
+            Assert.That(save.retention, Is.Not.Null);
+            Assert.That(save.rating, Is.Zero);
+            Assert.That(save.perks, Is.EqualTo(new[] { DI_Perks.HeadStart, DI_Perks.Vanguard }));
+            Assert.That(new DI_SaveData().rating, Is.EqualTo(DI_SaveData.DefaultRating), "A new or pre-rating save starts at the default.");
+            save.RecordRating(1200);
+            save.RecordRating(1100);
+            Assert.That(save.peakRating, Is.EqualTo(1200));
+            Assert.That(save.ratedMatches, Is.EqualTo(2));
         }
     }
 }

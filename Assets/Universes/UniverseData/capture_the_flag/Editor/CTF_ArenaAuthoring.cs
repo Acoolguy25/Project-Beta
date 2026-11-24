@@ -29,6 +29,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         static readonly Vector2 TitleBox = new(40f, 7f);
         /// <summary>Title font size: about 3.5 m letters, readable from the lobby spawn 46 m away.</summary>
         const float TitleFontSize = 40f;
+        /// <summary>Height of the title's centre over the bridge (its box is 7 m tall).</summary>
+        const float TitleHeight = 13f;
         /// <summary>Largest share of the screen height a base sign or the title may cover up close.</summary>
         const float SignMaxScreen = 0.12f;
         const float TitleMaxScreen = 0.16f;
@@ -129,6 +131,14 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             public Material grass, road, concrete, wall, sandbag, space, proto, medieval, crate;
             public Material[] floor, parapet, trim, banner;
         }
+
+        /// <summary>
+        /// Where bots may walk, in world metres: the fenced field (walls included) from below the ground
+        /// to above the base decks and catwalks, for the NavMesh bake.
+        /// </summary>
+        public static Bounds NavMeshVolume => new(new Vector3(0f, NavMeshVolumeHeight * 0.5f - 2f, 0f),
+            new Vector3(HalfLength * 2f + NavMeshVolumeMargin, NavMeshVolumeHeight, HalfWidth * 2f + NavMeshVolumeMargin));
+        const float NavMeshVolumeHeight = 30f, NavMeshVolumeMargin = 4f;
 
         /// <summary>Opens a new scene, builds the arena and returns the configured map object.</summary>
         public static GameObject Build(GameObject[] powerUpPrefabs) {
@@ -453,7 +463,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
                 new Vector3(-BridgeLength * 0.5f, BridgeHeight, 0f), 0f);
             Mirrored((p, y) => Cube("Rail", centre, p, new Vector3(BridgeLength, RailHeight, 0.6f), m.sandbag),
                 new Vector3(0f, BridgeHeight + RailHeight * 0.5f, BridgeWidth * 0.5f - 0.3f), 0f);
-            var title = WorldText("Title", centre, new Vector3(0f, 22f, 0f), "FLAG WARS", TitleFontSize, new Color(1f, 0.85f, 0.25f), TitleBox);
+            // Low enough that from the lobby it sits in the middle of the view, under the top HUD's chips
+            // (try 1: at 22 m it hid behind the twist chip), and still above a robot on the bridge.
+            var title = WorldText("Title", centre, new Vector3(0f, TitleHeight, 0f), "FLAG WARS", TitleFontSize, new Color(1f, 0.85f, 0.25f), TitleBox);
             title.fontStyle = FontStyles.Bold;
             CTF_Authoring.FacingLabel(title, TitleBox.y, TitleMaxScreen);
             return title.gameObject;

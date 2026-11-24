@@ -50,10 +50,11 @@ namespace Universes.UniverseData.capture_the_flag.Tests {
 
         [Test]
         public void CarryingSlowsAndBoostStacks() {
-            Assert.That(CTF_Rules.SpeedMultiplier(false, false, 1.4f), Is.EqualTo(1f));
-            Assert.That(CTF_Rules.SpeedMultiplier(true, false, 1.4f), Is.EqualTo(CTF_Rules.CarrierSpeedMultiplier));
-            Assert.That(CTF_Rules.SpeedMultiplier(false, true, 1.4f), Is.EqualTo(1.4f));
-            Assert.That(CTF_Rules.SpeedMultiplier(true, true, 1.4f), Is.EqualTo(CTF_Rules.CarrierSpeedMultiplier * 1.4f).Within(1e-5f));
+            float carrier = CTF_Rules.CarrierSpeedMultiplier;
+            Assert.That(CTF_Rules.SpeedMultiplier(false, carrier, false, 1.4f, 1f), Is.EqualTo(1f));
+            Assert.That(CTF_Rules.SpeedMultiplier(true, carrier, false, 1.4f, 1f), Is.EqualTo(carrier));
+            Assert.That(CTF_Rules.SpeedMultiplier(false, carrier, true, 1.4f, 1f), Is.EqualTo(1.4f));
+            Assert.That(CTF_Rules.SpeedMultiplier(true, carrier, true, 1.4f, 1f), Is.EqualTo(carrier * 1.4f).Within(1e-5f));
         }
 
         [Test]
@@ -85,11 +86,11 @@ namespace Universes.UniverseData.capture_the_flag.Tests {
         }
 
         [Test]
-        public void OneHitLeftBeatsTheHeartbeat() {
-            Assert.That(CTF_Rules.LowHealthSignal(1f, 0.5f, 0.2f), Is.EqualTo(1f));
-            Assert.That(CTF_Rules.LowHealthSignal(0.5f, 0.5f, 0.2f), Is.EqualTo(0.2f).Within(1e-5f));
-            Assert.That(CTF_Rules.LowHealthSignal(0.25f, 0.5f, 0.2f), Is.EqualTo(0.1f).Within(1e-5f));
-            Assert.That(CTF_Rules.LowHealthSignal(0f, 0.5f, 0.2f), Is.EqualTo(1f), "dead: no heartbeat");
+        public void OneHitLeftBeatsTheEdgeVignette() {
+            Assert.That(CTF_Rules.LowHealthEdge(1f, 0.5f, 0.55f), Is.Zero);
+            Assert.That(CTF_Rules.LowHealthEdge(0.5f, 0.5f, 0.55f), Is.EqualTo(0.55f).Within(1e-5f));
+            Assert.That(CTF_Rules.LowHealthEdge(0.25f, 0.5f, 0.55f), Is.EqualTo(0.775f).Within(1e-5f));
+            Assert.That(CTF_Rules.LowHealthEdge(0f, 0.5f, 0.55f), Is.Zero, "dead: no warning");
         }
     }
 }

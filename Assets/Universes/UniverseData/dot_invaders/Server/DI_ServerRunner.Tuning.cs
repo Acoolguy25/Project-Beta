@@ -44,6 +44,7 @@ namespace Universes.UniverseData.dot_invaders {
                 return false;
             var multipliers = damage ? playerDamageMultipliers : playerProductionMultipliers;
             value = Mathf.Clamp(value, 1f, 10f);
+            MarkCustomMatch();
             if (value == 1f)
                 multipliers.Remove(clientId);
             else
@@ -62,8 +63,11 @@ namespace Universes.UniverseData.dot_invaders {
             BroadcastState();
         }
 
+        /// <summary>Fixes NPC intelligence (overriding the rating-picked tier until NPCTier is set again).</summary>
         internal void SetNPCIntelligence(float value) {
             npcIntelligence = Mathf.Clamp(value, 0f, 100f);
+            npcTuningOverridden = true;
+            MarkCustomMatch();
             BroadcastState();
         }
 
@@ -117,8 +121,11 @@ namespace Universes.UniverseData.dot_invaders {
             BroadcastState();
         }
 
+        /// <summary>Fixes NPC aggression (overriding the rating-picked tier until NPCTier is set again).</summary>
         internal void SetNpcAggression(float value) {
             npcAggression = Mathf.Clamp(value, 0f, 100f);
+            npcTuningOverridden = true;
+            MarkCustomMatch();
             BroadcastState();
         }
 
@@ -128,13 +135,13 @@ namespace Universes.UniverseData.dot_invaders {
             BroadcastState();
         }
 
-        /// <summary>Rerolls the board without disturbing the running match clock.</summary>
+        /// <summary>Rerolls the running board (same layout, fresh seed) and restarts the match on it.</summary>
         internal bool RestartMatch() {
             // The countdown lives in StartAsync; restarting after it exits would
             // leave a match that never ticks down, so only reroll a live match.
             if (!matchInProgress)
                 return false;
-            InitializeMatch();
+            InitializeMatch(layoutIndex);
             return true;
         }
     }

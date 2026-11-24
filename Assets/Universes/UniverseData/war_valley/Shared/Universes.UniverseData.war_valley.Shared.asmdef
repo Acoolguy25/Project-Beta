@@ -10,7 +10,8 @@
         "RyanAssets.Shared.Global",
         "Unity.AI.Navigation",
         "RyanAssets.Shared.Combat",
-        "RyanAssets.Shared.WorldUI"
+        "RyanAssets.Shared.WorldUI",
+        "RyanAssets.Retention"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

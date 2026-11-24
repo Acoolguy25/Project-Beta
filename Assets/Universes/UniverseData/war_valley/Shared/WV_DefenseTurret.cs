@@ -45,6 +45,7 @@ namespace Universes.UniverseData.war_valley.Shared {
 
         WV_Constructable constructable;
         StructureComponent structure;
+        WV_Owned owned;
         float nextFireTime;
         float nextRetargetTime;
         IEntity target;
@@ -57,6 +58,7 @@ namespace Universes.UniverseData.war_valley.Shared {
         void Awake() {
             constructable = GetComponent<WV_Constructable>();
             structure = GetComponent<StructureComponent>();
+            owned = GetComponent<WV_Owned>();
         }
 
         void Update() {
@@ -127,7 +129,10 @@ namespace Universes.UniverseData.war_valley.Shared {
         /// The presentation trace decides where the visible tracer stops.
         /// </summary>
         void Fire(Vector3 targetPosition) {
-            WV_Combat.DealDamage(target, damage, damageType, structure);
+            // Overcharge and Total War: the builder's doctrines raise what their turrets hit for.
+            long dealt = owned == null ? damage : WV_CommanderModifiers.Scale(damage,
+                WV_CommanderBonuses.For(owned.OwnerClientId).TurretDamageMultiplier);
+            WV_Combat.DealDamage(target, dealt, damageType, structure);
 
             if (weaponFire == null)
                 return;

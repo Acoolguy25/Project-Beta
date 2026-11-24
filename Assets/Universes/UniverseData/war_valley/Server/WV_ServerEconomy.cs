@@ -59,6 +59,9 @@ namespace Universes.UniverseData.war_valley.Server {
             WV_Economy.Instance?.CloseAccount(clientId);
         }
 
+        /// <summary>The commanders holding an account this round, by client id.</summary>
+        public IReadOnlyList<int> ActiveClientIds => activeClientIds;
+
         /// <summary>Re-seeds every live commander when the runner restarts a round.</summary>
         public void ResetAccounts() {
             WV_Economy economy = WV_Economy.Instance;
@@ -196,6 +199,33 @@ namespace Universes.UniverseData.war_valley.Server {
                 economy.Credit(clientId, amount);
                 WV_ServerCommand.Notify(clientId, notice);
             }
+        }
+
+        /// <summary>
+        /// Pays every live commander a bounty of <paramref name="amount"/> scaled by the round's
+        /// difficulty (<paramref name="roundMultiplier"/>) and by their own doctrines (War Bonds), and
+        /// tells each what they got: <paramref name="noticeFormat"/> takes the amount as {0}.
+        /// </summary>
+        public void PayBounty(long amount, float roundMultiplier, string noticeFormat) {
+            WV_Economy economy = WV_Economy.Instance;
+            if (economy == null || amount <= 0 || economy.HasInfiniteFunds)
+                return;
+            foreach (int clientId in activeClientIds) {
+                float multiplier = roundMultiplier * WV_CommanderBonuses.For(clientId).BountyMultiplier;
+                long paid = WV_CommanderModifiers.Scale(amount, multiplier);
+                economy.Credit(clientId, paid);
+                WV_ServerCommand.Notify(clientId, string.Format(noticeFormat, paid));
+            }
+        }
+
+        /// <summary>Credits one commander and, when <paramref name="notice"/> is given, tells them why.</summary>
+        public void Grant(int clientId, long amount, string notice = null) {
+            WV_Economy economy = WV_Economy.Instance;
+            if (economy == null || amount <= 0 || clientId == WV_Owned.NoOwner || economy.HasInfiniteFunds)
+                return;
+            economy.Credit(clientId, amount);
+            if (!string.IsNullOrEmpty(notice))
+                WV_ServerCommand.Notify(clientId, notice);
         }
 
         // --- Penalties -------------------------------------------------------

@@ -5,6 +5,7 @@ using Cysharp.Threading.Tasks;
 using FishNet;
 using FishNet.Connection;
 using RyanAssets.DataService;
+using RyanAssets.Retention;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
@@ -13,24 +14,12 @@ using UnityEngine;
 
 namespace Universes.UniverseData.dot_invaders {
     public sealed partial class DI_ServerRunner : ServerRunner {
-        const int BaseCount = 32;
         const int StartingTroops = 12;
         const int NeutralTroops = 5;
-        const int NpcTeamCount = 4;
         const int NpcBasesPerTeam = 1;
         // The same start as a player: the NPCs already fight each other, so they need no head start.
         const int NpcStartingTroops = StartingTroops;
         const int NpcTeamIdStart = DI_Rules.NpcTeamIdStart;
-        const string NewMatchMessage = "<color=#8C96AA>New match: a fresh board.</color>";
-        const int WinnerXPReward = 100;
-        const int WinnerGoldReward = 50;
-        const float ArenaHalfWidth = 100f;
-        const float ArenaHalfHeight = 74f;
-        // Keep complete base/dot visuals inside the border, not just their
-        // center points. Dots interpolate between bases, so this also bounds
-        // every route inside the same inset rectangle.
-        const float ArenaEdgeClearance = 5f;
-        const float MinimumBaseSpacing = 12f;
         const float CollisionDistance = 0.75f;
         const float SnapshotInterval = 0.1f;
         const float SimulationStep = 1f / 60f;
@@ -61,31 +50,40 @@ namespace Universes.UniverseData.dot_invaders {
         // Target priority a factory (doubled training) and a fortress (doubled defence) add.
         const float NpcFactoryPriority = 48f;
         const float NpcFortressPriority = 16f;
-        // Speed base configuration
         const string BasesColumn = "Bases";
         const string TroopsColumn = "Troops";
-        const int SpeedBaseCount = 4; // Number of speed bases on the map
+        const string RatingColumn = "Rating";
         // Clash positions sent per snapshot; a huge brawl only needs a sample to look busy.
         const int MaxClashEventsPerSnapshot = 48;
 
-        [SerializeField, Min(30)] int matchDurationSeconds = 300;
-        [SerializeField, Range(1, 2)] int turretBaseCount = 2;
-        [Tooltip("Factories on each board; they train at factoryMultiplier times the normal rate.")]
-        [SerializeField, Range(0, 4)] int factoryBaseCount = 2;
-        [Tooltip("Fortresses on each board; they need fortressMultiplier attackers per defender.")]
-        [SerializeField, Range(0, 4)] int fortressBaseCount = 2;
+        [Tooltip("Upper limit on any board's match length (each board sets its own, DI_BoardLayouts).")]
+        [SerializeField, Min(30)] int matchDurationSeconds = 1200;
         [Tooltip("Production multiplier of a factory (FactoryMultiplier command).")]
         [SerializeField, Range(DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier)]
         float factoryMultiplier = DI_Rules.DefaultFactoryMultiplier;
         [Tooltip("Attackers a fortress needs per defender (FortressMultiplier command).")]
         [SerializeField, Range(DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier)]
         float fortressMultiplier = DI_Rules.DefaultFortressMultiplier;
-        [SerializeField, Range(3, 8)] int nearbyPathsPerBase = 6;
-        [SerializeField, Min(12f)] float maximumLocalPathLength = 65f;
         [SerializeField, Range(0.1f, 1f)] float npcSuperLaunchCapacityFraction = 0.85f;
-        // Pause after a match ends before the base class resets and starts the next round: long enough
-        // to read the saved stats on the match-over panel.
-        [SerializeField, Range(3, 60)] int intermissionSeconds = 12;
+
+        [Header("Between matches")]
+        [Tooltip("Seconds the results stay up before the board vote starts.")]
+        [SerializeField, Range(0, 30)] int resultsSeconds = 7;
+        [Tooltip("Longest the board vote runs; it ends early once everyone voted. 0 skips the vote (rotation).")]
+        [SerializeField, Range(0, 30)] int boardVoteSeconds = 12;
+        [Tooltip("Boards offered in each vote.")]
+        [SerializeField, Range(2, 4)] int boardVoteOptions = 3;
+
+        [Header("Progression")]
+        [Tooltip("Levels, daily challenges and the play streak (shared retention kit).")]
+        [SerializeField] RetentionTuning retentionTuning = new();
+        [SerializeField] DI_MatchRewards rewards = new();
+        [SerializeField] DI_RatingTuning ratingTuning = new();
+        [Tooltip("NPC difficulty ladder: each match picks the tier nearest the players' average rating.")]
+        [SerializeField] DI_NpcTier[] npcTiers = DI_NpcTiers.CreateDefaults();
+        [SerializeField] DI_OverdriveTuning overdrive = new();
+        [Tooltip("Seconds after a match starts within which a loadout that finished loading late still applies.")]
+        [SerializeField, Range(0f, 60f)] float lateLoadoutSeconds = 15f;
 
         sealed class BaseState {
             public Vector2 position;
@@ -108,6 +106,8 @@ namespace Universes.UniverseData.dot_invaders {
             public Vector2 shotPosition;
             public int[] pendingRoute;
             public float damageTaken;
+            /// <summary>A team may start here (false for cores and middle islands).</summary>
+            public bool spawnable = true;
         }
 
         sealed class DotState {
@@ -156,6 +156,8 @@ namespace Universes.UniverseData.dot_invaders {
         int revision;
         int secondsRemaining;
         int winningTeamId = -1;
+        // Simulated seconds since the match started (Overdrive timing, late joins).
+        float matchElapsed;
         bool initialized;
         bool matchInProgress;
         float npcIntelligence = DI_Rules.DefaultNPCIntelligence;
@@ -178,8 +180,12 @@ namespace Universes.UniverseData.dot_invaders {
         protected override void Awake() {
             base.Awake();
             ServerPlayerCharacter.CanSpawnFunction = _ => false;
+            ratingTuning.Validate();
             InstanceFinder.ServerManager.RegisterBroadcast<DI_SendRequest>(OnSendRequest, true);
+            InstanceFinder.ServerManager.RegisterBroadcast<DI_PerkRequest>(OnPerkRequest, true);
+            InstanceFinder.ServerManager.RegisterBroadcast<DI_AbilityRequest>(OnAbilityRequest, true);
             PlayerData.OnPlayerRemoved += OnPlayerRemoved;
+            StartRetention();
             DI_Commands.Register(this);
         }
 
@@ -188,6 +194,7 @@ namespace Universes.UniverseData.dot_invaders {
             // Reset clears the leaderboard each round, so columns are re-enabled here.
             SetLeaderboardEnabled(BasesColumn, true);
             SetLeaderboardEnabled(TroopsColumn, true);
+            SetLeaderboardEnabled(RatingColumn, true);
             InitializeMatch();
 
             while (matchInProgress && secondsRemaining > 0) {
@@ -201,18 +208,21 @@ namespace Universes.UniverseData.dot_invaders {
                 CompleteMatch(DetermineLeadingTeam());
 
             BroadcastState();
-            // Intermission: the base class restarts the round (waiting for players) once this returns.
-            for (int remaining = intermissionSeconds; remaining > 0; remaining--) {
-                SetTopMessage($"{TopMessageText()} Next match in {remaining}s");
+            // Intermission: results, then the vote for the next board. The base class restarts the
+            // round (waiting for players) once this returns.
+            for (int remaining = resultsSeconds; remaining > 0; remaining--) {
+                SetTopMessage($"{TopMessageText()}  |  Board vote in {remaining}s");
                 await UniTask.Delay(TimeSpan.FromSeconds(1), cancellationToken: token);
             }
+            await VoteNextBoardAsync(token);
         }
 
         protected override void OnPlayerAdded(PlayerData playerData) {
             base.OnPlayerAdded(playerData);
             playerData.cameraTypes.Add(GameCameraType.TwoDimCamera);
+            // Tracked first, so the match the player is assigned to below opens on their summary.
+            retention.PlayerJoined(playerData);
             AssignPlayer(playerData);
-            PlayerProgress.Load<DI_SaveData>(playerData, DI_SaveData.Universe).Forget();
         }
 
         void Update() {
@@ -224,6 +234,7 @@ namespace Universes.UniverseData.dot_invaders {
             // Bound catch-up work per frame, retaining time debt after a hitch.
             for (int step = 0; step < 15 && simulationAccumulator >= SimulationStep && matchInProgress; step++) {
                 simulationAccumulator -= SimulationStep;
+                matchElapsed += SimulationStep;
                 RefreshTeamSpeedBases();
                 UpdateNpcTeams(SimulationStep);
                 UpdateBases(SimulationStep);
@@ -238,8 +249,6 @@ namespace Universes.UniverseData.dot_invaders {
                 BroadcastState();
             }
         }
-
-
 
         protected override void Reset() {
             initialized = false;
@@ -256,6 +265,7 @@ namespace Universes.UniverseData.dot_invaders {
             clashPositions.Clear();
             matchRecords.Clear();
             matchSummaries.Clear();
+            ClearMatchProgression();
             base.Reset();
         }
 
@@ -266,9 +276,13 @@ namespace Universes.UniverseData.dot_invaders {
 
         protected override void OnDestroy() {
             DI_Commands.Unregister();
-            if (InstanceFinder.ServerManager != null)
+            if (InstanceFinder.ServerManager != null) {
                 InstanceFinder.ServerManager.UnregisterBroadcast<DI_SendRequest>(OnSendRequest);
+                InstanceFinder.ServerManager.UnregisterBroadcast<DI_PerkRequest>(OnPerkRequest);
+                InstanceFinder.ServerManager.UnregisterBroadcast<DI_AbilityRequest>(OnAbilityRequest);
+            }
             PlayerData.OnPlayerRemoved -= OnPlayerRemoved;
+            StopRetention();
             base.OnDestroy();
         }
     }

@@ -106,6 +106,15 @@ namespace Universes.UniverseData.war_valley.Server {
             EquipLoadout();
         }
 
+        /// <summary>
+        /// Re-reads the character's build into the weapon's damage, for a damage doctrine picked while
+        /// this soldier was already on the field (Sharpshooters, Total War).
+        /// </summary>
+        public void RefreshDamage() {
+            if (weapon != null && gameCharacter != null)
+                weapon.hitDamageSync.Value = gameCharacter.Build.ScaleDamage(weapon.hitDamageInit);
+        }
+
         void EquipLoadout() {
             bool gunner = WV_TroopCatalog.Get(kind).UsesGun;
             ToolEnum tool = gunner ? ToolEnum.Pistol : ToolEnum.Dagger;
@@ -291,9 +300,10 @@ namespace Universes.UniverseData.war_valley.Server {
                 || !localNPC.IsTargetInAttackRange(target))
                 return;
 
-            HealthComponent targetHealth = targetComponent.GetComponent<HealthComponent>();
-            if (targetHealth != null)
-                targetHealth.TakeDamage(weapon.hitDamage, weapon.defaultDamageType, gameCharacter);
+            // Through the entity, not straight into its HealthComponent, so the flag's siege armor
+            // (WV_Flag.TakeDamage) also soaks knife hits; going around it let a knife mob tear the
+            // flag down at 200 health a second.
+            WV_Combat.DealDamage(target, weapon.hitDamage, weapon.defaultDamageType, gameCharacter);
         }
 
         void HandleLethalAttackEnded() {

@@ -41,6 +41,7 @@ namespace Universes.UniverseData.dot_invaders {
                             routeIndex = 1
                         });
                         state.troops--;
+                        CountStat(state.ownerClientId, DI_Retention.Stats.TroopsSent);
                         if (state.troops == 0)
                             state.damageTaken = 0f;
                         state.pendingTroops--;
@@ -61,7 +62,7 @@ namespace Universes.UniverseData.dot_invaders {
                     ? DI_Rules.SuperProductionOverInterval(state.uninterruptedSeconds, deltaTime,
                         superProductionSpeed, superSpeedupSeconds)
                     : deltaTime * DI_Rules.BaseProductionRate(productionSpeed, state.isFactory, factoryMultiplier);
-                production *= GetPlayerProductionMultiplier(state.ownerClientId);
+                production *= ProductionMultiplier(state);
                 state.uninterruptedSeconds = Mathf.Min(superSpeedupSeconds, state.uninterruptedSeconds + deltaTime);
                 if (state.troops >= Capacity(state)) {
                     state.actionTimer = 0f;
@@ -162,15 +163,18 @@ namespace Universes.UniverseData.dot_invaders {
                         ? Mathf.Clamp01(-Vector2.Dot(relativeStart, relativeTravel) / relativeTravel.sqrMagnitude) : 0f;
                     if ((relativeStart + relativeTravel * closestTime).sqrMagnitude <= collisionDistanceSquared) {
                         RecordClash((firstPosition + GetDotPosition(dots[j])) * 0.5f);
-                        float firstDamage = GetPlayerDamageMultiplier(dots[i].ownerClientId);
-                        float secondDamage = GetPlayerDamageMultiplier(dots[j].ownerClientId);
+                        float firstDamage = ClashDamage(dots[i]);
+                        float secondDamage = ClashDamage(dots[j]);
                         float exchange = Mathf.Min(dots[i].health / secondDamage, dots[j].health / firstDamage);
                         dots[i].health -= secondDamage * exchange;
                         dots[j].health -= firstDamage * exchange;
-                        if (dots[j].health <= 0.00001f)
+                        if (dots[j].health <= 0.00001f) {
                             destroyed.Add(j);
+                            CountStat(dots[i].ownerClientId, DI_Retention.Stats.TroopsDefeated);
+                        }
                         if (dots[i].health <= 0.00001f) {
                             destroyed.Add(i);
+                            CountStat(dots[j].ownerClientId, DI_Retention.Stats.TroopsDefeated);
                             break;
                         }
                     }
@@ -193,9 +197,12 @@ namespace Universes.UniverseData.dot_invaders {
         int TeamSpeedBaseCount(int teamId) =>
             teamId >= 0 && teamSpeedBases.TryGetValue(teamId, out int count) ? count : 0;
 
-        /// <summary>Board units per second a team's troops actually travel at.</summary>
+        /// <summary>Board units per second a team's troops actually travel at: speed bases and the team's perks.</summary>
         float TeamMoveSpeed(int teamId) =>
-            DI_Rules.TeamMoveSpeed(moveSpeed, TeamSpeedBaseCount(teamId), speedBaseBonus);
+            DI_Rules.TeamMoveSpeed(moveSpeed, TeamSpeedBaseCount(teamId), speedBaseBonus) * EffectsOf(teamId).moveSpeed;
+
+        /// <summary>Damage a troop deals in a road clash: the admin's multiplier and its team's clash perk.</summary>
+        float ClashDamage(DotState dot) => GetPlayerDamageMultiplier(dot.ownerClientId) * EffectsOf(dot.teamId).clash;
 
         bool ContinueRoute(DotState dot) {
             // Hostile intermediate bases must be captured before later troops
@@ -265,23 +272,26 @@ namespace Universes.UniverseData.dot_invaders {
             }
 
             if (target.troops > 0) {
-                target.damageTaken += DI_Rules.ArrivalDamage(
-                    GetPlayerDamageMultiplier(dot.ownerClientId) * dot.health, target.isFortress, fortressMultiplier);
+                float attack = GetPlayerDamageMultiplier(dot.ownerClientId) * EffectsOf(dot.teamId).siege * dot.health;
+                target.damageTaken += DI_Rules.ArrivalDamage(attack, DefenceOf(target));
                 int defeated = Mathf.Min(target.troops, Mathf.FloorToInt(target.damageTaken + 0.00001f));
                 target.troops -= defeated;
+                if (defeated > 0)
+                    CountStat(dot.ownerClientId, DI_Retention.Stats.TroopsDefeated, defeated);
                 target.damageTaken -= defeated;
                 if (target.troops == 0)
                     target.damageTaken = 0f;
                 return;
             }
 
+            RecordCaptureFrom(target.teamId, dot.ownerClientId);
             target.ownerClientId = dot.ownerClientId;
             target.teamId = dot.teamId;
             target.troops = 1;
             target.damageTaken = 0f;
             target.turretCooldown = turretFireRate;
             ClearSend(target);
-            RecordCapture(dot.ownerClientId, dot.teamId);
+            RecordCapture(dot.ownerClientId, dot.teamId, target);
         }
 
         /// <summary>Queues a clash for the next snapshot's effects; presentation only.</summary>

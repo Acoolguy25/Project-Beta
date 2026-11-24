@@ -1,28 +1,37 @@
 ﻿#if UNITY_SERVER
 using System;
-using System.Collections.Generic;
+using System.Threading;
 using Cysharp.Threading.Tasks;
-using FishNet;
-using FishNet.Connection;
 using RyanAssets.DataService;
-using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Requests;
 using UnityEngine;
 
 namespace Universes.UniverseData.dot_invaders {
-    // Match setup: arena generation, links and special bases.
+    // Match setup: which board is played (rotation and the vote between matches) and building it.
     public sealed partial class DI_ServerRunner {
-        void InitializeMatch() {
+        const string BoardVoteTitle = "Choose the next board";
+        const string BoardVoteDescription = "The board with the most votes is played next.";
+
+        // Seeds every generated board; boards differ every match even on the same layout.
+        readonly System.Random boardRandom = new(unchecked(Environment.TickCount * 397 ^ DateTime.UtcNow.Ticks.GetHashCode()));
+        DI_BoardLayout layout = DI_BoardLayouts.All[0];
+        int layoutIndex = -1;
+        // Chosen by the vote (or rotation) at the end of a match; survives the round reset.
+        int nextLayoutIndex = -1;
+
+        internal DI_BoardLayout Layout => layout;
+
+        void InitializeMatch() => InitializeMatch(TakeNextLayout());
+
+        void InitializeMatch(int boardIndex) {
             // Match bonuses come only from the newly generated bases.
             teamSpeedBases.Clear();
             playerDamageMultipliers.Clear();
             playerProductionMultipliers.Clear();
             simulationAccumulator = 0f;
             snapshotTimer = 0f;
-            bases.Clear();
-            links.Clear();
             dots.Clear();
             npcTeams.Clear();
             playerTeams.Clear();
@@ -31,200 +40,114 @@ namespace Universes.UniverseData.dot_invaders {
             clashPositions.Clear();
             matchRecords.Clear();
             matchSummaries.Clear();
+            ClearMatchProgression();
             nextTeamId = 0;
             nextDotId = 0;
             revision = 0;
             winningTeamId = -1;
-            secondsRemaining = matchDurationSeconds;
+            matchElapsed = 0f;
             matchInProgress = false;
 
-            GenerateBases();
-            GenerateLinks();
-            AssignTurrets();
-            AssignSuperBases();
-            AssignSpeedBases();
-            AssignFactoriesAndFortresses();
+            layoutIndex = Mathf.Clamp(boardIndex, 0, DI_BoardLayouts.All.Count - 1);
+            layout = DI_BoardLayouts.All[layoutIndex];
+            secondsRemaining = Mathf.Min(layout.matchSeconds, matchDurationSeconds);
+            BuildBoard(layout, boardRandom.Next());
             initialized = true;
 
+            ChooseNpcTier();
             foreach (PlayerData player in PlayerData.Players.Values)
                 AssignPlayer(player);
 
-            SpawnNpcTeams();
+            SpawnNpcTeams(layout.npcTeams);
             AnnounceNewMatch();
             matchInProgress = true;
+            BeginMatchForPlayers();
             UpdateTopMessage();
             BroadcastState();
         }
 
-        void GenerateBases() {
-            var random = new System.Random(unchecked(Environment.TickCount * 397 ^ DateTime.UtcNow.Ticks.GetHashCode()));
-            int attempts = 0;
+        /// <summary>The voted board, else the next one in rotation (a random one for the first match).</summary>
+        int TakeNextLayout() {
+            int count = DI_BoardLayouts.All.Count;
+            int next = nextLayoutIndex >= 0 ? nextLayoutIndex
+                : layoutIndex >= 0 ? (layoutIndex + 1) % count
+                : boardRandom.Next(count);
+            nextLayoutIndex = -1;
+            return next;
+        }
 
-            while (bases.Count < BaseCount && attempts++ < 5000) {
-                var candidate = new Vector2(
-                    Mathf.Lerp(-ArenaHalfWidth + ArenaEdgeClearance, ArenaHalfWidth - ArenaEdgeClearance,
-                        (float)random.NextDouble()),
-                    Mathf.Lerp(-ArenaHalfHeight + ArenaEdgeClearance, ArenaHalfHeight - ArenaEdgeClearance,
-                        (float)random.NextDouble()));
-
-                bool overlaps = false;
-                for (int i = 0; i < bases.Count; i++) {
-                    if (Vector2.Distance(candidate, bases[i].position) < MinimumBaseSpacing) {
-                        overlaps = true;
-                        break;
-                    }
-                }
-
-                if (!overlaps)
-                    bases.Add(new BaseState { position = candidate });
-            }
-
-            // Extremely unlikely fallback that still guarantees a playable board.
-            for (int i = bases.Count; i < BaseCount; i++) {
-                float angle = i * Mathf.PI * 2f / BaseCount;
+        /// <summary>Replaces the board with a fresh one generated from <paramref name="board"/>.</summary>
+        void BuildBoard(DI_BoardLayout board, int seed) {
+            DI_BoardPlan plan = DI_BoardGenerator.Generate(board, seed);
+            bases.Clear();
+            links.Clear();
+            for (int i = 0; i < plan.Count; i++) {
+                DI_BaseKind kind = plan.kinds[i];
                 bases.Add(new BaseState {
-                    position = new Vector2(Mathf.Cos(angle) * 82f, Mathf.Sin(angle) * 46f)
+                    position = plan.positions[i],
+                    spawnable = plan.spawnable[i],
+                    isTurret = kind == DI_BaseKind.Turret,
+                    isSuperProducer = kind == DI_BaseKind.Super,
+                    isSpeedBase = kind == DI_BaseKind.Speed,
+                    isFactory = kind == DI_BaseKind.Factory,
+                    isFortress = kind == DI_BaseKind.Fortress,
                 });
             }
+            links.AddRange(plan.links);
         }
 
-        void GenerateLinks() {
-            var edgeKeys = new HashSet<ulong>();
-
-            // Prim's minimum spanning tree keeps the board connected without the
-            // long, crossing roads introduced by random base creation order.
-            var connected = new HashSet<int> { 0 };
-            while (connected.Count < bases.Count) {
-                int source = -1, target = -1;
-                float shortest = float.MaxValue;
-                foreach (int i in connected) {
-                    for (int j = 0; j < bases.Count; j++) {
-                        if (connected.Contains(j))
-                            continue;
-                        float distance = (bases[i].position - bases[j].position).sqrMagnitude;
-                        if (distance < shortest) {
-                            shortest = distance;
-                            source = i;
-                            target = j;
-                        }
-                    }
-                }
-                if (target < 0)
-                    break;
-                AddLink(source, target, edgeKeys);
-                connected.Add(target);
+        /// <summary>
+        /// Lets the players pick the next board from a few (never the one just played). Nobody voting, or a
+        /// tie, falls back to a random top option; with nobody online the first option is simply played.
+        /// </summary>
+        async UniTask VoteNextBoardAsync(CancellationToken token) {
+            int[] options = DI_BoardLayouts.VoteOptions(boardVoteOptions, layoutIndex, boardRandom);
+            if (options.Length == 0)
+                return;
+            if (boardVoteSeconds <= 0 || options.Length == 1 || GetActivePlayersCount() == 0) {
+                nextLayoutIndex = options[0];
+                return;
             }
 
-            // Dense local alternatives; the spanning tree still connects any isolated
-            // clusters. Crossings are allowed, but roads cannot pass through a base.
-            for (int i = 0; i < bases.Count; i++) {
-                var neighbors = new List<int>();
-                for (int j = 0; j < bases.Count; j++) {
-                    if (i != j)
-                        neighbors.Add(j);
-                }
-                neighbors.Sort((a, b) =>
-                    (bases[i].position - bases[a].position).sqrMagnitude.CompareTo(
-                        (bases[i].position - bases[b].position).sqrMagnitude));
-
-                for (int j = 0; j < Mathf.Min(nearbyPathsPerBase, neighbors.Count); j++) {
-                    int neighbor = neighbors[j];
-                    if (Vector2.Distance(bases[i].position, bases[neighbor].position) <= maximumLocalPathLength &&
-                        !PassesThroughBase(i, neighbor))
-                        AddLink(i, neighbor, edgeKeys);
-                }
+            var titles = new string[options.Length];
+            var descriptions = new string[options.Length];
+            for (int i = 0; i < options.Length; i++) {
+                DI_BoardLayout option = DI_BoardLayouts.All[options[i]];
+                titles[i] = option.title;
+                descriptions[i] = option.Describe();
             }
+            VoteResult result = await ServerVote.StartDynamicVote(BoardVoteTitle, BoardVoteDescription, titles, descriptions,
+                boardVoteSeconds, token);
+            nextLayoutIndex = options[PickVotedOption(result)];
+            DI_BoardLayout chosen = DI_BoardLayouts.All[nextLayoutIndex];
+            ServerChat.SendSystemMessage(new SystemMessageBroadcast(
+                $"<color={DI_Rules.ChatAccentHex}>Next board: {chosen.title}.</color> {chosen.tagline}", SystemMessageSource.CustomMessage));
         }
 
-        bool PassesThroughBase(int a, int b) {
-            Vector2 start = bases[a].position, end = bases[b].position;
-            Vector2 direction = end - start;
-            for (int i = 0; i < bases.Count; i++) {
-                if (i == a || i == b)
-                    continue;
-                float along = Mathf.Clamp01(Vector2.Dot(bases[i].position - start, direction) / Mathf.Max(0.001f, direction.sqrMagnitude));
-                if ((bases[i].position - (start + direction * along)).sqrMagnitude < 4.5f * 4.5f)
-                    return true;
-            }
-            return false;
+        /// <summary>The winning option, a random one among tied leaders, or the first when nobody voted.</summary>
+        int PickVotedOption(VoteResult result) {
+            if (result.winner >= 0)
+                return result.winner;
+            int top = result.TopVotes;
+            if (top <= 0 || result.totals == null)
+                return 0;
+            int leaders = 0;
+            foreach (int total in result.totals)
+                if (total == top) leaders++;
+            int pick = boardRandom.Next(leaders);
+            for (int i = 0; i < result.totals.Length; i++)
+                if (result.totals[i] == top && pick-- == 0)
+                    return i;
+            return 0;
         }
 
-        // Special bases are spread over fixed objectives so every board has the same
-        // shape of contest; each objective takes the nearest base that is still plain.
-        // Objectives as fractions of the arena half-extents. Factories take the corners of one
-        // diagonal first, fortresses the other diagonal, then the remaining edge midpoints, so
-        // no two specials share a point whatever the counts (up to 4 each).
-        const float ObjectiveCornerX = 0.62f;
-        const float ObjectiveCornerY = 0.57f;
-        const float ObjectiveEdge = 0.8f;
-        static readonly Vector2[] FactoryObjectives = {
-            Objective(-ObjectiveCornerX, ObjectiveCornerY), Objective(ObjectiveCornerX, -ObjectiveCornerY),
-            Objective(-ObjectiveEdge, 0f), Objective(ObjectiveEdge, 0f)
-        };
-        static readonly Vector2[] FortressObjectives = {
-            Objective(-ObjectiveCornerX, -ObjectiveCornerY), Objective(ObjectiveCornerX, ObjectiveCornerY),
-            Objective(0f, ObjectiveEdge), Objective(0f, -ObjectiveEdge)
-        };
-
-        static Vector2 Objective(float x, float y) => new(x * ArenaHalfWidth, y * ArenaHalfHeight);
-
-        void AssignTurrets() {
-            // Two separated objectives near the middle of each half of the board.
-            int count = Mathf.Clamp(turretBaseCount, 1, 2);
-            for (int t = 0; t < count; t++) {
-                int best = NearestPlainBase(new Vector2(count == 1 ? 0f : (t == 0 ? -35f : 35f), 0f));
-                if (best >= 0)
-                    bases[best].isTurret = true;
-            }
-        }
-
-        void AssignSuperBases() {
-            for (int t = 0; t < 2; t++) {
-                int best = NearestPlainBase(new Vector2(0f, t == 0 ? -35f : 35f));
-                if (best >= 0)
-                    bases[best].isSuperProducer = true;
-            }
-        }
-
-        void AssignSpeedBases() {
-            // Distributed along the board's middle line.
-            for (int i = 0; i < SpeedBaseCount; i++) {
-                float xPos = SpeedBaseCount > 1
-                    ? Mathf.Lerp(-ArenaHalfWidth + 20f, ArenaHalfWidth - 20f, (float)i / (SpeedBaseCount - 1))
-                    : 0f;
-                int best = NearestPlainBase(new Vector2(xPos, 0f));
-                if (best >= 0)
-                    bases[best].isSpeedBase = true;
-            }
-        }
-
-        void AssignFactoriesAndFortresses() {
-            // Factories and fortresses sit on opposite corners, so neither side of the
-            // board starts next to both.
-            for (int i = 0; i < Mathf.Min(factoryBaseCount, FactoryObjectives.Length); i++) {
-                int best = NearestPlainBase(FactoryObjectives[i]);
-                if (best >= 0)
-                    bases[best].isFactory = true;
-            }
-            for (int i = 0; i < Mathf.Min(fortressBaseCount, FortressObjectives.Length); i++) {
-                int best = NearestPlainBase(FortressObjectives[i]);
-                if (best >= 0)
-                    bases[best].isFortress = true;
-            }
-        }
-
-        /// <summary>The base nearest <paramref name="objective"/> that has no special role yet, or -1.</summary>
-        int NearestPlainBase(Vector2 objective) {
-            int best = -1;
-            float distance = float.MaxValue;
-            for (int i = 0; i < bases.Count; i++) {
-                float candidate = (bases[i].position - objective).sqrMagnitude;
-                if (!IsSpecial(bases[i]) && candidate < distance) {
-                    best = i;
-                    distance = candidate;
-                }
-            }
-            return best;
+        /// <summary>Moves the next match to a board (NextBoard command); false for an unknown id.</summary>
+        internal bool SetNextBoard(string boardId) {
+            int index = DI_BoardLayouts.IndexOf(boardId);
+            if (index < 0)
+                return false;
+            nextLayoutIndex = index;
+            return true;
         }
 
         static bool IsSpecial(BaseState state) =>
@@ -232,21 +155,23 @@ namespace Universes.UniverseData.dot_invaders {
 
         int Capacity(BaseState state) => state.isSuperProducer ? superMaxCapacity : maxCapacity;
 
-        float ProductionRate(BaseState state) => state.isSuperProducer
+        /// <summary>Troops per second the base trains right now, perks and Overdrive included.</summary>
+        float ProductionRate(BaseState state) => (state.isSuperProducer
             ? DI_Rules.SuperProductionRate(state.uninterruptedSeconds, superProductionSpeed, superSpeedupSeconds)
-            : DI_Rules.BaseProductionRate(productionSpeed, state.isFactory, factoryMultiplier);
+            : DI_Rules.BaseProductionRate(productionSpeed, state.isFactory, factoryMultiplier)) *
+            ProductionMultiplier(state);
+
+        /// <summary>Every multiplier on a base's training: the admin's player multiplier, perks and Overdrive.</summary>
+        float ProductionMultiplier(BaseState state) =>
+            GetPlayerProductionMultiplier(state.ownerClientId) * TeamProductionMultiplier(state.teamId);
+
+        /// <summary>Attackers this garrison needs per defender: fortress and the holder's defence perk.</summary>
+        float DefenceOf(BaseState state) =>
+            DI_Rules.DefenceMultiplier(state.isFortress, fortressMultiplier, EffectsOf(state.teamId).defence);
 
         static void InterruptProduction(BaseState state) {
             state.uninterruptedSeconds = 0f;
             state.actionTimer = 0f;
-        }
-
-        void AddLink(int a, int b, HashSet<ulong> edgeKeys) {
-            int source = Mathf.Min(a, b);
-            int target = Mathf.Max(a, b);
-            ulong key = ((ulong)(uint)source << 32) | (uint)target;
-            if (edgeKeys.Add(key))
-                links.Add(new Vector2Int(source, target));
         }
     }
 }

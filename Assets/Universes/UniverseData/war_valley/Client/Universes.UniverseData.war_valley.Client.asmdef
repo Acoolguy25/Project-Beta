@@ -21,7 +21,11 @@
         "Unity.ugui",
         "RyanAssets.GameFeel",
         "RyanAssets.Client.ClientUI.NameTag",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Client.ClientUI.Vote",
+        "RyanAssets.Shared.Requests"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

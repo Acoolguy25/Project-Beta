@@ -25,13 +25,28 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Tooltip("Hide a marker when you are closer than this to its target (it is right in front of you).")]
         [Min(0f)] public float hideWithin = 10f;
 
+        [Header("Feeds kept clear")]
+        [Tooltip("HUD rectangles markers never sit on (the kill feed and flag toasts on the right edge): a marker that would " +
+                 "land on one moves just above or below it.")]
+        public RectTransform[] keepClear = new RectTransform[0];
+        [Tooltip("Extra gap around those rectangles, in pixels (about half a marker).")]
+        [Min(0f)] public float keepClearPadding = 28f;
+
         [Header("Crosshair clearance")]
         [Tooltip("Within this distance of the screen centre (share of the screen height) a marker fades so the crosshair stays readable.")]
         [Range(0f, 0.5f)] public float centreClear = 0.12f;
         [Tooltip("Marker opacity right on the crosshair.")]
         [Range(0f, 1f)] public float centreAlpha = 0.2f;
 
+        [Header("Stacking")]
+        [Tooltip("Two markers closer than this (pixels) are pulled apart, so both icons and distances read (try 1: carrying " +
+                 "while your flag was taken stacked two on one spot).")]
+        [Min(0f)] public float stackGap = 64f;
+
         Camera cam;
+        readonly Vector3[] corners = new Vector3[4];
+        readonly Vector2[] placed = new Vector2[3];
+        int placedCount, placedFrame = -1;
 
         public void SetFlag(int index, bool show, Vector3 target, Sprite icon, Color color) =>
             Place(flagMarkers[index], show, target, icon, color);
@@ -74,6 +89,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 // The arrow sprite points up.
                 arrowDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
             }
+            point = KeepClear(point, inner);
+            point = Unstack(point, inner);
             float alpha = 1f;
             if (!offScreen && centreClear > 0f) {
                 float fromCentre = Vector2.Distance(point, new Vector2(w * 0.5f, h * 0.5f)) / (h * centreClear);
@@ -81,6 +98,42 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             }
             RectTransformUtility.ScreenPointToLocalPointInRectangle(area, point, null, out Vector2 local);
             marker.Show(local, offScreen, arrowDegrees, Mathf.RoundToInt(metres), icon, color, alpha);
+        }
+
+        /// <summary>Moves <paramref name="point"/> off the markers already placed this frame: down (or up at the bottom edge) by <see cref="stackGap"/>.</summary>
+        Vector2 Unstack(Vector2 point, Rect inner) {
+            if (placedFrame != Time.frameCount) {
+                placedFrame = Time.frameCount;
+                placedCount = 0;
+            }
+            for (int pass = 0; pass < placed.Length; pass++) {
+                bool moved = false;
+                for (int i = 0; i < placedCount; i++) {
+                    if ((placed[i] - point).sqrMagnitude >= stackGap * stackGap) continue;
+                    point.y = placed[i].y - stackGap >= inner.yMin ? placed[i].y - stackGap : placed[i].y + stackGap;
+                    moved = true;
+                }
+                if (!moved) break;
+            }
+            if (placedCount < placed.Length) placed[placedCount++] = point;
+            return point;
+        }
+
+        /// <summary>Moves <paramref name="point"/> (screen pixels) off any kept-clear HUD rectangle, to its nearer edge inside <paramref name="inner"/>.</summary>
+        Vector2 KeepClear(Vector2 point, Rect inner) {
+            if (keepClear == null) return point;
+            foreach (var rect in keepClear) {
+                if (rect == null || !rect.gameObject.activeInHierarchy) continue;
+                // The HUD canvas is screen-space overlay: world corners are screen pixels.
+                rect.GetWorldCorners(corners);
+                Rect r = Rect.MinMaxRect(corners[0].x - keepClearPadding, corners[0].y - keepClearPadding,
+                    corners[2].x + keepClearPadding, corners[2].y + keepClearPadding);
+                if (!r.Contains(point)) continue;
+                bool aboveFits = r.yMax <= inner.yMax, belowFits = r.yMin >= inner.yMin;
+                bool goUp = aboveFits && (!belowFits || r.yMax - point.y < point.y - r.yMin);
+                point.y = goUp ? r.yMax : r.yMin;
+            }
+            return point;
         }
     }
 }

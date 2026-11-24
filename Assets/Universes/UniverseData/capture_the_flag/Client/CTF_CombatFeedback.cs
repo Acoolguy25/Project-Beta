@@ -14,7 +14,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
     /// <summary>
     /// What a fight feels like in Flag Wars, all from server broadcasts: impact sparks on every
     /// confirmed hit, a hit marker, damage number and hit sound for the shooter, a kill sound and feed
-    /// line for every kill, a damage pulse and low-health heartbeat for the local player, and a
+    /// line for every kill, a damage pulse and a low-health edge vignette for the local player, and a
     /// respawn countdown while dead. Decides nothing.
     /// </summary>
     public sealed class CTF_CombatFeedback : MonoBehaviour {
@@ -30,9 +30,13 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Header("Kill feed")]
         public HudToastFeed killFeed;
         public Sprite pistolIcon, daggerIcon, fallIcon, skullIcon;
+        [Tooltip("Kill-feed icon per gun, in CTF_Weapon order (a gun kill shows the gun that made it).")]
+        public Sprite[] weaponIcons = new Sprite[0];
         [Min(0.5f)] public float killFeedSeconds = 5f;
         [Tooltip("Colour of the verb between the names (\"eliminated\").")]
         public Color feedVerbColor = new(0.6f, 0.64f, 0.7f);
+        [Tooltip("The mastery mark before a mastered gun's name in the feed.")]
+        public Color masteryColor = new(1f, 0.8f, 0.25f);
 
         [Header("Respawn")]
         public HudPopup respawnCard;
@@ -63,16 +67,20 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Range(0f, 1f)] public float deathFlashAlpha = 0.35f;
         [Tooltip("Damage pulse strength for losing all of your health at once (scaled by the share lost).")]
         [Min(0f)] public float damagePulseScale = 2f;
-        [Tooltip("Share of max health at or below which the heartbeat runs. Hits deal half of max health, so 0.5 = one hit left.")]
+        [Tooltip("Share of max health at or below which the low-health warning beats. Hits deal half of max health, so 0.5 = one hit left.")]
         [Range(0.05f, 1f)] public float lowHealthAt = 0.5f;
-        [Tooltip("Value handed to the shared heartbeat at lowHealthAt (it beats at 0.3 and below, stronger toward 0).")]
-        [Range(0.01f, 0.3f)] public float oneHitLeftSignal = 0.2f;
+        [Tooltip("The warning is the shared edge-only vignette (the centre of the view, where the enemy and the crosshair are, " +
+                 "stays clear; try 1's heartbeat tinted the whole screen): its strength at lowHealthAt (rising toward 1 at 0).")]
+        [Range(0.05f, 1f)] public float lowHealthStrength = 0.55f;
+        public Color lowHealthColor = new(0.9f, 0.08f, 0.08f);
+        [Range(0.05f, 1f)] public float lowHealthMaxAlpha = 0.45f;
+        [Min(0f)] public float lowHealthPulsesPerSecond = 1.4f;
 
         ClientManager manager;
         LocalCharacter watched;
         float respawnAt, hitMarkerUntil;
         int shownSeconds = -1;
-        string verbHex;
+        string verbHex, masteryHex;
         int lastDamage = int.MinValue;
         string lastDamageText;
 
@@ -85,7 +93,10 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             return lastDamageText;
         }
 
-        void Awake() => verbHex = "#" + ColorUtility.ToHtmlStringRGB(feedVerbColor);
+        void Awake() {
+            verbHex = "#" + ColorUtility.ToHtmlStringRGB(feedVerbColor);
+            masteryHex = "#" + ColorUtility.ToHtmlStringRGB(masteryColor);
+        }
 
         int MyId => manager != null && manager.Connection != null ? manager.Connection.ClientId : -1;
 
@@ -98,7 +109,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             LocalPlayer.OnCharacterAdded.Unsubscribe(OnLocalCharacter);
             LocalPlayer.OnCharacterRemoved -= OnLocalCharacterRemoved;
             Unwatch();
-            ScreenFx.SetLowHealth(1f);
+            SetLowHealth(1f);
         }
 
         void OnDestroy() {
@@ -135,7 +146,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             if (character == null) return;
             watched = character;
             watched.Health.OnChange += OnLocalHealth;
-            ScreenFx.SetLowHealth(1f);
+            SetLowHealth(1f);
             HideRespawn();
         }
 
@@ -153,7 +164,13 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             long max = watched.MaxHealth.Value;
             if (max <= 0) return;
             if (next < previous && next > 0) ScreenFx.DamagePulse(Mathf.Clamp01((previous - next) / (float)max) * damagePulseScale);
-            ScreenFx.SetLowHealth(CTF_Rules.LowHealthSignal(next / (float)max, lowHealthAt, oneHitLeftSignal));
+            SetLowHealth(next / (float)max);
+        }
+
+        /// <summary>One hit left: an edge vignette beats (never the centre-filling heartbeat).</summary>
+        void SetLowHealth(float health01) {
+            float strength = CTF_Rules.LowHealthEdge(health01, lowHealthAt, lowHealthStrength);
+            CTF_EdgeVignette.Set(CTF_EdgeVignette.Source.LowHealth, strength, lowHealthColor, lowHealthMaxAlpha, lowHealthPulsesPerSecond);
         }
 
         void HideRespawn() {
@@ -181,20 +198,24 @@ namespace Universes.UniverseData.capture_the_flag.Client {
 
         void OnKill(CTF_KillBroadcast message, Channel channel) {
             int me = MyId;
-            // Killers that are not players (a turret, a bot) have no id but still have a name.
+            // Bots have actor ids like players; a killer outside the match (a turret) has no id but still a name.
             bool hasKiller = message.killerId >= 0 || !string.IsNullOrEmpty(message.killerName);
             string victim = Name(message.victimName, message.victimTeam, message.victimId == me);
+            // A gun kill names the gun (bots carry all four from Regular up): "Rivet  [Scattergun]  You".
+            string verb = hasKiller ? CTF_Rules.KillVerb(message.cause, CTF_Loadouts.Get(message.weapon).title) : "";
+            // A gun its killer mastered (50 kills with it) carries a gold check: "Rivet  ✓ [Scattergun]  You".
+            if (hasKiller && message.killerMastered && message.cause == CTF_KillCause.Gun) verb = $"<color={masteryHex}>{CTF_Goals.MasteryMark}</color> {verb}";
             string line = hasKiller
-                ? $"{Name(message.killerName, message.killerTeam, message.killerId == me)}  <color={verbHex}><size=85%>eliminated</size></color>  {victim}"
+                ? $"{Name(message.killerName, message.killerTeam, message.killerId == me)}  <color={verbHex}><size=85%>{verb}</size></color>  {victim}"
                 : $"{victim}  <color={verbHex}><size=85%>{Fate(message.cause, message.victimId == me)}</size></color>";
-            killFeed.Push(Icon(message.cause), CTF_Rules.Color(hasKiller ? message.killerTeam : message.victimTeam), line, killFeedSeconds);
+            killFeed.Push(KillIcon(message), CTF_Rules.Color(hasKiller ? message.killerTeam : message.victimTeam), line, killFeedSeconds);
 
             if (hasKiller && message.killerId == me) {
                 GameSfx.Play(SfxCue.Kill);
                 CameraShake.Kick(killShake);
             }
             if (message.victimId != me) return;
-            ScreenFx.SetLowHealth(1f);
+            SetLowHealth(1f);
             ScreenFx.Flash(new Color(killColor.r, killColor.g, killColor.b, deathFlashAlpha));
             respawnBy.text = hasKiller
                 ? $"Eliminated by {Name(message.killerName, message.killerTeam, false, startsSentence: false)}"
@@ -214,6 +235,12 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         static bool IsMyTeam(CTF_Team team) {
             var me = LocalPlayer.Character;
             return me != null && me.GetTeam().realTeam == (team == CTF_Team.Red ? TeamColor.Red : TeamColor.Blue);
+        }
+
+        Sprite KillIcon(in CTF_KillBroadcast message) {
+            int i = (int)message.weapon;
+            bool gun = message.cause == CTF_KillCause.Gun && weaponIcons != null && i >= 0 && i < weaponIcons.Length && weaponIcons[i] != null;
+            return gun ? weaponIcons[i] : Icon(message.cause);
         }
 
         Sprite Icon(CTF_KillCause cause) => cause switch {

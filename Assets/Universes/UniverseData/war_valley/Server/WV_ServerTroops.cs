@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FishNet;
 using FishNet.Object;
@@ -32,6 +33,9 @@ namespace Universes.UniverseData.war_valley.Server {
         GameObject troopPrefab;
 
         readonly Dictionary<int, List<WV_TroopBrain>> squads = new();
+
+        /// <summary>Raised when a troop a commander trained (not a free one) takes the field: the commander's client id and its kind.</summary>
+        public event Action<int, WV_TroopKind> TroopDelivered;
 
         void Awake() {
             Instance = this;
@@ -100,6 +104,74 @@ namespace Universes.UniverseData.war_valley.Server {
             // A trained troop walks to the same gather point a produced vehicle does, so one rally
             // flag controls everything a building turns out.
             brain.OrderMove(building.RallyPoint);
+            TroopDelivered?.Invoke(clientId, kind);
+        }
+
+        /// <summary>
+        /// Gives a commander up to <paramref name="count"/> free troops of <paramref name="kind"/>
+        /// beside <paramref name="center"/> - the Veteran Squad unlock - within their soldier limit.
+        /// Returns how many took the field.
+        /// </summary>
+        public int DeployFreeTroops(int clientId, WV_TroopKind kind, int count, Vector3 center) {
+            if (troopPrefab == null || clientId == WV_Owned.NoOwner)
+                return 0;
+            int deployed = 0;
+            for (int i = 0; i < count && HasRoomForTroop(clientId); i++) {
+                if (SpawnTroop(center, WV_Permissions.GetCommanderTeam(clientId), kind, clientId) != null)
+                    deployed++;
+            }
+            return deployed;
+        }
+
+        /// <summary>
+        /// Heals each living troop of a commander by <paramref name="fractionOfMax"/> of its maximum
+        /// health, rounded up (Field Medics).
+        /// </summary>
+        public void HealSquad(int clientId, float fractionOfMax) {
+            if (fractionOfMax <= 0f || !squads.TryGetValue(clientId, out List<WV_TroopBrain> squad))
+                return;
+            foreach (WV_TroopBrain brain in squad) {
+                GameCharacter character = brain != null ? brain.Character : null;
+                if (character == null || character.IsDead || character.IsFullHealth)
+                    continue;
+                long max = character.MaxHealth.Value;
+                long heal = Math.Min(max - character.Health.Value, (long)Mathf.Ceil(max * fractionOfMax));
+                if (heal > 0)
+                    character.HealHealth(heal);
+            }
+        }
+
+        /// <summary>
+        /// A troop doctrine picked mid-round reaches the troops already on the field: their health grows by
+        /// <paramref name="healthRatio"/> (the added share is healed, as a reinforced flag is) and their
+        /// damage by <paramref name="damageRatio"/>. Every living troop of the commander is added to
+        /// <paramref name="changed"/>, so the pick can be shown on them.
+        /// </summary>
+        public void Reinforce(int clientId, float healthRatio, float damageRatio, List<GameCharacter> changed) {
+            if (!squads.TryGetValue(clientId, out List<WV_TroopBrain> squad))
+                return;
+            foreach (WV_TroopBrain brain in squad) {
+                GameCharacter character = brain != null ? brain.Character : null;
+                if (character == null || character.IsDead)
+                    continue;
+                changed?.Add(character);
+                if (healthRatio <= 1.0001f && damageRatio <= 1.0001f)
+                    continue;
+                CharacterBuild build = character.Build;
+                if (healthRatio > 1.0001f) {
+                    long max = character.MaxHealth.Value;
+                    long added = WV_CommanderModifiers.Scale(max, healthRatio) - max;
+                    build.HealthMultiplier *= healthRatio;
+                    if (added > 0)
+                        character.HealMaxHealth(added);
+                }
+                if (damageRatio > 1.0001f)
+                    build.DamageMultiplier *= damageRatio;
+                // Written back without ApplyBuild, which would reset the health just raised.
+                character.BuildSync.Value = build;
+                if (damageRatio > 1.0001f && character.TryGetComponent(out WV_NpcCombat combat))
+                    combat.RefreshDamage();
+            }
         }
 
         /// <summary>Hands back what a troop cost when it was queued but could not be delivered.</summary>
@@ -135,7 +207,13 @@ namespace Universes.UniverseData.war_valley.Server {
             character.DisplayName = WV_Rules.GetOwnedName(clientId, WV_Rules.GetTroopDisplayName(kind));
             // The kind's body - thin, big, short, or quick - and the health, speed, and damage that
             // come with it, applied through the character's own build setting.
-            character.ApplyBuild(WV_TroopCatalog.Get(kind).Build, WV_TroopCatalog.BaseHealth);
+            // The commander's doctrines (Hardened Infantry, Sharpshooters, Total War) toughen and
+            // sharpen every troop they field from the moment it is picked.
+            WV_CommanderModifiers bonuses = WV_CommanderBonuses.For(clientId);
+            CharacterBuild build = WV_TroopCatalog.Get(kind).Build.OrStandard;
+            build.HealthMultiplier *= bonuses.TroopHealthMultiplier;
+            build.DamageMultiplier *= bonuses.TroopDamageMultiplier;
+            character.ApplyBuild(build, WV_TroopCatalog.BaseHealth);
 
             // The robot body ships with a material variant per team colour, replicated by the
             // character itself, so a commander's squad is literally painted in their colour rather

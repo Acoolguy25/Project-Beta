@@ -73,8 +73,19 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         const float ArrowCaptionSize = 18f;
         const float BannerWidth = 640f;
         const float BannerEmblemSize = 48f;
+        const float BannerStarSize = 40f;
         /// <summary>The banner hangs this far below the top edge, under the shared top bar's message pill.</summary>
         const float BannerTopOffset = 58f;
+        /// <summary>Space above the funds card: its research line, then the retention level chip.</summary>
+        const float AboveEconomyGap = 28f;
+        const float HintPillHeight = 36f;
+        const float StackGap = 10f;
+        /// <summary>Bottom of the level chip, stacked on the funds card and its research line.</summary>
+        const float LevelChipBottom = Margin + EconomyCardHeight + AboveEconomyGap;
+        /// <summary>Bottom of the selection summary, stacked on the level chip.</summary>
+        const float SelectionPanelBottom = LevelChipBottom + WV_AuthoringCampaignHUD.LevelChipHeight + StackGap;
+        /// <summary>Bottom of the hint pill, above the command bar.</summary>
+        const float HintBottom = Margin + BarHeight + 30f;
 
         static WV_AuthoringHUD() {
             // Deferred: asset operations are not allowed while the domain is still loading.
@@ -116,7 +127,8 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static bool IsCurrent(WV_HUD hud) {
             if (!HasReferences(hud, "structurePanel", "optionMenu", "commandMenu", "researchLabel",
                     "selectionHealthFill", "donateButton", "donatePanel", "researchButton", "sellButton",
-                    "sellLabel", "troopRangeIndicator", "hintPanel", "healthBars", "waveDrama"))
+                    "sellLabel", "troopRangeIndicator", "hintPanel", "healthBars", "waveDrama",
+                    "doctrinePanel", "campaignCard", "retentionHud", "retentionSummary"))
                 return false;
             SerializedProperty forces = new SerializedObject(hud).FindProperty("forceCounts");
             return forces != null && forces.arraySize == 4;
@@ -209,7 +221,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             // One pill for alerts and notices, just above the order prompt. It sizes to the message,
             // and long messages end in an ellipsis rather than wrapping over the battlefield.
             RectTransform hintPill = UIKit.Pinned(root.transform, "Hint", new Vector2(0.5f, 0f),
-                new Vector2(0f, Margin + BarHeight + 30f), new Vector2(400f, 36f));
+                new Vector2(0f, HintBottom), new Vector2(400f, HintPillHeight));
             HudKit.Glass(hintPill, 18f);
             UIKit.Row(hintPill.gameObject, 8f, new RectOffset(12, 16, 0, 0), TextAnchor.MiddleLeft);
             UIKit.FitContent(hintPill.gameObject, true, false);
@@ -220,6 +232,9 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
             hintPill.gameObject.SetActive(false);
 
             BuildWaveDrama(root.transform, hud);
+            // Levels, challenges, the round summary, the doctrine hand and the campaign card.
+            WV_AuthoringCampaignHUD.Build(root.transform, hud, Margin,
+                doctrineBottom: HintBottom + HintPillHeight + StackGap, levelChipBottom: LevelChipBottom);
 
             Wire(hud,
                 ("donatePanel", donatePanel), ("selectionBox", selectionBox),
@@ -306,10 +321,29 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
 
             // Hung from the top, under the top bar, so the middle of the field - and the flag - stays in
             // view while it shows. WV_WaveDrama keeps the arrows below it.
+            // The kicker carries the round ("VETERAN · IRON STORM"); WV_WaveDrama writes and colours it.
             HudBanner banner = HudKit.Banner(layerObject.transform, "WaveBanner", new Vector2(0.5f, 1f),
-                new Vector2(0f, -BannerTopOffset), BannerWidth, "crossed_swords", WaveAccent, BannerEmblemSize);
+                new Vector2(0f, -BannerTopOffset), BannerWidth, "crossed_swords", WaveAccent, BannerEmblemSize, kicker: "WAR VALLEY");
+            if (banner.kicker != null) {
+                banner.kicker.fontSize = 15f;
+                banner.kicker.characterSpacing = 4f;
+                banner.kicker.fontStyle = FontStyles.Bold;
+            }
+            // The result's stars, as icons under the title that fill one by one.
+            RectTransform starRow = UIKit.Node(banner.transform, "Stars");
+            UIKit.Row(starRow.gameObject, 10f, new RectOffset(0, 0, 2, 2), TextAnchor.MiddleCenter, controlWidth: false, controlHeight: false);
+            UIKit.Size(starRow, -1f, BannerStarSize + 4f);
+            var bannerStars = new Object[WV_Campaign.MaxStars];
+            for (int i = 0; i < bannerStars.Length; i++) {
+                Image star = HudKit.Icon(starRow, "star", BannerStarSize, new Color(1f, 1f, 1f, 0.16f));
+                bannerStars[i] = star;
+            }
+            starRow.SetSiblingIndex(banner.title.transform.GetSiblingIndex() + 1);
+            starRow.gameObject.SetActive(false);
 
             WireArray(drama, "approachArrows", arrows);
+            WireArray(drama, "bannerStars", bannerStars);
+            Wire(drama, ("starRow", starRow.gameObject));
             Wire(drama, ("banner", banner), ("flagArrow", flagArrow),
                 ("waveIcon", HudKit.Icon("crossed_swords")), ("bossIcon", HudKit.Icon("warlord")),
                 ("victoryIcon", HudKit.Icon("laurels_trophy")), ("defeatIcon", HudKit.Icon("tombstone")));
@@ -420,7 +454,7 @@ namespace Universes.UniverseData.war_valley.Editor.Client {
         static void BuildSelectionSummary(Transform parent, WV_HUD hud) {
             Image panel = Panel(parent, "SelectionPanel", Glass);
             Anchor(panel, Vector2.zero, Vector2.zero, Vector2.zero,
-                new Vector2(Margin, Margin + EconomyCardHeight + 28f), new Vector2(CardWidth, SelectionPanelHeight));
+                new Vector2(Margin, SelectionPanelBottom), new Vector2(CardWidth, SelectionPanelHeight));
             Round(panel, withShadow: false);
 
             TextMeshProUGUI label = Label(panel.transform, "SelectionLabel", string.Empty, 15f, Ink, TextAlignmentOptions.TopLeft);

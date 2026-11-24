@@ -17,6 +17,10 @@ namespace Universes.UniverseData.dot_invaders {
 
         /// <summary>Players a match can hold before a player colour repeats an NPC team's colour.</summary>
         public const int PlayersWithOwnColour = 5;
+
+        /// <summary>Rich-text colours of the game's system chat lines: quiet notes and highlights.</summary>
+        public const string ChatMutedHex = "#8C96AA";
+        public const string ChatAccentHex = "#7FD4FF";
         public const int NpcTeamIdStart = 100;
 
         public static TeamColor GetTeamColor(int teamId) =>
@@ -102,17 +106,40 @@ namespace Universes.UniverseData.dot_invaders {
         public static float BaseProductionRate(float productionSpeed, bool factory, float factoryMultiplier) =>
             productionSpeed * (factory ? factoryMultiplier : 1f);
 
+        /// <summary>
+        /// Attackers a garrison needs per defender: the fortress multiplier on a fortress, times any
+        /// defence perk of the team holding it (<paramref name="perkDefence"/>, 1 = none).
+        /// </summary>
+        public static float DefenceMultiplier(bool fortress, float fortressMultiplier, float perkDefence = 1f) =>
+            (fortress ? Mathf.Max(MinSpecialBaseMultiplier, fortressMultiplier) : 1f) * Mathf.Max(MinDefenceMultiplier, perkDefence);
+
+        /// <summary>Lowest combined defence multiplier the rules accept (guards a division).</summary>
+        public const float MinDefenceMultiplier = 0.01f;
+
         /// <summary>Garrison damage one arriving troop deals; a fortress shrugs off part of it.</summary>
         public static float ArrivalDamage(float attackDamage, bool fortress, float fortressMultiplier) =>
-            fortress ? attackDamage / fortressMultiplier : attackDamage;
+            ArrivalDamage(attackDamage, DefenceMultiplier(fortress, fortressMultiplier));
+
+        /// <summary>Garrison damage one arriving troop deals to a garrison with <paramref name="defence"/> (see <see cref="DefenceMultiplier"/>).</summary>
+        public static float ArrivalDamage(float attackDamage, float defence) =>
+            attackDamage / Mathf.Max(MinDefenceMultiplier, defence);
 
         /// <summary>Attackers it takes to empty a garrison of <paramref name="defenders"/>.</summary>
         public static int AttackersToDefeat(int defenders, bool fortress, float fortressMultiplier) =>
-            fortress ? Mathf.CeilToInt(Mathf.Max(0, defenders) * fortressMultiplier) : Mathf.Max(0, defenders);
+            AttackersToDefeat(defenders, DefenceMultiplier(fortress, fortressMultiplier));
+
+        public static int AttackersToDefeat(int defenders, float defence) =>
+            Mathf.CeilToInt(Mathf.Max(0, defenders) * Mathf.Max(MinDefenceMultiplier, defence) - DefenceRounding);
 
         /// <summary>Defenders that <paramref name="attackers"/> plain troops are sure to defeat.</summary>
         public static int DefendersDefeatedBy(int attackers, bool fortress, float fortressMultiplier) =>
-            fortress ? Mathf.FloorToInt(Mathf.Max(0, attackers) / fortressMultiplier) : Mathf.Max(0, attackers);
+            DefendersDefeatedBy(attackers, DefenceMultiplier(fortress, fortressMultiplier));
+
+        public static int DefendersDefeatedBy(int attackers, float defence) =>
+            Mathf.FloorToInt(Mathf.Max(0, attackers) / Mathf.Max(MinDefenceMultiplier, defence) + DefenceRounding);
+
+        // Float slack so 10 defenders at 1.0 need exactly 10 attackers, not 11 after a rounding error.
+        const float DefenceRounding = 0.0001f;
 
         public static float SuperProductionRate(float uninterruptedSeconds, float peakRate, float speedupSeconds) {
             float startRate = Mathf.Min(1.25f, peakRate);
@@ -264,6 +291,16 @@ namespace Universes.UniverseData.dot_invaders {
         public float fortressMultiplier;
         // Appended: the receiving player's saved progress, filled once the match is over.
         public DI_MatchSummary yourSummary;
+        // Appended (retention pass): the board being played (DI_BoardLayouts id), the NPC tier's name,
+        // the teams in Overdrive right now, and the receiving player's Overdrive and rated status.
+        public string layoutId;
+        public string npcTierName;
+        public int[] overdriveTeams;
+        /// <summary>A <see cref="DI_AbilityState"/>.</summary>
+        public int yourAbilityState;
+        /// <summary>Active: seconds of Overdrive left. Locked: seconds until it can be used.</summary>
+        public float yourAbilitySeconds;
+        public bool yourMatchRated;
     }
 
     /// <summary>One player's captures and most bases held, this match and over all saved matches.</summary>
@@ -273,5 +310,41 @@ namespace Universes.UniverseData.dot_invaders {
         public int totalCaptures;
         public int matchMostHeld;
         public int bestMostHeld;
+        // Appended (retention pass): where the player finished and what it did to their rating.
+        public bool rated;
+        public int ratingBefore;
+        public int ratingAfter;
+        /// <summary>1-based finishing place among <see cref="teamCount"/> teams (0 = not placed).</summary>
+        public int placement;
+        public int teamCount;
+        /// <summary>Why the match was not rated ("Joined late"), when it was not.</summary>
+        public string unratedReason;
+    }
+
+    /// <summary>
+    /// The receiving player's Dot Invaders profile: rating, record and equipped perks. Sent by the server
+    /// when their save loads and whenever it changes (a match ends, a perk is equipped).
+    /// </summary>
+    public struct DI_ProfileBroadcast : IBroadcast {
+        /// <summary>False while their progress cannot be saved (defaults this session).</summary>
+        public bool saved;
+        public int rating;
+        public int peakRating;
+        public int ratedMatches;
+        public int matches;
+        public int wins;
+        /// <summary>Equipped perk ids (DI_Perks), in slot order.</summary>
+        public string[] perks;
+    }
+
+    /// <summary>Client asks to equip exactly these perks; the server checks them against the player's level.</summary>
+    public struct DI_PerkRequest : IBroadcast {
+        public string[] perks;
+    }
+
+    /// <summary>Client asks to use an ability (0 = Overdrive).</summary>
+    public struct DI_AbilityRequest : IBroadcast {
+        public const int Overdrive = 0;
+        public int ability;
     }
 }
