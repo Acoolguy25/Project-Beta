@@ -505,15 +505,13 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         void UpdateBoarding() {
             if (night.Phase != CH_Phase.Boarding || pendingScene) return;
-            bool everyoneAboard = true;
-            int aboard = 0;
+            int aboard = 0, ashore = 0;
             foreach (var character in LocalCharacter.Characters.Values) {
                 if (character == null || character.IsDead || eliminated.Contains(character.Owner)) continue;
                 if (IsAboard(character)) aboard++;
-                else everyoneAboard = false;
+                else ashore++;
             }
-            if (aboard == 0 && Time.time < boardingEnds) return;
-            if (!everyoneAboard && Time.time < boardingEnds) return;
+            if (!CH_Night.FerryLeaves(aboard, ashore, Time.time >= boardingEnds)) return;
             pendingScene = true;
             Depart().Forget();
         }

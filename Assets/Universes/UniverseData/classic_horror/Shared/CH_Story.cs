@@ -38,7 +38,7 @@ namespace Universes.UniverseData.classic_horror {
         public static readonly string[] Endings = {
             "",
             "SHE CAME HOME\nYou carried Mara back across the black water, and Lily's song went with you. When the sun came up over the reservoir the chapel bell was silent for the first time in sixty years.",
-            "YOU ESCAPED\nThe boat cut through the fog with Mara shaking at the wheel. Behind you the bell started ringing again. Somewhere in Hollowmere a little girl is still waiting on the jetty steps.",
+            "YOU ESCAPED\nThe boat cut through the fog with Mara shaking at the tiller. Behind you the bell started ringing again. Somewhere in Hollowmere a little girl is still waiting on the jetty steps.",
             "THE CHOIR SINGS ON\nNobody left Hollowmere. On still nights fishermen on the reservoir hear new voices in the chapel, singing slightly out of tune."
         };
 

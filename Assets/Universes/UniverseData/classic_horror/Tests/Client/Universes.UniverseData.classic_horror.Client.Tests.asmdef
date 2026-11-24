@@ -1,0 +1,22 @@
+{
+  "name": "Universes.UniverseData.classic_horror.Client.Tests",
+  "references": [
+    "Universes.UniverseData.classic_horror.Shared",
+    "Universes.UniverseData.classic_horror.Client",
+    "RyanAssets.Client.ClientUI.Topbar",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS",
+    "!UNITY_SERVER"
+  ],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false
+}

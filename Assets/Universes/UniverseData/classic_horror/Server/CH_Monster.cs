@@ -65,6 +65,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly Dictionary<LocalCharacter, float> lastSeen = new();
         readonly List<LocalCharacter> stale = new();
         readonly List<Vector3> sweepPoints = new();
+        // The sweep point he is walking to, so a new leg gets a new path at once (not after he stops at the last one).
+        Vector3? sweepHeading;
 
         public Mode State { get; private set; } = Mode.Patrol;
         public LocalCharacter Quarry { get; private set; }
@@ -392,6 +394,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             State = Mode.Search;
             searchUntil = Time.time + tuning.searchSeconds;
             sweepPoints.Clear();
+            sweepHeading = null;
             for (int i = 0; i < 4; i++) {
                 Vector2 offset = RandomInCircle() * tuning.searchRadius;
                 Vector3 candidate = lastKnownPosition + lastKnownVelocity.normalized * (tuning.searchRadius * 0.4f) + new Vector3(offset.x, 0f, offset.y);
@@ -412,10 +415,13 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (near != null && runner.OccupantOf(near) == null && checkedHidingPlaces.Add(near)
                 && random.NextDouble() < tuning.checkHidingChance && BeginOpening(near, null))
                 return;
-            if (sweepPoints.Count == 0) { Steer(lastKnownPosition, tuning.searchSpeed, false); return; }
-            Vector3 point = sweepPoints[0];
-            if (Flat(point - transform.position).sqrMagnitude < SweepPointReach * SweepPointReach) { sweepPoints.RemoveAt(0); return; }
-            Steer(point, tuning.searchSpeed, false);
+            while (sweepPoints.Count > 0 && Flat(sweepPoints[0] - transform.position).sqrMagnitude < SweepPointReach * SweepPointReach)
+                sweepPoints.RemoveAt(0);
+            Vector3 point = sweepPoints.Count > 0 ? sweepPoints[0] : lastKnownPosition;
+            // Each leg starts from where he is, walking: the path to the next point replaces the old one straight away.
+            bool newLeg = sweepHeading != point;
+            sweepHeading = point;
+            Steer(point, tuning.searchSpeed, newLeg);
         }
 
         /// <summary>Heads for a hiding place he can actually walk to, with a deadline; false if there is no complete path.</summary>
@@ -476,8 +482,10 @@ namespace Universes.UniverseData.classic_horror.Server {
         void Patrol() {
             if (TryRelocate()) return;
             bool arrived = Flat(patrolPoint - transform.position).sqrMagnitude < PatrolPointReach * PatrolPointReach;
-            if (arrived || Time.time > patrolUntil) PickPatrolPoint();
-            Steer(patrolPoint, tuning.patrolSpeed, false);
+            // A new leg replaces whatever path he still holds (the end of a chase, a feed), or he would stand on it.
+            bool newLeg = arrived || Time.time > patrolUntil;
+            if (newLeg) PickPatrolPoint();
+            Steer(patrolPoint, tuning.patrolSpeed, newLeg);
         }
 
         void PickPatrolPoint() {

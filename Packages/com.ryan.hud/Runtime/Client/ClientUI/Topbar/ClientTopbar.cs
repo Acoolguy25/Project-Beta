@@ -73,10 +73,13 @@ namespace RyanAssets.Client.ClientUI.Topbar {
                 statusPill.SetActive(!string.IsNullOrEmpty(text));
         }
 
-        /// <summary>"war_valley" -> "War Valley".</summary>
+        /// <summary>The game's registered title ("The Drowned Choir"), or its id spaced and capitalised ("war_valley" -> "War Valley").</summary>
         static string FormatGameName(string universeId) {
             if (string.IsNullOrEmpty(universeId))
                 return string.Empty;
+            foreach (Universes.UniverseStruct universe in Universes.UniverseRegistry.All)
+                if (universe.id == universeId && !string.IsNullOrEmpty(universe.title))
+                    return universe.title;
             string spaced = universeId.Replace('_', ' ').Replace('-', ' ');
             return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(spaced);
         }

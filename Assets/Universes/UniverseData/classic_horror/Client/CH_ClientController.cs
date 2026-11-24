@@ -4,6 +4,8 @@ using FishNet.Managing.Client;
 using FishNet.Transporting;
 using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
+using RyanAssets.Client.ClientUI.Spectate;
+using RyanAssets.Client.ClientUI.Topbar;
 using RyanAssets.GameFeel;
 using RyanAssets.Input;
 using RyanAssets.Shared.Globals;
@@ -62,6 +64,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         public CH_CutsceneDirector cutscenes;
         public CH_ItemPresenter items;
         public CH_Apparitions apparitions;
+        public CH_HidingView hidingView;
 
         [Header("Ending")]
         public HudPopup endingPopup;
@@ -149,7 +152,7 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         void OnEnable() {
             // A catch is always fatal and lives are what count: the shared health bar has nothing to say here.
-            RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = true;
+            ClientHealthbar.Suppressed = true;
             ToolControls.interactPressed += Interact;
             CharacterControls.LockKeyboardZoom(); // E is this game's action key, not camera zoom
             ToolControls.journalPressed += OpenJournal;
@@ -157,7 +160,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         }
 
         void OnDisable() {
-            RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = false;
+            ClientHealthbar.Suppressed = false;
             ToolControls.interactPressed -= Interact;
             CharacterControls.UnlockKeyboardZoom();
             ToolControls.journalPressed -= OpenJournal;
@@ -264,6 +267,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             foreach (var pair in hiddenCharacters) ShowCharacter(pair.Value);
             hiddenCharacters.Clear();
             localHidden = false;
+            hidingView.Exit();
             promptKind = FocusKind.None;
             promptIndex = -1;
         }
@@ -384,7 +388,10 @@ namespace Universes.UniverseData.classic_horror.Client {
             hiddenNow.Clear();
             if (next.hides != null) foreach (CH_HideView hide in next.hides) if (hide.occupantId >= 0) hiddenNow.Add(hide.occupantId);
             int local = LocalCharacterId();
+            bool wasHidden = localHidden;
             localHidden = local >= 0 && hiddenNow.Contains(local);
+            if (localHidden && !wasHidden) LookOutOf(next.hides, local);
+            else if (!localHidden && wasHidden) hidingView.Exit();
             items.SetHiddenCharacters(hiddenNow);
             // Only remembered once their character exists here, so a late joiner keeps trying on each state.
             foreach (int id in hiddenNow)
@@ -415,9 +422,21 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         bool LocalHidden => hasState && localHidden;
 
+        /// <summary>Looks out through the door of the hiding place <paramref name="local"/> is in.</summary>
+        void LookOutOf(CH_HideView[] hides, int local) {
+            foreach (CH_HideView hide in hides) {
+                if (hide.occupantId != local || map.hidingSpots == null || hide.id < 0 || hide.id >= map.hidingSpots.Length) continue;
+                CH_HidingSpot spot = map.hidingSpots[hide.id];
+                if (spot == null) return;
+                hidingView.Enter(spot.Exit - spot.Inside, fearLoop.LocalFlashlight != null ? fearLoop.LocalFlashlight.gameObject : null);
+                return;
+            }
+        }
+
         void UpdateHiding() {
             if (hidingOverlay == null) return;
             float target = LocalHidden ? 1f : 0f;
+            cutscenes.HideGameplayHud = LocalHidden;
             hidingOverlay.alpha = Mathf.MoveTowards(hidingOverlay.alpha, target, Time.unscaledDeltaTime / hidingFadeSeconds);
             if (hidingLabel != null && LocalHidden) hidingLabel.text = fearLoop.Fear > 0.4f ? "Don't move. Don't breathe." : "Hiding  ·  press E to leave";
         }
@@ -426,6 +445,8 @@ namespace Universes.UniverseData.classic_horror.Client {
         void ShowEnding(CH_StateBroadcast next) {
             bool over = next.phase is CH_Phase.Complete or CH_Phase.Failed;
             endingPopup.SetVisible(over);
+            // The spectate bar shares the bottom of the screen with the card; while the night is over the card wins.
+            ClientSpectate.SetBarHidden(over);
             if (!over) { endingShown = false; return; }
             endingNextCase.Text = $"Next night in {next.nextNightSeconds}s";
             endingSolved.Text = $"Escapes tonight: {next.escapes}";

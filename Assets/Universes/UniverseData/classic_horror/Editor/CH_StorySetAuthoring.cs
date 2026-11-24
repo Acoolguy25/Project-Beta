@@ -129,7 +129,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             public Vector3 outward, side;
             /// <summary>The middle of the jetty's last plank, on the planks.</summary>
             public Vector3 jettyEnd;
-            public float boatLength;
+            public float boatLength, boatWidth;
         }
 
         /// <summary>
@@ -194,7 +194,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             Vector3 jettyEnd = jettyCentre + outward * (jettySize.x * 0.5f - 0.6f);
             return new Harbour {
                 hull = hullMark, boarding = boarding, shore = shoreMark, stern = stern, slots = slots, arrival = arrival, ferry = boat.transform,
-                outward = outward, side = side, jettyEnd = new Vector3(jettyEnd.x, deck, jettyEnd.z), boatLength = boatLength
+                outward = outward, side = side, jettyEnd = new Vector3(jettyEnd.x, deck, jettyEnd.z), boatLength = boatLength, boatWidth = boatWidth
             };
         }
 
@@ -563,6 +563,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
             if (!IsWater(riseTo)) Debug.LogWarning($"[Drowned Choir] the Taking: the lake off the jetty's end at {riseTo} is shallow; Crane will rise from its bed.");
             // He lands an arm's length in front of her, not inside her coat.
             Vector3 onEdge = edge + outward * TakingGrabReach;
+            // Once he has her, she is held at his side, never inside him: the cut to the drag-under puts her there.
+            Vector3 heldBeside = side * TakingHeldBeside;
             Vector3 struggle = (edge + riseTo) * 0.5f;
             // Filmed from behind Mara's shoulder on the open side, so the lake and its mist are behind him and both are in frame.
             Vector3 overShoulder = (-outward - side).normalized;
@@ -609,15 +611,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
                         Take(M("Taking", "2 from", edge + overShoulder * 3.6f + up * 1.8f), M("Taking", "2 to", edge + overShoulder * 3.0f + up * 1.7f), M("Taking", "2 look", struggle + up * 1.25f), 5.2f, 50f,
                             actorMark: M("Taking", "2 priest from", riseFrom), actorTarget: M("Taking", "2 priest to", riseTo), actorPose: ActorPose.Rise, shake: 0.5f, cue: "splash",
                             maraMark: M("Taking", "2 mara", edge, riseTo - edge), maraPose: ActorPose.Stand),
-                        // He lunges onto the jetty's edge, where Mara stands, and drags her under with him.
+                        // He lunges onto the jetty's edge, where Mara stands, and drags her under at his side.
                         Take(M("Taking", "3 from", edge + overShoulder * 2.8f + up * 1.6f), null, M("Taking", "3 look", onEdge + up * 1.2f), 2f, 48f,
                             actorMark: M("Taking", "3 priest from", riseTo), actorTarget: M("Taking", "3 priest to", onEdge), actorPose: ActorPose.Lunge, shake: 0.8f, cue: "scream",
                             maraMark: M("Taking", "3 mara", edge, riseTo - edge), maraPose: ActorPose.Stand),
-                        Take(M("Taking", "3b from", edge + overShoulder * 2.4f + up * 1.6f), null, M("Taking", "3b look", riseTo + up * 0.5f), 1.8f, 48f,
+                        // Framed on the pair as he takes her, so they sink down through the shot rather than start with their heads cut off.
+                        Take(M("Taking", "3b from", edge + overShoulder * 4.2f + up * 1.9f), null, M("Taking", "3b look", Vector3.Lerp(onEdge, riseTo, 0.5f) + up * 1.4f), 1.8f, 50f,
                             actorMark: M("Taking", "3b priest from", onEdge), actorTarget: M("Taking", "3b priest to", riseTo), actorPose: ActorPose.Sink, shake: 0.5f, cue: "splash",
-                            maraMark: M("Taking", "3b mara from", edge, riseTo - edge), maraTarget: M("Taking", "3b mara to", riseTo), maraPose: ActorPose.Sink),
-                        Take(M("Taking", "4 from", chapel - Vector3.forward * 20f + up * 3f), M("Taking", "4 to", chapel - Vector3.forward * 12f + up * 2.5f), M("Taking", "4 look", chapel + up * 4f), 6f, 50f, cue: "bell"),
-                        Take(M("Taking", "5 from", graves - graveFacing * 9f + up * 3f), M("Taking", "5 to", graves - graveFacing * 5f + up * 2f), M("Taking", "5 look", graves + up * 0.6f), 8f, 50f)
+                            maraMark: M("Taking", "3b mara from", onEdge + heldBeside, -side), maraTarget: M("Taking", "3b mara to", riseTo + heldBeside), maraPose: ActorPose.Sink),
+                        Take(M("Taking", "4 from", chapel - Vector3.forward * 20f + up * 3f), M("Taking", "4 to", chapel - Vector3.forward * 12f + up * 2.5f), M("Taking", "4 look", chapel + up * 4f), 6f, 50f, cue: "bell", fill: 0.5f),
+                        Take(M("Taking", "5 from", graves - graveFacing * 9f + up * 3f), M("Taking", "5 to", graves - graveFacing * 5f + up * 2f), M("Taking", "5 look", graves + up * 0.6f), 8f, 50f, fill: 1f)
                     }
                 },
                 new CH_CutsceneSet.Scene {
@@ -629,6 +632,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 BuildDeparture(harbour, M)
             };
             cutscenes.ferry = harbour.ferry;
+            cutscenes.ferryWake = BuildFerryWake(harbour);
             return cutscenes;
         }
 
@@ -643,10 +647,10 @@ namespace Universes.UniverseData.classic_horror.Editor {
             Vector3 open = (outward + side).normalized, across = Vector3.Cross(up, open).normalized;
             Quaternion turn = Quaternion.FromToRotation(bow, open);
             Transform ferry = harbour.ferry;
-            // The ferry's pose with its hull centre at centreAt, turned to face the open lake.
-            Transform Leg(string name, Vector3 centreAt) {
-                Transform mark = M("Departure", name, centreAt + turn * (ferry.position - centre), null);
-                mark.rotation = turn * ferry.rotation;
+            // The ferry's pose with its hull centre at centreAt, turned by rotation from its mooring.
+            Transform Leg(string name, Vector3 centreAt, Quaternion rotation) {
+                Transform mark = M("Departure", name, centreAt + rotation * (ferry.position - centre), null);
+                mark.rotation = rotation * ferry.rotation;
                 return mark;
             }
             Transform Aboard(string name, Vector3 position, Vector3 facing) {
@@ -654,7 +658,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 mark.SetParent(ferry, true);
                 return mark;
             }
-            Vector3 turned = centre + open * 9f, away = turned + open * 30f;
+            Vector3 turned = centre + open * DepartureTurnOut;
+            // Then out into the lake down a lane the hull fits: the wreck lies off this shore.
+            Vector3 lane = ClearLane(turned, open, ferry, harbour.boatLength, harbour.boatWidth, out float run);
+            Vector3 away = turned + lane * run;
+            Quaternion sailing = Quaternion.FromToRotation(bow, lane);
             Transform tiller = Aboard("mara (tiller)", harbour.stern.position - up * 0.2f, bow);
             Transform hullLook = Aboard("hull look", centre + up * 1f, bow);
             Transform bowCamera = Aboard("bow camera", centre + bow * (harbour.boatLength * 0.42f) + up * 1.9f, -bow);
@@ -662,20 +670,69 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 phase = CH_Phase.Departure,
                 shots = new[] {
                     Take(M("Departure", "1 from", turned + open * 9f + across * 3f + up * 1.4f, null), M("Departure", "1 to", turned + open * 11f + across * 4f + up * 1.8f, null), hullLook, 7f, 50f,
-                        shake: 0.2f, cue: "engine", maraMark: tiller, maraPose: ActorPose.Stand, ferryTarget: Leg("1 ferry", turned)),
+                        shake: 0.2f, cue: "engine", maraMark: tiller, maraPose: ActorPose.Stand, ferryTarget: Leg("1 ferry", turned, turn)),
                     Take(bowCamera, null, M("Departure", "2 look", harbour.jettyEnd + up * 1.3f, null), 9f, 32f,
                         actorMark: M("Departure", "2 priest", harbour.jettyEnd, open), actorPose: ActorPose.Stand, cue: "bell",
-                        maraMark: tiller, maraPose: ActorPose.Stand, ferryTarget: Leg("2 ferry", away))
+                        maraMark: tiller, maraPose: ActorPose.Stand, ferryTarget: Leg("2 ferry", away, sailing))
                 }
             };
         }
 
+        const float DepartureTurnOut = 9f, DepartureRun = 30f, DepartureMinRun = 18f, LaneClearance = 2f, LaneHullHeight = 2.5f;
+        // Bigger than this is the lake, the terrain's skirts or the sky, not something a boat could hit.
+        const float MaxObstacleSize = 100f;
+        static readonly float[] LaneTurns = { 0f, -12f, 12f, -24f, 24f, -36f, 36f, -48f, 48f };
+
+        /// <summary>
+        /// The way out from <paramref name="start"/>, turned from <paramref name="open"/> by the smallest angle that works,
+        /// and how far (<paramref name="run"/>, up to <see cref="DepartureRun"/>) the hull can sail down it, bow first,
+        /// without passing through anything in the scene. Anything the moored-out hull already overlaps is not in the way.
+        /// </summary>
+        static Vector3 ClearLane(Vector3 start, Vector3 open, Transform ferry, float hullLength, float hullWidth, out float run) {
+            // The hull's footprint sailing along direction, as a world box: what it sweeps through the water.
+            Bounds Hull(Vector3 centre, Vector3 direction) {
+                Vector3 along = direction * (hullLength * 0.5f), across = Vector3.Cross(Vector3.up, direction) * (hullWidth * 0.5f);
+                var box = new Bounds(centre + along + across, Vector3.zero);
+                box.Encapsulate(centre + along - across);
+                box.Encapsulate(centre - along + across);
+                box.Encapsulate(centre - along - across);
+                box.Encapsulate(centre + Vector3.up * LaneHullHeight);
+                return box;
+            }
+            var obstacles = new List<Bounds>();
+            Bounds moored = Hull(start, open);
+            foreach (Renderer part in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None)) {
+                if (!part.enabled || part is ParticleSystemRenderer || part.transform.IsChildOf(ferry)) continue;
+                Bounds box = part.bounds;
+                if (box.size.x > MaxObstacleSize || box.size.z > MaxObstacleSize || moored.Intersects(box)) continue;
+                obstacles.Add(box);
+            }
+            float ClearRun(Vector3 direction) {
+                for (float distance = 1f; distance <= DepartureRun; distance += 1f) {
+                    Bounds at = Hull(start + direction * distance, direction);
+                    foreach (Bounds box in obstacles) if (at.Intersects(box)) return distance - 1f;
+                }
+                return float.MaxValue;
+            }
+            Vector3 best = open;
+            float longest = -1f;
+            foreach (float angle in LaneTurns) {
+                Vector3 direction = Quaternion.AngleAxis(angle, Vector3.up) * open;
+                float clear = ClearRun(direction);
+                if (clear >= DepartureRun) { run = DepartureRun; return direction; }
+                if (clear > longest) { longest = clear; best = direction; }
+            }
+            run = Mathf.Max(0f, longest - LaneClearance);
+            if (run < DepartureMinRun) Debug.LogWarning($"Classic Horror: the ferry only has {run:0} m of clear water to sail out from {start}; check the harbour.");
+            return best;
+        }
+
         static Shot Take(Transform from, Transform to, Transform lookAt, float seconds, float fieldOfView, Transform actorMark = null,
             Transform actorTarget = null, ActorPose actorPose = ActorPose.Hidden, float shake = 0f, string cue = null,
-            Transform maraMark = null, Transform maraTarget = null, ActorPose maraPose = ActorPose.Hidden, Transform ferryTarget = null) => new() {
+            Transform maraMark = null, Transform maraTarget = null, ActorPose maraPose = ActorPose.Hidden, Transform ferryTarget = null, float fill = 0f) => new() {
             from = from, to = to, lookAt = lookAt, seconds = seconds, fieldOfView = fieldOfView, actorMark = actorMark,
             actorTarget = actorTarget, actorPose = actorMark != null ? actorPose : ActorPose.Hidden, shake = shake, cue = cue ?? string.Empty,
-            maraMark = maraMark, maraTarget = maraTarget, maraPose = maraMark != null ? maraPose : ActorPose.Hidden, ferryTarget = ferryTarget
+            maraMark = maraMark, maraTarget = maraTarget, maraPose = maraMark != null ? maraPose : ActorPose.Hidden, ferryTarget = ferryTarget, fill = fill
         };
 
         // ---- Helpers -------------------------------------------------------------------------------------------------------
@@ -814,13 +871,14 @@ namespace Universes.UniverseData.classic_horror.Editor {
             main.duration = 30f;
             main.startLifetime = 36f;
             main.startSpeed = 0.12f;
-            main.startSize = new ParticleSystem.MinMaxCurve(6f, 12f);
+            // Many small, faint, ragged puffs rather than a few big discs: no single one reads, and they overlap into a layer.
+            main.startSize = new ParticleSystem.MinMaxCurve(LakeMistPuffSize * 0.6f, LakeMistPuffSize * 1.4f);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-            main.startColor = new Color(1f, 1f, 1f, 0.085f);
-            main.maxParticles = 160;
+            main.startColor = new Color(1f, 1f, 1f, LakeMistAlpha);
+            main.maxParticles = LakeMistPuffs;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             var emission = particles.emission;
-            emission.rateOverTime = 4.2f;
+            emission.rateOverTime = LakeMistPuffs / main.startLifetime.constant;
             var shape = particles.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
             shape.scale = new Vector3(LakeMistReach, 0.3f, LakeMistReach);
@@ -837,11 +895,62 @@ namespace Universes.UniverseData.classic_horror.Editor {
             renderer.receiveShadows = false;
         }
 
-        /// <summary>The lake mist: its height above the water and the width of open lake it covers (metres).</summary>
-        const float LakeMistHeight = 0.35f, LakeMistReach = 70f;
+        /// <summary>The lake mist: its height above the water and the width of open lake it covers (metres), and its puffs.</summary>
+        const float LakeMistHeight = 0.35f, LakeMistReach = 70f, LakeMistPuffSize = 4.5f, LakeMistAlpha = 0.05f;
+        const int LakeMistPuffs = 700;
 
-        /// <summary>The Taking: how far off the jetty's end (past Mara's mark) he rises, and how far in front of her he lands.</summary>
-        const float TakingRiseOffEnd = 1.6f, TakingGrabReach = 0.55f;
+        /// <summary>The ferry's wake: foam puffs per metre sailed, how long each lasts, and how wide it starts and spreads.</summary>
+        const float WakePerMetre = 3f, WakeSeconds = 6f, WakeStartSize = 0.9f, WakeSpreadSize = 3.2f, WakeAlpha = 0.4f;
+
+        /// <summary>
+        /// Foam that the ferry leaves behind when a scene sails it: emitted at the stern by distance travelled (so a moored
+        /// boat leaves none), in world space so the trail stays on the water, widening and fading as it falls behind.
+        /// </summary>
+        static ParticleSystem BuildFerryWake(Harbour harbour) {
+            var wake = new GameObject("Ferry Wake");
+            wake.transform.SetParent(harbour.ferry, false);
+            Vector3 stern = harbour.stern.position;
+            wake.transform.position = new Vector3(stern.x, lakeSurface + 0.04f, stern.z) + harbour.outward * 0.4f;
+            var particles = wake.AddComponent<ParticleSystem>();
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = particles.main;
+            main.playOnAwake = false;
+            main.loop = true;
+            main.startLifetime = WakeSeconds;
+            main.startSpeed = 0f;
+            main.startSize = WakeStartSize;
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = new Color(1f, 1f, 1f, WakeAlpha);
+            main.maxParticles = 400;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = particles.emission;
+            emission.rateOverTime = 0f;
+            emission.rateOverDistance = WakePerMetre;
+            var shape = particles.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(1.2f, 0f, 0.3f);
+            var size = particles.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(WakeSpreadSize / WakeStartSize, AnimationCurve.EaseInOut(0f, 1f / (WakeSpreadSize / WakeStartSize), 1f, 1f));
+            var fade = particles.colorOverLifetime;
+            fade.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.08f), new GradientAlphaKey(0.5f, 0.5f), new GradientAlphaKey(0f, 1f) });
+            fade.color = gradient;
+            var renderer = wake.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.HorizontalBillboard;
+            renderer.sharedMaterial = CH_Authoring.FerryWakeMaterial();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            return particles;
+        }
+
+        /// <summary>
+        /// The Taking: how far off the jetty's end (past Mara's mark) he rises, how far in front of her he lands, and how
+        /// far to his side she is held as he drags her under (half his width and half hers, so the two never overlap).
+        /// </summary>
+        const float TakingRiseOffEnd = 1.6f, TakingGrabReach = 0.55f, TakingHeldBeside = 0.62f;
 
         /// <summary>The lake bed is deeper than this under open water, so a hull floats clear of it.</summary>
         const float LakeDraught = 1f;

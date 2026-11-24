@@ -23,8 +23,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
         // Mara is built on the investigators' body and walk, dressed as a skipper: sou'wester, long oilskin coat, dark overalls.
         const string CrewModelPath = "Assets/UnityTechnologies/SpaceRobotKyle/Models/KyleRobot.fbx";
         const string CrewControllerPath = "Assets/UnityTechnologies/SpaceRobotKyle/Animations/StarterAssetsThirdPerson.controller";
-        static readonly Color MaraOilskin = new(0.6f, 0.42f, 0.07f), MaraOveralls = new(0.09f, 0.1f, 0.12f);
-        static readonly Color MaraRubber = new(0.05f, 0.06f, 0.05f), MaraSkin = new(0.52f, 0.38f, 0.3f);
+        static readonly Color MaraOilskin = new(0.56f, 0.4f, 0.09f), MaraOveralls = new(0.09f, 0.1f, 0.12f);
+        static readonly Color MaraRubber = new(0.05f, 0.06f, 0.05f), MaraSkin = new(0.72f, 0.54f, 0.44f);
         const string SoftDotPath = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Textures/fx_soft_dot.png";
         const float ItemLightRange = 3f;
 
@@ -197,15 +197,23 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         /// <summary>A soft, alpha-blended mist for the lake (the night sky's grey-blue, faint), used by the story set.</summary>
-        public static Material LakeMistMaterial() {
-            string path = Root + "/Materials/LakeMist.mat";
+        public static Material LakeMistMaterial() => SoftParticleMaterial("LakeMist", "LakeMistPuff", LakeMistColour, 11);
+
+        /// <summary>Pale foam for the ferry's wake (a little brighter than the mist, so the trail reads behind the hull).</summary>
+        public static Material FerryWakeMaterial() => SoftParticleMaterial("FerryWake", "FerryWakeFoam", WakeFoamColour, 29);
+
+        static readonly Color LakeMistColour = new(0.5f, 0.56f, 0.62f), WakeFoamColour = new(0.72f, 0.78f, 0.82f);
+
+        /// <summary>An unlit, alpha-blended particle material on a generated cloud texture (<see cref="CloudTexture"/>).</summary>
+        static Material SoftParticleMaterial(string name, string textureName, Color color, int seed) {
+            string path = Root + "/Materials/" + name + ".mat";
             var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
             if (shader == null) throw new System.InvalidOperationException("URP particle shader is missing.");
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (material == null) { material = new Material(shader) { name = "LakeMist" }; AssetDatabase.CreateAsset(material, path); }
+            if (material == null) { material = new Material(shader) { name = name }; AssetDatabase.CreateAsset(material, path); }
             material.shader = shader;
-            material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(SoftDotPath));
-            material.SetColor("_BaseColor", new Color(0.5f, 0.56f, 0.62f, 1f));
+            material.SetTexture("_BaseMap", CloudTexture(textureName, seed));
+            material.SetColor("_BaseColor", color);
             material.SetFloat("_Surface", 1f);
             material.SetFloat("_Blend", 0f);
             material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
@@ -215,6 +223,40 @@ namespace Universes.UniverseData.classic_horror.Editor {
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             EditorUtility.SetDirty(material);
             return material;
+        }
+
+        /// <summary>
+        /// A ragged puff of cloud: a soft falloff broken up by layered noise and a fine dither, so many of them overlap into
+        /// drifting mist with no round edges and no colour bands (a smooth radial dot shows both at low alpha).
+        /// </summary>
+        static Texture2D CloudTexture(string name, int seed) {
+            const int Size = 128;
+            const float Raggedness = 0.75f, Dither = 1.5f / 255f;
+            string path = Root + "/Materials/" + name + ".png";
+            var texture = new Texture2D(Size, Size, TextureFormat.RGBA32, false);
+            var random = new System.Random(seed);
+            float ox = random.Next(1000), oy = random.Next(1000);
+            for (int y = 0; y < Size; y++)
+                for (int x = 0; x < Size; x++) {
+                    float u = x / (Size - 1f) * 2f - 1f, v = y / (Size - 1f) * 2f - 1f;
+                    float falloff = Mathf.Clamp01(1f - Mathf.Sqrt(u * u + v * v));
+                    float noise = 0f, amplitude = 0.5f, frequency = 2.5f;
+                    for (int octave = 0; octave < 4; octave++, amplitude *= 0.5f, frequency *= 2f)
+                        noise += amplitude * Mathf.PerlinNoise(ox + u * frequency, oy + v * frequency);
+                    float alpha = Mathf.Clamp01(falloff * falloff * (3f - 2f * falloff) * Mathf.Lerp(1f, noise * 1.9f, Raggedness));
+                    alpha = Mathf.Clamp01(alpha + ((float)random.NextDouble() - 0.5f) * Dither);
+                    texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                }
+            System.IO.File.WriteAllBytes(path, texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            if (importer.wrapMode != TextureWrapMode.Clamp || !importer.alphaIsTransparency) {
+                importer.wrapMode = TextureWrapMode.Clamp;
+                importer.alphaIsTransparency = true;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
 
         /// <summary>Three vigil candles lit on a grave once its singer is freed: across the graveyard you can count them.</summary>
@@ -281,8 +323,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         /// <summary>
-        /// Mara as a client-only puppet for the cutscenes: the investigators' body and walk in dark overalls, under a
-        /// skipper's sou'wester and a long oilskin coat that follow her bones, so she reads as a person, not a mannequin.
+        /// Mara as a client-only puppet for the cutscenes: the investigators' skeleton and walk, with a skipper built over
+        /// it (<see cref="DressAsSkipper"/>) in place of the robot's own mesh.
         /// </summary>
         [MenuItem("Ryan/Classic Horror/Rebuild Mara Actor")]
         public static void BuildMaraActor() {
@@ -293,22 +335,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
             try {
                 PrefabUtility.UnpackPrefabInstance(root, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
                 root.name = "MaraActor";
-                Material overalls = Material("MaraOveralls", MaraOveralls);
                 Material oilskin = Material("MaraOilskin", MaraOilskin);
-                oilskin.SetFloat("_Smoothness", 0.55f);
-                foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) {
-                    var slots = renderer.sharedMaterials;
-                    for (int i = 0; i < slots.Length; i++) slots[i] = overalls;
-                    renderer.sharedMaterials = slots;
-                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                    if (renderer is SkinnedMeshRenderer skin) skin.updateWhenOffscreen = true;
-                }
+                oilskin.SetTexture("_BaseMap", WeatheringTexture("MaraOilskinWear"));
+                oilskin.SetFloat("_Smoothness", 0.5f);
                 foreach (var collider in root.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(collider);
                 var animator = root.GetComponent<Animator>() ?? root.AddComponent<Animator>();
                 animator.runtimeAnimatorController = controller;
                 animator.applyRootMotion = false;
                 animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 DressAsSkipper(root, animator, oilskin);
+                foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 var actor = root.AddComponent<CH_Puppet>();
                 actor.animator = animator;
                 actor.footstep = Sound(0.3f, 1.25f, 1.5f, 18f, AudioFolder + "wood-thud.ogg");
@@ -320,10 +356,35 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         /// <summary>
-        /// Dresses the crew body as a skipper, so nothing of the mannequin shows: a long oilskin coat (a fitted body and a
-        /// flared skirt to below the knee, lathed meshes, not capsules), sleeves, gloves, rubber boots, a hood with a face
-        /// under it and a sou'wester on top. Each piece is parented to the bone it covers so it moves with her. Sizes are
-        /// fractions of her height, measured in the model's bind pose.
+        /// Proportions of Mara's skipper's costume, as fractions of her height. Widths are diameters; "Down" values are
+        /// fractions of the bone they run along.
+        /// </summary>
+        static class SkipperCut {
+            // Head: an oval skull with a face on it, ear flaps and a sou'wester over it, a braid down her back.
+            public static readonly Vector3 Head = new(0.086f, 0.118f, 0.104f);
+            public const float HeadAboveBone = 0.052f, Neck = 0.056f;
+            public const float EyeApart = 0.0165f, EyeSize = 0.0085f, EyeRaise = 0.008f;
+            public static readonly Vector3 Nose = new(0.0105f, 0.016f, 0.01f), Mouth = new(0.021f, 0.0045f, 0.006f), Brow = new(0.022f, 0.004f, 0.006f);
+            public static readonly Vector3 EarFlap = new(0.026f, 0.07f, 0.056f), HatCrown = new(0.1f, 0.068f, 0.112f), HatBrim = new(0.2f, 0.004f, 0.23f);
+            public const float BrimTilt = -12f, BrimBack = 0.022f, BraidBead = 0.03f;
+            // Coat: a lathed body from hips to a standing collar, and a flared skirt to below the knee.
+            public const float CoatHip = 0.104f, CoatChest = 0.112f, CoatShoulder = 0.118f, CoatCollar = 0.05f, CollarHeight = 0.032f, CoatDepth = 0.68f;
+            public const float SkirtBelowKnee = 0.07f, SkirtHem = 0.14f, ButtonSize = 0.012f;
+            // Arms: a shoulder cap where the sleeve meets the coat, sleeves, a cuff over the wrist, a glove with a thumb.
+            public const float ShoulderCap = 0.074f, UpperSleeve = 0.068f, LowerSleeve = 0.062f, Cuff = 0.07f, CuffLength = 0.03f;
+            public static readonly Vector3 Glove = new(0.05f, 0.072f, 0.032f);
+            // Legs: overalls under the coat, rubber boots to mid-calf.
+            public const float Thigh = 0.08f, Shin = 0.064f, Boot = 0.072f, BootFoot = 0.058f, BootTopDown = 0.45f;
+        }
+
+        static readonly Color MaraHair = new(0.2f, 0.1f, 0.06f), MaraLips = new(0.36f, 0.16f, 0.14f), MaraEyes = new(0.06f, 0.04f, 0.035f);
+
+        /// <summary>
+        /// Dresses the crew body as a skipper and takes the robot's own mesh away, so nothing of it shows: a lathed
+        /// oilskin coat with a standing collar, buttons and a skirt to below the knee, shoulder caps, sleeves, cuffs and
+        /// gloves, overalls and rubber boots, a head with a face, ear flaps and a sou'wester, and a braid. Each piece
+        /// is parented to the bone it covers so it moves with her walk. Sizes are fractions of her height
+        /// (<see cref="SkipperCut"/>), measured in the model's bind pose.
         /// </summary>
         static void DressAsSkipper(GameObject root, Animator animator, Material oilskin) {
             Transform Bone(HumanBodyBones bone) => animator.isHuman ? animator.GetBoneTransform(bone) : null;
@@ -331,10 +392,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
             Transform chest = Bone(HumanBodyBones.Chest) ?? Bone(HumanBodyBones.Spine) ?? hips;
             Transform neck = Bone(HumanBodyBones.Neck) ?? head, knee = Bone(HumanBodyBones.LeftLowerLeg);
             if (hips == null || head == null || knee == null) throw new System.InvalidOperationException("Mara's model is not a humanoid rig; she cannot be dressed.");
-            Bounds body = root.GetComponentInChildren<SkinnedMeshRenderer>().bounds;
-            float height = body.size.y, top = body.max.y;
+            float height = 0f;
+            foreach (var body in root.GetComponentsInChildren<SkinnedMeshRenderer>(true)) {
+                height = Mathf.Max(height, body.bounds.max.y - root.transform.position.y);
+                Object.DestroyImmediate(body); // the robot itself: everything she shows is built below
+            }
+            if (height <= 0f) throw new System.InvalidOperationException("Mara's model has no body mesh to measure.");
             Vector3 up = Vector3.up, forward = root.transform.forward, right = root.transform.right;
-            Material rubber = Material("MaraRubber", MaraRubber), skin = Material("MaraSkin", MaraSkin), eyes = Material("MaraEyes", Color.black);
+            Material rubber = Material("MaraRubber", MaraRubber), skin = Material("MaraSkin", MaraSkin), eyes = Material("MaraEyes", MaraEyes);
+            Material overalls = Material("MaraOveralls", MaraOveralls), hair = Material("MaraHair", MaraHair), lips = Material("MaraLips", MaraLips);
+            skin.SetFloat("_Smoothness", 0.3f);
             oilskin.SetFloat("_Cull", 0f); // the hem and collar are open: show their inside too
             oilskin.doubleSidedGI = true;
 
@@ -345,15 +412,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 Object.DestroyImmediate(piece.GetComponent<Collider>());
                 piece.GetComponent<Renderer>().sharedMaterial = material;
                 Vector3 along = b - a;
-                piece.transform.SetPositionAndRotation((a + b) * 0.5f, Quaternion.LookRotation(forward, along.normalized));
+                piece.transform.SetPositionAndRotation((a + b) * 0.5f, Quaternion.FromToRotation(up, along.normalized) * Quaternion.LookRotation(forward, up));
                 piece.transform.localScale = new Vector3(width * height, along.magnitude * 0.5f + width * height * 0.5f, width * height);
                 piece.transform.SetParent(bone, true);
             }
-            // A ball at a point, parented to a bone.
-            void Ball(string name, Transform bone, Vector3 at, Vector3 size, Material material) {
-                var ball = Shape(name, PrimitiveType.Sphere, null, at, size * height, material);
-                ball.transform.rotation = Quaternion.LookRotation(forward, up);
+            // An ellipsoid (or a flat cylinder) at a point, parented to a bone and turned to face the way she faces.
+            GameObject Ball(string name, Transform bone, Vector3 at, Vector3 size, Material material, float tilt = 0f, PrimitiveType type = PrimitiveType.Sphere) {
+                var ball = Shape(name, type, null, at, size * height, material);
+                ball.transform.rotation = Quaternion.AngleAxis(tilt, right) * Quaternion.LookRotation(forward, up);
                 ball.transform.SetParent(bone, true);
+                return ball;
             }
             // A lathed piece of coat: elliptical rings (height above base, half width, half depth, all fractions of her height).
             void Lathe(string name, Transform bone, Vector3 basePoint, Vector3[] rings) {
@@ -365,54 +433,85 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.TwoSided;
                 piece.transform.SetParent(bone, true);
             }
+            Vector3 Ring(float above, float halfWidth) => new(above, halfWidth, halfWidth * SkipperCut.CoatDepth);
 
+            // The coat: from the hips, out over the chest and shoulders, in to a standing collar round her neck.
             float torso = (neck.position.y - hips.position.y) / height;
             Lathe("Coat", chest, hips.position, new[] {
-                new Vector3(0f, 0.118f, 0.088f), new Vector3(torso * 0.45f, 0.122f, 0.09f), new Vector3(torso * 0.8f, 0.138f, 0.085f),
-                new Vector3(torso * 0.95f, 0.1f, 0.07f), new Vector3(torso + 0.01f, 0.062f, 0.058f), new Vector3(torso + 0.055f, 0.066f, 0.062f),
+                Ring(0f, SkipperCut.CoatHip), Ring(torso * 0.45f, SkipperCut.CoatHip * 1.03f), Ring(torso * 0.7f, SkipperCut.CoatChest),
+                Ring(torso * 0.84f, SkipperCut.CoatShoulder), Ring(torso * 0.95f, SkipperCut.CoatShoulder * 0.8f), Ring(torso + 0.005f, SkipperCut.CoatCollar),
+                Ring(torso + SkipperCut.CollarHeight, SkipperCut.CoatCollar * 1.1f),
             });
-            float skirt = (hips.position.y - knee.position.y) / height + 0.07f;
+            for (int i = 0; i < 4; i++) {
+                float above = torso * Mathf.Lerp(0.12f, 0.7f, i / 3f);
+                float depth = Mathf.Lerp(SkipperCut.CoatHip, SkipperCut.CoatChest, above / (torso * 0.7f)) * SkipperCut.CoatDepth;
+                Ball("Button", chest, hips.position + up * (above * height) + forward * (depth * height), Vector3.one * SkipperCut.ButtonSize, rubber);
+            }
+            float skirt = (hips.position.y - knee.position.y) / height + SkipperCut.SkirtBelowKnee;
             Lathe("Coat skirt", hips, hips.position + up * (0.03f * height), new[] {
-                new Vector3(0f, 0.121f, 0.091f), new Vector3(-skirt * 0.5f, 0.138f, 0.11f), new Vector3(-skirt, 0.152f, 0.124f),
+                Ring(0f, SkipperCut.CoatHip * 1.02f), Ring(-skirt * 0.5f, (SkipperCut.CoatHip + SkipperCut.SkirtHem) * 0.5f * 1.04f), Ring(-skirt, SkipperCut.SkirtHem),
             });
+
             void Arm(HumanBodyBones upper, HumanBodyBones lower, HumanBodyBones hand) {
                 Transform shoulder = Bone(upper), elbow = Bone(lower), wrist = Bone(hand);
                 if (shoulder == null || elbow == null || wrist == null) return;
-                Piece(upper + " sleeve", shoulder, shoulder.position, elbow.position, 0.072f, oilskin);
-                Piece(lower + " sleeve", elbow, elbow.position, Vector3.Lerp(elbow.position, wrist.position, 0.9f), 0.066f, oilskin);
-                Ball(hand + " glove", wrist, wrist.position + (wrist.position - elbow.position).normalized * (0.035f * height), new Vector3(0.05f, 0.05f, 0.04f), rubber);
+                Vector3 towardHand = (wrist.position - elbow.position).normalized;
+                Ball(upper + " shoulder", shoulder, shoulder.position, Vector3.one * SkipperCut.ShoulderCap, oilskin);
+                Piece(upper + " sleeve", shoulder, shoulder.position, elbow.position, SkipperCut.UpperSleeve, oilskin);
+                Piece(lower + " sleeve", elbow, elbow.position, wrist.position - towardHand * (SkipperCut.CuffLength * height), SkipperCut.LowerSleeve, oilskin);
+                var cuff = Ball(lower + " cuff", elbow, wrist.position - towardHand * (SkipperCut.CuffLength * 0.5f * height),
+                    new Vector3(SkipperCut.Cuff, SkipperCut.CuffLength * 0.5f, SkipperCut.Cuff), oilskin, 0f, PrimitiveType.Cylinder);
+                cuff.transform.rotation = Quaternion.FromToRotation(up, towardHand) * Quaternion.LookRotation(forward, up);
+                var glove = Ball(hand + " glove", wrist, wrist.position + towardHand * (SkipperCut.Glove.y * 0.45f * height), SkipperCut.Glove, rubber);
+                glove.transform.rotation = Quaternion.FromToRotation(up, towardHand) * Quaternion.LookRotation(right * (upper == HumanBodyBones.LeftUpperArm ? -1f : 1f), up);
+                Piece(hand + " thumb", wrist, wrist.position + forward * (0.012f * height), wrist.position + forward * (0.03f * height) + towardHand * (0.03f * height), 0.016f, rubber);
             }
             Arm(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand);
             Arm(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand);
-            void Boot(HumanBodyBones lower, HumanBodyBones foot) {
-                Transform shin = Bone(lower), ankle = Bone(foot);
-                if (shin == null || ankle == null) return;
-                Piece(lower + " boot", shin, Vector3.Lerp(shin.position, ankle.position, 0.15f), ankle.position, 0.068f, rubber);
-            }
-            Boot(HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot);
-            Boot(HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot);
 
-            // Head: an oilskin hood over the mannequin's head, a weathered face in its opening, and the sou'wester on top.
-            Vector3 face = new Vector3(head.position.x, Mathf.Lerp(head.position.y, top, 0.45f), head.position.z);
-            Ball("Hood", head, face - forward * (0.022f * height) + up * (0.01f * height), new Vector3(0.135f, 0.15f, 0.14f), oilskin);
-            Ball("Face", head, face + forward * (0.043f * height), new Vector3(0.085f, 0.105f, 0.05f), skin);
-            foreach (float side in new[] { -1f, 1f })
-                Ball("Eye", head, face + forward * (0.066f * height) + up * (0.012f * height) + right * (side * 0.019f * height), Vector3.one * 0.011f, eyes);
-            var crown = Shape("Sou'wester crown", PrimitiveType.Cylinder, null, Vector3.zero, new Vector3(0.15f, 0.035f, 0.16f) * height, oilskin);
-            crown.transform.position = new Vector3(head.position.x, top - 0.005f * height, head.position.z) - forward * (0.015f * height);
-            crown.transform.SetParent(head, true);
-            var brim = Shape("Sou'wester brim", PrimitiveType.Cylinder, null, Vector3.zero, new Vector3(0.26f, 0.004f, 0.29f) * height, oilskin);
-            brim.transform.SetPositionAndRotation(new Vector3(head.position.x, top - 0.035f * height, head.position.z) - forward * (0.02f * height),
-                Quaternion.AngleAxis(-10f, right));
-            brim.transform.SetParent(head, true);
+            void Leg(HumanBodyBones upper, HumanBodyBones lower, HumanBodyBones foot, HumanBodyBones toes) {
+                Transform hip = Bone(upper), shin = Bone(lower), ankle = Bone(foot), toe = Bone(toes);
+                if (hip == null || shin == null || ankle == null) return;
+                Piece(upper + " trouser", hip, hip.position, shin.position, SkipperCut.Thigh, overalls);
+                Vector3 bootTop = Vector3.Lerp(ankle.position, shin.position, SkipperCut.BootTopDown);
+                Piece(lower + " trouser", shin, shin.position, bootTop, SkipperCut.Shin, overalls);
+                Piece(lower + " boot", shin, bootTop, ankle.position, SkipperCut.Boot, rubber);
+                Vector3 toeTip = toe != null ? toe.position + forward * (0.035f * height) : ankle.position + forward * (0.13f * height);
+                Vector3 heel = ankle.position - forward * (0.02f * height);
+                toeTip.y = heel.y = Mathf.Min(ankle.position.y, root.transform.position.y + SkipperCut.BootFoot * 0.5f * height);
+                Piece(foot + " boot", ankle, heel, toeTip, SkipperCut.BootFoot, rubber);
+            }
+            Leg(HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes);
+            Leg(HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, HumanBodyBones.RightToes);
+
+            // Head: neck, an oval head with eyes, brows, a nose and a mouth, the sou'wester's ear flaps, crown and brim, a braid.
+            Vector3 skull = head.position + up * (SkipperCut.HeadAboveBone * height);
+            float faceFront = SkipperCut.Head.z * 0.5f;
+            Piece("Neck", neck, neck.position - up * (0.02f * height), skull, SkipperCut.Neck, skin);
+            Ball("Head", head, skull, SkipperCut.Head, skin);
+            foreach (float side in new[] { -1f, 1f }) {
+                Vector3 eye = skull + up * (SkipperCut.EyeRaise * height) + right * (side * SkipperCut.EyeApart * height) + forward * ((faceFront - 0.006f) * height);
+                Ball("Eye", head, eye, Vector3.one * SkipperCut.EyeSize, eyes);
+                Ball("Brow", head, eye + up * (0.014f * height) + forward * (0.003f * height), SkipperCut.Brow, hair, side * 8f);
+                Ball("Ear flap", head, skull + right * (side * SkipperCut.Head.x * 0.5f * height) - up * (0.008f * height) - forward * (0.016f * height), SkipperCut.EarFlap, oilskin);
+            }
+            Ball("Nose", head, skull - up * (0.008f * height) + forward * ((faceFront - 0.002f) * height), SkipperCut.Nose, skin, -20f);
+            Ball("Mouth", head, skull - up * (0.032f * height) + forward * ((faceFront - 0.008f) * height), SkipperCut.Mouth, lips);
+            for (int i = 0; i < 4; i++)
+                Ball("Braid", i == 0 ? head : neck, skull - forward * ((faceFront + 0.004f) * height) - up * ((0.03f + i * SkipperCut.BraidBead * 0.8f) * height),
+                    Vector3.one * (SkipperCut.BraidBead * (1f - i * 0.12f)), hair);
+            Ball("Sou'wester crown", head, skull + up * (0.04f * height) - forward * (0.006f * height), SkipperCut.HatCrown, oilskin);
+            Ball("Sou'wester brim", head, skull + up * (0.022f * height) - forward * (SkipperCut.BrimBack * height), SkipperCut.HatBrim, oilskin,
+                SkipperCut.BrimTilt, PrimitiveType.Cylinder);
         }
 
         /// <summary>
         /// A ring-by-ring lathed tube (no caps), saved as a mesh asset so the prefab keeps it. Each ring is (height above
-        /// the base, half width, half depth) as fractions of <paramref name="scale"/>.
+        /// the base, half width, half depth) as fractions of <paramref name="scale"/>. The seam runs down the back and its
+        /// normals are shared, so it shades as one smooth surface.
         /// </summary>
         static Mesh LatheMesh(string name, Vector3[] rings, float scale) {
-            const int Segments = 20;
+            const int Segments = 28;
             string path = Root + "/Materials/" + name + ".asset";
             var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
             if (mesh == null) { mesh = new Mesh { name = name }; AssetDatabase.CreateAsset(mesh, path); }
@@ -422,7 +521,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             var triangles = new List<int>();
             for (int r = 0; r < rings.Length; r++)
                 for (int s = 0; s <= Segments; s++) {
-                    float angle = s * Mathf.PI * 2f / Segments;
+                    float angle = Mathf.PI + s * Mathf.PI * 2f / Segments; // starts at the back
                     vertices.Add(new Vector3(Mathf.Sin(angle) * rings[r].y, rings[r].x, Mathf.Cos(angle) * rings[r].z) * scale);
                     uvs.Add(new Vector2(s / (float)Segments, r / (float)(rings.Length - 1)));
                 }
@@ -438,9 +537,46 @@ namespace Universes.UniverseData.classic_horror.Editor {
             mesh.SetUVs(0, uvs);
             mesh.SetTriangles(triangles, 0);
             mesh.RecalculateNormals();
+            var normals = mesh.normals;
+            for (int r = 0; r < rings.Length; r++) {
+                int first = r * stride, last = first + Segments;
+                normals[first] = normals[last] = (normals[first] + normals[last]).normalized;
+            }
+            mesh.normals = normals;
             mesh.RecalculateBounds();
             EditorUtility.SetDirty(mesh);
             return mesh;
+        }
+
+        /// <summary>
+        /// A tileable grey wear map (creases and rubbed patches) saved as a texture asset, so a flat-coloured material
+        /// reads as worn cloth instead of plastic. Multiplied by the material's colour.
+        /// </summary>
+        static Texture2D WeatheringTexture(string name) {
+            const int Size = 256;
+            const float Darkest = 0.84f;
+            const int WeatheringSeed = 1903;
+            string path = Root + "/Materials/" + name + ".png";
+            var texture = new Texture2D(Size, Size, TextureFormat.RGB24, false);
+            var random = new System.Random(WeatheringSeed);
+            float ox = random.Next(1000), oy = random.Next(1000);
+            for (int y = 0; y < Size; y++)
+                for (int x = 0; x < Size; x++) {
+                    float u = x / (float)Size, v = y / (float)Size;
+                    // Tileable: sample the noise on a torus.
+                    float Noise(float frequency) {
+                        float a = u * Mathf.PI * 2f, b = v * Mathf.PI * 2f;
+                        return Mathf.PerlinNoise(ox + Mathf.Cos(a) * frequency, oy + Mathf.Sin(a) * frequency + Mathf.Cos(b) * frequency * 1.7f)
+                            * 0.5f + Mathf.PerlinNoise(ox + Mathf.Sin(b) * frequency * 2.3f, oy + Mathf.Cos(a) * frequency) * 0.5f;
+                    }
+                    float creases = 1f - Mathf.Abs(Noise(5f) * 2f - 1f);
+                    float wear = Mathf.Lerp(Darkest, 1f, Mathf.Clamp01(Noise(2f) * 0.5f + (1f - Mathf.Pow(creases, 10f)) * 0.6f));
+                    texture.SetPixel(x, y, new Color(wear, wear, wear));
+                }
+            System.IO.File.WriteAllBytes(path, texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(path);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
 
         /// <summary>A short-range light in front of a puppet's face (switched with the puppet's visibility).</summary>

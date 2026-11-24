@@ -80,8 +80,14 @@ namespace RyanAssets.Client.ClientUI.Topbar {
 
         void OnHealthChanged(long oldValue, long newValue, bool asServer) => Refresh();
 
+        /// <summary>
+        /// Whether the bar shows for the followed character: there is one, it is hurt but alive, and no game has
+        /// <see cref="Suppressed"/> the bar.
+        /// </summary>
+        public static bool ShowsFor(bool hasTarget, bool fullHealth, long health) => hasTarget && !suppressed && !fullHealth && health > 0;
+
         void Refresh() {
-            if (observed == null || suppressed) {
+            if (!ShowsFor(observed != null, observed == null || observed.IsFullHealth, observed != null ? observed.Health.Value : 0)) {
                 visibility.SetVisible(false);
                 return;
             }
@@ -98,7 +104,7 @@ namespace RyanAssets.Client.ClientUI.Topbar {
                     : theme.danger;
                 fill.rectTransform.anchorMax = new Vector2(fraction, 1f);
             }
-            visibility.SetVisible(!observed.IsFullHealth && health > 0, theme.fadeDuration);
+            visibility.SetVisible(true, theme.fadeDuration);
         }
     }
 }

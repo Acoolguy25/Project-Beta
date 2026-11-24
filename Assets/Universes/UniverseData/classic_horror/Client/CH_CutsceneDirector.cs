@@ -39,6 +39,13 @@ namespace Universes.UniverseData.classic_horror.Client {
         [Tooltip("Seconds between checks for characters that spawned mid-scene, so they are cleared off the stage too.")]
         [SerializeField, Min(0.1f)] float stageCheckSeconds = 0.5f;
 
+        [Header("Fill")]
+        [Tooltip("A wide, shadowless light carried with the camera; a shot's fill sets how bright it is.")]
+        public Light fillLight;
+        [SerializeField, Min(0f)] float fillIntensity = 2.2f;
+        [Tooltip("Seconds the fill takes to rise or fall between shots.")]
+        [SerializeField, Min(0.01f)] float fillBlendSeconds = 0.6f;
+
         [Header("Cues")]
         public SfxSound thud = new();
         public SfxSound bell = new();
@@ -63,6 +70,9 @@ namespace Universes.UniverseData.classic_horror.Client {
         readonly CH_CutsceneStage stage = new();
 
         public bool Playing => playing;
+
+        /// <summary>Keeps the gameplay HUD faded out outside a scene too (looking out of a hiding place, where only the crack shows).</summary>
+        public bool HideGameplayHud { get; set; }
 
         public void Bind(CH_CutsceneSet cutscenes, CH_Puppet priestPuppet, CH_Puppet maraPuppet) {
             set = cutscenes;
@@ -106,6 +116,15 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (camera != null && defaultFov > 0f) camera.fieldOfView = defaultFov;
             if (titleCard != null) titleCard.alpha = 0f;
             if (blackout != null) blackout.alpha = 0f;
+            if (fillLight != null) { fillLight.intensity = 0f; fillLight.enabled = false; }
+        }
+
+        /// <summary>Carries the fill light with the camera, easing it toward this shot's <paramref name="fill"/>.</summary>
+        void UpdateFill(Transform camera, float fill) {
+            if (fillLight == null) return;
+            fillLight.transform.SetPositionAndRotation(camera.position, camera.rotation);
+            fillLight.intensity = Mathf.MoveTowards(fillLight.intensity, fill * fillIntensity, fillIntensity * Time.unscaledDeltaTime / fillBlendSeconds);
+            fillLight.enabled = fillLight.intensity > 0.001f;
         }
 
         void ShowTitle(string card) {
@@ -144,6 +163,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                     : shot.to != null ? Quaternion.Slerp(shot.from.rotation, shot.to.rotation, eased) : shot.from.rotation;
                 camera.transform.SetPositionAndRotation(position, rotation);
                 if (shot.fieldOfView > 1f) camera.fieldOfView = shot.fieldOfView;
+                UpdateFill(camera.transform, shot.fill);
             }
             if (priest != null) priest.Animate(shot.actorMark, shot.actorTarget, shot.actorPose, progress);
             if (mara != null) mara.Animate(shot.maraMark, shot.maraTarget, shot.maraPose, progress);
@@ -168,6 +188,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (set.ferry == null || !CH_CutsceneSet.MovesFerry(scene)) return;
             ferryHome = new Pose(set.ferry.position, set.ferry.rotation);
             ferryMoved = true;
+            if (set.ferryWake != null) set.ferryWake.Play(true);
             if (candidates == null) return;
             Bounds hull = new(ferryHome.position, Vector3.zero);
             bool any = false;
@@ -184,6 +205,8 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         /// <summary>Puts the ferry and its riders back where they were moored.</summary>
         void DockFerry() {
+            // Stop the wake before the hull jumps home, or it would lay foam all the way back across the lake.
+            if (set != null && set.ferryWake != null) set.ferryWake.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             if (ferryMoved && set != null && set.ferry != null) PlaceFerry(ferryHome);
             ferryMoved = false;
             riders.Clear();
@@ -235,7 +258,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             float height = Screen.height * barFraction * eased / scale;
             if (topBar != null) topBar.sizeDelta = new Vector2(topBar.sizeDelta.x, height);
             if (bottomBar != null) bottomBar.sizeDelta = new Vector2(bottomBar.sizeDelta.x, height);
-            if (gameplayHud != null) gameplayHud.alpha = 1f - eased;
+            if (gameplayHud != null) gameplayHud.alpha = HideGameplayHud ? 0f : 1f - eased;
         }
     }
 }

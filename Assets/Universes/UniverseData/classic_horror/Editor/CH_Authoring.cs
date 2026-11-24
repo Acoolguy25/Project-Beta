@@ -602,6 +602,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.voice = root.AddComponent<CH_VoicePlayer>();
             client.cutscenes = root.AddComponent<CH_CutsceneDirector>();
             client.apparitions = root.AddComponent<CH_Apparitions>();
+            client.hidingView = root.AddComponent<CH_HidingView>();
             client.boatIcon = HudKit.Icon("compass");
             client.choirIcon = HudKit.Icon("tombstone");
             client.bellIcon = HudKit.Icon("crowned_skull");
@@ -680,6 +681,17 @@ namespace Universes.UniverseData.classic_horror.Editor {
             title.SetAsLastSibling();
 
             const string sounds = AudioFolder;
+            // Moonlight carried with the cutscene camera, for the shots that would otherwise read as black.
+            var fill = new GameObject("Cutscene Fill").AddComponent<Light>();
+            fill.transform.SetParent(director.transform, false);
+            fill.type = LightType.Spot;
+            fill.spotAngle = 95f;
+            fill.range = 40f;
+            fill.color = new Color(0.62f, 0.7f, 0.88f);
+            fill.shadows = LightShadows.None;
+            fill.intensity = 0f;
+            fill.enabled = false;
+            director.fillLight = fill;
             director.thud = Sound(1f, 0.55f, 0f, 0f, sounds + "wood-thud.ogg");
             director.bell = Sound(1f, 0.5f, 0f, 0f, sounds + "chapel-bell-1.ogg", sounds + "chapel-bell-2.ogg");
             director.scream = Sound(0.9f, 0.7f, 0f, 0f, FloodedSounds + "WindHowl.mp3");
@@ -693,17 +705,25 @@ namespace Universes.UniverseData.classic_horror.Editor {
             RectTransform view = UIKit.Fill(canvas, "Hiding");
             client.hidingOverlay = view.gameObject.AddComponent<CanvasGroup>();
             client.hidingOverlay.alpha = 0f; client.hidingOverlay.blocksRaycasts = false;
-            var doorColour = new Color(0.02f, 0.015f, 0.01f, 0.97f);
-            Panel("Left door", view, Vector2.zero, new Vector2(0.455f, 1f), doorColour);
-            Panel("Right door", view, new Vector2(0.545f, 0f), Vector2.one, doorColour);
-            // The crack lets in a sliver; its edges are darker still.
-            Panel("Crack shadow", view, new Vector2(0.455f, 0f), new Vector2(0.545f, 1f), new Color(0f, 0f, 0f, 0.45f));
-            Panel("Top slat", view, new Vector2(0.455f, 0.82f), new Vector2(0.545f, 1f), doorColour);
-            Panel("Bottom slat", view, new Vector2(0.455f, 0f), new Vector2(0.545f, 0.16f), doorColour);
+            // Solid doors, so nothing of the HUD behind shows through; the room is seen only through the crack between them.
+            var doorColour = new Color(0.02f, 0.015f, 0.01f, 1f);
+            var doorEdge = new Color(0.11f, 0.075f, 0.05f, 1f);
+            const float CrackLeft = 0.462f, CrackRight = 0.538f, Edge = 0.006f, SlatTop = 0.84f, SlatBottom = 0.14f;
+            Panel("Left door", view, Vector2.zero, new Vector2(CrackLeft, 1f), doorColour);
+            Panel("Right door", view, new Vector2(CrackRight, 0f), Vector2.one, doorColour);
+            Panel("Top slat", view, new Vector2(CrackLeft, SlatTop), new Vector2(CrackRight, 1f), doorColour);
+            Panel("Bottom slat", view, new Vector2(CrackLeft, 0f), new Vector2(CrackRight, SlatBottom), doorColour);
+            // The doors' edges catch a little of the light from outside, framing the crack.
+            Panel("Left door edge", view, new Vector2(CrackLeft - Edge, SlatBottom), new Vector2(CrackLeft, SlatTop), doorEdge);
+            Panel("Right door edge", view, new Vector2(CrackRight, SlatBottom), new Vector2(CrackRight + Edge, SlatTop), doorEdge);
+            // The crack's own shadow falls off towards its edges.
+            Panel("Crack shadow left", view, new Vector2(CrackLeft, SlatBottom), new Vector2(CrackLeft + 0.014f, SlatTop), new Color(0f, 0f, 0f, 0.55f));
+            Panel("Crack shadow right", view, new Vector2(CrackRight - 0.014f, SlatBottom), new Vector2(CrackRight, SlatTop), new Color(0f, 0f, 0f, 0.55f));
             client.hidingLabel = UIKit.Text(view, "Hint", "Hiding  ·  press E to leave", UIText.Strong, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             var hint = client.hidingLabel.rectTransform;
             // Above the shared hotbar, which keeps the bottom of the screen.
-            hint.anchorMin = new Vector2(0f, 0.2f); hint.anchorMax = new Vector2(1f, 0.25f); hint.offsetMin = hint.offsetMax = Vector2.zero;
+            hint.anchorMin = new Vector2(0f, 0.2f); hint.anchorMax = new Vector2(1f, 0.26f); hint.offsetMin = hint.offsetMax = Vector2.zero;
+            client.hidingLabel.overflowMode = TextOverflowModes.Overflow; // the theme's font has no ellipsis glyph
         }
 
         /// <summary>The boarding countdown: big, centred above the prompt, impossible to miss.</summary>

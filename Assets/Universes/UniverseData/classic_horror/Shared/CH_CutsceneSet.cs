@@ -38,6 +38,8 @@ namespace Universes.UniverseData.classic_horror {
             public Transform ferryTarget;
             [Tooltip("A sound cue at the start of the shot: thud, bell, scream, doors, engine or splash.")]
             public string cue;
+            [Tooltip("A soft moonlight fill from the camera for a shot that would read as black (0 = none, 1 = the director's full fill).")]
+            [Range(0f, 1f)] public float fill;
         }
 
         [Serializable]
@@ -51,6 +53,8 @@ namespace Universes.UniverseData.classic_horror {
         public Scene[] scenes = new Scene[0];
         [Tooltip("The moored ferry, which a scene can sail away (Shot.ferryTarget). Marks parented to it travel with it.")]
         public Transform ferry;
+        [Tooltip("Foam left behind the ferry while a scene sails it (emits by distance travelled; stopped and cleared when it docks).")]
+        public ParticleSystem ferryWake;
 
         /// <summary>Whether any shot of <paramref name="scene"/> moves the ferry.</summary>
         public static bool MovesFerry(Scene scene) {

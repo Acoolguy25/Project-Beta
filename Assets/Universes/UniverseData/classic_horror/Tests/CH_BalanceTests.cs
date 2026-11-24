@@ -14,6 +14,11 @@ namespace Universes.UniverseData.classic_horror.Tests {
         const float Reaction = 0.4f;
         /// <summary>A long run with nothing to break his sight: no corner, no door, no hiding place.</summary>
         const float OpenGround = 300f;
+        /// <summary>
+        /// After <see cref="OpenGround"/> of sprinting in the open he is no further behind than this: close enough to be
+        /// heard and seen over a shoulder, so the open is never where a chase is won.
+        /// </summary>
+        const float OpenRunGap = 30f;
         /// <summary>A run this long in his sight means the player never tried to lose him.</summary>
         const float EndlessOpenGround = 600f;
         /// <summary>The shared client character, whose CharacterMovement holds the sprint cost.</summary>
@@ -38,7 +43,7 @@ namespace Universes.UniverseData.classic_horror.Tests {
             for (int act = 1; act <= 3; act++)
                 foreach (int team in new[] { 1, 3 }) {
                     var run = CH_ChaseModel.Run(Tuning, Tuning.ChaseSpeed(act, false, team), 0f, OpenGround, 8f);
-                    Assert.Less(run.finalGap, Tuning.chaseSightRange,
+                    Assert.Less(run.finalGap, OpenRunGap,
                         $"Act {act}, {team} alive: {OpenGround} m of open sprinting left a {run.finalGap:0.0} m gap; only cover should lose him.");
                 }
         }

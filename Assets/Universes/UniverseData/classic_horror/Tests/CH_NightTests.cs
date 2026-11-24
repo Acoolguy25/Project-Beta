@@ -253,5 +253,13 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.AreEqual(boards.y + CH_Night.ReachLiftAshore, CH_Night.SlotReachPoint(CH_SlotKind.Grave, boards).y, 1e-4f);
             Assert.Greater(CH_Night.ReachLiftAboard, CH_Night.ReachLiftAshore);
         }
+
+        [Test] public void TheFerryWaitsForTeammatesAshoreUntilTheCountdownEnds() {
+            Assert.IsFalse(CH_Night.FerryLeaves(aboard: 1, ashore: 1, countdownOver: false), "One aboard, one still running: it waits.");
+            Assert.IsFalse(CH_Night.FerryLeaves(aboard: 0, ashore: 2, countdownOver: false), "Nobody aboard yet: it waits.");
+            Assert.IsTrue(CH_Night.FerryLeaves(aboard: 2, ashore: 0, countdownOver: false), "Everyone aboard: it leaves at once.");
+            Assert.IsTrue(CH_Night.FerryLeaves(aboard: 1, ashore: 1, countdownOver: true), "Countdown over: it leaves with whoever made it.");
+            Assert.IsTrue(CH_Night.FerryLeaves(aboard: 0, ashore: 1, countdownOver: true), "Countdown over with nobody aboard: the night is lost.");
+        }
     }
 }

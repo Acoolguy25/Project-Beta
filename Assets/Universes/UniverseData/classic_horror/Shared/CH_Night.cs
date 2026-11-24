@@ -203,6 +203,12 @@ namespace Universes.UniverseData.classic_horror {
         /// <summary>The lake only spares an investigator with empty hands whom he is not chasing.</summary>
         public static bool DrowningCostsLife(bool carrying, bool chased) => carrying || chased;
 
+        /// <summary>
+        /// Whether the ferry leaves during boarding: as soon as everyone still in the night is aboard (and someone is), or
+        /// when the countdown runs out, taking only those aboard; until then it waits for teammates still ashore.
+        /// </summary>
+        public static bool FerryLeaves(int aboard, int ashore, bool countdownOver) => countdownOver || (aboard > 0 && ashore == 0);
+
         /// <summary>Whether the slot is accepting its item in the current act.</summary>
         public bool IsOpen(Slot slot) {
             if (slot == null || slot.Filled || IsOver) return false;
