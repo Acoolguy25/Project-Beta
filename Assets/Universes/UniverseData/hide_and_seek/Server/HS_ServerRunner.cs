@@ -7,7 +7,8 @@ using FishNet;
 using FishNet.Connection;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
-using RyanAssets.Levels.Server;
+using RyanAssets.Retention;
+using RyanAssets.Retention.Server;
 using RyanAssets.Rounds;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
@@ -21,34 +22,43 @@ namespace Universes.UniverseData.hide_and_seek.Server {
     /// Hide and seek: hiders scatter while seekers wait blindfolded, then seekers tag hiders (who join
     /// the seekers). Hiders win if anyone is still hidden when time runs out. Roles, tags, the
     /// blindfold freeze and late-round pings are all decided here.
+    /// <para>
+    /// The other parts of the runner live beside this file: role abilities
+    /// (<c>HS_ServerRunner.Abilities.cs</c>), round points, MVP, streaks and the retention kit
+    /// (<c>HS_ServerRunner.Scoring.cs</c>), and mid-round map events (<c>HS_ServerRunner.Events.cs</c>).
+    /// </para>
     /// </summary>
-    public sealed class HS_ServerRunner : ServerRunner {
+    public sealed partial class HS_ServerRunner : ServerRunner {
         [Header("Round")]
         [SerializeField, Min(1)] int minPlayers = 2;
         [SerializeField, Min(1)] int intermissionSeconds = 10;
         [SerializeField, Min(5)] int hideSeconds = 30;
         [SerializeField, Min(20)] int seekSeconds = 150;
-        [Tooltip("Results length: the survivors' names stay up over the map this long.")]
-        [SerializeField, Min(3)] int resultsSeconds = 10;
+        [Tooltip("Results length: the survivors' names, the results card and the match summary stay up this long.")]
+        [SerializeField, Min(3)] int resultsSeconds = 14;
         [Tooltip("Seconds left in the seek phase when pings start, and how often they repeat.")]
         [SerializeField, Min(0)] int pingFrom = 60;
         [SerializeField, Min(5)] int pingEvery = 15;
         [SerializeField, Min(0.1f)] float tagCooldown = 0.6f;
+        [Tooltip("A tag reaches HS_Rules.TagRange plus this (world units) from the seeker's eyes to the hider's chest (Abilities: eye and target heights), " +
+                 "so a tag the client's prompt offers at TagRange (measured at the feet) is never refused for the height difference.")]
+        [SerializeField, Min(0f)] float tagReachSlack = 0.6f;
+        [Tooltip("Milliseconds between two updates of the seek phase (timer, points, events).")]
+        [SerializeField, Min(50)] int seekTickMs = 500;
         [Header("Movement")]
         [SerializeField] float hiderWalk = 13f, hiderSprint = 20f, seekerWalk = 14.5f, seekerSprint = 22f;
-        [Header("Rewards (account XP/gold)")]
-        [SerializeField] ulong tagXP = 15, surviveXP = 40, surviveGold = 15, seekerWinXP = 20;
-        [Header("Taunts (cooldown and allowance: HS_Rules)")]
-        [Tooltip("XP for a taunt with no seeker near.")]
-        [SerializeField, Min(0)] int tauntXP = 3;
-        [Tooltip("XP for a brave taunt: a seeker within Brave Taunt Range.")]
-        [SerializeField, Min(0)] int braveTauntXP = 10;
+        [SerializeField, Min(0f)] float jumpHeight = 1.4f, staminaMax = 160f, staminaRegen = 25f;
+        [Header("Taunts (cooldown and allowance: HS_Rules; points: Scoring)")]
         [Tooltip("World units, measured straight through walls; a seeker this close makes a taunt brave. About three robot heights, " +
                  "so a seeker on another floor or across the house does not count.")]
         [SerializeField, Min(0f)] float braveTauntRange = 20f;
+        [Header("Daily twist (HS_Daily) and daily challenges")]
+        [Tooltip("Days added to the clock that the daily challenges, the play streak and the featured event read. 0 in play; " +
+                 "set it to preview another day (QA).")]
+        [SerializeField] int previewDayOffset;
 
+        const string PointsColumn = "Points";
         const string TagsColumn = "Tags";
-        const string SurvivedColumn = "Survived";
 
         readonly Dictionary<NetworkConnection, HS_Role> roles = new();
         readonly Dictionary<NetworkConnection, int> timesSeeker = new();
@@ -60,10 +70,20 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         HS_Map map;
         HS_Phase phase;
         int round, secondsLeft, phaseSeconds, hidersAtStart;
+        float seekStartedAt;
         string headline = "";
         bool stateDirty;
 
         public HS_Phase Phase => phase;
+
+        /// <summary>The server's clock for everything daily (the kit's challenges and streak, the featured event).</summary>
+        DateTime Now => DateTime.UtcNow.AddDays(previewDayOffset);
+
+        /// <summary>Today's featured event (<see cref="HS_Daily"/>).</summary>
+        HS_RoundEvent FeaturedToday => HS_Daily.Today(Now);
+
+        /// <summary>The share of the seek phase gone: 0 while the hiders hide, 1 at the end.</summary>
+        float SeekShareGone => phase == HS_Phase.Seeking && seekSeconds > 0 ? Mathf.Clamp01((Time.time - seekStartedAt) / seekSeconds) : 0f;
 
         protected override void Awake() {
             base.Awake();
@@ -72,10 +92,19 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             ServerPlayerCharacter.SpawnLocationFunction = SpawnPosition;
             ServerPlayerCharacter.RespawnTime = 2f;
             PlayerData.OnPlayerRemoved += OnPlayerLeft;
+            abilityTuning.Validate();
+            scoring.Validate();
+            events.Validate();
+            retention = new RetentionService<HS_SaveData>(HS_Retention.Rules(retentionTuning), save => save.retention, () => Now);
+            retention.Unlocked += OnUnlocked;
+            retention.Ready += OnRetentionReady;
             var server = InstanceFinder.ServerManager;
             server.RegisterBroadcast<HS_TagRequest>(OnTagRequest);
             server.RegisterBroadcast<HS_StateRequest>(OnStateRequest);
             server.RegisterBroadcast<HS_TauntRequest>(OnTauntRequest);
+            server.RegisterBroadcast<HS_AbilityRequest>(OnAbilityRequest);
+            // A disconnect is reported before the player is despawned, while their document is still loaded.
+            server.OnRemoteConnectionState += OnRemoteConnectionState;
         }
 
         /// <summary>A player's name, or a stand-in when their data is already gone (they left this frame).</summary>
@@ -84,6 +113,10 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         HS_Role RoleOf(NetworkConnection c) => roles.TryGetValue(c, out var r) ? r : HS_Role.None;
         static bool Seeks(HS_Role r) => r is HS_Role.Seeker or HS_Role.Caught;
         int HidersLeft => roles.Count(r => r.Value == HS_Role.Hider && r.Key.IsActive);
+
+        /// <summary>The live character of a connection, or false when it has none (not spawned, or dead).</summary>
+        static bool TryGetLiveCharacter(NetworkConnection c, out LocalCharacter character) =>
+            LocalCharacter.Characters.TryGetValue(c, out character) && character != null && !character.IsDead;
 
         Vector3 SpawnPosition(NetworkConnection connection) {
             if (map == null) return Vector3.up * 2f;
@@ -99,11 +132,16 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             player.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
             player.cameraTypes.Add(GameCameraType.FirstPersonCamera);
             // Joining mid-round makes you a seeker, so nobody can join just to hide.
-            roles[player.Owner] = phase is HS_Phase.Hiding or HS_Phase.Seeking ? HS_Role.Seeker : HS_Role.None;
+            bool midRound = phase is HS_Phase.Hiding or HS_Phase.Seeking;
+            roles[player.Owner] = midRound ? HS_Role.Seeker : HS_Role.None;
+            PlayerProgress.Load<HS_SaveData>(player, HS_SaveData.Universe).Forget();
+            retention.PlayerJoined(player);
+            if (midRound) JoinRoundScoring(player.Owner);
             ApplyMovement(player);
             ApplyTeam(player);
+            SendAbilityState(player.Owner);
+            SendRunningBlends(player.Owner);
             MarkDirty();
-            PlayerProgress.Load<HS_SaveData>(player, HS_SaveData.Universe).Forget();
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -112,24 +150,39 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (PlayerData.TryGetPlayerData(character.Owner, out var player)) { ApplyMovement(player); ApplyTeam(player); }
         }
 
+        void OnRemoteConnectionState(NetworkConnection c, FishNet.Transporting.RemoteConnectionStateArgs args) {
+            if (args.ConnectionState == FishNet.Transporting.RemoteConnectionState.Stopped) RecordLeaver(c);
+        }
+
         void OnPlayerLeft(PlayerData player) {
-            roles.Remove(player.Owner);
-            lastTag.Remove(player.Owner);
-            requestTimes.Remove(player.Owner);
-            lastTaunt.Remove(player.Owner);
-            tauntsThisRound.Remove(player.Owner);
+            NetworkConnection c = player.Owner;
+            // Normally recorded at the disconnect already; a player removed another way is recorded here.
+            RecordLeaver(c);
+            roles.Remove(c);
+            lastTag.Remove(c);
+            requestTimes.Remove(c);
+            lastTaunt.Remove(c);
+            tauntsThisRound.Remove(c);
+            ForgetAbilities(c);
+            ForgetScoring(c);
             MarkDirty();
         }
 
         void ApplyMovement(PlayerData player) {
-            HS_Role role = RoleOf(player.Owner);
-            bool frozen = phase == HS_Phase.Hiding && Seeks(role);
+            NetworkConnection c = player.Owner;
+            HS_Role role = RoleOf(c);
             bool seeker = Seeks(role);
-            player.walkSpeed.Value = frozen ? 0f : seeker ? seekerWalk : hiderWalk;
-            player.sprintSpeed.Value = frozen ? 0f : seeker ? seekerSprint : hiderSprint;
-            player.jumpHeight.Value = frozen ? 0f : 1.4f;
-            player.staminaMax.Value = 160f;
-            player.staminaRegen.Value = 25f;
+            bool rooted = (phase == HS_Phase.Hiding && seeker) || IsRooted(c);
+            float scale = SpeedScaleOf(c, role);
+            player.walkSpeed.Value = rooted ? 0f : (seeker ? seekerWalk : hiderWalk) * scale;
+            player.sprintSpeed.Value = rooted ? 0f : (seeker ? seekerSprint : hiderSprint) * scale;
+            player.jumpHeight.Value = rooted ? 0f : jumpHeight;
+            player.staminaMax.Value = staminaMax;
+            player.staminaRegen.Value = staminaRegen;
+        }
+
+        void ApplyMovement(NetworkConnection c) {
+            if (PlayerData.TryGetPlayerData(c, out var player)) ApplyMovement(player);
         }
 
         void ApplyTeam(PlayerData player) {
@@ -139,8 +192,13 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (player.TryGetCharacter(out var character) && character.GetTeam().realTeam != team) character.SetTeam(new TeamConfig(team));
         }
 
+        /// <summary>Re-applies everyone's movement, team and ability bar (after a phase or role change).</summary>
         void ApplyAll() {
-            foreach (var player in PlayerData.Players.Values) { ApplyMovement(player); ApplyTeam(player); }
+            foreach (var player in PlayerData.Players.Values) {
+                ApplyMovement(player);
+                ApplyTeam(player);
+                SendAbilityState(player.Owner);
+            }
             MarkDirty();
         }
 
@@ -152,9 +210,10 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (map == null || !map.IsConfigured) throw new InvalidOperationException("Hide and seek requires a configured HS_Map in hide_and_seek_start.");
             SetGlobalInvul(true);
             SetTeamKillEnabled(false);
+            SetLeaderboardEnabled(PointsColumn, true);
             SetLeaderboardEnabled(TagsColumn, true);
-            SetLeaderboardEnabled(SurvivedColumn, true);
             SetMusic(MusicSelection.GameMusic);
+            ResetAbilities();
             foreach (var key in roles.Keys.ToList()) roles[key] = HS_Role.None;
             ApplyAll();
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
@@ -178,6 +237,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
 
             // ---- roles
             round++;
+            seekStartedAt = float.MaxValue;
             var active = GetActivePlayers().Select(p => p.Owner).ToList();
             int seekers = TeamSplit.MinorityCount(active.Count, HS_Rules.PlayersPerSeeker);
             var picked = TeamSplit.PickRotating(active.Count, seekers, random, i => timesSeeker.TryGetValue(active[i], out int n) ? n : 0);
@@ -191,6 +251,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             hidersAtStart = HidersLeft;
             lastTaunt.Clear();
             tauntsThisRound.Clear();
+            ResetAbilities();
+            BeginRoundScoring();
 
             // ---- hide
             phase = HS_Phase.Hiding;
@@ -211,36 +273,37 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             // ---- seek
             phase = HS_Phase.Seeking;
             phaseSeconds = seekSeconds;
+            seekStartedAt = Time.time;
             ApplyAll();
             SetMusic(MusicSelection.HorrorChaseMusic);
-            float end = Time.time + seekSeconds;
+            float start = Time.time, end = start + seekSeconds, lastTick = start;
+            PlanEvent(seekSeconds);
             int nextPing = pingFrom;
             while (true) {
                 token.ThrowIfCancellationRequested();
                 secondsLeft = Mathf.Max(0, Mathf.CeilToInt(end - Time.time));
                 if (secondsLeft == 0 || HidersLeft == 0 || !roles.Any(r => Seeks(r.Value) && r.Key.IsActive)) break;
                 if (pingFrom > 0 && secondsLeft <= nextPing) { Ping(); nextPing = secondsLeft - pingEvery; }
+                TickScoring(Time.time - lastTick);
+                TickEvent(Time.time - start);
+                lastTick = Time.time;
                 headline = $"SEEK! {HidersLeft}/{hidersAtStart} hiders left";
                 BroadcastState();
-                await AwaitTime(500, token);
+                await AwaitTime(seekTickMs, token);
             }
 
             // ---- results
+            StopEvent();
+            ResetAbilities();
             phase = HS_Phase.Results;
             phaseSeconds = resultsSeconds;
             int survivors = HidersLeft;
             bool hidersWin = survivors > 0;
             headline = hidersWin ? $"HIDERS WIN! {survivors} stayed hidden." : "SEEKERS WIN! Everyone was found.";
+            ApplyAll();
             RevealHidingSpots();
             SetMusic(MusicSelection.VictoryMusic);
-            foreach (var pair in roles.Where(r => r.Key.IsActive)) {
-                bool survived = pair.Value == HS_Role.Hider;
-                if (pair.Value != HS_Role.None) PlayerProgress.Modify<HS_SaveData>(pair.Key, save => save.RecordRound(survived));
-                if (pair.Value == HS_Role.Hider) {
-                    Award(pair.Key, surviveXP, surviveGold);
-                    if (PlayerData.TryGetPlayerData(pair.Key, out var p)) RoundLeaderboard.Add(p, SurvivedColumn, 1);
-                } else if (!hidersWin) Award(pair.Key, seekerWinXP, 0);
-            }
+            FinishRound(hidersWin);
             ServerChat.SendSystemMessage(new(headline, SystemMessageSource.CustomMessage));
             for (int i = resultsSeconds; i > 0; i--) {
                 secondsLeft = i;
@@ -255,15 +318,15 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (!connection.IsAuthenticated || phase != HS_Phase.Seeking || !Seeks(RoleOf(connection))) return;
             if (lastTag.TryGetValue(connection, out float at) && Time.time - at < tagCooldown) return;
             lastTag[connection] = Time.time;
-            if (!LocalCharacter.Characters.TryGetValue(connection, out var seeker) || seeker == null || seeker.IsDead) return;
-            Vector3 eye = seeker.transform.position + Vector3.up * 1.4f;
+            if (!TryGetLiveCharacter(connection, out var seeker)) return;
+            Vector3 eye = seeker.transform.position + Vector3.up * abilityEyeHeight;
             NetworkConnection best = null;
             float bestDistance = float.MaxValue;
             foreach (var pair in roles) {
                 if (pair.Value != HS_Role.Hider || !LocalCharacter.Characters.TryGetValue(pair.Key, out var hider) || hider == null) continue;
-                Vector3 target = hider.transform.position + Vector3.up * 1f;
+                Vector3 target = hider.transform.position + Vector3.up * abilityTargetHeight;
                 float d = Vector3.Distance(eye, target);
-                if (d > HS_Rules.TagRange + 0.6f || d >= bestDistance) continue;
+                if (d > HS_Rules.TagRange + tagReachSlack + Mathf.Abs(abilityEyeHeight - abilityTargetHeight) || d >= bestDistance) continue;
                 if (Physics.Linecast(eye, target, out RaycastHit hit, ~0, QueryTriggerInteraction.Ignore)
                     && hit.collider.GetComponentInParent<LocalCharacter>() == null) continue;
                 best = pair.Key;
@@ -274,15 +337,20 @@ namespace Universes.UniverseData.hide_and_seek.Server {
                 return;
             }
             roles[best] = HS_Role.Caught;
+            // The assist is judged on the dazzle, so read it before the found hider's effects end.
+            NetworkConnection assister = FlashAssister(best, connection);
+            // A found hider loses whatever they had running (a blend ends where everyone can see it).
+            EndEffects(best);
             if (PlayerData.TryGetPlayerData(best, out var caught)) { ApplyMovement(caught); ApplyTeam(caught); }
+            SendAbilityState(best);
             if (PlayerData.TryGetPlayerData(connection, out var tagger)) RoundLeaderboard.Add(tagger, TagsColumn, 1);
             PlayerProgress.Modify<HS_SaveData>(connection, save => save.tags++);
-            Award(connection, tagXP, 0);
             string seekerName = NameOf(connection), hiderName = NameOf(best);
             InstanceFinder.ServerManager.Broadcast(new HS_TagBroadcast {
                 seekerId = connection.ClientId, hiderId = best.ClientId, seekerName = seekerName, hiderName = hiderName, hidersLeft = HidersLeft
             });
             ServerChat.SendSystemMessage(new($"{seekerName} found {hiderName}! {HidersLeft} left.", SystemMessageSource.CustomMessage));
+            OnTagScored(connection, best, assister);
             MarkDirty();
         }
 
@@ -291,27 +359,42 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (!connection.IsAuthenticated || request.round != round) return;
             float since = lastTaunt.TryGetValue(connection, out float at) ? Time.time - at : float.MaxValue;
             int used = tauntsThisRound.TryGetValue(connection, out int n) ? n : 0;
-            string refusal = HS_Rules.TauntRefusal(phase, RoleOf(connection), since, used);
+            int allowance = TauntAllowance(connection);
+            string refusal = HS_Rules.TauntRefusal(phase, RoleOf(connection), since, used, allowance);
             if (refusal != null) {
                 // Say why, and resend the count so a HUD that missed a confirmation (reconnect, late state) corrects itself.
                 InstanceFinder.ServerManager.Broadcast(connection, new HS_ResultBroadcast { accepted = false, message = refusal });
                 if (used > 0) InstanceFinder.ServerManager.Broadcast(connection, new HS_TauntBroadcast { clientId = connection.ClientId, used = used, correction = true });
                 return;
             }
-            if (!LocalCharacter.Characters.TryGetValue(connection, out var hider) || hider == null || hider.IsDead) return;
+            if (!TryGetLiveCharacter(connection, out var hider)) return;
             lastTaunt[connection] = Time.time;
             tauntsThisRound[connection] = used + 1;
             Vector3 position = hider.transform.position;
-            int xp = HS_Rules.TauntReward(NearestSeekerDistance(position), braveTauntRange, tauntXP, braveTauntXP, out bool brave);
-            Award(connection, (ulong)xp, 0);
+            int points = HS_Rules.TauntReward(NearestSeekerDistance(position), braveTauntRange, scoring.tauntPoints, scoring.braveTauntPoints, out bool brave);
+            // The taunt's own popup shows what it paid, so the points arrive without a second popup.
+            AddPoints(connection, points, brave ? "Brave taunt" : "Taunt", false);
+            if (brave) retention.Count(connection, HS_Retention.Stats.BraveTaunts);
             PlayerProgress.Modify<HS_SaveData>(connection, save => save.RecordTaunt(brave));
-            InstanceFinder.ServerManager.Broadcast(new HS_TauntBroadcast { clientId = connection.ClientId, position = position, xp = xp, brave = brave, used = used + 1 });
+            InstanceFinder.ServerManager.Broadcast(connection, new HS_TauntBroadcast { clientId = connection.ClientId, position = position, xp = scoring.Xp(points), brave = brave, used = used + 1 });
+            BroadcastTauntToOthers(connection, position);
+        }
+
+        /// <summary>
+        /// What everyone but the taunter hears and sees: only who and where. A decoy sends exactly this too,
+        /// so nothing in the message tells the two apart.
+        /// </summary>
+        void BroadcastTauntToOthers(NetworkConnection source, Vector3 position) {
+            var others = new HashSet<NetworkConnection>();
+            foreach (PlayerData player in PlayerData.Players.Values)
+                if (player.Owner != source && player.Owner.IsActive) others.Add(player.Owner);
+            if (others.Count > 0) InstanceFinder.ServerManager.Broadcast(others, new HS_TauntBroadcast { clientId = source.ClientId, position = position });
         }
 
         float NearestSeekerDistance(Vector3 position) {
             float best = float.MaxValue;
             foreach (var pair in roles) {
-                if (!Seeks(pair.Value) || !LocalCharacter.Characters.TryGetValue(pair.Key, out var seeker) || seeker == null || seeker.IsDead) continue;
+                if (!Seeks(pair.Value) || !TryGetLiveCharacter(pair.Key, out var seeker)) continue;
                 best = Mathf.Min(best, Vector3.Distance(position, seeker.transform.position));
             }
             return best;
@@ -325,14 +408,23 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             InstanceFinder.ServerManager.Broadcast(new HS_RevealBroadcast { round = round, spots = spots, seconds = resultsSeconds });
         }
 
+        /// <summary>Late in a round every seeker gets a blurred fix on each hider; blended hiders are missed and live decoys show up too.</summary>
         void Ping() {
-            var positions = roles.Where(r => r.Value == HS_Role.Hider && LocalCharacter.Characters.ContainsKey(r.Key))
-                .Select(r => HS_Rules.Blur(LocalCharacter.Characters[r.Key].transform.position, random)).ToArray();
-            if (positions.Length == 0) return;
+            var positions = new List<Vector3>();
+            foreach (var pair in roles)
+                if (pair.Value == HS_Role.Hider && !IsBlended(pair.Key) && LocalCharacter.Characters.TryGetValue(pair.Key, out var hider) && hider != null)
+                    positions.Add(HS_Rules.Blur(hider.transform.position, random));
+            AddDecoyPositions(positions, null, 0f, HS_Rules.PingScatter);
+            SendPing(positions, "PING! The seekers know roughly where you are. Move!", pair => pair.Value == HS_Role.Hider);
+        }
+
+        /// <summary>Sends <paramref name="positions"/> to the seekers and a warning to the hiders <paramref name="warn"/> picks.</summary>
+        void SendPing(List<Vector3> positions, string warning, Func<KeyValuePair<NetworkConnection, HS_Role>, bool> warn) {
+            if (positions.Count == 0) return;
             var seekers = roles.Where(r => Seeks(r.Value) && r.Key.IsActive).Select(r => r.Key).ToHashSet();
-            InstanceFinder.ServerManager.Broadcast(seekers, new HS_PingBroadcast { positions = positions });
-            foreach (var hider in roles.Where(r => r.Value == HS_Role.Hider && r.Key.IsActive))
-                InstanceFinder.ServerManager.Broadcast(hider.Key, new HS_ResultBroadcast { accepted = true, message = "PING! The seekers know roughly where you are. Move!" });
+            InstanceFinder.ServerManager.Broadcast(seekers, new HS_PingBroadcast { positions = positions.ToArray() });
+            foreach (var hider in roles.Where(r => r.Key.IsActive && warn(r)))
+                InstanceFinder.ServerManager.Broadcast(hider.Key, new HS_ResultBroadcast { accepted = true, message = warning });
         }
 
         void FixedUpdate() {
@@ -349,27 +441,25 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             if (requestTimes.TryGetValue(connection, out float previous) && Time.unscaledTime - previous < 1f) return;
             requestTimes[connection] = Time.unscaledTime;
             InstanceFinder.ServerManager.Broadcast(connection, MakeState());
+            SendAbilityState(connection);
         }
 
         void MarkDirty() => stateDirty = true;
 
         void Update() {
+            TickAbilities();
             if (stateDirty && map != null) BroadcastState();
         }
 
         HS_StateBroadcast MakeState() => new() {
             phase = phase, round = round, secondsLeft = secondsLeft, phaseSeconds = phaseSeconds, hidersLeft = HidersLeft, hidersAtStart = hidersAtStart, headline = headline,
-            roles = roles.Where(r => r.Key.IsActive).Select(r => new HS_PlayerRole { clientId = r.Key.ClientId, role = r.Value, name = NameOf(r.Key) }).ToArray()
+            roles = roles.Where(r => r.Key.IsActive).Select(r => new HS_PlayerRole { clientId = r.Key.ClientId, role = r.Value, name = NameOf(r.Key) }).ToArray(),
+            activeEvent = activeEvent, eventSecondsLeft = EventSecondsLeft, featuredEvent = FeaturedToday,
         };
 
         void BroadcastState() {
             stateDirty = false;
             InstanceFinder.ServerManager.Broadcast(MakeState());
-        }
-
-        static void Award(NetworkConnection connection, ulong xp, ulong gold) {
-            if ((xp != 0 || gold != 0) && !LevelsServer.AwardPlayerXPAndGold(connection, xp, gold))
-                Debug.LogWarning($"Hide and seek could not award rewards to connection {connection.ClientId}.");
         }
 
         static void SetMusic(MusicSelection selection) {
@@ -392,6 +482,13 @@ namespace Universes.UniverseData.hide_and_seek.Server {
                 server.UnregisterBroadcast<HS_TagRequest>(OnTagRequest);
                 server.UnregisterBroadcast<HS_StateRequest>(OnStateRequest);
                 server.UnregisterBroadcast<HS_TauntRequest>(OnTauntRequest);
+                server.UnregisterBroadcast<HS_AbilityRequest>(OnAbilityRequest);
+                server.OnRemoteConnectionState -= OnRemoteConnectionState;
+            }
+            if (retention != null) {
+                retention.Unlocked -= OnUnlocked;
+                retention.Ready -= OnRetentionReady;
+                retention.Dispose();
             }
             base.OnDestroy();
         }

@@ -5,6 +5,7 @@
         "FishNet.Runtime",
         "RyanAssets.Core",
         "RyanAssets.Progress",
+        "RyanAssets.Retention",
         "RyanAssets.Rounds",
         "Unity.TextMeshPro"
     ],

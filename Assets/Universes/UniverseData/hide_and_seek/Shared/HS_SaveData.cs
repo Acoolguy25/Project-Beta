@@ -1,5 +1,6 @@
 using System;
 using RyanAssets.Progress;
+using RyanAssets.Retention;
 
 namespace Universes.UniverseData.hide_and_seek {
     /// <summary>
@@ -8,6 +9,7 @@ namespace Universes.UniverseData.hide_and_seek {
     /// </summary>
     public sealed class HS_SaveData : ProgressData {
         public const string Universe = "hide_and_seek";
+        // New fields below all have initializers and keep their meaning, so version 1 documents load as they are.
         public override int LatestVersion => 1;
 
         public int roundsPlayed;
@@ -18,9 +20,47 @@ namespace Universes.UniverseData.hide_and_seek {
         /// <summary>Taunts the player made as a hider, and how many of them were brave (a seeker close by).</summary>
         public int taunts, braveTaunts;
 
+        /// <summary>The shared retention kit's block: game level, daily challenges, play streak.</summary>
+        public RetentionSave retention = new();
+        /// <summary>Rounds won (a hider nobody found, or a starting seeker when everyone was found).</summary>
+        public int roundsWon;
+        /// <summary>Consecutive wins right now, and the longest run ever.</summary>
+        public int winStreak, bestWinStreak;
+        /// <summary>Times the player had the most points in a round.</summary>
+        public int mvps;
+        /// <summary>Most points in a single round.</summary>
+        public int bestRoundPoints;
+        public int closeCalls;
+        public int abilitiesUsed;
+        /// <summary>Rounds the player left before they ended (each one is a loss).</summary>
+        public int roundsLeft;
+
         public void RecordRound(bool survivedHiding) {
             roundsPlayed++;
             if (survivedHiding) hidesSurvived++;
+        }
+
+        /// <summary>
+        /// Records a finished round's result and points. Returns true when <paramref name="points"/> beat the
+        /// player's best round (a first scoring round counts).
+        /// </summary>
+        public bool RecordResult(bool survivedHiding, bool won, int points, bool mvp) {
+            RecordRound(survivedHiding);
+            if (won) {
+                roundsWon++;
+                winStreak++;
+                bestWinStreak = Math.Max(bestWinStreak, winStreak);
+            } else winStreak = 0;
+            if (mvp) mvps++;
+            if (points <= bestRoundPoints) return false;
+            bestRoundPoints = points;
+            return true;
+        }
+
+        /// <summary>The player left a round they were dealt into before it ended: it counts as a loss, so the win streak ends.</summary>
+        public void RecordLeft() {
+            roundsLeft++;
+            winStreak = 0;
         }
 
         public void RecordTaunt(bool brave) {
@@ -34,6 +74,15 @@ namespace Universes.UniverseData.hide_and_seek {
             tags = Math.Max(0, tags);
             taunts = Math.Max(0, taunts);
             braveTaunts = Math.Clamp(braveTaunts, 0, taunts);
+            retention = RetentionSave.Repair(retention);
+            roundsWon = Math.Max(0, roundsWon);
+            winStreak = Math.Max(0, winStreak);
+            bestWinStreak = Math.Max(bestWinStreak, winStreak);
+            mvps = Math.Max(0, mvps);
+            bestRoundPoints = Math.Max(0, bestRoundPoints);
+            closeCalls = Math.Max(0, closeCalls);
+            abilitiesUsed = Math.Max(0, abilitiesUsed);
+            roundsLeft = Math.Max(0, roundsLeft);
         }
     }
 }

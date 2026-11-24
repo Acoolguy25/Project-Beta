@@ -382,6 +382,15 @@ namespace RyanAssets.Retention.Tests {
         }
 
         [Test]
+        public void ChallengeCardLabelPrefersTheShortText() {
+            var challenge = new ChallengeDefinition("first_finds", "first_find", 2, 150, 25, "Find the first hider of a round {target} times");
+            Assert.AreEqual("Find the first hider of a round 2 times", challenge.CardLabel(), "no short text: the full text");
+            challenge.shortText = "First finds x{target}";
+            Assert.AreEqual("First finds x2", challenge.CardLabel());
+            Assert.AreEqual("Find the first hider of a round 2 times", challenge.Describe(), "the panel and toasts keep the full text");
+        }
+
+        [Test]
         public void HeadlinesShowFirstAndTheLeastValuableLinesFold() {
             var summary = new MatchSummary(new LevelProgress(1, 0, 100));
             summary.Add(RewardLine.Info("Waves", "12 / 12"));

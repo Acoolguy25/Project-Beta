@@ -50,5 +50,42 @@ namespace Universes.UniverseData.hide_and_seek.Tests {
             foreach (int used in new[] { 0, 5, 6 })
                 Assert.That(HS_Rules.TauntRefusal(phase, role, since, used) == null, Is.EqualTo(HS_Rules.CanTaunt(phase, role, since, used)));
         }
+
+        [Test]
+        public void RecordResultBuildsAndBreaksWinStreaks() {
+            var save = new HS_SaveData();
+            save.RecordResult(true, true, 50, false);
+            save.RecordResult(false, true, 40, true);
+            Assert.That(save.winStreak, Is.EqualTo(2));
+            Assert.That(save.roundsWon, Is.EqualTo(2));
+            Assert.That(save.mvps, Is.EqualTo(1));
+            Assert.That(save.hidesSurvived, Is.EqualTo(1));
+            save.RecordResult(false, false, 10, false);
+            Assert.That(save.winStreak, Is.Zero);
+            Assert.That(save.bestWinStreak, Is.EqualTo(2));
+            Assert.That(save.roundsPlayed, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void RecordResultReportsANewBestRoundOnlyWhenBeaten() {
+            var save = new HS_SaveData();
+            Assert.That(save.RecordResult(true, true, 80, false), Is.True);
+            Assert.That(save.RecordResult(true, true, 80, false), Is.False, "a tie is not a record");
+            Assert.That(save.RecordResult(true, true, 120, false), Is.True);
+            Assert.That(save.bestRoundPoints, Is.EqualTo(120));
+        }
+
+        [Test]
+        public void ValidateRepairsTheRetentionBlockAndStreaks() {
+            var save = new HS_SaveData { retention = null, winStreak = 4, bestWinStreak = 1, mvps = -2, bestRoundPoints = -1, closeCalls = -3, abilitiesUsed = -4, roundsWon = -1 };
+            save.Validate();
+            Assert.That(save.retention, Is.Not.Null);
+            Assert.That(save.bestWinStreak, Is.EqualTo(4));
+            Assert.That(save.mvps, Is.Zero);
+            Assert.That(save.bestRoundPoints, Is.Zero);
+            Assert.That(save.closeCalls, Is.Zero);
+            Assert.That(save.abilitiesUsed, Is.Zero);
+            Assert.That(save.roundsWon, Is.Zero);
+        }
     }
 }

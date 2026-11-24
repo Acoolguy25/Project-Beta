@@ -263,6 +263,21 @@ namespace RyanAssets.Retention.Tests {
         }
 
         [Test]
+        public void JoiningNeverAnnouncesAnAccountLevel() {
+            // As RetentionService does at join: the level now is the baseline, and level-ups from rewards
+            // paid while the player loads in (goals already met, a daily claim) only move it.
+            var player = new RetentionPlayer();
+            player.NoteAccountLevel(0);
+            player.QuietAccountLevelUntil(Noon.AddSeconds(15));
+            Assert.IsFalse(player.TryAnnounceAccountLevel(1, Noon.AddSeconds(2)), "a level-up while joining is not announced");
+            Assert.IsFalse(player.TryAnnounceAccountLevel(2, Noon.AddSeconds(5)));
+            Assert.AreEqual(2, player.AnnouncedAccountLevel, "but it moves the baseline");
+            Assert.IsFalse(player.TryAnnounceAccountLevel(2, Noon.AddMinutes(5)), "the same level later is not news");
+            Assert.IsTrue(player.TryAnnounceAccountLevel(3, Noon.AddMinutes(5)), "a real level gain after joining is");
+            Assert.IsFalse(player.TryAnnounceAccountLevel(3, Noon.AddMinutes(6)), "once");
+        }
+
+        [Test]
         public void ReportsFromARewardHandlerAreNotLost() {
             var f = new Fixture();
             ChallengeDefinition builds = f.Picked(0), bosses = f.Picked(2);

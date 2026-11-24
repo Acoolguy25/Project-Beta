@@ -16,7 +16,10 @@
         "RyanAssets.UI.Editor",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime",
-        "RyanAssets.GameFeel"
+        "RyanAssets.GameFeel",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Retention.Editor"
     ],
     "includePlatforms": [
         "Editor"

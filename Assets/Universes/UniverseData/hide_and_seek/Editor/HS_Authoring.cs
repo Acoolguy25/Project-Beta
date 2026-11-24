@@ -5,14 +5,18 @@ using RyanAssets.Authoring;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+#if !UNITY_SERVER
+using Universes.UniverseData.hide_and_seek.Client;
+#endif
 using Universes.UniverseData.hide_and_seek.Editor.Manor;
 using static RyanAssets.Authoring.UniverseAuthoringKit;
 
 namespace Universes.UniverseData.hide_and_seek.Editor {
     /// <summary>
     /// Builds Hide and Seek's start scene: "Pumpkin Hollow Manor" (<see cref="HS_ManorPlan"/>, built by
-    /// <see cref="HS_ManorBuilder"/>), hide points probed from its floors, the ping marker and the HUD
-    /// (<see cref="HS_HudAuthoring"/>). Safe to re-run. Build the server runner from the Linux Server
+    /// <see cref="HS_ManorBuilder"/>), hide points probed from its floors, the ping marker, the flashlight
+    /// beam and decoy marker, and the HUD (<see cref="HS_HudAuthoring"/>). Safe to re-run. Build the server runner from the Linux Server
     /// profile with <c>-executeMethod Universes.UniverseData.hide_and_seek.Editor.HS_Authoring.BuildServerAssets</c>.
     /// </summary>
     public static class HS_Authoring {
@@ -69,11 +73,172 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             return Kit.Save(root, "", "PingMarker");
         }
 
+        /// <summary>
+        /// The flashlight shot (<see cref="HS_FlashlightBeam"/>): a spot light and a soft additive cone of
+        /// light, a unit cone along +Z that the client scales to the range and angle the server tested.
+        /// </summary>
+        static GameObject BuildFlashlightBeam() {
+            var root = new GameObject("FlashlightBeam");
+            var spot = root.AddComponent<Light>();
+            spot.type = LightType.Spot;
+            spot.range = 36f;
+            spot.spotAngle = 50f;
+            spot.innerSpotAngle = 28f;
+            spot.intensity = 0f;
+            spot.color = new Color(1f, 0.95f, 0.78f);
+            spot.shadows = LightShadows.None;
+            spot.renderMode = LightRenderMode.ForcePixel;
+            var cone = new GameObject("Cone", typeof(MeshFilter), typeof(MeshRenderer));
+            cone.transform.SetParent(root.transform, false);
+            cone.GetComponent<MeshFilter>().sharedMesh = ConeMesh();
+            var renderer = cone.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = GlowMaterial("FlashlightBeamGlow");
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+#if !UNITY_SERVER
+            var beam = root.AddComponent<HS_FlashlightBeam>();
+            SetFields(beam, ("spot", spot), ("cone", cone.transform), ("coneRenderer", renderer));
+#endif
+            return Kit.Save(root, "", "FlashlightBeam");
+        }
+
+        /// <summary>The thrower's decoy marker (<see cref="HS_DecoyMarker"/>): a glowing noise maker, a pulsing ring and a thin beam.</summary>
+        static GameObject BuildDecoyMarker() {
+            var root = new GameObject("DecoyMarker");
+            var glow = Kit.Mat("DecoyGlow", new Color(1f, 0.72f, 0.2f), emission: 3f);
+            var beamMat = Kit.Mat("DecoyBeam", new Color(1f, 0.72f, 0.2f), emission: 2f, alpha: 0.3f);
+            var body = Empty("Body", root.transform, new Vector3(0f, 0.9f, 0f));
+            NoShadows(Primitive(PrimitiveType.Sphere, "Speaker", body.transform, Vector3.zero, Vector3.one * 1.1f, glow, false));
+            NoShadows(Primitive(PrimitiveType.Cylinder, "Horn", body.transform, new Vector3(0f, 0.75f, 0f), new Vector3(0.35f, 0.35f, 0.35f), glow, false));
+            NoShadows(Primitive(PrimitiveType.Cylinder, "Beam", root.transform, new Vector3(0f, 8f, 0f), new Vector3(0.25f, 8f, 0.25f), beamMat, false));
+            // A thin glowing band on the ground (a hollow ring, soft on both edges) that pulses out like a taunt's sound.
+            var ring = new GameObject("Ring", typeof(MeshFilter), typeof(MeshRenderer));
+            ring.transform.SetParent(root.transform, false);
+            ring.transform.localPosition = new Vector3(0f, 0.08f, 0f);
+            ring.transform.localScale = new Vector3(2.5f, 1f, 2.5f);
+            ring.GetComponent<MeshFilter>().sharedMesh = RingMesh();
+            var ringRenderer = ring.GetComponent<MeshRenderer>();
+            ringRenderer.sharedMaterial = GlowMaterial("DecoyRingGlow");
+            ringRenderer.sharedMaterial.SetColor("_BaseColor", new Color(1f, 0.72f, 0.2f, 0.8f));
+            NoShadows(ring);
+#if !UNITY_SERVER
+            var marker = root.AddComponent<HS_DecoyMarker>();
+            SetFields(marker, ("body", body.transform), ("ring", ring.transform));
+#endif
+            return Kit.Save(root, "", "DecoyMarker");
+        }
+
+        /// <summary>A unit cone along +Z: apex at the origin, radius 1 at z = 1, bright at the lens and fading to the far end.</summary>
+        static Mesh ConeMesh() {
+            const string path = Root + "/Prefabs/FlashlightBeamCone.asset";
+            const int sides = 32, rings = 6;
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (mesh == null) {
+                mesh = new Mesh { name = "FlashlightBeamCone" };
+                AssetDatabase.CreateAsset(mesh, path);
+            }
+            mesh.Clear();
+            var vertices = new List<Vector3>();
+            var colors = new List<Color>();
+            var triangles = new List<int>();
+            for (int r = 0; r <= rings; r++) {
+                float z = (float)r / rings;
+                // Strong near the lens, a long soft tail; the open end fades to nothing so the cone has no hard rim.
+                float alpha = Mathf.Lerp(0.9f, 0f, Mathf.Pow(z, 0.7f));
+                for (int i = 0; i < sides; i++) {
+                    float a = i * Mathf.PI * 2f / sides;
+                    vertices.Add(new Vector3(Mathf.Cos(a) * z, Mathf.Sin(a) * z, z));
+                    colors.Add(new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            for (int r = 0; r < rings; r++)
+            for (int i = 0; i < sides; i++) {
+                int a = r * sides + i, b = r * sides + (i + 1) % sides, c = a + sides, d = b + sides;
+                triangles.AddRange(new[] { a, c, b, b, c, d });
+            }
+            mesh.SetVertices(vertices);
+            mesh.SetColors(colors);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            EditorUtility.SetDirty(mesh);
+            return mesh;
+        }
+
+        /// <summary>A flat ring in the XZ plane, outer radius 1: transparent at both edges and brightest at radius 0.88, so it reads as a band of light, not a disc.</summary>
+        static Mesh RingMesh() {
+            const string path = Root + "/Prefabs/DecoyRing.asset";
+            const int sides = 48;
+            float[] radii = { 0.72f, 0.88f, 1f };
+            float[] alphas = { 0f, 1f, 0f };
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (mesh == null) {
+                mesh = new Mesh { name = "DecoyRing" };
+                AssetDatabase.CreateAsset(mesh, path);
+            }
+            mesh.Clear();
+            var vertices = new List<Vector3>();
+            var colors = new List<Color>();
+            var triangles = new List<int>();
+            for (int r = 0; r < radii.Length; r++)
+            for (int i = 0; i < sides; i++) {
+                float a = i * Mathf.PI * 2f / sides;
+                vertices.Add(new Vector3(Mathf.Cos(a) * radii[r], 0f, Mathf.Sin(a) * radii[r]));
+                colors.Add(new Color(1f, 1f, 1f, alphas[r]));
+            }
+            for (int r = 0; r < radii.Length - 1; r++)
+            for (int i = 0; i < sides; i++) {
+                int a = r * sides + i, b = r * sides + (i + 1) % sides, c = a + sides, d = b + sides;
+                triangles.AddRange(new[] { a, b, c, b, d, c });
+            }
+            mesh.SetVertices(vertices);
+            mesh.SetColors(colors);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            EditorUtility.SetDirty(mesh);
+            return mesh;
+        }
+
+        /// <summary>An additive URP Particles/Unlit material (vertex colour times _BaseColor), both faces drawn, as the kit's glows use.</summary>
+        static Material GlowMaterial(string name) {
+            Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? throw new System.InvalidOperationException("URP Particles/Unlit shader not found.");
+            string path = $"{Root}/Materials/{name}.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, path);
+            } else material.shader = shader;
+            material.SetColor("_BaseColor", Color.white);
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 2f);
+            material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            material.SetFloat("_DstBlend", (float)BlendMode.One);
+            material.SetFloat("_SrcBlendAlpha", (float)BlendMode.One);
+            material.SetFloat("_DstBlendAlpha", (float)BlendMode.One);
+            material.SetFloat("_ZWrite", 0f);
+            material.SetFloat("_Cull", (float)CullMode.Off);
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        static void SetFields(Object target, params (string field, Object value)[] fields) {
+            var so = new SerializedObject(target);
+            foreach (var (field, value) in fields)
+                (so.FindProperty(field) ?? throw new System.ArgumentException($"{target.GetType().Name} has no field '{field}'.")).objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         // ---------------------------------------------------------------- scene
         static void BuildStartScene() {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             var hud = HS_HudAuthoring.Build();
             var ping = BuildPing();
+            var beam = BuildFlashlightBeam();
+            var decoy = BuildDecoyMarker();
             // Autumn dusk: soft warm sun, dim ambient, fog that hides the edge of the ground; the lamps do the rest (HS_ManorLighting).
             Light sun = Kit.NewLitScene(HS_ManorLighting.SkyTint, HS_ManorLighting.FogColor, HS_ManorLighting.FogStart, HS_ManorLighting.FogEnd,
                 HS_ManorLighting.SunEuler, HS_ManorLighting.SunIntensity);
@@ -103,9 +268,14 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             map.spawnScatter = MapScale * 0.8f;
             map.killY = -20f;
             map.pingPrefab = ping;
+            map.flashlightBeamPrefab = beam;
+            map.decoyMarkerPrefab = decoy;
             map.clientPrefab = hud;
             map.flickerLights = builder.FlickerLights.ToArray();
             map.flickerGlows = builder.FlickerGlows.ToArray();
+            // What a blackout dims: the sun and every manor lamp, not the candles (they keep a dimmed flicker).
+            var flickering = new HashSet<Light>(map.flickerLights);
+            map.blackoutLights = manor.GetComponentsInChildren<Light>(true).Where(l => !flickering.Contains(l)).Prepend(sun).ToArray();
             (int reach, string busiest) = builder.CheckLightReach();
             if (reach > HS_ManorLighting.MaxLightsPerObject)
                 throw new System.InvalidOperationException($"[HideAndSeek] {reach} lights reach {busiest}; URP draws at most {HS_ManorLighting.MaxLightsPerObject} per object. Shorten ranges in HS_ManorLighting or split that surface.");

@@ -23,6 +23,9 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         float[] baseIntensity, seeds;
         MaterialPropertyBlock block;
 
+        /// <summary>Overall level of every flickering light, 0..1 (<see cref="HS_Blackout"/> lowers it while the power is out).</summary>
+        public float Dim { get; set; } = 1f;
+
         void Start() {
             var map = GetComponentInParent<HS_Map>();
             lights = map.flickerLights ?? System.Array.Empty<Light>();
@@ -46,7 +49,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             for (int i = 0; i < lights.Length; i++) {
                 float slow = Mathf.PerlinNoise(t, seeds[i]);
                 float fast = Mathf.PerlinNoise(t * flutterSpeedRatio, seeds[i] + 5.7f);
-                float level = 1f - sway * slow - flutter * fast;
+                float level = (1f - sway * slow - flutter * fast) * Dim;
                 lights[i].intensity = baseIntensity[i] * level;
                 Renderer glow = Glow(i);
                 if (glow == null) continue;

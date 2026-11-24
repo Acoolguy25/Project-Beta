@@ -48,6 +48,7 @@ namespace RyanAssets.Retention {
         internal double accountXpCarry;
         internal bool finishing;
         int announcedAccountLevel = -1;
+        DateTime accountLevelQuietUntil;
 
         /// <summary>
         /// False when the player's document is not saved this session (it could not be loaded, or the
@@ -94,6 +95,19 @@ namespace RyanAssets.Retention {
             announcedAccountLevel = level;
             return true;
         }
+
+        /// <summary>
+        /// Until <paramref name="utc"/> (just after joining), account level-ups only move the level last
+        /// announced: <see cref="TryAnnounceAccountLevel(int, DateTime)"/> records them and says false.
+        /// </summary>
+        public void QuietAccountLevelUntil(DateTime utc) => accountLevelQuietUntil = utc;
+
+        /// <summary>
+        /// <see cref="TryAnnounceAccountLevel(int)"/>, except that a level-up before the time given to
+        /// <see cref="QuietAccountLevelUntil"/> is recorded without an announcement (false).
+        /// </summary>
+        public bool TryAnnounceAccountLevel(int level, DateTime utcNow) =>
+            TryAnnounceAccountLevel(level) && utcNow >= accountLevelQuietUntil;
     }
 
     /// <summary>
@@ -240,7 +254,7 @@ namespace RyanAssets.Retention {
                     index = update.Index, id = challenge.id, text = challenge.Describe(), progress = update.Progress,
                     target = challenge.target, completed = true, xpReward = challenge.xpReward, goldReward = challenge.goldReward, day = day,
                 });
-                Grant(player, save, new RewardLine(challenge.Describe(), challenge.xpReward, challenge.goldReward), true, Source.Daily, null);
+                Grant(player, save, new RewardLine(challenge.CardLabel(), challenge.xpReward, challenge.goldReward), true, Source.Daily, null);
                 sink.SaveSoon(player);
             }
         }

@@ -50,9 +50,9 @@ namespace RyanAssets.Retention.Client {
         [Tooltip("{0} = days, {1} = XP of tomorrow's bonus.")]
         public string streakClaimedFormat = "Day {0} streak! Come back tomorrow for +{1} XP";
         [Tooltip("{0} = days, {1} = XP of today's bonus.")]
-        public string streakPendingFormat = "Day {0} streak: finish a match today for +{1} XP";
+        public string streakPendingFormat = "Day {0} streak: play today to keep your streak (+{1} XP)";
         [Tooltip("{0} = XP of day 1's bonus.")]
-        public string streakNoneFormat = "Finish a match today to start a streak (+{0} XP)";
+        public string streakNoneFormat = "Play today to start a streak (+{0} XP)";
         [Tooltip("{0} = level, {1} = unlock title.")]
         public string nextUnlockFormat = "Level {0}: {1}";
 

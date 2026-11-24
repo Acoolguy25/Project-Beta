@@ -24,6 +24,7 @@ namespace RyanAssets.Retention.Editor {
         const string ActiveKey = "RyanAssets.Retention.Preview.Active";
         const string ModeKey = "RyanAssets.Retention.Preview.Mode";
         const string FixesMode = "fixes";
+        const string Try5Mode = "try5";
         const string PlayerListPrefab = "Packages/com.ryan.hud/Runtime/Client/ClientUI/PlayerList/PlayerListCanvas.prefab";
         const string PlayerRowPrefab = "Packages/com.ryan.hud/Runtime/Client/ClientUI/PlayerList/PlayerListRowPrefab.prefab";
         const string ScreenFxPrefab = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Prefabs/ScreenFxOverlay.prefab";
@@ -54,6 +55,13 @@ namespace RyanAssets.Retention.Editor {
         /// </summary>
         public static void CaptureFixes(string directory) => Start(directory, FixesMode);
 
+        /// <summary>
+        /// Kit try 5 checks at 1280x720: a card with three unlocks (during the XP count, at each reveal,
+        /// at the end) and the toasts over a bright sky and over snow. Run it on the old and the new code
+        /// for before/after frames.
+        /// </summary>
+        public static void CaptureTry5(string directory) => Start(directory, Try5Mode);
+
         static void Start(string directory, string mode = "") {
             SessionState.SetString(ModeKey, mode);
             if (EditorApplication.isPlaying) EditorApplication.isPlaying = false;
@@ -67,8 +75,9 @@ namespace RyanAssets.Retention.Editor {
             if (change == PlayModeStateChange.EnteredPlayMode && SessionState.GetBool(ActiveKey, false)) {
                 SessionState.SetBool(ActiveKey, false);
                 string dir = SessionState.GetString(DirKey, string.Empty);
-                bool fixes = SessionState.GetString(ModeKey, string.Empty) == FixesMode;
-                routine = fixes ? RunFixes(string.IsNullOrEmpty(dir) ? null : dir) : Run(string.IsNullOrEmpty(dir) ? null : dir);
+                string mode = SessionState.GetString(ModeKey, string.Empty);
+                string target = string.IsNullOrEmpty(dir) ? null : dir;
+                routine = mode == FixesMode ? RunFixes(target) : mode == Try5Mode ? RunTry5(target) : Run(target);
                 waitUntil = 0;
                 waitFor = null;
                 EditorApplication.update += Tick;
@@ -268,6 +277,99 @@ namespace RyanAssets.Retention.Editor {
             Debug.Log("[Retention preview] fixes done." + (dir != null ? " Shots in " + dir : string.Empty) + "\n" + notes);
             EditorApplication.isPlaying = false;
         }
+
+        // ---------------------------------------------------------------- kit try 5 checks
+
+        static IEnumerator RunTry5(string dir) {
+            RetentionHud hud = BuildScene(nested: true);
+            var card = Field<RetentionSummaryCard>(hud, "summaryCard");
+            var toasts = Field<HudToastFeed>(hud, "toasts");
+            Camera camera = Camera.main;
+            if (dir != null) Directory.CreateDirectory(dir);
+            const string tag = "1280x720";
+            PlayModeWindow.SetCustomRenderingResolution(1280, 720, "Retention try 5 " + tag);
+            yield return 1f;
+            card.Hide();
+            toasts.Clear();
+            Invoke(hud, "OnSnapshot", Snapshot());
+            yield return 0.8f;
+            toasts.Clear();
+            yield return 0.5f;
+
+            // 1. Three unlocks in one match: during the XP count, at the first and second reveal, at the end.
+            Invoke(hud, "OnSummary", ThreeUnlockSummary());
+            yield return (Func<bool>)(() => Phase(card) == "Fill" && Float(card, "travelled") >= 0.5f * Float(card, "distance"));
+            Shot(dir, tag, "1-three-unlocks-during-xp-count");
+            yield return (Func<bool>)(() => Int(card, "unlockIndex") >= 1 || Phase(card) == "Done");
+            yield return 0.6f;
+            Shot(dir, tag, "1-three-unlocks-first-reveal");
+            yield return (Func<bool>)(() => Int(card, "unlockIndex") >= 2 || Phase(card) == "Done");
+            yield return 0.6f;
+            Shot(dir, tag, "1-three-unlocks-second-reveal");
+            yield return (Func<bool>)(() => Phase(card) == "Done");
+            yield return 2.5f;
+            Shot(dir, tag, "1-three-unlocks-done");
+            yield return 0.3f;
+            card.Hide();
+            yield return 0.8f;
+
+            // 3. Long challenge names on the card (Hide and Seek): with gold, without, and a short name.
+            Invoke(hud, "OnSummary", LongLabelSummary());
+            yield return (Func<bool>)(() => Phase(card) == "Done");
+            yield return 0.6f;
+            Shot(dir, tag, "3-long-challenge-labels");
+            yield return 0.3f;
+            card.Hide();
+            yield return 0.8f;
+
+            // 2. Toasts over a bright sky, then over snow.
+            var backdrops = new[] { ("sky", new Color(0.56f, 0.8f, 0.98f)), ("snow", new Color(0.95f, 0.96f, 0.98f)) };
+            foreach ((string name, Color color) in backdrops) {
+                if (camera != null) camera.backgroundColor = color;
+                toasts.Clear();
+                yield return 0.3f;
+                ThreeToasts(hud);
+                yield return 1.2f;
+                Shot(dir, tag, "2-toasts-over-" + name);
+                yield return 0.3f;
+            }
+            if (camera != null) camera.backgroundColor = new Color(0.16f, 0.2f, 0.26f);
+            toasts.Clear();
+            yield return 0.3f;
+            Debug.Log("[Retention preview] try 5 done." + (dir != null ? " Shots in " + dir : string.Empty));
+            EditorApplication.isPlaying = false;
+        }
+
+        static RetentionSummaryBroadcast ThreeUnlockSummary() => new() {
+            title = "Rebirth 3",
+            lines = new[] { Line("Rebirth 3", 600, 0, 1, "x1.5 income"), Line("Goals", 240, 0, 6), Line("Time on your plot", 90, 0, 9) },
+            totalXp = 930, totalGold = 0,
+            levelBefore = 4, levelXpBefore = 60, levelXpNeededBefore = 250,
+            levelAfter = 7, levelXpAfter = 40, levelXpNeededAfter = 325,
+            unlocks = new[] {
+                Unlock(5, "big_hopper", "Big Hopper", "Hoppers hold twice as many bricks.", "backpack"),
+                Unlock(6, "coin_rain", "Coin Rain", "Gold coins drop twice as often.", "paid"),
+                Unlock(7, "rush_vip", "Rush Hour VIP", "Rush hour pays you an extra 25%.", "bolt"),
+            },
+            hasNextUnlock = true, nextUnlock = Unlock(9, "night_shift", "Night Shift", "Earn while you are away.", "timer"),
+        };
+
+        static RetentionSummaryBroadcast LongLabelSummary() => new() {
+            title = "Round over",
+            lines = new[] {
+                Line("Seeker win", 80, 10),
+                Line("Find the first hider of a round 2 times", 150, 25),
+                Line("Find the first hider of a round 2 times", 150),
+                Line("First finds x2", 150, 25),
+                Line("Hold 8 waves without a leak", 120),
+                Line("Round points", 0, 0, 1, "420 (best 510)"),
+            },
+            totalXp = 650, totalGold = 60,
+            levelBefore = 6, levelXpBefore = 40, levelXpNeededBefore = 900,
+            levelAfter = 6, levelXpAfter = 690, levelXpNeededAfter = 900,
+            unlocks = Array.Empty<RetentionUnlockView>(),
+            hasNextUnlock = true, nextUnlock = Unlock(8, "night_vision", "Night Vision", "See hiders in the dark.", "visibility"),
+        };
 
         static void ThreeToasts(RetentionHud hud) {
             Invoke(hud, "OnChallenge", new RetentionChallengeBroadcast {

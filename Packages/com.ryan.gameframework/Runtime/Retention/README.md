@@ -9,6 +9,23 @@ The shared "one more match" loop for every Project Beta game:
 
 The server owns all of the rules. The client only draws the state the server sends.
 
+## Changes in try 5
+
+No public names changed or removed. Additions:
+- `RetentionSummaryCard.unlockTeaserKicker`, `unlockTeaserKickerManyFormat`, `unlockTeaserTitleFormat` and `unlockTeaserIcon`
+- `RetentionPlayer.QuietAccountLevelUntil(DateTime)` and `TryAnnounceAccountLevel(int, DateTime)`
+- `RetentionService.AccountLevelFormat` and `JoinQuietSeconds`
+- `ChallengeDefinition.shortText` and `CardLabel()`
+
+Rebuild a game's HUD (or let its nested prefab instance update) to get the toast card and the new default texts.
+
+- **Several unlocks, never an empty box.** The card's unlock block shows a locked teaser ("3 NEW UNLOCKS", "Reach level 5", lock icon) while the lines and the XP count play, instead of an empty grey box. Each unlock is then revealed in turn ("UNLOCKED 1/3"). Once the card is done or skipped, they keep taking turns until it hides, so every unlock is seen. `unlockPlaceholder` is no longer shown.
+- **Toasts on a card.** Kit toasts used the shared translucent glass row and read see-through over bright scenes. They now have an opaque themed card behind them (raised surface, hairline edge, soft shadow) that is readable over sky and snow. The shared `HudKit.ToastFeed` is unchanged.
+- **Joining never announces.** The account level at join is now the baseline. Level-ups from rewards paid in the first `JoinQuietSeconds` (15) after joining move it without a chat line. These are rewards paid as the game loads the player in, such as goals already met or a daily claim. Only a later level gain from a payout is announced.
+- **"Account level" in chat.** The kit's chat line reads "{name} has reached account level {n}!" (`AccountLevelFormat`), so it does not look wrong next to a game's own level. The line from `LevelsServer` (games that still call it) is unchanged.
+- **Neutral streak texts.** The defaults no longer assume matches: "Day N streak: play today to keep your streak (+X XP)", "Play today to start a streak", and "N-day streak! Play today to make it day N+1". Every text is still a serialized field that games can override.
+- **Long reward labels stay readable.** A label too long for one line, even at 90% of its size, gets a row 1.5 times as tall and wraps to two lines at full size. Before, it shrank into two tiny lines. No label shrinks below 13 (the theme's small text size). A challenge can also set `shortText` ("First finds x{target}") for its card line; the panel and toasts keep the full `text`.
+
 ## Changes in try 4
 
 No public names changed or removed. These are additions: `RewardLine.Pinned`, `RewardLine.Headline(...)`, `RewardLine.AsHeadline()`, `MatchSummary.FoldedFormat`, and on `RetentionPlayer` the members `InMatch`, `AnnouncedAccountLevel`, `NoteAccountLevel(int)` and `TryAnnounceAccountLevel(int)`.

@@ -50,22 +50,137 @@ MonoBehaviour:
     _editor_value: 0
   DebugTimerSpeed:
     _editor_value: 10
+  abilityTuning:
+    dash:
+      basic:
+        cooldown: 18
+        duration: 2.5
+        power: 1.6
+      upgraded:
+        cooldown: 15
+        duration: 3.5
+        power: 1.7
+    decoy:
+      basic:
+        cooldown: 28
+        duration: 20
+        power: 22
+      upgraded:
+        cooldown: 22
+        duration: 30
+        power: 32
+    blend:
+      basic:
+        cooldown: 35
+        duration: 7
+        power: 0
+      upgraded:
+        cooldown: 28
+        duration: 10
+        power: 0
+    rush:
+      basic:
+        cooldown: 16
+        duration: 2.5
+        power: 1.5
+      upgraded:
+        cooldown: 13
+        duration: 3.5
+        power: 1.6
+    radar:
+      basic:
+        cooldown: 30
+        duration: 5
+        power: 45
+      upgraded:
+        cooldown: 24
+        duration: 6
+        power: 65
+    flashlight:
+      basic:
+        cooldown: 25
+        duration: 3
+        power: 32
+      upgraded:
+        cooldown: 20
+        duration: 4
+        power: 44
+    flashlightConeDegrees: 50
+    dazzledSpeedScale: 0.45
+    radarScatter: 5
+    decoyFoolRange: 9
+    quickRecoveryCooldownScale: 0.8
+  abilityEyeHeight: 4.4
+  abilityTargetHeight: 3
+  decoyPairSpread: 22
+  decoyWallMargin: 1
+  abilityRequestInterval: 0.2
+  events:
+    chance: 0.8
+    startWindow: {x: 0.25, y: 0.55}
+    blackoutSeconds: 18
+    frenzySeconds: 15
+    frenzySpeedScale: 1.25
+    shuffleSeconds: 20
+    weights: {x: 1, y: 1, z: 1}
+    featuredPayMultiplier: 2
+  scoring:
+    survivalPoints: 5
+    survivalInterval: 10
+    closeCallRange: 9
+    closeCallEscapeRange: 22
+    closeCallPoints: 15
+    closeCallCooldown: 8
+    closeCallsPerRound: 4
+    tauntPoints: 3
+    braveTauntPoints: 10
+    decoyFooledPoints: 12
+    lastHiderPoints: 25
+    survivedPoints: 40
+    survivedGold: 15
+    shufflePoints: 20
+    tagPoints: 25
+    firstFindPoints: 15
+    flashAssistPoints: 10
+    flashAssistGrace: 3
+    seekerWinPoints: 30
+    playedXp: 15
+    mvpXp: 30
+    mvpGold: 10
+    winStreakXpPerWin: 10
+    winStreakCap: 5
+    xpPerPoint: 1
+  retentionTuning:
+    levels:
+      maxLevel: 50
+      firstLevelXp: 100
+      extraXpPerLevel: 25
+      growth: 1
+    streak:
+      firstDayXp: 25
+      xpPerExtraDay: 15
+      firstDayGold: 10
+      goldPerExtraDay: 5
+      maxBonusDays: 7
+      lineFormat: Daily streak (day {0})
+    dailyChallengeCount: 3
+    accountXpScale: 1
   minPlayers: 2
   intermissionSeconds: 10
   hideSeconds: 30
   seekSeconds: 150
-  resultsSeconds: 10
+  resultsSeconds: 14
   pingFrom: 60
   pingEvery: 15
   tagCooldown: 0.6
+  tagReachSlack: 0.6
+  seekTickMs: 500
   hiderWalk: 13
   hiderSprint: 20
   seekerWalk: 14.5
   seekerSprint: 22
-  tagXP: 15
-  surviveXP: 40
-  surviveGold: 15
-  seekerWinXP: 20
-  tauntXP: 3
-  braveTauntXP: 10
+  jumpHeight: 1.4
+  staminaMax: 160
+  staminaRegen: 25
   braveTauntRange: 20
+  previewDayOffset: 0

@@ -21,6 +21,12 @@ namespace Universes.UniverseData.hide_and_seek {
         public HS_PlayerRole[] roles;
         /// <summary>Length of the current phase, for the HUD's countdown bar.</summary>
         public int phaseSeconds;
+        /// <summary>The map event running now (<see cref="HS_RoundEvent.None"/> when none), so late joiners see it too.</summary>
+        public HS_RoundEvent activeEvent;
+        /// <summary>Seconds the active event has left.</summary>
+        public int eventSecondsLeft;
+        /// <summary>Today's featured event (<see cref="HS_Daily"/>): it comes every round today and pays double for its play.</summary>
+        public HS_RoundEvent featuredEvent;
     }
 
     /// <summary>A seeker tries to tag whoever is closest in front of them.</summary>
@@ -49,6 +55,8 @@ namespace Universes.UniverseData.hide_and_seek {
     public struct HS_ResultBroadcast : IBroadcast {
         public bool accepted;
         public string message;
+        /// <summary>Set when the message is about an ability (a refusal, a radar warning): it shows above the ability bar, not mid-screen.</summary>
+        public HS_Ability ability;
     }
 
     /// <summary>A hider asks to taunt: a sound plays at their spot for everyone, and it earns XP.</summary>
@@ -84,6 +92,106 @@ namespace Universes.UniverseData.hide_and_seek {
         public int round;
         public HS_HidingSpot[] spots;
         /// <summary>How long the results show, so the clients keep the names up that long.</summary>
+        public int seconds;
+    }
+
+    // ---------------------------------------------------------------- retention pass (2026-11-23): abilities, points, events
+
+    /// <summary>A role ability. Hiders: Dash, Decoy, Blend. Seekers (and found hiders): Rush, Radar, Flashlight.</summary>
+    public enum HS_Ability : byte { None, Dash, Decoy, Blend, Rush, Radar, Flashlight }
+
+    /// <summary>Something that shakes up a round while the seekers hunt.</summary>
+    public enum HS_RoundEvent : byte { None, Blackout, Frenzy, Shuffle }
+
+    /// <summary>A player asks to use one of their abilities; the server checks role, phase, unlock and cooldown.</summary>
+    public struct HS_AbilityRequest : IBroadcast {
+        public int round;
+        public HS_Ability ability;
+        /// <summary>Where the player is looking (camera forward): the decoy's throw and the flashlight's beam.</summary>
+        public UnityEngine.Vector3 direction;
+    }
+
+    /// <summary>One slot of a player's ability bar, as the server sees it.</summary>
+    public struct HS_AbilitySlot {
+        public HS_Ability ability;
+        public bool unlocked;
+        /// <summary>Level of this game's track that unlocks it (shown on a locked slot).</summary>
+        public int unlockLevel;
+        /// <summary>The ability's upgrade is owned too.</summary>
+        public bool upgraded;
+        /// <summary>Full cooldown (seconds), for the slot's recharge sweep.</summary>
+        public float cooldown;
+        /// <summary>Seconds until it can be used again (0 = ready).</summary>
+        public float readyIn;
+        /// <summary>How long an activation lasts (0 = instant).</summary>
+        public float duration;
+        /// <summary>Seconds the current activation has left (0 = not active).</summary>
+        public float activeLeft;
+    }
+
+    /// <summary>Server -> one player: their ability bar (sent when their role, unlocks or cooldowns change).</summary>
+    public struct HS_AbilityStateBroadcast : IBroadcast {
+        public int round;
+        /// <summary>The slots for the player's side, in key order (1, 2, 3); empty outside a round.</summary>
+        public HS_AbilitySlot[] slots;
+        /// <summary>Taunts the player may make this round (more with the Taunt Master unlock); 0 from an older server means the default.</summary>
+        public int tauntAllowance;
+    }
+
+    /// <summary>
+    /// Someone used an ability: everyone gets the visible part (a dash, a decoy's noise, a flashlight
+    /// beam, a hider blending in); a radar's findings go only to the seeker who used it.
+    /// </summary>
+    public struct HS_AbilityBroadcast : IBroadcast {
+        public int clientId;
+        public HS_Ability ability;
+        /// <summary>Where it happened: the user's feet, or the decoy's spot.</summary>
+        public UnityEngine.Vector3 position;
+        public UnityEngine.Vector3 direction;
+        /// <summary>How long the effect lasts on clients (0 = a moment; a blend sent with 0 has ended).</summary>
+        public float seconds;
+        /// <summary>Flashlight: the hiders it dazzled (client ids).</summary>
+        public int[] targets;
+        /// <summary>Radar: rough positions of what it picked up (hiders and decoys look alike).</summary>
+        public UnityEngine.Vector3[] positions;
+        /// <summary>Range or radius, for the visual (world units).</summary>
+        public float range;
+        /// <summary>Flashlight: the beam's full width (degrees), so the client draws the cone the server tested.</summary>
+        public float angle;
+        /// <summary>Dash / Rush: the user owns the Ghost Trail cosmetic, so everyone sees a trail behind them.</summary>
+        public bool flair;
+    }
+
+    /// <summary>Server -> one player: round points just earned, with the reason ("Close call") and the round total.</summary>
+    public struct HS_PointsBroadcast : IBroadcast {
+        public int points;
+        public int total;
+        public string reason;
+        /// <summary>Points from something the player did on purpose (a tag, a brave taunt) get the big popup.</summary>
+        public bool highlight;
+    }
+
+    /// <summary>Server -> one player at the end of a round: their points, records, streak and the round's MVP.</summary>
+    public struct HS_RoundRecapBroadcast : IBroadcast {
+        public int round;
+        /// <summary>False for someone who joined after the round's roles were dealt (only the MVP applies).</summary>
+        public bool played;
+        public bool won;
+        public int points;
+        public int bestPoints;
+        public bool newBest;
+        public int winStreak;
+        public int bestWinStreak;
+        public int mvpClientId;
+        public string mvpName;
+        public int mvpPoints;
+    }
+
+    /// <summary>Server -> everyone: a map event starts (<see cref="started"/>) or ends.</summary>
+    public struct HS_EventBroadcast : IBroadcast {
+        public int round;
+        public HS_RoundEvent kind;
+        public bool started;
         public int seconds;
     }
 }
