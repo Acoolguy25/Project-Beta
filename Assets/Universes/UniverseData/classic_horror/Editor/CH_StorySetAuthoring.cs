@@ -86,6 +86,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 map.slotMarkerPrefab = Load(CH_Authoring.SlotMarkerPath);
                 map.graveCandlesPrefab = Load(CH_Authoring.GraveCandlesPath);
                 map.priestActorPrefab = Load(CH_Authoring.PriestActorPath);
+                map.maraActorPrefab = Load(CH_Authoring.MaraActorPath);
                 EditorUtility.SetDirty(map);
                 if (!map.IsConfigured) throw new System.InvalidOperationException("The story set is incomplete; see the warnings above.");
                 EditorSceneManager.MarkSceneDirty(scene);
@@ -448,27 +449,53 @@ namespace Universes.UniverseData.classic_horror.Editor {
             // A stand-in priest's mark faces the way he looks; camera marks are aimed by their shot's look-at instead.
             Transform M(string scene, string name, Vector3 position, Vector3? facing = null) => Mark(group, scene + ": " + name, position, facing ?? Vector3.forward);
 
+            // Mara: at the helm (the lantern's place, by the stern), on the jetty planks, at the jetty's edge by the boat.
+            Vector3 helm = harbour.slots[2].position;
+            Vector3 edge = deck + side * 0.9f + outward * 2.2f;
+
             cutscenes.scenes = new[] {
                 new CH_CutsceneSet.Scene {
                     phase = CH_Phase.Prologue,
                     titleCard = "THE DROWNED CHOIR\nHollowmere, the night of the flood",
                     shots = new[] {
-                        Take(M("Prologue", "1 from", boatWater + open * 26f + up * 3f), M("Prologue", "1 to", boatWater + open * 14f + up * 2.2f), M("Prologue", "1 look", village + up * 5f), 8.2f, 50f),
-                        Take(M("Prologue", "2 from", deck + up * 1.8f + side * 2.2f + outward * 1.5f), M("Prologue", "2 to", deck + up * 1.7f + side * 1.4f - outward * 0.5f), M("Prologue", "2 look", village + up * 3f), 7.2f, 55f),
+                        Take(M("Prologue", "1 from", boatWater + open * 26f + up * 3f), M("Prologue", "1 to", boatWater + open * 14f + up * 2.2f), M("Prologue", "1 look", village + up * 5f), 8.2f, 50f,
+                            maraMark: M("Prologue", "1 mara", helm, -outward), maraPose: ActorPose.Stand),
+                        Take(M("Prologue", "2 from", deck + up * 1.8f + side * 2.2f + outward * 1.5f), M("Prologue", "2 to", deck + up * 1.7f + side * 1.4f - outward * 0.5f), M("Prologue", "2 look", village + up * 3f), 7.2f, 55f,
+                            maraMark: M("Prologue", "2 mara from", deck - outward * 1.8f + side * 0.3f), maraTarget: M("Prologue", "2 mara to", deck - outward * 3.6f + side * 0.3f), maraPose: ActorPose.Walk),
                         Take(M("Prologue", "3 from", harbour.stern.position + up * 1.1f - side * 1.6f + outward * 0.8f), null, harbour.stern, 6.2f, 45f, shake: 0.7f, cue: "thud"),
                         Take(M("Prologue", "4 from", deck + up * 1.7f + outward * 1f), M("Prologue", "4 to", deck + up * 1.7f - outward * 2f), M("Prologue", "4 look", watcher + up * 1.6f), 6.2f, 28f,
                             actorMark: M("Prologue", "4 priest", watcher, deck - watcher), actorPose: ActorPose.Stand, cue: "bell"),
-                        Take(M("Prologue", "5 from", deck + up * 2.2f + side * 3f + outward * 2f), M("Prologue", "5 to", deck + up * 7f + side * 6f + outward * 9f), M("Prologue", "5 look", deck + up * 1f), 9.2f, 55f)
+                        Take(M("Prologue", "5 from", deck + up * 2.2f + side * 3f + outward * 2f), M("Prologue", "5 to", deck + up * 7f + side * 6f + outward * 9f), M("Prologue", "5 look", deck + up * 1f), 9.2f, 55f,
+                            maraMark: M("Prologue", "5 mara", deck - outward * 1.2f + side * 0.4f, -outward), maraPose: ActorPose.Stand)
+                    }
+                },
+                // The returning crew's prologue: the crash, his face on the lake, and Mara's orders (CH_Story.CutsceneLines).
+                new CH_CutsceneSet.Scene {
+                    phase = CH_Phase.Arrival,
+                    titleCard = "THE DROWNED CHOIR\nBack at Hollowmere",
+                    shots = new[] {
+                        Take(M("Arrival", "1 from", harbour.stern.position + up * 1.1f - side * 1.6f + outward * 0.8f), null, harbour.stern, 5.8f, 45f, shake: 0.7f, cue: "thud"),
+                        Take(M("Arrival", "2 from", deck + up * 1.7f + outward * 1f), M("Arrival", "2 to", deck + up * 1.7f - outward * 1f), M("Arrival", "2 look", watcher + up * 1.6f), 3.4f, 28f,
+                            actorMark: M("Arrival", "2 priest", watcher, deck - watcher), actorPose: ActorPose.Stand, cue: "bell"),
+                        Take(M("Arrival", "3 from", deck + up * 2.2f + side * 3f + outward * 2f), M("Arrival", "3 to", deck + up * 7f + side * 6f + outward * 9f), M("Arrival", "3 look", deck + up * 1f), 9.4f, 55f,
+                            maraMark: M("Arrival", "3 mara", deck - outward * 1.2f + side * 0.4f, -outward), maraPose: ActorPose.Stand)
                     }
                 },
                 new CH_CutsceneSet.Scene {
                     phase = CH_Phase.Taking,
                     shots = new[] {
-                        Take(M("Taking", "1 from", boat + side * 4f + up * 2f), M("Taking", "1 to", boat + side * 3.4f + up * 1.8f + outward * 1f), M("Taking", "1 look", boat + up * 0.8f), 6f, 50f, shake: 0.35f, cue: "engine"),
+                        Take(M("Taking", "1 from", boat + side * 4f + up * 2f), M("Taking", "1 to", boat + side * 3.4f + up * 1.8f + outward * 1f), M("Taking", "1 look", boat + up * 0.8f), 6f, 50f, shake: 0.35f, cue: "engine",
+                            maraMark: M("Taking", "1 mara", helm, side), maraPose: ActorPose.Stand),
                         Take(M("Taking", "2 from", deck + up * 1.6f + side * 0.8f), M("Taking", "2 to", deck + up * 1.5f + side * 1.4f), M("Taking", "2 look", riseTo + up * 1.6f), 5.2f, 38f,
-                            actorMark: M("Taking", "2 priest from", riseFrom), actorTarget: M("Taking", "2 priest to", riseTo), actorPose: ActorPose.Rise, shake: 0.5f, cue: "splash"),
-                        Take(M("Taking", "3 from", boat + side * 2.6f + up * 1.5f), null, M("Taking", "3 look", boat + up * 1f), 3.8f, 42f,
-                            actorMark: M("Taking", "3 priest from", riseTo), actorTarget: M("Taking", "3 priest to", boatWater - side * 0.4f), actorPose: ActorPose.Lunge, shake: 0.8f, cue: "scream"),
+                            actorMark: M("Taking", "2 priest from", riseFrom), actorTarget: M("Taking", "2 priest to", riseTo), actorPose: ActorPose.Rise, shake: 0.5f, cue: "splash",
+                            maraMark: M("Taking", "2 mara", deck + side * 0.2f + outward * 1.6f, riseTo - deck), maraPose: ActorPose.Stand),
+                        // He lunges onto the jetty's edge, where Mara stands, and drags her under with him.
+                        Take(M("Taking", "3 from", boat + side * 2.6f + up * 1.5f), null, M("Taking", "3 look", edge + up * 0.8f), 2f, 42f,
+                            actorMark: M("Taking", "3 priest from", riseTo), actorTarget: M("Taking", "3 priest to", edge - side * 0.35f), actorPose: ActorPose.Lunge, shake: 0.8f, cue: "scream",
+                            maraMark: M("Taking", "3 mara", edge, riseTo - edge), maraPose: ActorPose.Stand),
+                        Take(M("Taking", "3b from", boat + side * 2.3f + up * 1.2f), null, M("Taking", "3b look", riseTo + up * 0.3f), 1.8f, 40f,
+                            actorMark: M("Taking", "3b priest from", edge - side * 0.35f), actorTarget: M("Taking", "3b priest to", riseTo - side * 0.35f), actorPose: ActorPose.Sink, shake: 0.5f, cue: "splash",
+                            maraMark: M("Taking", "3b mara from", edge, riseTo - edge), maraTarget: M("Taking", "3b mara to", riseTo), maraPose: ActorPose.Sink),
                         Take(M("Taking", "4 from", chapel - Vector3.forward * 20f + up * 3f), M("Taking", "4 to", chapel - Vector3.forward * 12f + up * 2.5f), M("Taking", "4 look", chapel + up * 4f), 6f, 50f, cue: "bell"),
                         Take(M("Taking", "5 from", graves - graveFacing * 9f + up * 3f), M("Taking", "5 to", graves - graveFacing * 5f + up * 2f), M("Taking", "5 look", graves + up * 0.6f), 8f, 50f)
                     }
@@ -482,9 +509,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 new CH_CutsceneSet.Scene {
                     phase = CH_Phase.Departure,
                     shots = new[] {
-                        Take(M("Departure", "1 from", boatWater + open * 5f + up * 1.5f), M("Departure", "1 to", boatWater + open * 24f + up * 3f), M("Departure", "1 look", deck + up * 2f), 7f, 50f, shake: 0.2f, cue: "engine"),
+                        Take(M("Departure", "1 from", boatWater + open * 5f + up * 1.5f), M("Departure", "1 to", boatWater + open * 24f + up * 3f), M("Departure", "1 look", deck + up * 2f), 7f, 50f, shake: 0.2f, cue: "engine",
+                            maraMark: M("Departure", "1 mara", helm, open), maraPose: ActorPose.Stand),
                         Take(M("Departure", "2 from", boatWater + open * 24f + up * 3f), M("Departure", "2 to", boatWater + open * 40f + up * 4f), M("Departure", "2 look", deck + up * 1.6f), 9f, 32f,
-                            actorMark: M("Departure", "2 priest", deck, open), actorPose: ActorPose.Stand, cue: "bell")
+                            actorMark: M("Departure", "2 priest", deck, open), actorPose: ActorPose.Stand, cue: "bell",
+                            maraMark: M("Departure", "2 mara", helm, open), maraPose: ActorPose.Stand)
                     }
                 }
             };
@@ -492,9 +521,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
         }
 
         static Shot Take(Transform from, Transform to, Transform lookAt, float seconds, float fieldOfView, Transform actorMark = null,
-            Transform actorTarget = null, ActorPose actorPose = ActorPose.Hidden, float shake = 0f, string cue = null) => new() {
+            Transform actorTarget = null, ActorPose actorPose = ActorPose.Hidden, float shake = 0f, string cue = null,
+            Transform maraMark = null, Transform maraTarget = null, ActorPose maraPose = ActorPose.Hidden) => new() {
             from = from, to = to, lookAt = lookAt, seconds = seconds, fieldOfView = fieldOfView, actorMark = actorMark,
-            actorTarget = actorTarget, actorPose = actorMark != null ? actorPose : ActorPose.Hidden, shake = shake, cue = cue ?? string.Empty
+            actorTarget = actorTarget, actorPose = actorMark != null ? actorPose : ActorPose.Hidden, shake = shake, cue = cue ?? string.Empty,
+            maraMark = maraMark, maraTarget = maraTarget, maraPose = maraMark != null ? maraPose : ActorPose.Hidden
         };
 
         // ---- Helpers -------------------------------------------------------------------------------------------------------

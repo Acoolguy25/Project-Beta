@@ -14,6 +14,8 @@ namespace Universes.UniverseData.classic_horror {
             public CH_ItemState State;
             public Vector3 Position;
             public float Yaw;
+            /// <summary>Where it was found: its last resort when it is dropped somewhere it cannot lie.</summary>
+            public Vector3 Origin;
             /// <summary>Who carries it (the runner's investigator key), or -1.</summary>
             public int Carrier = -1;
             /// <summary>The slot it was placed in, or -1.</summary>
@@ -95,7 +97,7 @@ namespace Universes.UniverseData.classic_horror {
         }
 
         Item AddItem(CH_ItemKind kind, Pose pose, CH_ItemState state) {
-            var item = new Item { Id = Items.Count, Kind = kind, State = state, Position = pose.position, Yaw = YawOf(pose.rotation) };
+            var item = new Item { Id = Items.Count, Kind = kind, State = state, Position = pose.position, Origin = pose.position, Yaw = YawOf(pose.rotation) };
             Items.Add(item);
             return item;
         }
@@ -178,6 +180,28 @@ namespace Universes.UniverseData.classic_horror {
             held.Yaw = yaw;
             return held;
         }
+
+        /// <summary>Slots aboard the ferry (its parts and the bell). Their markers and items sit on the boat's boards.</summary>
+        public static bool IsAboard(CH_SlotKind kind) =>
+            kind is CH_SlotKind.BoatFuel or CH_SlotKind.BoatToolbox or CH_SlotKind.BoatLantern or CH_SlotKind.BoatBell;
+
+        /// <summary>Height above a slot that investigators reach for. Aboard it clears the gunwale, which would otherwise hide the boards from the jetty.</summary>
+        public const float ReachLiftAshore = 0.9f, ReachLiftAboard = 1.6f;
+
+        /// <summary>The point the client focuses and the server checks reach and line of sight to, for a slot.</summary>
+        public static Vector3 SlotReachPoint(CH_SlotKind kind, Vector3 position) =>
+            position + Vector3.up * (IsAboard(kind) ? ReachLiftAboard : ReachLiftAshore);
+
+        /// <summary>
+        /// Where a dropped item comes to rest. It lies where it was let go if that is dry ground; dropped in the lake (a
+        /// drowning, a swim) it washes up where its carrier last stood on dry ground, or, if they never did, back where it
+        /// was found. Never anywhere nearer the boat than the carrier got on foot, so the water is never a shortcut.
+        /// </summary>
+        public static Vector3 DropPosition(Vector3 at, bool atIsDry, Vector3? lastDry, Vector3 origin) =>
+            atIsDry ? at : lastDry ?? origin;
+
+        /// <summary>The lake only spares an investigator with empty hands whom he is not chasing.</summary>
+        public static bool DrowningCostsLife(bool carrying, bool chased) => carrying || chased;
 
         /// <summary>Whether the slot is accepting its item in the current act.</summary>
         public bool IsOpen(Slot slot) {

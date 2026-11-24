@@ -2,11 +2,11 @@ using UnityEngine;
 
 namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>
-    /// Makes an evidence record findable in the dark: its rim glow (the Evidence Rim material on
+    /// Makes an item lying in the world findable in the dark: its rim glow (the Evidence Rim material on
     /// <see cref="rimRenderers"/>) and its lamp breathe slowly, and both brighten while the
     /// investigator's reticle is on it.
     /// </summary>
-    public sealed class CH_EvidenceGlow : MonoBehaviour {
+    public sealed class CH_ItemGlow : MonoBehaviour {
         static readonly int RimStrength = Shader.PropertyToID("_RimStrength");
 
         [Tooltip("Renderers that carry the Evidence Rim material as an extra material slot.")]
@@ -44,7 +44,7 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         void Awake() {
             block = new MaterialPropertyBlock();
-            // Records found at the same moment should not pulse in lockstep.
+            // Items lying side by side should not pulse in lockstep.
             phase = Random.value * pulseSeconds;
         }
 

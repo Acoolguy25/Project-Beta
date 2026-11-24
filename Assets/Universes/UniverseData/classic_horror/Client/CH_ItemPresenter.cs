@@ -38,7 +38,7 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         sealed class View {
             public GameObject root;
-            public CH_EvidenceGlow glow;
+            public CH_ItemGlow glow;
             public CH_ItemState state = CH_ItemState.Hidden;
             public int carrierId = -1;
             public Transform carrier, hand;
@@ -54,7 +54,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         CH_Map map;
         ClientManager manager;
         int visibilityMask, localCharacterId = -1;
-        bool heldVisible = true;
+        bool heldVisible = true, glowsAllowed = true;
         Quaternion swayRotation = Quaternion.identity, lastCameraRotation = Quaternion.identity;
 
         public void Bind(CH_Map owner, ClientManager client) {
@@ -75,10 +75,18 @@ namespace Universes.UniverseData.classic_horror.Client {
         void OnDestroy() => ResetNight();
 
         /// <summary>The glow on a resting item, for focus and prompt placement.</summary>
-        public CH_EvidenceGlow GlowOf(int itemId) => views.TryGetValue(itemId, out View view) && view.state == CH_ItemState.Resting ? view.glow : null;
+        public CH_ItemGlow GlowOf(int itemId) => views.TryGetValue(itemId, out View view) && view.state == CH_ItemState.Resting ? view.glow : null;
 
         /// <summary>Your own held item is put away while a cutscene plays or you are hiding.</summary>
         public void SetLocalHeldVisible(bool visible) => heldVisible = visible;
+
+        /// <summary>Resting items lose their outline while a cutscene plays: the scene is not a search.</summary>
+        public void SetGlowsAllowed(bool allowed) {
+            if (glowsAllowed == allowed) return;
+            glowsAllowed = allowed;
+            foreach (View view in views.Values)
+                if (view.glow != null && view.state == CH_ItemState.Resting) view.glow.enabled = allowed;
+        }
 
         /// <summary>Teammates inside a hiding place: what they carry is inside with them.</summary>
         public void SetHiddenCharacters(HashSet<int> characterIds) {
@@ -119,7 +127,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                     root.transform.SetPositionAndRotation(GroundBelow(item.position), Quaternion.Euler(0f, item.yaw, 0f));
                     root.transform.localScale = view.restScale;
                     SetShadows(root, true);
-                    if (view.glow != null) view.glow.enabled = true;
+                    if (view.glow != null) view.glow.enabled = glowsAllowed;
                     break;
                 case CH_ItemState.Carried:
                     if (view.glow != null) { view.glow.SetFocused(false); view.glow.enabled = false; }
@@ -158,7 +166,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             GameObject root = Instantiate(prefab, map.transform);
             root.name = $"{item.title} (item {item.id})";
-            return new View { root = root, glow = root.GetComponent<CH_EvidenceGlow>(), restScale = root.transform.localScale };
+            return new View { root = root, glow = root.GetComponent<CH_ItemGlow>(), restScale = root.transform.localScale };
         }
 
         void ApplySlot(CH_SlotView slot, CH_StateBroadcast state, CH_ItemKind? localCarried) {
@@ -171,7 +179,9 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (show && !markers.ContainsKey(slot.id) && map.slotMarkerPrefab != null) {
                 GameObject marker = Instantiate(map.slotMarkerPrefab, map.transform);
                 marker.name = $"Marker: {slot.title}";
-                marker.transform.SetPositionAndRotation(GroundBelow(slot.position + Vector3.up * 0.5f), Quaternion.Euler(0f, slot.yaw, 0f));
+                // Aboard, the marker sits on the boards as authored: a ray from above would stop on the gunwale or pass under the hull.
+                Vector3 at = CH_Night.IsAboard(slot.kind) ? slot.position : GroundBelow(slot.position + Vector3.up * 0.5f);
+                marker.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, slot.yaw, 0f));
                 markers.Add(slot.id, marker);
             }
             if (markers.TryGetValue(slot.id, out GameObject existing) && existing.activeSelf != show) existing.SetActive(show);

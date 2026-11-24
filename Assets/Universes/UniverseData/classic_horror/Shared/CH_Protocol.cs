@@ -25,7 +25,9 @@ namespace Universes.UniverseData.classic_horror {
         /// <summary>Cutscene: the boat leaves Hollowmere.</summary>
         Departure = 8,
         Complete = 9,
-        Failed = 10
+        Failed = 10,
+        /// <summary>Cutscene: the short prologue for a crew who have all been to Hollowmere before.</summary>
+        Arrival = 11
     }
 
     /// <summary>Everything an investigator can pick up. Items never vanish: they rest, are carried, or are placed.</summary>
@@ -49,8 +51,6 @@ namespace Universes.UniverseData.classic_horror {
     public enum CH_ScareKind : byte {
         /// <summary>Face to face with the hunting priest: his face fills the screen.</summary>
         Warning = 0,
-        /// <summary>He answers a discovery (a freed singer, an angry beat).</summary>
-        Discovery = 1,
         /// <summary>He caught you.</summary>
         Fatal = 2,
         /// <summary>A whisper, and he is standing right behind you when you turn round.</summary>
@@ -58,7 +58,9 @@ namespace Universes.UniverseData.classic_horror {
         /// <summary>He stands far ahead in the dark, watching, and is gone when the light finds him.</summary>
         Watcher = 4,
         /// <summary>The bell is lifted from the altar: the lights die and he is in your face.</summary>
-        BellGrab = 5
+        BellGrab = 5,
+        /// <summary>He tore your hiding place open: his face, then a heartbeat to run before he strikes.</summary>
+        DraggedOut = 6
     }
 
     /// <summary>Atmospheric events the server schedules for everyone (<see cref="CH_AmbientScareBroadcast"/>).</summary>
@@ -74,8 +76,8 @@ namespace Universes.UniverseData.classic_horror {
         World = 2
     }
 
-    /// <summary>What an interaction targets.</summary>
-    public enum CH_Target : byte { Item = 0, Slot = 1, Hide = 2 }
+    /// <summary>What an interaction targets. <see cref="Drop"/> sets down whatever the investigator holds (its id is unused).</summary>
+    public enum CH_Target : byte { Item = 0, Slot = 1, Hide = 2, Drop = 3 }
 
     public struct CH_InteractRequest : IBroadcast {
         public int seed;
@@ -172,9 +174,14 @@ namespace Universes.UniverseData.classic_horror {
         public float seconds;
     }
 
-    /// <summary>One investigator's own record, sent to them alone (their lore pages and escapes across nights).</summary>
+    /// <summary>One investigator's own record across nights, sent to them alone when they join and when a night ends.</summary>
     public struct CH_ProgressBroadcast : IBroadcast {
-        public int escapes, trueEndings, singersFreed, bestSeconds;
+        public int nightsPlayed, escapes, trueEndings;
+        /// <summary>Bit per ending (<see cref="CH_Story"/> Ending* index) they have seen.</summary>
         public int endingsSeen;
+        /// <summary>Bit per drowned singer (<see cref="CH_Story.Singers"/>) they have laid to rest.</summary>
+        public int singersMet;
+        /// <summary>Quickest escape in seconds, or 0.</summary>
+        public int bestSeconds;
     }
 }

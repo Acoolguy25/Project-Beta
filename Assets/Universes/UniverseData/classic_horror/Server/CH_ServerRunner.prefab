@@ -48,14 +48,85 @@ MonoBehaviour:
     _editor_value: 0
   DebugTimerInfinite:
     _editor_value: 0
-  investigationSeconds: 720
-  descentSeconds: 540
-  escapeSeconds: 120
-  revivesPerPlayer: 3
-  nextCaseDelay: 18
-  interactionReach: 3.5
-  itemXPReward: 10
-  itemCreditReward: 5
-  winXPReward: 100
-  winCreditReward: 50
+  DebugTimerSpeed:
+    _editor_value: 10
+  livesPerPlayer: 3
+  boardingSeconds: 40
+  nextNightDelay: 20
+  maximumNightSeconds: 2400
+  interactionReach: 3
+  walkSpeed: 4.5
+  sprintSpeed: 9.5
+  heavyWalkSpeed: 4.2
+  jumpHeight: 1.4
+  actGraceSeconds: {x: 20, y: 10, z: 3}
+  takingLeadInSeconds: 2.5
+  chapelLeadInSeconds: 3.5
+  returnTheLostEachAct: 1
+  dryGroundMargin: 0.1
+  progressWaitSeconds: 4
+  loadWaitSeconds: 30
+  spawnScatterRadius: 5
+  spawnCandidateAttempts: 6
+  spawnMonsterSafeDistance: 30
+  itemMinimumDistanceFromJetty: 30
+  deliveryXPReward: 15
+  deliveryCreditReward: 5
+  escapeXPReward: 120
+  escapeCreditReward: 60
+  trueEndingBonusXP: 80
+  monsterTuning:
+    patrolSpeed: 3.6
+    searchSpeed: 5.4
+    chaseSpeedByAct: {x: 6.9, y: 7.4, z: 8}
+    bellChaseSpeed: 8.6
+    bellGrabHoldSeconds: 3
+    loneChaseFactor: 0.92
+    lungeSpeed: 11.5
+    lungeRange: 5.5
+    lungeSeconds: 0.5
+    lungeCooldown: 3.5
+    litSightRange: 55
+    darkSightRange: 22
+    sightAngle: 130
+    closeSenseRadius: 3.5
+    chaseSightRange: 65
+    sprintNoiseSpeed: 6
+    walkNoiseSpeed: 1.5
+    sprintHearingRange: 30
+    walkHearingRange: 11
+    bellHearingRange: 80
+    memorySeconds: 5
+    searchSeconds: 14
+    searchRadius: 14
+    predictionSeconds: 0.45
+    repathInterval: 0.2
+    strikeDistance: 1.9
+    attackCooldown: 1.2
+    feedSeconds: 4
+    relocateAfterSeconds: 35
+    relocateWhenFurtherThan: 50
+    relocateDistance: {x: 26, y: 42}
+    relocateCooldown: 50
+    patrolTowardInvestigators: 0.65
+    sawHideSeconds: 1.75
+    checkHidingChance: 0.25
+    dragOutHoldSeconds: 1.6
+    openHidingGiveUpSeconds: 12
+    stuckSeconds: 1.2
+    stuckNudge: 1.4
+    tauntInterval: 13
+  warningsPerInvestigator: 3
+  warningCooldown: 60
+  warningDistance: 7
+  warningHoldSeconds: 0.9
+  apparitionInterval: {x: 70, y: 140}
+  apparitionMinimumDistance: 25
+  actStartAltarDistance: {x: 6, y: 10}
+  bellGrabBehindAltar: 1.2
+  bellGrabScareRadius: 30
+  ambientScares: 1
+  ambientScareInterval: {x: 55, y: 110}
+  lightsOutSeconds: 3.5
+  doorSlamDistance: {x: 10, y: 26}
   fixedSeed: 0

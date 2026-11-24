@@ -11,7 +11,7 @@ namespace Universes.UniverseData.classic_horror.Client {
     /// He is a client-only actor; nothing here can hurt you, which you only learn afterwards.
     /// </summary>
     public sealed class CH_Apparitions : MonoBehaviour {
-        public CH_PriestActor actor;
+        public CH_Puppet actor;
         public CH_VoicePlayer voice;
         public CH_Jumpscare jumpscare;
         public SfxSound revealSting = new();

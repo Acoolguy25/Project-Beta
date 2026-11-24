@@ -35,6 +35,8 @@ namespace Universes.UniverseData.classic_horror {
         public CH_CutsceneSet cutscenes;
         [Tooltip("The priest as a client-only puppet (no networking or collision), used by cutscenes and apparitions.")]
         public GameObject priestActorPrefab;
+        [Tooltip("Mara, the ferry's skipper, as a client-only puppet for the cutscenes.")]
+        public GameObject maraActorPrefab;
         [Tooltip("What each item looks like, in CH_ItemKind order. The same prefab lies in the world, is carried and is placed.")]
         public GameObject[] itemPrefabs = new GameObject[8];
         [Tooltip("A faint marker shown where a carried item belongs.")]

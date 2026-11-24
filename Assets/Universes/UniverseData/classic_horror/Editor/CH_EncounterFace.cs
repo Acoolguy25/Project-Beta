@@ -32,6 +32,13 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const float SideShadowStart = 0.38f, SideShadowEnd = 0.74f, BrowShadow = 0.8f, ShadowFloor = 0.07f;
 
         public static Texture2D Build() {
+            // Without a graphics device (batchmode -nographics) the preview renders nothing usable: keep the committed picture.
+            if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) {
+                var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(Path);
+                if (existing == null) throw new System.InvalidOperationException($"No graphics device to render {Path}, and no picture is there yet: run the build with graphics.");
+                Debug.LogWarning($"Classic Horror: no graphics device, so {Path} was kept as it is rather than re-rendered.");
+                return existing;
+            }
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(FacePrefab);
             if (prefab == null) throw new System.InvalidOperationException("PresenceFace.prefab is missing: " + FacePrefab);
             var root = Object.Instantiate(prefab);

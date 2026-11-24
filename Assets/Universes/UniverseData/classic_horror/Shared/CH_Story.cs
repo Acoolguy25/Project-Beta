@@ -67,7 +67,7 @@ namespace Universes.UniverseData.classic_horror {
         };
 
         public static string ActName(CH_Phase phase) => phase switch {
-            CH_Phase.Prologue => "Prologue",
+            CH_Phase.Prologue or CH_Phase.Arrival => "Prologue",
             CH_Phase.Stranded => "Act I  ·  Stranded",
             CH_Phase.Taking => "Act I  ·  Stranded",
             CH_Phase.Choir => "Act II  ·  The choir",
@@ -88,9 +88,13 @@ namespace Universes.UniverseData.classic_horror {
             _ => null
         };
 
+        /// <summary>The cutscene phases, in the order a night can play them.</summary>
+        public static readonly CH_Phase[] Cutscenes = { CH_Phase.Prologue, CH_Phase.Arrival, CH_Phase.Taking, CH_Phase.ChapelOpens, CH_Phase.Departure };
+
         /// <summary>How long (seconds) each cutscene phase holds the night.</summary>
         public static float CutsceneSeconds(CH_Phase phase) => phase switch {
             CH_Phase.Prologue => 37f,
+            CH_Phase.Arrival => 18.6f,
             CH_Phase.Taking => 29f,
             CH_Phase.ChapelOpens => 10f,
             CH_Phase.Departure => 16f,
@@ -105,6 +109,8 @@ namespace Universes.UniverseData.classic_horror {
         /// <summary>Line cues for each cutscene: (seconds into the scene, voice line id). Spaced so no two lines overlap (CH_StoryTests checks against the clip lengths).</summary>
         public static (float at, string line)[] CutsceneLines(CH_Phase phase) => phase switch {
             CH_Phase.Prologue => new[] { (1.5f, "prologue_1"), (8.2f, "prologue_2"), (15.4f, "prologue_3"), (21.6f, "prologue_4"), (27.8f, "prologue_5") },
+            // Back again: the crash, his face on the lake, and Mara's orders.
+            CH_Phase.Arrival => new[] { (0.4f, "prologue_3"), (9.6f, "prologue_5") },
             CH_Phase.Taking => new[] { (0.6f, "taking_1"), (6.0f, "taking_2"), (11.2f, "taking_3"), (15.0f, "taking_4"), (21.0f, "taking_5") },
             CH_Phase.ChapelOpens => new[] { (2.2f, "chapel_open") },
             CH_Phase.Departure => new[] { (0.8f, "escape_1"), (3.6f, "escape_2") },

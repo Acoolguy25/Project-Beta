@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>
     /// Plays the map's authored cutscenes (<see cref="CH_CutsceneSet"/>) on the main camera: letterbox bars, eased camera
-    /// moves between marks, the priest as a client-only actor, sound cues and a title card. Runs after the first-person
+    /// moves between marks, the priest and Mara as client-only puppets, sound cues and a title card. Runs after the first-person
     /// camera each frame so it wins, and before the game-feel kit so shakes still land. Movement input is off while a
     /// scene plays; the server holds the night for the same length.
     /// </summary>
@@ -43,7 +43,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         public SfxSound splash = new();
 
         CH_CutsceneSet set;
-        CH_PriestActor actor;
+        CH_Puppet priest, mara;
         CH_CutsceneSet.Scene scene;
         float startedAt, length, defaultFov = -1f, letterbox;
         int lastShot = -1;
@@ -52,15 +52,16 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         public bool Playing => playing;
 
-        public void Bind(CH_CutsceneSet cutscenes, CH_PriestActor priestActor) {
+        public void Bind(CH_CutsceneSet cutscenes, CH_Puppet priestPuppet, CH_Puppet maraPuppet) {
             set = cutscenes;
-            actor = priestActor;
+            priest = priestPuppet;
+            mara = maraPuppet;
         }
 
         /// <summary>Starts the scene for <paramref name="phase"/>, <paramref name="secondsIn"/> seconds in (late joiners pick it up mid-way).</summary>
         public void Play(CH_Phase phase, float secondsIn) {
             if (set == null || !set.TryGet(phase, out scene)) { Stop(); return; }
-            startedAt = Time.time - Mathf.Max(0f, secondsIn);
+            startedAt = Time.unscaledTime - Mathf.Max(0f, secondsIn);
             length = CH_Story.CutsceneSeconds(phase);
             playing = true;
             lastShot = -1;
@@ -79,7 +80,8 @@ namespace Universes.UniverseData.classic_horror.Client {
                 InputService.SetInputScreenActive(InputScreen.GameMenu, false);
                 inputTaken = false;
             }
-            if (actor != null) actor.Hide();
+            if (priest != null) priest.Hide();
+            if (mara != null) mara.Hide();
             Camera camera = Camera.main;
             if (camera != null && defaultFov > 0f) camera.fieldOfView = defaultFov;
             if (titleCard != null) titleCard.alpha = 0f;
@@ -100,7 +102,8 @@ namespace Universes.UniverseData.classic_horror.Client {
             ApplyLetterbox();
             if (!playing) return;
 
-            float elapsed = Time.time - startedAt;
+            // Wall-clock time: the server ends the scene on its own clock, and a hitch must not leave the camera behind it.
+            float elapsed = Time.unscaledTime - startedAt;
             int index = CH_CutsceneSet.ShotAt(scene, elapsed, out float progress);
             CH_CutsceneSet.Shot shot = scene.shots[index];
             if (index != lastShot) BeginShot(shot, index);
@@ -116,7 +119,8 @@ namespace Universes.UniverseData.classic_horror.Client {
                 camera.transform.SetPositionAndRotation(position, rotation);
                 if (shot.fieldOfView > 1f) camera.fieldOfView = shot.fieldOfView;
             }
-            if (actor != null) actor.Animate(shot, progress);
+            if (priest != null) priest.Animate(shot.actorMark, shot.actorTarget, shot.actorPose, progress);
+            if (mara != null) mara.Animate(shot.maraMark, shot.maraTarget, shot.maraPose, progress);
 
             // A short dip to black at each cut, and out of the last shot.
             float sinceCut = ShotElapsed(index, elapsed);

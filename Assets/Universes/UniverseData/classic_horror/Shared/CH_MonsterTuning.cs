@@ -11,6 +11,10 @@ namespace Universes.UniverseData.classic_horror {
     [Serializable]
     public sealed class CH_MonsterTuning {
         public const float InvestigatorWalkSpeed = 4.5f, InvestigatorSprintSpeed = 9.5f;
+        /// <summary>Walking with the fuel can: no sprint at all, so a chased carrier has to put it down to get away.</summary>
+        public const float HeavyCarrySpeed = 4.2f;
+        /// <summary>The stamina the runner gives investigators, and the shared character's sprint cost and recovery.</summary>
+        public const float InvestigatorStamina = 100f, SprintStaminaPerSecond = 10f, StaminaRegenPerSecond = 16f, StaminaRegenDelay = 0.6f;
         /// <summary>How short of its destination (metres) the agent stops.</summary>
         public const float AgentStoppingDistance = 0.4f;
 
@@ -22,6 +26,8 @@ namespace Universes.UniverseData.classic_horror {
         public Vector3 chaseSpeedByAct = new(6.9f, 7.4f, 8.0f);
         [Tooltip("Chasing whoever carries his bell.")]
         [Min(0.5f)] public float bellChaseSpeed = 8.6f;
+        [Tooltip("When the bell leaves the altar he rises behind it and stares this long before he follows the thief.")]
+        [Min(0f)] public float bellGrabHoldSeconds = 3f;
         [Tooltip("Chase speed multiplier while only one investigator is alive, so a solo night stays winnable.")]
         [Range(0.5f, 1f)] public float loneChaseFactor = 0.92f;
 
@@ -84,10 +90,12 @@ namespace Universes.UniverseData.classic_horror {
         [Range(0f, 1f)] public float patrolTowardInvestigators = 0.65f;
 
         [Header("Hiding")]
-        [Tooltip("Someone who hides within this many seconds of being seen or heard was watched going in.")]
+        [Tooltip("Someone who hides within this many seconds of him seeing them was watched going in. Being heard is not enough.")]
         [Min(0f)] public float sawHideSeconds = 1.75f;
-        [Tooltip("Chance he opens a hiding place he passes while sweeping the area he lost someone in.")]
+        [Tooltip("Chance he rattles an empty hiding place he passes while sweeping the area he lost someone in (a scare, never a catch).")]
         [Range(0f, 1f)] public float checkHidingChance = 0.25f;
+        [Tooltip("Torn out of a hiding place, the investigator gets this long, his face in theirs, before he follows.")]
+        [Min(0f)] public float dragOutHoldSeconds = 1.6f;
         [Tooltip("Seconds he keeps trying to reach a hiding place before he gives up and searches instead.")]
         [Min(1f)] public float openHidingGiveUpSeconds = 12f;
 

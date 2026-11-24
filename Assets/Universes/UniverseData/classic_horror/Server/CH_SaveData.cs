@@ -36,6 +36,12 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (nightSeconds > 0 && (fastestEscapeSeconds == 0 || nightSeconds < fastestEscapeSeconds)) fastestEscapeSeconds = nightSeconds;
         }
 
+        /// <summary>The record as the ending card shows it.</summary>
+        public CH_ProgressBroadcast ToBroadcast() => new() {
+            nightsPlayed = nightsPlayed, escapes = escapes, trueEndings = trueEndings,
+            endingsSeen = endingsSeen, singersMet = singersMet, bestSeconds = fastestEscapeSeconds
+        };
+
         /// <summary>Version 1 was the investigation game: its closed cases count as escapes, its fastest case as the record.</summary>
         public override void Migrate(int fromVersion, JObject stored) {
             if (fromVersion >= 2 || stored == null) return;

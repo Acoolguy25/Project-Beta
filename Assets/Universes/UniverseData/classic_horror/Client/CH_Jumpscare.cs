@@ -11,6 +11,7 @@ namespace Universes.UniverseData.classic_horror.Client {
     public sealed class CH_Jumpscare : MonoBehaviour {
         [System.Serializable]
         public struct Encounter {
+            public CH_ScareKind kind;
             [Min(0.1f)] public float seconds;
             [Range(0.25f, 3f)] public float stingPitch;
             [Range(0f, 1f)] public float shake;
@@ -30,18 +31,19 @@ namespace Universes.UniverseData.classic_horror.Client {
         public AudioSource sting;
         [Tooltip("Global volume with the scare's chromatic aberration and vignette. Its weight is animated from 0.")]
         public Volume lensVolume;
-        [Tooltip("Indexed by CH_ScareKind: warning, discovery, fatal, apparition, watcher, bell grab.")]
+        [Tooltip("How each kind of scare looks; a kind with no entry uses the first.")]
         public Encounter[] encounters = {
-            new() { seconds = 1.1f, stingPitch = 0.85f, shake = 0.55f, shakeSeconds = 0.45f, lens = 0.8f, tint = Color.white, zoom = 1f },
-            new() { seconds = 1.4f, stingPitch = 1.25f, shake = 0.4f, shakeSeconds = 0.35f, lens = 0.6f, tint = Color.white, zoom = 1f },
+            new() { kind = CH_ScareKind.Warning, seconds = 1.1f, stingPitch = 0.85f, shake = 0.55f, shakeSeconds = 0.45f, lens = 0.8f, tint = Color.white, zoom = 1f },
             // The catch: drowned in red and a little closer; at 1.06 x the 1.22 end scale the mouth still sits inside a 16:9 frame.
-            new() { seconds = 3.5f, stingPitch = 0.7f, shake = 0.9f, shakeSeconds = 0.7f, lens = 1f, tint = new Color(1f, 0.42f, 0.36f), zoom = 1.06f },
+            new() { kind = CH_ScareKind.Fatal, seconds = 3.5f, stingPitch = 0.7f, shake = 0.9f, shakeSeconds = 0.7f, lens = 1f, tint = new Color(1f, 0.42f, 0.36f), zoom = 1.06f },
             // You turned round and he was there: a flash, gone before you are sure.
-            new() { seconds = 0.45f, stingPitch = 1.1f, shake = 0.6f, shakeSeconds = 0.3f, lens = 0.9f, tint = new Color(0.85f, 0.9f, 1f), zoom = 1.12f },
+            new() { kind = CH_ScareKind.Apparition, seconds = 0.45f, stingPitch = 1.1f, shake = 0.6f, shakeSeconds = 0.3f, lens = 0.9f, tint = new Color(0.85f, 0.9f, 1f), zoom = 1.12f },
             // The watcher never shows his face.
-            new() { seconds = 0.1f, stingPitch = 1f, shake = 0f, shakeSeconds = 0f, lens = 0f, tint = Color.clear, zoom = 1f },
+            new() { kind = CH_ScareKind.Watcher, seconds = 0.1f, stingPitch = 1f, shake = 0f, shakeSeconds = 0f, lens = 0f, tint = Color.clear, zoom = 1f },
             // The bell leaves the altar: the longest, closest, reddest look at him.
-            new() { seconds = 2.4f, stingPitch = 0.6f, shake = 1f, shakeSeconds = 0.8f, lens = 1f, tint = new Color(1f, 0.3f, 0.25f), zoom = 1.1f },
+            new() { kind = CH_ScareKind.BellGrab, seconds = 2.4f, stingPitch = 0.6f, shake = 1f, shakeSeconds = 0.8f, lens = 1f, tint = new Color(1f, 0.3f, 0.25f), zoom = 1.1f },
+            // The wardrobe door is torn off: his face, short and hard, then the view comes back while he stares. Run.
+            new() { kind = CH_ScareKind.DraggedOut, seconds = 1.2f, stingPitch = 0.75f, shake = 1f, shakeSeconds = 0.6f, lens = 1f, tint = new Color(1f, 0.55f, 0.5f), zoom = 1.14f },
         };
         [Tooltip("Fraction of the encounter the face stays fully visible before fading.")]
         [Range(0f, 1f)] public float holdFraction = 0.55f;
@@ -68,10 +70,10 @@ namespace Universes.UniverseData.classic_horror.Client {
         public void Play(int sequence, CH_ScareKind kind, bool force = false) {
             if (overlay == null || (!force && sequence <= lastSequence)) return;
             if (!force) lastSequence = sequence;
-            // A catch or the bell may replace a warning; warnings never restart an active scare.
-            if (kind is not (CH_ScareKind.Fatal or CH_ScareKind.BellGrab) && Playing) return;
-            int index = Mathf.Clamp((int)kind, 0, encounters.Length - 1);
-            Encounter encounter = encounters[index];
+            // A catch, the bell or a drag-out may replace a warning; warnings never restart an active scare.
+            if (kind is not (CH_ScareKind.Fatal or CH_ScareKind.BellGrab or CH_ScareKind.DraggedOut) && Playing) return;
+            if (encounters == null || encounters.Length == 0) return;
+            Encounter encounter = EncounterFor(kind);
             PlayedCount++;
             started = Time.unscaledTime;
             duration = encounter.seconds;
@@ -81,6 +83,11 @@ namespace Universes.UniverseData.classic_horror.Client {
             overlay.alpha = 1;
             if (sting != null) { sting.pitch = encounter.stingPitch; sting.Play(); }
             CameraShake.Kick(encounter.shake, encounter.shakeSeconds);
+        }
+
+        Encounter EncounterFor(CH_ScareKind kind) {
+            foreach (Encounter candidate in encounters) if (candidate.kind == kind) return candidate;
+            return encounters[0];
         }
 
         void Update() {

@@ -29,7 +29,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         [Tooltip("Spawns each investigator gets per night, counting the first. Losing the last one leaves them watching.")]
         [SerializeField, Min(1)] int livesPerPlayer = 3;
         [Tooltip("Seconds everyone still ashore has to reach the boat once the bell is aboard.")]
-        [SerializeField, Min(5)] int boardingSeconds = 25;
+        [SerializeField, Min(5)] int boardingSeconds = 40;
         [SerializeField, Min(3)] int nextNightDelay = 20;
         [Tooltip("A night that has run this long ends in failure, so a stuck server always moves on.")]
         [SerializeField, Min(300)] int maximumNightSeconds = 2400;
@@ -37,11 +37,21 @@ namespace Universes.UniverseData.classic_horror.Server {
         [Tooltip("Investigators walk and sprint at these speeds; carrying the fuel can takes the sprint away.")]
         [SerializeField] float walkSpeed = CH_MonsterTuning.InvestigatorWalkSpeed;
         [SerializeField] float sprintSpeed = CH_MonsterTuning.InvestigatorSprintSpeed;
-        [SerializeField] float heavyWalkSpeed = 3.9f;
-        [Tooltip("Seconds of grace at the start of Act I before the priest starts hunting.")]
-        [SerializeField, Min(0)] float openingGraceSeconds = 20f;
-        [Tooltip("Deep water pulls an investigator out without spending a life.")]
-        [SerializeField] bool drowningCostsLife = false;
+        [SerializeField] float heavyWalkSpeed = CH_MonsterTuning.HeavyCarrySpeed;
+        [SerializeField] float jumpHeight = 1.4f;
+        [Tooltip("Seconds of grace at the start of each act (I, II, III) before the priest hunts again.")]
+        [SerializeField] Vector3 actGraceSeconds = new(20f, 10f, 3f);
+        [Tooltip("Seconds between the act's last delivery and its cutscene, so the line it earned can land.")]
+        [SerializeField, Min(0)] float takingLeadInSeconds = 2.5f;
+        [SerializeField, Min(0)] float chapelLeadInSeconds = 3.5f;
+        [Tooltip("Investigators left behind come back with one life when the next act begins: nobody watches a whole night.")]
+        [SerializeField] bool returnTheLostEachAct = true;
+        [Tooltip("Ground this far above the lake counts as dry: what a carrier drops in the water washes up on the last dry ground they stood on.")]
+        [SerializeField, Min(0)] float dryGroundMargin = 0.1f;
+        [Tooltip("Seconds to wait for everyone's saved progress before choosing the long or the short prologue.")]
+        [SerializeField, Min(0)] float progressWaitSeconds = 4f;
+        [Tooltip("Longest wait for the investigators' clients to load the map before the night (and its opening scene) begins.")]
+        [SerializeField, Min(0)] float loadWaitSeconds = 30f;
 
         [Header("Spawning")]
         [SerializeField, Min(0)] float spawnScatterRadius = 5f;
@@ -71,6 +81,14 @@ namespace Universes.UniverseData.classic_horror.Server {
         [SerializeField, Min(0)] float warningHoldSeconds = 0.9f;
         [Tooltip("Seconds between an investigator's whispered apparitions (behind you, a watcher in the dark), never in a chase.")]
         [SerializeField] Vector2 apparitionInterval = new(70f, 140f);
+        [Tooltip("No apparition with the real priest closer than this (metres): the real thing is scarier.")]
+        [SerializeField, Min(0)] float apparitionMinimumDistance = 25f;
+        [Tooltip("Where he starts Acts II (x) and III (y): this far in front of the altar, in his chapel.")]
+        [SerializeField] Vector2 actStartAltarDistance = new(6f, 10f);
+        [Tooltip("When the bell is lifted he is standing this far behind the altar.")]
+        [SerializeField, Min(0)] float bellGrabBehindAltar = 1.2f;
+        [Tooltip("Everyone this close to the altar when the bell is lifted sees him rise behind it.")]
+        [SerializeField, Min(0)] float bellGrabScareRadius = 30f;
         [SerializeField] bool ambientScares = true;
         [SerializeField] Vector2 ambientScareInterval = new(55f, 110f);
         [SerializeField, Min(0.5f)] float lightsOutSeconds = 3.5f;
@@ -90,6 +108,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         CancellationToken nightToken;
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
         readonly Dictionary<NetworkConnection, float> snapshotTimes = new();
+        /// <summary>Clients that have the map loaded: they have asked for the night's state at least once.</summary>
+        readonly HashSet<NetworkConnection> loadedClients = new();
         readonly HashSet<NetworkConnection> eliminated = new();
         readonly HashSet<string> eliminatedAccounts = new();
         readonly Dictionary<string, int> accountLives = new();
@@ -97,6 +117,13 @@ namespace Universes.UniverseData.classic_horror.Server {
         readonly Dictionary<NetworkConnection, CH_ScareRation> warnings = new();
         readonly Dictionary<NetworkConnection, float> nextApparition = new();
         readonly Dictionary<LocalCharacter, (CH_HidingSpot spot, float since)> hidden = new();
+        /// <summary>The last dry ground each investigator stood on tonight (see <see cref="CH_Night.DropPosition"/>).</summary>
+        readonly Dictionary<NetworkConnection, Vector3> lastDryGround = new();
+        // State views are rebuilt into the same arrays each broadcast; FishNet serializes a broadcast as it is sent.
+        CH_ItemView[] itemViews = Array.Empty<CH_ItemView>();
+        CH_SlotView[] slotViews = Array.Empty<CH_SlotView>();
+        CH_HideView[] hideViews = Array.Empty<CH_HideView>();
+        string[] itemTitles = Array.Empty<string>(), slotTitles = Array.Empty<string>();
         readonly List<(float at, string line)> earQueue = new();
         readonly List<Transform> spawnAnchors = new();
         readonly List<(Transform anchor, float score)> spawnOrder = new();
@@ -114,7 +141,6 @@ namespace Universes.UniverseData.classic_horror.Server {
         static readonly Vector3 FallbackSpawn = new(500, 25, 490);
         const float ChaseMusicReleaseDelay = 5f;
         /// <summary>Items and slots are interacted with at about chest height above their anchor.</summary>
-        static readonly Vector3 InteractLift = Vector3.up * 0.9f;
         const float VoiceGap = 0.35f;
         const float StateInterval = 0.5f;
 
@@ -124,7 +150,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         public bool Hunting => night != null && CH_Story.IsPlayable(night.Phase) && nightReleased;
         public int Act => Phase switch { CH_Phase.Choir or CH_Phase.ChapelOpens => 2, CH_Phase.Sermon or CH_Phase.Boarding => 3, _ => 1 };
         public int LivingInvestigators { get; private set; } = 1;
-        int NightSeconds => night == null ? 0 : Mathf.Max(0, Mathf.RoundToInt((night.IsOver ? nightEnded : Time.time) - nightStarted));
+        /// <summary>Seconds since the night began, frozen once it has ended (nightEnded is only this night's once it is set).</summary>
+        int NightSeconds => night == null ? 0 : Mathf.Max(0, Mathf.RoundToInt((night.IsOver && nightEnded >= nightStarted ? nightEnded : Time.time) - nightStarted));
 
         protected override void Awake() {
             base.Awake();
@@ -153,8 +180,9 @@ namespace Universes.UniverseData.classic_horror.Server {
             player.SetPlayerTeam(new TeamConfig(TeamColor.Blue));
             player.cameraTypes.Clear();
             player.LockCamera(GameCameraType.FirstPersonCamera);
-            player.staminaMax.Value = 100f;
-            player.staminaRegen.Value = 16f;
+            player.staminaMax.Value = CH_MonsterTuning.InvestigatorStamina;
+            player.staminaRegen.Value = CH_MonsterTuning.StaminaRegenPerSecond;
+            player.staminaCooldown.Value = CH_MonsterTuning.StaminaRegenDelay;
             ApplyMovement(player);
         }
 
@@ -166,13 +194,13 @@ namespace Universes.UniverseData.classic_horror.Server {
             bool heavy = night != null && night.CarriedBy(CarrierKey(player.Owner))?.Kind == CH_ItemKind.Fuel;
             player.walkSpeed.Value = hiding ? 0f : heavy ? heavyWalkSpeed : walkSpeed;
             player.sprintSpeed.Value = hiding ? 0f : heavy ? heavyWalkSpeed : sprintSpeed;
-            player.jumpHeight.Value = hiding ? 0f : 1.4f;
+            player.jumpHeight.Value = hiding ? 0f : jumpHeight;
         }
 
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
             PreparePlayer(player);
-            PlayerProgress.Load<CH_SaveData>(player, CH_SaveData.Universe).Forget();
+            LoadProgress(player).Forget();
             string account = AccountKey(player.Owner);
             bool active = night != null && !night.IsOver;
             player.lives.Value = account != null && active && accountLives.TryGetValue(account, out int left) ? left : livesPerPlayer;
@@ -194,6 +222,17 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (night != null) nextApparition[character.Owner] = Time.time + RandomRange(apparitionInterval);
         }
 
+        async UniTaskVoid LoadProgress(PlayerData player) {
+            await PlayerProgress.Load<CH_SaveData>(player, CH_SaveData.Universe);
+            if (player != null) SendProgress(player);
+        }
+
+        /// <summary>Tells an investigator their own record: the ending card shows it.</summary>
+        static void SendProgress(PlayerData player) {
+            if (player == null || !player.Owner.IsActive || !PlayerProgress.TryGet<CH_SaveData>(player, out var save)) return;
+            InstanceFinder.ServerManager.Broadcast(player.Owner, save.ToBroadcast());
+        }
+
         static void PrepareFlashlight(ToolBaseShared tool) {
             if (tool is ToolFlashlightShared flashlight) flashlight.LightOn.Value = true;
         }
@@ -201,15 +240,18 @@ namespace Universes.UniverseData.classic_horror.Server {
         void OnPlayerLeft(PlayerData player) {
             requestTimes.Remove(player.Owner);
             snapshotTimes.Remove(player.Owner);
+            loadedClients.Remove(player.Owner);
             eliminated.Remove(player.Owner);
             reviving.Remove(player.Owner);
             warnings.Remove(player.Owner);
             nextApparition.Remove(player.Owner);
             if (night == null) return;
+            // Dropped before their dry-ground record goes, so it lands where they last stood.
             // Whatever they carried stays where they stood.
             LocalCharacter character = player.GetCharacter();
             Vector3 at = character != null ? character.transform.position : map.arrival.position;
             DropCarried(player.Owner, at, character != null ? character.transform.eulerAngles.y : 0f);
+            lastDryGround.Remove(player.Owner);
             if (character != null) hidden.Remove(character);
         }
 
@@ -224,11 +266,13 @@ namespace Universes.UniverseData.classic_horror.Server {
                 throw new InvalidOperationException("The Drowned Choir needs its story set on the map: run Ryan > Classic Horror > Build Story Set.");
             RebuildSpawnAnchors();
             await WaitForPlayersAsync(1, token);
+            await WaitForClientsLoadedAsync(token);
 
             int seed;
             do { seed = fixedSeed != 0 ? fixedSeed : Guid.NewGuid().GetHashCode(); } while (fixedSeed == 0 && seed == lastSeed);
             lastSeed = seed;
             night = new CH_Night(seed, BuildLayout(seed));
+            CacheTitles();
             ResetNightState();
             foreach (var player in PlayerData.Players.Values) { player.lives.Value = livesPerPlayer; PreparePlayer(player); }
             acceptingPlayers = true;
@@ -239,7 +283,9 @@ namespace Universes.UniverseData.classic_horror.Server {
             nightStarted = Time.time;
             Debug.Log($"[Drowned Choir] night {seed} begins: singers {string.Join(", ", Array.ConvertAll(night.Singers, CH_Story.SingerName))}");
 
-            await PlayCutscene(CH_Phase.Prologue, token);
+            // A crew who have all been here before get the short version.
+            await WaitForProgressAsync(token);
+            await PlayCutscene(EveryoneHasPlayed() ? CH_Phase.Arrival : CH_Phase.Prologue, token);
             if (!night.IsOver) EnterAct(CH_Phase.Stranded);
             while (!night.IsOver) {
                 token.ThrowIfCancellationRequested();
@@ -254,6 +300,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             SetGlobalInvul(true);
             SetMusic(night.Phase == CH_Phase.Complete ? MusicSelection.VictoryMusic : MusicSelection.HorrorAmbientMusic);
             RecordEnding();
+            foreach (var player in PlayerData.Players.Values) SendProgress(player);
             for (int i = nextNightDelay; i > 0; i--) {
                 nextNightCountdown = i;
                 BroadcastState();
@@ -261,8 +308,43 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
         }
 
+        /// <summary>
+        /// Waits until every investigator's client has the map loaded (it starts asking for the night's state), so nobody
+        /// walks into the opening scene half-way through.
+        /// </summary>
+        async UniTask WaitForClientsLoadedAsync(CancellationToken token) {
+            float until = Time.time + loadWaitSeconds;
+            while (Time.time < until && !EveryClientLoaded()) await AwaitTime(100, token);
+        }
+
+        bool EveryClientLoaded() {
+            foreach (var player in PlayerData.Players.Values)
+                if (player != null && !loadedClients.Contains(player.Owner)) return false;
+            return true;
+        }
+
+        async UniTask WaitForProgressAsync(CancellationToken token) {
+            float until = Time.time + progressWaitSeconds;
+            while (Time.time < until && !EveryonesProgressLoaded()) await AwaitTime(100, token);
+        }
+
+        static bool EveryonesProgressLoaded() {
+            foreach (var player in PlayerData.Players.Values)
+                if (player != null && !PlayerProgress.TryGet<CH_SaveData>(player, out _)) return false;
+            return true;
+        }
+
+        /// <summary>Every investigator here has seen a night through before (and their record has loaded).</summary>
+        static bool EveryoneHasPlayed() {
+            if (PlayerData.Players.Count == 0) return false;
+            foreach (var player in PlayerData.Players.Values)
+                if (player == null || !PlayerProgress.TryGet<CH_SaveData>(player, out var save) || save.nightsPlayed == 0) return false;
+            return true;
+        }
+
         void ResetNightState() {
             livesLost = 0;
+            lastDryGround.Clear();
             eliminated.Clear();
             eliminatedAccounts.Clear();
             accountLives.Clear();
@@ -324,8 +406,9 @@ namespace Universes.UniverseData.classic_horror.Server {
             SetGlobalInvul(false);
             // The priest stays where the scene left him and starts again after the act's grace.
             nightReleased = false;
-            float grace = act == CH_Phase.Stranded ? openingGraceSeconds : act == CH_Phase.Choir ? 10f : 3f;
+            float grace = act == CH_Phase.Stranded ? actGraceSeconds.x : act == CH_Phase.Choir ? actGraceSeconds.y : actGraceSeconds.z;
             releaseAt = Time.time + grace;
+            if (act != CH_Phase.Stranded && returnTheLostEachAct) ReturnTheLost();
             nextAmbientScare = Time.time + Mathf.Max(grace, RandomRange(ambientScareInterval) * 0.6f);
             switch (act) {
                 case CH_Phase.Stranded:
@@ -334,13 +417,27 @@ namespace Universes.UniverseData.classic_horror.Server {
                     break;
                 case CH_Phase.Choir:
                     // He dragged Mara into the chapel: he starts the act there.
-                    monster?.Warp(map.altar.position + map.altar.forward * 6f);
+                    monster?.Warp(map.altar.position + map.altar.forward * actStartAltarDistance.x);
                     break;
                 case CH_Phase.Sermon:
-                    monster?.Warp(map.altar.position + map.altar.forward * 10f);
+                    monster?.Warp(map.altar.position + map.altar.forward * actStartAltarDistance.y);
                     break;
             }
             BroadcastState();
+        }
+
+        /// <summary>A new act: everyone left behind wakes on the shore again with one life.</summary>
+        void ReturnTheLost() {
+            foreach (var player in PlayerData.Players.Values) {
+                if (player == null || !eliminated.Contains(player.Owner)) continue;
+                eliminated.Remove(player.Owner);
+                string account = AccountKey(player.Owner);
+                if (account != null) { eliminatedAccounts.Remove(account); accountLives[account] = 1; }
+                player.lives.Value = 1;
+                PreparePlayer(player);
+                ServerPlayerCharacter.Instance.SpawnPlayerCharacter(player.Owner);
+                Debug.Log($"[Drowned Choir] client {player.Owner.ClientId} returns for {night.Phase} with one life");
+            }
         }
 
         void Tick() {
@@ -358,6 +455,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 return;
             }
             KeepHiddenInPlace();
+            TrackDryGround();
             UpdateBoarding();
             UpdateMusic();
             UpdateApparitions();
@@ -382,13 +480,13 @@ namespace Universes.UniverseData.classic_horror.Server {
             try {
                 switch (earned) {
                     case CH_Phase.Taking:
-                        await UniTask.Delay(TimeSpan.FromSeconds(2.5f), cancellationToken: token); // let "Lamp's lit" land
+                        await UniTask.Delay(TimeSpan.FromSeconds(takingLeadInSeconds), cancellationToken: token); // let "Lamp's lit" land
                         if (Stale()) return;
                         await PlayCutscene(CH_Phase.Taking, token);
                         if (!Stale()) EnterAct(CH_Phase.Choir);
                         break;
                     case CH_Phase.ChapelOpens:
-                        await UniTask.Delay(TimeSpan.FromSeconds(3.5f), cancellationToken: token); // the last singer's thanks
+                        await UniTask.Delay(TimeSpan.FromSeconds(chapelLeadInSeconds), cancellationToken: token); // the last singer's thanks
                         if (Stale()) return;
                         await PlayCutscene(CH_Phase.ChapelOpens, token);
                         if (!Stale()) EnterAct(CH_Phase.Sermon);
@@ -427,10 +525,10 @@ namespace Universes.UniverseData.classic_horror.Server {
         async UniTaskVoid Depart() {
             CH_Night current = night;
             try {
-                // Anyone not aboard when the boat leaves is left to the choir.
+                // Anyone standing ashore when the boat leaves is left to the choir. Someone between lives is pulled aboard.
                 foreach (var character in LocalCharacter.Characters.Values) {
-                    if (character == null || eliminated.Contains(character.Owner)) continue;
-                    if (character.IsDead || !IsAboard(character)) LeaveBehind(character.Owner);
+                    if (character == null || character.IsDead || eliminated.Contains(character.Owner)) continue;
+                    if (!IsAboard(character)) LeaveBehind(character.Owner);
                 }
                 if (EveryoneOut()) { FailNight(); return; }
                 await PlayCutscene(CH_Phase.Departure, nightToken);
@@ -490,6 +588,7 @@ namespace Universes.UniverseData.classic_horror.Server {
 
             if (request.target == CH_Target.Hide) { ToggleHiding(connection, character, request.id); return; }
             if (hidden.ContainsKey(character)) { Reject(connection, request.target, "Leave your hiding place first."); return; }
+            if (request.target == CH_Target.Drop) { PutDown(connection, character); return; }
             if (!TryGetInteractPoint(request.target, request.id, out Vector3 point)) { Reject(connection, request.target, "That's gone."); return; }
             if (!CanReach(character, point)) { Reject(connection, request.target, "Move closer."); return; }
 
@@ -511,6 +610,15 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
             if (PlayerData.TryGetPlayerData(connection, out var player)) ApplyMovement(player);
             InstanceFinder.ServerManager.Broadcast(connection, new CH_InteractionResult { seed = night.Seed, accepted = true, target = request.target, message = "" });
+            BroadcastState();
+        }
+
+        /// <summary>The investigator sets what they carry down at their feet (to run, or to leave it for someone else).</summary>
+        void PutDown(NetworkConnection connection, LocalCharacter character) {
+            if (night.CarriedBy(CarrierKey(connection)) == null) { Reject(connection, CH_Target.Drop, "Your hands are empty."); return; }
+            DropCarried(connection, character.transform.position, character.transform.eulerAngles.y);
+            if (PlayerData.TryGetPlayerData(connection, out var player)) ApplyMovement(player);
+            Accept(connection, CH_Target.Drop);
             BroadcastState();
         }
 
@@ -536,7 +644,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
             CH_Night.Slot slot = night.GetSlot(id);
             if (slot == null || slot.Filled) return false;
-            point = slot.Position + InteractLift;
+            point = CH_Night.SlotReachPoint(slot.Kind, slot.Position);
             return true;
         }
 
@@ -558,18 +666,23 @@ namespace Universes.UniverseData.classic_horror.Server {
                 seed = night.Seed, kind = CH_AmbientScare.LightsOut, position = map.altar.position, seconds = 2.5f
             });
             foreach (var other in LocalCharacter.Characters.Values)
-                if (other != null && !other.IsDead && Vector3.Distance(other.transform.position, map.altar.position) < 30f)
+                if (other != null && !other.IsDead && Vector3.Distance(other.transform.position, map.altar.position) < bellGrabScareRadius)
                     SendScare(other.Owner, CH_ScareKind.BellGrab);
             Broadcast("bell_take", CH_VoiceMode.Monster, Vector3.zero);
             QueueEar("mara_free", 5.5f);
             QueueEar("bell_tip", 0f);
-            if (monster != null) {
-                // He was behind the altar all along.
-                Vector3 behind = map.altar.position - map.altar.forward * 1.2f;
-                monster.Warp(behind);
-                monster.Hold(2.4f);
+            if (monster == null) return;
+            if (monster.IsChasing && monster.Quarry != character) {
+                // Already on someone else's heels: he turns for the bell from where he is.
                 monster.Hunt(character);
+                return;
             }
+            // He was behind the altar all along. He stares, then follows the bell. Sampled at the thief's floor height:
+            // the altar's top and its back panel carry NavMesh too, and he must not appear standing on them.
+            Vector3 behind = map.altar.position - map.altar.forward * bellGrabBehindAltar;
+            behind.y = character.transform.position.y;
+            monster.Warp(behind);
+            monster.Hunt(character, monsterTuning.bellGrabHoldSeconds);
         }
 
         void OnPlaced(NetworkConnection connection, CH_Night.Item item, CH_Night.Slot slot) {
@@ -605,14 +718,36 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
         }
 
+        /// <summary>Sets down what <paramref name="connection"/> carries: where they are if that is dry ground, else as <see cref="CH_Night.DropPosition"/> says.</summary>
         void DropCarried(NetworkConnection connection, Vector3 position, float yaw) {
             if (night == null) return;
-            // Set it down on the ground under them, above the waterline where possible.
-            Vector3 ground = position;
-            if (NavMesh.SamplePosition(position, out NavMeshHit hit, 4f, NavMesh.AllAreas) && hit.position.y > map.waterLevel) ground = hit.position;
-            if (ground.y <= map.waterLevel) ground = map.arrival.position;
-            CH_Night.Item dropped = night.Drop(CarrierKey(connection), ground, yaw);
-            if (dropped != null) Debug.Log($"[Drowned Choir] client {connection.ClientId} dropped {dropped.Kind}");
+            int key = CarrierKey(connection);
+            CH_Night.Item held = night.CarriedBy(key);
+            if (held == null) return;
+            bool dry = TryDryGround(position, out Vector3 ground);
+            Vector3? lastDry = lastDryGround.TryGetValue(connection, out Vector3 last) ? last : null;
+            Vector3 at = CH_Night.DropPosition(ground, dry, lastDry, held.Origin);
+            night.Drop(key, at, yaw);
+            Debug.Log($"[Drowned Choir] client {connection.ClientId} dropped {held.Kind} at {at} ({(dry ? "where they stood" : lastDry.HasValue ? "washed up on their last dry ground" : "back where it was found")})");
+        }
+
+        const float DryGroundSampleRadius = 1f;
+
+        /// <summary>The NavMesh point under <paramref name="position"/> if it is dry ground (above the lake), the ground Crane walks too.</summary>
+        bool TryDryGround(Vector3 position, out Vector3 ground) {
+            ground = position;
+            if (!NavMesh.SamplePosition(position, out NavMeshHit hit, DryGroundSampleRadius, NavMesh.AllAreas) || hit.position.y <= map.waterLevel + dryGroundMargin)
+                return false;
+            ground = hit.position;
+            return true;
+        }
+
+        /// <summary>Remembers where each investigator last stood on dry ground, for whatever the lake takes from them.</summary>
+        void TrackDryGround() {
+            foreach (var character in LocalCharacter.Characters.Values) {
+                if (character == null || character.IsDead || hidden.ContainsKey(character)) continue;
+                if (TryDryGround(character.transform.position, out Vector3 ground)) lastDryGround[character.Owner] = ground;
+            }
         }
 
         public bool IsCarryingBell(LocalCharacter character) =>
@@ -698,16 +833,23 @@ namespace Universes.UniverseData.classic_horror.Server {
             return best;
         }
 
-        /// <summary>He pulled a hiding place open. If someone was in it, they are about to be caught.</summary>
+        /// <summary>He is on his way to the hiding place he watched <paramref name="inside"/> climb into: they hear that he knows.</summary>
+        public void OnHidingPlaceTargeted(CH_HidingSpot spot, LocalCharacter inside) {
+            if (inside == null) return;
+            Debug.Log($"[Drowned Choir] the priest saw client {inside.Owner.ClientId} hide in the {spot.label} and is coming");
+            Whisper(inside.Owner, "whisper_sees");
+        }
+
+        /// <summary>He pulled a hiding place open: a slammed door for an empty one, his face and a head start for whoever he saw go in.</summary>
         public void OnHidingPlaceOpened(CH_HidingSpot spot, LocalCharacter inside) {
             if (inside == null) {
                 InstanceFinder.ServerManager.Broadcast(new CH_AmbientScareBroadcast { seed = night.Seed, kind = CH_AmbientScare.DoorSlam, position = spot.Exit });
                 return;
             }
-            Debug.Log($"[Drowned Choir] the priest found client {inside.Owner.ClientId} hiding in the {spot.label}");
+            Debug.Log($"[Drowned Choir] the priest tore client {inside.Owner.ClientId} out of the {spot.label}");
             SpeakFromMonster("wardrobe_found", force: true);
-            // Pulled out in front of him, able to move again, whether or not his blow lands (spawn protection).
             LeaveHiding(inside, spot);
+            SendScare(inside.Owner, CH_ScareKind.DraggedOut);
         }
 
         // ---- Deaths and spawning ------------------------------------------------------------------------------------------
@@ -716,8 +858,11 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (night == null || night.IsOver || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
             hidden.Remove(character);
+            bool carrying = night.CarriedBy(CarrierKey(character.Owner)) != null;
+            bool chased = monster != null && monster.IsHunting && monster.Quarry == character;
             DropCarried(character.Owner, character.transform.position, character.transform.eulerAngles.y);
-            if (damage == DamageType.Water && !drowningCostsLife) {
+            if (damage == DamageType.Water && !CH_Night.DrowningCostsLife(carrying, chased)) {
+                Debug.Log($"[Drowned Choir] client {character.Owner.ClientId} was pulled from the lake (empty hands, not chased)");
                 character.CanSpectate.Value = false;
                 reviving.Add(character.Owner);
                 return;
@@ -884,10 +1029,12 @@ namespace Universes.UniverseData.classic_horror.Server {
             else if (!chaseTipCalled && monster.ChasesStarted >= 3) { chaseTipCalled = true; QueueEar("chase_tip", 0f); }
         }
 
-        public void OnChaseLost() {
-            if (monster != null && monster.ChasesEscaped % 2 == 1) SpeakFromMonster(CH_Story.LostLines[(monster.ChasesEscaped / 2) % CH_Story.LostLines.Length]);
-            foreach (var character in LocalCharacter.Characters.Values)
-                if (character != null && !character.IsDead) PlayerProgress.Modify<CH_SaveData>(character.Owner, save => save.chasesEscaped++);
+        /// <summary>He gave up a chase; <paramref name="escaped"/> got away from him (null when the chase ended in a catch or the lake).</summary>
+        public void OnChaseLost(LocalCharacter escaped) {
+            if (escaped == null) return;
+            if (monster.ChasesEscaped % 2 == 1) SpeakFromMonster(CH_Story.LostLines[(monster.ChasesEscaped / 2) % CH_Story.LostLines.Length]);
+            PlayerProgress.Modify<CH_SaveData>(escaped.Owner, save => save.chasesEscaped++);
+            Debug.Log($"[Drowned Choir] client {escaped.Owner.ClientId} got away from him at {NightSeconds}s");
         }
 
         /// <summary>He is chasing someone he can see up close: now and then his face fills their screen and he falters.</summary>
@@ -900,9 +1047,9 @@ namespace Universes.UniverseData.classic_horror.Server {
             monster.Hold(warningHoldSeconds);
         }
 
-        public void OnRelocated(Vector3 position) {
-            Debug.Log($"[Drowned Choir] the priest rose from the water at {position}");
-            if (UnityEngine.Random.value < 0.5f) Broadcast("rise_1", CH_VoiceMode.World, position + Vector3.up * 1.5f);
+        public void OnRelocated(Vector3 position, bool fromWater) {
+            Debug.Log($"[Drowned Choir] the priest {(fromWater ? "rose from the water" : "stepped out of the dark")} at {position}");
+            if (fromWater && UnityEngine.Random.value < 0.5f) Broadcast("rise_1", CH_VoiceMode.World, position + Vector3.up * 1.5f);
         }
 
         public void SpeakFromMonster(string line) => SpeakFromMonster(line, false);
@@ -917,6 +1064,12 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         /// <summary>Queues a line in everyone's ear; it plays once the previous ear line has finished.</summary>
         void QueueEar(string line, float delay) => earQueue.Add((Time.time + delay, line));
+
+        /// <summary>A line in one investigator's ear only.</summary>
+        void Whisper(NetworkConnection connection, string line) {
+            if (connection == null || !connection.IsActive || night == null) return;
+            InstanceFinder.ServerManager.Broadcast(connection, new CH_VoiceBroadcast { seed = night.Seed, line = line, mode = CH_VoiceMode.Ear, position = Vector3.zero });
+        }
 
         void FlushVoiceQueue() {
             if (earQueue.Count == 0 || Time.time < earFreeAt) return;
@@ -958,7 +1111,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 if (Time.time < due) continue;
                 nextApparition[character.Owner] = Time.time + RandomRange(apparitionInterval);
                 // Not with him actually close: the real thing is scarier.
-                if (Vector3.Distance(character.transform.position, monster.transform.position) < 25f) continue;
+                if (Vector3.Distance(character.transform.position, monster.transform.position) < apparitionMinimumDistance) continue;
                 SendScare(character.Owner, UnityEngine.Random.value < 0.55f ? CH_ScareKind.Apparition : CH_ScareKind.Watcher);
                 return; // one per tick
             }
@@ -1029,7 +1182,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         }
 
         void OnStateRequest(NetworkConnection connection, CH_StateRequest request, Channel channel) {
-            if (night == null || !connection.IsAuthenticated) return;
+            if (!connection.IsAuthenticated) return;
+            loadedClients.Add(connection);
+            if (night == null) return;
             if (snapshotTimes.TryGetValue(connection, out float previous) && Time.unscaledTime - previous < 1f) return;
             snapshotTimes[connection] = Time.unscaledTime;
             InstanceFinder.ServerManager.Broadcast(connection, MakeState());
@@ -1041,35 +1196,44 @@ namespace Universes.UniverseData.classic_horror.Server {
             InstanceFinder.ServerManager.Broadcast(MakeState());
         }
 
-        CH_StateBroadcast MakeState() {
-            var items = new CH_ItemView[night.Items.Count];
-            for (int i = 0; i < items.Length; i++) {
+        /// <summary>Names never change during a night, so they are built once when it starts.</summary>
+        void CacheTitles() {
+            itemTitles = new string[night.Items.Count];
+            for (int i = 0; i < itemTitles.Length; i++) {
                 CH_Night.Item item = night.Items[i];
-                items[i] = new CH_ItemView {
+                itemTitles[i] = item.Singer >= 0 ? $"{CH_Story.SingerName(item.Singer)}'s {CH_Story.ItemName(item.Kind).ToLowerInvariant()}" : CH_Story.ItemName(item.Kind);
+            }
+            slotTitles = new string[night.Slots.Count];
+            for (int i = 0; i < slotTitles.Length; i++) slotTitles[i] = SlotTitle(night.Slots[i]);
+            itemViews = new CH_ItemView[night.Items.Count];
+            slotViews = new CH_SlotView[night.Slots.Count];
+            hideViews = new CH_HideView[map.hidingSpots.Length];
+        }
+
+        CH_StateBroadcast MakeState() {
+            for (int i = 0; i < itemViews.Length; i++) {
+                CH_Night.Item item = night.Items[i];
+                itemViews[i] = new CH_ItemView {
                     id = item.Id, kind = item.Kind, state = item.State, position = item.Position, yaw = item.Yaw,
                     carrierId = item.State == CH_ItemState.Carried ? CarrierObjectId(item.Carrier) : -1,
-                    objective = night.IsObjective(item),
-                    singer = (sbyte)item.Singer,
-                    title = item.Singer >= 0 ? $"{CH_Story.SingerName(item.Singer)}'s {CH_Story.ItemName(item.Kind).ToLowerInvariant()}" : CH_Story.ItemName(item.Kind)
+                    objective = night.IsObjective(item), singer = (sbyte)item.Singer, title = itemTitles[i]
                 };
             }
-            var slots = new CH_SlotView[night.Slots.Count];
-            for (int i = 0; i < slots.Length; i++) {
+            for (int i = 0; i < slotViews.Length; i++) {
                 CH_Night.Slot slot = night.Slots[i];
-                slots[i] = new CH_SlotView {
+                slotViews[i] = new CH_SlotView {
                     id = slot.Id, kind = slot.Kind, accepts = slot.Accepts, position = slot.Position, yaw = slot.Yaw,
-                    filled = slot.Filled, open = night.IsOpen(slot), singer = (sbyte)slot.Singer, title = SlotTitle(slot)
+                    filled = slot.Filled, open = night.IsOpen(slot), singer = (sbyte)slot.Singer, title = slotTitles[i]
                 };
             }
-            var hides = new CH_HideView[map.hidingSpots.Length];
-            for (int i = 0; i < hides.Length; i++) {
+            for (int i = 0; i < hideViews.Length; i++) {
                 LocalCharacter occupant = map.hidingSpots[i] != null ? OccupantOf(map.hidingSpots[i]) : null;
-                hides[i] = new CH_HideView { id = i, occupantId = occupant != null ? occupant.ObjectId : -1 };
+                hideViews[i] = new CH_HideView { id = i, occupantId = occupant != null ? occupant.ObjectId : -1 };
             }
             Objective(out string objective, out string detail, out int progress, out int total);
             return new CH_StateBroadcast {
                 seed = night.Seed, phase = night.Phase, phaseSeconds = Time.time - phaseStarted,
-                objective = objective, detail = detail, items = items, slots = slots, hides = hides,
+                objective = objective, detail = detail, items = itemViews, slots = slotViews, hides = hideViews,
                 progress = progress, progressTotal = total,
                 countdown = night.Phase == CH_Phase.Boarding ? Mathf.Max(0, Mathf.CeilToInt(boardingEnds - Time.time)) : 0,
                 monsterId = monster != null ? monster.GetComponent<GameCharacter>().ObjectId : -1,
@@ -1081,7 +1245,6 @@ namespace Universes.UniverseData.classic_horror.Server {
         static string SlotTitle(CH_Night.Slot slot) => slot.Kind switch {
             CH_SlotKind.Grave => $"{CH_Story.SingerName(slot.Singer)}'s grave",
             CH_SlotKind.LilyMarker => "Lily's marker",
-            CH_SlotKind.BoatBell => "The boat",
             _ => "The boat"
         };
 
@@ -1106,9 +1269,9 @@ namespace Universes.UniverseData.classic_horror.Server {
                     progress = night.SingersFreed; total = CH_Story.SingersPerNight;
                     break;
                 case CH_Phase.Sermon:
-                    bool carried = night.Items.Exists(item => item.Kind == CH_ItemKind.Bell && item.State != CH_ItemState.Hidden && item.Touched);
+                    bool carried = BellTaken();
                     objective = carried ? "Carry the bell to the boat" : "Take Crane's bell from the chapel altar";
-                    detail = carried ? "He hears the bell wherever it goes. Pass it on if he gets close." : "Mara is in the chapel. Take his bell and he will let her go.";
+                    detail = carried ? "He hears it wherever it goes. If he gets close, put it down (R) for a teammate." : "Mara is in the chapel. Take his bell and he will let her go.";
                     break;
                 case CH_Phase.Boarding:
                     objective = "GET TO THE BOAT";
@@ -1124,6 +1287,11 @@ namespace Universes.UniverseData.classic_horror.Server {
                     objective = CH_Story.Title;
                     break;
             }
+        }
+
+        bool BellTaken() {
+            foreach (CH_Night.Item item in night.Items) if (item.Kind == CH_ItemKind.Bell) return item.Touched;
+            return false;
         }
 
         protected override void Reset() {

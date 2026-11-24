@@ -107,6 +107,42 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.IsNull(night.Drop(Ana, fell, 0f), "Empty hands drop nothing.");
         }
 
+        [Test] public void AnItemPutDownCanBePickedUpByATeammate() {
+            CH_Night night = Started();
+            CH_Night.Item fuel = Item(night, CH_ItemKind.Fuel);
+            night.TryPickUp(Ana, fuel.Id, out _, out _);
+            var feet = new Vector3(12f, 2f, 5f);
+            Assert.AreSame(fuel, night.Drop(Ana, feet, 0f), "R puts down what you hold.");
+            Assert.IsNull(night.CarriedBy(Ana));
+            Assert.IsTrue(night.TryPickUp(Ben, fuel.Id, out _, out bool firstTouch), "Passed on: a teammate takes it from the ground.");
+            Assert.IsFalse(firstTouch, "Its first pick-up line does not play twice.");
+            Assert.AreEqual(Ben, fuel.Carrier);
+        }
+
+        [Test] public void ItemsRememberWhereTheyWereFound() {
+            CH_Night night = Started();
+            foreach (CH_Night.Item item in night.Items) Assert.AreEqual(item.Position, item.Origin, $"{item.Kind} starts where it was found.");
+            CH_Night.Item fuel = Item(night, CH_ItemKind.Fuel);
+            Vector3 found = fuel.Origin;
+            night.TryPickUp(Ana, fuel.Id, out _, out _);
+            night.Drop(Ana, new Vector3(1f, 1f, 1f), 0f);
+            Assert.AreEqual(found, fuel.Origin, "Moving it does not move where it was found.");
+        }
+
+        [Test] public void TheLakeIsNeverAShortcut() {
+            Vector3 feet = new(5f, 20f, 5f), shore = new(8f, 17f, 2f), found = new(40f, 18f, 40f);
+            Assert.AreEqual(feet, CH_Night.DropPosition(feet, true, shore, found), "On dry ground it lies where it was let go.");
+            Assert.AreEqual(shore, CH_Night.DropPosition(feet, false, shore, found), "In the water it washes up where they last stood on dry ground.");
+            Assert.AreEqual(found, CH_Night.DropPosition(feet, false, null, found), "Without any dry ground, it goes back where it was found.");
+        }
+
+        [Test] public void DrowningIsOnlyFreeWithEmptyHandsAndNobodyChasing() {
+            Assert.IsFalse(CH_Night.DrowningCostsLife(false, false), "A swim with empty hands, unchased, is forgiven.");
+            Assert.IsTrue(CH_Night.DrowningCostsLife(true, false), "Carrying something into the lake costs a life.");
+            Assert.IsTrue(CH_Night.DrowningCostsLife(false, true), "Jumping in to escape him costs a life.");
+            Assert.IsTrue(CH_Night.DrowningCostsLife(true, true));
+        }
+
         [Test] public void PartsOnlyFitTheirOwnPlaceAndStayThere() {
             CH_Night night = Started();
             CH_Night.Item fuel = Item(night, CH_ItemKind.Fuel);
@@ -203,6 +239,19 @@ namespace Universes.UniverseData.classic_horror.Tests {
             night.TryPickUp(Ana, fuel.Id, out _, out _);
             night.Fail();
             Assert.IsFalse(night.TryPlace(Ana, Slot(night, CH_SlotKind.BoatFuel).Id, out _));
+        }
+
+        [Test] public void BoatSlotsAreReachedAboveTheGunwale() {
+            // From the jetty a point on the boat's boards is hidden by the hull's side; graves are reached at hand height.
+            Vector3 boards = new(10f, 16.36f, 5f);
+            foreach (CH_SlotKind kind in new[] { CH_SlotKind.BoatFuel, CH_SlotKind.BoatToolbox, CH_SlotKind.BoatLantern, CH_SlotKind.BoatBell }) {
+                Assert.IsTrue(CH_Night.IsAboard(kind), kind.ToString());
+                Assert.AreEqual(boards.y + CH_Night.ReachLiftAboard, CH_Night.SlotReachPoint(kind, boards).y, 1e-4f, kind.ToString());
+            }
+            Assert.IsFalse(CH_Night.IsAboard(CH_SlotKind.Grave));
+            Assert.IsFalse(CH_Night.IsAboard(CH_SlotKind.LilyMarker));
+            Assert.AreEqual(boards.y + CH_Night.ReachLiftAshore, CH_Night.SlotReachPoint(CH_SlotKind.Grave, boards).y, 1e-4f);
+            Assert.Greater(CH_Night.ReachLiftAboard, CH_Night.ReachLiftAshore);
         }
     }
 }

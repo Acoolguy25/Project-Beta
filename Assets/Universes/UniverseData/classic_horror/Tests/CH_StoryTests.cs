@@ -7,7 +7,7 @@ namespace Universes.UniverseData.classic_horror.Tests {
     /// <summary>The story's data agrees with itself: every line it names exists, and no two cutscene lines overlap.</summary>
     public sealed class CH_StoryTests {
         const string BankPath = "Assets/Universes/UniverseData/classic_horror/Data/VoiceBank.asset";
-        static readonly CH_Phase[] Cutscenes = { CH_Phase.Prologue, CH_Phase.Taking, CH_Phase.ChapelOpens, CH_Phase.Departure };
+        static readonly CH_Phase[] Cutscenes = CH_Story.Cutscenes;
 
         static CH_VoiceBank Bank() {
             var bank = AssetDatabase.LoadAssetAtPath<CH_VoiceBank>(BankPath);

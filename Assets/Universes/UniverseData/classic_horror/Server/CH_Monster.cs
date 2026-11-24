@@ -22,6 +22,24 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float ThinkInterval = 0.1f;
         const float NavigationRadius = 0.25f, NavigationHeight = 1.9f;
         const float SamplePositionRadius = 3f;
+        // Behaviour constants. Balance numbers (speeds, senses, timings a designer tunes) live in CH_MonsterTuning; these
+        // shape how he moves and are not meant to be tuned per map.
+        /// <summary>His footstep sounds play this much faster than a walking investigator's: a heavy, quick stride.</summary>
+        const float FootstepPace = 2.2f;
+        /// <summary>Seconds into the night before his first taunt.</summary>
+        const float FirstTauntDelay = 8f;
+        /// <summary>Within this distance he goes straight at the quarry instead of leading them, and repaths every think.</summary>
+        const float DirectChaseDistance = 4f;
+        /// <summary>A strike lands within the tuning's strike distance; he starts the swing this much further out.</summary>
+        const float StrikeWindup = 0.6f;
+        /// <summary>Longest he extrapolates a lost quarry's run, in seconds.</summary>
+        const float GuessHorizon = 2.5f;
+        /// <summary>Hiding places this close to his search path may be rattled.</summary>
+        const float RattleRadius = 4f;
+        /// <summary>A sweep point, patrol point or wardrobe door counts as reached within these distances.</summary>
+        const float SweepPointReach = 1.5f, PatrolPointReach = 2f, HidingPlaceReach = 1.6f;
+        /// <summary>Longest walk to one patrol point before he picks another, and how widely around an investigator he picks it.</summary>
+        const float PatrolLegSeconds = 22f, PatrolScatter = 16f;
         static readonly Vector3 HitboxSize = new(0.5f, 1.9f, 0.5f), HitboxCenter = new(0, 0.95f, 0);
 
         CH_ServerRunner runner;
@@ -34,8 +52,8 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         readonly Dictionary<LocalCharacter, Vector3> previousPositions = new();
         readonly Dictionary<LocalCharacter, float> speeds = new();
-        /// <summary>When he last saw or heard each investigator: hiding right after means he watched them go in.</summary>
-        readonly Dictionary<LocalCharacter, float> lastSensed = new();
+        /// <summary>When he last saw each investigator: hiding right after means he watched them go in.</summary>
+        readonly Dictionary<LocalCharacter, float> lastSeen = new();
         readonly List<LocalCharacter> stale = new();
         readonly List<Vector3> sweepPoints = new();
 
@@ -82,13 +100,13 @@ namespace Universes.UniverseData.classic_horror.Server {
                 hitbox.size = HitboxSize;
                 hitbox.center = HitboxCenter;
             }
-            if (TryGetComponent(out CharacterAnimator animator)) animator.FootstepPaceMultiplier = 2.2f;
+            if (TryGetComponent(out CharacterAnimator animator)) animator.FootstepPaceMultiplier = FootstepPace;
             locomotion.SetTargetingType(NPCTargetingType.External);
             obstacleMask = ~LayerMask.GetMask("Character", "LocalCharacter", "Ignore Raycast", "UI", "Water");
             lastThink = Time.time;
             lastSensedAnyone = Time.time;
             nextRelocate = Time.time + tuning.relocateCooldown;
-            nextTaunt = Time.time + 8f;
+            nextTaunt = Time.time + FirstTauntDelay;
             progressPosition = transform.position;
         }
 
@@ -123,11 +141,19 @@ namespace Universes.UniverseData.classic_horror.Server {
             progressPosition = transform.position;
         }
 
-        /// <summary>Starts a chase on <paramref name="target"/> at once, wherever they are (the bell is lifted).</summary>
-        public void Hunt(LocalCharacter target) {
+        /// <summary>
+        /// Chases <paramref name="target"/> wherever they are (the bell is lifted, a hiding place is torn open). With
+        /// <paramref name="afterSeconds"/> he first stands and stares that long, and neither lunges nor strikes until it is over.
+        /// </summary>
+        public void Hunt(LocalCharacter target, float afterSeconds = 0f) {
             if (target == null || target.IsDead) return;
             BeginChase(target);
             lastKnownPosition = target.transform.position;
+            if (afterSeconds <= 0f) return;
+            Hold(afterSeconds);
+            nextAttack = Time.time + afterSeconds;
+            // The first second of the run is theirs.
+            nextLunge = Time.time + afterSeconds + tuning.lungeCooldown * 0.5f;
         }
 
         void Stop() {
@@ -198,7 +224,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
             stale.Clear();
             foreach (var pair in previousPositions) if (pair.Key == null || !pair.Key.IsSpawned) stale.Add(pair.Key);
-            foreach (var character in stale) { previousPositions.Remove(character); speeds.Remove(character); lastSensed.Remove(character); }
+            foreach (var character in stale) { previousPositions.Remove(character); speeds.Remove(character); lastSeen.Remove(character); }
         }
 
         bool IsEligible(LocalCharacter character) =>
@@ -229,7 +255,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 bool heard = distance < tuning.HearingRange(speed, bell);
                 bool close = distance < tuning.closeSenseRadius;
                 if (!seen && !heard && !close) continue;
-                lastSensed[character] = Time.time;
+                if (seen || (close && clear)) lastSeen[character] = Time.time;
                 // Keep the chase on the same person: anyone else must be clearly closer to steal it.
                 float score = distance - (character == Quarry ? 6f : 0f) - (bell ? 4f : 0f);
                 if (score >= bestDistance) continue;
@@ -246,16 +272,16 @@ namespace Universes.UniverseData.classic_horror.Server {
             return light != null && light.IsIlluminating;
         }
 
-        /// <summary>Someone who climbs into a hiding place right after he saw or heard them was watched going in.</summary>
+        /// <summary>Someone who climbs into a hiding place right after he saw them was watched going in.</summary>
         void WatchHidingPlaces() {
             if (State == Mode.OpenHidingPlace) return;
             foreach (var character in LocalCharacter.Characters.Values) {
                 if (character == null || character.IsDead || !runner.IsHidden(character)) continue;
-                if (!lastSensed.TryGetValue(character, out float sensedAt)) continue;
+                if (!lastSeen.TryGetValue(character, out float seenAt)) continue;
                 CH_HidingSpot spot = runner.HidingPlaceOf(character);
-                if (spot == null || Time.time - sensedAt > tuning.sawHideSeconds || runner.HiddenSince(character) < sensedAt - 0.05f) continue;
+                if (spot == null || Time.time - seenAt > tuning.sawHideSeconds || runner.HiddenSince(character) < seenAt - 0.05f) continue;
                 // He saw that.
-                lastSensed.Remove(character);
+                lastSeen.Remove(character);
                 if (BeginOpening(spot, character)) return;
                 // He cannot get to it: he waits nearby for them to come out.
                 lastKnownPosition = spot.Exit;
@@ -267,15 +293,17 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         // ---- Chase -----------------------------------------------------------------------------------------------------
 
+        /// <summary>Starts a chase, or turns an existing one on a new quarry (which is not a new chase).</summary>
         void BeginChase(LocalCharacter target) {
-            bool fresh = State != Mode.Chase || Quarry != target;
+            bool newChase = State != Mode.Chase;
+            bool newQuarry = Quarry != target;
             Quarry = target;
             State = Mode.Chase;
             lostAt = -1f;
             checkedHidingPlaces.Clear();
-            if (!fresh) return;
+            if (newQuarry) nextRepath = 0f;
+            if (!newChase) return;
             ChasesStarted++;
-            nextRepath = 0f;
             runner.OnChaseStarted(target);
         }
 
@@ -295,10 +323,10 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (Time.time < lungeUntil) pace = tuning.lungeSpeed;
 
             // Close in on where they are going, not where they were; right on top of them, go straight for them.
-            Vector3 aim = distance < 4f ? position : position + lastKnownVelocity * tuning.predictionSeconds;
-            Steer(aim, pace, Time.time >= nextRepath || distance < 4f);
+            Vector3 aim = distance < DirectChaseDistance ? position : position + lastKnownVelocity * tuning.predictionSeconds;
+            Steer(aim, pace, Time.time >= nextRepath || distance < DirectChaseDistance);
 
-            if (visible && distance < tuning.strikeDistance + 0.6f && Time.time >= nextAttack
+            if (visible && distance < tuning.strikeDistance + StrikeWindup && Time.time >= nextAttack
                 && Vector3.Distance(Flat(transform.position), Flat(position)) < tuning.strikeDistance) {
                 nextAttack = Time.time + tuning.attackCooldown;
                 Strike(target);
@@ -325,12 +353,14 @@ namespace Universes.UniverseData.classic_horror.Server {
                 BeginSearch();
                 return;
             }
-            Vector3 guess = lastKnownPosition + lastKnownVelocity * Mathf.Min(lostFor + tuning.predictionSeconds, 2.5f);
+            Vector3 guess = lastKnownPosition + lastKnownVelocity * Mathf.Min(lostFor + tuning.predictionSeconds, GuessHorizon);
             Steer(guess, tuning.ChaseSpeed(runner.Act, false, runner.LivingInvestigators), Time.time >= nextRepath);
         }
 
         void BeginSearch() {
-            if (Quarry != null) ChasesEscaped++;
+            // Only a living quarry got away; a catch or a death in the lake is not an escape.
+            LocalCharacter escaped = Quarry != null && !Quarry.IsDead ? Quarry : null;
+            if (escaped != null) ChasesEscaped++;
             ForgetQuarry();
             State = Mode.Search;
             searchUntil = Time.time + tuning.searchSeconds;
@@ -340,7 +370,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 Vector3 candidate = lastKnownPosition + lastKnownVelocity.normalized * (tuning.searchRadius * 0.4f) + new Vector3(offset.x, 0f, offset.y);
                 if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, SamplePositionRadius, agent.areaMask)) sweepPoints.Add(hit.position);
             }
-            runner.OnChaseLost();
+            runner.OnChaseLost(escaped);
         }
 
         void Sweep() {
@@ -349,13 +379,15 @@ namespace Universes.UniverseData.classic_horror.Server {
                 patrolUntil = 0f;
                 return;
             }
-            // Passing a hiding place close to where he lost someone, he may open it.
-            CH_HidingSpot near = runner.NearestHidingPlace(transform.position, 4f);
-            if (near != null && checkedHidingPlaces.Add(near) && random.NextDouble() < tuning.checkHidingChance && BeginOpening(near, null))
+            // Passing a hiding place close to where he lost someone, he may rattle it open. He only ever looks inside one he
+            // saw someone climb into (WatchHidingPlaces), so this is a scare for whoever hides nearby, never a catch.
+            CH_HidingSpot near = runner.NearestHidingPlace(transform.position, RattleRadius);
+            if (near != null && runner.OccupantOf(near) == null && checkedHidingPlaces.Add(near)
+                && random.NextDouble() < tuning.checkHidingChance && BeginOpening(near, null))
                 return;
             if (sweepPoints.Count == 0) { Steer(lastKnownPosition, tuning.searchSpeed, false); return; }
             Vector3 point = sweepPoints[0];
-            if (Flat(point - transform.position).sqrMagnitude < 2.25f) { sweepPoints.RemoveAt(0); return; }
+            if (Flat(point - transform.position).sqrMagnitude < SweepPointReach * SweepPointReach) { sweepPoints.RemoveAt(0); return; }
             Steer(point, tuning.searchSpeed, false);
         }
 
@@ -368,10 +400,16 @@ namespace Universes.UniverseData.classic_horror.Server {
             hidingQuarry = quarry;
             openingGivesUpAt = Time.time + tuning.openHidingGiveUpSeconds;
             State = Mode.OpenHidingPlace;
+            // The tell: whoever is inside hears that he knows, and can still bolt before he gets there.
+            if (quarry != null) runner.OnHidingPlaceTargeted(spot, quarry);
             return true;
         }
 
-        /// <summary>Walks to a hiding place and pulls it open; whoever is inside is caught.</summary>
+        /// <summary>
+        /// Walks to a hiding place and pulls it open. Someone he watched climb in is torn out in front of him: his face
+        /// fills their screen, he holds for <see cref="CH_MonsterTuning.dragOutHoldSeconds"/>, then the chase is on.
+        /// Anyone else inside (they hid after he set off) only hears the door rattle.
+        /// </summary>
         void OpenHidingPlace() {
             if (targetHidingPlace == null) { State = Mode.Patrol; return; }
             if (Time.time > openingGivesUpAt) {
@@ -382,24 +420,22 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
             Vector3 front = targetHidingPlace.Exit;
             float pace = hidingQuarry != null ? tuning.ChaseSpeed(runner.Act, false, runner.LivingInvestigators) : tuning.searchSpeed;
-            if (Flat(front - transform.position).sqrMagnitude > 1.6f * 1.6f) {
+            if (Flat(front - transform.position).sqrMagnitude > HidingPlaceReach * HidingPlaceReach) {
                 Steer(front, pace, Time.time >= nextRepath);
                 return;
             }
             CH_HidingSpot spot = targetHidingPlace;
+            LocalCharacter watched = hidingQuarry;
             targetHidingPlace = null;
             hidingQuarry = null;
             LocalCharacter inside = runner.OccupantOf(spot);
-            runner.OnHidingPlaceOpened(spot, inside);
-            if (inside != null && !inside.IsDead) {
-                Catches++;
-                inside.TakeDamage(System.Math.Max(1L, inside.Health.Value), DamageType.Melee, (IEntity)entity);
-                State = Mode.Feed;
-                feedUntil = Time.time + tuning.feedSeconds;
-                Stop();
+            if (inside == null || inside != watched || inside.IsDead) {
+                runner.OnHidingPlaceOpened(spot, null);
+                State = Mode.Search;
                 return;
             }
-            State = Mode.Search;
+            runner.OnHidingPlaceOpened(spot, inside);
+            Hunt(inside, tuning.dragOutHoldSeconds);
         }
 
         void ForgetQuarry() {
@@ -412,17 +448,17 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         void Patrol() {
             if (TryRelocate()) return;
-            bool arrived = Flat(patrolPoint - transform.position).sqrMagnitude < 4f;
+            bool arrived = Flat(patrolPoint - transform.position).sqrMagnitude < PatrolPointReach * PatrolPointReach;
             if (arrived || Time.time > patrolUntil) PickPatrolPoint();
             Steer(patrolPoint, tuning.patrolSpeed, false);
         }
 
         void PickPatrolPoint() {
-            patrolUntil = Time.time + 22f;
+            patrolUntil = Time.time + PatrolLegSeconds;
             Vector3 candidate;
             LocalCharacter someone = RandomLivingInvestigator();
             if (someone != null && random.NextDouble() < tuning.patrolTowardInvestigators) {
-                Vector2 offset = RandomInCircle() * 16f;
+                Vector2 offset = RandomInCircle() * PatrolScatter;
                 candidate = someone.transform.position + new Vector3(offset.x, 0f, offset.y);
             } else {
                 Transform[] spots = runner.Map.searchLocations;
@@ -439,21 +475,38 @@ namespace Universes.UniverseData.classic_horror.Server {
             LocalCharacter someone = RandomLivingInvestigator();
             if (someone == null || NearestInvestigatorDistance(transform.position) < tuning.relocateWhenFurtherThan) return false;
             nextRelocate = Time.time + tuning.relocateCooldown;
-            for (int attempt = 0; attempt < 16; attempt++) {
+            // He comes up out of the water where he can (the first attempts insist on the waterline), anywhere dark if not.
+            for (int attempt = 0; attempt < RelocateAttempts; attempt++) {
+                bool shoreOnly = attempt < RelocateAttempts / 2;
                 float angle = (float)(random.NextDouble() * Mathf.PI * 2f);
                 float radius = Mathf.Lerp(tuning.relocateDistance.x, tuning.relocateDistance.y, (float)random.NextDouble());
                 Vector3 candidate = someone.transform.position + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
                 if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, SamplePositionRadius, agent.areaMask)) continue;
+                if (shoreOnly && !NearWater(hit.position)) continue;
                 if (NearestInvestigatorDistance(hit.position) < tuning.relocateDistance.x * 0.8f || AnyoneCanSee(hit.position)) continue;
                 probePath ??= new NavMeshPath();
                 if (!NavMesh.CalculatePath(hit.position, someone.transform.position, agent.areaMask, probePath) || probePath.status != NavMeshPathStatus.PathComplete) continue;
                 agent.Warp(hit.position);
                 progressPosition = hit.position;
                 patrolPoint = someone.transform.position;
-                patrolUntil = Time.time + 22f;
+                patrolUntil = Time.time + PatrolLegSeconds;
                 lastSensedAnyone = Time.time;
-                runner.OnRelocated(hit.position);
+                runner.OnRelocated(hit.position, shoreOnly);
                 return true;
+            }
+            return false;
+        }
+
+        const int RelocateAttempts = 32;
+        const float WaterlineSearchRadius = 5f;
+
+        /// <summary>Whether open water (ground below the lake's surface) lies within a few steps of <paramref name="point"/>.</summary>
+        bool NearWater(Vector3 point) {
+            float water = runner.Map.waterLevel;
+            for (int i = 0; i < 8; i++) {
+                Vector3 probe = point + Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward * WaterlineSearchRadius + Vector3.up * 6f;
+                if (Physics.Raycast(probe, Vector3.down, out RaycastHit ground, 20f, obstacleMask, QueryTriggerInteraction.Ignore)
+                    && ground.point.y < water - 0.2f) return true;
             }
             return false;
         }

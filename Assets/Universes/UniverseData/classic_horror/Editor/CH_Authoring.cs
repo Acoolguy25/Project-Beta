@@ -345,6 +345,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             RyanAssets.Editor.NPCCharacterAuthoring.Build();
             BuildItemViews();
             BuildPriestActor();
+            BuildMaraActor();
             CH_VoiceAuthoring.Build();
             BuildHud();
             AssetDatabase.SaveAssets();
@@ -478,16 +479,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
         // as "something to pick up".
         const float ItemIdleRim = 0.65f;
 
-        /// <summary>The amber glow light and CH_EvidenceGlow (with its code defaults) on an item.</summary>
+        /// <summary>The amber glow light and CH_ItemGlow (with its code defaults) on an item.</summary>
         static void AddGlow(GameObject root, float range, float idleRim = ItemIdleRim) {
             var light = root.GetComponent<Light>();
             if (light == null) light = root.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = Amber; light.range = range; light.shadows = LightShadows.None;
             // Re-added so the prefab takes the glow's current defaults (a faint idle edge, a strong focus).
-            var old = root.GetComponent<CH_EvidenceGlow>();
+            var old = root.GetComponent<CH_ItemGlow>();
             if (old != null) Object.DestroyImmediate(old, true);
-            var glow = root.AddComponent<CH_EvidenceGlow>();
+            var glow = root.AddComponent<CH_ItemGlow>();
             glow.glowLight = light;
             light.intensity = glow.IdleLight;
             glow.rimRenderers = AddRim(root, RimMaterial());

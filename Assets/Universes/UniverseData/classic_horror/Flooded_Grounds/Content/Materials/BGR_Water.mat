@@ -118,7 +118,7 @@ Material:
     - _ScrollSpeed: 0.4
     - _Shift: 0
     - _Shininess: 0.6012862
-    - _Smoothness: 1
+    - _Smoothness: 0.25
     - _Smth: 0.95
     - _SpecContrast: 2
     - _SpecIntensity: 2.3
@@ -160,6 +160,7 @@ Material:
     - _SSSColor: {r: 0, g: 0, b: 0, a: 0}
     - _SpColor: {r: 0.25882354, g: 0.2304037, b: 0.2304037, a: 0}
     - _SpecColor: {r: 1, g: 1, b: 1, a: 0}
+    - _SheenColor: {r: 0.02, g: 0.03, b: 0.04, a: 1}
     - _SpecularColor: {r: 0.72, g: 0.72, b: 0.72, a: 1}
     - _WaveSpeed: {r: 19, g: 9, b: -16, a: -7}
     - _WorldLightDir: {r: 0, g: 0.1, b: -0.5, a: 0}

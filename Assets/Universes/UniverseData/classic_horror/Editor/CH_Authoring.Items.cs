@@ -13,11 +13,16 @@ namespace Universes.UniverseData.classic_horror.Editor {
         public const string SlotMarkerPath = ItemFolder + "SlotMarker.prefab";
         public const string GraveCandlesPath = ItemFolder + "GraveCandles.prefab";
         public const string PriestActorPath = Root + "/Prefabs/PriestActor.prefab";
+        public const string MaraActorPath = Root + "/Prefabs/MaraActor.prefab";
 
         const string KayKitDungeon = "Assets/ThirdParty/KayKit/DungeonRemastered/Models/";
         const string KayKitFurniture = "Assets/ThirdParty/KayKit/FurnitureBits/Models/";
         const string MonsterPrefabPath = "Packages/com.ryan.gameframework/Runtime/Characters/Monster/Prefabs/Monster.prefab";
         const string PriestModelPath = Root + "/Cursed Priest/Prefab/Priest.prefab";
+        // Mara is built like the investigators (the shared robot body and its walk), in her yellow oilskin.
+        const string CrewModelPath = "Assets/UnityTechnologies/SpaceRobotKyle/Models/KyleRobot.fbx";
+        const string CrewControllerPath = "Assets/UnityTechnologies/SpaceRobotKyle/Animations/StarterAssetsThirdPerson.controller";
+        static readonly Color MaraOilskin = new(0.78f, 0.56f, 0.12f);
         const string SoftDotPath = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Textures/fx_soft_dot.png";
         const float ItemLightRange = 3f;
 
@@ -242,12 +247,64 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 animator.applyRootMotion = false;
                 animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 root.transform.localScale = monster.transform.localScale;
-                var actor = root.AddComponent<CH_PriestActor>();
+                var actor = root.AddComponent<CH_Puppet>();
                 actor.animator = animator;
                 actor.footstep = Sound(0.55f, 0.7f, 2f, 30f, AudioFolder + "wood-thud.ogg");
+                // A cold glint on his face, so he is more than a silhouette against the water.
+                actor.faceLight = FaceLight(root.transform, new Color(0.62f, 0.72f, 1f), 1.4f);
                 PrefabUtility.SaveAsPrefabAsset(root, PriestActorPath);
             } finally { Object.DestroyImmediate(root); }
             AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>Mara as a client-only puppet: the investigators' body and walk, recoloured, for the cutscenes.</summary>
+        [MenuItem("Ryan/Classic Horror/Rebuild Mara Actor")]
+        public static void BuildMaraActor() {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(CrewModelPath);
+            var controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(CrewControllerPath);
+            if (model == null || controller == null) throw new System.InvalidOperationException($"The crew model or its controller is missing ({CrewModelPath}).");
+            var root = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            try {
+                PrefabUtility.UnpackPrefabInstance(root, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                root.name = "MaraActor";
+                Material oilskin = Material("MaraOilskin", MaraOilskin);
+                foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) {
+                    var slots = renderer.sharedMaterials;
+                    for (int i = 0; i < slots.Length; i++) slots[i] = oilskin;
+                    renderer.sharedMaterials = slots;
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                    if (renderer is SkinnedMeshRenderer skin) skin.updateWhenOffscreen = true;
+                }
+                foreach (var collider in root.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(collider);
+                var animator = root.GetComponent<Animator>() ?? root.AddComponent<Animator>();
+                animator.runtimeAnimatorController = controller;
+                animator.applyRootMotion = false;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                var actor = root.AddComponent<CH_Puppet>();
+                actor.animator = animator;
+                actor.footstep = Sound(0.3f, 1.25f, 1.5f, 18f, AudioFolder + "wood-thud.ogg");
+                // Her head torch.
+                actor.faceLight = FaceLight(root.transform, new Color(1f, 0.85f, 0.6f), 1f);
+                PrefabUtility.SaveAsPrefabAsset(root, MaraActorPath);
+            } finally { Object.DestroyImmediate(root); }
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>A short-range light in front of a puppet's face (switched with the puppet's visibility).</summary>
+        static Light FaceLight(Transform puppet, Color color, float intensity) {
+            var holder = new GameObject("Face Light").transform;
+            holder.SetParent(puppet, false);
+            // In the puppet's own space, so it scales with the model: just in front of and above the eyes.
+            float scale = Mathf.Max(0.01f, puppet.localScale.y);
+            holder.localPosition = new Vector3(0f, 1.75f / scale, 0.55f / scale);
+            var light = holder.gameObject.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = color;
+            light.intensity = intensity;
+            light.range = 2.4f;
+            light.shadows = LightShadows.None;
+            light.enabled = false;
+            return light;
         }
     }
 }

@@ -16,7 +16,8 @@ using UnityEngine;
 namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>
     /// Presentation and input for The Drowned Choir; the server decides everything. Binds the night's state to the HUD,
-    /// the items in the world, the cutscenes, the voices and the scares, and sends what the investigator presses E on.
+    /// the items in the world, the cutscenes, the voices and the scares, and sends what the investigator presses E on
+    /// (and R, to put down what they carry).
     /// </summary>
     public sealed class CH_ClientController : MonoBehaviour {
         [Header("Objective card")]
@@ -78,14 +79,17 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Range(0f, 1f)] float collectShake = 0.12f;
         [SerializeField] Color actTitleColor = new(0.94f, 0.68f, 0.32f);
         [SerializeField, Min(0.5f)] float actTitleSeconds = 3.5f;
+        [Tooltip("Act card size relative to the shared overlay's largest text (1 = a countdown number).")]
+        [SerializeField, Range(0.2f, 1f)] float actTitleSize = 0.45f;
         [SerializeField] bool equipFlashlightOnSpawn = true;
         [SerializeField, Min(0.1f)] float footstepPaceMultiplier = 3f;
 
         enum FocusKind { None, Item, Slot, Hide }
 
         readonly List<Vector3> navigationObjectives = new();
-        // Teammates whose renderers are switched off because they are in a hiding place, and everyone hidden right now.
-        readonly HashSet<int> hiddenCharacters = new(), hiddenNow = new();
+        // Teammates in a hiding place, with the renderers this switched off (only those come back on), and everyone hidden now.
+        readonly Dictionary<int, List<Renderer>> hiddenCharacters = new();
+        readonly HashSet<int> hiddenNow = new();
         readonly List<int> releasedCharacters = new();
         bool localHidden;
         CH_Map map;
@@ -102,12 +106,13 @@ namespace Universes.UniverseData.classic_horror.Client {
         int visibilityMask;
         CharacterAnimator localCharacterAnimator;
         float previousFootstepPaceMultiplier = 1f;
-        CH_EvidenceGlow focusedGlow;
+        CH_ItemGlow focusedGlow;
         ToolFlashlightShared offeredFlashlight;
         string shownObjective, shownDetail;
         int shownProgress = -1, shownTotal = -1, shownCountdown = -1, shownTranscript = -1;
         CH_ItemKind? shownCarry;
-        bool endingShown;
+        bool endingShown, hasProgress;
+        CH_ProgressBroadcast progress;
         CH_Phase cutscenePhase = CH_Phase.Waiting;
 
         bool NightOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
@@ -127,26 +132,28 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (map != null) {
                 voice.Bind(map.voices);
                 // One puppet priest for the cutscenes and another for the apparitions, so neither interrupts the other.
-                cutscenes.Bind(map.cutscenes, SpawnActor("Priest (cutscenes)"));
-                apparitions.actor = SpawnActor("Priest (apparitions)");
+                cutscenes.Bind(map.cutscenes, SpawnPuppet(map.priestActorPrefab, "Priest (cutscenes)"), SpawnPuppet(map.maraActorPrefab, "Mara (cutscenes)"));
+                apparitions.actor = SpawnPuppet(map.priestActorPrefab, "Priest (apparitions)");
             }
         }
 
-        CH_PriestActor SpawnActor(string label) {
-            if (map.priestActorPrefab == null) { Debug.LogError("[Drowned Choir] CH_Map.priestActorPrefab is not assigned."); return null; }
-            GameObject actor = Instantiate(map.priestActorPrefab, map.transform);
-            actor.name = label;
-            return actor.GetComponent<CH_PriestActor>();
+        CH_Puppet SpawnPuppet(GameObject prefab, string label) {
+            if (prefab == null) { Debug.LogError($"[Drowned Choir] CH_Map has no puppet prefab for {label}; run Build Story Set."); return null; }
+            GameObject puppet = Instantiate(prefab, map.transform);
+            puppet.name = label;
+            return puppet.GetComponent<CH_Puppet>();
         }
 
         void OnEnable() {
             ToolControls.interactPressed += Interact;
             ToolControls.journalPressed += OpenJournal;
+            ToolControls.reloadToolPressed += PutDown;
         }
 
         void OnDisable() {
             ToolControls.interactPressed -= Interact;
             ToolControls.journalPressed -= OpenJournal;
+            ToolControls.reloadToolPressed -= PutDown;
             objectiveCompass?.SetDisplayAllowed(false);
             journal.Close();
         }
@@ -159,6 +166,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             manager.UnregisterBroadcast<CH_InteractionResult>(OnInteractionResult);
             manager.UnregisterBroadcast<CH_AmbientScareBroadcast>(OnAmbientScare);
             manager.UnregisterBroadcast<CH_VoiceBroadcast>(OnVoice);
+            manager.UnregisterBroadcast<CH_ProgressBroadcast>(OnProgress);
         }
 
         void Update() {
@@ -171,6 +179,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                 manager.RegisterBroadcast<CH_InteractionResult>(OnInteractionResult);
                 manager.RegisterBroadcast<CH_AmbientScareBroadcast>(OnAmbientScare);
                 manager.RegisterBroadcast<CH_VoiceBroadcast>(OnVoice);
+                manager.RegisterBroadcast<CH_ProgressBroadcast>(OnProgress);
                 items.Bind(map, manager);
             }
             if (manager != null && manager.Started && Time.unscaledTime > nextSnapshot && !hasState) {
@@ -181,6 +190,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (Time.unscaledTime > nextFocus) { nextFocus = Time.unscaledTime + focusInterval; UpdateFocus(); }
             radio.SetSuppressed(NightOver);
             items.SetLocalHeldVisible(!InCutscene && !localHidden);
+            items.SetGlowsAllowed(!InCutscene);
             UpdateHiding();
             if (voice.TranscriptRevision != shownTranscript) {
                 shownTranscript = voice.TranscriptRevision;
@@ -218,7 +228,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             UpdateCutscene(next, previous, fresh);
             UpdateObjective(next);
             if (!fresh && next.phase != previous && CH_Story.ActCard(next.phase) is string card)
-                ScreenFx.ShowText(card, actTitleColor, actTitleSeconds);
+                ScreenFx.ShowText(card, actTitleColor, actTitleSeconds, actTitleSize);
             items.Apply(next, LocalCharacterId(), LocalCarried(), fresh);
             UpdateHiddenCharacters(next);
             UpdateBoarding(next);
@@ -243,7 +253,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             shownObjective = shownDetail = null;
             shownProgress = shownTotal = shownCountdown = -1;
             shownCarry = null;
-            foreach (int id in hiddenCharacters) SetCharacterVisible(id, true);
+            foreach (var pair in hiddenCharacters) ShowCharacter(pair.Value);
             hiddenCharacters.Clear();
             localHidden = false;
             promptKind = FocusKind.None;
@@ -253,6 +263,13 @@ namespace Universes.UniverseData.classic_horror.Client {
         void OnVoice(CH_VoiceBroadcast line, Channel channel) {
             if (!hasState || line.seed != state.seed) return;
             voice.Play(line);
+        }
+
+        void OnProgress(CH_ProgressBroadcast record, Channel channel) {
+            progress = record;
+            hasProgress = true;
+            // The card may already be up when the record arrives (it is sent once the night's ending is saved).
+            if (endingShown && endingSummary != null) endingSummary.text = Summary(state);
         }
 
         void OnScare(CH_ScareBroadcast scare, Channel channel) {
@@ -271,7 +288,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             feedback = result.accepted ? "" : result.message;
             feedbackUntil = result.accepted ? 0 : Time.unscaledTime + feedbackSeconds;
             pendingId = -1;
-            if (result.accepted && result.target != CH_Target.Hide) {
+            if (result.accepted && result.target is CH_Target.Item or CH_Target.Slot) {
                 if (objectiveCollectAudio != null && objectiveCollectCue != null) objectiveCollectAudio.PlayOneShot(objectiveCollectCue);
                 CameraShake.Kick(collectShake, 0.2f);
             }
@@ -322,6 +339,8 @@ namespace Universes.UniverseData.classic_horror.Client {
                 shownCarry = carried;
                 carryChip.gameObject.SetActive(carried.HasValue);
                 if (carried.HasValue) carryChip.Text = CarryText(carried.Value);
+                // The chip row has room for the carry label or the "F Journal" key hint, not both.
+                if (journal.hint != null) journal.hint.gameObject.SetActive(!carried.HasValue);
             }
         }
 
@@ -331,11 +350,12 @@ namespace Universes.UniverseData.classic_horror.Client {
             _ => 1
         };
 
+        // Short enough to share the objective panel's chip row with the timer and the journal.
         string CarryText(CH_ItemKind kind) => kind switch {
-            CH_ItemKind.Fuel => "Fuel can  ·  too heavy to run",
-            CH_ItemKind.Bell => "Crane's bell  ·  he can hear it",
-            CH_ItemKind.MusicBox => "Lily's music box",
-            _ => CH_Story.ItemName(kind)
+            CH_ItemKind.Fuel => "Fuel · heavy · R drop",
+            CH_ItemKind.Bell => "Bell · he hears it · R drop",
+            CH_ItemKind.MusicBox => "Music box · R drop",
+            _ => CH_Story.ItemName(kind) + " · R drop"
         };
 
         void UpdateBoarding(CH_StateBroadcast next) {
@@ -353,18 +373,30 @@ namespace Universes.UniverseData.classic_horror.Client {
             localHidden = local >= 0 && hiddenNow.Contains(local);
             items.SetHiddenCharacters(hiddenNow);
             // Only remembered once their character exists here, so a late joiner keeps trying on each state.
-            foreach (int id in hiddenNow) if (id != local && !hiddenCharacters.Contains(id) && SetCharacterVisible(id, false)) hiddenCharacters.Add(id);
+            foreach (int id in hiddenNow)
+                if (id != local && !hiddenCharacters.ContainsKey(id) && TryHideCharacter(id, out List<Renderer> switchedOff)) hiddenCharacters.Add(id, switchedOff);
             releasedCharacters.Clear();
-            foreach (int id in hiddenCharacters) if (!hiddenNow.Contains(id)) releasedCharacters.Add(id);
-            foreach (int id in releasedCharacters) { SetCharacterVisible(id, true); hiddenCharacters.Remove(id); }
+            foreach (int id in hiddenCharacters.Keys) if (!hiddenNow.Contains(id)) releasedCharacters.Add(id);
+            foreach (int id in releasedCharacters) { ShowCharacter(hiddenCharacters[id]); hiddenCharacters.Remove(id); }
         }
 
-        /// <summary>Switches a teammate's renderers; false if their character has not spawned here.</summary>
-        bool SetCharacterVisible(int characterId, bool visible) {
+        /// <summary>Switches off a teammate's visible renderers and returns them; false if their character has not spawned here.</summary>
+        bool TryHideCharacter(int characterId, out List<Renderer> switchedOff) {
+            switchedOff = null;
             Transform character = FindObject(characterId);
             if (character == null) return false;
-            foreach (Renderer part in character.GetComponentsInChildren<Renderer>(true)) part.enabled = visible;
+            switchedOff = new List<Renderer>();
+            foreach (Renderer part in character.GetComponentsInChildren<Renderer>(true)) {
+                if (!part.enabled) continue;
+                part.enabled = false;
+                switchedOff.Add(part);
+            }
             return true;
+        }
+
+        /// <summary>Turns back on exactly what <see cref="TryHideCharacter"/> turned off (parts off for other reasons stay off).</summary>
+        static void ShowCharacter(List<Renderer> switchedOff) {
+            foreach (Renderer part in switchedOff) if (part != null) part.enabled = true;
         }
 
         bool LocalHidden => hasState && localHidden;
@@ -402,10 +434,22 @@ namespace Universes.UniverseData.classic_horror.Client {
             foreach (CH_SlotView slot in next.slots) if (slot.kind == CH_SlotKind.Grave && slot.filled) freed++;
             foreach (CH_ItemView item in next.items) if (item.kind is CH_ItemKind.Hymnal or CH_ItemKind.Photograph or CH_ItemKind.Candle) total++;
             bool musicBox = System.Array.Exists(next.slots, slot => slot.kind == CH_SlotKind.LilyMarker && slot.filled);
-            string secret = next.ending == CH_Story.EndingTrue ? "Lily's music box returned"
-                : musicBox ? "Lily's music box returned" : "Somewhere in Hollowmere, a music box is still waiting...";
-            return $"Singers freed {freed}/{total}   ·   Lives lost {next.livesLost}   ·   {FormatTime(next.nightSeconds)}\n{secret}";
+            string secret = musicBox ? "Lily's music box returned" : "Somewhere in Hollowmere, a music box is still waiting...";
+            string tonight = $"Singers freed {freed}/{total}   ·   Lives lost {next.livesLost}   ·   {FormatTime(next.nightSeconds)}\n{secret}";
+            return hasProgress ? tonight + "\n" + Record(progress) : tonight;
         }
+
+        /// <summary>The investigator's own record across nights: what there is still to find.</summary>
+        static string Record(CH_ProgressBroadcast record) {
+            int endings = 0;
+            foreach (byte ending in RealEndings) if ((record.endingsSeen & (1 << ending)) != 0) endings++;
+            int singers = 0;
+            for (int i = 0; i < CH_Story.SingerCount; i++) if ((record.singersMet & (1 << i)) != 0) singers++;
+            string best = record.bestSeconds > 0 ? FormatTime(record.bestSeconds) : "--:--";
+            return $"Endings {endings}/{RealEndings.Length}   ·   Singers met {singers}/{CH_Story.SingerCount}   ·   Best escape {best}   ·   Nights {record.nightsPlayed}";
+        }
+
+        static readonly byte[] RealEndings = { CH_Story.EndingTrue, CH_Story.EndingEscaped, CH_Story.EndingDrowned };
 
         // ---- Focus and interaction ------------------------------------------------------------------------------------------
 
@@ -439,7 +483,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             if (carried.HasValue) {
                 for (int i = 0; i < state.slots.Length; i++)
-                    if (state.slots[i].open) Consider(FocusKind.Slot, i, state.slots[i].position + Vector3.up * 0.9f);
+                    if (state.slots[i].open) Consider(FocusKind.Slot, i, CH_Night.SlotReachPoint(state.slots[i].kind, state.slots[i].position));
             }
             if (map.hidingSpots != null) {
                 for (int i = 0; i < map.hidingSpots.Length; i++) {
@@ -501,7 +545,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             _ => $"Fit the {CH_Story.ItemName(carried).ToLowerInvariant()} to the boat"
         };
 
-        void SetFocusedGlow(CH_EvidenceGlow glow) {
+        void SetFocusedGlow(CH_ItemGlow glow) {
             if (focusedGlow == glow) return;
             if (focusedGlow != null) focusedGlow.SetFocused(false);
             focusedGlow = glow;
@@ -518,6 +562,13 @@ namespace Universes.UniverseData.classic_horror.Client {
             pendingKind = focusKind;
             pendingId = focusId;
             pendingUntil = Time.unscaledTime + pendingInteractionSeconds;
+        }
+
+        /// <summary>R: set down what you carry, at your feet.</summary>
+        void PutDown() {
+            if (!hasState || LocalHidden || !CH_Story.IsPlayable(state.phase) || LocalCarried() == null) return;
+            if (LocalPlayer.Character == null || LocalPlayer.Character.IsDead) return;
+            Send(CH_Target.Drop, -1);
         }
 
         bool Send(CH_Target target, int id) {

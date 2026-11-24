@@ -4,12 +4,13 @@ using UnityEngine;
 namespace Universes.UniverseData.classic_horror {
     /// <summary>
     /// The authored cutscenes, as camera shots placed in the map. Each shot moves the camera from one mark to another
-    /// while it looks at a target, and may stand the priest (a client-only actor) on a mark. Clients play the scene that
+    /// while it looks at a target, and may stand the priest and Mara (client-only puppets) on marks. Clients play the scene that
     /// matches the server's cutscene phase; the server holds the night for <see cref="CH_Story.CutsceneSeconds"/>.
     /// Built by <b>Ryan > Classic Horror > Build Story Set</b>.
     /// </summary>
     public sealed class CH_CutsceneSet : MonoBehaviour {
-        public enum ActorPose : byte { Hidden = 0, Stand = 1, Walk = 2, Rise = 3, Lunge = 4 }
+        /// <summary>How a puppet moves over a shot. Stand faces its mark's forward; Sink is pulled toward its target and under.</summary>
+        public enum ActorPose : byte { Hidden = 0, Stand = 1, Walk = 2, Rise = 3, Lunge = 4, Sink = 5 }
 
         [Serializable]
         public struct Shot {
@@ -28,6 +29,11 @@ namespace Universes.UniverseData.classic_horror {
             [Tooltip("Where he moves to over the shot (empty: he stays on his mark).")]
             public Transform actorTarget;
             public ActorPose actorPose;
+            [Tooltip("Where Mara stands in this shot (empty: not in it).")]
+            public Transform maraMark;
+            [Tooltip("Where she moves to over the shot (empty: she stays on her mark).")]
+            public Transform maraTarget;
+            public ActorPose maraPose;
             [Tooltip("A sound cue at the start of the shot: thud, bell, scream, doors, engine or splash.")]
             public string cue;
         }
