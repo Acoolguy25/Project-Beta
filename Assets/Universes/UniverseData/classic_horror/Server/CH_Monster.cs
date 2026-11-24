@@ -22,6 +22,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float ThinkInterval = 0.1f;
         const float NavigationRadius = 0.25f, NavigationHeight = 1.9f;
         const float SamplePositionRadius = 3f;
+        /// <summary>How far above or below a wanted spot a NavMesh point may be and still count as the same floor.</summary>
+        const float SameFloorHeight = 0.5f;
         // Behaviour constants. Balance numbers (speeds, senses, timings a designer tunes) live in CH_MonsterTuning; these
         // shape how he moves and are not meant to be tuned per map.
         /// <summary>His footstep sounds play this much faster than a walking investigator's: a heavy, quick stride.</summary>
@@ -40,6 +42,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float SweepPointReach = 1.5f, PatrolPointReach = 2f, HidingPlaceReach = 1.6f;
         /// <summary>Longest walk to one patrol point before he picks another, and how widely around an investigator he picks it.</summary>
         const float PatrolLegSeconds = 22f, PatrolScatter = 16f;
+        /// <summary>After a stare (the bell grab, a drag-out), the share of his lunge cooldown he also waits before lunging.</summary>
+        const float HeadStartLungeShare = 0.5f;
         static readonly Vector3 HitboxSize = new(0.5f, 1.9f, 0.5f), HitboxCenter = new(0, 0.95f, 0);
 
         CH_ServerRunner runner;
@@ -48,6 +52,9 @@ namespace Universes.UniverseData.classic_horror.Server {
         NavMeshAgent agent;
         GameCharacter entity;
         System.Random random;
+
+        /// <summary>His networked body.</summary>
+        public GameCharacter Entity => entity != null ? entity : entity = GetComponent<GameCharacter>();
         int obstacleMask;
 
         readonly Dictionary<LocalCharacter, Vector3> previousPositions = new();
@@ -131,6 +138,21 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         public void Resume() { suspended = false; lastThink = Time.time; lastSensedAnyone = Time.time; }
 
+        /// <summary>
+        /// Finds where he could stand near <paramref name="spot"/> (on the same floor, within <paramref name="reach"/> m)
+        /// with a whole path to <paramref name="target"/>. A NavMesh island (a table top, an altar's back panel) does not count.
+        /// </summary>
+        public bool TryFindStandingSpot(Vector3 spot, Vector3 target, float reach, out Vector3 standing) {
+            standing = spot;
+            probePath ??= new NavMeshPath();
+            if (!NavMesh.SamplePosition(spot, out NavMeshHit hit, reach, agent.areaMask) || Mathf.Abs(hit.position.y - spot.y) > SameFloorHeight)
+                return false;
+            if (!NavMesh.CalculatePath(hit.position, target, agent.areaMask, probePath) || probePath.status != NavMeshPathStatus.PathComplete)
+                return false;
+            standing = hit.position;
+            return true;
+        }
+
         /// <summary>Puts him somewhere new at once (a cutscene's end, the director), forgetting the chase.</summary>
         public void Warp(Vector3 position) {
             if (NavMesh.SamplePosition(position, out NavMeshHit hit, SamplePositionRadius, agent.areaMask) && agent.enabled)
@@ -152,8 +174,8 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (afterSeconds <= 0f) return;
             Hold(afterSeconds);
             nextAttack = Time.time + afterSeconds;
-            // The first second of the run is theirs.
-            nextLunge = Time.time + afterSeconds + tuning.lungeCooldown * 0.5f;
+            // The start of the run is theirs: no lunge until this share of his lunge cooldown has passed too.
+            nextLunge = Time.time + afterSeconds + tuning.lungeCooldown * HeadStartLungeShare;
         }
 
         void Stop() {
@@ -315,7 +337,9 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (lastKnownPosition != Vector3.zero) lastKnownVelocity = Vector3.Lerp(lastKnownVelocity, velocity, 0.5f);
             lastKnownPosition = position;
 
-            float pace = tuning.ChaseSpeed(runner.Act, runner.IsCarryingBell(target), runner.LivingInvestigators);
+            bool bell = runner.IsCarryingBell(target);
+            float pace = tuning.ChaseSpeed(runner.Act, bell, runner.LivingInvestigators);
+            if (!bell) pace = tuning.ClosingPace(pace, distance);
             if (visible && distance < tuning.lungeRange && distance > tuning.strikeDistance && Time.time >= nextLunge) {
                 lungeUntil = Time.time + tuning.lungeSeconds;
                 nextLunge = Time.time + tuning.lungeCooldown;
@@ -354,7 +378,8 @@ namespace Universes.UniverseData.classic_horror.Server {
                 return;
             }
             Vector3 guess = lastKnownPosition + lastKnownVelocity * Mathf.Min(lostFor + tuning.predictionSeconds, GuessHorizon);
-            Steer(guess, tuning.ChaseSpeed(runner.Act, false, runner.LivingInvestigators), Time.time >= nextRepath);
+            float pace = tuning.ChaseSpeed(runner.Act, false, runner.LivingInvestigators);
+            Steer(guess, tuning.ClosingPace(pace, Vector3.Distance(transform.position, guess)), Time.time >= nextRepath);
         }
 
         void BeginSearch() {

@@ -6,7 +6,8 @@ namespace Universes.UniverseData.classic_horror {
     /// follows at a fixed pace. They sprint until their stamina is gone, walk until it is back to
     /// <see cref="SprintAgainAt"/>, and sprint again, with the shared character's stamina rules
     /// (<see cref="CH_MonsterTuning.InvestigatorStamina"/> and friends). He catches them when he is within striking
-    /// distance, or within lunging range while they walk. The real village has corners that favour neither side; the
+    /// distance, or within lunging range while they walk. Unless told otherwise he closes in as the
+    /// gap opens (<see cref="CH_MonsterTuning.ClosingPace"/>), as he does in the game. The real village has corners that favour neither side; the
     /// model answers "can a good player make it, and by how much".
     /// </summary>
     public static class CH_ChaseModel {
@@ -28,13 +29,15 @@ namespace Universes.UniverseData.classic_horror {
         /// <param name="holdSeconds">How long he stands still before he follows (the bell grab's stare, a drag-out's stagger).</param>
         /// <param name="distance">Metres to the goal.</param>
         /// <param name="startGap">Metres between them when the chase begins.</param>
-        /// <param name="carrySpeed">A fixed pace for an investigator who cannot sprint (the fuel can), or 0 to sprint.</param>
-        public static Result Run(CH_MonsterTuning tuning, float pursuerSpeed, float holdSeconds, float distance, float startGap, float carrySpeed = 0f) {
+        /// <param name="fixedSpeed">A fixed pace for an investigator who walks or cannot sprint (the fuel can), or 0 to sprint.</param>
+        /// <param name="closesIn">Whether he presses harder as the gap opens; false for the bell, which he chases flat out.</param>
+        public static Result Run(CH_MonsterTuning tuning, float pursuerSpeed, float holdSeconds, float distance, float startGap,
+            float fixedSpeed = 0f, bool closesIn = true) {
             float covered = 0f, pursuer = -startGap, stamina = CH_MonsterTuning.InvestigatorStamina, regenDelay = 0f, time = 0f;
-            bool sprinting = carrySpeed <= 0f;
+            bool sprinting = fixedSpeed <= 0f;
             while (covered < distance) {
                 float speed;
-                if (carrySpeed > 0f) speed = carrySpeed;
+                if (fixedSpeed > 0f) speed = fixedSpeed;
                 else {
                     if (sprinting && stamina <= 0f) sprinting = false;
                     else if (!sprinting && stamina >= CH_MonsterTuning.InvestigatorStamina * SprintAgainAt) sprinting = true;
@@ -48,7 +51,7 @@ namespace Universes.UniverseData.classic_horror {
                 }
                 covered += speed * Step;
                 time += Step;
-                if (time > holdSeconds) pursuer += pursuerSpeed * Step;
+                if (time > holdSeconds) pursuer += (closesIn ? tuning.ClosingPace(pursuerSpeed, covered - pursuer) : pursuerSpeed) * Step;
                 float gap = covered - pursuer;
                 bool running = speed >= CH_MonsterTuning.InvestigatorSprintSpeed;
                 if (time > holdSeconds && (gap < tuning.strikeDistance || (!running && gap < tuning.lungeRange)))

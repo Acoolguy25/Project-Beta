@@ -22,6 +22,8 @@ namespace Universes.UniverseData.classic_horror {
 
         /// <summary>Item names, in <see cref="CH_ItemKind"/> order.</summary>
         public static readonly string[] ItemNames = { "Fuel can", "Ferryman's toolbox", "Ferry lantern", "Hymnal", "Photograph", "Vigil candle", "Lily's music box", "Crane's bell" };
+        /// <summary>Each item as it reads mid-sentence ("Take ..."): an article where it needs one, names kept capitalised.</summary>
+        public static readonly string[] ItemsInSentence = { "the fuel can", "the ferryman's toolbox", "the ferry lantern", "the hymnal", "the photograph", "the vigil candle", "Lily's music box", "Crane's bell" };
 
         /// <summary>The three boat parts, in the order the boat's slots are authored.</summary>
         public static readonly CH_ItemKind[] BoatParts = { CH_ItemKind.Fuel, CH_ItemKind.Toolbox, CH_ItemKind.Lantern };
@@ -41,6 +43,8 @@ namespace Universes.UniverseData.classic_horror {
         };
 
         public static string ItemName(CH_ItemKind kind) => ItemNames[(int)kind];
+
+        public static string ItemInSentence(CH_ItemKind kind) => ItemsInSentence[(int)kind];
 
         public static string SingerName(int singer) => singer >= 0 && singer < Singers.Length ? Singers[singer] : "the drowned";
 

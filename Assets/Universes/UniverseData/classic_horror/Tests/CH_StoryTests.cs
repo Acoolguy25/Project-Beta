@@ -82,5 +82,16 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.IsTrue(tuning.InSightCone(Vector3.forward, Vector3.forward));
             Assert.IsFalse(tuning.InSightCone(Vector3.forward, Vector3.back));
         }
+
+        [Test] public void EveryItemReadsMidSentenceWithItsOwnCapitals() {
+            Assert.AreEqual(CH_Story.ItemNames.Length, CH_Story.ItemsInSentence.Length);
+            foreach (CH_ItemKind kind in System.Enum.GetValues(typeof(CH_ItemKind))) {
+                string name = CH_Story.ItemName(kind), inSentence = CH_Story.ItemInSentence(kind);
+                Assert.IsTrue(inSentence.EndsWith(name.Substring(1)), $"'{inSentence}' should read as '{name}'.");
+                bool properNoun = name.Contains("'s ") && char.IsUpper(name[0]) && !name.StartsWith("Ferryman");
+                if (properNoun) Assert.AreEqual(name, inSentence, $"{name} is named after someone: no article, capital kept.");
+                else Assert.AreEqual("the " + name.ToLowerInvariant(), inSentence);
+            }
+        }
     }
 }

@@ -19,10 +19,10 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const string KayKitFurniture = "Assets/ThirdParty/KayKit/FurnitureBits/Models/";
         const string MonsterPrefabPath = "Packages/com.ryan.gameframework/Runtime/Characters/Monster/Prefabs/Monster.prefab";
         const string PriestModelPath = Root + "/Cursed Priest/Prefab/Priest.prefab";
-        // Mara is built like the investigators (the shared robot body and its walk), in her yellow oilskin.
+        // Mara is built on the investigators' body and walk, dressed as a skipper: sou'wester, long oilskin coat, dark overalls.
         const string CrewModelPath = "Assets/UnityTechnologies/SpaceRobotKyle/Models/KyleRobot.fbx";
         const string CrewControllerPath = "Assets/UnityTechnologies/SpaceRobotKyle/Animations/StarterAssetsThirdPerson.controller";
-        static readonly Color MaraOilskin = new(0.78f, 0.56f, 0.12f);
+        static readonly Color MaraOilskin = new(0.6f, 0.42f, 0.07f), MaraOveralls = new(0.09f, 0.1f, 0.12f);
         const string SoftDotPath = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Textures/fx_soft_dot.png";
         const float ItemLightRange = 3f;
 
@@ -257,7 +257,10 @@ namespace Universes.UniverseData.classic_horror.Editor {
             AssetDatabase.SaveAssets();
         }
 
-        /// <summary>Mara as a client-only puppet: the investigators' body and walk, recoloured, for the cutscenes.</summary>
+        /// <summary>
+        /// Mara as a client-only puppet for the cutscenes: the investigators' body and walk in dark overalls, under a
+        /// skipper's sou'wester and a long oilskin coat that follow her bones, so she reads as a person, not a mannequin.
+        /// </summary>
         [MenuItem("Ryan/Classic Horror/Rebuild Mara Actor")]
         public static void BuildMaraActor() {
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(CrewModelPath);
@@ -267,10 +270,12 @@ namespace Universes.UniverseData.classic_horror.Editor {
             try {
                 PrefabUtility.UnpackPrefabInstance(root, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
                 root.name = "MaraActor";
+                Material overalls = Material("MaraOveralls", MaraOveralls);
                 Material oilskin = Material("MaraOilskin", MaraOilskin);
+                oilskin.SetFloat("_Smoothness", 0.55f);
                 foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) {
                     var slots = renderer.sharedMaterials;
-                    for (int i = 0; i < slots.Length; i++) slots[i] = oilskin;
+                    for (int i = 0; i < slots.Length; i++) slots[i] = overalls;
                     renderer.sharedMaterials = slots;
                     renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                     if (renderer is SkinnedMeshRenderer skin) skin.updateWhenOffscreen = true;
@@ -280,6 +285,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 animator.runtimeAnimatorController = controller;
                 animator.applyRootMotion = false;
                 animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                DressAsSkipper(root, animator, oilskin);
                 var actor = root.AddComponent<CH_Puppet>();
                 actor.animator = animator;
                 actor.footstep = Sound(0.3f, 1.25f, 1.5f, 18f, AudioFolder + "wood-thud.ogg");
@@ -288,6 +294,52 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 PrefabUtility.SaveAsPrefabAsset(root, MaraActorPath);
             } finally { Object.DestroyImmediate(root); }
             AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// A sou'wester on the head and an oilskin coat (body, sleeves and a skirt to the knee), each piece parented to the
+        /// bone it covers so it moves with her walk. Sizes are fractions of her height, measured in the model's bind pose.
+        /// </summary>
+        static void DressAsSkipper(GameObject root, Animator animator, Material oilskin) {
+            Transform Bone(HumanBodyBones bone) => animator.isHuman ? animator.GetBoneTransform(bone) : null;
+            Transform hips = Bone(HumanBodyBones.Hips), head = Bone(HumanBodyBones.Head);
+            Transform neck = Bone(HumanBodyBones.Neck) ?? head, knee = Bone(HumanBodyBones.LeftLowerLeg);
+            if (hips == null || head == null || knee == null) throw new System.InvalidOperationException("Mara's model is not a humanoid rig; she cannot be dressed.");
+            Bounds body = root.GetComponentInChildren<SkinnedMeshRenderer>().bounds;
+            float height = body.size.y, top = body.max.y;
+            Vector3 up = Vector3.up, forward = root.transform.forward;
+
+            // A capsule from a to b, parented to the bone it covers.
+            void Piece(string name, Transform bone, Vector3 a, Vector3 b, float width, float depth) {
+                var piece = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                piece.name = name;
+                Object.DestroyImmediate(piece.GetComponent<Collider>());
+                piece.GetComponent<Renderer>().sharedMaterial = oilskin;
+                Vector3 along = b - a;
+                piece.transform.SetPositionAndRotation((a + b) * 0.5f, Quaternion.LookRotation(forward, along.normalized));
+                piece.transform.localScale = new Vector3(width * height, along.magnitude * 0.5f, depth * height);
+                piece.transform.SetParent(bone, true);
+            }
+            void Sleeve(HumanBodyBones upper, HumanBodyBones lower, HumanBodyBones hand) {
+                Transform shoulder = Bone(upper), elbow = Bone(lower), wrist = Bone(hand);
+                if (shoulder == null || elbow == null || wrist == null) return;
+                Piece(upper + " sleeve", shoulder, shoulder.position, elbow.position, 0.075f, 0.075f);
+                Piece(lower + " sleeve", elbow, elbow.position, Vector3.Lerp(elbow.position, wrist.position, 0.85f), 0.065f, 0.065f);
+            }
+
+            Piece("Coat", hips, hips.position, neck.position + up * (0.02f * height), 0.24f, 0.17f);
+            Piece("Coat skirt", hips, hips.position + up * (0.04f * height), new Vector3(hips.position.x, knee.position.y - 0.03f * height, hips.position.z), 0.26f, 0.2f);
+            Sleeve(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand);
+            Sleeve(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand);
+
+            // The sou'wester: a low crown and a brim that dips at the back over the collar.
+            var crown = Shape("Sou'wester crown", PrimitiveType.Cylinder, null, Vector3.zero, new Vector3(0.15f, 0.035f, 0.16f) * height, oilskin);
+            crown.transform.position = new Vector3(head.position.x, top - 0.02f * height, head.position.z);
+            crown.transform.SetParent(head, true);
+            var brim = Shape("Sou'wester brim", PrimitiveType.Cylinder, null, Vector3.zero, new Vector3(0.24f, 0.004f, 0.27f) * height, oilskin);
+            brim.transform.SetPositionAndRotation(new Vector3(head.position.x, top - 0.05f * height, head.position.z) - forward * (0.02f * height),
+                Quaternion.AngleAxis(-10f, root.transform.right));
+            brim.transform.SetParent(head, true);
         }
 
         /// <summary>A short-range light in front of a puppet's face (switched with the puppet's visibility).</summary>

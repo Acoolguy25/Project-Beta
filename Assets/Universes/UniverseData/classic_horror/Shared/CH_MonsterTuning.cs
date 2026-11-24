@@ -5,16 +5,22 @@ namespace Universes.UniverseData.classic_horror {
     /// <summary>
     /// Every number that decides how Father Crane hunts, in one serialized block on the server runner. Speeds are what
     /// his navigation agent moves at (m/s); investigators walk at 4.5 and sprint at 9.5 for about ten seconds of
-    /// stamina. He is faster than a walk and slower than a sprint: a sprint opens a gap, and only breaking his sight and
-    /// getting out of earshot (or hiding) ends a chase.
+    /// stamina. He is faster than a walk and slower than a sprint: a first sprint opens a gap, but stamina comes back
+    /// slowly, so in the open he stays on you and from Act II he runs a team down. Only breaking his sight and getting
+    /// out of earshot (or hiding) ends a chase. <c>CH_BalanceTests</c> holds these numbers to that.
     /// </summary>
     [Serializable]
     public sealed class CH_MonsterTuning {
         public const float InvestigatorWalkSpeed = 4.5f, InvestigatorSprintSpeed = 9.5f;
         /// <summary>Walking with the fuel can: no sprint at all, so a chased carrier has to put it down to get away.</summary>
         public const float HeavyCarrySpeed = 4.2f;
-        /// <summary>The stamina the runner gives investigators, and the shared character's sprint cost and recovery.</summary>
-        public const float InvestigatorStamina = 100f, SprintStaminaPerSecond = 10f, StaminaRegenPerSecond = 16f, StaminaRegenDelay = 0.6f;
+        /// <summary>The stamina, recovery per second and recovery delay the runner gives investigators.</summary>
+        public const float InvestigatorStamina = 100f, StaminaRegenPerSecond = 12f, StaminaRegenDelay = 0.6f;
+        /// <summary>
+        /// The shared character's sprint cost (<c>CharacterMovement.sprintStaminaPerSecond</c> on the client prefab). The
+        /// server cannot set it, so <c>CH_BalanceTests</c> reads the prefab and fails if the two drift apart.
+        /// </summary>
+        public const float SprintStaminaPerSecond = 10f;
         /// <summary>How short of its destination (metres) the agent stops.</summary>
         public const float AgentStoppingDistance = 0.4f;
 
@@ -25,11 +31,19 @@ namespace Universes.UniverseData.classic_horror {
         [Tooltip("Chasing, per act: I (stranded), II (the choir), III (the last sermon).")]
         public Vector3 chaseSpeedByAct = new(6.9f, 7.4f, 8.0f);
         [Tooltip("Chasing whoever carries his bell.")]
-        [Min(0.5f)] public float bellChaseSpeed = 8.6f;
+        [Min(0.5f)] public float bellChaseSpeed = 8.4f;
         [Tooltip("When the bell leaves the altar he rises behind it and stares this long before he follows the thief.")]
         [Min(0f)] public float bellGrabHoldSeconds = 3f;
         [Tooltip("Chase speed multiplier while only one investigator is alive, so a solo night stays winnable.")]
         [Range(0.5f, 1f)] public float loneChaseFactor = 0.92f;
+
+        [Header("Closing in")]
+        [Tooltip("Metres ahead of him where he starts to press harder. The village's corners cost him more than they cost a runner, so without this a long chase drifts out of his sight.")]
+        [Min(0f)] public float closeInFrom = 20f;
+        [Tooltip("Metres ahead of him where he presses hardest.")]
+        [Min(0f)] public float closeInFull = 40f;
+        [Tooltip("His chase pace multiplier at closeInFull and beyond. It never takes him past a sprinting investigator, and never applies to the bell (he already runs flat out for it).")]
+        [Range(1f, 1.6f)] public float closeInBoost = 1.3f;
 
         [Header("Lunge")]
         [Tooltip("Close enough, with a clear line, he lunges at this speed for a moment.")]
@@ -112,6 +126,16 @@ namespace Universes.UniverseData.classic_horror {
         public float ChaseSpeed(int act, bool bellCarrier, int livingInvestigators) {
             float speed = bellCarrier ? bellChaseSpeed : act <= 1 ? chaseSpeedByAct.x : act == 2 ? chaseSpeedByAct.y : chaseSpeedByAct.z;
             return livingInvestigators <= 1 ? speed * loneChaseFactor : speed;
+        }
+
+        /// <summary>
+        /// His pace with the quarry <paramref name="gap"/> metres ahead: <paramref name="pace"/> up close, rising to
+        /// <see cref="closeInBoost"/> times it as the gap opens, but never past <see cref="InvestigatorSprintSpeed"/>
+        /// (unless his own pace already is). A sprinter still gains on him; a walker or a lost runner does not get away.
+        /// </summary>
+        public float ClosingPace(float pace, float gap) {
+            float press = Mathf.Lerp(1f, closeInBoost, Mathf.InverseLerp(closeInFrom, closeInFull, gap));
+            return Mathf.Min(pace * press, Mathf.Max(pace, InvestigatorSprintSpeed));
         }
 
         /// <summary>How far he sees an investigator, lit or in the dark, already chasing them or not.</summary>

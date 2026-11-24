@@ -702,7 +702,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
             Panel("Bottom slat", view, new Vector2(0.455f, 0f), new Vector2(0.545f, 0.16f), doorColour);
             client.hidingLabel = UIKit.Text(view, "Hint", "Hiding  ·  press E to leave", UIText.Strong, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             var hint = client.hidingLabel.rectTransform;
-            hint.anchorMin = new Vector2(0f, 0.06f); hint.anchorMax = new Vector2(1f, 0.11f); hint.offsetMin = hint.offsetMax = Vector2.zero;
+            // Above the shared hotbar, which keeps the bottom of the screen.
+            hint.anchorMin = new Vector2(0f, 0.2f); hint.anchorMax = new Vector2(1f, 0.25f); hint.offsetMin = hint.offsetMax = Vector2.zero;
         }
 
         /// <summary>The boarding countdown: big, centred above the prompt, impossible to miss.</summary>
@@ -722,11 +723,14 @@ namespace Universes.UniverseData.classic_horror.Editor {
             voice.ear = Source(root.transform, "VoiceEar");
             voice.monster = Spatial(Source(root.transform, "VoicePriest"), 4f, 70f);
             voice.world = Spatial(Source(root.transform, "VoiceWorld"), 2f, 45f);
+            // The subtitle's emblem says where a voice comes from: the radio, the priest, a whisper, the dead, or Mara in person.
+            voice.radioIcon = UIThemeAssets.Icon("pocket_radio");
+            voice.defaultIcon = UIThemeAssets.Icon("candle");
             voice.styles = new[] {
-                new CH_VoicePlayer.SpeakerStyle { speaker = "MARA", caption = new Color(0.95f, 0.76f, 0.46f) },
-                new CH_VoicePlayer.SpeakerStyle { speaker = "FATHER CRANE", caption = new Color(0.9f, 0.3f, 0.26f) },
-                new CH_VoicePlayer.SpeakerStyle { speaker = "LILY", caption = new Color(0.68f, 0.84f, 1f) },
-                new CH_VoicePlayer.SpeakerStyle { speaker = "???", caption = new Color(0.62f, 0.6f, 0.66f) },
+                new CH_VoicePlayer.SpeakerStyle { speaker = "MARA", caption = new Color(0.95f, 0.76f, 0.46f), icon = UIThemeAssets.Icon("person") },
+                new CH_VoicePlayer.SpeakerStyle { speaker = "FATHER CRANE", caption = new Color(0.9f, 0.3f, 0.26f), icon = UIThemeAssets.Icon("crowned_skull") },
+                new CH_VoicePlayer.SpeakerStyle { speaker = "LILY", caption = new Color(0.68f, 0.84f, 1f), icon = UIThemeAssets.Icon("ghost") },
+                new CH_VoicePlayer.SpeakerStyle { speaker = "???", caption = new Color(0.62f, 0.6f, 0.66f), icon = UIThemeAssets.Icon("eye") },
             };
         }
 
@@ -1003,7 +1007,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             HudKit.AccentStripe(card, Amber, 4f, left: true);
             UIKit.Row(card.gameObject, 16f, new RectOffset(22, 26, 18, 18), TextAnchor.UpperLeft);
             UIKit.FitContent(card.gameObject, false, true);
-            HudKit.Emblem(card, "Emblem", "pocket_radio", 52f, Amber, out _, out _);
+            HudKit.Emblem(card, "Emblem", "pocket_radio", 52f, Amber, out _, out radio.emblem);
             RectTransform text = UIKit.Node(card, "Text");
             UIKit.Size(text, -1f, -1f, 1f);
             UIKit.Column(text.gameObject, 4f, null, TextAnchor.UpperLeft);
