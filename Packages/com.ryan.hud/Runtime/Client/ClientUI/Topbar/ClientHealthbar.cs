@@ -21,9 +21,32 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         CanvasGroupController visibility;
         GameCharacter observed;
 
+        static bool suppressed;
+        static event System.Action SuppressedChanged;
+
+        /// <summary>
+        /// Keeps the bar hidden whatever the health, for a game where health is not the player's concern (a catch is
+        /// always fatal, lives are what count). The game sets it while it runs and clears it when it ends.
+        /// </summary>
+        public static bool Suppressed {
+            get => suppressed;
+            set {
+                if (suppressed == value) return;
+                suppressed = value;
+                SuppressedChanged?.Invoke();
+            }
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() {
+            suppressed = false;
+            SuppressedChanged = null;
+        }
+
         void Awake() => visibility = GetComponent<CanvasGroupController>();
 
         void Start() {
+            SuppressedChanged += Refresh;
             CameraController.OnCameraTargetAdded += Observe;
             CameraController.OnCameraTargetRemoved += StopObserving;
             if (CameraController.targetCharacter != null)
@@ -32,6 +55,7 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         }
 
         void OnDestroy() {
+            SuppressedChanged -= Refresh;
             CameraController.OnCameraTargetAdded -= Observe;
             CameraController.OnCameraTargetRemoved -= StopObserving;
             StopObserving(observed);
@@ -57,7 +81,7 @@ namespace RyanAssets.Client.ClientUI.Topbar {
         void OnHealthChanged(long oldValue, long newValue, bool asServer) => Refresh();
 
         void Refresh() {
-            if (observed == null) {
+            if (observed == null || suppressed) {
                 visibility.SetVisible(false);
                 return;
             }

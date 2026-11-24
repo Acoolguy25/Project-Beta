@@ -49,6 +49,9 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         public void ResetNight() => End();
 
+        /// <summary>Takes him away at once: a cutscene is starting, and the night's own scenes never share the frame with him.</summary>
+        public void Cancel() => End();
+
         public void Play(CH_ScareKind kind, int scareSequence) {
             if (actor == null || mode != Mode.None) return;
             sequence = scareSequence;

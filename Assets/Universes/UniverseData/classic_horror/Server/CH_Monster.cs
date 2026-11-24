@@ -24,6 +24,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float SamplePositionRadius = 3f;
         /// <summary>How far above or below a wanted spot a NavMesh point may be and still count as the same floor.</summary>
         const float SameFloorHeight = 0.5f;
+        /// <summary>How far above or below a steering target its NavMesh point may be (a step, a slope) before it counts as another floor.</summary>
+        const float SteerFloorTolerance = 1.2f;
         // Behaviour constants. Balance numbers (speeds, senses, timings a designer tunes) live in CH_MonsterTuning; these
         // shape how he moves and are not meant to be tuned per map.
         /// <summary>His footstep sounds play this much faster than a walking investigator's: a heavy, quick stride.</summary>
@@ -84,7 +86,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         LocalCharacter hidingQuarry;
         float openingGivesUpAt;
         // Reused for reachability checks, which run outside the per-frame path.
-        NavMeshPath probePath;
+        NavMeshPath probePath, steerPath;
         readonly HashSet<CH_HidingSpot> checkedHidingPlaces = new();
 
         public void Initialize(CH_ServerRunner owner, LocalNPC npc, int seed, CH_MonsterTuning hunt) {
@@ -348,7 +350,7 @@ namespace Universes.UniverseData.classic_horror.Server {
 
             // Close in on where they are going, not where they were; right on top of them, go straight for them.
             Vector3 aim = distance < DirectChaseDistance ? position : position + lastKnownVelocity * tuning.predictionSeconds;
-            Steer(aim, pace, Time.time >= nextRepath || distance < DirectChaseDistance);
+            Steer(aim, pace, Time.time >= nextRepath || distance < DirectChaseDistance, position);
 
             if (visible && distance < tuning.strikeDistance + StrikeWindup && Time.time >= nextAttack
                 && Vector3.Distance(Flat(transform.position), Flat(position)) < tuning.strikeDistance) {
@@ -379,7 +381,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             }
             Vector3 guess = lastKnownPosition + lastKnownVelocity * Mathf.Min(lostFor + tuning.predictionSeconds, GuessHorizon);
             float pace = tuning.ChaseSpeed(runner.Act, false, runner.LivingInvestigators);
-            Steer(guess, tuning.ClosingPace(pace, Vector3.Distance(transform.position, guess)), Time.time >= nextRepath);
+            Steer(guess, tuning.ClosingPace(pace, Vector3.Distance(transform.position, guess)), Time.time >= nextRepath, lastKnownPosition);
         }
 
         void BeginSearch() {
@@ -565,14 +567,29 @@ namespace Universes.UniverseData.classic_horror.Server {
 
         // ---- Movement ------------------------------------------------------------------------------------------------------
 
-        void Steer(Vector3 destination, float speed, bool repath) {
+        /// <summary>
+        /// Heads for <paramref name="destination"/> (or, if he cannot walk all the way there, <paramref name="fallback"/>).
+        /// Paths are worked out at once and handed to the agent whole: a pending path request, or a predicted point that
+        /// lands on a porch roof he cannot reach, used to leave him standing still for a moment in the middle of a chase.
+        /// </summary>
+        void Steer(Vector3 destination, float speed, bool repath, Vector3? fallback = null) {
             locomotion.SetTargetingType(NPCTargetingType.External);
             agent.speed = speed * (entity != null ? entity.Build.Speed : 1f);
             agent.isStopped = false;
             if (!repath && agent.hasPath && !agent.isPathStale) return;
             nextRepath = Time.time + tuning.repathInterval;
+            if (TrySetPath(destination) || (fallback.HasValue && TrySetPath(fallback.Value))) return;
+            // Nowhere he can walk all the way to (they are on a roof, in the lake): get as near as the NavMesh allows.
             if (NavMesh.SamplePosition(destination, out NavMeshHit hit, SamplePositionRadius, agent.areaMask))
                 agent.SetDestination(hit.position);
+        }
+
+        /// <summary>Sets a whole path to <paramref name="point"/> on its own floor, at once; false if there is none.</summary>
+        bool TrySetPath(Vector3 point) {
+            if (!NavMesh.SamplePosition(point, out NavMeshHit hit, SamplePositionRadius, agent.areaMask)
+                || Mathf.Abs(hit.position.y - point.y) > SteerFloorTolerance) return false;
+            steerPath ??= new NavMeshPath();
+            return agent.CalculatePath(hit.position, steerPath) && steerPath.status == NavMeshPathStatus.PathComplete && agent.SetPath(steerPath);
         }
 
         /// <summary>Hunting and getting nowhere (a doorframe, a crate): he forces his way along his path.</summary>

@@ -148,12 +148,15 @@ namespace Universes.UniverseData.classic_horror.Client {
         }
 
         void OnEnable() {
+            // A catch is always fatal and lives are what count: the shared health bar has nothing to say here.
+            RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = true;
             ToolControls.interactPressed += Interact;
             ToolControls.journalPressed += OpenJournal;
             ToolControls.reloadToolPressed += PutDown;
         }
 
         void OnDisable() {
+            RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = false;
             ToolControls.interactPressed -= Interact;
             ToolControls.journalPressed -= OpenJournal;
             ToolControls.reloadToolPressed -= PutDown;
@@ -277,7 +280,10 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         void OnScare(CH_ScareBroadcast scare, Channel channel) {
             if (!hasState || scare.seed != state.seed) return;
-            if (scare.kind is CH_ScareKind.Apparition or CH_ScareKind.Watcher) apparitions.Play(scare.kind, scare.sequence);
+            if (scare.kind is CH_ScareKind.Apparition or CH_ScareKind.Watcher) {
+                // One that arrives as a scene starts would stand in the scene's frame.
+                if (!cutscenes.Playing) apparitions.Play(scare.kind, scare.sequence);
+            }
             else jumpscare.Play(scare.sequence, scare.kind);
         }
 
@@ -307,6 +313,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                     journal.Close();
                     placedItems.Clear();
                     items.CollectPlaced(placedItems);
+                    apparitions.Cancel();
                     cutscenes.Play(next.phase, fresh ? next.phaseSeconds : 0f, placedItems);
                 }
             } else if (cutscenePhase != CH_Phase.Waiting) {
