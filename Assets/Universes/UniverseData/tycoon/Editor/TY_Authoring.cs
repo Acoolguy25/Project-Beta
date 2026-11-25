@@ -94,30 +94,33 @@ namespace Universes.UniverseData.tycoon.Editor {
         }
 
         internal sealed class Prefabs {
-            public GameObject plotBase, ore, coin;
+            public GameObject plotBase, ore, coin, chest;
             public GameObject[] items, pads;
             public Material[] plotMats, oreMats, floorMats;
-            public Material grass, plaza, stone, city, space, proto;
+            public Material grass, plaza, stone, city, space, proto, dungeon;
         }
 
         // ---------------------------------------------------------------- KayKit models
-        enum Pack { City, Space, Proto }
+        enum Pack { City, Space, Proto, Dungeon }
 
         static string PackPath(Pack pack) => pack switch {
             Pack.City => KayKit + "/CityBuilderBits/Models",
             Pack.Space => KayKit + "/SpaceBaseBits/Models",
+            Pack.Dungeon => KayKit + "/DungeonRemastered/Models",
             _ => KayKit + "/PrototypeBits/Models",
         };
 
         /// <summary>One URP material per KayKit pack: every model in a pack shares its palette texture.</summary>
         static Material PackMaterial(Pack pack) {
-            string texture = pack switch { Pack.City => "citybits_texture", Pack.Space => "spacebits_texture", _ => "prototypebits_texture" };
+            string texture = pack switch {
+                Pack.City => "citybits_texture", Pack.Space => "spacebits_texture", Pack.Dungeon => "dungeon_texture", _ => "prototypebits_texture",
+            };
             var tex = AssetDatabase.LoadAssetAtPath<Texture2D>($"{PackPath(pack)}/{texture}.png");
             if (tex == null) throw new FileNotFoundException($"KayKit texture missing: {PackPath(pack)}/{texture}.png");
             return Kit.Mat($"KayKit{pack}", Color.white, tex, smoothness: 0.3f);
         }
 
-        static Material Pal(Prefabs p, Pack pack) => pack switch { Pack.City => p.city, Pack.Space => p.space, _ => p.proto };
+        static Material Pal(Prefabs p, Pack pack) => pack switch { Pack.City => p.city, Pack.Space => p.space, Pack.Dungeon => p.dungeon, _ => p.proto };
 
         /// <summary>A KayKit model under <paramref name="parent"/>, largest side <paramref name="size"/> m, base on the parent origin + offset.</summary>
         static GameObject Kay(Prefabs p, Pack pack, string model, Transform parent, float size, Vector3 offset = default, float yaw = 0f, Material overrideMaterial = null) {
@@ -147,6 +150,7 @@ namespace Universes.UniverseData.tycoon.Editor {
                 city = PackMaterial(Pack.City),
                 space = PackMaterial(Pack.Space),
                 proto = PackMaterial(Pack.Proto),
+                dungeon = PackMaterial(Pack.Dungeon),
             };
             p.floorMats = PlotColors.Select((c, i) => Tiled(Kit.Mat($"PlotFloor{i}", Color.Lerp(c, new Color(0.9f, 0.92f, 0.95f), 0.82f), tile, smoothness: 0.3f), 10f, 10f)).ToArray();
             var mats = new Mats {
@@ -162,6 +166,7 @@ namespace Universes.UniverseData.tycoon.Editor {
                 padExpensive = Kit.Mat("PadExpensive", new Color(0.95f, 0.3f, 0.25f), tile, 0.4f),
                 padLocked = Kit.Mat("PadLocked", new Color(0.45f, 0.47f, 0.52f), tile, 0.05f),
                 padForeign = Kit.Mat("PadForeign", new Color(0.62f, 0.64f, 0.68f), tile, 0.1f),
+                landmarkBase = Kit.Mat("LandmarkBase", TY_Lanes.Color(TY_ItemKind.Landmark), tile, 0.5f, smoothness: 0.6f, metallic: 0.4f),
                 upgradeFields = new[] {
                     Kit.Mat("FieldPolish", new Color(1f, 0.45f, 0.35f), emission: 1.4f, alpha: 0.35f),
                     Kit.Mat("FieldWash", new Color(0.35f, 0.75f, 1f), emission: 1.4f, alpha: 0.35f),
@@ -173,6 +178,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             p.pads = System.Enum.GetValues(typeof(TY_ItemKind)).Cast<TY_ItemKind>().Select(kind => Pad(kind, mats)).ToArray();
             p.ore = Brick(p.oreMats[0]);
             p.coin = Coin(p);
+            p.chest = Chest(p, mats);
 
             p.items = new GameObject[TY_Catalog.Count];
             int dropperTier = 0, upgraderTier = 0;
@@ -193,11 +199,31 @@ namespace Universes.UniverseData.tycoon.Editor {
             p.items[Index("Mega Vault")] = Props(p, "MegaVault", Pack.Space, "basemodule_A", 3.6f, "MEGA VAULT");
             p.items[Index("Auto-Collector")] = AutoCollector(p);
             p.items[Index("Bank Tower")] = Building(p, "BankTower", "building_E");
+            // Landmarks: each base is the catalog's footprint (TY_Item.size), so they never overlap (tested).
+            p.items[Index("Solar Farm")] = Landmark(p, mats, "Solar Farm",
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(-1.15f, 0f, -1.15f), 0f),
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(1.15f, 0f, -1.15f), 0f),
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(-1.15f, 0f, 1.15f), 0f),
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(1.15f, 0f, 1.15f), 0f));
+            // A warehouse with containers waiting at its door.
+            p.items[Index("Cargo Port")] = Landmark(p, mats, "Cargo Port",
+                new LandmarkPart(Pack.Space, "cargodepot_B", 3.4f, new Vector3(-0.5f, 0f, -0.6f), 180f),
+                new LandmarkPart(Pack.Space, "containers_A", 1.7f, new Vector3(1.4f, 0f, 1.4f), 0f),
+                new LandmarkPart(Pack.Space, "cargo_B_stacked", 1.3f, new Vector3(-1.5f, 0f, 1.6f), 25f));
+            // A garage with its trucks parked out front.
+            p.items[Index("Truck Depot")] = Landmark(p, mats, "Truck Depot",
+                new LandmarkPart(Pack.Space, "basemodule_garage", 3.2f, new Vector3(0f, 0f, -0.8f), 180f),
+                new LandmarkPart(Pack.Space, "spacetruck_large", 2.4f, new Vector3(-1.1f, 0f, 1.3f), 90f),
+                new LandmarkPart(Pack.Space, "spacetruck", 1.8f, new Vector3(1.2f, 0f, 1.4f), 90f));
+            p.items[Index("Landing Pad")] = Landmark(p, mats, "Landing Pad",
+                new LandmarkPart(Pack.Space, "landingpad_large", 4f, Vector3.zero, 0f),
+                new LandmarkPart(Pack.Space, "lander_A", 3f, new Vector3(0f, 0.3f, 0f), 180f));
+            p.items[Index("Brick Rocket")] = BrickRocket(p, mats);
             return p;
         }
 
         sealed class Mats {
-            public Material belt, brickWall, steel, dark, lava, gold, claim, collect, padReady, padExpensive, padLocked, padForeign;
+            public Material belt, brickWall, steel, dark, lava, gold, claim, collect, padReady, padExpensive, padLocked, padForeign, landmarkBase;
             public Material[] upgradeFields;
         }
 
@@ -313,7 +339,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             text.alignment = TextAlignmentOptions.MidlineLeft;
             text.fontStyle = style;
             text.textWrappingMode = TextWrappingModes.NoWrap;
-            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.overflowMode = TextOverflowModes.Truncate; // Inter has no ellipsis glyph
             text.sortingOrder = 3;
             var font = TY_HudAuthoring.Font(style == FontStyles.Bold);
             if (font != null) text.font = font;
@@ -477,6 +503,158 @@ namespace Universes.UniverseData.tycoon.Editor {
             return Kit.Save(root, "Items", "AutoCollector");
         }
 
+        /// <summary>One model of a landmark: pack, model, largest side in metres, offset and yaw on the landmark's base.</summary>
+        readonly struct LandmarkPart {
+            public readonly Pack pack;
+            public readonly string model;
+            public readonly float size, yaw;
+            public readonly Vector3 offset;
+            /// <summary>Replaces the pack's palette (the Brick Rocket is gold), or null.</summary>
+            public readonly Material material;
+
+            public LandmarkPart(Pack pack, string model, float size, Vector3 offset, float yaw, Material material = null) {
+                this.pack = pack; this.model = model; this.size = size; this.offset = offset; this.yaw = yaw; this.material = material;
+            }
+        }
+
+        /// <summary>
+        /// A landmark: KayKit models on a glowing gold-rimmed base the size of its catalog footprint, with a
+        /// small one-line name plate (name and multiplier) over it, so five of them never crowd the plot.
+        /// Origin at the base's centre.
+        /// </summary>
+        static GameObject Landmark(Prefabs p, Mats m, string itemName, params LandmarkPart[] parts) {
+            var (root, top) = LandmarkBody(p, m, itemName, parts);
+            LandmarkPlate(root.transform, TY_Catalog.Items[Index(itemName)], top);
+            return Kit.Save(root, "Items", root.name);
+        }
+
+        /// <summary>The base and models of a landmark (not saved yet); returns the root and the models' top.</summary>
+        static (GameObject root, float top) LandmarkBody(Prefabs p, Mats m, string itemName, params LandmarkPart[] parts) {
+            var item = TY_Catalog.Items[Index(itemName)];
+            if (item.size <= 0f) throw new System.ArgumentException($"{itemName} needs a footprint size in TY_Catalog.");
+            var root = new GameObject(itemName.Replace(" ", ""));
+            NoShadows(Cube("Base", root.transform, new Vector3(0f, LandmarkBaseHeight * 0.5f, 0f), new Vector3(item.size, LandmarkBaseHeight, item.size), m.landmarkBase, false));
+            float top = LandmarkBaseHeight;
+            foreach (LandmarkPart part in parts) {
+                var go = Kay(p, part.pack, part.model, root.transform, part.size, part.offset + Vector3.up * LandmarkBaseHeight, part.yaw, part.material);
+                top = Mathf.Max(top, RendererBounds(go).max.y);
+            }
+            return (root, top);
+        }
+
+        /// <summary>Size of a built landmark's name plate: one line, about a third of a pad sign's area.</summary>
+        static readonly Vector2 PlateSize = new(3.4f, 0.72f);
+
+        /// <summary>The landmark's colour on its plate: bright, like the ready chest's sign.</summary>
+        static Color PlateColor => Color.Lerp(TY_Lanes.Color(TY_ItemKind.Landmark), Color.white, 0.15f);
+
+        static void LandmarkPlate(Transform root, in TY_Item item, float top) {
+            Transform sign = DarkSign(root, new Vector3(0f, top + 0.75f, 0f), PlateSize, TY_Lanes.Color(TY_ItemKind.Landmark));
+            var text = WorldText("Label", sign, new Vector3(0f, -0.03f, -0.02f), $"{item.name.ToUpperInvariant()}  <size=80%>x{item.value:0.##}</size>", 2.4f,
+                PlateColor, new Vector2(PlateSize.x - 0.2f, PlateSize.y - 0.1f));
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Truncate; // Inter has no ellipsis glyph
+            text.sortingOrder = 3;
+            var font = TY_HudAuthoring.Font(true);
+            if (font != null) text.font = font;
+        }
+
+        const string RocketModel = "Assets/CartoonMilitaryModelPack/OriginalMeshes&Materials/CustomPart/Missiles/ICBM/ICBM_01.fbx";
+        const string RocketMaterial = "Assets/CartoonMilitaryModelPack/OriginalMeshes&Materials/CustomPart/Missiles/ICBM/Materials/ICBM_01_BodyTexture.mat";
+        /// <summary>Height of the Brick Rocket: the capstone landmark is the tallest thing on the plot.</summary>
+        const float RocketHeight = 8.5f;
+
+        /// <summary>
+        /// The Brick Rocket, the last landmark: a tall rocket standing on a launch pad beside a gantry. The
+        /// rocket is its own child (TY_RocketView), so clients can launch it when it is built.
+        /// </summary>
+        static GameObject BrickRocket(Prefabs p, Mats m) {
+            var (root, _) = LandmarkBody(p, m, "Brick Rocket",
+                new LandmarkPart(Pack.Space, "landingpad_small", 3.2f, new Vector3(-0.3f, 0f, 0.2f), 0f),
+                new LandmarkPart(Pack.Space, "structure_tall", 3.6f, new Vector3(1.55f, 0f, -1.2f), 90f));
+            var view = root.AddComponent<TY_RocketView>();
+            var holder = Empty("Rocket", root.transform, new Vector3(-0.3f, LandmarkBaseHeight + 0.25f, 0.2f));
+            var model = Model(RocketModel, holder.transform, RocketHeight);
+            if (model == null) throw new FileNotFoundException("Rocket model missing: " + RocketModel);
+            StandUp(model, holder.transform);
+            var material = AssetDatabase.LoadAssetAtPath<Material>(RocketMaterial);
+            if (material != null) foreach (var r in model.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => material).ToArray();
+            view.rocket = holder.transform;
+            view.nozzle = Empty("Nozzle", holder.transform, new Vector3(0f, 0.2f, 0f)).transform;
+            float top = RendererBounds(root).max.y - root.transform.position.y;
+            LandmarkPlate(root.transform, TY_Catalog.Items[Index("Brick Rocket")], top);
+            return Kit.Save(root, "Items", root.name);
+        }
+
+        /// <summary>Turns a model whose long side lies flat so it stands on <paramref name="holder"/>'s origin, pointing up.</summary>
+        static void StandUp(GameObject model, Transform holder) {
+            Bounds b = RendererBounds(model);
+            if (b.size.y < Mathf.Max(b.size.x, b.size.z)) {
+                Vector3 axis = b.size.z >= b.size.x ? Vector3.right : Vector3.forward;
+                model.transform.rotation = Quaternion.AngleAxis(b.size.z >= b.size.x ? -90f : 90f, axis) * model.transform.rotation;
+                b = RendererBounds(model);
+            }
+            Vector3 foot = new(b.center.x, b.min.y, b.center.z);
+            model.transform.position += holder.position - foot;
+        }
+
+        /// <summary>A billboarded dark rounded sign with a coloured top strip, like the buy pads' signs; returns its transform.</summary>
+        static Transform DarkSign(Transform parent, Vector3 position, Vector2 size, Color strip) {
+            var sign = Empty("Sign", parent, position);
+            sign.AddComponent<Billboard>();
+            SpriteChild("Back", sign.transform, Vector3.zero, TY_HudAuthoring.SignSprite(), new Color(0.06f, 0.08f, 0.12f, 0.94f), 0)
+                .transform.localScale = new Vector3(size.x, size.y, 1f);
+            SpriteChild("Strip", sign.transform, new Vector3(0f, size.y * 0.5f - 0.1f, -0.01f), TY_HudAuthoring.WhiteSprite(), strip, 1)
+                .transform.localScale = new Vector3(size.x - 0.3f, 0.1f, 1f);
+            return sign.transform;
+        }
+
+        /// <summary>Height of a landmark's base slab.</summary>
+        const float LandmarkBaseHeight = 0.14f;
+
+        /// <summary>
+        /// The daily chest: a bobbing gold chest with a light while today's is waiting, a plain one once it
+        /// is opened, on a small pad, with a label the client fills in (see <see cref="TY_ChestView"/>).
+        /// </summary>
+        static GameObject Chest(Prefabs p, Mats m) {
+            var root = new GameObject("DailyChest");
+            var view = root.AddComponent<TY_ChestView>();
+            NoShadows(Cube("Pad", root.transform, new Vector3(0f, 0.05f, 0f), new Vector3(TY_Catalog.ChestPadSize, 0.1f, TY_Catalog.ChestPadSize), m.landmarkBase, false));
+            var ready = Empty("Ready", root.transform, new Vector3(0f, 0.25f, 0f));
+            var spinner = ready.AddComponent<Spinner>();
+            spinner.degreesPerSecond = new Vector3(0f, 45f, 0f);
+            spinner.bobHeight = 0.2f;
+            Kay(p, Pack.Dungeon, "chest_gold", ready.transform, 2.1f);
+            view.readyModel = ready;
+            var opened = Empty("Opened", root.transform, new Vector3(0f, 0.1f, 0f));
+            Kay(p, Pack.Dungeon, "chest", opened.transform, 1.8f);
+            view.openedModel = opened;
+            var glow = new GameObject("Glow", typeof(Light));
+            glow.transform.SetParent(root.transform, false);
+            glow.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            var light = glow.GetComponent<Light>();
+            light.type = LightType.Point; light.color = new Color(1f, 0.82f, 0.3f); light.range = 5f; light.intensity = 3f;
+            light.shadows = LightShadows.None;
+            view.readyGlow = glow;
+            // Ready: a large sign naming today's prize. Opened: a small sign (the countdown and the next prize),
+            // so the chest does not fill the plot with a big sign for the 23 hours it is closed.
+            // A little to the plot's side (-x) and low, so from the spawn camera it clears the rebirth pad's sign.
+            Transform readySign = DarkSign(root.transform, new Vector3(-0.4f, 3.0f, 0f), new Vector2(3.6f, 1.6f), view.readyColor);
+            view.readySign = readySign.gameObject;
+            view.label = WorldText("Label", readySign, new Vector3(0f, -0.04f, -0.02f), "DAILY CHEST", 2.6f, view.readyColor, new Vector2(3.4f, 1.5f));
+            Transform waiting = DarkSign(root.transform, new Vector3(-0.4f, 2.55f, 0f), new Vector2(3.4f, 0.95f), new Color(0.6f, 0.63f, 0.7f));
+            view.waitingSign = waiting.gameObject;
+            view.waitingLabel = WorldText("Label", waiting, new Vector3(0f, -0.05f, -0.02f), "", 2.2f, view.waitingColor, new Vector2(3.2f, 0.85f));
+            view.waitingLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            // The plates' bold font (and its material): the default font's material does not come along here.
+            var font = TY_HudAuthoring.Font(true);
+            if (font != null) { view.label.font = font; view.waitingLabel.font = font; }
+            // Drawn over the sign's back, like the pads' text (equal orders sort by distance and can hide it).
+            ((TextMeshPro)view.label).sortingOrder = ((TextMeshPro)view.waitingLabel).sortingOrder = 3;
+            waiting.gameObject.SetActive(false);
+            return Kit.Save(root, "", "DailyChest");
+        }
+
         static GameObject Statue(Material gold, Material stone) {
             var root = new GameObject("GoldenStatue");
             Cube("Plinth", root.transform, new Vector3(0f, 0.75f, 0f), new Vector3(4f, 1.5f, 4f), stone);
@@ -546,6 +724,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             map.padPrefabs = p.pads;
             map.orePrefab = p.ore;
             map.goldCoinPrefab = p.coin;
+            map.chestPrefab = p.chest;
             map.oreMaterials = p.oreMats;
             map.clientPrefab = hud;
             EditorUtility.SetDirty(map);
@@ -599,7 +778,8 @@ namespace Universes.UniverseData.tycoon.Editor {
                         var pad = (GameObject)PrefabUtility.InstantiatePrefab(map.padPrefabs[(int)kind], view.itemRoot);
                         pad.transform.localPosition = TY_Catalog.LanePosition(kind);
                         bool affordable = kind == TY_ItemKind.Building;
-                        pad.GetComponent<TY_ButtonView>().Show(TY_Catalog.Items[next], map.Picture(next), affordable ? TY_ButtonLook.Affordable : TY_ButtonLook.Expensive, "", affordable ? 1f : 0.45f);
+                        pad.GetComponent<TY_ButtonView>().Show(TY_Catalog.Items[next], TY_Catalog.Items[next].price, TY_Catalog.Effect(next, 1), map.Picture(next),
+                            affordable ? TY_ButtonLook.Affordable : TY_ButtonLook.Expensive, "", affordable ? 1f : 0.45f);
                     }
                 }
             }

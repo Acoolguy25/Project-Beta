@@ -3,7 +3,15 @@ using UnityEngine;
 
 namespace Universes.UniverseData.tycoon {
     // Append only: values travel over the wire.
-    public enum TY_EventKind : byte { Claimed, Bought, TooPoor, Collected, Rebirth, Released, Info, GoldenBrick, Perk, CollectorFull, RushHour, RushHourOver }
+    public enum TY_EventKind : byte {
+        Claimed, Bought, TooPoor, Collected, Rebirth, Released, Info, GoldenBrick, Perk, CollectorFull, RushHour, RushHourOver,
+        /// <summary>A tycoon goal was completed. item = goal index, amount = cash paid, extra = tokens paid.</summary>
+        Goal,
+        /// <summary>Earnings while away were paid on join. amount = cash, extra = seconds away (the text names the paid part).</summary>
+        OfflineEarnings,
+        /// <summary>The daily chest was opened. amount = cash, extra = seconds until the next one.</summary>
+        DailyChest,
+    }
 
     public struct TY_PlotState {
         public byte plot;
@@ -41,6 +49,19 @@ namespace Universes.UniverseData.tycoon {
         public float rushSeconds;
         /// <summary>The rush hour's income multiplier (already part of <see cref="multiplier"/> and <see cref="income"/>).</summary>
         public float rushMultiplier;
+        /// <summary>The player's current goal (<see cref="TY_Goals.Get"/>), its progress and the cash it pays (appended).</summary>
+        public int goalIndex;
+        public long goalProgress;
+        public long goalReward;
+        /// <summary>Whether today's daily chest is still waiting on the player's plot, else seconds until the next one.</summary>
+        public bool chestReady;
+        public float chestSeconds;
+        /// <summary>Streak day of the chest the sign names: today's while it is ready, else the next one's (appended).</summary>
+        public int chestStreak;
+        /// <summary>Investment levels bought (kept through rebirths; each adds income) (appended).</summary>
+        public int invested;
+        /// <summary>That chest's prize: minutes of income and perk tokens (appended).</summary>
+        public int chestMinutes, chestTokens;
     }
 
     /// <summary>Something happened to this player (purchase, collection, refusal).</summary>
@@ -50,6 +71,8 @@ namespace Universes.UniverseData.tycoon {
         public int item;
         public long amount;
         public string text;
+        /// <summary>A second number for some kinds (see <see cref="TY_EventKind"/>); appended.</summary>
+        public long extra;
     }
 
     /// <summary>A client that has just loaded asks for the plots and its wallet.</summary>

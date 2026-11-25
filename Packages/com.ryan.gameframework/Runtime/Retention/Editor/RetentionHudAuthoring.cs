@@ -32,6 +32,7 @@ namespace RyanAssets.Retention.Editor {
         const float SummaryWidth = 480f;
         const float ToastWidth = 440f;
         const float ToastRowHeight = 40f;
+        const float ToastRadius = 10f;
         /// <summary>
         /// Room the shared HUD's player list (top right, under the top bar) takes with four players:
         /// padding 6+6, header 30, gap 4, four 34-px rows 2 apart, plus a 12-px gap below it.
@@ -248,7 +249,7 @@ namespace RyanAssets.Retention.Editor {
             RectTransform streak = Node(card, "Streak");
             Row(streak.gameObject, 8f, null, TextAnchor.MiddleLeft);
             panel.streakIcon = HudKit.Icon(streak, StreakIcon, 20f, style.streak);
-            panel.streakLabel = Wrapping(Text(streak, "Text", "Finish a match today to start a streak", UIText.Small, UIColorRole.TextSecondary));
+            panel.streakLabel = Wrapping(Text(streak, "Text", "Play today to start a streak", UIText.Small, UIColorRole.TextSecondary));
             Size(panel.streakLabel, -1f, -1f, 1f);
 
             RectTransform next = Node(card, "NextUnlock");
@@ -463,6 +464,36 @@ namespace RyanAssets.Retention.Editor {
                 row.padding = new RectOffset(row.padding.left, row.padding.right, 8, 8);
                 row.childControlHeight = true;
             }
+            CardBehind(template);
+        }
+
+        /// <summary>
+        /// The shared toast row is translucent glass, which reads see-through over bright scenes (sky,
+        /// snow). Kit toasts get an opaque themed card instead: a soft shadow, a hairline edge and a
+        /// raised-surface body, drawn behind the accent bar, icon and text (and fading with the toast).
+        /// </summary>
+        static void CardBehind(HudToast template) {
+            Transform row = template.transform;
+            if (row.TryGetComponent(out Image glass)) {
+                if (glass.TryGetComponent(out UIThemeColor painter)) Object.DestroyImmediate(painter);
+                Object.DestroyImmediate(glass);
+            }
+            RectTransform shade = Fill(row, "Shadow", -12f, -8f, -12f, -16f);
+            shade.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            var shadow = shade.gameObject.AddComponent<Image>();
+            shadow.sprite = Theme.shadowSprite;
+            shadow.type = Image.Type.Sliced;
+            shadow.raycastTarget = false;
+            shadow.color = new Color(0f, 0f, 0f, 0.4f);
+            RectTransform edge = Fill(row, "Edge");
+            edge.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            Rounded(edge, UIColorRole.Stroke, ToastRadius, raycast: false);
+            RectTransform body = Fill(row, "Body", 1f, 1f, 1f, 1f);
+            body.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            Rounded(body, UIColorRole.SurfaceRaised, ToastRadius - 1f, raycast: false);
+            shade.SetSiblingIndex(0);
+            edge.SetSiblingIndex(1);
+            body.SetSiblingIndex(2);
         }
 
         /// <summary>Removes the theme painter so a script- or style-set colour sticks.</summary>

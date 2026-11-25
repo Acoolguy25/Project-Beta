@@ -53,6 +53,8 @@ namespace Universes.UniverseData.tycoon.Editor {
                 var go = (GameObject)PrefabUtility.InstantiatePrefab(itemPrefabs[i]);
                 // Floating labels would crowd the picture.
                 foreach (var text in go.GetComponentsInChildren<TMPro.TMP_Text>(true)) text.gameObject.SetActive(false);
+                // Floating signs (landmark names) are world labels, not part of the item's picture.
+                foreach (var sign in go.GetComponentsInChildren<SpriteRenderer>(true)) sign.gameObject.SetActive(false);
                 foreach (var light in go.GetComponentsInChildren<Light>(true)) light.enabled = false;
                 Transform focus = go.transform.Find(FocusName);
                 Bounds bounds = VisibleBounds(focus != null ? focus.gameObject : go);

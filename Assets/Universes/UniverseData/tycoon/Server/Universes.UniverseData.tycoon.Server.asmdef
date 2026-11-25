@@ -19,7 +19,9 @@
         "RyanAssets.Core",
         "RyanAssets.Progress",
         "RyanAssets.Commands.Server",
-        "RyanAssets.Commands.Shared"
+        "RyanAssets.Commands.Shared",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Server"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

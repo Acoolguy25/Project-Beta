@@ -41,6 +41,8 @@ namespace RyanAssets.Retention.Tests {
             public readonly List<string> UnlockIds = new();
             /// <summary>Runs after each send, like a game handler reacting to it.</summary>
             public Action<object> AfterSend;
+            /// <summary>Run around each account payout, like RetentionService's level announcement.</summary>
+            public Action<RetentionPlayer> BeforePay, AfterPay;
 
             public void Send<T>(RetentionPlayer player, T message) where T : struct, IBroadcast {
                 Sent.Add(message);
@@ -49,9 +51,11 @@ namespace RyanAssets.Retention.Tests {
 
             public void PayAccount(RetentionPlayer player, int accountXp, int gold) {
                 Assert.IsTrue(accountXp > 0 || gold > 0, "never a zero payout (LevelsServer warns on those)");
+                BeforePay?.Invoke(player);
                 AccountXp += accountXp;
                 Gold += gold;
                 Payouts++;
+                AfterPay?.Invoke(player);
             }
 
             public void SaveSoon(RetentionPlayer player) => Saves++;
@@ -223,6 +227,54 @@ namespace RyanAssets.Retention.Tests {
             f.Ledger.AddXp(f.Player, f.Save, 1, "Bonus", true);
             Assert.AreEqual(1, f.Sink.Of<RetentionLevelUpBroadcast>().Count());
             Assert.AreEqual(2, f.Sink.UnlockIds.Count);
+        }
+
+        [Test]
+        public void AccountLevelFromZeroIsAnnouncedOnceAndInMatchOnlyAtTheEnd() {
+            var f = new Fixture(new RetentionTuning { accountXpScale = 1f });
+            // Mirrors RetentionService: account rank = account XP / 10; the rank before the first payout
+            // is noted, a rank-up outside a match is announced at once, one inside a match when it ends.
+            int Rank() => (int)(f.Sink.AccountXp / 10);
+            var announced = new List<int>();
+            var paidInMatch = new List<bool>();
+            f.Sink.BeforePay = player => player.NoteAccountLevel(Rank());
+            f.Sink.AfterPay = player => {
+                paidInMatch.Add(player.InMatch);
+                if (!player.InMatch && player.TryAnnounceAccountLevel(Rank())) announced.Add(Rank());
+            };
+            Assert.AreEqual(-1, f.Player.AnnouncedAccountLevel, "not known before the first payout");
+            Assert.IsFalse(f.Player.TryAnnounceAccountLevel(3), "nothing is announced while the level is not known");
+
+            f.Ledger.AddXp(f.Player, f.Save, 15, "Bonus", false);
+            CollectionAssert.AreEqual(new[] { 1 }, announced, "a new player's first rank-up (0 to 1) is announced");
+            f.Ledger.AddXp(f.Player, f.Save, 1, "Bonus", false);
+            CollectionAssert.AreEqual(new[] { 1 }, announced, "same rank, no second line");
+
+            f.Ledger.BeginMatch(f.Player, f.Save);
+            paidInMatch.Clear();
+            f.Ledger.AddXp(f.Player, f.Save, 10, "Kill", false);
+            f.Ledger.FinishMatch(f.Player, f.Save, Day, Noon, "Victory!", new[] { new RewardLine("Win", 20) });
+            Assert.IsTrue(paidInMatch.Count >= 2 && paidInMatch.All(x => x), "payouts inside the match and while it finishes are in the match");
+            Assert.IsFalse(f.Player.InMatch);
+            CollectionAssert.AreEqual(new[] { 1 }, announced, "nothing announced during the match");
+            Assert.IsTrue(f.Player.TryAnnounceAccountLevel(Rank()), "the final rank is announced when the match ends");
+            Assert.IsTrue(Rank() >= 4);
+            Assert.IsFalse(f.Player.TryAnnounceAccountLevel(Rank()), "once");
+        }
+
+        [Test]
+        public void JoiningNeverAnnouncesAnAccountLevel() {
+            // As RetentionService does at join: the level now is the baseline, and level-ups from rewards
+            // paid while the player loads in (goals already met, a daily claim) only move it.
+            var player = new RetentionPlayer();
+            player.NoteAccountLevel(0);
+            player.QuietAccountLevelUntil(Noon.AddSeconds(15));
+            Assert.IsFalse(player.TryAnnounceAccountLevel(1, Noon.AddSeconds(2)), "a level-up while joining is not announced");
+            Assert.IsFalse(player.TryAnnounceAccountLevel(2, Noon.AddSeconds(5)));
+            Assert.AreEqual(2, player.AnnouncedAccountLevel, "but it moves the baseline");
+            Assert.IsFalse(player.TryAnnounceAccountLevel(2, Noon.AddMinutes(5)), "the same level later is not news");
+            Assert.IsTrue(player.TryAnnounceAccountLevel(3, Noon.AddMinutes(5)), "a real level gain after joining is");
+            Assert.IsFalse(player.TryAnnounceAccountLevel(3, Noon.AddMinutes(6)), "once");
         }
 
         [Test]

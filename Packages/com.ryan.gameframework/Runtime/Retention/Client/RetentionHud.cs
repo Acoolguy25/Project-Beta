@@ -83,10 +83,10 @@ namespace RyanAssets.Retention.Client {
         [SerializeField] string levelUpCenterFormat = "LEVEL {0}";
         [Tooltip("{0} = unlock title.")]
         [SerializeField] string unlockFormat = "Unlocked: {0}";
-        [Tooltip("Greeting on join with a live streak: {0} = streak days, {1} = XP today's first match adds, {2} = the day it makes.")]
-        [SerializeField] string streakGreetingFormat = "{0}-day streak! Play a match today to make it day {2} (+{1} XP)";
+        [Tooltip("Greeting on join with a live streak: {0} = streak days, {1} = XP of today's bonus, {2} = the day it makes.")]
+        [SerializeField] string streakGreetingFormat = "{0}-day streak! Play today to make it day {2} (+{1} XP)";
         [Tooltip("Greeting on join without a streak: {1} = XP of day 1's bonus.")]
-        [SerializeField] string streakStartFormat = "Play a match today to start a daily streak (+{1} XP)";
+        [SerializeField] string streakStartFormat = "Play today to start a daily streak (+{1} XP)";
         [Tooltip("Greeting on join after a streak lapsed: {1} = XP of day 1's bonus, {3} = the best streak.")]
         [SerializeField] string streakLapsedFormat = "Your streak ended. Start a new one today (+{1} XP, best {3} days)";
         [SerializeField] string notSavedText = "Your progress could not be loaded; nothing is saved this session.";

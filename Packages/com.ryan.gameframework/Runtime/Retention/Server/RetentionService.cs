@@ -65,10 +65,6 @@ namespace RyanAssets.Retention.Server {
             public TSave Detached;
             public float NextRequestTime;
             public bool Left, IsReady, SaveDue, Queued;
-            /// <summary>Account level last announced in chat (0 = not known yet).</summary>
-            public int AnnouncedLevel;
-            /// <summary>True while FinishMatch pays its lines (the match is already closed then).</summary>
-            public bool Finishing;
 
             public Player(PlayerData data) {
                 Data = data;
@@ -96,10 +92,10 @@ namespace RyanAssets.Retention.Server {
                 // LevelsServer warns on zero amounts.
                 if (gold > 0) LevelsServer.AwardPlayerGold(data, (ulong)gold);
                 if (accountXp <= 0) return;
-                if (state.AnnouncedLevel <= 0) state.AnnouncedLevel = LevelsCalc.GetRank(data.xp.Value);
+                state.NoteAccountLevel(LevelsCalc.GetRank(data.xp.Value));
                 AddAccountXp(data, (ulong)accountXp);
                 // One chat line per match: inside a match, the level is announced when it finishes.
-                if (state.Match == null && !state.Finishing) service.AnnounceLevel(state);
+                if (!state.InMatch) service.AnnounceLevel(state);
             }
 
             public void SaveSoon(RetentionPlayer player) => service.MarkSaveDue((Player)player);
@@ -121,15 +117,33 @@ namespace RyanAssets.Retention.Server {
             ServerPlayerSave.MarkDirty(data.Owner);
         }
 
+        /// <summary>
+        /// Chat line for an account level-up a payout brought: {0} = player name, {1} = account level.
+        /// It says "account level" because games show their own level next to it.
+        /// </summary>
+        public string AccountLevelFormat { get; set; } = "{0} has reached account level {1}!";
+
+        /// <summary>
+        /// Seconds after joining during which account level-ups (from rewards paid as the player loads
+        /// in: goals already met, a daily claim) move the baseline without a chat line. Joining never
+        /// announces.
+        /// </summary>
+        public float JoinQuietSeconds { get; set; } = 15f;
+
         /// <summary>Says in chat that the player reached a new account level (the highest one only).</summary>
         void AnnounceLevel(Player state) {
             PlayerData data = state.Data;
-            if (data == null || state.AnnouncedLevel <= 0) return;
+            if (data == null) return;
             int level = LevelsCalc.GetRank(data.xp.Value);
-            if (level <= state.AnnouncedLevel) return;
-            state.AnnouncedLevel = level;
+            if (!state.TryAnnounceAccountLevel(level, utcNow())) return;
             if (InstanceFinder.ServerManager == null || !InstanceFinder.ServerManager.Started) return;
-            var line = new SystemMessageBroadcast($"{data.GetPlayerName()} has reached level {level}!", SystemMessageSource.PlayerLevelUp);
+            string text;
+            try {
+                text = string.Format(AccountLevelFormat ?? string.Empty, data.GetPlayerName(), level);
+            } catch (FormatException) {
+                text = AccountLevelFormat;
+            }
+            var line = new SystemMessageBroadcast(text, SystemMessageSource.PlayerLevelUp);
             if (AnnounceLevelToSelf || state.Connection == null) ServerChat.SendSystemMessage(line);
             else ServerChat.SendSystemMessageExcept(state.Connection, line);
         }
@@ -279,12 +293,7 @@ namespace RyanAssets.Retention.Server {
             // Copy now: the change may run later (while the document loads) and the caller may reuse the list.
             RewardLine[] lines = rewards == null ? Array.Empty<RewardLine>() : new List<RewardLine>(rewards).ToArray();
             Change(connection, (state, block) => {
-                state.Finishing = true;
-                try {
-                    ledger.FinishMatch(state, block, Today, utcNow(), title, lines);
-                } finally {
-                    state.Finishing = false;
-                }
+                ledger.FinishMatch(state, block, Today, utcNow(), title, lines);
                 AnnounceLevel(state);
             });
         }
@@ -351,6 +360,10 @@ namespace RyanAssets.Retention.Server {
             if (players.TryGetValue(data.Owner, out Player state) && state.Data == data) return state;
             state = new Player(data);
             players[data.Owner] = state;
+            // The account level at join is the baseline: joining never announces, and rewards paid in
+            // the first moments (as the game loads the player in) only move it.
+            state.NoteAccountLevel(LevelsCalc.GetRank(data.xp.Value));
+            state.QuietAccountLevelUntil(utcNow().AddSeconds(Math.Max(0f, JoinQuietSeconds)));
             string playerId = data.player_id.Value;
             if (!ProgressLimits.IsValidPlayerId(playerId)) {
                 // PlayerProgress keeps nothing for such players; keep a session-only document here.

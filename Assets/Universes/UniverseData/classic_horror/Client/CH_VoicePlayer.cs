@@ -12,6 +12,8 @@ namespace Universes.UniverseData.classic_horror.Client {
         public struct SpeakerStyle {
             public string speaker;
             public Color caption;
+            [Tooltip("The subtitle's emblem for this speaker when they are not on the radio.")]
+            public Sprite icon;
         }
 
         public CH_RadioFeed subtitles;
@@ -28,6 +30,10 @@ namespace Universes.UniverseData.classic_horror.Client {
         [Tooltip("Caption colour per speaker.")]
         public SpeakerStyle[] styles = new SpeakerStyle[0];
         [SerializeField] Color defaultCaption = new(0.78f, 0.74f, 0.66f);
+        [Tooltip("The emblem on a radio line, whoever speaks it.")]
+        public Sprite radioIcon;
+        [Tooltip("The emblem for a speaker without a style (the freed singers).")]
+        public Sprite defaultIcon;
 
         CH_VoiceBank bank;
         Transform monsterTransform;
@@ -56,7 +62,9 @@ namespace Universes.UniverseData.classic_horror.Client {
                 Debug.LogWarning($"[Drowned Choir] unknown voice line '{voice.line}'");
                 return;
             }
-            Color caption = CaptionColor(line.speaker);
+            SpeakerStyle style = StyleOf(line.speaker);
+            Color caption = style.caption;
+            Sprite icon = line.radio ? radioIcon : style.icon;
             bool subtitle = true;
             switch (voice.mode) {
                 case CH_VoiceMode.Ear:
@@ -76,7 +84,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             transcript.Add(line.speaker + CH_StoryText.Separator + line.text);
             TranscriptRevision++;
-            if (subtitle) subtitles.Show(line.speaker, line.text, caption, line.seconds, line.radio);
+            if (subtitle) subtitles.Show(line.speaker, line.text, caption, icon, line.seconds, line.radio);
         }
 
         void LateUpdate() {
@@ -93,9 +101,9 @@ namespace Universes.UniverseData.classic_horror.Client {
             source.Play();
         }
 
-        Color CaptionColor(string speaker) {
-            foreach (SpeakerStyle style in styles) if (style.speaker == speaker) return style.caption;
-            return defaultCaption;
+        SpeakerStyle StyleOf(string speaker) {
+            foreach (SpeakerStyle style in styles) if (style.speaker == speaker) return style;
+            return new SpeakerStyle { speaker = speaker, caption = defaultCaption, icon = defaultIcon };
         }
     }
 }

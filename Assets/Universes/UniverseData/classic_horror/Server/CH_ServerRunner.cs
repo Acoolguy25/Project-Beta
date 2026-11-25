@@ -246,8 +246,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             warnings.Remove(player.Owner);
             nextApparition.Remove(player.Owner);
             if (night == null) return;
-            // Dropped before their dry-ground record goes, so it lands where they last stood.
-            // Whatever they carried stays where they stood.
+            // Whatever they carried drops where they stood, before their dry-ground record goes.
             LocalCharacter character = player.GetCharacter();
             Vector3 at = character != null ? character.transform.position : map.arrival.position;
             DropCarried(player.Owner, at, character != null ? character.transform.eulerAngles.y : 0f);
@@ -677,13 +676,30 @@ namespace Universes.UniverseData.classic_horror.Server {
                 monster.Hunt(character);
                 return;
             }
-            // He was behind the altar all along. He stares, then follows the bell. Sampled at the thief's floor height:
-            // the altar's top and its back panel carry NavMesh too, and he must not appear standing on them.
-            Vector3 behind = map.altar.position - map.altar.forward * bellGrabBehindAltar;
-            behind.y = character.transform.position.y;
-            monster.Warp(behind);
+            // He was behind the altar all along. He stares, then follows the bell.
+            monster.Warp(BehindTheAltar(character.transform.position));
             monster.Hunt(character, monsterTuning.bellGrabHoldSeconds);
         }
+
+        /// <summary>
+        /// Where he rises when the bell is lifted: on the chapel floor behind the altar, the nearest spot that has a whole
+        /// path to the thief. The altar's top and its back panel carry NavMesh islands of their own, and a priest who rises
+        /// on one of those can never leave it (he did, in try 7's first live bell run). Failing everything, beside the thief.
+        /// </summary>
+        Vector3 BehindTheAltar(Vector3 thief) {
+            Vector3 back = -map.altar.forward, side = map.altar.right;
+            foreach (float further in BehindAltarSteps)
+                foreach (float across in AcrossAltarSteps) {
+                    Vector3 spot = map.altar.position + back * (bellGrabBehindAltar + further) + side * across;
+                    spot.y = thief.y;
+                    if (monster.TryFindStandingSpot(spot, thief, BehindAltarReach, out Vector3 standing)) return standing;
+                }
+            return thief - map.altar.forward * bellGrabBehindAltar;
+        }
+
+        static readonly float[] BehindAltarSteps = { 0f, 0.6f, 1.2f, -0.6f };
+        static readonly float[] AcrossAltarSteps = { 0f, -1.2f, 1.2f, -2.4f, 2.4f };
+        const float BehindAltarReach = 0.8f;
 
         void OnPlaced(NetworkConnection connection, CH_Night.Item item, CH_Night.Slot slot) {
             Debug.Log($"[Drowned Choir] client {connection.ClientId} placed {item.Kind} on {slot.Kind} at {NightSeconds}s");
@@ -867,7 +883,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 reviving.Add(character.Owner);
                 return;
             }
-            bool byPriest = monster != null && source == monster.GetComponent<GameCharacter>();
+            bool byPriest = monster != null && source == monster.Entity;
             if (byPriest) {
                 SendScare(character.Owner, CH_ScareKind.Fatal);
                 SpeakFromMonster(CH_Story.CatchLines[livesLost % CH_Story.CatchLines.Length], force: true);
@@ -1236,7 +1252,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 objective = objective, detail = detail, items = itemViews, slots = slotViews, hides = hideViews,
                 progress = progress, progressTotal = total,
                 countdown = night.Phase == CH_Phase.Boarding ? Mathf.Max(0, Mathf.CeilToInt(boardingEnds - Time.time)) : 0,
-                monsterId = monster != null ? monster.GetComponent<GameCharacter>().ObjectId : -1,
+                monsterId = monster != null ? monster.Entity.ObjectId : -1,
                 livesPerPlayer = livesPerPlayer, livesLost = livesLost, nightSeconds = NightSeconds,
                 ending = night.Ending, escapes = escapes, nextNightSeconds = nextNightCountdown
             };
@@ -1271,7 +1287,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 case CH_Phase.Sermon:
                     bool carried = BellTaken();
                     objective = carried ? "Carry the bell to the boat" : "Take Crane's bell from the chapel altar";
-                    detail = carried ? "He hears it wherever it goes. If he gets close, put it down (R) for a teammate." : "Mara is in the chapel. Take his bell and he will let her go.";
+                    detail = carried ? "He hears it. R puts it down for a teammate." : "Mara is in the chapel. Take his bell and he will let her go.";
                     break;
                 case CH_Phase.Boarding:
                     objective = "GET TO THE BOAT";
@@ -1297,7 +1313,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         protected override void Reset() {
             if (!Application.isPlaying) return;
             acceptingPlayers = false;
-            if (monster != null && monster.GetComponent<GameCharacter>().IsSpawned) InstanceFinder.ServerManager.Despawn(monster.gameObject);
+            if (monster != null && monster.Entity.IsSpawned) InstanceFinder.ServerManager.Despawn(monster.gameObject);
             monster = null;
             night = null;
             pendingScene = false;

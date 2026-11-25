@@ -18,6 +18,12 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Min(0.1f)] float lungeAnimationSpeed = 7f;
         [Tooltip("Fraction of a Sink shot it stands before it is pulled toward its target and under.")]
         [SerializeField, Range(0f, 1f)] float sinkStart = 0.15f;
+        [Tooltip("Fraction of a Rise shot by which it is fully out of the water (it drifts toward its target for the rest).")]
+        [SerializeField, Range(0.1f, 1f)] float riseEnd = 0.625f;
+        [Tooltip("Fraction of a Lunge shot it holds still, gathering, before it springs.")]
+        [SerializeField, Range(0f, 1f)] float lungeStart = 0.35f;
+        [Tooltip("Fraction of a Lunge shot the spring itself takes.")]
+        [SerializeField, Range(0.05f, 1f)] float lungeLength = 0.4f;
 
         static readonly int SpeedId = Animator.StringToHash("Speed");
         static readonly int MotionSpeedId = Animator.StringToHash("MotionSpeed");
@@ -74,11 +80,11 @@ namespace Universes.UniverseData.classic_horror.Client {
                     Place(Vector3.Lerp(start, end, progress), facing, walkAnimationSpeed);
                     break;
                 case CH_CutsceneSet.ActorPose.Rise:
-                    float rise = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress * 1.6f));
+                    float rise = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / riseEnd));
                     Place(Vector3.Lerp(start, end, progress) + Vector3.down * (riseDepth * (1f - rise)), facing);
                     break;
                 case CH_CutsceneSet.ActorPose.Lunge:
-                    float lunge = Mathf.Clamp01((progress - 0.35f) / 0.4f);
+                    float lunge = Mathf.Clamp01((progress - lungeStart) / lungeLength);
                     Place(Vector3.Lerp(start, end, lunge * lunge), facing, lunge > 0f && lunge < 1f ? lungeAnimationSpeed : 0f);
                     break;
                 case CH_CutsceneSet.ActorPose.Sink:

@@ -1,5 +1,6 @@
 using RyanAssets.UI.GameHud;
 using TMPro;
+using UnityEngine.UI;
 using UnityEngine;
 
 namespace Universes.UniverseData.classic_horror.Client {
@@ -12,6 +13,8 @@ namespace Universes.UniverseData.classic_horror.Client {
         public HudPopup popup;
         public TMP_Text caption;
         public TMP_Text transcript;
+        [Tooltip("The glyph in the card's emblem, swapped for each speaker.")]
+        public Image emblem;
         [Tooltip("Caption when a line names no speaker.")]
         [SerializeField] string defaultSpeaker = "Radio";
         public AudioSource staticSource;
@@ -32,12 +35,13 @@ namespace Universes.UniverseData.classic_horror.Client {
         bool suppressed;
 
         /// <summary>
-        /// Shows <paramref name="body"/> said by <paramref name="speaker"/>. The words are typed over
-        /// <paramref name="spokenSeconds"/> when the line is voiced, or at reading pace when it is not.
+        /// Shows <paramref name="body"/> said by <paramref name="speaker"/>, under <paramref name="icon"/> (kept when null).
+        /// The words are typed over <paramref name="spokenSeconds"/> when the line is voiced, or at reading pace when it is not.
         /// </summary>
-        public void Show(string speaker, string body, Color captionColor, float spokenSeconds = 0f, bool radioStatic = false) {
+        public void Show(string speaker, string body, Color captionColor, Sprite icon, float spokenSeconds = 0f, bool radioStatic = false) {
             caption.text = string.IsNullOrEmpty(speaker) ? defaultSpeaker : speaker;
             caption.color = captionColor;
+            if (emblem != null && icon != null) emblem.sprite = icon;
             transcript.text = body;
             // Story lines are plain text, so the string length is the visible character count.
             length = body.Length;

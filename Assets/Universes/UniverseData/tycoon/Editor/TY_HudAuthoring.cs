@@ -3,8 +3,11 @@ using System.Linq;
 using RyanAssets.Authoring;
 #if !UNITY_SERVER
 using RyanAssets.GameFeel;
+using RyanAssets.Retention.Client;
+using RyanAssets.Retention.Editor;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
+using RyanAssets.UI.GameHud;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
@@ -16,9 +19,11 @@ namespace Universes.UniverseData.tycoon.Editor {
     /// Generates the TycoonHUD prefab from the shared <see cref="UITheme"/> (same fonts, surfaces and
     /// shapes as the shared HUD) plus the tycoon's own icons, lane colours and item pictures.
     /// <para>
-    /// Layout: wallet card bottom-left (cash, income, collector gauge, perk shop button), build plan
-    /// bottom-right (one card per lane with the next item's picture and price progress), hint pill
-    /// bottom-centre, toasts top-centre and the rebirth perk shop as a centred card.
+    /// Layout: bottom-left a stack of the next-goal card over the wallet card (cash, income, collector
+    /// gauge, perk shop button); build plan bottom-right (one card per lane with the next item's picture
+    /// and price progress); hint pill bottom-centre with the retention kit's level chip above it (its
+    /// challenges panel opens above that); toasts top-centre (the kit's below the tycoon's); the rebirth
+    /// perk shop, the "welcome back" card and the kit's rebirth summary card centred.
     /// </para>
     /// </summary>
     public static class TY_HudAuthoring {
@@ -30,6 +35,14 @@ namespace Universes.UniverseData.tycoon.Editor {
 
         static readonly Color Pink = new(1f, 0.42f, 0.84f);
         static readonly Color Rush = new(1f, 0.62f, 0.15f);
+        static readonly Color GoalColor = new(0.36f, 0.85f, 1f);
+        const float LeftStackWidth = 380f;
+        const float StackSpacing = 10f;
+        const float HintHeight = 44f;
+        /// <summary>Gap between the hint pill, the level chip above it and the challenges panel above that.</summary>
+        const float CentreGap = 12f;
+        /// <summary>Height of the retention kit's level chip (RetentionHudAuthoring.ChipHeight).</summary>
+        const float LevelChipHeight = 44f;
         const string Kenney = "Assets/ThirdParty/Kenney/Sounds";
 
         // ---------------------------------------------------------------- sprites
@@ -182,6 +195,14 @@ namespace Universes.UniverseData.tycoon.Editor {
             return card;
         }
 
+        /// <summary>A card inside a stack (a column layout sizes it, so it has no size fitter of its own).</summary>
+        static RectTransform StackCard(Transform stack, string name, int padding = 16, float spacing = 10f) {
+            RectTransform card = UIKit.Node(stack, name);
+            UIKit.Rounded(card, UIColorRole.SurfaceRaised, 18f, 0.94f);
+            UIKit.Column(card.gameObject, spacing, UIKit.Pad(padding));
+            return card;
+        }
+
         // ---------------------------------------------------------------- HUD
         public static GameObject Build() {
             UITheme theme = UIKit.Theme;
@@ -192,13 +213,99 @@ namespace Universes.UniverseData.tycoon.Editor {
             controller.feedback = BuildFeedback(root);
             float m = theme.screenMargin + 4f;
 
-            BuildWallet(root, hud, m, theme);
+            // Bottom-left: the next goal sits on top of the wallet and both grow upwards together.
+            RectTransform stack = UIKit.Pinned(root, "LeftStack", Vector2.zero, new Vector2(m, m), new Vector2(LeftStackWidth, 100f));
+            UIKit.Column(stack.gameObject, StackSpacing, null, TextAnchor.LowerLeft);
+            UIKit.FitContent(stack.gameObject, false, true);
+            BuildGoal(stack, hud);
+            BuildWallet(stack, hud, theme);
             BuildPlan(root, hud, m);
             BuildHint(root, hud, m);
             BuildToast(root, hud);
             BuildPerkShop(root, hud);
+            BuildWelcomeBack(root, hud);
+            AddRetentionHud(root, m, hud);
 
             return UIKit.SavePrefab(root.gameObject, PrefabPath);
+        }
+
+        /// <summary>
+        /// Nests the shared retention HUD (level chip, daily challenges, toasts, the rebirth summary card)
+        /// and moves its parts clear of the tycoon's cards: the chip above the hint pill, the panel above
+        /// the chip and the summary in the middle of the screen (the left edge holds the goal and wallet).
+        /// </summary>
+        static void AddRetentionHud(RectTransform root, float margin, TY_Hud hud) {
+            RetentionHud kit = RetentionHudAuthoring.AddTo(root);
+            // The tycoon's toasts wait while the rebirth card is open (TY_Hud).
+            hud.summaryCard = kit.GetComponentInChildren<RetentionSummaryCard>(true);
+            float chipY = margin + HintHeight + CentreGap;
+            kit.SetPlacement(RetentionHudPart.LevelChip, new RetentionPlacement(new Vector2(0.5f, 0f), new Vector2(0f, chipY)));
+            kit.SetPlacement(RetentionHudPart.ChallengesPanel, new RetentionPlacement(new Vector2(0.5f, 0f), new Vector2(0f, chipY + LevelChipHeight + CentreGap)));
+            // Toasts keep the kit's spot (top right, under the player list): at the top centre they ran into the
+            // centred summary card and the tycoon's own toast.
+            kit.SetPlacement(RetentionHudPart.SummaryCard, new RetentionPlacement(new Vector2(0.5f, 0.5f), new Vector2(0f, 40f)));
+            // Script changes to a nested prefab instance are only kept when recorded as overrides.
+            PrefabUtility.RecordPrefabInstancePropertyModifications(kit);
+            RecordRect(kit.GetComponentInChildren<RetentionLevelChip>(true));
+            RecordRect(kit.GetComponentInChildren<RetentionChallengesPanel>(true));
+            RecordRect(kit.GetComponentInChildren<HudToastFeed>(true));
+            RecordRect(kit.GetComponentInChildren<RetentionSummaryCard>(true));
+        }
+
+        static void RecordRect(Component part) {
+            if (part == null) throw new FileNotFoundException("The retention HUD prefab is missing a part; rebuild it (Ryan > Retention > Rebuild HUD).");
+            PrefabUtility.RecordPrefabInstancePropertyModifications(part.transform);
+        }
+
+        /// <summary>The next goal: number, what to do, progress bar and its reward (cash, or a token badge).</summary>
+        static void BuildGoal(RectTransform stack, TY_Hud hud) {
+            UITheme theme = UIKit.Theme;
+            RectTransform card = StackCard(stack, "Goal", 14, 6f);
+            var goal = card.gameObject.AddComponent<TY_GoalCard>();
+            goal.punchTarget = card;
+            hud.goalCard = goal;
+
+            RectTransform header = HRow(card, "Header", 8f, 24f);
+            TyIcon(header, "flag", 18f, GoalColor);
+            goal.number = Colored(Label(header, "Number", "GOAL 1", UIText.Caption, UIColorRole.TextSecondary), GoalColor);
+            goal.number.characterSpacing = 1f;
+            Spacer(header);
+            goal.reward = Pill(header, "Reward", "payments", "+$25", theme.currency * new Color(1f, 1f, 1f, 0.2f), theme.currency, out RectTransform rewardPill, 24f);
+            goal.rewardPill = rewardPill.gameObject;
+            goal.tokenText = Pill(header, "Tokens", "stars", "+1", Pink * new Color(1f, 1f, 1f, 0.22f), Pink, out RectTransform tokens, 24f);
+            goal.tokenBadge = tokens.gameObject;
+
+            goal.text = Label(card, "Text", "Empty your collector at the blue pad", UIText.Strong, UIColorRole.TextPrimary);
+            goal.text.textWrappingMode = TextWrappingModes.Normal;
+            goal.fill = Bar(card, "Bar", 8f, GoalColor);
+            goal.progress = Label(card, "Progress", "0 / 1", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.MidlineRight);
+        }
+
+        /// <summary>"Welcome back": time away, the counted-up earnings and a Collect button, centred.</summary>
+        static void BuildWelcomeBack(RectTransform root, TY_Hud hud) {
+            UITheme theme = UIKit.Theme;
+            RectTransform card = HudKit.Card(root, "WelcomeBack", new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), new Vector2(460f, 300f));
+            UIKit.Column(card.gameObject, 10f, new RectOffset(24, 24, 22, 22), TextAnchor.UpperCenter);
+            UIKit.FitContent(card.gameObject, false, true);
+            HudKit.AccentStripe(card, theme.currency);
+            var view = card.gameObject.AddComponent<TY_OfflineCard>();
+            view.popup = card.GetComponent<HudPopup>();
+            hud.offlineCard = view;
+
+            RectTransform header = HRow(card, "Header", 10f, 40f);
+            header.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
+            TyIcon(header, "savings", 32f, theme.currency);
+            Label(header, "Title", "Welcome back!", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            view.away = Label(card, "Away", "You were away for 2h 05m", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            Label(card, "Caption", "YOUR FACTORY EARNED", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center).characterSpacing = 2f;
+            view.amount = Colored(Label(card, "Amount", "$0", UIText.Display, UIColorRole.Currency, TextAlignmentOptions.Center), theme.currency);
+            view.amount.fontSize = 52f;
+            UIKit.Size(view.amount, -1f, 64f);
+            view.punchTarget = view.amount.transform;
+            view.detail = Label(card, "Detail", "", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+            view.detail.textWrappingMode = TextWrappingModes.Normal;
+            view.collect = UIKit.TextButton(card, "Collect", "Collect", null, UIColorRole.Accent, UIColorRole.OnAccent, 44f);
+            UIKit.Size(view.collect, -1f, 44f);
         }
 
         /// <summary>
@@ -216,8 +323,8 @@ namespace Universes.UniverseData.tycoon.Editor {
             return feedback;
         }
 
-        static void BuildWallet(RectTransform root, TY_Hud hud, float margin, UITheme theme) {
-            RectTransform card = Card(root, "Wallet", Vector2.zero, new Vector2(margin, margin), 380f);
+        static void BuildWallet(RectTransform stack, TY_Hud hud, UITheme theme) {
+            RectTransform card = StackCard(stack, "Wallet");
 
             RectTransform header = HRow(card, "Header", 8f, 26f);
             TyIcon(header, "factory", 20f, theme.accent);
@@ -266,7 +373,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             TyIcon(header, "construction", 22f, UIKit.Theme.warning);
             Label(header, "Title", "Build plan", UIText.Title, UIColorRole.TextPrimary).fontSize = 20f;
             Spacer(header);
-            hud.buildText = Label(header, "Count", "0/22 built", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.MidlineRight);
+            hud.buildText = Label(header, "Count", $"0/{TY_Catalog.BaseCount} built", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.MidlineRight);
             hud.buildFill = Bar(card, "BuildBar", 8f, UIKit.Theme.warning);
 
             hud.laneCards = TY_Lanes.BuildLanes.Select(lane => LaneCard(card, lane)).ToArray();
@@ -282,8 +389,9 @@ namespace Universes.UniverseData.tycoon.Editor {
             Colored(Label(top, "Title", "Rebirth ready!", UIText.Strong, UIColorRole.TextPrimary), Pink);
             Spacer(top);
             hud.rebirthCardPrice = Colored(Label(top, "Price", "$50K", UIText.Strong, UIColorRole.Currency, TextAlignmentOptions.MidlineRight), UIKit.Theme.currency);
-            Label(rebirth, "Info", $"Step on the pink pad: income x{1 + TY_Catalog.RebirthBonus:0.#} per rebirth and +1 perk token", UIText.Small, UIColorRole.TextSecondary)
-                .textWrappingMode = TextWrappingModes.Normal;
+            hud.rebirthCardInfo = Label(rebirth, "Info", "Step on the pink pad: income x1.5, +perk token, opens the Solar Farm landmark. Landmarks stay.",
+                UIText.Small, UIColorRole.TextSecondary);
+            hud.rebirthCardInfo.textWrappingMode = TextWrappingModes.Normal;
             hud.rebirthCardFill = Bar(rebirth, "Bar", 8f, Pink);
             hud.rebirthCard = rebirth.gameObject;
         }
@@ -351,7 +459,7 @@ namespace Universes.UniverseData.tycoon.Editor {
         }
 
         static void BuildHint(RectTransform root, TY_Hud hud, float margin) {
-            RectTransform pill = UIKit.Pinned(root, "Hint", new Vector2(0.5f, 0f), new Vector2(0f, margin), new Vector2(600f, 44f));
+            RectTransform pill = UIKit.Pinned(root, "Hint", new Vector2(0.5f, 0f), new Vector2(0f, margin), new Vector2(600f, HintHeight));
             UIKit.Rounded(pill, UIColorRole.Surface, 22f, raycast: false);
             UIKit.Row(pill.gameObject, 10f, UIKit.Pad(18, 0), TextAnchor.MiddleCenter);
             UIKit.FitContent(pill.gameObject, true, false);
@@ -392,6 +500,8 @@ namespace Universes.UniverseData.tycoon.Editor {
             hud.iconInfo = IconSprite("auto_awesome");
             hud.iconFull = IconSprite("savings");
             hud.iconRush = IconSprite("local_fire_department");
+            hud.iconGoal = IconSprite("flag");
+            hud.iconChest = IconSprite("inventory_2");
         }
 
         static void BuildPerkShop(RectTransform root, TY_Hud hud) {

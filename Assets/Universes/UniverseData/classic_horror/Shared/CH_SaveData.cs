@@ -2,8 +2,11 @@ using System;
 using Newtonsoft.Json.Linq;
 using RyanAssets.Progress;
 
-namespace Universes.UniverseData.classic_horror.Server {
-    /// <summary>What The Drowned Choir remembers about an investigator between sessions. Written only by the server.</summary>
+namespace Universes.UniverseData.classic_horror {
+    /// <summary>
+    /// What The Drowned Choir remembers about an investigator between sessions. Written only by the server; it lives in
+    /// the shared assembly so the tests can check its migration and limits.
+    /// </summary>
     public sealed class CH_SaveData : ProgressData {
         public const string Universe = "classic_horror";
         public override int LatestVersion => 2;

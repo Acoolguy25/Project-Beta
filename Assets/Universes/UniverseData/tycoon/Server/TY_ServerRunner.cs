@@ -7,7 +7,8 @@ using FishNet;
 using FishNet.Connection;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
-using RyanAssets.Levels.Server;
+using RyanAssets.Retention;
+using RyanAssets.Retention.Server;
 using RyanAssets.Rounds;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
@@ -21,8 +22,11 @@ namespace Universes.UniverseData.tycoon.Server {
     /// <summary>
     /// Brick Tycoon: players claim a plot, earn from droppers into a collector with a limited size,
     /// step on lane pads to build, grab gold coins, and rebirth for a permanent multiplier plus a
-    /// token for the perk shop. Every rule (cash, prices, unlocks, claims, pickups) is decided here
-    /// from replicated character positions; clients only draw.
+    /// token for the perk shop; rebirths open landmarks that stay through every rebirth after. A goal
+    /// chain, a daily chest, offline earnings and the shared retention kit (levels with unlocks, daily
+    /// challenges, streak, a summary card at each rebirth) give a next goal at every moment (see the
+    /// Retention and Progress partials). Every rule (cash, prices, unlocks, claims, pickups) is decided
+    /// here from replicated character positions; clients only draw.
     /// </summary>
     public sealed partial class TY_ServerRunner : ServerRunner {
         [Header("Economy")]
@@ -34,13 +38,7 @@ namespace Universes.UniverseData.tycoon.Server {
         [SerializeField, Min(1f)] float walkSpeed = 14f, sprintSpeed = 22f;
 
         [Header("Gold coins")]
-        [Tooltip("Seconds between gold coins on a plot (random in this range).")]
-        [SerializeField] Vector2 goldenInterval = new(45f, 90f);
-        [Tooltip("Seconds a gold coin waits before it vanishes.")]
-        [SerializeField, Min(5f)] float goldenLifetime = 30f;
-        [Tooltip("A gold coin pays this many seconds of the plot's income.")]
-        [SerializeField, Min(1f)] float goldenIncomeSeconds = 25f;
-        [SerializeField, Min(0)] long goldenMinimum = 50;
+        [SerializeField] TY_GoldCoins goldCoins = new();
 
         [Header("Rush hour")]
         [Tooltip("Timed server event: every few minutes every tycoon earns more for a short while.")]
@@ -49,10 +47,8 @@ namespace Universes.UniverseData.tycoon.Server {
             + "service has no permissions, so any player could run them, and rush earnings are saved. Keep it off when shipping.")]
         [SerializeField] bool rushCommands;
 
-        [Header("Rewards (account XP/gold)")]
-        [SerializeField] ulong purchaseXP = 4;
-        [SerializeField] ulong rebirthXP = 150;
-        [SerializeField] ulong rebirthGold = 75;
+        [Header("Rewards (game XP through the retention kit, which also pays account XP and gold)")]
+        [SerializeField] TY_RewardTuning rewards = new();
 
         [Header("Feedback")]
         [SerializeField, Min(0.2f)] float refusalCooldown = 2.5f;
@@ -76,6 +72,28 @@ namespace Universes.UniverseData.tycoon.Server {
             public double cash, lifetime;
             public int rebirths, tokens;
             public TY_PerkLevels perks;
+            /// <summary>Current goal of <see cref="TY_Goals"/>; lifetime coin and collection counts (saved).</summary>
+            public int goalIndex, coins, collects;
+            /// <summary>Day the daily chest was last opened (saved).</summary>
+            public int chestDay = RetentionDay.None;
+            /// <summary>The save has been applied: the chest and offline earnings wait for it, so they never pay twice.</summary>
+            public bool loaded;
+            // The time the save was last written, kept until offline earnings can be paid (-1: nothing pending).
+            public long offlineSince = -1;
+            public ulong offlineBuilt;
+            /// <summary>The "welcome back" event, held until the client listens (it is sent once, on join).</summary>
+            public readonly TY_HeldMessage<TY_EventBroadcast> welcome = new();
+            /// <summary>Investment levels bought (saved; each adds income, kept through rebirths).</summary>
+            public int invested;
+            /// <summary>Goal stats of this frame (<see cref="statsFrame"/>), so a tick computes them once; -1 = stale.</summary>
+            public TY_GoalStats stats;
+            public int statsFrame = -1;
+            /// <summary>Seconds on a claimed plot this session, and whole minutes of it already reported.</summary>
+            public float plotSeconds;
+            public int minutesReported;
+            public bool streakClaimed;
+            /// <summary>Cash earned since the last report to the daily challenges (reported once a second).</summary>
+            public long unreportedEarnings;
             public int plot = -1;
             public bool onCollector;
             /// <summary>Lanes whose pad the player stood on last tick: a pad buys once per step onto it.</summary>
@@ -84,10 +102,12 @@ namespace Universes.UniverseData.tycoon.Server {
             public readonly Dictionary<int, float> refusedAt = new();
         }
 
-        static readonly TY_ItemKind[] Lanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Rebirth };
-
         readonly Dictionary<NetworkConnection, Tycooner> players = new();
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
+        /// <summary>Clients that asked for the state, so their handlers are registered and events are not lost.</summary>
+        readonly HashSet<NetworkConnection> listeners = new();
+        /// <summary>Reused every tick to walk the players while the dictionary may change.</summary>
+        readonly List<NetworkConnection> connectionBuffer = new();
         Plot[] plots = Array.Empty<Plot>();
         TY_Map map;
         bool plotsDirty;
@@ -102,12 +122,22 @@ namespace Universes.UniverseData.tycoon.Server {
             InstanceFinder.ServerManager.RegisterBroadcast<TY_StateRequest>(OnStateRequest);
             InstanceFinder.ServerManager.RegisterBroadcast<TY_PerkRequest>(OnPerkRequest);
             rushHour.Validate();
+            ValidateRetentionTuning();
+            retention = new RetentionService<TY_SaveData>(TY_Retention.Rules(retentionTuning, unlockTuning, offline), save => save.retention);
+            retention.Ready += OnRetentionReady;
         }
 
-        void OnValidate() => rushHour?.Validate();
+        void OnValidate() {
+            rushHour?.Validate();
+            ValidateRetentionTuning();
+        }
 
         Tycooner For(NetworkConnection connection) {
-            if (!players.TryGetValue(connection, out var t)) players[connection] = t = new Tycooner { cash = startingCash };
+            if (!players.TryGetValue(connection, out var t)) {
+                players[connection] = t = new Tycooner { cash = startingCash };
+                // The client may have asked for the state before the server added the player.
+                if (listeners.Contains(connection)) t.welcome.MarkListening();
+            }
             return t;
         }
 
@@ -120,6 +150,8 @@ namespace Universes.UniverseData.tycoon.Server {
             WriteLeaderboard(player);
             SendState(player.Owner);
             LoadProgressAsync(player).Forget();
+            // After the tycoon's own load started: the kit finds the document loading and waits for it.
+            retention.PlayerJoined(player);
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -134,6 +166,7 @@ namespace Universes.UniverseData.tycoon.Server {
             }
             players.Remove(player.Owner);
             requestTimes.Remove(player.Owner);
+            listeners.Remove(player.Owner);
         }
 
         Vector3 SpawnPosition(NetworkConnection connection) {
@@ -148,10 +181,17 @@ namespace Universes.UniverseData.tycoon.Server {
             player.sprintSpeed.Value = sprintSpeed * m;
         }
 
-        /// <summary>Everything on top of the catalog's own multipliers: the tuning scale and a running rush hour.</summary>
-        double EventScale => rushHour.Scale(incomeScale, Time.time);
+        /// <summary>Cash per second the plot earns right now (rush hour included).</summary>
+        double IncomeOf(Plot plot, Tycooner t) => BaseIncomeOf(plot.purchased, t, plot.owner) * RushMultiplierFor(plot.owner);
 
-        double IncomeOf(Plot plot, Tycooner t) => TY_Catalog.Income(plot.purchased, t.rebirths, t.perks) * EventScale;
+        /// <summary>Income of a build without rush hours: the catalog's, the tuning scale, investments and the player's level unlocks.</summary>
+        double BaseIncomeOf(ulong purchased, Tycooner t, NetworkConnection owner) =>
+            TY_Catalog.Income(purchased, t.rebirths, t.perks) * incomeScale * TY_Catalog.InvestMultiplier(t.invested) * LevelIncomeMultiplier(owner);
+
+        /// <summary>Everything on top of dropper income, as the wallet shows it.</summary>
+        double MultiplierOf(ulong purchased, Tycooner t, NetworkConnection owner) =>
+            TY_Catalog.Multiplier(purchased, t.rebirths, t.perks) * incomeScale * TY_Catalog.InvestMultiplier(t.invested) * LevelIncomeMultiplier(owner)
+            * RushMultiplierFor(owner);
 
         // ---------------------------------------------------------------- lifecycle
         protected override async UniTask StartAsync(CancellationToken token) {
@@ -177,17 +217,26 @@ namespace Universes.UniverseData.tycoon.Server {
                 UpdateRushHour(now);
                 for (int i = 0; i < plots.Length; i++) Earn(plots[i], dt, now);
                 SetTopMessage(TopMessage(now));
+                connectionBuffer.Clear();
+                connectionBuffer.AddRange(players.Keys);
+                foreach (var connection in connectionBuffer)
+                    if (players.TryGetValue(connection, out var t)) TickPlayer(connection, t, dt);
                 BroadcastPlots();
-                foreach (var connection in players.Keys.ToList()) SendWallet(connection);
+                foreach (var connection in connectionBuffer) SendWallet(connection);
                 await AwaitTime(1000, token);
             }
         }
 
+        /// <summary>The shared top line: the running rush hour, or the countdown to the next one (something to wait for).</summary>
         string TopMessage(float now) {
             if (rushHour.IsActive(now))
                 return $"RUSH HOUR: every tycoon earns x{rushHour.multiplier:0.#} for {Mathf.CeilToInt(rushHour.Remaining(now))} s!";
             int free = plots.Count(p => p.owner == null);
-            return free > 0 ? $"Brick Tycoon: claim a free plot! ({free} left)" : "Brick Tycoon: every plot is taken";
+            string plotsLine = free > 0 ? $"{free} free plot{(free == 1 ? "" : "s")}" : "every plot is taken";
+            float untilRush = rushHour.NextAt - now;
+            if (float.IsInfinity(untilRush) || untilRush < 0f) return $"Brick Tycoon: {plotsLine}";
+            int seconds = Mathf.CeilToInt(untilRush);
+            return $"Next RUSH HOUR in {seconds / 60}:{seconds % 60:00}  ·  {plotsLine}";
         }
 
         // ---------------------------------------------------------------- rush hour
@@ -210,13 +259,16 @@ namespace Universes.UniverseData.tycoon.Server {
             foreach (var connection in players.Keys) SendWallet(connection);
             TY_EventKind kind = started ? TY_EventKind.RushHour : TY_EventKind.RushHourOver;
             long seconds = started ? (long)Math.Ceiling(rushHour.duration) : 0;
-            foreach (var pair in players) Event(pair.Key, kind, pair.Value.plot, -1, seconds, text);
+            foreach (var pair in players) {
+                Event(pair.Key, kind, pair.Value.plot, -1, seconds, text);
+                if (!started && pair.Value.plot >= 0) retention.Count(pair.Key, TY_Retention.StatRush);
+            }
             plotsDirty = true;
         }
 
         void Earn(Plot plot, float dt, float now) {
             if (plot.owner == null || !players.TryGetValue(plot.owner, out var t)) return;
-            long capacity = TY_Catalog.Capacity(plot.purchased, t.perks);
+            long capacity = CapacityOf(plot, t);
             bool wasFull = plot.bank >= capacity;
             plot.bank = Math.Min(capacity, plot.bank + IncomeOf(plot, t) * dt);
             if (TY_Catalog.AutoCollects(plot.purchased)) {
@@ -232,8 +284,8 @@ namespace Universes.UniverseData.tycoon.Server {
                 Rect area = TY_Catalog.GoldenArea;
                 plot.goldenPosition = new Vector3(Random.Range(area.xMin, area.xMax), 0f, Random.Range(area.yMin, area.yMax));
                 plot.golden = true;
-                plot.goldenUntil = now + goldenLifetime;
-                plot.nextGolden = now + Random.Range(goldenInterval.x, goldenInterval.y);
+                plot.goldenUntil = now + goldCoins.lifetime;
+                plot.nextGolden = now + GoldenWait(plot.owner);
                 plotsDirty = true;
                 Event(plot.owner, TY_EventKind.Info, t.plot, -1, 0, "A gold coin appeared on your plot! Grab it before it vanishes.");
             }
@@ -257,10 +309,11 @@ namespace Universes.UniverseData.tycoon.Server {
                 if (onCollector && !t.onCollector) Collect(pair.Key, t, plot);
                 t.onCollector = onCollector;
                 if (plot.golden && map.GoldenZone(t.plot, plot.goldenPosition).ContainsFootprint(feet)) GrabGolden(pair.Key, t, plot);
+                if (ChestReady(t) && map.ChestZone(t.plot).ContainsFootprint(feet)) OpenChest(pair.Key, t, plot);
                 int pads = 0;
-                foreach (TY_ItemKind lane in Lanes) {
-                    int item = lane == TY_ItemKind.Rebirth ? TY_Catalog.RebirthIndex : TY_Catalog.NextInLane(plot.purchased, lane);
-                    if (item < 0 || (lane == TY_ItemKind.Rebirth && !TY_Catalog.Available(plot.purchased, item))) continue;
+                foreach (TY_ItemKind lane in TY_Lanes.PadLanes) {
+                    int item = TY_Catalog.PadItem(plot.purchased, lane, t.rebirths);
+                    if (item < 0) continue;
                     if (!map.ButtonZone(t.plot, item).ContainsFootprint(feet)) continue;
                     int bit = 1 << (int)lane;
                     pads |= bit;
@@ -275,11 +328,13 @@ namespace Universes.UniverseData.tycoon.Server {
         void Claim(NetworkConnection connection, Tycooner t, int index) {
             plots[index] = new Plot {
                 owner = connection, purchased = TY_Catalog.StarterMask,
-                nextGolden = Time.time + Random.Range(goldenInterval.x, goldenInterval.y) * 0.5f
+                nextGolden = Time.time + GoldenWait(connection) * 0.5f
             };
             t.plot = index;
             RestoreBuild(connection, index);
             plotsDirty = true;
+            // A tycoon's "match" runs from claiming a plot (or the last rebirth) to the next rebirth.
+            retention.BeginMatch(connection);
             Event(connection, TY_EventKind.Claimed, index, -1, 0, "You claimed a tycoon! Step on the glowing pads to build.");
             ServerChat.SendSystemMessage(new($"{PlayerData.GetPlayerName(connection)} claimed tycoon #{index + 1}.", SystemMessageSource.CustomMessage));
             SendWallet(connection);
@@ -291,8 +346,10 @@ namespace Universes.UniverseData.tycoon.Server {
         }
 
         void Pay(NetworkConnection connection, Tycooner t, long amount) {
+            t.statsFrame = -1;
             t.cash += amount;
             t.lifetime += amount;
+            t.unreportedEarnings += amount;
             plotsDirty = true;
             if (PlayerData.TryGetPlayerData(connection, out var player)) WriteLeaderboard(player);
         }
@@ -302,15 +359,21 @@ namespace Universes.UniverseData.tycoon.Server {
             if (amount <= 0) return;
             plot.bank -= amount;
             Pay(connection, t, amount);
+            t.collects++;
+            retention.Count(connection, TY_Retention.StatCollect);
             Event(connection, TY_EventKind.Collected, t.plot, -1, amount, $"+${TY_Catalog.Money(amount)}");
             SendWallet(connection);
         }
 
         void GrabGolden(NetworkConnection connection, Tycooner t, Plot plot) {
             plot.golden = false;
-            long reward = Math.Max(goldenMinimum, (long)(IncomeOf(plot, t) * goldenIncomeSeconds));
+            float lucky = Has(connection, TY_Retention.LuckyCoins) ? unlockTuning.luckyCoinsMultiplier : 1f;
+            long reward = goldCoins.Reward(IncomeOf(plot, t), lucky);
             Pay(connection, t, reward);
-            Event(connection, TY_EventKind.GoldenBrick, t.plot, -1, reward, $"Gold coin! +${TY_Catalog.Money(reward)}");
+            t.coins++;
+            retention.Count(connection, TY_Retention.StatCoins);
+            retention.AddXp(connection, rewards.coinXp, "Gold coins");
+            Event(connection, TY_EventKind.GoldenBrick, t.plot, -1, reward, $"Gold coin! +${TY_Catalog.Money(reward)}" + (lucky > 1f ? " (Lucky Coins)" : ""));
             SendWallet(connection);
         }
 
@@ -323,32 +386,33 @@ namespace Universes.UniverseData.tycoon.Server {
 
         void TryBuy(NetworkConnection connection, Tycooner t, Plot plot, int index) {
             var item = TY_Catalog.Items[index];
-            if (!TY_Catalog.Available(plot.purchased, index)) {
-                if (Refuse(connection, t, index) && item.prereq >= 0)
-                    Event(connection, TY_EventKind.TooPoor, t.plot, index, 0, $"Build {TY_Catalog.Items[item.prereq].name} first to unlock {item.name}.");
+            if (!TY_Catalog.Available(plot.purchased, index, t.rebirths)) {
+                if (!Refuse(connection, t, index)) return;
+                string reason = TY_Catalog.LockReason(plot.purchased, index, t.rebirths);
+                if (!string.IsNullOrEmpty(reason)) Event(connection, TY_EventKind.TooPoor, t.plot, index, 0, $"{item.name}: {reason}.");
                 return;
             }
-            if (t.cash < item.price) {
+            long price = TY_Catalog.Price(index, t.rebirths, t.invested);
+            if (t.cash < price) {
                 if (!Refuse(connection, t, index)) return;
-                long missing = (long)Math.Ceiling(item.price - t.cash);
+                long missing = (long)Math.Ceiling(price - t.cash);
                 Event(connection, TY_EventKind.TooPoor, t.plot, index, missing, $"You need ${TY_Catalog.Money(missing)} more for {item.name}.");
                 return;
             }
-            t.cash -= item.price;
-            if (item.kind == TY_ItemKind.Rebirth) {
-                t.rebirths++;
-                t.tokens += TY_Perks.TokensPerRebirth;
-                t.cash = startingCash + TY_Perks.StartingCash(t.perks);
-                plot.purchased = TY_Catalog.StarterMask;
-                plot.bank = 0;
-                Event(connection, TY_EventKind.Rebirth, t.plot, index, t.rebirths,
-                    $"REBIRTH {t.rebirths}! Income x{TY_Catalog.RebirthMultiplier(t.rebirths):0.#} and +{TY_Perks.TokensPerRebirth} perk token.");
-                ServerChat.SendSystemMessage(new($"{PlayerData.GetPlayerName(connection)} rebirthed! (x{t.rebirths})", SystemMessageSource.CustomMessage));
-                Award(connection, rebirthXP, rebirthGold);
+            t.cash -= price;
+            t.statsFrame = -1;
+            if (item.kind == TY_ItemKind.Rebirth) Rebirth(connection, t, plot);
+            else if (item.kind == TY_ItemKind.Invest) {
+                t.invested++;
+                Event(connection, TY_EventKind.Bought, t.plot, index, price,
+                    $"Invested ${TY_Catalog.Money(price)}! Income x{TY_Catalog.InvestMultiplier(t.invested):0.##} for good.");
             } else {
                 plot.purchased |= 1ul << index;
-                Event(connection, TY_EventKind.Bought, t.plot, index, item.price, $"Built {item.name}! {item.Effect}");
-                Award(connection, purchaseXP, 0);
+                string text = item.kind == TY_ItemKind.Landmark
+                    ? $"LANDMARK! {item.name} built: {item.Effect}, through every rebirth."
+                    : $"Built {item.name}! {item.Effect}";
+                Event(connection, TY_EventKind.Bought, t.plot, index, price, text);
+                retention.Count(connection, TY_Retention.StatBuilds);
             }
             plotsDirty = true;
             if (PlayerData.TryGetPlayerData(connection, out var player)) WriteLeaderboard(player);
@@ -356,8 +420,51 @@ namespace Universes.UniverseData.tycoon.Server {
         }
 
         // ---------------------------------------------------------------- messages
+        /// <summary>
+        /// Resets the plot for a permanent multiplier and perk tokens. Landmarks (and, with Head Office,
+        /// the collector lane) stay; the run's summary card closes the "match" and a new one begins.
+        /// </summary>
+        void Rebirth(NetworkConnection connection, Tycooner t, Plot plot) {
+            int extraTokens = Has(connection, TY_Retention.TokenPress) ? unlockTuning.tokenPressTokens : 0;
+            TY_RebirthResult result = rewards.Rebirth(t.rebirths, plot.purchased, Has(connection, TY_Retention.HeadOffice), extraTokens);
+            t.rebirths = result.rebirths;
+            t.tokens += result.tokens;
+            t.cash = startingCash + TY_Perks.StartingCash(t.perks);
+            plot.purchased = result.kept;
+            plot.bank = 0;
+            t.statsFrame = -1;
+            string opened = result.landmark >= 0 ? $" The {TY_Catalog.Items[result.landmark].name} landmark is now for sale!" : "";
+            Event(connection, TY_EventKind.Rebirth, t.plot, TY_Catalog.RebirthIndex, t.rebirths,
+                $"REBIRTH {t.rebirths}! Income x{TY_Catalog.RebirthMultiplier(t.rebirths):0.#} and +{result.tokens} perk token{(result.tokens == 1 ? "" : "s")}.{opened}");
+            ServerChat.SendSystemMessage(new($"{PlayerData.GetPlayerName(connection)} rebirthed! (x{t.rebirths})", SystemMessageSource.CustomMessage));
+            retention.Count(connection, TY_Retention.StatRebirth);
+            // Goals the rebirth meets ("Rebirth 2 times") are paid in this run, so the card counts their XP
+            // and ends on the level the chip shows after it; their toasts wait for the card on the client.
+            rebirthLines.Clear();
+            rebirthLines.Add(RewardLine.Headline(result.Label, result.xp, result.gold, result.detail));
+            CompleteMetGoals(connection, t, MaxGoalsAtRebirth, rebirthLines);
+            retention.FinishMatch(connection, $"Rebirth {t.rebirths}!", rebirthLines);
+            retention.BeginMatch(connection);
+        }
+
+        /// <summary>Most goals a rebirth completes at once (a veteran's tail goals can line up).</summary>
+        const int MaxGoalsAtRebirth = 4;
+        /// <summary>The rebirth card's pinned lines: the rebirth first, then the goals it met (reused).</summary>
+        readonly List<RewardLine> rebirthLines = new();
+
         void OnStateRequest(NetworkConnection connection, TY_StateRequest request, Channel channel) {
             if (!connection.IsAuthenticated) return;
+            // The client asks once its handlers are registered (possibly before the server added the
+            // player): from now on events reach it, so a held welcome-back event can go out.
+            if (listeners.Add(connection)) {
+                // The welcome first: the client holds the card's cash back from the wallet that follows.
+                if (players.TryGetValue(connection, out Tycooner listener)) {
+                    listener.welcome.MarkListening();
+                    SendWelcome(connection, listener);
+                }
+                SendState(connection);
+                return;
+            }
             if (requestTimes.TryGetValue(connection, out float previous) && Time.unscaledTime - previous < 1f) return;
             requestTimes[connection] = Time.unscaledTime;
             SendState(connection);
@@ -397,7 +504,7 @@ namespace Universes.UniverseData.tycoon.Server {
                     ownerName = p.owner != null ? PlayerData.GetPlayerName(p.owner) : "",
                     purchased = p.purchased,
                     bank = (long)Math.Floor(p.bank),
-                    capacity = t != null ? TY_Catalog.Capacity(p.purchased, t.perks) : TY_Catalog.BaseCapacity,
+                    capacity = t != null ? CapacityOf(p, t) : TY_Catalog.BaseCapacity,
                     rebirths = t?.rebirths ?? 0,
                     income = t != null ? (float)IncomeOf(p, t) : 0f,
                     golden = p.golden,
@@ -413,30 +520,36 @@ namespace Universes.UniverseData.tycoon.Server {
 
         void SendWallet(NetworkConnection connection) {
             if (connection == null || !connection.IsActive || !players.TryGetValue(connection, out var t)) return;
-            ulong purchased = t.plot >= 0 ? plots[t.plot].purchased : 0;
+            bool hasPlot = OwnsPlot(connection, t);
+            ulong purchased = hasPlot ? plots[t.plot].purchased : 0;
+            TY_Goal goal = TY_Goals.Get(t.goalIndex);
+            DateTime now = DateTime.UtcNow;
+            bool chestReady = ChestReady(t);
+            int chestDay = ChestStreakDay(connection, t, now);
             InstanceFinder.ServerManager.Broadcast(connection, new TY_WalletBroadcast {
                 cash = (long)Math.Floor(t.cash), plot = t.plot, rebirths = t.rebirths,
-                income = t.plot >= 0 ? (float)IncomeOf(plots[t.plot], t) : 0f,
-                multiplier = (float)(TY_Catalog.Multiplier(purchased, t.rebirths, t.perks) * EventScale),
+                income = hasPlot ? (float)IncomeOf(plots[t.plot], t) : 0f,
+                multiplier = (float)MultiplierOf(purchased, t, connection),
                 tokens = t.tokens, perks = t.perks, lifetime = (long)t.lifetime,
-                rushSeconds = rushHour.Remaining(Time.time), rushMultiplier = rushHour.multiplier,
+                rushSeconds = rushHour.Remaining(Time.time),
+                rushMultiplier = rushHour.IsActive(Time.time) ? RushMultiplierFor(connection) : rushHour.multiplier,
+                goalIndex = t.goalIndex, goalProgress = GoalStats(connection, t).Get(goal.stat), goalReward = GoalCash(connection, t, goal),
+                chestReady = chestReady, chestSeconds = chestReady ? 0f : RetentionDay.SecondsUntilReset(now),
+                chestStreak = chestDay, invested = t.invested, chestMinutes = chest.Minutes(chestDay), chestTokens = chest.Tokens(chestDay),
             });
         }
 
-        static void Event(NetworkConnection connection, TY_EventKind kind, int plot, int item, long amount, string text) {
+        bool OwnsPlot(NetworkConnection connection, Tycooner t) => t.plot >= 0 && t.plot < plots.Length && plots[t.plot].owner == connection;
+
+        static void Event(NetworkConnection connection, TY_EventKind kind, int plot, int item, long amount, string text, long extra = 0) {
             if (connection == null || !connection.IsActive) return;
-            InstanceFinder.ServerManager.Broadcast(connection, new TY_EventBroadcast { kind = kind, plot = plot, item = item, amount = amount, text = text });
+            InstanceFinder.ServerManager.Broadcast(connection, new TY_EventBroadcast { kind = kind, plot = plot, item = item, amount = amount, text = text, extra = extra });
         }
 
         void WriteLeaderboard(PlayerData player) {
             if (!players.TryGetValue(player.Owner, out var t)) return;
             RoundLeaderboard.Set(player, CashColumn, (int)Math.Min(int.MaxValue, Math.Floor(t.cash)));
             RoundLeaderboard.Set(player, RebirthColumn, t.rebirths);
-        }
-
-        static void Award(NetworkConnection connection, ulong xp, ulong gold) {
-            if ((xp != 0 || gold != 0) && !LevelsServer.AwardPlayerXPAndGold(connection, xp, gold))
-                Debug.LogWarning($"Tycoon could not award rewards to connection {connection.ClientId}.");
         }
 
         // ---------------------------------------------------------------- debugging hooks
@@ -471,6 +584,8 @@ namespace Universes.UniverseData.tycoon.Server {
         }
 
         protected override void OnDestroy() {
+            if (retention != null) retention.Ready -= OnRetentionReady;
+            retention?.Dispose();
             TY_Commands.Unregister(this);
             GameCharacter.FallHeightOverride = null;
             PlayerData.OnPlayerRemoved -= OnPlayerLeft;

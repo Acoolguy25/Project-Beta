@@ -3,6 +3,8 @@ using UnityEngine;
 using System.IO;
 using System.Linq;
 using RyanAssets.GameFeel;
+using RyanAssets.Retention.Client;
+using RyanAssets.Retention.Editor;
 using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using TMPro;
@@ -21,7 +23,9 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
     /// <item>bottom left: role card (icon, role, what to do now) and the room you're in;</item>
     /// <item>bottom centre: tag prompt (seekers) or taunt prompt (hiders); right: tag feed; top centre: toasts; left middle:
     /// the results banner with every survivor's hiding spot;</item>
-    /// <item>full screen: the seekers' blindfold countdown (the hider's heartbeat vignette is the kit's ScreenFx danger overlay).</item>
+    /// <item>full screen: the seekers' blindfold countdown (the hider's heartbeat vignette is the kit's ScreenFx danger overlay);</item>
+    /// <item>bottom centre: the ability bar (keys 1-3); next to the room chip: round points; under the round card: the map event;</item>
+    /// <item>the shared retention HUD (<see cref="RetentionHudAuthoring"/>) nested in, its level chip and challenges bottom right.</item>
     /// </list>
     /// The prefab also carries the game's client-side feel: sounds (Audio/, credited in CREDITS.md), the
     /// heartbeat, seeker footsteps, the manor ambience and the candle flicker.
@@ -34,9 +38,11 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         const string HiderIcon = "directions_run", SeekerIcon = "search", CaughtIcon = "pan_tool", SpectatorIcon = "visibility",
             WaitingIcon = "groups", HidingIcon = "visibility_off", SeekingIcon = "search", ResultsIcon = "emoji_events",
             PingIcon = "my_location", TagIcon = "pan_tool", InfoIcon = "timer", LocationIcon = "home", TimerIcon = "timer",
-            TauntIcon = "campaign";
+            TauntIcon = "campaign", PointsIcon = "star", LockIcon = "lock", BlackoutIcon = "candle", FrenzyIcon = "siren", ShuffleIcon = "run";
 
         const string AudioFolder = HS_Authoring.Root + "/Audio";
+        /// <summary>The kit's edge-only vignette (clear centre), reused for the blended hider's tint.</summary>
+        const string EdgeVignette = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Textures/screen_danger_vignette.png";
         const string KitAudioFolder = "Packages/com.ryan.gameframework/Runtime/GameFeel/Audio";
 
         public static GameObject Build() {
@@ -55,6 +61,10 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             BuildToast(canvas, hud);
             BuildAlert(canvas, hud);
             BuildBanner(canvas, hud);
+            BuildPointsChip(canvas, hud);
+            BuildEventChip(canvas, hud);
+            BuildAbilityBar(canvas, hud);
+            BuildRetention(canvas, hud);
             hud.hiderIcon = UIThemeAssets.Icon(HiderIcon);
             hud.seekerIcon = UIThemeAssets.Icon(SeekerIcon);
             hud.caughtIcon = UIThemeAssets.Icon(CaughtIcon);
@@ -67,10 +77,17 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.tagIcon = UIThemeAssets.Icon(TagIcon);
             hud.infoIcon = UIThemeAssets.Icon(InfoIcon);
             hud.tauntIcon = UIThemeAssets.Icon(TauntIcon);
+            hud.blackoutIcon = UIThemeAssets.Icon(BlackoutIcon);
+            hud.frenzyIcon = UIThemeAssets.Icon(FrenzyIcon);
+            hud.shuffleIcon = UIThemeAssets.Icon(ShuffleIcon);
+            hud.abilityIcons = new Sprite[HS_Abilities.Count];
+            for (int i = 1; i < HS_Abilities.Count; i++) hud.abilityIcons[i] = UIThemeAssets.Icon(HS_Abilities.Info((HS_Ability)i).Icon);
             AssignSounds(hud);
             BuildFootsteps(canvas, hud);
             BuildAmbience(canvas, hud);
-            canvas.gameObject.AddComponent<HS_LightFlicker>();
+            var flicker = canvas.gameObject.AddComponent<HS_LightFlicker>();
+            BuildAbilityFeel(canvas, hud);
+            BuildBlackout(canvas, hud, flicker);
             return SavePrefab(canvas.gameObject, PrefabPath);
 #endif
         }
@@ -106,6 +123,38 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             // Taunts must carry: a seeker anywhere in the house hears roughly where it came from.
             hud.tauntSound = Sound(1f, 1.5f, 0.3f, 15f, 170f, "taunt_1", "taunt_2", "taunt_3");
             hud.blindTick = Sound(0.55f, 0.2f, 0.2f, 0f, 0f, "tick");
+            hud.pointsSound = Sound(KitAudioFolder, 0.55f, 1f, 0.1f, 0f, 0f, "coin");
+            hud.eventSound = Sound(KitAudioFolder, 0.8f, 0f, 0.5f, 0f, 0f, "horn");
+            hud.recordSound = Sound(KitAudioFolder, 0.8f, 0f, 0.5f, 0f, 0f, "level_up");
+        }
+
+        /// <summary>Ability sounds from the kit's library; 3D ones carry about a room or two (world units).</summary>
+        static void BuildAbilityFeel(RectTransform canvas, HS_ClientController hud) {
+            var feel = canvas.gameObject.AddComponent<HS_AbilityFeel>();
+            // The blended hider's view: a cold edge tint behind every HUD element (first child), clear in the middle.
+            RectTransform tint = Fill(canvas, "BlendVignette");
+            tint.SetAsFirstSibling();
+            var tintImage = tint.gameObject.AddComponent<Image>();
+            tintImage.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(EdgeVignette)
+                ?? throw new FileNotFoundException($"[HideAndSeek] Missing {EdgeVignette}; rebuild the GameFeel assets.");
+            tintImage.color = new Color(0.45f, 0.8f, 1f, 1f);
+            tintImage.raycastTarget = false;
+            var tintGroup = tint.gameObject.AddComponent<CanvasGroup>();
+            tintGroup.alpha = 0f;
+            tintGroup.blocksRaycasts = tintGroup.interactable = false;
+            Wire(feel, ("controller", hud), ("bar", hud.abilityBar), ("blendVignette", tintGroup),
+                ("dashSound", Sound(KitAudioFolder, 0.75f, 1f, 0.1f, 10f, 70f, "whoosh_1", "whoosh_2")),
+                ("blendSound", Sound(KitAudioFolder, 0.6f, 0.5f, 0.2f, 0f, 0f, "pickup")),
+                ("radarSound", Sound(KitAudioFolder, 0.7f, 0f, 0.2f, 12f, 90f, "countdown_beep")),
+                ("flashSound", Sound(KitAudioFolder, 0.8f, 1f, 0.1f, 10f, 80f, "hit_1", "hit_2", "hit_3")),
+                ("dazzledSound", Sound(KitAudioFolder, 0.6f, 0f, 0.2f, 0f, 0f, "explosion_1")));
+        }
+
+        static void BuildBlackout(RectTransform canvas, HS_ClientController hud, HS_LightFlicker flicker) {
+            var blackout = canvas.gameObject.AddComponent<HS_Blackout>();
+            Wire(blackout, ("controller", hud), ("flicker", flicker),
+                ("powerDown", Sound(KitAudioFolder, 0.7f, 0f, 0.5f, 0f, 0f, "explosion_large_1")),
+                ("powerUp", Sound(KitAudioFolder, 0.6f, 0f, 0.5f, 0f, 0f, "build_1")));
         }
 
         /// <summary>Sets serialized fields (private ones included) on a component the prefab is built with.</summary>
@@ -257,7 +306,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.roleHint.overflowMode = TextOverflowModes.Ellipsis;
 
             RectTransform chipLayer = Layer(canvas, "Location");
-            RectTransform chip = Pinned(chipLayer, "LocationChip", Vector2.zero, new Vector2(16f, 126f), new Vector2(240f, 38f));
+            RectTransform chip = Pinned(chipLayer, "LocationChip", Vector2.zero, new Vector2(16f, 126f), new Vector2(LocationChipWidth, 38f));
             Shadow(chip, 16f, 4f, 0.3f);
             Rounded(chip, UIColorRole.Surface, 19f, raycast: false);
             Row(chip.gameObject, 8f, Pad(12, 0), TextAnchor.MiddleLeft, controlWidth: false);
@@ -389,9 +438,14 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.bannerTitle.fontSize = 34f;
             hud.bannerSubtitle = BannerRow(banner, "Subtitle", "", UIText.Body, UIColorRole.TextSecondary, 100f, 124f);
             hud.bannerSubtitle.fontSize = 18f;
+            // The round's MVP and your own points, record and streak (HS_RoundRecapBroadcast).
+            hud.bannerMvp = BannerRow(banner, "Mvp", "", UIText.Strong, UIColorRole.TextPrimary, 130f, 154f);
+            hud.bannerMvp.fontSize = 18f;
+            hud.bannerYou = BannerRow(banner, "You", "", UIText.Body, UIColorRole.TextPrimary, 156f, 180f);
+            hud.bannerYou.fontSize = 17f;
             // A line taller than its row is dropped whole by Ellipsis/Truncate (the font has no ellipsis
             // glyph), so the fixed-height rows overflow instead; the texts are short and fit the width.
-            foreach (TMP_Text row in new TMP_Text[] { hud.bannerTitle, hud.bannerSubtitle }) {
+            foreach (TMP_Text row in new TMP_Text[] { hud.bannerTitle, hud.bannerSubtitle, hud.bannerMvp, hud.bannerYou }) {
                 row.textWrappingMode = TextWrappingModes.NoWrap;
                 row.overflowMode = TextOverflowModes.Overflow;
                 row.verticalAlignment = VerticalAlignmentOptions.Middle;
@@ -405,12 +459,17 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.bannerSpots.textWrappingMode = TextWrappingModes.NoWrap;
             hud.bannerSpots.overflowMode = TextOverflowModes.Overflow;
             hud.bannerSpotLines = BannerListLines - 1;
+            hud.bannerCard = banner;
+            hud.bannerShadow = (RectTransform)layer.Find(banner.name + "Shadow");
+            hud.bannerListTop = BannerListTop;
+            hud.bannerLineHeight = BannerListFontSize * 1.3f;
+            hud.bannerBottomMargin = 18f;
             hud.banner = Fader(layer, false);
         }
 
         /// <summary>The results card: its list holds this many lines (the survivors plus "+N more").</summary>
         const int BannerListLines = 5;
-        const float BannerListFontSize = 17f, BannerListTop = 134f;
+        const float BannerListFontSize = 17f, BannerListTop = 190f;
         /// <summary>Card height: header, then the list at about 1.3 line heights per line, then the bottom margin.</summary>
         const float BannerHeight = BannerListTop + BannerListLines * BannerListFontSize * 1.3f + 18f;
 
@@ -424,6 +483,171 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             rect.offsetMin = new Vector2(24f, -bottom);
             rect.offsetMax = new Vector2(-24f, -top);
             return label;
+        }
+
+        // ---------------------------------------------------------------- round points, map event
+        /// <summary>Round points, beside the room chip: a star and the total, punched when it grows.</summary>
+        static void BuildPointsChip(RectTransform canvas, HS_ClientController hud) {
+            RectTransform layer = Layer(canvas, "Points");
+            RectTransform chip = Pinned(layer, "PointsChip", Vector2.zero, new Vector2(16f + LocationChipWidth + 8f, 126f), new Vector2(PointsChipWidth, 38f));
+            Shadow(chip, 16f, 4f, 0.3f);
+            Rounded(chip, UIColorRole.Surface, 19f, raycast: false);
+            Row(chip.gameObject, 8f, Pad(12, 0), TextAnchor.MiddleLeft, controlWidth: false);
+            Icon(chip, PointsIcon, 18f, UIColorRole.Warning);
+            hud.pointsLabel = Text(chip, "Points", "0", UIText.Strong, UIColorRole.TextPrimary);
+            TMP_Text caption = Text(chip, "Caption", "PTS", UIText.Caption, UIColorRole.TextMuted);
+            // The row does not control widths (the icon keeps its size), so the texts get explicit rects too:
+            // a text keeps TMP's default 200-unit width otherwise and pushes "PTS" out of the chip.
+            foreach ((TMP_Text text, float width) in new[] { (hud.pointsLabel, 52f), (caption, 34f) }) {
+                Size(text, width, 38f, 0f);
+                text.rectTransform.sizeDelta = new Vector2(width, 38f);
+                text.textWrappingMode = TextWrappingModes.NoWrap;
+                text.overflowMode = TextOverflowModes.Overflow;
+            }
+            hud.pointsPunch = chip;
+            // "+15 Close call": rises from just above the chip and fades (HS_ClientController.ShowPointsPopup).
+            TextMeshProUGUI popup = Text(layer, "PointsPopup", "+15 Close call", UIText.Strong, UIColorRole.Warning, TextAlignmentOptions.MidlineLeft);
+            popup.rectTransform.anchorMin = popup.rectTransform.anchorMax = popup.rectTransform.pivot = Vector2.zero;
+            popup.rectTransform.anchoredPosition = new Vector2(16f + LocationChipWidth + 8f + 6f, 126f + 38f + 8f);
+            popup.rectTransform.sizeDelta = new Vector2(360f, 30f);
+            popup.fontSize = 22f;
+            popup.textWrappingMode = TextWrappingModes.NoWrap;
+            popup.overflowMode = TextOverflowModes.Overflow;
+            popup.raycastTarget = false;
+            popup.gameObject.SetActive(false);
+            hud.pointsPopup = popup;
+            hud.pointsChip = Fader(layer, false);
+        }
+
+        const float LocationChipWidth = 240f, PointsChipWidth = 150f;
+
+        /// <summary>The running map event (Blackout, Frenzy, Shuffle) and its countdown, just under the round card.</summary>
+        static void BuildEventChip(RectTransform canvas, HS_ClientController hud) {
+            RectTransform layer = Layer(canvas, "Event");
+            RectTransform chip = Pinned(layer, "EventChip", new Vector2(0.5f, 1f), new Vector2(0f, -170f), new Vector2(260f, 40f));
+            Shadow(chip, 16f, 4f, 0.35f);
+            Rounded(chip, UIColorRole.SurfaceRaised, 20f, raycast: false);
+            Row(chip.gameObject, 8f, Pad(14, 0), TextAnchor.MiddleCenter, controlWidth: false);
+            hud.eventIcon = Free(Icon(chip, BlackoutIcon, 20f, UIColorRole.Warning));
+            hud.eventLabel = Text(chip, "Event", "BLACKOUT 0:18", UIText.Strong, UIColorRole.Warning, TextAlignmentOptions.MidlineLeft);
+            Size(hud.eventLabel, 200f, 40f, 0f);
+            hud.eventLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            hud.eventLabel.overflowMode = TextOverflowModes.Overflow;
+            hud.eventChip = Fader(layer, false);
+        }
+
+        // ---------------------------------------------------------------- abilities
+        const float SlotSize = 76f, SlotGap = 14f, SlotLabelHeight = 20f;
+
+        /// <summary>Three ability keys at the bottom centre, under the tag and taunt prompts.</summary>
+        static void BuildAbilityBar(RectTransform canvas, HS_ClientController hud) {
+            RectTransform layer = Layer(canvas, "Abilities");
+            int count = HS_Abilities.SlotsPerSide;
+            float width = count * SlotSize + (count - 1) * SlotGap;
+            RectTransform bar = Pinned(layer, "AbilityBar", new Vector2(0.5f, 0f), new Vector2(0f, 18f), new Vector2(width, SlotSize + SlotLabelHeight + 4f));
+            var slots = new HS_AbilitySlotView[count];
+            for (int i = 0; i < count; i++) slots[i] = BuildSlot(bar, i, new Vector2(i * (SlotSize + SlotGap), 0f));
+            // On the canvas, not the layer: a hidden layer is deactivated, and the bar must keep listening.
+            // The line above the bar for ability results (HS_AbilityBar.Say): clear of the view and of the centre toast.
+            TextMeshProUGUI message = Text(layer, "AbilityMessage", "Radar: 2 contacts nearby!", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            RectTransform messageRect = message.rectTransform;
+            messageRect.anchorMin = messageRect.anchorMax = new Vector2(0.5f, 0f);
+            messageRect.pivot = new Vector2(0.5f, 0f);
+            messageRect.anchoredPosition = new Vector2(0f, 18f + SlotSize + SlotLabelHeight + 12f);
+            messageRect.sizeDelta = new Vector2(720f, 30f);
+            message.fontSize = 20f;
+            message.textWrappingMode = TextWrappingModes.NoWrap;
+            message.overflowMode = TextOverflowModes.Overflow;
+            message.raycastTarget = false;
+            var shadowed = AssetDatabase.LoadAssetAtPath<Material>(BoldShadowMaterial);
+            if (shadowed != null && message.font != null && shadowed.mainTexture == message.font.material.mainTexture) message.fontSharedMaterial = shadowed;
+            var abilityBar = canvas.gameObject.AddComponent<HS_AbilityBar>();
+            Wire(abilityBar, ("controller", hud), ("bar", Fader(layer, false)), ("messageLabel", message),
+                ("readySound", Sound(KitAudioFolder, 0.35f, 0f, 0.3f, 0f, 0f, "pickup")));
+            hud.abilityBar = abilityBar;
+            var so = new SerializedObject(abilityBar);
+            SerializedProperty list = so.FindProperty("slots");
+            list.arraySize = count;
+            for (int i = 0; i < count; i++) list.GetArrayElementAtIndex(i).objectReferenceValue = slots[i];
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        static HS_AbilitySlotView BuildSlot(RectTransform bar, int index, Vector2 offset) {
+            RectTransform slot = Pinned(bar, $"Slot{index + 1}", Vector2.zero, offset, new Vector2(SlotSize, SlotSize + SlotLabelHeight + 4f));
+            var view = slot.gameObject.AddComponent<HS_AbilitySlotView>();
+            RectTransform face = Pinned(slot, "Face", new Vector2(0.5f, 1f), Vector2.zero, new Vector2(SlotSize, SlotSize));
+            Shadow(face, 18f, 5f, 0.4f);
+            Rounded(face, UIColorRole.SurfaceRaised, 18f, raycast: false);
+            Image icon = Free(PlaceIcon(face, "sprint", 40f, new Vector2(0.5f, 0.5f), new Vector2(0f, 2f)));
+            Image cooldown = Radial(face, "Cooldown", UIColorRole.SurfaceInset, 0.8f, 1f);
+            cooldown.fillAmount = 0f;
+            Image active = Radial(face, "Active", UIColorRole.Success, 0.35f, 1f);
+            active.gameObject.SetActive(false);
+            TextMeshProUGUI timer = Label(face, "Timer", "", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+            timer.fontSize = 26f;
+            RectTransform key = Pinned(face, "Key", new Vector2(0f, 1f), new Vector2(6f, -6f), new Vector2(22f, 22f));
+            Rounded(key, UIColorRole.TextPrimary, 6f, 0.16f, raycast: false);
+            TextMeshProUGUI keyLabel = Label(key, "Key", (index + 1).ToString(), UIText.Caption, UIColorRole.TextPrimary, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+            keyLabel.fontSize = 13f;
+            keyLabel.overflowMode = TextOverflowModes.Overflow;
+
+            // Locked: a light veil (the ability's icon stays readable under it at lockedIconAlpha), a clear
+            // lock badge in the top-right corner and the unlock level along the bottom.
+            RectTransform locked = Fill(face, "Locked");
+            Rounded(locked, UIColorRole.Surface, 18f, 0.35f, raycast: false);
+            RectTransform badge = Pinned(locked, "LockBadge", new Vector2(1f, 1f), new Vector2(-5f, -5f), new Vector2(24f, 24f));
+            Rounded(badge, UIColorRole.SurfaceInset, 12f, raycast: false);
+            PlaceIcon(badge, LockIcon, 16f, new Vector2(0.5f, 0.5f), Vector2.zero, UIColorRole.TextPrimary);
+            RectTransform levelPill = Pinned(locked, "LevelPill", new Vector2(0.5f, 0f), new Vector2(0f, 5f), new Vector2(46f, 18f));
+            Rounded(levelPill, UIColorRole.SurfaceInset, 9f, raycast: false);
+            TextMeshProUGUI lockLabel = Label(levelPill, "Level", "LV 2", UIText.Caption, UIColorRole.Warning, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+            lockLabel.fontSize = 12f;
+            lockLabel.overflowMode = TextOverflowModes.Overflow;
+
+            TextMeshProUGUI nameLabel = Label(slot, "Name", "Dash", UIText.Caption, UIColorRole.TextSecondary, TextAlignmentOptions.Center, Vector2.zero, new Vector2(1f, SlotLabelHeight / (SlotSize + SlotLabelHeight + 4f)));
+            nameLabel.fontSize = 12f;
+            nameLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            nameLabel.overflowMode = TextOverflowModes.Overflow;
+            Wire(view, ("icon", icon), ("cooldownFill", cooldown), ("activeRing", active), ("keyLabel", keyLabel), ("nameLabel", nameLabel),
+                ("timerLabel", timer), ("lockOverlay", locked.gameObject), ("lockLabel", lockLabel), ("punchTarget", face));
+            return view;
+        }
+
+        /// <summary>A full-size radial overlay (clockwise from the top) on a rounded face.</summary>
+        static Image Radial(RectTransform face, string name, UIColorRole role, float opacity, float fill) {
+            Image image = Free(Rounded(Fill(face, name), role, 18f, opacity, raycast: false));
+            image.type = Image.Type.Filled;
+            image.fillMethod = Image.FillMethod.Radial360;
+            image.fillOrigin = (int)Image.Origin360.Top;
+            image.fillClockwise = false;
+            image.fillAmount = fill;
+            return image;
+        }
+
+        // ---------------------------------------------------------------- shared retention HUD
+        /// <summary>
+        /// Nests the kit's HUD and moves its level chip and challenges panel to the bottom right (the role
+        /// card holds the bottom left). The kit (try 2) puts the match summary at the left edge, where this
+        /// game's results banner sits, so the summary moves to the right centre: the tag feed there is
+        /// cleared at round end, and the kit keeps the challenges panel shut while the summary shows.
+        /// Toasts keep the kit's top-right spot.
+        /// </summary>
+        static void BuildRetention(RectTransform canvas, HS_ClientController hud) {
+            RetentionHud retention = RetentionHudAuthoring.AddTo(canvas);
+            retention.SetPlacement(RetentionHudPart.LevelChip, new RetentionPlacement(new Vector2(1f, 0f), new Vector2(-16f, 16f)));
+            retention.SetPlacement(RetentionHudPart.ChallengesPanel, new RetentionPlacement(new Vector2(1f, 0f), new Vector2(-16f, 70f)));
+            retention.SetPlacement(RetentionHudPart.SummaryCard, new RetentionPlacement(new Vector2(1f, 0.5f), new Vector2(-24f, 0f)));
+            // Script changes to a nested prefab instance are only kept when recorded as overrides.
+            PrefabUtility.RecordPrefabInstancePropertyModifications(retention);
+            RecordRect(retention.GetComponentInChildren<RetentionLevelChip>(true));
+            RecordRect(retention.GetComponentInChildren<RetentionChallengesPanel>(true));
+            RecordRect(retention.GetComponentInChildren<RetentionSummaryCard>(true));
+            hud.retentionHud = retention;
+        }
+
+        static void RecordRect(Component part) {
+            if (part == null) throw new FileNotFoundException("The retention HUD prefab is missing a part; rebuild it (Ryan > Retention > Rebuild HUD).");
+            PrefabUtility.RecordPrefabInstancePropertyModifications(part.transform);
         }
 
         // ---------------------------------------------------------------- blindfold

@@ -14,7 +14,9 @@
         "RyanAssets.Client.ClientUI.NameTag",
         "RyanAssets.Input",
         "RyanAssets.UI",
-        "RyanAssets.GameFeel"
+        "RyanAssets.GameFeel",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

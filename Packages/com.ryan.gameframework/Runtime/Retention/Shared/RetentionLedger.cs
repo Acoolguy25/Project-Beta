@@ -46,6 +46,9 @@ namespace RyanAssets.Retention {
         internal List<PendingStat> pending = new(4);
         internal List<PendingStat> draining = new(4);
         internal double accountXpCarry;
+        internal bool finishing;
+        int announcedAccountLevel = -1;
+        DateTime accountLevelQuietUntil;
 
         /// <summary>
         /// False when the player's document is not saved this session (it could not be loaded, or the
@@ -62,6 +65,49 @@ namespace RyanAssets.Retention {
 
         /// <summary>Account XP earned but not yet paid (below 1 point), carried to the next payout.</summary>
         public double AccountXpCarry => accountXpCarry;
+
+        /// <summary>
+        /// True while a match is open or <see cref="RetentionLedger.FinishMatch"/> is paying its lines
+        /// (the match is already closed then). A level-up inside a match is announced once, when it ends.
+        /// </summary>
+        public bool InMatch => Match != null || finishing;
+
+        /// <summary>
+        /// The account level last announced (or seen before the first payout); -1 while not known.
+        /// Level 0 is a known level: a new player going from 0 to 1 is announced.
+        /// </summary>
+        public int AnnouncedAccountLevel => announcedAccountLevel;
+
+        /// <summary>
+        /// Call before paying account XP, with the level the player has now. Only the first call counts
+        /// (while the level is not known), so later level-ups are measured from it.
+        /// </summary>
+        public void NoteAccountLevel(int level) {
+            if (announcedAccountLevel < 0) announcedAccountLevel = Math.Max(0, level);
+        }
+
+        /// <summary>
+        /// True (and records it) when <paramref name="level"/> is above the level last announced; false
+        /// when it is not, or while no level was noted yet.
+        /// </summary>
+        public bool TryAnnounceAccountLevel(int level) {
+            if (announcedAccountLevel < 0 || level <= announcedAccountLevel) return false;
+            announcedAccountLevel = level;
+            return true;
+        }
+
+        /// <summary>
+        /// Until <paramref name="utc"/> (just after joining), account level-ups only move the level last
+        /// announced: <see cref="TryAnnounceAccountLevel(int, DateTime)"/> records them and says false.
+        /// </summary>
+        public void QuietAccountLevelUntil(DateTime utc) => accountLevelQuietUntil = utc;
+
+        /// <summary>
+        /// <see cref="TryAnnounceAccountLevel(int)"/>, except that a level-up before the time given to
+        /// <see cref="QuietAccountLevelUntil"/> is recorded without an announcement (false).
+        /// </summary>
+        public bool TryAnnounceAccountLevel(int level, DateTime utcNow) =>
+            TryAnnounceAccountLevel(level) && utcNow >= accountLevelQuietUntil;
     }
 
     /// <summary>
@@ -110,13 +156,18 @@ namespace RyanAssets.Retention {
             MatchSummary summary = player.Match ?? new MatchSummary(Rules.Progress(save));
             player.Match = null;
             summary.Title = title;
-            if (rewards != null)
-                foreach (RewardLine line in rewards) Grant(player, save, line, false, Source.Play, summary);
-            StreakClaim streak = Rules.ClaimStreak(save, day);
-            if (streak.Paid) {
-                Grant(player, save, new RewardLine(Rules.Tuning.streak.Line(streak.Days), streak.Xp, streak.Gold), false, Source.Daily, summary);
-                summary.StreakDays = streak.Days;
-                sink.SaveSoon(player);
+            player.finishing = true;
+            try {
+                if (rewards != null)
+                    foreach (RewardLine line in rewards) Grant(player, save, line, false, Source.Play, summary);
+                StreakClaim streak = Rules.ClaimStreak(save, day);
+                if (streak.Paid) {
+                    Grant(player, save, new RewardLine(Rules.Tuning.streak.Line(streak.Days), streak.Xp, streak.Gold), false, Source.Daily, summary);
+                    summary.StreakDays = streak.Days;
+                    sink.SaveSoon(player);
+                }
+            } finally {
+                player.finishing = false;
             }
             if (save.matchesFinished < int.MaxValue) save.matchesFinished++;
             summary.After = Rules.Progress(save);
@@ -203,7 +254,7 @@ namespace RyanAssets.Retention {
                     index = update.Index, id = challenge.id, text = challenge.Describe(), progress = update.Progress,
                     target = challenge.target, completed = true, xpReward = challenge.xpReward, goldReward = challenge.goldReward, day = day,
                 });
-                Grant(player, save, new RewardLine(challenge.Describe(), challenge.xpReward, challenge.goldReward), true, Source.Daily, null);
+                Grant(player, save, new RewardLine(challenge.CardLabel(), challenge.xpReward, challenge.goldReward), true, Source.Daily, null);
                 sink.SaveSoon(player);
             }
         }

@@ -25,6 +25,11 @@ namespace RyanAssets.Retention {
         public int goldReward;
         /// <summary>What the player reads, e.g. "Win {target} rounds".</summary>
         public string text;
+        /// <summary>
+        /// Optional short name for the end-of-match card's reward line ("First finds x{target}"), where a
+        /// long <see cref="text"/> would have to shrink. Empty: the card shows <see cref="Describe"/>.
+        /// </summary>
+        public string shortText;
 
         public ChallengeDefinition() { }
 
@@ -39,6 +44,9 @@ namespace RyanAssets.Retention {
 
         /// <summary><see cref="text"/> with <see cref="TargetToken"/> filled in.</summary>
         public string Describe() => (text ?? id ?? string.Empty).Replace(TargetToken, target.ToString());
+
+        /// <summary>The card line's label: <see cref="shortText"/> (filled in) when set, else <see cref="Describe"/>.</summary>
+        public string CardLabel() => string.IsNullOrEmpty(shortText) ? Describe() : shortText.Replace(TargetToken, target.ToString());
 
         public override string ToString() => $"{id} ({statKey} {target})";
     }

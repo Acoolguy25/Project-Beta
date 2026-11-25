@@ -77,6 +77,12 @@ namespace Universes.UniverseData.classic_horror.Client {
         /// <summary>The glow on a resting item, for focus and prompt placement.</summary>
         public CH_ItemGlow GlowOf(int itemId) => views.TryGetValue(itemId, out View view) && view.state == CH_ItemState.Resting ? view.glow : null;
 
+        /// <summary>Every item set in its place (in the boat, on a grave, on Lily's step), for a scene that sails the boat away.</summary>
+        public void CollectPlaced(List<Transform> into) {
+            foreach (View view in views.Values)
+                if (view.state == CH_ItemState.Placed && view.root != null) into.Add(view.root.transform);
+        }
+
         /// <summary>Your own held item is put away while a cutscene plays or you are hiding.</summary>
         public void SetLocalHeldVisible(bool visible) => heldVisible = visible;
 

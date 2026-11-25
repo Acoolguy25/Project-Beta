@@ -1,6 +1,6 @@
 {
   "name": "Universes.UniverseData.tycoon.Tests",
-  "references": ["Universes.UniverseData.tycoon.Shared", "RyanAssets.Rounds", "RyanAssets.Core"],
+  "references": ["Universes.UniverseData.tycoon.Shared", "RyanAssets.Rounds", "RyanAssets.Core", "RyanAssets.Retention"],
   "includePlatforms": ["Editor"],
   "optionalUnityReferences": ["TestAssemblies"],
   "defineConstraints": ["UNITY_INCLUDE_TESTS"]

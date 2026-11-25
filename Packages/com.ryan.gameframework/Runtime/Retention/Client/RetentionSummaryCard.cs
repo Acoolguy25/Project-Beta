@@ -22,6 +22,14 @@ namespace RyanAssets.Retention.Client {
         enum Phase { Idle, Lines, Fill, Unlocks, Done }
 
         const int LabelCell = 0, GoldCell = 1, XpCell = 2;
+        /// <summary>Smallest size a long label shrinks to, as a share of its size (two lines still fit a row).</summary>
+        const float LabelMinScale = 0.82f;
+        /// <summary>No label shrinks below this (the theme's small text size), so it stays readable.</summary>
+        const float LabelMinSize = 13f;
+        /// <summary>A label that fits on one line at this share of its size stays on one line.</summary>
+        const float OneLineMinScale = 0.9f;
+        /// <summary>Height of a row whose label wraps, as a share of the normal row height.</summary>
+        const float TallRowScale = 1.5f;
 
         public TMP_Text title;
         [Header("Level")]
@@ -42,7 +50,7 @@ namespace RyanAssets.Retention.Client {
         public Sprite infoIcon;
         [Header("Unlock reveal")]
         public HudPopup unlockPopup;
-        [Tooltip("Faint outline shown where the unlock will appear, until it does.")]
+        [Tooltip("Old faint outline where the unlock appears. Unused since try 5: the block shows a locked teaser until the reveal.")]
         public GameObject unlockPlaceholder;
         public Image unlockDisc;
         public Image unlockIcon;
@@ -67,6 +75,14 @@ namespace RyanAssets.Retention.Client {
         public string unlockKickerText = "UNLOCKED";
         [Tooltip("{0} = which unlock, {1} = how many this match.")]
         public string unlockKickerManyFormat = "UNLOCKED {0}/{1}";
+        [Tooltip("Kicker of the locked teaser shown until the reveal, for one unlock.")]
+        public string unlockTeaserKicker = "NEW UNLOCK";
+        [Tooltip("Kicker of the locked teaser for several unlocks: {0} = how many.")]
+        public string unlockTeaserKickerManyFormat = "{0} NEW UNLOCKS";
+        [Tooltip("Title of the locked teaser: {0} = level of the first unlock.")]
+        public string unlockTeaserTitleFormat = "Reach level {0}";
+        [Tooltip("Icon of the locked teaser (empty: the theme's \"lock\" icon).")]
+        public Sprite unlockTeaserIcon;
         [Tooltip("Footer under a match that paid the streak (the bonus itself is a line): {0} = streak day, {1} = tomorrow's day.")]
         public string streakFormat = "Come back tomorrow for day {1} of your streak!";
         [Tooltip("{0} = level, {1} = unlock title.")]
@@ -158,7 +174,10 @@ namespace RyanAssets.Retention.Client {
             if (bar != null) bar.Value = Fraction(summary.levelXpAfter, summary.levelXpNeededAfter);
             ShowFinalLevel();
             RetentionUnlockView[] unlocks = summary.unlocks;
-            if (unlocks != null && unlocks.Length > 0) ShowUnlock(unlocks.Length - 1, false);
+            if (unlocks != null && unlocks.Length > 0) {
+                unlockIndex = Mathf.Clamp(unlockIndex, 1, unlocks.Length);
+                ShowUnlock(unlockIndex - 1, false);
+            }
             Finish();
         }
 
@@ -180,6 +199,7 @@ namespace RyanAssets.Retention.Client {
                 case Phase.Unlocks: UpdateUnlocks(now); break;
                 case Phase.Done:
                     if (feel.autoHideSeconds > 0f && now >= hideAt) Hide();
+                    else CycleUnlocks(now);
                     break;
             }
         }
@@ -244,6 +264,16 @@ namespace RyanAssets.Retention.Client {
             nextAt = now + feel.unlockSeconds;
         }
 
+        /// <summary>After the reveal, several unlocks keep taking turns (quietly) until the card hides.</summary>
+        void CycleUnlocks(float now) {
+            RetentionUnlockView[] unlocks = summary.unlocks;
+            if (unlocks == null || unlocks.Length < 2 || now < nextAt) return;
+            unlockIndex = unlockIndex % unlocks.Length + 1;
+            ShowUnlock(unlockIndex - 1, false);
+            if (unlockIcon != null) Punch.Pop(unlockIcon.rectTransform, feel.unlockPopFrom, feel.punchSeconds);
+            nextAt = now + feel.unlockSeconds;
+        }
+
         void ShowFinalLevel() {
             SetCounter(summary.totalXp);
             SetGold(summary.totalGold);
@@ -256,6 +286,7 @@ namespace RyanAssets.Retention.Client {
         void Finish() {
             phase = Phase.Done;
             hideAt = Time.unscaledTime + feel.autoHideSeconds;
+            nextAt = Time.unscaledTime + feel.unlockSeconds;
         }
 
         // ---------------------------------------------------------------- pieces
@@ -272,6 +303,7 @@ namespace RyanAssets.Retention.Client {
         void ShowUnlock(int index, bool celebrate) {
             if (unlockPlaceholder != null) unlockPlaceholder.SetActive(false);
             if (unlockPopup != null) unlockPopup.Show();
+            if (unlockDescription != null) unlockDescription.alpha = 1f;
             FillUnlock(index);
             if (!celebrate) return;
             if (unlockIcon != null) Punch.Pop(unlockIcon.rectTransform, feel.unlockPopFrom, feel.punchSeconds);
@@ -290,8 +322,9 @@ namespace RyanAssets.Retention.Client {
         }
 
         /// <summary>
-        /// Lays the unlock block out now, invisible, with the longest description of the match, so its
-        /// reveal does not resize the card. Without unlocks it takes no space.
+        /// Lays the unlock block out now, with the longest description of the match, so its reveal does
+        /// not resize the card, and shows it as a locked teaser ("3 NEW UNLOCKS", "Reach level 5") until
+        /// the bar gets there: never an empty box. Without unlocks it takes no space.
         /// </summary>
         void ReserveUnlock() {
             if (unlockPopup == null) return;
@@ -299,13 +332,23 @@ namespace RyanAssets.Retention.Client {
             bool any = unlocks != null && unlocks.Length > 0;
             unlockPopup.deactivateWhenHidden = false;
             unlockPopup.gameObject.SetActive(any);
-            if (unlockPlaceholder != null) unlockPlaceholder.SetActive(any);
+            if (unlockPlaceholder != null) unlockPlaceholder.SetActive(false);
             if (!any) return;
-            unlockPopup.HideImmediate();
             int longest = 0;
             for (int i = 1; i < unlocks.Length; i++)
                 if ((unlocks[i].description?.Length ?? 0) > (unlocks[longest].description?.Length ?? 0)) longest = i;
             FillUnlock(longest);
+            // The teaser: the same block, locked. The description keeps its space but is not shown yet.
+            if (unlockDisc != null) unlockDisc.color = style.muted;
+            if (unlockIcon != null) {
+                Sprite locked = unlockTeaserIcon != null ? unlockTeaserIcon : icons != null ? icons.Get("lock") : null;
+                if (locked != null) unlockIcon.sprite = locked;
+            }
+            if (unlockKicker != null)
+                unlockKicker.text = unlocks.Length > 1 ? Format(unlockTeaserKickerManyFormat, unlocks.Length) : unlockTeaserKicker;
+            if (unlockTitle != null) unlockTitle.text = Format(unlockTeaserTitleFormat, unlocks[0].level);
+            if (unlockDescription != null) unlockDescription.alpha = 0f;
+            unlockPopup.Show();
         }
 
         void FillLines() {
@@ -329,10 +372,11 @@ namespace RyanAssets.Retention.Client {
                 else row.Set(XpCell, reward.xp > 0 ? $"+{reward.xp} XP" : string.Empty, style.xp);
                 TMP_Text[] cells = row.cells;
                 if (cells != null && cells.Length > XpCell) {
+                    if (cells[LabelCell] != null) FitLabel(cells[LabelCell]);
                     // An info line's detail may run on, right-aligned, over the empty gold cell.
                     if (cells[XpCell] != null) cells[XpCell].overflowMode = info ? TextOverflowModes.Overflow : TextOverflowModes.Ellipsis;
-                    // A reward line with a detail and no gold gives the gold cell's width to its label.
-                    if (cells[GoldCell] != null) cells[GoldCell].gameObject.SetActive(!(hasDetail && hasReward && reward.gold <= 0));
+                    // A reward line without gold gives the gold cell's width to its label.
+                    if (cells[GoldCell] != null) cells[GoldCell].gameObject.SetActive(!(hasReward && reward.gold <= 0));
                 }
                 Sprite icon = info ? infoIcon : rewardIcon;
                 if (icon != null && row.icon != null) {
@@ -342,6 +386,68 @@ namespace RyanAssets.Retention.Client {
                 if (rowGroups[i] == null) row.TryGetComponent(out rowGroups[i]);
                 SetRowShown(i, false);
             }
+            FitRowHeights();
+        }
+
+        /// <summary>
+        /// A label too long for one line ("Find the first hider of a round 2 times" next to a gold value)
+        /// gets a taller row, so it wraps to two lines at a readable size instead of two tiny ones. Done
+        /// once when the card starts (rows are revealed by fading), so the card does not resize later.
+        /// </summary>
+        void FitRowHeights() {
+            if (lines == null || lines.Count == 0) return;
+            float baseHeight = RowHeight(lines.template);
+            if (baseHeight <= 0f) return;
+            for (int i = 0; i < lines.Count; i++) SetRowHeight(lines.Row(i), baseHeight);
+            LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
+            bool changed = false;
+            for (int i = 0; i < lines.Count; i++) {
+                HudRow row = lines.Row(i);
+                TMP_Text cell = row.cells != null && row.cells.Length > LabelCell ? row.cells[LabelCell] : null;
+                if (cell == null || string.IsNullOrEmpty(cell.text)) continue;
+                float width = cell.rectTransform.rect.width;
+                // Slightly long labels stay on one line, a little smaller (auto-size); longer ones wrap.
+                if (width <= 0f || OneLineWidth(cell) * OneLineMinScale <= width + 0.5f) continue;
+                SetRowHeight(row, Mathf.Max(baseHeight, baseHeight * TallRowScale));
+                changed = true;
+            }
+            if (changed) LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)transform);
+        }
+
+        /// <summary>Width of the label on one line at its full size.</summary>
+        static float OneLineWidth(TMP_Text cell) {
+            bool auto = cell.enableAutoSizing;
+            float size = cell.fontSize;
+            cell.enableAutoSizing = false;
+            if (auto) cell.fontSize = cell.fontSizeMax;
+            float width = cell.GetPreferredValues(cell.text, float.PositiveInfinity, float.PositiveInfinity).x;
+            cell.fontSize = size;
+            cell.enableAutoSizing = auto;
+            return width;
+        }
+
+        static float RowHeight(HudRow row) =>
+            row != null && row.TryGetComponent(out LayoutElement size) ? size.preferredHeight : -1f;
+
+        static void SetRowHeight(HudRow row, float height) {
+            if (!row.TryGetComponent(out LayoutElement size) || Mathf.Approximately(size.preferredHeight, height)) return;
+            size.minHeight = size.preferredHeight = size.maxHeight = height;
+        }
+
+        /// <summary>
+        /// Lets a long label ("Hold 8 waves without a leak") wrap to a second line and shrink to fit the
+        /// row before it is cut with an ellipsis. Short labels keep their size. A label the prefab already
+        /// auto-sizes is left as authored.
+        /// </summary>
+        static void FitLabel(TMP_Text cell) {
+            if (cell.enableAutoSizing) return;
+            float size = cell.fontSize;
+            cell.textWrappingMode = TextWrappingModes.Normal;
+            cell.overflowMode = TextOverflowModes.Ellipsis;
+            cell.fontSizeMax = size;
+            cell.fontSizeMin = Mathf.Min(size, Mathf.Max(LabelMinSize, Mathf.Round(size * LabelMinScale)));
+            cell.lineSpacing = -14f;
+            cell.enableAutoSizing = true;
         }
 
         /// <summary>Hides or shows a line without changing the layout (fades its CanvasGroup; rows without one fall back to deactivating).</summary>

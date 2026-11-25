@@ -42,7 +42,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
             (new(475.58f, 26.51f, 517.58f), "nursery, garden house")
         };
         static readonly string[] SingerDates = { "1903 - 1962", "1898 - 1962", "1931 - 1962", "1940 - 1962", "1912 - 1962" };
-        static readonly Color EngravingColour = new(0.62f, 0.6f, 0.55f);
+        static readonly Color EngravingColour = new(0.15f, 0.14f, 0.12f);
+        /// <summary>The engraving fills this much of its stone's width and height, raised this far above the stone's middle.</summary>
+        const float EngravingWidth = 0.78f, EngravingHeight = 0.34f, EngravingRaise = 0.12f;
 
         static int mask;
         static float waterLevel;
@@ -78,6 +80,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 map.hidingSpots = BuildHidingSpots(set, map);
                 map.musicBoxSpots = BuildMusicBoxSpots(set);
                 map.cutscenes = BuildCutscenes(set, map, harbour);
+                BuildLakeMist(set, harbour);
 
                 map.voices = AssetDatabase.LoadAssetAtPath<CH_VoiceBank>(CH_VoiceAuthoring.BankPath) ?? CH_VoiceAuthoring.Build();
                 var prefabs = new GameObject[System.Enum.GetValues(typeof(CH_ItemKind)).Length];
@@ -120,8 +123,13 @@ namespace Universes.UniverseData.classic_horror.Editor {
             public Transform hull;
             public Transform boarding, shore, stern, arrival;
             public Transform[] slots;
+            /// <summary>The ferry itself, which the departure sails away.</summary>
+            public Transform ferry;
             /// <summary>Out over the water, and along the jetty's side, towards the boat, on the horizontal plane.</summary>
             public Vector3 outward, side;
+            /// <summary>The middle of the jetty's last plank, on the planks.</summary>
+            public Vector3 jettyEnd;
+            public float boatLength;
         }
 
         /// <summary>
@@ -183,7 +191,11 @@ namespace Universes.UniverseData.classic_horror.Editor {
             Debug.Log($"Classic Horror: ferry moored at {boatCentre} ({boatLength:0.0} x {boatWidth:0.0} m), jetty {jettySize.x:0.0} m from {shore} "
                 + $"heading {outward}, water {water:0.00}.");
             Transform hullMark = Mark(group, "Hull centre", new Vector3(boatCentre.x, water, boatCentre.z), outward);
-            return new Harbour { hull = hullMark, boarding = boarding, shore = shoreMark, stern = stern, slots = slots, arrival = arrival, outward = outward, side = side };
+            Vector3 jettyEnd = jettyCentre + outward * (jettySize.x * 0.5f - 0.6f);
+            return new Harbour {
+                hull = hullMark, boarding = boarding, shore = shoreMark, stern = stern, slots = slots, arrival = arrival, ferry = boat.transform,
+                outward = outward, side = side, jettyEnd = new Vector3(jettyEnd.x, deck, jettyEnd.z), boatLength = boatLength
+            };
         }
 
         // The village's south-west shore, a few steps west of the fishing dock: the open lake and the wreck lie west of it.
@@ -296,50 +308,127 @@ namespace Universes.UniverseData.classic_horror.Editor {
             facing.y = 0f;
             GameObject stone = Instance(MarkerStonePrefab, group, "Lily's stone");
             stone.transform.SetPositionAndRotation(spot, Quaternion.LookRotation(-facing.normalized));
-            Engrave(group, "LILY CRANE\n1954 - 1962\n<size=60%>she waited for the ferry</size>", spot, facing.normalized, 0.55f);
+            Physics.SyncTransforms();
+            Engrave(group, "LILY CRANE\n1954 - 1962\n<size=60%>she waited for the ferry</size>", stone.transform, facing.normalized);
             return Mark(group, "Lily's marker (slot)", spot + facing.normalized * 0.7f, facing);
         }
 
         // ---- The graveyard -----------------------------------------------------------------------------------------------
 
+        /// <summary>
+        /// The graveyard's obelisk: a narrow shaft on a wider plinth, so no face is flat and wide enough for a name. Singers'
+        /// graves are only ever the slab headstones.
+        /// </summary>
+        const string ObeliskStone = "Prop_Gravestone_E";
+
+        /// <summary>How far out in front of a singer's stone must be clear for its name to be read, and half how wide.</summary>
+        const float ReadingDistance = 2.4f, ReadingHalfWidth = 0.45f;
+
         /// <summary>Five gravestones spread across the chapel graveyard, one per singer, each engraved with their name.</summary>
         static Transform[] BuildGraves(Transform set) {
             Transform group = Group(set, "Singers' graves");
             var stones = new List<Transform>();
+            MeshRenderer[] scenery = Object.FindObjectsByType<MeshRenderer>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             foreach (Transform candidate in Object.FindObjectsByType<Transform>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)) {
-                if (!candidate.name.StartsWith("Prop_Gravestone") || PrefabUtility.GetNearestPrefabInstanceRoot(candidate) != candidate.gameObject) continue;
+                if (!candidate.name.StartsWith("Prop_Gravestone") || candidate.name.StartsWith(ObeliskStone)
+                    || PrefabUtility.GetNearestPrefabInstanceRoot(candidate) != candidate.gameObject) continue;
                 Vector3 p = candidate.position;
-                if (Graveyard.Contains(new Vector2(p.x, p.z)) && p.y > waterLevel - 0.2f) stones.Add(candidate);
+                if (!Graveyard.Contains(new Vector2(p.x, p.z)) || p.y <= waterLevel - 0.2f) continue;
+                if (FaceIsClear(candidate, StoneFront(candidate), scenery)) stones.Add(candidate);
             }
             if (stones.Count < CH_Story.SingerCount) throw new System.InvalidOperationException($"Only {stones.Count} gravestones in the chapel graveyard.");
             List<Transform> chosen = Spread(stones, CH_Story.SingerCount, ChapelDoor);
             var graves = new Transform[CH_Story.SingerCount];
             for (int singer = 0; singer < graves.Length; singer++) {
                 Transform stone = chosen[singer];
-                Vector3 front = OpenSide(stone.position + Vector3.up * 0.4f, stone.forward, stone.right);
+                Vector3 front = StoneFront(stone);
                 Vector3 foot = stone.position + front * 0.75f;
                 foot.y = GroundHeight(foot);
                 string name = CH_Story.Singers[singer];
-                Engrave(group, $"{name.ToUpperInvariant()}\n{SingerDates[singer]}", stone.position + front * 0.2f + Vector3.up * 0.1f, front, 0.65f);
+                Engrave(group, $"{name.ToUpperInvariant()}\n{SingerDates[singer]}", stone, front);
                 graves[singer] = Mark(group, $"{name}'s grave", foot, -front);
             }
             return graves;
         }
 
-        /// <summary>Carved lettering in front of a stone: dim, only readable up close or in the beam of a flashlight.</summary>
-        static void Engrave(Transform parent, string text, Vector3 face, Vector3 front, float height) {
+        /// <summary>The side of a stone with the most room in front of it, where its name is carved and its slot lies.</summary>
+        static Vector3 StoneFront(Transform stone) => OpenSide(stone.position + Vector3.up * 0.4f, stone.forward, stone.right);
+
+        /// <summary>
+        /// Nothing stands between a reader and the stone's face, no trunk and no other stone, from just off the face to
+        /// <see cref="ReadingDistance"/> out. Checked on the meshes themselves between knee and head height, because the
+        /// graveyard's trees have no colliders.
+        /// </summary>
+        static bool FaceIsClear(Transform stone, Vector3 front, MeshRenderer[] scenery) {
+            Vector3 across = Vector3.Cross(Vector3.up, front), start = stone.position + front * 0.3f;
+            float low = stone.position.y + 0.6f, high = stone.position.y + 1.8f;
+            var corridor = new Bounds(start, Vector3.zero);
+            foreach (float along in new[] { 0f, ReadingDistance })
+                foreach (float side in new[] { -ReadingHalfWidth, ReadingHalfWidth })
+                    corridor.Encapsulate(start + front * along + across * side);
+            corridor.min = new Vector3(corridor.min.x, low, corridor.min.z);
+            corridor.max = new Vector3(corridor.max.x, high, corridor.max.z);
+            foreach (MeshRenderer scenic in scenery) {
+                if (scenic.transform.IsChildOf(stone) || !scenic.bounds.Intersects(corridor)) continue;
+                Mesh mesh = scenic.TryGetComponent(out MeshFilter filter) ? filter.sharedMesh : null;
+                if (mesh == null) continue;
+                Matrix4x4 toWorld = scenic.localToWorldMatrix;
+                foreach (Vector3 vertex in mesh.vertices) {
+                    Vector3 world = toWorld.MultiplyPoint3x4(vertex);
+                    if (world.y < low || world.y > high) continue;
+                    Vector3 offset = world - start;
+                    float along = Vector3.Dot(offset, front);
+                    if (along > 0f && along < ReadingDistance && Mathf.Abs(Vector3.Dot(offset, across)) < ReadingHalfWidth) return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Carved lettering on the face of a stone, sized to that stone (the graveyard's stones differ in width): dark, so it
+        /// reads as cut into a stone lit by a flashlight and fades into it in the dark.
+        /// </summary>
+        static void Engrave(Transform parent, string text, Transform stone, Vector3 front) {
+            // Measured in the stone's own axes, which the face direction is one of: a turned stone's world box is wider.
+            Bounds local = LocalBounds(stone);
+            Vector3 size = Vector3.Scale(local.size, stone.lossyScale), centre = stone.TransformPoint(local.center);
+            Vector3 across = Vector3.Cross(Vector3.up, front).normalized;
+            float width = AlongAxes(stone, size, across), depth = AlongAxes(stone, size, front) * 0.5f;
             var label = new GameObject("Engraving");
             label.transform.SetParent(parent, false);
-            label.transform.SetPositionAndRotation(face + Vector3.up * height, Quaternion.LookRotation(-front));
+            Vector3 face = centre + Vector3.up * (size.y * EngravingRaise) + front * (depth + 0.01f);
+            label.transform.SetPositionAndRotation(face, Quaternion.LookRotation(-front));
             var tmp = label.AddComponent<TextMeshPro>();
             tmp.text = text;
-            tmp.fontSize = 1.1f;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.color = EngravingColour;
             tmp.textWrappingMode = TextWrappingModes.NoWrap;
-            tmp.rectTransform.sizeDelta = new Vector2(1.2f, 0.6f);
             tmp.characterSpacing = 6f;
+            tmp.rectTransform.sizeDelta = new Vector2(width * EngravingWidth, size.y * EngravingHeight);
+            tmp.enableAutoSizing = true;
+            tmp.fontSizeMin = 0.2f;
+            tmp.fontSizeMax = 1.1f;
         }
+
+        /// <summary>The box round every mesh under <paramref name="root"/>, in its own (unscaled) space.</summary>
+        static Bounds LocalBounds(Transform root) {
+            Bounds bounds = default;
+            bool any = false;
+            foreach (MeshFilter part in root.GetComponentsInChildren<MeshFilter>()) {
+                if (part.sharedMesh == null) continue;
+                Bounds mesh = part.sharedMesh.bounds;
+                for (int corner = 0; corner < 8; corner++) {
+                    Vector3 point = mesh.center + Vector3.Scale(mesh.extents, new Vector3((corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1));
+                    point = root.InverseTransformPoint(part.transform.TransformPoint(point));
+                    if (!any) { bounds = new Bounds(point, Vector3.zero); any = true; } else bounds.Encapsulate(point);
+                }
+            }
+            return bounds;
+        }
+
+        /// <summary>How long a box of <paramref name="size"/> on <paramref name="root"/>'s axes is along <paramref name="direction"/>.</summary>
+        static float AlongAxes(Transform root, Vector3 size, Vector3 direction) =>
+            Mathf.Abs(Vector3.Dot(direction, root.right)) * size.x + Mathf.Abs(Vector3.Dot(direction, root.up)) * size.y + Mathf.Abs(Vector3.Dot(direction, root.forward)) * size.z;
 
         // ---- The chapel ----------------------------------------------------------------------------------------------------
 
@@ -416,11 +505,34 @@ namespace Universes.UniverseData.classic_horror.Editor {
             foreach (var (position, label) in MusicBoxHints) {
                 if (!Physics.Raycast(position + Vector3.up * 1.6f, Vector3.down, out RaycastHit surface, 3f, mask, QueryTriggerInteraction.Ignore)) continue;
                 if (!NavMesh.SamplePosition(surface.point, out _, 2.5f, NavMesh.AllAreas)) continue;
+                if (!CanBeTakenFrom(surface.point)) { Debug.LogWarning($"Classic Horror: the music box spot \"{label}\" cannot be seen from anywhere a player can stand; skipped."); continue; }
                 spots.Add(Mark(group, "Music box: " + label, surface.point, Vector3.forward));
             }
             if (spots.Count == 0) Debug.LogWarning("Classic Horror: no music box spot was reachable; it will use a search location.");
             return spots.ToArray();
         }
+
+        /// <summary>
+        /// A player can stand within arm's reach of <paramref name="point"/> and see the box there, as the client's pick-up
+        /// check does (eye to a point just above the box, nothing in between): not tucked behind a bed or under a shelf.
+        /// </summary>
+        static bool CanBeTakenFrom(Vector3 point) {
+            Vector3 box = point + Vector3.up * 0.3f;
+            for (int step = 0; step < 8; step++) {
+                Vector3 direction = Quaternion.Euler(0f, step * 45f, 0f) * Vector3.forward;
+                foreach (float distance in new[] { 0.9f, 1.4f }) {
+                    if (!NavMesh.SamplePosition(point + direction * distance, out NavMeshHit stand, 0.35f, NavMesh.AllAreas)) continue;
+                    // The NavMesh is his, and runs under beds and tables: nothing may hang over where a player would stand.
+                    if (Physics.Raycast(stand.position + Vector3.up * 0.25f, Vector3.up, PlayerEyeHeight, mask, QueryTriggerInteraction.Ignore)) continue;
+                    Vector3 eye = stand.position + Vector3.up * PlayerEyeHeight, toBox = box - eye;
+                    if (!Physics.Raycast(eye, toBox.normalized, Mathf.Max(0f, toBox.magnitude - 0.2f), mask, QueryTriggerInteraction.Ignore)) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>A standing player's eye above the NavMesh.</summary>
+        const float PlayerEyeHeight = 1.45f;
 
         // ---- Cutscenes -----------------------------------------------------------------------------------------------------
 
@@ -444,14 +556,22 @@ namespace Universes.UniverseData.classic_horror.Editor {
             graveFacing.y = 0f;
             graveFacing = graveFacing.sqrMagnitude > 1e-4f ? graveFacing.normalized : Vector3.forward;
             Vector3 boatWater = new(boat.x, lakeSurface, boat.z);
-            Vector3 riseFrom = boatWater - side * 1.9f - up * 2.2f, riseTo = boatWater - side * 1.9f;
+            // Mara stands at the jetty's end looking out. He rises waist deep from the open lake straight off the end, where
+            // the water is deep and nothing grows (beside the jetty the bed is reeds and grass), and climbs onto the end.
+            Vector3 edge = harbour.jettyEnd;
+            Vector3 riseTo = new Vector3(edge.x, lakeSurface - 0.8f, edge.z) + outward * TakingRiseOffEnd, riseFrom = riseTo - up * 2.2f;
+            if (!IsWater(riseTo)) Debug.LogWarning($"[Drowned Choir] the Taking: the lake off the jetty's end at {riseTo} is shallow; Crane will rise from its bed.");
+            // He lands an arm's length in front of her, not inside her coat.
+            Vector3 onEdge = edge + outward * TakingGrabReach;
+            Vector3 struggle = (edge + riseTo) * 0.5f;
+            // Filmed from behind Mara's shoulder on the open side, so the lake and its mist are behind him and both are in frame.
+            Vector3 overShoulder = (-outward - side).normalized;
 
             // A stand-in priest's mark faces the way he looks; camera marks are aimed by their shot's look-at instead.
             Transform M(string scene, string name, Vector3 position, Vector3? facing = null) => Mark(group, scene + ": " + name, position, facing ?? Vector3.forward);
 
-            // Mara: at the helm (the lantern's place, by the stern), on the jetty planks, at the jetty's edge by the boat.
-            Vector3 helm = harbour.slots[2].position;
-            Vector3 edge = deck + side * 0.9f + outward * 2.2f;
+            // Mara: at the tiller by the engine, on the jetty planks, at the jetty's open edge.
+            Vector3 helm = harbour.stern.position - up * 0.2f;
 
             cutscenes.scenes = new[] {
                 new CH_CutsceneSet.Scene {
@@ -486,15 +606,15 @@ namespace Universes.UniverseData.classic_horror.Editor {
                     shots = new[] {
                         Take(M("Taking", "1 from", boat + side * 4f + up * 2f), M("Taking", "1 to", boat + side * 3.4f + up * 1.8f + outward * 1f), M("Taking", "1 look", boat + up * 0.8f), 6f, 50f, shake: 0.35f, cue: "engine",
                             maraMark: M("Taking", "1 mara", helm, side), maraPose: ActorPose.Stand),
-                        Take(M("Taking", "2 from", deck + up * 1.6f + side * 0.8f), M("Taking", "2 to", deck + up * 1.5f + side * 1.4f), M("Taking", "2 look", riseTo + up * 1.6f), 5.2f, 38f,
+                        Take(M("Taking", "2 from", edge + overShoulder * 3.6f + up * 1.8f), M("Taking", "2 to", edge + overShoulder * 3.0f + up * 1.7f), M("Taking", "2 look", struggle + up * 1.25f), 5.2f, 50f,
                             actorMark: M("Taking", "2 priest from", riseFrom), actorTarget: M("Taking", "2 priest to", riseTo), actorPose: ActorPose.Rise, shake: 0.5f, cue: "splash",
-                            maraMark: M("Taking", "2 mara", deck + side * 0.2f + outward * 1.6f, riseTo - deck), maraPose: ActorPose.Stand),
+                            maraMark: M("Taking", "2 mara", edge, riseTo - edge), maraPose: ActorPose.Stand),
                         // He lunges onto the jetty's edge, where Mara stands, and drags her under with him.
-                        Take(M("Taking", "3 from", boat + side * 2.6f + up * 1.5f), null, M("Taking", "3 look", edge + up * 0.8f), 2f, 42f,
-                            actorMark: M("Taking", "3 priest from", riseTo), actorTarget: M("Taking", "3 priest to", edge - side * 0.35f), actorPose: ActorPose.Lunge, shake: 0.8f, cue: "scream",
+                        Take(M("Taking", "3 from", edge + overShoulder * 2.8f + up * 1.6f), null, M("Taking", "3 look", onEdge + up * 1.2f), 2f, 48f,
+                            actorMark: M("Taking", "3 priest from", riseTo), actorTarget: M("Taking", "3 priest to", onEdge), actorPose: ActorPose.Lunge, shake: 0.8f, cue: "scream",
                             maraMark: M("Taking", "3 mara", edge, riseTo - edge), maraPose: ActorPose.Stand),
-                        Take(M("Taking", "3b from", boat + side * 2.3f + up * 1.2f), null, M("Taking", "3b look", riseTo + up * 0.3f), 1.8f, 40f,
-                            actorMark: M("Taking", "3b priest from", edge - side * 0.35f), actorTarget: M("Taking", "3b priest to", riseTo - side * 0.35f), actorPose: ActorPose.Sink, shake: 0.5f, cue: "splash",
+                        Take(M("Taking", "3b from", edge + overShoulder * 2.4f + up * 1.6f), null, M("Taking", "3b look", riseTo + up * 0.5f), 1.8f, 48f,
+                            actorMark: M("Taking", "3b priest from", onEdge), actorTarget: M("Taking", "3b priest to", riseTo), actorPose: ActorPose.Sink, shake: 0.5f, cue: "splash",
                             maraMark: M("Taking", "3b mara from", edge, riseTo - edge), maraTarget: M("Taking", "3b mara to", riseTo), maraPose: ActorPose.Sink),
                         Take(M("Taking", "4 from", chapel - Vector3.forward * 20f + up * 3f), M("Taking", "4 to", chapel - Vector3.forward * 12f + up * 2.5f), M("Taking", "4 look", chapel + up * 4f), 6f, 50f, cue: "bell"),
                         Take(M("Taking", "5 from", graves - graveFacing * 9f + up * 3f), M("Taking", "5 to", graves - graveFacing * 5f + up * 2f), M("Taking", "5 look", graves + up * 0.6f), 8f, 50f)
@@ -506,26 +626,56 @@ namespace Universes.UniverseData.classic_horror.Editor {
                         Take(M("Chapel", "from", chapel - Vector3.forward * 6f + up * 1.8f), M("Chapel", "to", chapel + Vector3.forward * 9f + up * 1.8f), M("Chapel", "look", altar + up * 0.6f), 10f, 55f, shake: 0.25f, cue: "doors")
                     }
                 },
-                new CH_CutsceneSet.Scene {
-                    phase = CH_Phase.Departure,
-                    shots = new[] {
-                        Take(M("Departure", "1 from", boatWater + open * 5f + up * 1.5f), M("Departure", "1 to", boatWater + open * 24f + up * 3f), M("Departure", "1 look", deck + up * 2f), 7f, 50f, shake: 0.2f, cue: "engine",
-                            maraMark: M("Departure", "1 mara", helm, open), maraPose: ActorPose.Stand),
-                        Take(M("Departure", "2 from", boatWater + open * 24f + up * 3f), M("Departure", "2 to", boatWater + open * 40f + up * 4f), M("Departure", "2 look", deck + up * 1.6f), 9f, 32f,
-                            actorMark: M("Departure", "2 priest", deck, open), actorPose: ActorPose.Stand, cue: "bell",
-                            maraMark: M("Departure", "2 mara", helm, open), maraPose: ActorPose.Stand)
-                    }
+                BuildDeparture(harbour, M)
+            };
+            cutscenes.ferry = harbour.ferry;
+            return cutscenes;
+        }
+
+        /// <summary>
+        /// The ferry turns her bow to the open lake and sails, Mara at the tiller; from the bow we look back past her at
+        /// Father Crane, standing at the end of the jetty, watching his bell leave. Marks for Mara and the bow camera are
+        /// parented to the ferry so they travel with it.
+        /// </summary>
+        static CH_CutsceneSet.Scene BuildDeparture(Harbour harbour, System.Func<string, string, Vector3, Vector3?, Transform> M) {
+            Vector3 up = Vector3.up, outward = harbour.outward, side = harbour.side;
+            Vector3 centre = harbour.hull.position, bow = -outward;
+            Vector3 open = (outward + side).normalized, across = Vector3.Cross(up, open).normalized;
+            Quaternion turn = Quaternion.FromToRotation(bow, open);
+            Transform ferry = harbour.ferry;
+            // The ferry's pose with its hull centre at centreAt, turned to face the open lake.
+            Transform Leg(string name, Vector3 centreAt) {
+                Transform mark = M("Departure", name, centreAt + turn * (ferry.position - centre), null);
+                mark.rotation = turn * ferry.rotation;
+                return mark;
+            }
+            Transform Aboard(string name, Vector3 position, Vector3 facing) {
+                Transform mark = M("Departure", name, position, facing);
+                mark.SetParent(ferry, true);
+                return mark;
+            }
+            Vector3 turned = centre + open * 9f, away = turned + open * 30f;
+            Transform tiller = Aboard("mara (tiller)", harbour.stern.position - up * 0.2f, bow);
+            Transform hullLook = Aboard("hull look", centre + up * 1f, bow);
+            Transform bowCamera = Aboard("bow camera", centre + bow * (harbour.boatLength * 0.42f) + up * 1.9f, -bow);
+            return new CH_CutsceneSet.Scene {
+                phase = CH_Phase.Departure,
+                shots = new[] {
+                    Take(M("Departure", "1 from", turned + open * 9f + across * 3f + up * 1.4f, null), M("Departure", "1 to", turned + open * 11f + across * 4f + up * 1.8f, null), hullLook, 7f, 50f,
+                        shake: 0.2f, cue: "engine", maraMark: tiller, maraPose: ActorPose.Stand, ferryTarget: Leg("1 ferry", turned)),
+                    Take(bowCamera, null, M("Departure", "2 look", harbour.jettyEnd + up * 1.3f, null), 9f, 32f,
+                        actorMark: M("Departure", "2 priest", harbour.jettyEnd, open), actorPose: ActorPose.Stand, cue: "bell",
+                        maraMark: tiller, maraPose: ActorPose.Stand, ferryTarget: Leg("2 ferry", away))
                 }
             };
-            return cutscenes;
         }
 
         static Shot Take(Transform from, Transform to, Transform lookAt, float seconds, float fieldOfView, Transform actorMark = null,
             Transform actorTarget = null, ActorPose actorPose = ActorPose.Hidden, float shake = 0f, string cue = null,
-            Transform maraMark = null, Transform maraTarget = null, ActorPose maraPose = ActorPose.Hidden) => new() {
+            Transform maraMark = null, Transform maraTarget = null, ActorPose maraPose = ActorPose.Hidden, Transform ferryTarget = null) => new() {
             from = from, to = to, lookAt = lookAt, seconds = seconds, fieldOfView = fieldOfView, actorMark = actorMark,
             actorTarget = actorTarget, actorPose = actorMark != null ? actorPose : ActorPose.Hidden, shake = shake, cue = cue ?? string.Empty,
-            maraMark = maraMark, maraTarget = maraTarget, maraPose = maraMark != null ? maraPose : ActorPose.Hidden
+            maraMark = maraMark, maraTarget = maraTarget, maraPose = maraMark != null ? maraPose : ActorPose.Hidden, ferryTarget = ferryTarget
         };
 
         // ---- Helpers -------------------------------------------------------------------------------------------------------
@@ -647,6 +797,51 @@ namespace Universes.UniverseData.classic_horror.Editor {
             }
             return chosen;
         }
+
+        /// <summary>
+        /// A thin mist lying on the open lake around the harbour, drifting slowly. At night the dark water and the dark
+        /// shore read alike from the jetty; the mist on the water (and a little over the reeds) tells them apart.
+        /// </summary>
+        static void BuildLakeMist(Transform set, Harbour harbour) {
+            Vector3 open = (harbour.outward + harbour.side).normalized;
+            var mist = new GameObject("Lake Mist");
+            mist.transform.SetParent(set, false);
+            mist.transform.position = new Vector3(harbour.boarding.position.x, lakeSurface + LakeMistHeight, harbour.boarding.position.z) + open * LakeMistReach * 0.4f;
+            var particles = mist.AddComponent<ParticleSystem>();
+            var main = particles.main;
+            main.loop = true;
+            main.prewarm = true;
+            main.duration = 30f;
+            main.startLifetime = 36f;
+            main.startSpeed = 0.12f;
+            main.startSize = new ParticleSystem.MinMaxCurve(6f, 12f);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.startColor = new Color(1f, 1f, 1f, 0.085f);
+            main.maxParticles = 160;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = particles.emission;
+            emission.rateOverTime = 4.2f;
+            var shape = particles.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(LakeMistReach, 0.3f, LakeMistReach);
+            var fade = particles.colorOverLifetime;
+            fade.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.25f), new GradientAlphaKey(1f, 0.75f), new GradientAlphaKey(0f, 1f) });
+            fade.color = gradient;
+            var renderer = mist.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.HorizontalBillboard;
+            renderer.sharedMaterial = CH_Authoring.LakeMistMaterial();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        /// <summary>The lake mist: its height above the water and the width of open lake it covers (metres).</summary>
+        const float LakeMistHeight = 0.35f, LakeMistReach = 70f;
+
+        /// <summary>The Taking: how far off the jetty's end (past Mara's mark) he rises, and how far in front of her he lands.</summary>
+        const float TakingRiseOffEnd = 1.6f, TakingGrabReach = 0.55f;
 
         /// <summary>The lake bed is deeper than this under open water, so a hull floats clear of it.</summary>
         const float LakeDraught = 1f;

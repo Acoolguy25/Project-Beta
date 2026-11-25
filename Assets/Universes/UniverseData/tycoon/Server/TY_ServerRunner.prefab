@@ -50,20 +50,67 @@ MonoBehaviour:
     _editor_value: 0
   DebugTimerSpeed:
     _editor_value: 10
+  retentionTuning:
+    levels:
+      maxLevel: 50
+      firstLevelXp: 250
+      extraXpPerLevel: 30
+      growth: 1.025
+    streak:
+      firstDayXp: 50
+      xpPerExtraDay: 25
+      firstDayGold: 10
+      goldPerExtraDay: 5
+      maxBonusDays: 7
+      lineFormat: Daily streak (day {0})
+    dailyChallengeCount: 3
+    accountXpScale: 1
+  unlockTuning:
+    luckyCoinsMultiplier: 1.5
+    bigHopperCapacity: 1.5
+    coinRainInterval: 0.5
+    rushVipBonus: 1
+    tokenPressTokens: 1
+    legendIncome: 1.25
+  streakMinutes: 3
+  offline:
+    share: 0.25
+    capHours: 2
+    minAwayMinutes: 3
+    nightShiftCapHours: 4
+    overtimeShare: 0.5
+    overtimeCapHours: 8
+  chest:
+    incomeSeconds: 300
+    incomeSecondsPerDay: 150
+    growthDays: 7
+    minimumCash: 500
+    xp: 40
+    xpPerDay: 20
+    week: 7
+    weekTokens: 2
+    midWeekDay: 3
+    midWeekTokens: 1
+  goalsPerTick: 1
   incomeScale: 1
   startingCash: 0
   walkSpeed: 14
   sprintSpeed: 22
-  goldenInterval: {x: 45, y: 90}
-  goldenLifetime: 30
-  goldenIncomeSeconds: 25
-  goldenMinimum: 50
+  goldCoins:
+    interval: {x: 45, y: 90}
+    lifetime: 30
+    incomeSeconds: 25
+    minimum: 50
   rushHour:
     interval: {x: 240, y: 420}
     duration: 30
     multiplier: 2
-  purchaseXP: 4
-  rebirthXP: 150
-  rebirthGold: 75
+  rushCommands: 0
+  rewards:
+    rebirthXp: 100
+    rebirthXpPerRebirth: 5
+    rebirthGold: 75
+    coinXp: 3
+    minuteXp: 15
   refusalCooldown: 2.5
   fullReminder: 25

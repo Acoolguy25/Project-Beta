@@ -15,7 +15,10 @@
         "RyanAssets.UI",
         "RyanAssets.UI.Editor",
         "RyanAssets.GameFeel",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Retention.Editor"
     ],
     "includePlatforms": [
         "Editor"

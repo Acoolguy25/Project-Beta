@@ -79,9 +79,12 @@ MonoBehaviour:
     patrolSpeed: 3.6
     searchSpeed: 5.4
     chaseSpeedByAct: {x: 6.9, y: 7.4, z: 8}
-    bellChaseSpeed: 8.6
+    bellChaseSpeed: 8.4
     bellGrabHoldSeconds: 3
     loneChaseFactor: 0.92
+    closeInFrom: 20
+    closeInFull: 40
+    closeInBoost: 1.3
     lungeSpeed: 11.5
     lungeRange: 5.5
     lungeSeconds: 0.5

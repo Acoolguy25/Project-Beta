@@ -38,6 +38,8 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Min(0.5f)] float interactionReach = 3f;
         [SerializeField, Range(0f, 1f)] float focusAlignment = 0.88f;
         [SerializeField, Min(0.02f)] float focusInterval = 0.08f;
+        [Tooltip("Seconds the wardrobe crack takes to fade in or out as you hide or leave.")]
+        [SerializeField, Min(0.01f)] float hidingFadeSeconds = 0.25f;
         [SerializeField, Min(0.5f)] float feedbackSeconds = 2.5f;
         [SerializeField, Min(0.1f)] float pendingInteractionSeconds = 1.5f;
 
@@ -114,6 +116,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         bool endingShown, hasProgress;
         CH_ProgressBroadcast progress;
         CH_Phase cutscenePhase = CH_Phase.Waiting;
+        readonly List<Transform> placedItems = new();
 
         bool NightOver => hasState && state.phase is CH_Phase.Complete or CH_Phase.Failed;
         bool InCutscene => hasState && CH_Story.IsCutscene(state.phase);
@@ -145,12 +148,15 @@ namespace Universes.UniverseData.classic_horror.Client {
         }
 
         void OnEnable() {
+            // A catch is always fatal and lives are what count: the shared health bar has nothing to say here.
+            RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = true;
             ToolControls.interactPressed += Interact;
             ToolControls.journalPressed += OpenJournal;
             ToolControls.reloadToolPressed += PutDown;
         }
 
         void OnDisable() {
+            RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = false;
             ToolControls.interactPressed -= Interact;
             ToolControls.journalPressed -= OpenJournal;
             ToolControls.reloadToolPressed -= PutDown;
@@ -274,7 +280,10 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         void OnScare(CH_ScareBroadcast scare, Channel channel) {
             if (!hasState || scare.seed != state.seed) return;
-            if (scare.kind is CH_ScareKind.Apparition or CH_ScareKind.Watcher) apparitions.Play(scare.kind, scare.sequence);
+            if (scare.kind is CH_ScareKind.Apparition or CH_ScareKind.Watcher) {
+                // One that arrives as a scene starts would stand in the scene's frame.
+                if (!cutscenes.Playing) apparitions.Play(scare.kind, scare.sequence);
+            }
             else jumpscare.Play(scare.sequence, scare.kind);
         }
 
@@ -302,7 +311,10 @@ namespace Universes.UniverseData.classic_horror.Client {
                 if (cutscenePhase != next.phase) {
                     cutscenePhase = next.phase;
                     journal.Close();
-                    cutscenes.Play(next.phase, fresh ? next.phaseSeconds : 0f);
+                    placedItems.Clear();
+                    items.CollectPlaced(placedItems);
+                    apparitions.Cancel();
+                    cutscenes.Play(next.phase, fresh ? next.phaseSeconds : 0f, placedItems);
                 }
             } else if (cutscenePhase != CH_Phase.Waiting) {
                 cutscenePhase = CH_Phase.Waiting;
@@ -404,7 +416,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         void UpdateHiding() {
             if (hidingOverlay == null) return;
             float target = LocalHidden ? 1f : 0f;
-            hidingOverlay.alpha = Mathf.MoveTowards(hidingOverlay.alpha, target, Time.deltaTime * 4f);
+            hidingOverlay.alpha = Mathf.MoveTowards(hidingOverlay.alpha, target, Time.unscaledDeltaTime / hidingFadeSeconds);
             if (hidingLabel != null && LocalHidden) hidingLabel.text = fearLoop.Fear > 0.4f ? "Don't move. Don't breathe." : "Hiding  ·  press E to leave";
         }
 
@@ -529,7 +541,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             switch (kind) {
                 case FocusKind.Item:
                     CH_ItemView item = state.items[index];
-                    string name = item.singer >= 0 ? item.title : "the " + item.title.ToLowerInvariant();
+                    string name = item.singer >= 0 ? item.title : CH_Story.ItemInSentence(item.kind);
                     return carried.HasValue ? $"Swap for {name}" : $"Take {name}";
                 case FocusKind.Slot:
                     return SlotPrompt(state.slots[index], carried ?? CH_ItemKind.Fuel);
@@ -542,7 +554,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             CH_SlotKind.Grave => $"Lay it on {slot.title}",
             CH_SlotKind.LilyMarker => "Leave the music box for Lily",
             CH_SlotKind.BoatBell => "Throw the bell into the boat",
-            _ => $"Fit the {CH_Story.ItemName(carried).ToLowerInvariant()} to the boat"
+            _ => $"Fit {CH_Story.ItemInSentence(carried)} to the boat"
         };
 
         void SetFocusedGlow(CH_ItemGlow glow) {

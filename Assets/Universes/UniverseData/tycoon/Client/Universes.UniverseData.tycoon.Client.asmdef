@@ -12,7 +12,10 @@
         "FishNet.Runtime",
         "Unity.TextMeshPro",
         "Unity.ugui",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "RyanAssets.UI",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

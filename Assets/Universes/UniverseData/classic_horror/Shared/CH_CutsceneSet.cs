@@ -34,6 +34,8 @@ namespace Universes.UniverseData.classic_horror {
             [Tooltip("Where she moves to over the shot (empty: she stays on her mark).")]
             public Transform maraTarget;
             public ActorPose maraPose;
+            [Tooltip("Where the ferry is at the end of this shot, moving there from where it was (empty: it stays put).")]
+            public Transform ferryTarget;
             [Tooltip("A sound cue at the start of the shot: thud, bell, scream, doors, engine or splash.")]
             public string cue;
         }
@@ -47,6 +49,14 @@ namespace Universes.UniverseData.classic_horror {
         }
 
         public Scene[] scenes = new Scene[0];
+        [Tooltip("The moored ferry, which a scene can sail away (Shot.ferryTarget). Marks parented to it travel with it.")]
+        public Transform ferry;
+
+        /// <summary>Whether any shot of <paramref name="scene"/> moves the ferry.</summary>
+        public static bool MovesFerry(Scene scene) {
+            foreach (Shot shot in scene.shots) if (shot.ferryTarget != null) return true;
+            return false;
+        }
 
         public bool TryGet(CH_Phase phase, out Scene scene) {
             foreach (Scene candidate in scenes)

@@ -33,6 +33,13 @@ namespace Universes.UniverseData.hide_and_seek {
         public Renderer[] flickerGlows;
         [Tooltip("Where the grandfather clock ticks (world space), for the ambience.")]
         public Vector3 clockPosition;
+        [Tooltip("Every light a Blackout dims (the sun and the lamps, not the flickering candles), filled by HS_Authoring, so a " +
+                 "light spawned later (a flashlight beam) or one from another scene is never caught.")]
+        public Light[] blackoutLights;
+        [Tooltip("The flashlight's beam (HS_FlashlightBeam): a spot light and a cone, drawn on every client for a moment.")]
+        public GameObject flashlightBeamPrefab;
+        [Tooltip("Shown only to the hider who threw a decoy, where it landed, for as long as it is live (HS_DecoyMarker).")]
+        public GameObject decoyMarkerPrefab;
 
         public bool IsConfigured => hidePoints != null && hidePoints.Length > 0 && seekerSpawn != null && lobbySpawn != null;
 

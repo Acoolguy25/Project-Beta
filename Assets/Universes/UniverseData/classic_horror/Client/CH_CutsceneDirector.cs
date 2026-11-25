@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using RyanAssets.GameFeel;
 using RyanAssets.Input;
 using TMPro;
@@ -6,7 +7,8 @@ using UnityEngine;
 namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>
     /// Plays the map's authored cutscenes (<see cref="CH_CutsceneSet"/>) on the main camera: letterbox bars, eased camera
-    /// moves between marks, the priest and Mara as client-only puppets, sound cues and a title card. Runs after the first-person
+    /// moves between marks, the priest and Mara as client-only puppets on a cleared stage (<see cref="CH_CutsceneStage"/>),
+    /// sound cues and a title card. Runs after the first-person
     /// camera each frame so it wins, and before the game-feel kit so shakes still land. Movement input is off while a
     /// scene plays; the server holds the night for the same length.
     /// </summary>
@@ -34,6 +36,9 @@ namespace Universes.UniverseData.classic_horror.Client {
         public CanvasGroup blackout;
         [SerializeField, Min(0f)] float cutFadeSeconds = 0.25f;
 
+        [Tooltip("Seconds between checks for characters that spawned mid-scene, so they are cleared off the stage too.")]
+        [SerializeField, Min(0.1f)] float stageCheckSeconds = 0.5f;
+
         [Header("Cues")]
         public SfxSound thud = new();
         public SfxSound bell = new();
@@ -45,10 +50,17 @@ namespace Universes.UniverseData.classic_horror.Client {
         CH_CutsceneSet set;
         CH_Puppet priest, mara;
         CH_CutsceneSet.Scene scene;
+        // The ferry's mooring and what rides in it (the parts fitted aboard), put back when the scene ends.
+        Pose ferryHome;
+        bool ferryMoved;
+        readonly List<Transform> riders = new();
+        readonly List<Pose> riderHomes = new();
         float startedAt, length, defaultFov = -1f, letterbox;
         int lastShot = -1;
+        float nextStageCheck;
         bool playing, inputTaken;
         Canvas barCanvas;
+        readonly CH_CutsceneStage stage = new();
 
         public bool Playing => playing;
 
@@ -58,9 +70,13 @@ namespace Universes.UniverseData.classic_horror.Client {
             mara = maraPuppet;
         }
 
-        /// <summary>Starts the scene for <paramref name="phase"/>, <paramref name="secondsIn"/> seconds in (late joiners pick it up mid-way).</summary>
-        public void Play(CH_Phase phase, float secondsIn) {
+        /// <summary>
+        /// Starts the scene for <paramref name="phase"/>, <paramref name="secondsIn"/> seconds in (late joiners pick it up
+        /// mid-way). Of <paramref name="aboardCandidates"/>, whatever lies in the ferry sails with it if the scene moves it.
+        /// </summary>
+        public void Play(CH_Phase phase, float secondsIn, IReadOnlyList<Transform> aboardCandidates = null) {
             if (set == null || !set.TryGet(phase, out scene)) { Stop(); return; }
+            BoardFerry(aboardCandidates);
             startedAt = Time.unscaledTime - Mathf.Max(0f, secondsIn);
             length = CH_Story.CutsceneSeconds(phase);
             playing = true;
@@ -71,6 +87,8 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             if (titleCard != null) titleCard.alpha = 0f;
             ShowTitle(scene.titleCard);
+            stage.Clear();
+            nextStageCheck = Time.unscaledTime + stageCheckSeconds;
         }
 
         public void Stop() {
@@ -82,6 +100,8 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
             if (priest != null) priest.Hide();
             if (mara != null) mara.Hide();
+            stage.Restore();
+            DockFerry();
             Camera camera = Camera.main;
             if (camera != null && defaultFov > 0f) camera.fieldOfView = defaultFov;
             if (titleCard != null) titleCard.alpha = 0f;
@@ -101,12 +121,18 @@ namespace Universes.UniverseData.classic_horror.Client {
             letterbox = Mathf.MoveTowards(letterbox, playing ? 1f : 0f, Time.unscaledDeltaTime / barSeconds);
             ApplyLetterbox();
             if (!playing) return;
+            if (Time.unscaledTime >= nextStageCheck) {
+                nextStageCheck = Time.unscaledTime + stageCheckSeconds;
+                stage.Clear();
+            }
 
             // Wall-clock time: the server ends the scene on its own clock, and a hitch must not leave the camera behind it.
             float elapsed = Time.unscaledTime - startedAt;
             int index = CH_CutsceneSet.ShotAt(scene, elapsed, out float progress);
             CH_CutsceneSet.Shot shot = scene.shots[index];
             if (index != lastShot) BeginShot(shot, index);
+            // The ferry first: marks parented to it (Mara at the tiller, a camera on its bow) move with it.
+            if (ferryMoved) PlaceFerry(FerryPose(index, progress));
 
             Camera camera = Camera.main;
             if (camera != null && shot.from != null) {
@@ -135,6 +161,52 @@ namespace Universes.UniverseData.classic_horror.Client {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
             if (elapsed > length + 0.5f) Stop();
+        }
+
+        void BoardFerry(IReadOnlyList<Transform> candidates) {
+            DockFerry();
+            if (set.ferry == null || !CH_CutsceneSet.MovesFerry(scene)) return;
+            ferryHome = new Pose(set.ferry.position, set.ferry.rotation);
+            ferryMoved = true;
+            if (candidates == null) return;
+            Bounds hull = new(ferryHome.position, Vector3.zero);
+            bool any = false;
+            foreach (Renderer part in set.ferry.GetComponentsInChildren<Renderer>()) {
+                if (!any) { hull = part.bounds; any = true; } else hull.Encapsulate(part.bounds);
+            }
+            hull.Expand(new Vector3(0.2f, 1f, 0.2f));
+            foreach (Transform candidate in candidates) {
+                if (candidate == null || !hull.Contains(candidate.position)) continue;
+                riders.Add(candidate);
+                riderHomes.Add(new Pose(candidate.position, candidate.rotation));
+            }
+        }
+
+        /// <summary>Puts the ferry and its riders back where they were moored.</summary>
+        void DockFerry() {
+            if (ferryMoved && set != null && set.ferry != null) PlaceFerry(ferryHome);
+            ferryMoved = false;
+            riders.Clear();
+            riderHomes.Clear();
+        }
+
+        /// <summary>Where the ferry is <paramref name="progress"/> through shot <paramref name="index"/>: eased from where the last move left it.</summary>
+        Pose FerryPose(int index, float progress) {
+            Pose start = ferryHome;
+            for (int i = index - 1; i >= 0; i--)
+                if (scene.shots[i].ferryTarget != null) { start = new Pose(scene.shots[i].ferryTarget.position, scene.shots[i].ferryTarget.rotation); break; }
+            Transform target = scene.shots[index].ferryTarget;
+            if (target == null) return start;
+            float eased = Mathf.SmoothStep(0f, 1f, progress);
+            return new Pose(Vector3.Lerp(start.position, target.position, eased), Quaternion.Slerp(start.rotation, target.rotation, eased));
+        }
+
+        void PlaceFerry(Pose pose) {
+            set.ferry.SetPositionAndRotation(pose.position, pose.rotation);
+            Quaternion turn = pose.rotation * Quaternion.Inverse(ferryHome.rotation);
+            for (int i = 0; i < riders.Count; i++)
+                if (riders[i] != null)
+                    riders[i].SetPositionAndRotation(pose.position + turn * (riderHomes[i].position - ferryHome.position), turn * riderHomes[i].rotation);
         }
 
         float ShotElapsed(int index, float elapsed) {
