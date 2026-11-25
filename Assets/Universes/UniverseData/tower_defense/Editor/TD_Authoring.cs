@@ -263,9 +263,9 @@ namespace Universes.UniverseData.tower_defense.Editor {
         static GameObject Slot(Materials m) {
             var root = new GameObject("TowerSlot");
             var view = root.AddComponent<TD_SlotView>();
-            var pad = Model(Military + "Building_Prefebs/HeliPad_Prefeb.prefab", root.transform, PadSize, keepColliders: true);
+            var pad = Model("Assets/ThirdParty/KayKit/MedievalHexagonPack/buildings/blue/building_tower_base_blue.fbx", root.transform, PadSize, keepColliders: false);
             float top = pad != null ? RendererBounds(pad).max.y : 0.3f;
-            if (pad == null) Debug.LogWarning("[TowerDefense] HeliPad prefab missing; the tower pad has no model.");
+            if (pad == null) Debug.LogWarning("[TowerDefense] KayKit tower base missing; the tower pad has no model.");
             view.topHeight = top;
             view.padModel = pad;
             view.glow = FlatRing("Glow", root.transform, PadSize * 0.4f, top + 0.04f, m.ring);

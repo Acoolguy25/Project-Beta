@@ -17,6 +17,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const string KayKit = "Assets/ThirdParty/KayKit/MedievalHexagonPack/";
         const string Nature = KayKit + "decoration/nature/";
         const string Props = KayKit + "decoration/props/";
+        const string Buildings = KayKit + "buildings/";
         const string Military = "Assets/CartoonMilitaryModelPack/Prefebs/Building_Prefebs/";
 
         /// <summary>Hex tile width (corner to corner) in metres.</summary>
@@ -183,7 +184,26 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Kay(Props + "sack", parent, b + new Vector3(-16.5f, 0f, -12f), 1.4f, 0f);
             Kay(Props + "resource_stone", parent, b + new Vector3(16f, 0f, -14f), 3f, 40f);
             Kay(Props + "wheelbarrow", parent, b + new Vector3(19f, 0f, -9f), 2.4f, 210f);
+            Village(parent);
             return baseModel.transform;
+        }
+
+        /// <summary>
+        /// A little KayKit village (CC0) along the field's north and south edges and a mill by the base, so the
+        /// battlefield looks lived in. Fixed positions, clear of the road and the build cells.
+        /// </summary>
+        static void Village(Transform parent) {
+            var village = Empty("Village", parent).transform;
+            (string folder, string model, float x, float z, float size, float yaw)[] houses = {
+                ("blue", "building_home_A_blue", -60f, 60f, 9f, 180f), ("green", "building_home_B_green", -42f, 61f, 9f, 170f),
+                ("yellow", "building_tavern_yellow", -22f, 60f, 11f, 185f), ("blue", "building_church_blue", 0f, 61f, 13f, 180f),
+                ("green", "building_market_green", 22f, 60f, 11f, 175f), ("yellow", "building_home_A_yellow", 42f, 61f, 9f, 185f),
+                ("blue", "building_home_B_blue", 60f, 60f, 9f, 180f), ("red", "building_barracks_red", -30f, -70f, 12f, 0f),
+                ("red", "building_archeryrange_red", -4f, -71f, 12f, 5f), ("red", "building_blacksmith_red", 24f, -70f, 11f, 0f),
+                ("blue", "building_windmill_blue", 92f, 30f, 13f, -90f), ("blue", "building_watermill_blue", 92f, -22f, 12f, -90f),
+                ("blue", "building_well_blue", 86f, 14f, 4f, 0f),
+            };
+            foreach (var h in houses) Kay($"{Buildings}{h.folder}/{h.model}", village, new Vector3(h.x, 0f, h.z), h.size, h.yaw, solid: true);
         }
 
         static GameObject MilitaryModel(Transform parent, string model, Vector3 position, float size, float yaw) {
