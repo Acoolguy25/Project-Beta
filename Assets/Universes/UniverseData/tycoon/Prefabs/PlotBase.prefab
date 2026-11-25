@@ -627,7 +627,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d0db3631ae66601fa15a44ba9a2cc37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Rounds::RyanAssets.Rounds.Billboard
+  facing: 0
   yawOnly: 1
+  maxScreenHeight: 0
+  referenceHeight: 1
 --- !u!1 &1960324418252723826
 GameObject:
   m_ObjectHideFlags: 0
@@ -2099,7 +2102,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d0db3631ae66601fa15a44ba9a2cc37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Rounds::RyanAssets.Rounds.Billboard
+  facing: 0
   yawOnly: 1
+  maxScreenHeight: 0
+  referenceHeight: 1
 --- !u!1001 &5556349922067033711
 PrefabInstance:
   m_ObjectHideFlags: 0

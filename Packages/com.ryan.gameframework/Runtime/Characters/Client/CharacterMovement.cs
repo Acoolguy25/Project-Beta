@@ -90,6 +90,9 @@ namespace RyanAssets.Characters.Client {
         [Tooltip("Minimum seconds between wall jumps.")]
         [SerializeField, FormerlySerializedAs("WallJumpCooldown"), Min(0f)] private float wallJumpCooldown = 0.2f;
 
+        /// <summary>Ledges lower than this (metres) are left to the physics engine; lifting for them only jitters.</summary>
+        private const float MinimumStepHeight = 0.005f;
+
         // ------------------------------------------------------------------ public state
         /// <summary>The movement controller driving the local player's character, if any.</summary>
         public static CharacterMovement Local { get; private set; }
@@ -569,14 +572,16 @@ namespace RyanAssets.Characters.Client {
 
             Transform body = _boxCollider.transform;
             Vector3 scale = body.lossyScale;
-            Vector3 halfExtents = Vector3.Scale(_boxCollider.size * 0.5f, new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
-            halfExtents = new Vector3(
-                Mathf.Max(0.01f, halfExtents.x - collisionSkin),
-                Mathf.Max(0.01f, halfExtents.y - collisionSkin),
-                Mathf.Max(0.01f, halfExtents.z - collisionSkin));
+            Vector3 fullHalfExtents = Vector3.Scale(_boxCollider.size * 0.5f, new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
+            // The cast box is the collider shrunk by the skin, so it never starts out touching what it measures.
+            Vector3 halfExtents = new Vector3(
+                Mathf.Max(0.01f, fullHalfExtents.x - collisionSkin),
+                Mathf.Max(0.01f, fullHalfExtents.y - collisionSkin),
+                Mathf.Max(0.01f, fullHalfExtents.z - collisionSkin));
 
             Quaternion orientation = body.rotation;
-            Vector3 center = body.TransformPoint(_boxCollider.center) + up * collisionSkin;
+            Vector3 colliderCenter = body.TransformPoint(_boxCollider.center);
+            Vector3 center = colliderCenter + up * collisionSkin;
             float distance = speed * Time.fixedDeltaTime + stepProbeDistance;
             PhysicsScene physics = _boxCollider.gameObject.scene.GetPhysicsScene();
 
@@ -588,13 +593,15 @@ namespace RyanAssets.Characters.Client {
                 return;
 
             Vector3 right = body.right, forward = body.forward, bodyUp = body.up;
-            float forwardExtent = Mathf.Abs(Vector3.Dot(direction, right)) * halfExtents.x
-                + Mathf.Abs(Vector3.Dot(direction, bodyUp)) * halfExtents.y
-                + Mathf.Abs(Vector3.Dot(direction, forward)) * halfExtents.z;
-            float heightExtent = Mathf.Abs(Vector3.Dot(up, right)) * halfExtents.x
-                + Mathf.Abs(Vector3.Dot(up, bodyUp)) * halfExtents.y
-                + Mathf.Abs(Vector3.Dot(up, forward)) * halfExtents.z;
-            Vector3 feet = center - up * heightExtent;
+            float forwardExtent = Mathf.Abs(Vector3.Dot(direction, right)) * fullHalfExtents.x
+                + Mathf.Abs(Vector3.Dot(direction, bodyUp)) * fullHalfExtents.y
+                + Mathf.Abs(Vector3.Dot(direction, forward)) * fullHalfExtents.z;
+            float heightExtent = Mathf.Abs(Vector3.Dot(up, right)) * fullHalfExtents.x
+                + Mathf.Abs(Vector3.Dot(up, bodyUp)) * fullHalfExtents.y
+                + Mathf.Abs(Vector3.Dot(up, forward)) * fullHalfExtents.z;
+            // The collider's true underside: the lift is measured from here, so the body clears the ledge
+            // instead of ending a skin's width inside it and being shoved back off.
+            Vector3 feet = colliderCenter - up * heightExtent;
             Vector3 landingProbe = feet + direction * (forwardExtent + distance) + up * (maxStepHeight + collisionSkin);
 
             if (!physics.Raycast(landingProbe, -up, out RaycastHit landing, maxStepHeight + collisionSkin * 2f, _stepMask, QueryTriggerInteraction.Ignore)
@@ -602,7 +609,7 @@ namespace RyanAssets.Characters.Client {
                 return;
 
             float stepHeight = Vector3.Dot(landing.point - feet, up);
-            if (stepHeight <= collisionSkin || stepHeight > maxStepHeight)
+            if (stepHeight <= MinimumStepHeight || stepHeight > maxStepHeight)
                 return;
             _body.MovePosition(_body.position + up * (stepHeight + collisionSkin));
         }

@@ -331,6 +331,7 @@ namespace Universes.UniverseData.tycoon.Client {
             int cheapest = -1;
             long cheapestPrice = 0;
             foreach (int i in TY_Catalog.AvailableItems(p.purchased, p.rebirths)) {
+                if (TY_Catalog.Items[i].kind == TY_ItemKind.Decor) continue; // scenery is never the next step
                 long price = TY_Catalog.Price(i, p.rebirths);
                 if (cheapest < 0 || price < cheapestPrice) { cheapest = i; cheapestPrice = price; }
             }

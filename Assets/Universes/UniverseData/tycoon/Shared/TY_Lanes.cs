@@ -10,7 +10,7 @@ namespace Universes.UniverseData.tycoon {
         public static readonly TY_ItemKind[] BuildLanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Landmark };
 
         /// <summary>Every lane with a buy pad on the plot, in pad order (the server checks them, clients draw them).</summary>
-        public static readonly TY_ItemKind[] PadLanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Rebirth, TY_ItemKind.Landmark, TY_ItemKind.Invest };
+        public static readonly TY_ItemKind[] PadLanes = { TY_ItemKind.Dropper, TY_ItemKind.Upgrader, TY_ItemKind.Building, TY_ItemKind.Utility, TY_ItemKind.Rebirth, TY_ItemKind.Landmark, TY_ItemKind.Invest, TY_ItemKind.Decor };
 
         public static string Title(TY_ItemKind kind) => kind switch {
             TY_ItemKind.Dropper => "Droppers",
@@ -19,6 +19,7 @@ namespace Universes.UniverseData.tycoon {
             TY_ItemKind.Utility => "Collector",
             TY_ItemKind.Landmark => "Landmarks",
             TY_ItemKind.Invest => "Invest",
+            TY_ItemKind.Decor => "Decor",
             _ => "Rebirth",
         };
 
@@ -30,6 +31,7 @@ namespace Universes.UniverseData.tycoon {
             TY_ItemKind.Utility => "savings",
             TY_ItemKind.Landmark => "account_balance",
             TY_ItemKind.Invest => "trending_up",
+            TY_ItemKind.Decor => "park",
             _ => "autorenew",
         };
 
@@ -40,6 +42,7 @@ namespace Universes.UniverseData.tycoon {
             TY_ItemKind.Utility => Hex(0xB98CFF),
             TY_ItemKind.Landmark => Hex(0xFFD24D),
             TY_ItemKind.Invest => Hex(0x5BE37D),
+            TY_ItemKind.Decor => Hex(0xFF8FB8),
             _ => Hex(0xFF6BD6),
         };
 

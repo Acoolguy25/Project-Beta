@@ -16,7 +16,7 @@ namespace Universes.UniverseData.tycoon.Editor {
     /// under Assets/ThirdParty/KayKit (see CREDITS.md). Build the server runner from an Editor in the
     /// Linux Server profile: <c>-executeMethod Universes.UniverseData.tycoon.Editor.TY_Authoring.BuildServerAssets</c>.
     /// </summary>
-    public static class TY_Authoring {
+    public static partial class TY_Authoring {
         public const string Universe = "tycoon";
         public const string Root = "Assets/Universes/UniverseData/tycoon";
         internal static readonly UniverseAuthoringKit Kit = new(Root);
@@ -97,30 +97,33 @@ namespace Universes.UniverseData.tycoon.Editor {
             public GameObject plotBase, ore, coin, chest;
             public GameObject[] items, pads;
             public Material[] plotMats, oreMats, floorMats;
-            public Material grass, plaza, stone, city, space, proto, dungeon;
+            public Material grass, plaza, stone, city, space, proto, dungeon, medieval;
         }
 
         // ---------------------------------------------------------------- KayKit models
-        enum Pack { City, Space, Proto, Dungeon }
+        enum Pack { City, Space, Proto, Dungeon, Medieval }
 
         static string PackPath(Pack pack) => pack switch {
             Pack.City => KayKit + "/CityBuilderBits/Models",
             Pack.Space => KayKit + "/SpaceBaseBits/Models",
             Pack.Dungeon => KayKit + "/DungeonRemastered/Models",
+            Pack.Medieval => KayKit + "/MedievalHexagonPack/decoration",
             _ => KayKit + "/PrototypeBits/Models",
         };
 
         /// <summary>One URP material per KayKit pack: every model in a pack shares its palette texture.</summary>
         static Material PackMaterial(Pack pack) {
             string texture = pack switch {
-                Pack.City => "citybits_texture", Pack.Space => "spacebits_texture", Pack.Dungeon => "dungeon_texture", _ => "prototypebits_texture",
+                Pack.City => "citybits_texture", Pack.Space => "spacebits_texture", Pack.Dungeon => "dungeon_texture", Pack.Medieval => "hexagons_medieval", _ => "prototypebits_texture",
             };
-            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>($"{PackPath(pack)}/{texture}.png");
-            if (tex == null) throw new FileNotFoundException($"KayKit texture missing: {PackPath(pack)}/{texture}.png");
+            // The medieval pack keeps its palette with the tiles, not beside the decoration models.
+            string texturePath = pack == Pack.Medieval ? $"{KayKit}/MedievalHexagonPack/tiles/base/hexagons_medieval.png" : $"{PackPath(pack)}/{texture}.png";
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
+            if (tex == null) throw new FileNotFoundException($"KayKit texture missing: {texturePath}");
             return Kit.Mat($"KayKit{pack}", Color.white, tex, smoothness: 0.3f);
         }
 
-        static Material Pal(Prefabs p, Pack pack) => pack switch { Pack.City => p.city, Pack.Space => p.space, Pack.Dungeon => p.dungeon, _ => p.proto };
+        static Material Pal(Prefabs p, Pack pack) => pack switch { Pack.City => p.city, Pack.Space => p.space, Pack.Dungeon => p.dungeon, Pack.Medieval => p.medieval, _ => p.proto };
 
         /// <summary>A KayKit model under <paramref name="parent"/>, largest side <paramref name="size"/> m, base on the parent origin + offset.</summary>
         static GameObject Kay(Prefabs p, Pack pack, string model, Transform parent, float size, Vector3 offset = default, float yaw = 0f, Material overrideMaterial = null) {
@@ -151,6 +154,7 @@ namespace Universes.UniverseData.tycoon.Editor {
                 space = PackMaterial(Pack.Space),
                 proto = PackMaterial(Pack.Proto),
                 dungeon = PackMaterial(Pack.Dungeon),
+                medieval = PackMaterial(Pack.Medieval),
             };
             p.floorMats = PlotColors.Select((c, i) => Tiled(Kit.Mat($"PlotFloor{i}", Color.Lerp(c, new Color(0.9f, 0.92f, 0.95f), 0.82f), tile, smoothness: 0.3f), 10f, 10f)).ToArray();
             var mats = new Mats {
@@ -219,6 +223,7 @@ namespace Universes.UniverseData.tycoon.Editor {
                 new LandmarkPart(Pack.Space, "landingpad_large", 4f, Vector3.zero, 0f),
                 new LandmarkPart(Pack.Space, "lander_A", 3f, new Vector3(0f, 0.3f, 0f), 180f));
             p.items[Index("Brick Rocket")] = BrickRocket(p, mats);
+            BuildDecorations(p);
             return p;
         }
 
@@ -474,10 +479,10 @@ namespace Universes.UniverseData.tycoon.Editor {
             return Kit.Save(root, "Items", "StreetLamps");
         }
 
-        /// <summary>A KayKit city building facing the plot centre (+Z), with a bush and bench out front.</summary>
+        /// <summary>A KayKit city building whose door and shop front face +Z, out toward the player and the gate.</summary>
         static GameObject Building(Prefabs p, string name, string model) {
             var root = new GameObject(name);
-            Kay(p, Pack.City, model, root.transform, 8.2f, Vector3.zero, 180f);
+            Kay(p, Pack.City, model, root.transform, 8.2f, Vector3.zero, 0f);
             return Kit.Save(root, "Items", name);
         }
 
@@ -726,6 +731,7 @@ namespace Universes.UniverseData.tycoon.Editor {
             map.goldCoinPrefab = p.coin;
             map.chestPrefab = p.chest;
             map.oreMaterials = p.oreMats;
+            map.ghostMaterial = Kit.Mat("BuildGhost", Color.white, emission: 0.5f, alpha: 0.4f);
             map.clientPrefab = hud;
             EditorUtility.SetDirty(map);
             Kit.SaveActiveScene(Kit.StartScene(Universe));

@@ -23,6 +23,8 @@ namespace Universes.UniverseData.tycoon {
         [Tooltip("The daily reward chest (with a TY_ChestView), placed on the local player's own plot.")]
         public GameObject chestPrefab;
         public Material[] oreMaterials;
+        [Tooltip("See-through material (a transparent lit shader) for the build previews that hover over a pad's item spot.")]
+        public Material ghostMaterial;
         [Tooltip("Client-only HUD and plot presentation.")]
         public GameObject clientPrefab;
 

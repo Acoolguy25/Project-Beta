@@ -81,6 +81,20 @@ namespace Universes.UniverseData.tycoon.Tests {
         }
 
         [Test]
+        public void DecorationsDressTheYardOutsideTheFrontWall() {
+            int outside = 0;
+            for (int i = 0; i < TY_Catalog.Count; i++) {
+                TY_Item item = TY_Catalog.Items[i];
+                if (item.kind != TY_ItemKind.Decor) continue;
+                // The fairy lights hang over the lot's walls; everything else stands on the lawn past the gate.
+                if (item.name == "Fairy Lights") continue;
+                outside++;
+                Assert.Greater(item.itemPosition.z, TY_Catalog.PlotSize * 0.5f + 0.6f, $"{item.name} stands inside the front wall");
+            }
+            Assert.Greater(outside, 0);
+        }
+
+        [Test]
         public void PadsDoNotOverlapEachOther() {
             var pads = new List<Area>();
             foreach (TY_ItemKind lane in TY_Lanes.PadLanes)

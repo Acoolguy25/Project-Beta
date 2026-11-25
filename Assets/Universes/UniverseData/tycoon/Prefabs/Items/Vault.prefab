@@ -227,7 +227,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d0db3631ae66601fa15a44ba9a2cc37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: RyanAssets.Rounds::RyanAssets.Rounds.Billboard
+  facing: 0
   yawOnly: 1
+  maxScreenHeight: 0
+  referenceHeight: 1
 --- !u!1001 &7207914479760707096
 PrefabInstance:
   m_ObjectHideFlags: 0
