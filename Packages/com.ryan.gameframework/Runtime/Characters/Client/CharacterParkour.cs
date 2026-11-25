@@ -255,7 +255,8 @@ namespace RyanAssets.Characters.Client {
             }
             if (Time.time >= _noGrabUntil && alongUp < 3f && TryHang()) return true;
             if (hasInput && Vector3.Dot(input, _movement.Facing) > 0.5f && TryMantle(input)) return true;
-            if (hasInput && _movement.Controls.sprint && alongUp > -8f && TryWallRun()) return true;
+            // A game that turns sprint into something else (SprintEnabled off) has no sprint wall run.
+            if (hasInput && _movement.SprintEnabled && _movement.Controls.sprint && alongUp > -8f && TryWallRun()) return true;
             return false;
         }
 
@@ -286,6 +287,9 @@ namespace RyanAssets.Characters.Client {
             float h = Height;
             Vector3 probe = feet + up * (h * Mathf.Clamp(height.x - 0.05f, 0.08f, 0.6f));
             if (!Ray(probe, forward, HalfDepth + grabReach, out RaycastHit wall) || !IsStatic(wall.collider))
+                return false;
+            // Wall-jump walls are for clinging, sliding and kicking off (CharacterWallSlide), not for hanging from their top.
+            if (wall.collider.GetComponentInParent<IWallJumpSurface>() != null)
                 return false;
             normal = Vector3.ProjectOnPlane(wall.normal, up);
             if (normal.sqrMagnitude < 0.8f || Vector3.Dot(normal.normalized, -forward) < 0.5f)

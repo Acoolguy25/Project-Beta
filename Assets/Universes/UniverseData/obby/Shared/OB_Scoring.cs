@@ -9,12 +9,13 @@ namespace Universes.UniverseData.obby {
     /// time than one of easy stages. A finish earns the best medal whose target its scored time (after
     /// the coin and star bonuses) beats.
     /// <para>
-    /// The factors are first estimates (phase-B play-tests re-measure them): par adds a run-up and
-    /// landing per hop to the flight times, so a clean run lands near 1.0x par; gold allows a quarter
-    /// more for hesitation, silver a few retries, bronze a steady, careful run. Bronze must stay inside
-    /// the race time: the shipped 24-stage course has a mean par of about 636 s against a 1500 s race
-    /// (606 to 668 s over seeds 1 to 100, so the race is about 2.2 to 2.5 times par), and the bronze factor
-    /// stays well under that.
+    /// Par is the time of a clean run at WALK speed (courses are fair at walk speed; see
+    /// <see cref="OB_CourseRules"/>), so a flawless walk lands near 1.0x par and the dash is how a player
+    /// beats it: gold sits just above par (5% slack), so it takes a clean run plus some well-placed dashes,
+    /// stars or coins; silver allows a few retries and bronze a steady, careful walk. The factors are first
+    /// estimates (the Unity phase re-measures them with a walking bot and a dashing bot). Bronze must stay
+    /// inside the race time: the shipped 24-stage course has a mean par of about 640 s against a 1500 s race
+    /// (605 to 675 s over seeds 1 to 100), so bronze at 1.6x par (about 1030 s) always fits.
     /// </para>
     /// </summary>
     [Serializable]
@@ -26,7 +27,7 @@ namespace Universes.UniverseData.obby {
         [Tooltip("Bronze: scored time at most this many times the course par.")]
         [Min(0.5f)] public float bronzeFactor;
 
-        public static OB_MedalTimes Default => new() { goldFactor = 1.25f, silverFactor = 1.5f, bronzeFactor = 1.7f };
+        public static OB_MedalTimes Default => new() { goldFactor = 1.05f, silverFactor = 1.3f, bronzeFactor = 1.6f };
 
         public float Factor(OB_Medal medal) => medal switch {
             OB_Medal.Gold => goldFactor,

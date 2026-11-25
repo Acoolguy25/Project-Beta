@@ -43,7 +43,16 @@ namespace Universes.UniverseData.obby.Editor {
         const string ThemeIcons = "Packages/com.ryan.ui/Runtime/UI/Theme/Icons/";
         /// <summary>HUD layout (1920x1080 canvas units): the star pill right of the coin pill, the results board right of centre,
         /// and the challenges panel's height above the bottom edge (over the level chip).</summary>
-        const float StarPillX = 275f, ResultsOffsetX = 230f, LevelChipClearance = 104f;
+        const float StarPillX = 235f, ClockShiftX = -30f, ResultsOffsetX = 230f;
+        // HUD placement (1080-high reference, the canvas scales with the window). Round 2: everything sits higher. The race row
+        // hugs the top edge just under the shared topbar; the bottom elements clear the bottom edge by 136 px (12.6% of the screen).
+        const float HudTopInset = 100f, HudSideMargin = 24f;
+        // Everything that used to sit along the bottom now hangs from the top (1080 reference units from the top edge): the stage card
+        // under the chat line, the level chip under the shared PLAYERS panel, the hint under the race-time row, the results board
+        // under the split line. Only the dash meter stays low, raised to about a fifth of the height (action feedback near the character).
+        const float StageCardTop = 130f, LevelChipTop = 200f, ChallengesTop = 285f, HintTop = 215f, ResultsTop = 230f;
+        // The dash meter's anchor as a share of the screen height (about a fifth up, whatever the aspect ratio).
+        const float DashMeterHeight = 0.21f, DashMeterOffsetX = -260f; // beside the character, not under it, so the bar and its caption never cover it
         const float LobbyTop = 100f;
         const float LobbySize = 18f;
 
@@ -1017,6 +1026,9 @@ namespace Universes.UniverseData.obby.Editor {
             client.atmosphere = world.atmosphere;
             // Parkour and ragdoll physics for the local player while in the obby.
             client.parkour = root.AddComponent<CharacterParkour>();
+            // The opt-in Dash (the sprint key bursts instead of running) and the wall cling before a wall jump.
+            client.dash = root.AddComponent<CharacterDash>();
+            root.AddComponent<CharacterWallSlide>();
 
             var canvasGo = new GameObject("HUD", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
             canvasGo.transform.SetParent(root.transform, false);
@@ -1034,11 +1046,11 @@ namespace Universes.UniverseData.obby.Editor {
             Vector2 topLeft = new(0f, 1f), topRight = Vector2.one, top = new(0.5f, 1f), bottomLeft = Vector2.zero, centre = new(0.5f, 0.5f);
             const float shadow = 0.22f;
             // The shared HUD owns the top corners (chat, player list) and the top strip (round topbar),
-            // so the race clock sits under the topbar and the stage card in the bottom-left corner.
-            const float clockTop = -132f;
+            // so the race clock sits right under the topbar and the stage card in the bottom-left corner, well off the bottom edge.
+            const float clockTop = -HudTopInset;
 
             {   // Stage card, bottom left: stage number, tier chip, stage name and course progress.
-                var card = Card("StageCard", hud, bottomLeft, bottomLeft, new Vector2(24f, 24f), new Vector2(380f, 112f), panel, 24f, shadow);
+                var card = Card("StageCard", hud, topLeft, topLeft, new Vector2(HudSideMargin, -StageCardTop), new Vector2(380f, 112f), panel, 24f, shadow);
                 client.stageCard = card;
                 var body = card.Find("Body");
                 client.stageLabel = Label(Box("Stage", body, topLeft, topLeft, new Vector2(20f, -12f), new Vector2(220f, 30f)), bold, bold.shadow, 20, OB_Palette.Gold, TextAlignmentOptions.MidlineLeft);
@@ -1071,10 +1083,10 @@ namespace Universes.UniverseData.obby.Editor {
                 var dot = Box("RacerDot", track, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.one * 12f);
                 strip.racerDotTemplate = Panel(dot, OB_Palette.Paper, 6f);
             }
-            {   // Stamina, bottom centre: a captioned bar that shows while stamina is spent and warns when a jump
-                // cannot be paid (it replaces the kit's thin unlabelled strip along the bottom edge).
+            {   // Dash, bottom centre: a captioned charge bar that shows while the dash is spent and says when it is ready
+                // (it replaces the kit's thin unlabelled stamina strip along the bottom edge).
                 var bottom = new Vector2(0.5f, 0f);
-                var meterRoot = Box("Stamina", hud, bottom, bottom, new Vector2(0f, 26f), new Vector2(320f, 42f));
+                var meterRoot = Box("Dash", hud, new Vector2(0.5f, DashMeterHeight), bottom, new Vector2(DashMeterOffsetX, 0f), new Vector2(320f, 42f));
                 var meter = meterRoot.gameObject.AddComponent<OB_StaminaMeter>();
                 meter.group = meterRoot.gameObject.AddComponent<CanvasGroup>();
                 meter.group.interactable = meter.group.blocksRaycasts = false;
@@ -1082,27 +1094,27 @@ namespace Universes.UniverseData.obby.Editor {
                 meter.label = Label(Box("Caption", meterRoot, top, top, Vector2.zero, new Vector2(320f, 22f)), bold, bold.shadow, 16, OB_Palette.Paper, TextAlignmentOptions.Center);
                 meter.label.characterSpacing = 3f;
                 meter.label.textWrappingMode = TextWrappingModes.NoWrap;
-                meter.label.text = "STAMINA";
+                meter.label.text = "DASH";
                 var meterTrack = Box("Track", meterRoot, bottom, bottom, Vector2.zero, new Vector2(320f, 14f));
                 Panel(meterTrack, panel, 7f);
                 var meterFill = Stretch("Fill", meterTrack, Vector2.zero, Vector2.one);
                 meter.fill = meterFill;
                 meter.fillImage = Panel(meterFill, OB_Palette.Gold, 7f);
-                meter.fullColor = OB_Palette.Gold;
+                meter.readyColor = OB_Palette.Gold;
                 meter.lowColor = OB_Palette.Lava;
             }
             {   // Stage hint above the card: white text on a dark pill fitted to it, fading out once read.
-                var hint = Box("Hint", hud, bottomLeft, bottomLeft, new Vector2(38f, 154f), new Vector2(560f, 60f));
+                var hint = Box("Hint", hud, top, bottomLeft, new Vector2(-280f, -(HintTop + 60f)), new Vector2(560f, 60f));
                 client.hintGroup = hint.gameObject.AddComponent<CanvasGroup>();
                 client.hintGroup.interactable = client.hintGroup.blocksRaycasts = false;
                 var backing = Box("Backing", hint, bottomLeft, bottomLeft, new Vector2(-14f, -8f), new Vector2(588f, 76f));
                 Panel(backing, panel, 16f);
                 client.hintBacking = backing;
-                client.hintLabel = Label(Stretch("Label", hint, Vector2.zero, Vector2.one), semi, semi.outline, 21, OB_Palette.Paper, TextAlignmentOptions.BottomLeft);
+                client.hintLabel = Label(Stretch("Label", hint, Vector2.zero, Vector2.one), semi, semi.outline, 21, OB_Palette.Paper, TextAlignmentOptions.Bottom);
                 client.hintLabel.lineSpacing = -6f;
             }
             {   // Race clock, top centre, with its status underneath.
-                var pill = Card("TimerPill", hud, top, top, new Vector2(-85f, clockTop), new Vector2(210f, 56f), panel, 28f, shadow);
+                var pill = Card("TimerPill", hud, top, top, new Vector2(-85f + ClockShiftX, clockTop), new Vector2(210f, 56f), panel, 28f, shadow);
                 var body = pill.Find("Body");
                 Icon("Clock", body, "icon_schedule", new Vector2(0f, 0.5f), new Vector2(32f, 0f), 30f, OB_Palette.Gold);
                 client.timerLabel = Label(Stretch("Timer", body, Vector2.zero, Vector2.one, new Vector2(56f, 0f), new Vector2(-14f, 0f)), bold, bold.shadow, 34, OB_Palette.Paper, TextAlignmentOptions.MidlineLeft);
@@ -1110,7 +1122,7 @@ namespace Universes.UniverseData.obby.Editor {
                 // The line under the clock. A split against the gold pace ("1:23.4  -4.8 vs gold") gets a dark
                 // pill like the clock's, so its colour reads over a pale sky, the desert and the gate stripes;
                 // the controller fits the pill to the text and hides it for the plain status words.
-                var status = Box("Status", hud, top, top, new Vector2(-85f, clockTop - 62f), new Vector2(380f, 34f));
+                var status = Box("Status", hud, top, top, new Vector2(-85f + ClockShiftX, clockTop - 62f), new Vector2(380f, 34f));
                 var backing = Box("Backing", status, centre, centre, Vector2.zero, new Vector2(300f, 34f));
                 Panel(backing, panel, 17f);
                 client.statusBacking = backing;
@@ -1120,7 +1132,7 @@ namespace Universes.UniverseData.obby.Editor {
                 client.leaderLabel = Label(Box("Leader", hud, top, top, new Vector2(0f, clockTop - 86f), new Vector2(900f, 30f)), bold, bold.outline, 20, OB_Palette.Paper, TextAlignmentOptions.Center);
             }
             {   // Coins, beside the clock.
-                var pill = Card("CoinPill", hud, top, top, new Vector2(105f, clockTop), new Vector2(150f, 56f), panel, 28f, shadow);
+                var pill = Card("CoinPill", hud, top, top, new Vector2(105f + ClockShiftX, clockTop), new Vector2(150f, 56f), panel, 28f, shadow);
                 client.coinPill = pill;
                 var body = pill.Find("Body");
                 Icon("Coin", body, "icon_paid", new Vector2(0f, 0.5f), new Vector2(32f, 0f), 34f, OB_Palette.Gold);
@@ -1128,7 +1140,7 @@ namespace Universes.UniverseData.obby.Editor {
                 client.coinsLabel.textWrappingMode = TextWrappingModes.NoWrap;
             }
             {   // Stars in this tier, beside the coins; hidden on tiers without stars.
-                var pill = Card("StarPill", hud, top, top, new Vector2(StarPillX, clockTop), new Vector2(170f, 56f), panel, 28f, shadow);
+                var pill = Card("StarPill", hud, top, top, new Vector2(StarPillX, clockTop), new Vector2(160f, 56f), panel, 28f, shadow);
                 client.starPill = pill;
                 var body = pill.Find("Body");
                 var icon = Box("Star", body, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(30f, 0f), Vector2.one * 32f).gameObject.AddComponent<Image>();
@@ -1162,7 +1174,7 @@ namespace Universes.UniverseData.obby.Editor {
                 // Opaque so the world (the FINISH arch and its beams) never reads through the rows. The controller sizes
                 // the board's height to its rows at runtime (resultsFrameHeight + the rows' height).
                 // Right of centre, so the retention kit's summary card (left edge) and the board show side by side.
-                var results = Card("Results", hud, centre, centre, new Vector2(ResultsOffsetX, -40f), new Vector2(980f, 600f), OB_Palette.Ink, 36f);
+                var results = Card("Results", hud, top, top, new Vector2(ResultsOffsetX, -ResultsTop), new Vector2(980f, 600f), OB_Palette.Ink, 36f);
                 client.resultsPanel = results.gameObject;
                 var body = results.Find("Body");
                 var header = Stretch("Header", body, new Vector2(0f, 1f), Vector2.one, new Vector2(0f, -104f), Vector2.zero);
@@ -1185,8 +1197,8 @@ namespace Universes.UniverseData.obby.Editor {
                 // challenges panel (J) above it, toasts and the summary card where the kit puts them.
                 client.retentionHud = RetentionHudAuthoring.AddTo(hud);
                 client.cosmetics.retentionHud = client.retentionHud;
-                client.retentionHud.SetPlacement(RetentionHudPart.LevelChip, new RetentionPlacement(new Vector2(1f, 0f), new Vector2(-24f, 24f)));
-                client.retentionHud.SetPlacement(RetentionHudPart.ChallengesPanel, new RetentionPlacement(new Vector2(1f, 0f), new Vector2(-24f, LevelChipClearance)));
+                client.retentionHud.SetPlacement(RetentionHudPart.LevelChip, new RetentionPlacement(new Vector2(1f, 1f), new Vector2(-HudSideMargin, -LevelChipTop)));
+                client.retentionHud.SetPlacement(RetentionHudPart.ChallengesPanel, new RetentionPlacement(new Vector2(1f, 1f), new Vector2(-HudSideMargin, -ChallengesTop)));
             }
 
             // Copied onto the existing prefab when its shape is unchanged, so a rebuild keeps its fileIDs.

@@ -66,14 +66,22 @@ namespace Universes.UniverseData.obby.Server {
         [SerializeField, Min(0f)] float starTimeBonus = 3f;
         [Tooltip("Medal targets as multiples of the course par.")]
         [SerializeField] OB_MedalTimes medalTimes = OB_MedalTimes.Default;
-        [Header("Stamina")]
-        [Tooltip("Stamina pool. Sprinting and jumping spend it; at zero the robot can neither sprint nor jump.")]
-        [SerializeField, Min(0f)] float staminaMax = 250f;
-        [Tooltip("Stamina regained per second.")]
+        [Header("Stamina (the kit's pool; the dash has its own charge on CharacterDash)")]
+        [Tooltip("Kit stamina pool. Courses are fair at walk speed and jump freely, and the Dash is limited by its own charge, so this " +
+                 "stays 0 (stamina off). A value above 0 makes every jump cost stamina again.")]
+        [SerializeField, Min(0f)] float staminaMax;
+        [Tooltip("Kit stamina regained per second (only when staminaMax is above 0).")]
         [SerializeField, Min(0f)] float staminaRegen = 60f;
-        [Tooltip("Seconds after spending stamina before it regenerates. Courses size every hop for a sprint, so this " +
-                 "stays 0: with a delay, a held sprint never regenerates and a long chain empties the pool (no jumps).")]
-        [SerializeField, Min(0f)] float staminaCooldown = 0f;
+        [Tooltip("Seconds after spending kit stamina before it regenerates (only when staminaMax is above 0).")]
+        [SerializeField, Min(0f)] float staminaCooldown;
+        [Header("Stage envelope")]
+        [Tooltip("Room around the course the server allows (see OB_StageEnvelope). A racer whose middle leaves it, or gets inside an out-of-bounds guard " +
+                 "(the far side of a gravity wall or ceiling), goes back to their checkpoint. The dash (walk x 1.9) and launches stay well inside the margins.")]
+        [SerializeField] OB_EnvelopeRules envelopeRules = OB_EnvelopeRules.Default;
+        [Tooltip("Fastest sideways speed (m/s) a racer's position may average over speedWindow seconds (OB_SpeedSanity): dash plus a launch plus a ride stays well under it. " +
+                 "Faster, and they go back to their checkpoint.")]
+        [SerializeField, Min(10f)] float maxPlanarSpeed = OB_SpeedSanity.DefaultLimit;
+        [SerializeField, Min(0.1f)] float speedWindow = 0.5f;
         [Header("Hazards")]
         [Tooltip("How far the robot's feet may dip below rising lava before it counts (forgives a frame of latency).")]
         [SerializeField, Min(0f)] float lavaMargin = 0.3f;
@@ -126,6 +134,9 @@ namespace Universes.UniverseData.obby.Server {
             public float lavaStart = -1f;
             /// <summary>In this race's retention summary (BeginMatch was called).</summary>
             public bool inMatch;
+            /// <summary>Where this runner was when the speed window opened (sampleTime 0: no window yet).</summary>
+            public Vector3 samplePosition;
+            public float sampleTime;
         }
 
         readonly Dictionary<NetworkConnection, Runner> runners = new();
@@ -138,6 +149,7 @@ namespace Universes.UniverseData.obby.Server {
         RetentionService<OB_SaveData> retention;
         OB_Course course;
         OB_CourseLayout layout;
+        OB_StageEnvelope envelope;
         OB_Phase phase;
         int round, finishCount, lastSeed, secondsLeft, builtRulesHash;
         float raceStart, raceDeadline;
@@ -244,6 +256,7 @@ namespace Universes.UniverseData.obby.Server {
             round++;
             layout = course.Build(seed, stageCount);
             builtRulesHash = (course.rules ?? OB_CourseRules.Default).Hash();
+            envelope = new OB_StageEnvelope(layout, envelopeRules);
             IndexCourse();
             course.SetGateClosed(true);
             finishCount = 0;
@@ -326,6 +339,16 @@ namespace Universes.UniverseData.obby.Server {
                 Bounds bounds = body.bounds;
                 Vector3 centre = bounds.center;
                 bool racing = phase is OB_Phase.Racing or OB_Phase.Closing;
+                if (runner.sampleTime <= 0f) { runner.samplePosition = centre; runner.sampleTime = Time.time; }
+                else if (Time.time - runner.sampleTime >= speedWindow) {
+                    bool tooFast = OB_SpeedSanity.Exceeds(runner.samplePosition, centre, Time.time - runner.sampleTime, maxPlanarSpeed);
+                    runner.samplePosition = centre;
+                    runner.sampleTime = Time.time;
+                    if (tooFast && racing && !runner.finished) {
+                        SendBack(character, runner, OB_ProgressReason.OutOfBounds);
+                        continue;
+                    }
+                }
 
                 if (racing && !runner.finished) {
                     for (int k = layout.StageCount - 1; k > runner.checkpoint; k--) {
@@ -347,6 +370,8 @@ namespace Universes.UniverseData.obby.Server {
                 float killY = layout.finishTop.y - OB_CourseGenerator.KillDepth, killTop = float.PositiveInfinity;
                 if (!runner.finished) layout.KillHeights(runner.checkpoint, centre, out killY, out killTop);
                 if (bounds.min.y < killY || bounds.max.y > killTop) SendBack(character, runner, OB_ProgressReason.Fell);
+                // The far side of a gravity wall, the top of a ceiling, or anywhere the course does not reach is out of bounds.
+                else if (envelope != null && !runner.finished && !envelope.Allows(runner.checkpoint, centre)) SendBack(character, runner, OB_ProgressReason.OutOfBounds);
             }
         }
 
@@ -453,6 +478,7 @@ namespace Universes.UniverseData.obby.Server {
             runner.respawnAt = 0f;
             runner.lavaStart = -1f;
             runner.graceUntil = Time.time + teleportGrace;
+            runner.sampleTime = 0f;
             character.TeleportTo(SpawnPosition(character.Owner));
         }
 

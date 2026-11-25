@@ -14,7 +14,9 @@ namespace Universes.UniverseData.obby {
         Beam, OnOffBlock, OnOffSwitch, Pendulum, Crusher, Laser, RollingLog, Turntable, Cannon, Mushroom,
         GravityFlip, RisingLava, Star,
         // Added in phase B of the overhaul.
-        Ice, Wind
+        Ice, Wind,
+        // Added in round 2 (2026-11-25).
+        OutOfBounds, Ghost, Honey, Ring, Swing, Plank
     }
 
     /// <summary>
@@ -29,7 +31,9 @@ namespace Universes.UniverseData.obby {
         OnOff, Hammers, Crushers, Lasers, LogRoll, Turntables, Cannons, Mushrooms, BeamWalk, Corkscrew,
         GravityFlip, LavaRise,
         // Added in phase B of the overhaul.
-        WindGaps, IceRink
+        WindGaps, IceRink,
+        // Added in round 2 (2026-11-25).
+        LiftShaft, GhostPath, HoneySwamp, BoostRings, Swings, RopeBridge
     }
 
     /// <summary>
@@ -63,6 +67,16 @@ namespace Universes.UniverseData.obby {
     /// trigger centred on <c>position</c>, <c>vector</c> = world push at the calm point (m/s), <c>speed</c> =
     /// extra push at the height of a gust (m/s), <c>period</c> = gust period, <c>phase</c>.
     /// </para>
+    /// <para>
+    /// Round-2 kinds: OutOfBounds = a box (<c>position</c> centre, <c>size</c>, <c>yaw</c>) the server never lets a racer's
+    /// middle be inside (the far side of a gravity wall or ceiling); it has no collider and no look. Ghost = a scaled
+    /// box that blinks solid like a Beat block: <c>period</c>, <c>speed</c> = solid fraction, <c>phase</c>. Honey = a scaled box
+    /// like a platform whose sticky field slows walkers to <c>speed</c> (share of their speed). Ring = a trigger box centred
+    /// on <c>position</c>, <c>size</c>, that launches whoever enters with the world velocity <c>vector</c>. Swing =
+    /// pivot at <c>position</c>, <c>size</c> = (platform width, rope length, platform depth), <c>vector</c> = (amplitude in
+    /// degrees, platform thickness, 0), <c>period</c>, <c>phase</c>; it swings along the stage's forward axis. Plank = a scaled box
+    /// like Crumble: <c>speed</c> = fuse, <c>period</c> = regrow. Lift Shaft lifts are ordinary Mover pieces travelling up or down.
+    /// </para>
     /// </summary>
     [Serializable]
     public struct OB_Piece {
@@ -95,7 +109,7 @@ namespace Universes.UniverseData.obby {
         [Tooltip("Height of the character's collider; gravity stages size their clearances from it.")]
         public float bodyHeight;
         // Appended fields.
-        [Tooltip("Sprint speed. OB_Course fills it from its own sprintSpeed (the value the server applies).")]
+        [Tooltip("Dash top speed (walk x 1.9, see CharacterDash). Only pro routes, gold pace and falls are sized for it; required jumps use walkSpeed. OB_Course fills it from its own sprintSpeed.")]
         public float sprintSpeed;
         [Tooltip("Matches CharacterMovement's launch protection time: seconds launch momentum is kept before it fades.")]
         public float launchProtection;
@@ -104,7 +118,7 @@ namespace Universes.UniverseData.obby {
 
         public static OB_Movement Default => new() {
             walkSpeed = 10f, jumpHeight = 2.6f, gravity = 30f, airMomentumDamping = 0.6f, bodyHeight = 5.6f,
-            sprintSpeed = 15f, launchProtection = 0.2f, slipAcceleration = 60f
+            sprintSpeed = 19f, launchProtection = 0.2f, slipAcceleration = 60f
         };
         public float JumpSpeed => Mathf.Sqrt(2f * gravity * jumpHeight);
 

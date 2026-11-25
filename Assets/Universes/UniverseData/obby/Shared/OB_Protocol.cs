@@ -4,7 +4,7 @@ namespace Universes.UniverseData.obby {
     public enum OB_Phase : byte { Waiting, Countdown, Racing, Closing, Results }
 
     /// <summary>Why a player's progress changed, so the client can react.</summary>
-    public enum OB_ProgressReason : byte { Sync, Checkpoint, Coin, Finish, Hazard, Fell, Star }
+    public enum OB_ProgressReason : byte { Sync, Checkpoint, Coin, Finish, Hazard, Fell, Star, OutOfBounds }
 
     /// <summary>Medal for a finish time (after the coin and star bonuses); see <see cref="OB_MedalTimes"/>.</summary>
     public enum OB_Medal : byte { None, Bronze, Silver, Gold }

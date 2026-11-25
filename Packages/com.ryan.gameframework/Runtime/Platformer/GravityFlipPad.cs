@@ -10,7 +10,9 @@ namespace RyanAssets.Platformer {
     /// respawn (teleports clear gravity) or <see cref="holdSeconds"/>. Floor pads, ceiling pads and
     /// floating orbs that flip a player in mid-jump are all this component. Every pad shares one gravity
     /// request, so the newest flip wins; a <see cref="GravityZone"/> entered later still takes over
-    /// while the player is inside it.
+    /// while the player is inside it. The character's gravity debounces direction changes (see
+    /// <c>CharacterGravity</c>), so two pads touched within a fraction of a second settle on one direction
+    /// and a flip cannot be chained to skip a stage.
     /// <para>Design rule: a flip must always have a surface to fall onto, and a level that flips players
     /// must catch players who fall the "wrong" way (the game's server needs an upper kill height).</para>
     /// </summary>
@@ -34,6 +36,12 @@ namespace RyanAssets.Platformer {
         /// <summary>Points the flip at <paramref name="worldDown"/>.</summary>
         public void Configure(Vector3 worldDown) => localDown = transform.InverseTransformDirection(worldDown.normalized);
 
+        /// <summary>Points the flip at <paramref name="worldDown"/> and sets how long it holds (a stage's worth, not the default hour).</summary>
+        public void Configure(Vector3 worldDown, float hold) {
+            Configure(worldDown);
+            holdSeconds = Mathf.Max(1f, hold);
+        }
+
 #if !UNITY_SERVER
         /// <summary>Raised on the client when a pad flips the local character.</summary>
         public static event System.Action<GravityFlipPad> Flipped;
@@ -44,7 +52,7 @@ namespace RyanAssets.Platformer {
         void OnTriggerEnter(Collider other) {
             if (!LocalBody.TryGet(other, out CharacterMovement movement) || movement.Gravity == null) return;
             Vector3 down = WorldDown;
-            bool change = Vector3.Dot(movement.Gravity.Down, down) < 0.99f;
+            bool change = Vector3.Dot(movement.Gravity.TargetDown, down) < 0.99f;
             movement.Gravity.Request(FlipSource, down, gravityScale, holdSeconds);
             if (change) Flipped?.Invoke(this);
         }

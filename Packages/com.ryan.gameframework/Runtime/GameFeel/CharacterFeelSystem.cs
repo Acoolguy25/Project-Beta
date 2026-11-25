@@ -30,6 +30,11 @@ namespace RyanAssets.GameFeel {
             public float peakFallSpeed;
             public bool near;
             public float teleportedAt = float.NegativeInfinity;
+            public CharacterStance stance;
+            public System.Action<Stance, Stance> onStance;
+            public float height, halfDepth;
+            public FxHandle trail;
+            public float nextWallPuff;
         }
 
         static readonly int GroundedId = Animator.StringToHash("Grounded");
@@ -89,6 +94,13 @@ namespace RyanAssets.GameFeel {
                 entry.onFootstep = () => OnFootstep(entry);
                 entry.events.Footstep += entry.onFootstep;
             }
+            entry.stance = character.GetComponent<CharacterStance>();
+            if (entry.stance != null) {
+                entry.onStance = (previous, next) => OnStance(entry, previous, next);
+                entry.stance.Changed += entry.onStance;
+            }
+            entry.height = character.TryGetComponent(out BoxCollider box) ? box.size.y * entry.root.lossyScale.y : 1.8f * entry.root.lossyScale.y;
+            entry.halfDepth = box != null ? box.size.z * 0.5f * entry.root.lossyScale.z : 0.3f * entry.root.lossyScale.z;
             tracked.Add(entry);
         }
 
@@ -104,6 +116,10 @@ namespace RyanAssets.GameFeel {
         void Unbind(Tracked entry) {
             if (entry.events != null && entry.onFootstep != null)
                 entry.events.Footstep -= entry.onFootstep;
+            if (entry.stance != null && entry.onStance != null)
+                entry.stance.Changed -= entry.onStance;
+            if (entry.stance != null && entry.stance.Current == Stance.Dash)
+                EndDashFeel(entry);
             if (entry.model != null)
                 runner.Punches.Cancel(entry.model);
         }
@@ -156,6 +172,7 @@ namespace RyanAssets.GameFeel {
             float ground = (velocity - up * along).magnitude;
             entry.groundSpeed = Mathf.Lerp(entry.groundSpeed, ground, 1f - Mathf.Exp(-SpeedSmoothing * dt));
 
+            StepWallSlide(entry, position, up);
             if (!entry.hasGroundedParameter || entry.character.IsDead)
                 return;
             bool grounded = entry.animator.GetBool(GroundedId);
@@ -206,6 +223,67 @@ namespace RyanAssets.GameFeel {
                 tracked[i].teleportedAt = Time.time;
                 tracked[i].hasPosition = false;
             }
+        }
+
+        // ------------------------------------------------------------------ stances
+        bool IsLocal(Tracked entry) => entry.character == LocalPlayer.Character;
+
+        void OnStance(Tracked entry, Stance previous, Stance next) {
+            GameFeelSettings.StanceFeelTuning fx = tuning.stances;
+            if (previous == Stance.Dash)
+                EndDashFeel(entry);
+            if (!entry.near && !IsLocal(entry))
+                return;
+            Vector3 position = entry.root.position, up = entry.root.up;
+            switch (next) {
+                case Stance.Dash when fx.dashEffects:
+                    GameSfx.PlayAt(SfxCue.Whoosh, position, fx.dashWhoosh.x, fx.dashWhoosh.y);
+                    GameFx.Play(FxKind.DustPuff, position, up, tuning.dustColor, fx.dashBurstDust * BodyScale(entry));
+                    GameFx.Play(FxKind.ShockwaveRing, position, up, fx.dashTrailColor, fx.dashBurstDust * BodyScale(entry));
+                    Vector3 anchor = new(0f, entry.height * fx.dashTrailAnchor.x / BodyScale(entry), -entry.halfDepth * fx.dashTrailAnchor.y / BodyScale(entry));
+                    entry.trail = GameFx.Attach(FxKind.Trail, entry.root, anchor, fx.dashTrailColor, fx.dashTrailScale * BodyScale(entry));
+                    if (IsLocal(entry)) {
+                        CameraFov.Kick(fx.dashFovKick, 0.3f);
+                        CameraFov.SetBoostDegrees(fx.dashFovBoost);
+                        ScreenFx.SetSpeedLines(fx.dashSpeedLines);
+                    }
+                    break;
+                case Stance.WallSlide when fx.wallEffects:
+                    entry.nextWallPuff = 0f;
+                    GameSfx.PlayAt(SfxCue.Land, position, fx.wallVolume.x, 1.4f);
+                    break;
+                case Stance.WallKick when fx.wallEffects:
+                    GameSfx.PlayAt(SfxCue.Jump, position, fx.wallVolume.y, 1.15f);
+                    Vector3 wall = WallPoint(entry, position, up);
+                    GameFx.Play(FxKind.DustPuff, wall, -entry.root.forward, tuning.dustColor, fx.wallDustScale * 2f * BodyScale(entry));
+                    GameFx.Play(FxKind.Sparks, wall, -entry.root.forward, Color.white, fx.wallSparkScale * 2f * BodyScale(entry));
+                    break;
+            }
+        }
+
+        void EndDashFeel(Tracked entry) {
+            entry.trail.Stop();
+            entry.trail = default;
+            if (!IsLocal(entry))
+                return;
+            CameraFov.SetBoostDegrees(0f);
+            ScreenFx.SetSpeedLines(0f);
+        }
+
+        /// <summary>Where a clinging character touches the wall: in front of its chest.</summary>
+        Vector3 WallPoint(Tracked entry, Vector3 position, Vector3 up) =>
+            position + up * (entry.height * 0.75f) + entry.root.forward * (entry.halfDepth + 0.05f * BodyScale(entry));
+
+        void StepWallSlide(Tracked entry, Vector3 position, Vector3 up) {
+            GameFeelSettings.StanceFeelTuning fx = tuning.stances;
+            if (!fx.wallEffects || entry.stance == null || entry.stance.Current != Stance.WallSlide || !entry.near || Time.time < entry.nextWallPuff)
+                return;
+            entry.nextWallPuff = Time.time + fx.wallPuffSeconds;
+            Vector3 wall = WallPoint(entry, position, up);
+            Vector3 away = -entry.root.forward;
+            GameFx.Play(FxKind.DustPuff, wall, away, tuning.dustColor, fx.wallDustScale * BodyScale(entry));
+            if (Random.value < fx.wallSparkChance)
+                GameFx.Play(FxKind.Sparks, wall, away, Color.white, fx.wallSparkScale * BodyScale(entry));
         }
 
         void OnFootstep(Tracked entry) {

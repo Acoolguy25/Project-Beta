@@ -675,7 +675,6 @@ MonoBehaviour:
     m_Flags: 0
     m_Priority: 0
   alignToGravity: 1
-  gravityAlignSpeed: 240
 --- !u!81 &6969761646436562824
 AudioListener:
   m_ObjectHideFlags: 0
@@ -1681,7 +1680,6 @@ MonoBehaviour:
     m_Flags: 0
     m_Priority: 0
   alignToGravity: 1
-  gravityAlignSpeed: 240
 --- !u!81 &220102606621613566
 AudioListener:
   m_ObjectHideFlags: 0

@@ -127,11 +127,17 @@ namespace Universes.UniverseData.obby {
         /// </summary>
         bool TryProRoute(out Vector3 star) {
             star = default;
+            proRoute = true;
+            try { return BuildProRoute(out star); } finally { proRoute = false; }
+        }
+
+        bool BuildProRoute(out Vector3 star) {
+            star = default;
             const float minimumBase = 3f, clearance = 1.2f, farEdgeKeepOut = SegmentBackReach + 1f;
             Vector3 baseTop = lastTop;
             Vector2 baseSize = lastSize;
             if (baseSize.x < minimumBase || baseSize.y < minimumBase) return false;
-            int hops = tier.proGapFraction >= rules.Tier(OB_Tier.Hard).proGapFraction ? 3 : 2;
+            int hops = Mathf.Clamp(tier.proHops, 1, 3);
             float size = Mathf.Max(1.2f, tier.platformSize.x * 0.85f);
             float zMin = baseTop.z - baseSize.y * 0.5f + size * 0.5f;
             float zMax = baseTop.z + baseSize.y * 0.5f - farEdgeKeepOut - size * 0.5f;

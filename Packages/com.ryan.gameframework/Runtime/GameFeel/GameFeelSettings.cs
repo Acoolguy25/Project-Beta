@@ -119,6 +119,45 @@ namespace RyanAssets.GameFeel {
             [Range(0.05f, 1f)] public float landShakeSeconds = 0.25f;
             [Tooltip("Seconds after a teleport or respawn during which landings never shake the camera.")]
             [Min(0f)] public float teleportGraceSeconds = 0.75f;
+            [Tooltip("Effects for the special stances (dash, wall slide, wall jump).")]
+            public StanceFeelTuning stances = new();
+        }
+
+        [Serializable]
+        public sealed class StanceFeelTuning {
+            [Header("Dash")]
+            [Tooltip("Whoosh and a burst of dust at the feet when a dash starts, and a trail while it lasts (every character this client sees).")]
+            public bool dashEffects = true;
+            [Tooltip("Whoosh cue volume and pitch when a dash starts.")]
+            public Vector2 dashWhoosh = new(0.9f, 1.25f);
+            [Tooltip("Colour of the dash trail.")]
+            public Color dashTrailColor = new(0.45f, 0.85f, 1f, 0.85f);
+            [Tooltip("Trail size per unit of character scale (the robot is scale 3).")]
+            [Range(0.01f, 2f)] public float dashTrailScale = 0.3f;
+            [Tooltip("Where the trail is attached, as a fraction of the character's height up and a fraction of its depth behind the centre.")]
+            public Vector2 dashTrailAnchor = new(0.45f, 0.35f);
+            [Tooltip("Extra field of view (degrees) that kicks in when the local player's dash starts.")]
+            [Range(0f, 30f)] public float dashFovKick = 9f;
+            [Tooltip("Field of view (degrees) held while the local player dashes.")]
+            [Range(0f, 30f)] public float dashFovBoost = 8f;
+            [Tooltip("Speed-line intensity (0..1) while the local player dashes.")]
+            [Range(0f, 1f)] public float dashSpeedLines = 0.85f;
+            [Tooltip("Dust puff size at the feet when a dash starts, per unit of character scale.")]
+            [Range(0.01f, 2f)] public float dashBurstDust = 0.5f;
+
+            [Header("Wall slide and wall jump")]
+            [Tooltip("Dust and sparks from the wall while a character slides down it, and a push-off burst on a wall jump.")]
+            public bool wallEffects = true;
+            [Tooltip("Seconds between dust puffs while sliding.")]
+            [Min(0.02f)] public float wallPuffSeconds = 0.09f;
+            [Tooltip("Chance (0..1) that a puff also throws sparks.")]
+            [Range(0f, 1f)] public float wallSparkChance = 0.35f;
+            [Tooltip("Dust puff size at the wall, per unit of character scale.")]
+            [Range(0.01f, 2f)] public float wallDustScale = 0.22f;
+            [Tooltip("Spark size at the wall, per unit of character scale.")]
+            [Range(0.01f, 2f)] public float wallSparkScale = 0.14f;
+            [Tooltip("Sound volume of the cling and of the push-off.")]
+            public Vector2 wallVolume = new(0.4f, 0.8f);
         }
 
         [Serializable]

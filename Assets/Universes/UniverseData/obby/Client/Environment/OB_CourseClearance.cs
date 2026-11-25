@@ -52,6 +52,8 @@ namespace Universes.UniverseData.obby.Client {
             public float rest;
             public int piece;
             public bool route;
+            /// <summary>An invisible force field (wind): things the route passes through on purpose (arches) may stand in it.</summary>
+            public bool soft;
         }
 
         /// <summary>Zones resting this close above a hanging candidate's top still count as resting on it.</summary>
@@ -108,9 +110,16 @@ namespace Universes.UniverseData.obby.Client {
             if (layout != null) {
                 for (int i = 0; i < layout.pieces.Count; i++) {
                     OB_Piece piece = layout.pieces[i];
+                    // Out-of-bounds guards are server-only volumes with no look or collider: they never block dressing.
+                    if (piece.kind == OB_PieceKind.OutOfBounds) continue;
                     Bounds box = Sweep(piece, PieceBounds(piece, settings.defaultPieceSize));
                     if (IsWide(piece)) AddZone(Widen(box, settings.turnedGravityMargin), float.NegativeInfinity, i, false, Grow(box));
                     else AddZone(Grow(box), box.min.y, i, false);
+                    if (piece.kind == OB_PieceKind.Wind) {
+                        var wind = zones[zones.Count - 1];
+                        wind.soft = true;
+                        zones[zones.Count - 1] = wind;
+                    }
                     if (IsRouteSurface(piece.kind)) {
                         int stage = Mathf.Clamp(piece.stage, 0, layout.StageCount - 1);
                         AddRoutePoint(new Vector3(box.center.x, box.max.y, box.center.z), layout.stages[stage].tier);
@@ -144,6 +153,7 @@ namespace Universes.UniverseData.obby.Client {
                     if (!cells.TryGetValue(Key(x, z), out var list)) continue;
                     foreach (int index in list) {
                         Zone zone = zones[index];
+                        if (zone.soft && ignoreRoute) continue;
                         if (zone.route ? ignoreRoute : zone.piece >= 0 && (zone.piece == ignoreA || zone.piece == ignoreB)) continue;
                         if (zone.rest >= hangsFrom - RestTolerance) continue;
                         if ((dissolvesNearCamera ? zone.core : zone.bounds).Intersects(bounds)) return true;
@@ -195,7 +205,7 @@ namespace Universes.UniverseData.obby.Client {
             or OB_PieceKind.Crumble or OB_PieceKind.Beat or OB_PieceKind.WallJumpWall or OB_PieceKind.Mover
             or OB_PieceKind.Beam or OB_PieceKind.OnOffBlock or OB_PieceKind.Laser or OB_PieceKind.RollingLog
             or OB_PieceKind.Crusher or OB_PieceKind.GravityFlip or OB_PieceKind.RisingLava or OB_PieceKind.Ice
-            or OB_PieceKind.Wind;
+            or OB_PieceKind.Wind or OB_PieceKind.Ghost or OB_PieceKind.Honey or OB_PieceKind.Plank;
 
         /// <summary>Pieces whose origin is their box centre (the generator's Box helper); others sit on their origin.</summary>
         static bool HasBoxOrigin(OB_PieceKind kind) => kind is not (OB_PieceKind.Spring or OB_PieceKind.Boost or OB_PieceKind.Coin
@@ -205,7 +215,8 @@ namespace Universes.UniverseData.obby.Client {
         static bool IsRouteSurface(OB_PieceKind kind) => kind is not (OB_PieceKind.Coin or OB_PieceKind.Star or OB_PieceKind.GravityZone
             or OB_PieceKind.Lava or OB_PieceKind.RisingLava or OB_PieceKind.WallJumpWall or OB_PieceKind.SpinnerBar
             or OB_PieceKind.SpinnerCross or OB_PieceKind.Pendulum or OB_PieceKind.Crusher or OB_PieceKind.Laser
-            or OB_PieceKind.OnOffSwitch or OB_PieceKind.GravityFlip or OB_PieceKind.Wind);
+            or OB_PieceKind.OnOffSwitch or OB_PieceKind.GravityFlip or OB_PieceKind.Wind or OB_PieceKind.OutOfBounds
+            or OB_PieceKind.Honey or OB_PieceKind.Swing or OB_PieceKind.Ring);
 
         bool IsWide(in OB_Piece piece) {
             // Pieces that turn gravity turn the player (and the chase camera) onto walls and ceilings.

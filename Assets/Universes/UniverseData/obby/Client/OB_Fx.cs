@@ -70,6 +70,13 @@ namespace Universes.UniverseData.obby.Client {
         [Tooltip("A bounce on a mushroom cap.")]
         public OB_Cue mushroomSound = new(SfxCue.Jump, 0.85f, 1.45f);
 
+        [Header("Round-2 mechanics")]
+        [Tooltip("Passing through a boost ring: a bright whoosh and a ring burst in its colour.")]
+        public OB_Cue ringSound = new(SfxCue.Whoosh, 1f, 1.35f);
+        [Min(0f)] public float ringBurstScale = 1.2f;
+        [Tooltip("Stepping into honey: a soft squelch.")]
+        public OB_Cue honeySound = new(SfxCue.Jump, 0.7f, 0.5f);
+
         [Header("Stars")]
         public OB_Cue starSound = new(SfxCue.LevelUp, 0.9f, 1.5f);
         [Min(0f)] public float starBurstScale = 1.4f;
@@ -180,6 +187,7 @@ namespace Universes.UniverseData.obby.Client {
             Crusher.Slammed += OnSlam;
             RisingLava.ChaseStarted += OnLavaChase;
             WindVolume.Entered += OnWind;
+            StickyZone.Entered += OnHoney;
         }
 
         void OnDisable() {
@@ -190,9 +198,16 @@ namespace Universes.UniverseData.obby.Client {
             Crusher.Slammed -= OnSlam;
             RisingLava.ChaseStarted -= OnLavaChase;
             WindVolume.Entered -= OnWind;
+            StickyZone.Entered -= OnHoney;
         }
 
         void OnWind(WindVolume field) => windSound.Play();
+
+        void OnHoney(StickyZone zone) {
+            honeySound.PlayAt(zone.transform.position);
+            if (CharacterMovement.Local != null && CharacterMovement.Local.Body != null)
+                GameFx.Play(FxKind.Sparks, CharacterMovement.Local.Body.position, OB_Palette.Honey, 0.6f);
+        }
 
         /// <summary>A crunch and a frost burst when the local player first touches ice.</summary>
         void UpdateIce() {
@@ -207,6 +222,11 @@ namespace Universes.UniverseData.obby.Client {
 
         void OnLaunched(LaunchPad pad, CharacterMovement movement) {
             Vector3 at = pad.transform.position;
+            if (pad.TryGetComponent(out BoostRing _)) {
+                ringSound.PlayAt(at);
+                GameFx.Play(FxKind.ShockwaveRing, at, OB_Palette.Ring, ringBurstScale);
+                return;
+            }
             if (padKinds.TryGetValue(pad, out OB_PieceKind kind)) {
                 if (kind == OB_PieceKind.Cannon) {
                     cannonSound.PlayAt(at);

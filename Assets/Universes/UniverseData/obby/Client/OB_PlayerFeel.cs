@@ -22,8 +22,8 @@ namespace Universes.UniverseData.obby.Client {
         public bool enablePostProcessing = true;
 
         [Header("Speed")]
-        [Tooltip("Speeds (m/s) where the speed effects start and reach full strength.")]
-        public Vector2 speedRange = new(17f, 32f);
+        [Tooltip("Speeds (m/s) where the speed effects start and reach full strength. Start above the dash's top speed (walk x 1.9, 19 m/s): the dash brings its own FOV kick and speed lines, so only launches and long falls add these.")]
+        public Vector2 speedRange = new(22f, 34f);
         [Tooltip("Extra field of view (degrees) at full speed.")]
         [Range(0f, 30f)] public float fovKick = 10f;
         [Tooltip("Speed line intensity (0..1) at full speed.")]

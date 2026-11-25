@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace RyanAssets.Characters.Shared {
     /// <summary>A special stance a character can be in. Values are sent over the network: add new ones at the end.</summary>
-    public enum Stance : byte { Normal, Hang, Climb, Mantle, Slide, WallRunLeft, WallRunRight, Roll, Ragdoll }
+    public enum Stance : byte { Normal, Hang, Climb, Mantle, Slide, WallRunLeft, WallRunRight, Roll, Ragdoll, WallSlide, WallKick, Dash }
 
     /// <summary>A stance and, for <see cref="Stance.Ragdoll"/>, how the body is flung and the gravity it falls with.</summary>
     public struct StanceState {
@@ -22,7 +22,7 @@ namespace RyanAssets.Characters.Shared {
     /// Every client presents it the same way: <see cref="Stance.Ragdoll"/> hands the body to the
     /// physics ragdoll (<see cref="RagdollCharacter"/>); the other stances layer a procedural pose over
     /// the animator (hands reaching for a ledge, leaning back into a slide, tilting off a wall, a
-    /// forward roll), so they need no extra animation clips.
+    /// forward roll, clinging to a wall, kicking off it, a sprinting dash), so they need no extra animation clips.
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
@@ -38,6 +38,37 @@ namespace RyanAssets.Characters.Shared {
         [SerializeField, Range(0f, 0.5f)] private float slideDrop = 0.27f;
         [Tooltip("How far back (degrees) the body leans in a slide.")]
         [SerializeField, Range(0f, 90f)] private float slideLean = 62f;
+        [Header("Wall slide and wall jump")]
+        [Tooltip("How high up the body the hands cling to the wall, as a fraction of height.")]
+        [SerializeField, Range(0.4f, 1.1f)] private float wallGripHeight = 0.9f;
+        [Tooltip("How far the hands scrub up and down the wall while sliding, as a fraction of height.")]
+        [SerializeField, Range(0f, 0.15f)] private float wallScrub = 0.04f;
+        [Tooltip("Scrub cycles per second.")]
+        [SerializeField, Min(0f)] private float wallScrubRate = 1.6f;
+        [Tooltip("How far the chest leans into the wall while sliding (degrees).")]
+        [SerializeField, Range(0f, 40f)] private float wallLean = 12f;
+        [Tooltip("Wall slide: degrees the planted leg's thigh / shin bend (thigh goes back, shin forward).")]
+        [SerializeField, Range(0f, 120f)] private float wallPlantedThigh = 42f, wallPlantedShin = 62f;
+        [Tooltip("Wall slide: degrees the free leg's thigh / shin bend.")]
+        [SerializeField, Range(0f, 120f)] private float wallFreeThigh = 14f, wallFreeShin = 24f;
+        [Tooltip("Dash: degrees the forearms bend.")]
+        [SerializeField, Range(0f, 90f)] private float dashForearmBend = 12f;
+        [Tooltip("Seconds the wall-jump kick pose lasts.")]
+        [SerializeField, Min(0.1f)] private float wallKickTime = 0.55f;
+        [Tooltip("How far the body somersaults after pushing off a wall (degrees; 0 = a turn with no flip).")]
+        [SerializeField, Range(0f, 720f)] private float wallKickFlip = 360f;
+
+        [Header("Dash")]
+        [Tooltip("How far the body leans forward while dashing (degrees).")]
+        [SerializeField, Range(0f, 70f)] private float dashLean = 38f;
+        [Tooltip("How far back the arms sweep while dashing (degrees).")]
+        [SerializeField, Range(0f, 110f)] private float dashArmSweep = 78f;
+        [Tooltip("How far the hips drop while dashing, as a fraction of height.")]
+        [SerializeField, Range(0f, 0.2f)] private float dashDrop = 0.05f;
+        [Tooltip("Animator speed multiplier while dashing: the legs cycle this much faster.")]
+        [SerializeField, Min(1f)] private float dashAnimatorSpeed = 1.8f;
+
+        [Header("Sync")]
         [Tooltip("Fastest fling (m/s) the server relays, so a client cannot launch others' copies wildly.")]
         [SerializeField, Min(0f)] private float maxFling = 45f;
         [Tooltip("Ragdoll spin (rad/s) per m/s of sideways fling, so hits send the body tumbling.")]
@@ -66,6 +97,8 @@ namespace RyanAssets.Characters.Shared {
         private float _weight;
         private Stance _posed;            // the stance the pose weight belongs to (kept while blending out)
         private Vector3 _leftGrip, _rightGrip; // world grips pinned when a climb or mantle starts
+        private float _baseAnimatorSpeed = 1f;
+        private bool _animatorSpeedScaled;
 
         private void Awake() {
             _animator = GetComponent<Animator>();
@@ -174,6 +207,7 @@ namespace RyanAssets.Characters.Shared {
                 return;
             bool posing = HasPose(Current);
             _weight = Mathf.MoveTowards(_weight, posing ? 1f : 0f, Time.deltaTime / poseBlendTime);
+            ScaleAnimatorSpeed(_posed == Stance.Dash ? _weight : 0f);
             if (_weight <= 0f)
                 return;
             float w = Mathf.SmoothStep(0f, 1f, _weight);
@@ -207,6 +241,15 @@ namespace RyanAssets.Characters.Shared {
                     TwoBoneIK(upper, lower, hand, shoulder + (right * side * 0.9f + up * 0.35f + forward * 0.2f) * height * 0.28f, -up, w);
                     break;
                 }
+                case Stance.WallSlide:
+                    PoseWallSlide(up, right, forward, height, w);
+                    break;
+                case Stance.WallKick:
+                    PoseWallKick(up, right, forward, height, w);
+                    break;
+                case Stance.Dash:
+                    PoseDash(up, right, height, w);
+                    break;
                 case Stance.Roll: {
                     // Tuck into a ball (knees to chest, head down), drop it to the floor and tumble once
                     // forward about its centre, then unfold.
@@ -229,6 +272,79 @@ namespace RyanAssets.Characters.Shared {
                     break;
                 }
             }
+        }
+
+        // ------------------------------------------------------------------ wall slide, wall kick, dash
+        /// <summary>Hands pressed to the wall in front, knees bent and one foot planted on it: clinging on while sliding down.</summary>
+        private void PoseWallSlide(Vector3 up, Vector3 right, Vector3 forward, float height, float w) {
+            float scrub = Mathf.Sin(Elapsed * wallScrubRate * Mathf.PI * 2f) * wallScrub * height;
+            float shoulder = Vector3.Distance(_leftUpperArm.position, _rightUpperArm.position) * 0.75f;
+            Vector3 grip = transform.position + up * (height * wallGripHeight) + forward * (HalfDepth() + 0.08f);
+            // The hands trade places on the wall: one rubs up while the other rubs down.
+            Reach(grip - right * shoulder + up * scrub, grip + right * shoulder - up * scrub, forward, w);
+            Bend(_hips, right, wallLean * w);
+            Bend(_neck, right, -wallLean * 0.6f * w);
+            Bend(_leftUpperLeg, right, -wallPlantedThigh * w);
+            Bend(_leftLowerLeg, right, wallPlantedShin * w);
+            Bend(_rightUpperLeg, right, -wallFreeThigh * w);
+            Bend(_rightLowerLeg, right, wallFreeShin * w);
+        }
+
+        /// <summary>
+        /// Push off the wall: crouch into it for the first moments, then spring away and somersault (or just
+        /// turn), arms flung out, landing the pose ready to run in the new direction.
+        /// </summary>
+        private void PoseWallKick(Vector3 up, Vector3 right, Vector3 forward, float height, float w) {
+            float t = Mathf.Clamp01(Elapsed / wallKickTime);
+            float crouch = Mathf.SmoothStep(0f, 1f, t / 0.18f) * (1f - Mathf.SmoothStep(0f, 1f, (t - 0.18f) / 0.12f));
+            float tuck = Mathf.SmoothStep(0f, 1f, (t - 0.2f) / 0.2f) * (1f - Mathf.SmoothStep(0f, 1f, (t - 0.65f) / 0.3f));
+            float spread = Mathf.SmoothStep(0f, 1f, (t - 0.12f) / 0.15f) * (1f - Mathf.SmoothStep(0f, 1f, (t - 0.7f) / 0.3f));
+            Bend(_leftUpperLeg, right, (-70f * crouch - 90f * tuck) * w);
+            Bend(_rightUpperLeg, right, (-60f * crouch - 80f * tuck) * w);
+            Bend(_leftLowerLeg, right, (95f * crouch + 130f * tuck) * w);
+            Bend(_rightLowerLeg, right, (90f * crouch + 120f * tuck) * w);
+            Bend(_spine, right, (20f * crouch + 25f * tuck) * w);
+            Bend(_leftUpperArm, forward, -70f * spread * w);
+            Bend(_rightUpperArm, forward, 70f * spread * w);
+            if (wallKickFlip <= 0f)
+                return;
+            float flip = Mathf.SmoothStep(0f, 1f, (t - 0.15f) / 0.7f);
+            Vector3 pivot = _hips.position + up * (height * 0.05f);
+            Quaternion spin = Quaternion.AngleAxis(wallKickFlip * flip * w, right);
+            _hips.SetPositionAndRotation(pivot + spin * (_hips.position - pivot), spin * _hips.rotation);
+        }
+
+        /// <summary>Sonic-style run: low forward lean, head up, arms swept straight back, legs kept under the body.</summary>
+        private void PoseDash(Vector3 up, Vector3 right, float height, float w) {
+            _hips.position -= up * (height * dashDrop * w);
+            Bend(_hips, right, dashLean * w);
+            Bend(_chest != null ? _chest : _spine, right, dashLean * 0.2f * w);
+            Bend(_neck, right, -dashLean * 0.75f * w);
+            // The hips lean the legs back with them; swing them forward again so the feet still land under the body.
+            Bend(_leftUpperLeg, right, -dashLean * 0.7f * w);
+            Bend(_rightUpperLeg, right, -dashLean * 0.7f * w);
+            Bend(_leftUpperArm, right, dashArmSweep * w);
+            Bend(_rightUpperArm, right, dashArmSweep * w);
+            Bend(_leftLowerArm, right, dashForearmBend * w);
+            Bend(_rightLowerArm, right, dashForearmBend * w);
+        }
+
+        /// <summary>Speeds the animator up by up to <see cref="dashAnimatorSpeed"/> (<paramref name="amount"/> 0..1) and gives the original speed back at 0.</summary>
+        private void ScaleAnimatorSpeed(float amount) {
+            if (_animator == null)
+                return;
+            if (amount <= 0f) {
+                if (_animatorSpeedScaled) {
+                    _animator.speed = _baseAnimatorSpeed;
+                    _animatorSpeedScaled = false;
+                }
+                return;
+            }
+            if (!_animatorSpeedScaled) {
+                _baseAnimatorSpeed = _animator.speed;
+                _animatorSpeedScaled = true;
+            }
+            _animator.speed = Mathf.Lerp(_baseAnimatorSpeed, _baseAnimatorSpeed * dashAnimatorSpeed, Mathf.SmoothStep(0f, 1f, amount));
         }
 
         /// <summary>Character height in metres, from the main collider (or the animator's scale).</summary>

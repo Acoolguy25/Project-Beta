@@ -37,7 +37,7 @@ RenderSettings:
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 405780051}
+  m_Sun: {fileID: 1980209964}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &405780050
+--- !u!1 &73714884
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,102 +127,36 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 405780052}
-  - component: {fileID: 405780051}
+  - component: {fileID: 73714885}
   m_Layer: 0
-  m_Name: Sun
+  m_Name: CourseStart
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!108 &405780051
-Light:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405780050}
-  m_Enabled: 1
-  serializedVersion: 13
-  m_Type: 1
-  m_Color: {r: 1, g: 0.94509804, b: 0.8392157, a: 1}
-  m_Intensity: 1.2
-  m_Range: 10
-  m_SpotAngle: 30
-  m_InnerSpotAngle: 21.80208
-  m_CookieSize2D: {x: 0.5, y: 0.5}
-  m_Shadows:
-    m_Type: 2
-    m_Resolution: -1
-    m_CustomResolution: -1
-    m_Strength: 0.75
-    m_Bias: 0.05
-    m_NormalBias: 0.4
-    m_NearPlane: 0.2
-    m_CullingMatrixOverride:
-      e00: 1
-      e01: 0
-      e02: 0
-      e03: 0
-      e10: 0
-      e11: 1
-      e12: 0
-      e13: 0
-      e20: 0
-      e21: 0
-      e22: 1
-      e23: 0
-      e30: 0
-      e31: 0
-      e32: 0
-      e33: 1
-    m_UseCullingMatrixOverride: 0
-  m_Cookie: {fileID: 0}
-  m_DrawHalo: 0
-  m_Flare: {fileID: 0}
-  m_RenderMode: 0
-  m_CullingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RenderingLayerMask: 1
-  m_Lightmapping: 4
-  m_LightShadowCasterMode: 0
-  m_AreaSize: {x: 1, y: 1}
-  m_BounceIntensity: 1
-  m_ColorTemperature: 6570
-  m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
-  m_UseBoundingSphereOverride: 0
-  m_UseViewFrustumForShadowCasterCull: 1
-  m_ForceVisible: 0
-  m_ShapeRadius: 0.025
-  m_ShadowAngle: 0
-  m_LightUnit: 1
-  m_LuxAtDistance: 1
-  m_EnableSpotReflector: 1
---- !u!4 &405780052
+--- !u!4 &73714885
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 405780050}
+  m_GameObject: {fileID: 73714884}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.34178162, y: -0.28073305, z: 0.10776333, w: 0.8903715}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 100, z: 9}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 170803038}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &560953543
+--- !u!1001 &151093709
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Modification:
     serializedVersion: 3
-    m_TransformParent: {fileID: 855450042}
+    m_TransformParent: {fileID: 170803038}
     m_Modifications:
     - target: {fileID: 4598517209392122553, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
       propertyPath: m_Name
@@ -285,17 +219,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
---- !u!1 &560953544 stripped
+--- !u!1 &151093710 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4598517209392122553, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
-  m_PrefabInstance: {fileID: 560953543}
+  m_PrefabInstance: {fileID: 151093709}
   m_PrefabAsset: {fileID: 0}
---- !u!4 &560953545 stripped
+--- !u!4 &151093711 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8039996867337958508, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
-  m_PrefabInstance: {fileID: 560953543}
+  m_PrefabInstance: {fileID: 151093709}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &855450040
+--- !u!1 &170803036
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -303,8 +237,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 855450042}
-  - component: {fileID: 855450041}
+  - component: {fileID: 170803038}
+  - component: {fileID: 170803037}
   m_Layer: 0
   m_Name: Course
   m_TagString: Untagged
@@ -312,13 +246,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &855450041
+--- !u!114 &170803037
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 855450040}
+  m_GameObject: {fileID: 170803036}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a1ee9dc91a2ffd74a9572562129563bf, type: 3}
@@ -330,14 +264,13 @@ MonoBehaviour:
     gravity: 30
     airMomentumDamping: 0.6
     bodyHeight: 5.6
-    sprintSpeed: 15
+    sprintSpeed: 19
     launchProtection: 0.2
     slipAcceleration: 60
-  sprintSpeed: 15
+  sprintSpeed: 19
   rules:
     tiers:
     - segments: {x: 2, y: 2}
-      reachSpeed: 0
       gapFraction: {x: 0.42, y: 0.6}
       riseFraction: 0.55
       platformSize: {x: 3, y: 3.8}
@@ -345,9 +278,9 @@ MonoBehaviour:
       mixChance: 0
       restBetweenSegments: 1
       proGapFraction: 0.72
-      introduces: 00010314150907y
+      introduces: 000103141509071b20y
+      proHops: 1
     - segments: {x: 2, y: 3}
-      reachSpeed: 0.1
       gapFraction: {x: 0.5, y: 0.68}
       riseFraction: 0.62
       platformSize: {x: 2.6, y: 3.3}
@@ -355,20 +288,20 @@ MonoBehaviour:
       mixChance: 0.1
       restBetweenSegments: 1
       proGapFraction: 0.78
-      introduces: 040506020a0d13120by
+      introduces: 040506020a0d13120b1c1dy
+      proHops: 1
     - segments: {x: 3, y: 3}
-      reachSpeed: 0.3
-      gapFraction: {x: 0.55, y: 0.74}
+      gapFraction: {x: 0.58, y: 0.76}
       riseFraction: 0.68
       platformSize: {x: 2.2, y: 2.8}
       beamWidth: 1.2
       mixChance: 0.25
       restBetweenSegments: 1
       proGapFraction: 0.82
-      introduces: 080e10110c1719y
+      introduces: 080e10110c17191f1ey
+      proHops: 1
     - segments: {x: 3, y: 4}
-      reachSpeed: 0.5
-      gapFraction: {x: 0.6, y: 0.8}
+      gapFraction: {x: 0.66, y: 0.84}
       riseFraction: 0.72
       platformSize: {x: 1.8, y: 2.4}
       beamWidth: 1
@@ -376,9 +309,9 @@ MonoBehaviour:
       restBetweenSegments: 0
       proGapFraction: 0.86
       introduces: 0f161ay
+      proHops: 2
     - segments: {x: 4, y: 4}
-      reachSpeed: 0.65
-      gapFraction: {x: 0.66, y: 0.87}
+      gapFraction: {x: 0.72, y: 0.89}
       riseFraction: 0.76
       platformSize: {x: 1.5, y: 2}
       beamWidth: 0.8
@@ -386,9 +319,9 @@ MonoBehaviour:
       restBetweenSegments: 0
       proGapFraction: 0.9
       introduces: 18y
+      proHops: 2
     - segments: {x: 4, y: 4}
-      reachSpeed: 0.8
-      gapFraction: {x: 0.72, y: 0.93}
+      gapFraction: {x: 0.78, y: 0.93}
       riseFraction: 0.8
       platformSize: {x: 1.3, y: 1.7}
       beamWidth: 0.65
@@ -396,6 +329,7 @@ MonoBehaviour:
       restBetweenSegments: 0
       proGapFraction: 0.96
       introduces: 
+      proHops: 2
     starsPerTier: 3
     physicalGapCeiling: 0.92
     physicalRiseCeiling: 0.85
@@ -548,6 +482,9 @@ MonoBehaviour:
           hard: 4.5
         pad: {x: 5, y: 6}
         cannonBack: 1.5
+        airControl: 0.3
+        flightMargin: 0.4
+        landingSlack: 1
         rise: {x: -2, y: 3}
         islandExtra: 4
         parExtra: 1.2
@@ -655,6 +592,148 @@ MonoBehaviour:
         strip:
           easy: 1.4
           hard: 3
+      lifts:
+        lifts:
+          easy: 1
+          hard: 3
+        travel:
+          easy: 5
+          hard: 12
+        speed:
+          easy: 2.2
+          hard: 3.6
+        size:
+          easy: 3.6
+          hard: 2.6
+        boardGap:
+          easy: 0.6
+          hard: 2
+        exitGap:
+          easy: 0.8
+          hard: 2.4
+        ledge: {x: 5, y: 5}
+        thickness: 0.6
+        parShare: 1
+      ghosts:
+        blocks:
+          easy: 5
+          hard: 9
+        size:
+          easy: 2.8
+          hard: 1.9
+        window:
+          easy: 2.8
+          hard: 2.1
+        overlap:
+          easy: 1.5
+          hard: 1
+        period:
+          easy: 5
+          hard: 4
+        riseShare: {x: -0.2, y: 0.5}
+        jink: 1.5
+        tension: -0.15
+        thickness: 0.8
+        parShare: 0.5
+      honey:
+        sheets:
+          easy: 2
+          hard: 4
+        width:
+          easy: 5
+          hard: 3.2
+        length:
+          easy: 6
+          hard: 11
+        keep:
+          easy: 0.6
+          hard: 0.42
+        riseShare: {x: -0.2, y: 0.3}
+        jink: 1.5
+        tension: -0.1
+        thickness: 0.8
+        recoveryRun: 4
+        recoveryWidth: 4
+        reach: 1.8
+        parShare: 1
+      rings:
+        rings:
+          easy: 2
+          hard: 4
+        launch:
+          easy: 14
+          hard: 17
+        flight: {x: 1, y: 1.35}
+        rise: {x: -2.5, y: 2}
+        lateral:
+          easy: 1
+          hard: 4
+        size:
+          easy: 7.5
+          hard: 5.5
+        depth: 1.2
+        catchAbove: 9
+        airControl: 0.5
+        flightMargin: 0.4
+        firstAhead: 0.8
+        firstHeight: 1.2
+        islandDepth:
+          easy: 11
+          hard: 8
+        islandWidth:
+          easy: 8
+          hard: 6
+        islandRise: {x: -4, y: -2}
+        parPerRing: 0.4
+      swings:
+        swings:
+          easy: 1
+          hard: 3
+        rope:
+          easy: 7
+          hard: 9
+        amplitude:
+          easy: 32
+          hard: 42
+        period:
+          easy: 4.4
+          hard: 3.2
+        width:
+          easy: 4.2
+          hard: 3
+        depth:
+          easy: 3.6
+          hard: 2.8
+        boardGap:
+          easy: 1
+          hard: 2.6
+        exitGap:
+          easy: 1.2
+          hard: 3
+        ledge: {x: 5, y: 5}
+        thickness: 0.6
+        parShare: 0.6
+      rope:
+        planks:
+          easy: 8
+          hard: 14
+        width:
+          easy: 4.2
+          hard: 2.4
+        depth:
+          easy: 1.8
+          hard: 1.4
+        gap:
+          easy: 0.3
+          hard: 1.4
+        fuse:
+          easy: 1.4
+          hard: 0.8
+        regrow: 3
+        sway: 0.7
+        bob: 0.25
+        thickness: 0.35
+        parFactor: 1
       crumbleMix:
         fuse:
           easy: 0.8
@@ -821,6 +900,7 @@ MonoBehaviour:
         speed:
           easy: 70
           hard: 220
+        rhythmSlack: 0.1
         parPerArena: 1.8
         arenaTensionScale: 0.7
       lavaRun:
@@ -864,6 +944,11 @@ MonoBehaviour:
           easy: 7
           hard: 6
         parExtra: 1.5
+        guardInset: 0
+        guardDepth: 6
+        guardHeight: 9
+        guardOverhang: 2.5
+        flipHoldSeconds: 25
       wallWalk:
         wallGapShare: 0.35
         bottom: -1.5
@@ -920,10 +1005,12 @@ MonoBehaviour:
         orbJumpShare: 0.55
       entryTension: -0.2
       restTension: -0.3
+    requiredGapCeiling: 0.95
+    proDashShare: 0.7
     crumbleCrossMargin: 0.3
-  lobbySpawn: {fileID: 1121736591}
-  courseStart: {fileID: 1762748296}
-  startGate: {fileID: 560953544}
+  lobbySpawn: {fileID: 1930261359}
+  courseStart: {fileID: 73714885}
+  startGate: {fileID: 151093710}
   platform: {fileID: 3870345185510741857, guid: b85ffaca80095b41cb876bf60a6cdccb, type: 3}
   checkpointPad: {fileID: 8634422729409926794, guid: ad1018e48a796ef96b13fed5065db883, type: 3}
   finishPad: {fileID: 573235629339966414, guid: d55fea2a96fa14a4eb9992746579e482, type: 3}
@@ -956,6 +1043,11 @@ MonoBehaviour:
   star: {fileID: 5959399019636995541, guid: 21505c9dc42531ba984bf15919e1792d, type: 3}
   ice: {fileID: 3872621395260548843, guid: 703ccf71eb294753daace791b6e40955, type: 3}
   wind: {fileID: 6803729999735895655, guid: 2ddbbebdfacf0bfacba536bfe26637aa, type: 3}
+  ghost: {fileID: 6331880072909905444, guid: 64d86f6468c21bb9fb55e924a414963a, type: 3}
+  honey: {fileID: 3409892698583429460, guid: 0db1c83de38549288badf1525fba0dfa, type: 3}
+  ring: {fileID: 2074448117427515559, guid: 5c9af849e47e73c8ab56590d9a0e7e2e, type: 3}
+  swing: {fileID: 5130202405089045823, guid: 1bddb1d68cc4c7ca481d0f6f54b2b878, type: 3}
+  plank: {fileID: 1512211593229464995, guid: 3f93c767904757125aab1a93ad6a8713, type: 3}
   tierPlatforms:
   - materials:
     - {fileID: 2100000, guid: 9d615713eadabffc3a2fce18d4d45e50, type: 2}
@@ -986,25 +1078,25 @@ MonoBehaviour:
   tileMetres: 2
   directionalFieldTint: {r: 0.3, g: 0.85, b: 1, a: 0.09}
   clientPrefab: {fileID: 2049112302594447213, guid: 546f354047fda669fbdfd0a4d9312c3e, type: 3}
---- !u!4 &855450042
+--- !u!4 &170803038
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 855450040}
+  m_GameObject: {fileID: 170803036}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1121736591}
-  - {fileID: 1762748296}
-  - {fileID: 560953545}
+  - {fileID: 1930261359}
+  - {fileID: 73714885}
+  - {fileID: 151093711}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &1094536032
+--- !u!1001 &1674746247
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -1064,7 +1156,7 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 0}
   m_SourcePrefab: {fileID: 100100000, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
---- !u!1 &1121736590
+--- !u!1 &1930261358
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1072,7 +1164,7 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1121736591}
+  - component: {fileID: 1930261359}
   m_Layer: 0
   m_Name: LobbySpawn
   m_TagString: Untagged
@@ -1080,22 +1172,22 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &1121736591
+--- !u!4 &1930261359
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1121736590}
+  m_GameObject: {fileID: 1930261358}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 100, z: -3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 855450042}
+  m_Father: {fileID: 170803038}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1762748295
+--- !u!1 &1980209963
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1103,33 +1195,99 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1762748296}
+  - component: {fileID: 1980209965}
+  - component: {fileID: 1980209964}
   m_Layer: 0
-  m_Name: CourseStart
+  m_Name: Sun
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &1762748296
+--- !u!108 &1980209964
+Light:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1980209963}
+  m_Enabled: 1
+  serializedVersion: 13
+  m_Type: 1
+  m_Color: {r: 1, g: 0.94509804, b: 0.8392157, a: 1}
+  m_Intensity: 1.2
+  m_Range: 10
+  m_SpotAngle: 30
+  m_InnerSpotAngle: 21.80208
+  m_CookieSize2D: {x: 0.5, y: 0.5}
+  m_Shadows:
+    m_Type: 2
+    m_Resolution: -1
+    m_CustomResolution: -1
+    m_Strength: 0.75
+    m_Bias: 0.05
+    m_NormalBias: 0.4
+    m_NearPlane: 0.2
+    m_CullingMatrixOverride:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    m_UseCullingMatrixOverride: 0
+  m_Cookie: {fileID: 0}
+  m_DrawHalo: 0
+  m_Flare: {fileID: 0}
+  m_RenderMode: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingLayerMask: 1
+  m_Lightmapping: 4
+  m_LightShadowCasterMode: 0
+  m_AreaSize: {x: 1, y: 1}
+  m_BounceIntensity: 1
+  m_ColorTemperature: 6570
+  m_UseColorTemperature: 0
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_UseBoundingSphereOverride: 0
+  m_UseViewFrustumForShadowCasterCull: 1
+  m_ForceVisible: 0
+  m_ShapeRadius: 0.025
+  m_ShadowAngle: 0
+  m_LightUnit: 1
+  m_LuxAtDistance: 1
+  m_EnableSpotReflector: 1
+--- !u!4 &1980209965
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1762748295}
+  m_GameObject: {fileID: 1980209963}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 100, z: 9}
+  m_LocalRotation: {x: 0.34178162, y: -0.28073305, z: 0.10776333, w: 0.8903715}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 855450042}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 405780052}
-  - {fileID: 855450042}
-  - {fileID: 1094536032}
+  - {fileID: 1980209965}
+  - {fileID: 170803038}
+  - {fileID: 1674746247}

@@ -5,28 +5,29 @@ using UnityEngine.UI;
 
 namespace Universes.UniverseData.obby.Client {
     /// <summary>
-    /// The obby's stamina meter: a labelled bar at the bottom centre of the HUD that shows while stamina is
-    /// spent, turns warning red once there is not enough left for a jump, and fades out a moment after it
-    /// refills. Sprinting and jumping both spend stamina, so it gates every hop and needs to be read at a
-    /// glance. While it is on screen the kit's own thin full-width stamina strip is hidden (and shown again
-    /// when the obby HUD goes away), so the two never show at once.
+    /// The obby's dash meter: a labelled charge bar low in the HUD that shows while the dash is spent or
+    /// recharging, reads "DASH" in gold once a burst can start, drains while one runs, shows "RECHARGING" while
+    /// it refills (only on solid ground, after a short pause), flashes when a dash is refused, and fades out a
+    /// moment after it is full again. It reads <see cref="CharacterDash.Local"/>. While it is on screen the
+    /// kit's own thin stamina strip is hidden (and shown again when the obby HUD goes away). The class keeps
+    /// its old name because the client prefab refers to it.
     /// </summary>
     public sealed class OB_StaminaMeter : MonoBehaviour {
         [Tooltip("Fades the whole meter.")]
         public CanvasGroup group;
-        [Tooltip("Fill of the bar: its right anchor follows the stamina fraction.")]
+        [Tooltip("Fill of the bar: its right anchor follows the charge.")]
         public RectTransform fill;
         [Tooltip("Coloured image of the fill.")]
         public Image fillImage;
-        [Tooltip("The STAMINA caption; it says OUT OF STAMINA while a jump cannot be paid.")]
+        [Tooltip("The caption: DASH when a burst can start, RECHARGING while it cannot.")]
         public TMP_Text label;
-        public Color fullColor = new(1f, 0.79f, 0.25f);
+        public Color readyColor = new(1f, 0.79f, 0.25f);
+        [Tooltip("Colour while charging below the level a burst needs, and while a refused dash flashes.")]
         public Color lowColor = new(1f, 0.3f, 0.18f);
-        [Tooltip("Stamina a jump costs (the character controller's jump cost); below it the meter warns.")]
-        [Min(0f)] public float jumpCost = 5f;
-        [Tooltip("Fraction of the pool under which the bar starts shifting toward the warning colour.")]
-        [Range(0f, 1f)] public float lowFraction = 0.3f;
-        [Tooltip("Seconds the meter stays after stamina is full again.")]
+        public string readyText = "DASH", chargingText = "RECHARGING";
+        [Tooltip("Seconds a refused dash flashes the meter.")]
+        [Min(0f)] public float deniedFlashSeconds = 0.35f;
+        [Tooltip("Seconds the meter stays after the dash is fully charged again.")]
         [Min(0f)] public float fullHoldSeconds = 1f;
         [Tooltip("Seconds the meter takes to fade in or out.")]
         [Min(0.01f)] public float fadeSeconds = 0.3f;
@@ -35,45 +36,60 @@ namespace Universes.UniverseData.obby.Client {
 
         Canvas kitStrip;
         bool kitStripWasEnabled;
-        float fullSince = float.NegativeInfinity, nextFind;
-        bool warned;
+        float fullSince = float.NegativeInfinity, nextFind, deniedUntil = float.NegativeInfinity;
+        DashState shownState = (DashState)(-1);
+        CharacterDash watched;
 
         void OnEnable() {
             if (group != null) group.alpha = 0f;
             nextFind = 0f;
-            warned = false;
-            if (label != null) label.text = "STAMINA";
+            shownState = (DashState)(-1);
         }
 
-        void OnDisable() => RestoreKitStrip();
+        void OnDisable() {
+            Unwatch();
+            RestoreKitStrip();
+        }
+
+        void Watch(CharacterDash dash) {
+            Unwatch();
+            watched = dash;
+            if (watched != null) watched.Denied += OnDenied;
+        }
+
+        void Unwatch() {
+            if (watched != null) watched.Denied -= OnDenied;
+            watched = null;
+        }
+
+        void OnDenied() => deniedUntil = Time.unscaledTime + deniedFlashSeconds;
 
         void Update() {
             HideKitStrip();
-            if (!StaminaController.StaminaLoaded || !StaminaController.StaminaEnabled || LocalPlayer.Character == null || LocalPlayer.Character.IsDead) {
+            CharacterDash dash = CharacterDash.Local;
+            if (!ReferenceEquals(dash, watched)) Watch(dash);
+            if (dash == null || !dash.Enabled || LocalPlayer.Character == null || LocalPlayer.Character.IsDead) {
                 Fade(0f);
                 return;
             }
-            float max = StaminaController.MaxStamina;
-            float stamina = StaminaController.Stamina;
-            float fraction = Mathf.Clamp01(stamina / max);
+            float charge = dash.Charge01;
             if (fill != null) {
                 var anchor = fill.anchorMax;
-                anchor.x = fraction;
+                anchor.x = charge;
                 fill.anchorMax = anchor;
             }
-            bool low = stamina < jumpCost;
-            if (fillImage != null) {
-                float warn = low ? 1f : lowFraction > 0f ? Mathf.Clamp01(1f - fraction / lowFraction) : 0f;
-                fillImage.color = Color.Lerp(fullColor, lowColor, warn);
+            DashState state = dash.State;
+            bool denied = Time.unscaledTime < deniedUntil;
+            if (fillImage != null) fillImage.color = denied || state == DashState.Recharging ? Color.Lerp(readyColor, lowColor, denied ? 1f : 0.6f) : readyColor;
+            if (label != null && state != shownState) {
+                shownState = state;
+                label.text = state == DashState.Recharging ? chargingText : readyText;
+                label.color = state == DashState.Recharging ? lowColor : Color.white;
             }
-            if (label != null && low != warned) {
-                warned = low;
-                label.text = low ? "OUT OF STAMINA" : "STAMINA";
-                label.color = low ? lowColor : Color.white;
-            }
-            if (stamina < max) fullSince = float.PositiveInfinity;
+            bool full = dash.Charge01 >= 1f && !dash.IsDashing;
+            if (!full) fullSince = float.PositiveInfinity;
             else if (float.IsPositiveInfinity(fullSince)) fullSince = Time.unscaledTime;
-            Fade(Time.unscaledTime - fullSince < fullHoldSeconds ? 1f : 0f);
+            Fade(Time.unscaledTime - fullSince < fullHoldSeconds || denied ? 1f : 0f);
         }
 
         void Fade(float target) {

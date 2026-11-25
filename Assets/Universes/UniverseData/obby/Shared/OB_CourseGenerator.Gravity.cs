@@ -19,12 +19,38 @@ namespace Universes.UniverseData.obby {
             Step(approach, new Vector2(halfWidth * 2f, GravityFieldStart + 1f));
         }
 
+        /// <summary>
+        /// Adds an out-of-bounds box over the local box <paramref name="min"/>..<paramref name="max"/>: the far
+        /// side of a gravity wall or the top of a ceiling, which the slab leaves solid and reachable. The
+        /// server sends back a racer whose middle gets inside (see <see cref="OB_StageEnvelope"/>).
+        /// </summary>
+        void Guard(Vector3 min, Vector3 max) => Add(new OB_Piece {
+            kind = OB_PieceKind.OutOfBounds, position = World((min + max) * 0.5f), yaw = yaw, size = max - min
+        });
+
+        /// <summary>Guard above a ceiling slab whose underside is at <paramref name="underside"/> (local y), spanning x and z.</summary>
+        void GuardAboveCeiling(float underside, float thickness, float minX, float maxX, float minZ, float maxZ) {
+            var g = GravityTune;
+            Guard(new Vector3(minX - g.guardOverhang, underside + g.guardInset, minZ - g.guardOverhang),
+                new Vector3(maxX + g.guardOverhang, underside + thickness + g.guardHeight, maxZ + g.guardOverhang));
+        }
+
+        /// <summary>Guard behind a wall slab (at x = <paramref name="face"/> to <paramref name="face"/> + side * thickness), spanning y and z.</summary>
+        void GuardBehindWall(float face, float side, float thickness, float minY, float maxY, float minZ, float maxZ) {
+            var g = GravityTune;
+            float a = face + side * g.guardInset, b = face + side * (thickness + g.guardDepth);
+            Guard(new Vector3(Mathf.Min(a, b), minY, minZ - g.guardOverhang), new Vector3(Mathf.Max(a, b), maxY + g.guardHeight, maxZ + g.guardOverhang));
+        }
+
         void WallSegment(float x, float top, float height, float thickness, float fromZ, float toZ) {
             if (toZ - fromZ < 0.01f) return;
             Box(OB_PieceKind.Platform, new Vector3(x, top, (fromZ + toZ) * 0.5f), new Vector3(thickness, height, toZ - fromZ), standable: false);
         }
 
-        /// <summary>Forward drift (m) while falling <paramref name="distance"/> at a sprint (players hold sprint).</summary>
+        /// <summary>
+        /// Forward drift (m) while falling <paramref name="distance"/> at the dash's top speed: the worst case. Required routes are walk-speed
+        /// (a walker drifts about half as far), so a landing sized with this has at least twice the room a walker needs.
+        /// </summary>
         float FallDrift(float distance) => m.sprintSpeed * Mathf.Sqrt(2f * Mathf.Max(0f, distance) / m.gravity);
 
         /// <summary>
@@ -74,6 +100,7 @@ namespace Universes.UniverseData.obby {
             float coinZ = obstacles > 1 ? first + spacing * 0.5f : first + t.coinAfter;
             Coin(new Vector3(face - side * CoinLift, top - t.coinBelowTop, coinZ));
 
+            GuardBehindWall(face, side, thickness, bottom - 1f, top, GravityFieldStart, wallEnd);
             float fieldEnd = wallEnd - overrun;
             float near = -side * halfWidth;
             Field(new Vector3(Mathf.Min(near, face), bottom + 0.5f, GravityFieldStart),
@@ -114,6 +141,7 @@ namespace Universes.UniverseData.obby {
             float fieldEnd = first + (patches - 1) * spacing + g.tail.At(d), end = fieldEnd + overrun;
             Box(OB_PieceKind.Platform, new Vector3(0f, height + thickness, (start + end) * 0.5f),
                 new Vector3(halfWidth * 2f, thickness, end - start), standable: false);
+            GuardAboveCeiling(height, thickness, -halfWidth, halfWidth, start, end);
             Coin(new Vector3(0f, height - CoinLift, fieldEnd - t.coinBeforeEnd)); // past the last patch, still under the ceiling
             Field(new Vector3(-halfWidth, -1f, GravityFieldStart), new Vector3(halfWidth, height, fieldEnd), Vector3.up);
 
@@ -152,9 +180,11 @@ namespace Universes.UniverseData.obby {
                 Vector3 down = downs[s];
                 float zc = z + sectionLength * 0.5f;
                 if (down.y > 0f) {
+                    GuardAboveCeiling(y0 + half * 2f, thickness, cx - half, cx + half, z, z + sectionLength);
                     Box(OB_PieceKind.Platform, new Vector3(cx, y0 + half * 2f + thickness, zc), new Vector3(half * 2f, thickness, sectionLength), standable: false);
                     Coin(new Vector3(cx, y0 + half * 2f - CoinLift, zc));
                 } else {
+                    GuardBehindWall(cx + down.x * half, down.x, thickness, y0 - 1f, y0 + half * 2f, z, z + sectionLength);
                     Box(OB_PieceKind.Platform, new Vector3(cx + down.x * (half + thickness * 0.5f), y0 + half * 2f, zc),
                         new Vector3(thickness, half * 2f, sectionLength), standable: false);
                 }
@@ -212,6 +242,7 @@ namespace Universes.UniverseData.obby {
                 float end = Mathf.Max(lastPatchEnd + m.FlatJumpReach() + g.obstacleRoom, floorEnd + forcedGap + ceilingBack);
                 Box(OB_PieceKind.Platform, new Vector3(floor.x, y + height + thickness, (start + end) * 0.5f),
                     new Vector3(width, thickness, end - start), standable: false);
+                GuardAboveCeiling(y + height, thickness, floor.x - width * 0.5f, floor.x + width * 0.5f, start, end);
                 maxCeiling = Mathf.Max(maxCeiling, World(new Vector3(0f, y + height, 0f)).y);
                 if (c == 0) Coin(new Vector3(floor.x, y + height - CoinLift, (start + end) * 0.5f));
                 // The arrow back down, hanging under the far end of the ceiling.

@@ -238,16 +238,18 @@ namespace Universes.UniverseData.obby {
                 float rise = Range(t.rise.x, t.rise.y);
                 float flight = m.LandTime(rise, 1f, up);
                 float carry = m.Carry(forward, flight);
-                float offset = Range(-1f, 1f) * t.offset.At(d) * m.walkSpeed * flight * tier.gapFraction.y;
+                float offset = Range(-1f, 1f) * t.offset.At(d) * m.walkSpeed * t.airControl * flight * tier.gapFraction.y;
                 float target = t.target.At(d);
                 bool last = c == cannons - 1;
-                float islandDepth = last ? target : target + t.islandExtra;
-                Add(new OB_Piece { kind = OB_PieceKind.Cannon, position = World(cannon), yaw = yaw, vector = new Vector3(0f, up, forward) });
+                // Holding forward adds walk speed (kept to airControl) over the flight: the island spans the hands-off landing and that one.
+                float heldShift = m.walkSpeed * t.airControl * flight * 0.9f;
+                float islandDepth = Mathf.Max(last ? target : target + t.islandExtra, heldShift + 2f * t.landingSlack + 1f);
+                Add(new OB_Piece { kind = OB_PieceKind.Cannon, position = World(cannon), yaw = yaw, vector = new Vector3(0f, up, forward), speed = flight });
                 // The no-input landing is the island's near middle; reaching it means steering sideways by the offset.
-                var island = new Vector3(cannon.x + offset, cannon.y + rise, cannon.z + carry + (islandDepth - target) * 0.5f);
+                var island = new Vector3(cannon.x + offset, cannon.y + rise, cannon.z + carry + heldShift * 0.5f);
                 Platform(island, new Vector3(target, 1f, islandDepth));
                 Land(island, new Vector2(target, islandDepth));
-                CheckSteer(Mathf.Max(0f, Mathf.Abs(offset) - target * 0.25f), flight);
+                CheckSteer(Mathf.Max(0f, Mathf.Abs(offset) - target * 0.25f), flight, t.airControl);
                 // A coin at the top of the arc, for those who fly true first and steer late.
                 float apexTime = up / m.gravity;
                 Coin(new Vector3(cannon.x, cannon.y + m.Apex(1f, up), cannon.z + m.Carry(forward, apexTime)));

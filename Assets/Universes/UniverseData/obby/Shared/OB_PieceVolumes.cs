@@ -73,7 +73,7 @@ namespace Universes.UniverseData.obby {
                 case OB_PieceKind.Platform: case OB_PieceKind.CheckpointPad: case OB_PieceKind.Finish: case OB_PieceKind.Lava:
                 case OB_PieceKind.Conveyor: case OB_PieceKind.Crumble: case OB_PieceKind.Beat: case OB_PieceKind.WallJumpWall:
                 case OB_PieceKind.Beam: case OB_PieceKind.OnOffBlock: case OB_PieceKind.Laser:
-                case OB_PieceKind.RollingLog: case OB_PieceKind.Ice:
+                case OB_PieceKind.RollingLog: case OB_PieceKind.Ice: case OB_PieceKind.Ghost: case OB_PieceKind.Honey: case OB_PieceKind.Plank:
                     volume = new OB_Volume(piece.position, piece.size, piece.yaw);
                     return true;
                 case OB_PieceKind.Mover: {
@@ -111,6 +111,14 @@ namespace Universes.UniverseData.obby {
                     volume = new OB_Volume(piece.position + Vector3.down * (piece.vector.y * 0.5f),
                         piece.size + Vector3.up * piece.vector.y, piece.yaw);
                     return true;
+                case OB_PieceKind.Swing: {
+                    // Pivot above, platform hanging a rope's length below; it sweeps forward and back through the swing.
+                    float rope = piece.size.y, reach = rope * Mathf.Sin(Mathf.Min(90f, piece.vector.x) * Mathf.Deg2Rad);
+                    float height = rope + piece.vector.y;
+                    volume = new OB_Volume(piece.position + Vector3.down * (height * 0.5f),
+                        new Vector3(piece.size.x, height, 2f * reach + piece.size.z), piece.yaw);
+                    return true;
+                }
                 case OB_PieceKind.Turntable:
                     volume = new OB_Volume(piece.position + Vector3.up * ((TurntablePostHeight - piece.size.y) * 0.5f),
                         new Vector3(piece.size.x, TurntablePostHeight + piece.size.y, piece.size.z), piece.yaw);

@@ -11,8 +11,6 @@ namespace Universes.UniverseData.obby {
     public struct OB_TierRule {
         [Tooltip("Segments per stage (inclusive range).")]
         public Vector2Int segments;
-        [Tooltip("Speed jumps are designed around: 0 = walking, 1 = sprinting (Hard and up expect sprint jumps).")]
-        [Range(0f, 1f)] public float reachSpeed;
         [Tooltip("Gaps as a fraction of the jump's reach at that speed (easiest, hardest).")]
         public Vector2 gapFraction;
         [Tooltip("Highest step up, as a fraction of the jump height.")]
@@ -29,6 +27,8 @@ namespace Universes.UniverseData.obby {
         [Range(0.3f, 0.95f)] public float proGapFraction;
         [Tooltip("Mechanics this tier introduces; a tier can use its own and every earlier tier's.")]
         public OB_StageKind[] introduces;
+        [Tooltip("Platforms on the optional pro route to a star. Each hop of it asks for a dash (a dash is short and refills slowly), so few.")]
+        [Range(1, 3)] public int proHops;
     }
 
     /// <summary>
@@ -41,20 +41,24 @@ namespace Universes.UniverseData.obby {
         public OB_TierRule[] tiers = DefaultTiers();
         [Tooltip("Hidden stars per tier (Mario star-coin style), on optional pro routes.")]
         [Range(0, 5)] public int starsPerTier = 3;
-        [Tooltip("The tightest gap any jump may ask for, as a fraction of a sprint jump's reach (tests hold every course to it).")]
+        [Tooltip("The tightest gap any jump may ask for, as a fraction of a dash jump's reach (tests hold every course to it).")]
         [Range(0.5f, 0.95f)] public float physicalGapCeiling = 0.92f;
         [Tooltip("The highest step any jump may ask for, as a fraction of the jump height.")]
         [Range(0.5f, 0.95f)] public float physicalRiseCeiling = 0.85f;
         [Tooltip("Seconds of a stage's par added for each hop: reacting, taking off and landing.")]
         [Min(0f)] public float parPerHop = 0.35f;
         // Appended fields.
-        [Tooltip("Share of each landing surface's depth a clean run crosses before its next jump, timed at the tier's reach speed.")]
+        [Tooltip("Share of each landing surface's depth a clean run crosses before its next jump, timed at walk speed.")]
         [Range(0f, 1f)] public float parRunShare = 0.2f;
         [Tooltip("Share of a jump's real flight time counted in par when it is longer than the gap's run time (floaty and bouncing jumps).")]
         [Range(0f, 1f)] public float parFlightShare = 1f;
         [Tooltip("Shapes of the individual mechanics (counts, sizes, timings, thresholds).")]
         public OB_MechanicRules mechanics = new();
-        [Tooltip("A crumbling piece holds at least this many seconds longer than crossing its longest side at the tier's reach speed takes, so it can always be run across.")]
+        [Tooltip("Required jumps (everything off the pro routes) are fair at WALK speed: no gap may be wider than this fraction of a walking jump's reach. The dash is for pro routes and gold pace only.")]
+        [Range(0.5f, 0.98f)] public float requiredGapCeiling = 0.95f;
+        [Tooltip("Pro-route gaps are designed for this far from walk speed toward the dash speed (0 = walk, 1 = full dash), so each pro hop wants a dash.")]
+        [Range(0f, 1f)] public float proDashShare = 0.7f;
+        [Tooltip("A crumbling piece holds at least this many seconds longer than crossing its longest side at walk speed takes, so it can always be run across.")]
         [Min(0f)] public float crumbleCrossMargin = 0.3f;
 
         public static OB_CourseRules Default => new();
@@ -95,42 +99,44 @@ namespace Universes.UniverseData.obby {
         }
 
         /// <summary>
-        /// The shipped curve. Basic already asks for real jumps (about half a walking jump's reach); from
-        /// Hard on, long gaps need a sprint; Extreme asks for up to about 87% of a full sprint jump on
-        /// platforms barely wider than the robot, with no rest between segments.
+        /// The shipped curve. Every required jump is fair at walk speed (the dash is an optional skill tool):
+        /// Basic asks for about half a walking jump's reach, Extreme for up to 93% of it on platforms barely
+        /// wider than the robot, with no rest between segments. Difficulty also climbs through narrower
+        /// platforms, timing and mechanics; pro routes to stars are the places that want a dash.
         /// </summary>
         public static OB_TierRule[] DefaultTiers() => new[] {
             new OB_TierRule {
-                segments = new Vector2Int(2, 2), reachSpeed = 0f, gapFraction = new Vector2(0.42f, 0.6f), riseFraction = 0.55f,
-                platformSize = new Vector2(3f, 3.8f), beamWidth = 1.8f, mixChance = 0f, restBetweenSegments = true, proGapFraction = 0.72f,
+                segments = new Vector2Int(2, 2), gapFraction = new Vector2(0.42f, 0.6f), riseFraction = 0.55f,
+                platformSize = new Vector2(3f, 3.8f), beamWidth = 1.8f, mixChance = 0f, restBetweenSegments = true, proGapFraction = 0.72f, proHops = 1,
                 introduces = new[] { OB_StageKind.Hops, OB_StageKind.Springs, OB_StageKind.Conveyors, OB_StageKind.Mushrooms,
-                    OB_StageKind.BeamWalk, OB_StageKind.LavaRun, OB_StageKind.Movers }
+                    OB_StageKind.BeamWalk, OB_StageKind.LavaRun, OB_StageKind.Movers, OB_StageKind.LiftShaft, OB_StageKind.RopeBridge }
             },
             new OB_TierRule {
-                segments = new Vector2Int(2, 3), reachSpeed = 0.1f, gapFraction = new Vector2(0.5f, 0.68f), riseFraction = 0.62f,
-                platformSize = new Vector2(2.6f, 3.3f), beamWidth = 1.5f, mixChance = 0.1f, restBetweenSegments = true, proGapFraction = 0.78f,
+                segments = new Vector2Int(2, 3), gapFraction = new Vector2(0.5f, 0.68f), riseFraction = 0.62f,
+                platformSize = new Vector2(2.6f, 3.3f), beamWidth = 1.5f, mixChance = 0.1f, restBetweenSegments = true, proGapFraction = 0.78f, proHops = 1,
                 introduces = new[] { OB_StageKind.Crumble, OB_StageKind.Beat, OB_StageKind.WallJump, OB_StageKind.MoonLeap,
-                    OB_StageKind.Boost, OB_StageKind.OnOff, OB_StageKind.Cannons, OB_StageKind.Turntables, OB_StageKind.WallWalk }
+                    OB_StageKind.Boost, OB_StageKind.OnOff, OB_StageKind.Cannons, OB_StageKind.Turntables, OB_StageKind.WallWalk,
+                    OB_StageKind.GhostPath, OB_StageKind.HoneySwamp }
             },
             new OB_TierRule {
-                segments = new Vector2Int(3, 3), reachSpeed = 0.3f, gapFraction = new Vector2(0.55f, 0.74f), riseFraction = 0.68f,
-                platformSize = new Vector2(2.2f, 2.8f), beamWidth = 1.2f, mixChance = 0.25f, restBetweenSegments = true, proGapFraction = 0.82f,
+                segments = new Vector2Int(3, 3), gapFraction = new Vector2(0.58f, 0.76f), riseFraction = 0.68f,
+                platformSize = new Vector2(2.2f, 2.8f), beamWidth = 1.2f, mixChance = 0.25f, restBetweenSegments = true, proGapFraction = 0.82f, proHops = 1,
                 introduces = new[] { OB_StageKind.Spinner, OB_StageKind.Hammers, OB_StageKind.Lasers, OB_StageKind.LogRoll,
-                    OB_StageKind.CeilingRun, OB_StageKind.GravityFlip, OB_StageKind.WindGaps }
+                    OB_StageKind.CeilingRun, OB_StageKind.GravityFlip, OB_StageKind.WindGaps, OB_StageKind.Swings, OB_StageKind.BoostRings }
             },
             new OB_TierRule {
-                segments = new Vector2Int(3, 4), reachSpeed = 0.5f, gapFraction = new Vector2(0.6f, 0.8f), riseFraction = 0.72f,
-                platformSize = new Vector2(1.8f, 2.4f), beamWidth = 1f, mixChance = 0.45f, restBetweenSegments = false, proGapFraction = 0.86f,
+                segments = new Vector2Int(3, 4), gapFraction = new Vector2(0.66f, 0.84f), riseFraction = 0.72f,
+                platformSize = new Vector2(1.8f, 2.4f), beamWidth = 1f, mixChance = 0.45f, restBetweenSegments = false, proGapFraction = 0.86f, proHops = 2,
                 introduces = new[] { OB_StageKind.Crushers, OB_StageKind.Corkscrew, OB_StageKind.IceRink }
             },
             new OB_TierRule {
-                segments = new Vector2Int(4, 4), reachSpeed = 0.65f, gapFraction = new Vector2(0.66f, 0.87f), riseFraction = 0.76f,
-                platformSize = new Vector2(1.5f, 2f), beamWidth = 0.8f, mixChance = 0.6f, restBetweenSegments = false, proGapFraction = 0.9f,
+                segments = new Vector2Int(4, 4), gapFraction = new Vector2(0.72f, 0.89f), riseFraction = 0.76f,
+                platformSize = new Vector2(1.5f, 2f), beamWidth = 0.8f, mixChance = 0.6f, restBetweenSegments = false, proGapFraction = 0.9f, proHops = 2,
                 introduces = new[] { OB_StageKind.LavaRise }
             },
             new OB_TierRule {
-                segments = new Vector2Int(4, 4), reachSpeed = 0.8f, gapFraction = new Vector2(0.72f, 0.93f), riseFraction = 0.8f,
-                platformSize = new Vector2(1.3f, 1.7f), beamWidth = 0.65f, mixChance = 0.75f, restBetweenSegments = false, proGapFraction = 0.96f,
+                segments = new Vector2Int(4, 4), gapFraction = new Vector2(0.78f, 0.93f), riseFraction = 0.8f,
+                platformSize = new Vector2(1.3f, 1.7f), beamWidth = 0.65f, mixChance = 0.75f, restBetweenSegments = false, proGapFraction = 0.96f, proHops = 2,
                 introduces = Array.Empty<OB_StageKind>()
             },
         };

@@ -85,12 +85,17 @@ MonoBehaviour:
   coinTimeBonus: 0.5
   starTimeBonus: 3
   medalTimes:
-    goldFactor: 1.25
-    silverFactor: 1.5
-    bronzeFactor: 1.7
-  staminaMax: 250
+    goldFactor: 1.05
+    silverFactor: 1.3
+    bronzeFactor: 1.6
+  staminaMax: 0
   staminaRegen: 60
   staminaCooldown: 0
+  envelopeRules:
+    margin: 10
+    launchMargin: 22
+    launchLift: 24
+    lobbyRadius: 24
   lavaMargin: 0.3
   positionBufferSeconds: 0.05
   maxHazardRewind: 0.35

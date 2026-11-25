@@ -13,7 +13,8 @@ namespace Universes.UniverseData.obby {
         [Header("Design")]
         [Tooltip("Movement the generator designs gaps and heights around. The server applies the same values to players.")]
         public OB_Movement movement = OB_Movement.Default;
-        [Min(0f)] public float sprintSpeed = 15f;
+        [Tooltip("Dash top speed (CharacterDash: walk x 1.9). The generator sizes pro routes and landing room for it; required jumps are walk-speed.")]
+        [Min(0f)] public float sprintSpeed = 19f;
         [Tooltip("The difficulty curve: per-tier segments, jump reach, platform sizes and which mechanics each tier introduces.")]
         public OB_CourseRules rules = new();
         [Tooltip("Lobby floor point players spawn on before reaching a checkpoint.")]
@@ -31,6 +32,8 @@ namespace Universes.UniverseData.obby {
         public GameObject beam, onOffBlock, onOffSwitchPad, onOffSwitchBlock, pendulum, crusher, laser, rollingLog, turntable;
         public GameObject cannon, mushroom, gravityFlipPad, gravityFlipOrb, risingLava, star;
         public GameObject ice, wind;
+        [Tooltip("Round-2 mechanics (OB_Authoring assigns them).")]
+        public GameObject ghost, honey, ring, swing, plank;
 
         [Header("Presentation")]
         [Tooltip("Platform materials per difficulty tier (indexed by OB_Tier), cycled per stage inside the tier.")]
@@ -77,7 +80,8 @@ namespace Universes.UniverseData.obby {
             && spinnerCross != null && coin != null && beam != null && onOffBlock != null && onOffSwitchPad != null
             && onOffSwitchBlock != null && pendulum != null && crusher != null && laser != null && rollingLog != null
             && turntable != null && cannon != null && mushroom != null && gravityFlipPad != null && gravityFlipOrb != null
-            && risingLava != null && star != null && ice != null && wind != null;
+            && risingLava != null && star != null && ice != null && wind != null && ghost != null && honey != null && ring != null
+            && swing != null && plank != null;
 
         /// <summary>The movement the course is designed around, with the sprint speed the server applies.</summary>
         public OB_Movement DesignMovement {
@@ -147,6 +151,11 @@ namespace Universes.UniverseData.obby {
             OB_PieceKind.Star => star,
             OB_PieceKind.Ice => ice,
             OB_PieceKind.Wind => wind,
+            OB_PieceKind.Ghost => ghost,
+            OB_PieceKind.Honey => honey,
+            OB_PieceKind.Ring => ring,
+            OB_PieceKind.Swing => swing,
+            OB_PieceKind.Plank => plank,
             _ => null
         };
 
@@ -159,7 +168,13 @@ namespace Universes.UniverseData.obby {
         static bool IsScaledBox(OB_PieceKind kind) => kind is OB_PieceKind.Platform or OB_PieceKind.Lava or OB_PieceKind.GravityZone
             or OB_PieceKind.Conveyor or OB_PieceKind.Crumble or OB_PieceKind.Beat or OB_PieceKind.WallJumpWall or OB_PieceKind.Mover
             or OB_PieceKind.Beam or OB_PieceKind.OnOffBlock or OB_PieceKind.Laser or OB_PieceKind.Crusher or OB_PieceKind.RisingLava
-            or OB_PieceKind.Ice;
+            or OB_PieceKind.Ice or OB_PieceKind.Ghost or OB_PieceKind.Honey or OB_PieceKind.Plank;
+
+        /// <summary>Limits walking input in the flight after a launcher (the client's FlightControl does the work).</summary>
+        static void AddFlightControl(GameObject launcher, float seconds, float share) {
+            if (!launcher.TryGetComponent(out FlightControl control)) control = launcher.AddComponent<FlightControl>();
+            control.Configure(seconds, share);
+        }
 
         GameObject Spawn(OB_Piece piece) {
             float yaw = piece.yaw;
@@ -171,7 +186,15 @@ namespace Universes.UniverseData.obby {
                 if (Mathf.Abs(piece.vector.x) > Mathf.Abs(piece.vector.z)) size = new Vector3(size.z, size.y, size.x);
             }
             GameObject prefab = PrefabFor(piece);
-            var go = Instantiate(prefab, piece.position, Quaternion.Euler(0f, yaw, 0f), root);
+            // Out-of-bounds guards are data for the server's envelope: an empty marker keeps the instance list aligned with the pieces.
+            if (piece.kind == OB_PieceKind.OutOfBounds) {
+                var marker = new GameObject($"{piece.stage:00} {piece.kind}");
+                marker.transform.SetPositionAndRotation(piece.position, Quaternion.Euler(0f, yaw, 0f));
+                marker.transform.SetParent(root, true);
+                return marker;
+            }
+            Quaternion rotation = piece.kind == OB_PieceKind.Swing ? Quaternion.Euler(piece.vector.x, yaw, 0f) : Quaternion.Euler(0f, yaw, 0f);
+            var go = Instantiate(prefab, piece.position, rotation, root);
             go.name = $"{piece.stage:00} {piece.kind}";
             if (IsScaledBox(piece.kind)) go.transform.localScale = size;
             switch (piece.kind) {
@@ -271,6 +294,7 @@ namespace Universes.UniverseData.obby {
                     break;
                 case OB_PieceKind.Cannon:
                     go.GetComponentInChildren<LaunchPad>().Configure(piece.vector);
+                    AddFlightControl(go.GetComponentInChildren<LaunchPad>().gameObject, piece.speed + rules.mechanics.cannons.flightMargin, rules.mechanics.cannons.airControl);
                     break;
                 case OB_PieceKind.Mushroom: {
                     go.GetComponentInChildren<LaunchPad>().Configure(piece.vector);
@@ -288,7 +312,7 @@ namespace Universes.UniverseData.obby {
                     if (piece.group == 0 && piece.vector != Vector3.zero)
                         go.transform.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, yaw, 0f) * Vector3.forward, piece.vector);
                     if (go.TryGetComponent(out BoxCollider trigger)) trigger.size = piece.size;
-                    go.GetComponentInChildren<GravityFlipPad>().Configure(piece.vector);
+                    go.GetComponentInChildren<GravityFlipPad>().Configure(piece.vector, rules.mechanics.gravity.flipHoldSeconds);
                     break;
                 case OB_PieceKind.Ice:
                     if (go.TryGetComponent(out IceSurface iceSurface)) iceSurface.Configure(piece.speed);
@@ -302,13 +326,35 @@ namespace Universes.UniverseData.obby {
                         gusts.Configure(local, calm, calm > 0f ? piece.speed / calm : 0f, piece.period, piece.phase);
                     }
                     break;
+                case OB_PieceKind.Ghost:
+                    if (go.TryGetComponent(out TimedToggleBlock ghostCycle)) ghostCycle.Configure(piece.period, piece.speed, piece.phase);
+                    Tile(go, piece.size);
+                    break;
+                case OB_PieceKind.Honey:
+                    if (go.TryGetComponent(out StickyZone honeyZone)) honeyZone.Configure(piece.speed);
+                    Tile(go, piece.size);
+                    break;
+                case OB_PieceKind.Ring:
+                    if (go.TryGetComponent(out BoostRing hoop)) hoop.Configure(Quaternion.Inverse(go.transform.rotation) * piece.vector, piece.size, rules.mechanics.rings.catchAbove);
+                    AddFlightControl(go, piece.speed + rules.mechanics.rings.flightMargin, rules.mechanics.rings.airControl);
+                    break;
+                case OB_PieceKind.Swing:
+                    if (go.TryGetComponent(out SwingPlatform swing)) {
+                        swing.Configure(piece.size, piece.vector.x, piece.vector.y);
+                        if (go.TryGetComponent(out NetworkPlatform motion))
+                            motion.Configure(Vector3.zero, 0f, SwingPlatform.MotionDelta(piece.vector.x), SwingPlatform.MotionSpeed(piece.vector.x, piece.period), false, true, piece.phase);
+                    }
+                    break;
+                case OB_PieceKind.Plank:
+                    Tile(go, piece.size);
+                    break;
                 case OB_PieceKind.RisingLava:
                     if (go.TryGetComponent(out RisingLava rising))
                         rising.Configure(piece.speed, piece.period, piece.vector.y, new Vector2(piece.size.x, piece.size.z));
                     Tile(go, piece.size);
                     break;
             }
-            if (piece.kind == OB_PieceKind.Crumble)
+            if (piece.kind is OB_PieceKind.Crumble or OB_PieceKind.Plank)
                 go.GetComponentInChildren<CrumbleBlock>().Configure(piece.speed, piece.period);
             return go;
         }

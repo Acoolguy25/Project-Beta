@@ -243,6 +243,10 @@ namespace Universes.UniverseData.obby {
         public OB_Span tail = new(7f, 6f);
         [Tooltip("Par seconds added to walking a field's length.")]
         [Min(0f)] public float parExtra = 1.5f;
+        [Tooltip("Out-of-bounds guards behind walls and above ceilings: how far into the slab they start (0 = at its inner face, which the racer's middle never reaches), how far past it they reach, how far above the top, and the overhang past the slab's ends, metres. The server sends back anyone whose middle is inside one.")]
+        [Min(0f)] public float guardInset = 0f, guardDepth = 6f, guardHeight = 9f, guardOverhang = 2.5f;
+        [Tooltip("Seconds a Gravity Flip keeps its gravity unless something else (a respawn, a checkpoint, a pad back) changes it: about the time to cross the flip stage.")]
+        [Min(1f)] public float flipHoldSeconds = 25f;
     }
 
     /// <summary>Wall Walk: gravity turns sideways onto a tall wall.</summary>

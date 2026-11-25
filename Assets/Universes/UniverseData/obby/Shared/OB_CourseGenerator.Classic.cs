@@ -2,8 +2,8 @@ using UnityEngine;
 
 namespace Universes.UniverseData.obby {
     // The original mechanics, rebuilt as chainable segments. Sizes lerp from a gentle value (d = 0)
-    // to an Extreme one (d = 1); plain jumps are sized by the tier rule (NextHop / Hop), so a Basic hop
-    // already asks for about half a walking jump and an Extreme one most of a sprint jump.
+
+
     public sealed partial class OB_CourseGenerator {
         /// <summary>How far the wall-kick walls reach above their ledge, metres.</summary>
         const float WallAboveLedge = 1f;
@@ -20,15 +20,14 @@ namespace Universes.UniverseData.obby {
         });
 
         /// <summary>
-        /// Lengthens any crumble fuse shorter than crossing the piece's longest side at its tier's reach
+        /// Lengthens any crumble fuse shorter than crossing the piece's longest side at walk
         /// speed (plus a margin) takes, once every piece has its final size.
         /// </summary>
         void FuseCrumbles() {
             for (int i = 0; i < layout.pieces.Count; i++) {
                 OB_Piece p = layout.pieces[i];
-                if (p.kind != OB_PieceKind.Crumble || p.stage >= layout.stages.Length) continue;
-                float reach = Mathf.Max(0.1f, Lerp(m.walkSpeed, m.sprintSpeed, rules.tiers[(int)layout.stages[p.stage].tier].reachSpeed));
-                float cross = Mathf.Max(p.size.x, p.size.z) / reach + rules.crumbleCrossMargin;
+                if (p.kind is not (OB_PieceKind.Crumble or OB_PieceKind.Plank) || p.stage >= layout.stages.Length) continue;
+                float cross = Mathf.Max(p.size.x, p.size.z) / Mathf.Max(0.1f, m.walkSpeed) + rules.crumbleCrossMargin;
                 if (p.speed >= cross) continue;
                 p.speed = cross;
                 layout.pieces[i] = p;

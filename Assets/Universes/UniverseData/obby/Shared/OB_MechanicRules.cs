@@ -171,6 +171,11 @@ namespace Universes.UniverseData.obby {
         [Tooltip("Pad before the first cannon (width, depth), and each cannon's distance from its pad's back edge or island's far edge, metres.")]
         public Vector2 pad = new(5f, 6f);
         [Min(0f)] public float cannonBack = 1.5f;
+        [Tooltip("Share of walking input kept while flying out of a cannon (holding forward otherwise adds walk speed to the launch), and seconds past the planned flight it stays limited.")]
+        [Range(0.05f, 1f)] public float airControl = 0.3f;
+        [Min(0f)] public float flightMargin = 0.4f;
+        [Tooltip("Metres of island depth kept free on both sides of the span between a hands-off landing and one that holds forward.")]
+        [Min(0f)] public float landingSlack = 1f;
         [Tooltip("Island height range relative to the cannon, metres.")]
         public Vector2 rise = new(-2f, 3f);
         [Tooltip("An island with a cannon on it is this much deeper, metres.")]
@@ -322,6 +327,13 @@ namespace Universes.UniverseData.obby {
         public OB_IceTuning ice = new();
         public OB_FlipTuning flip = new();
         public OB_CorkscrewTuning corkscrew = new();
+        // Round 2 (OB_MoreMechanicRules.cs).
+        public OB_LiftTuning lifts = new();
+        public OB_GhostTuning ghosts = new();
+        public OB_HoneyTuning honey = new();
+        public OB_RingTuning rings = new();
+        public OB_SwingTuning swings = new();
+        public OB_RopeTuning rope = new();
         // The original segments and the gravity segments (OB_ClassicRules.cs).
         public OB_CrumbleMixTuning crumbleMix = new();
         public OB_HopTuning hops = new();
@@ -390,6 +402,31 @@ namespace Universes.UniverseData.obby {
             Positive(nameof(boost) + ".landingWidth", boost.landingWidth);
             Positive(nameof(ceilingRun) + ".halfWidth", ceilingRun.halfWidth);
             Positive(nameof(gravity) + ".tail", gravity.tail);
+            Positive(nameof(lifts) + ".speed", lifts.speed);
+            Positive(nameof(lifts) + ".travel", lifts.travel);
+            Positive(nameof(ghosts) + ".window", ghosts.window);
+            Positive(nameof(ghosts) + ".period", ghosts.period);
+            Positive(nameof(honey) + ".keep", honey.keep);
+            Positive(nameof(honey) + ".length", honey.length);
+            Positive(nameof(rings) + ".launch", rings.launch);
+            Positive(nameof(swings) + ".period", swings.period);
+            Positive(nameof(swings) + ".rope", swings.rope);
+            Positive(nameof(rope) + ".fuse", rope.fuse);
+            if (honey.keep.easy > 1f || honey.keep.hard > 1f) throw new ArgumentException("Mechanics: honey.keep must lie in (0, 1].");
+            if (ghosts.window.easy > ghosts.period.easy || ghosts.window.hard > ghosts.period.hard)
+                throw new ArgumentException("Mechanics: ghosts.window cannot be longer than ghosts.period.");
+            Ordered(nameof(ghosts) + ".riseShare", ghosts.riseShare);
+            Ordered(nameof(honey) + ".riseShare", honey.riseShare);
+            Ordered(nameof(rings) + ".flight", rings.flight);
+            Ordered(nameof(rings) + ".rise", rings.rise);
+            Ordered(nameof(rings) + ".islandRise", rings.islandRise);
+            if (rings.flight.x <= 0f) throw new ArgumentException("Mechanics: rings.flight must be positive.");
+            AtLeastOne(nameof(lifts) + ".lifts", lifts.lifts);
+            AtLeastOne(nameof(ghosts) + ".blocks", ghosts.blocks);
+            AtLeastOne(nameof(honey) + ".sheets", honey.sheets);
+            AtLeastOne(nameof(rings) + ".rings", rings.rings);
+            AtLeastOne(nameof(swings) + ".swings", swings.swings);
+            AtLeastOne(nameof(rope) + ".planks", rope.planks);
             if (moonLeap.gravity.easy <= 0f || moonLeap.gravity.hard <= 0f || moonLeap.gravity.easy > 1f || moonLeap.gravity.hard > 1f)
                 throw new ArgumentException("Mechanics: moonLeap.gravity must lie in (0, 1].");
             // Segments that need at least one of something.

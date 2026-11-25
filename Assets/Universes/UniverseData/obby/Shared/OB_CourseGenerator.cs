@@ -30,9 +30,9 @@ namespace Universes.UniverseData.obby {
         public const int MaxStages = 60;
         /// <summary>
         /// The shipped course length: four stages per tier. Long enough to see every world and every
-        /// mechanic, short enough to finish well inside the race timer: par is about 606 to 668 s (seeds 1 to
-        /// 100) against the 1500 s race, so the race lasts about 2.2 times par at the least, and bronze (1.7x
-        /// par) always fits (tests hold bronze inside the race on this length).
+        /// mechanic, short enough to finish well inside the race timer: par (a clean WALKING run) is about 605 to
+        /// 675 s (seeds 1 to 100) against the 1500 s race, so the race lasts about 2.2 times par at the least, and
+        /// bronze (1.6x par) always fits (tests hold bronze inside the race on this length).
         /// </summary>
         public const int DefaultStageCount = 24;
         /// <summary>Height of a coin above the surface it is collected from.</summary>
@@ -65,8 +65,10 @@ namespace Universes.UniverseData.obby {
         readonly List<int> coinCandidateSegments = new();
         Vector3 lastTop;
         Vector2 lastSize;
-        /// <summary>Upper limit on <see cref="ReachSpeed"/> while a segment builds jumps from a slow surface (ice).</summary>
+        /// <summary>Upper limit on <see cref="ReachSpeed"/> while a segment builds jumps from a slow surface (ice, honey).</summary>
         float reachCap = float.PositiveInfinity;
+        /// <summary>True while a pro route is being built: its jumps are designed for a dash (see <see cref="OB_CourseRules.proDashShare"/>).</summary>
+        bool proRoute;
         /// <summary>Per-mechanic shapes.</summary>
         OB_MechanicRules Tune => rules.mechanics;
 
@@ -112,11 +114,13 @@ namespace Universes.UniverseData.obby {
         /// <summary>Changes a placed piece in place.</summary>
         void Edit(int index, Func<OB_Piece, OB_Piece> change) => layout.pieces[index] = change(layout.pieces[index]);
 
-        /// <summary>Adds a box whose top face is centred on <paramref name="localTop"/>.</summary>
+        /// <summary>Adds a box whose top face is centred on <paramref name="localTop"/>. Platform boxes that are not standable (gravity walls and ceilings) carry <c>group</c> 1.</summary>
         int Box(OB_PieceKind kind, Vector3 localTop, Vector3 size, bool standable = true) {
             if (standable) minTop = Mathf.Min(minTop, World(localTop).y);
             return Add(new OB_Piece {
-                kind = kind, position = World(localTop - Vector3.up * (size.y * 0.5f)), yaw = yaw, size = size
+                kind = kind, position = World(localTop - Vector3.up * (size.y * 0.5f)), yaw = yaw, size = size,
+                // A platform that is not a floor is a gravity wall or ceiling: only its inner face is meant to be stood on.
+                group = !standable && kind == OB_PieceKind.Platform ? 1 : 0
             });
         }
 
@@ -154,10 +158,10 @@ namespace Universes.UniverseData.obby {
         }
 
         /// <summary>Records mid-air steering: <paramref name="offset"/> metres sideways during <paramref name="airTime"/> seconds of flight.</summary>
-        void CheckSteer(float offset, float airTime) {
+        void CheckSteer(float offset, float airTime, float share = 1f) {
             layout.jumpChecks.Add(new OB_JumpCheck {
-                stage = stage, segment = segment, gap = offset, airTime = airTime, gravityScale = 1f, speed = m.walkSpeed,
-                maxGap = m.walkSpeed * airTime * tier.gapFraction.y + 0.001f, maxRise = float.PositiveInfinity
+                stage = stage, segment = segment, gap = offset, airTime = airTime, gravityScale = 1f, speed = m.walkSpeed * share,
+                maxGap = m.walkSpeed * share * airTime * tier.gapFraction.y + 0.001f, maxRise = float.PositiveInfinity
             });
         }
 
@@ -203,10 +207,11 @@ namespace Universes.UniverseData.obby {
 
         // ---------------------------------------------------------------- jump sizing
         /// <summary>
-        /// Speed this tier's jumps are designed around (walking in the easy tiers, toward sprinting later),
-        /// capped while jumps leave a surface the player cannot reach that speed on.
+        /// Speed jumps are designed around: always WALK speed (the dash is an optional skill tool), except on
+        /// pro routes to stars, which are designed for a dash. Capped while jumps leave a surface the player
+        /// cannot reach that speed on (ice, honey).
         /// </summary>
-        float ReachSpeed => Mathf.Min(Lerp(m.walkSpeed, m.sprintSpeed, tier.reachSpeed), reachCap);
+        float ReachSpeed => Mathf.Min(proRoute ? Lerp(m.walkSpeed, m.sprintSpeed, rules.proDashShare) : m.walkSpeed, reachCap);
 
         /// <summary>How far across a jump at <see cref="ReachSpeed"/> carries when it lands <paramref name="rise"/> higher.</summary>
         float Reach(float rise, float gravityScale = 1f, float launchSpeed = 0f) => ReachSpeed * m.LandTime(rise, gravityScale, launchSpeed);
@@ -358,6 +363,7 @@ namespace Universes.UniverseData.obby {
             var region = new Bounds(spawn, Vector3.zero);
             for (int i = firstPiece; i < layout.pieces.Count; i++) {
                 OB_Piece piece = layout.pieces[i];
+                if (piece.kind == OB_PieceKind.OutOfBounds) continue;
                 float c = Mathf.Abs(Mathf.Cos(piece.yaw * Mathf.Deg2Rad)), s = Mathf.Abs(Mathf.Sin(piece.yaw * Mathf.Deg2Rad));
                 Vector3 half = piece.size * 0.5f;
                 region.Encapsulate(new Bounds(piece.position, 2f * new Vector3(c * half.x + s * half.z, half.y, s * half.x + c * half.z)));
@@ -408,6 +414,12 @@ namespace Universes.UniverseData.obby {
                 case OB_StageKind.LavaRise: LavaRise(d); break;
                 case OB_StageKind.WindGaps: WindGaps(d); break;
                 case OB_StageKind.IceRink: IceRink(d); break;
+                case OB_StageKind.LiftShaft: LiftShaft(d); break;
+                case OB_StageKind.GhostPath: GhostPath(d); break;
+                case OB_StageKind.HoneySwamp: HoneySwamp(d); break;
+                case OB_StageKind.BoostRings: BoostRings(d); break;
+                case OB_StageKind.Swings: Swings(d); break;
+                case OB_StageKind.RopeBridge: RopeBridge(d); break;
                 default: Hops(d); break;
             }
         }

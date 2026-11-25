@@ -58,11 +58,13 @@ namespace RyanAssets.Characters.Client {
         [SerializeField, Min(0f)] private float terminalFallSpeed = 53f;
 
         [Header("Gravity")]
-        [Tooltip("How fast the body turns to stand on a new gravity direction (degrees per second).")]
-        [SerializeField, Min(1f)] private float upAlignSpeed = 540f;
         [Tooltip("Height up the body it turns about when gravity changes direction (0 = feet, 0.5 = middle). " +
-                 "Turning about the middle keeps the head from sweeping through the floor when gravity flips upside down.")]
+                 "Turning about the middle keeps the head from sweeping through the floor when gravity flips upside down. " +
+                 "How long the turn takes is set on the character's CharacterGravity.")]
         [SerializeField, Range(0f, 1f)] private float turnPivotHeight = 0.5f;
+        [Tooltip("While the body turns to a new gravity direction, how many times per step it is pushed out of anything its turning collider " +
+                 "sinks into (0 = leave it to the physics engine, which jitters). Keeps wall and ceiling landings clean.")]
+        [SerializeField, Range(0, 6)] private int turnDepenetrationPasses = 3;
 
         [Header("Steps and Collisions")]
         [Tooltip("Tallest ledge the character walks up without jumping.")]
@@ -89,6 +91,10 @@ namespace RyanAssets.Characters.Client {
         [SerializeField, FormerlySerializedAs("WallContactGrace"), Min(0f)] private float wallContactGrace = 0.15f;
         [Tooltip("Minimum seconds between wall jumps.")]
         [SerializeField, FormerlySerializedAs("WallJumpCooldown"), Min(0f)] private float wallJumpCooldown = 0.2f;
+        [Tooltip("After a wall jump the body turns to face the way it is kicked (away from the wall) for this long (s), even while the stick points back at the wall.")]
+        [SerializeField, Min(0f)] private float wallJumpTurnSeconds = 0.3f;
+        [Tooltip("Turn smoothing (s) for that quick turn away from the wall.")]
+        [SerializeField, Range(0.01f, 0.3f)] private float wallJumpTurnSmoothTime = 0.07f;
         [Tooltip("On slippery ground (ISurfaceTraction, such as ice), the fastest planar velocity change (m/s²) at traction 1; " +
                  "a surface's traction scales it. Normal ground keeps instant steering.")]
         [SerializeField, Min(0f)] private float slipAcceleration = 60f;
@@ -106,6 +112,21 @@ namespace RyanAssets.Characters.Client {
         public Vector3 ExternalVelocity => _externalVelocity;
         public float WalkSpeed => walkSpeed;
         public float SprintSpeed => sprintSpeed;
+        /// <summary>
+        /// Whether the sprint key makes the character sprint. A game that turns sprint into something else
+        /// (the obby's Dash) sets this to false; the default keeps sprint exactly as it always was.
+        /// </summary>
+        public bool SprintEnabled { get; set; } = true;
+        /// <summary>True while wind or another push (<see cref="AddPush"/>) acted on the last step.</summary>
+        public bool IsPushed => _push != Vector3.zero;
+        /// <summary>Raised when a wall jump kicks off, with the wall's normal (planar, pointing away from the wall).</summary>
+        public event System.Action<Vector3> WallJumped;
+        /// <summary>True while a wall-jump surface was touched recently enough that a jump press still kicks off it.</summary>
+        public bool HasWallContact => _wallSurface != null && Time.fixedTime - _wallContactTime <= wallContactGrace;
+        /// <summary>Seconds since a wall-jump surface was last touched.</summary>
+        public float WallContactAge => Time.fixedTime - _wallContactTime;
+        /// <summary>Normal (planar, pointing away from the wall) of the wall-jump surface last touched.</summary>
+        public Vector3 WallNormal => _wallNormal;
         /// <summary>The input this controller reads.</summary>
         public CharacterControls Controls => _input;
         /// <summary>True on the physics step jump was pressed (not held from before).</summary>
@@ -143,12 +164,18 @@ namespace RyanAssets.Characters.Client {
         private PlayerData _playerData;
         private int _stepMask;
         private readonly List<IMovementMode> _modes = new();
+        private readonly List<int> _modePriorities = new();
+        private readonly Collider[] _turnOverlaps = new Collider[8];
 
         // ------------------------------------------------------------------ runtime state
         private Vector3 _facing = Vector3.forward;        // planar, where the body looks
         private Vector3 _moveDirection = Vector3.forward; // planar, where input last pointed
-        private Vector3 _bodyUp = Vector3.up;             // the body's up, easing toward gravity up
+        private Vector3 _bodyUp = Vector3.up;             // the body's up: the smoothed gravity up
         private Vector3 _frameUp = Vector3.up;            // gravity up used for the previous step
+        private Vector3 _kickFacing;                      // direction the body turns to after a wall jump
+        private float _kickTurnUntil = float.NegativeInfinity;
+        private float _boostSpeed = 1f, _boostAcceleration = 1f;
+        private bool _boostMoves;
         private float _turnVelocity;
         private float _speed;
 
@@ -254,6 +281,13 @@ namespace RyanAssets.Characters.Client {
         }
 
         // ------------------------------------------------------------------ public API
+        /// <summary>Stops the steering speed and any launch or wall-jump momentum, keeping gravity and wall contacts (a wall slide starts from a standstill).</summary>
+        public void StopMomentum() {
+            _externalVelocity = Vector3.zero;
+            _externalProtectedUntil = float.NegativeInfinity;
+            _speed = 0f;
+        }
+
         /// <summary>Forgets launch momentum, gravity overrides and wall contacts, e.g. after a respawn.</summary>
         public void ClearExternalMotion() {
             _externalVelocity = Vector3.zero;
@@ -292,12 +326,36 @@ namespace RyanAssets.Characters.Client {
         public void AddPush(Vector3 velocity) => _pendingPush += velocity;
 
         /// <summary>Gives <paramref name="mode"/> the first look at every physics step (see <see cref="IMovementMode"/>).</summary>
-        public void AddMode(IMovementMode mode) {
-            if (mode != null && !_modes.Contains(mode))
-                _modes.Add(mode);
+        public void AddMode(IMovementMode mode, int priority = 0) {
+            if (mode == null || _modes.Contains(mode))
+                return;
+            // Higher priorities look first; equal ones keep the order they were added in.
+            int index = _modes.Count;
+            while (index > 0 && _modePriorities[index - 1] < priority)
+                index--;
+            _modes.Insert(index, mode);
+            _modePriorities.Insert(index, priority);
         }
 
-        public void RemoveMode(IMovementMode mode) => _modes.Remove(mode);
+        public void RemoveMode(IMovementMode mode) {
+            int index = _modes.IndexOf(mode);
+            if (index < 0)
+                return;
+            _modes.RemoveAt(index);
+            _modePriorities.RemoveAt(index);
+        }
+
+        /// <summary>
+        /// Boosts this physics step's steering: the target speed is multiplied by <paramref name="speedMultiplier"/> and
+        /// speed changes <paramref name="accelerationMultiplier"/> times as fast. With <paramref name="moveWithoutInput"/> the
+        /// character keeps moving the way it faces with no stick input. Call it every step from a movement mode; the
+        /// boost lapses the moment calls stop. Used by the obby's Dash.
+        /// </summary>
+        public void SetMoveBoost(float speedMultiplier, float accelerationMultiplier = 1f, bool moveWithoutInput = false) {
+            _boostSpeed = Mathf.Max(0f, speedMultiplier);
+            _boostAcceleration = Mathf.Max(0f, accelerationMultiplier);
+            _boostMoves = moveWithoutInput;
+        }
 
         /// <summary>The camera-relative move direction on the gravity plane, if there is move input.</summary>
         public bool TryGetMoveDirection(out Vector3 direction) {
@@ -318,7 +376,10 @@ namespace RyanAssets.Characters.Client {
         }
 
         /// <summary>Eases the facing toward <paramref name="direction"/> with the normal turn smoothing.</summary>
-        public void SteerToward(Vector3 direction) => TurnToward(PlanarOrFallback(direction, Up, _facing), Up);
+        public void SteerToward(Vector3 direction) => TurnToward(PlanarOrFallback(direction, Up, _facing), Up, turnSmoothTime);
+
+        /// <summary>Like <see cref="SteerToward"/> with an explicit turn smoothing time (seconds).</summary>
+        public void SteerToward(Vector3 direction, float smoothTime) => TurnToward(PlanarOrFallback(direction, Up, _facing), Up, smoothTime);
 
         /// <summary>Accelerates the body along gravity for one step, scaled by <paramref name="scale"/>.</summary>
         public void ApplyGravityStep(float dt, float scale = 1f) => ApplyGravity(dt * scale);
@@ -359,8 +420,10 @@ namespace RyanAssets.Characters.Client {
             // Triggers report after the physics step, so pushes gathered then act on this step.
             _push = _pendingPush;
             _pendingPush = Vector3.zero;
+            _boostSpeed = _boostAcceleration = 1f;
+            _boostMoves = false;
             _gravity.Resolve();
-            UpdateGravityFrame(dt);
+            UpdateGravityFrame();
             UpdateGroundState();
             JumpPressed = _input.jump && !_jumpHeldLastStep;
             for (int i = 0; i < _modes.Count; i++) {
@@ -378,10 +441,12 @@ namespace RyanAssets.Characters.Client {
         }
 
         /// <summary>
-        /// Keeps the planar directions perpendicular to gravity when it changes, and eases the body's
-        /// up toward gravity's up so a switch to a wall or ceiling reads as the character turning over.
+        /// Follows the smoothed gravity up (see <see cref="CharacterGravity"/>). Every step it turns, the planar
+        /// directions stay perpendicular to it and the velocity is carried across the turn
+        /// (<see cref="GravityBlend.Reproject"/>), so running continues over the corner onto a wall or ceiling
+        /// instead of the old speed ploughing into the new surface.
         /// </summary>
-        private void UpdateGravityFrame(float dt) {
+        private void UpdateGravityFrame() {
             // Flipping upside down rolls about the facing direction, so the character keeps facing (and
             // the camera keeps looking) the way it was going instead of turning around.
             Vector3 up = Up;
@@ -390,14 +455,12 @@ namespace RyanAssets.Characters.Client {
                 Vector3 previousFacing = _facing;
                 _facing = PlanarOrFallback(transport * _facing, up, previousFacing);
                 _moveDirection = PlanarOrFallback(transport * _moveDirection, up, _facing);
+                _kickFacing = PlanarOrFallback(transport * _kickFacing, up, _facing);
+                _externalVelocity = transport * _externalVelocity;
+                _body.linearVelocity = GravityBlend.Reproject(_body.linearVelocity, _frameUp, up, previousFacing);
                 _frameUp = up;
             }
-
-            if (Vector3.Angle(_bodyUp, up) < 0.01f) {
-                _bodyUp = up;
-                return;
-            }
-            _bodyUp = CharacterGravity.TurnToward(_bodyUp, up, _facing, upAlignSpeed * dt) * _bodyUp;
+            _bodyUp = up;
         }
 
         private void SnapOrientationToGravity() {
@@ -405,6 +468,7 @@ namespace RyanAssets.Characters.Client {
                 return;
             Vector3 up = Up;
             _frameUp = _bodyUp = up;
+            _kickTurnUntil = float.NegativeInfinity;
             _facing = PlanarOrFallback(_body.rotation * Vector3.forward, up, Vector3.forward);
             _moveDirection = _facing;
             _turnVelocity = 0f;
@@ -413,17 +477,52 @@ namespace RyanAssets.Characters.Client {
 
         /// <summary>
         /// Rotates the body toward <see cref="BodyRotation"/>. While it turns over to a new gravity
-        /// direction it pivots about <see cref="turnPivotHeight"/> instead of the feet; turning about
-        /// up (facing) leaves the pivot in place, so ordinary steering is unaffected.
+        /// direction it pivots about <see cref="turnPivotHeight"/> instead of the feet, and is pushed out of
+        /// anything the turning collider sinks into; turning about up (facing) leaves the pivot in place, so
+        /// ordinary steering is unaffected.
         /// </summary>
         private void ApplyBodyRotation() {
             Quaternion current = _body.rotation;
             Quaternion target = BodyRotation();
             Vector3 pivot = TurnPivotLocal();
-            Vector3 shift = current * pivot - target * pivot;
-            if (shift.sqrMagnitude > 0.000001f)
-                _body.position += shift;
+            Vector3 position = _body.position + (current * pivot - target * pivot);
+            if (turnDepenetrationPasses > 0 && Vector3.Angle(current * Vector3.up, target * Vector3.up) > 0.25f)
+                position = ResolveTurnOverlap(position, target);
+            if ((position - _body.position).sqrMagnitude > 0.000001f)
+                _body.position = position;
             _body.MoveRotation(target);
+        }
+
+        /// <summary>
+        /// Moves <paramref name="position"/> out of whatever the body's box would overlap if it stood there
+        /// with <paramref name="rotation"/>, so a turn never leaves a corner buried in the floor to be
+        /// shoved out (and jitter) by the solver.
+        /// </summary>
+        private Vector3 ResolveTurnOverlap(Vector3 position, Quaternion rotation) {
+            if (_boxCollider == null)
+                return position;
+            Vector3 scale = _boxCollider.transform.lossyScale;
+            Vector3 absScale = new(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+            Vector3 halfExtents = Vector3.Scale(_boxCollider.size * 0.5f, absScale);
+            PhysicsScene world = _body.gameObject.scene.GetPhysicsScene();
+            for (int pass = 0; pass < turnDepenetrationPasses; pass++) {
+                Vector3 centre = position + rotation * Vector3.Scale(_boxCollider.center, scale);
+                int count = world.OverlapBox(centre, halfExtents, _turnOverlaps, rotation, _stepMask, QueryTriggerInteraction.Ignore);
+                bool moved = false;
+                for (int i = 0; i < count; i++) {
+                    Collider other = _turnOverlaps[i];
+                    if (other == _boxCollider || other.attachedRigidbody == _body)
+                        continue;
+                    if (!Physics.ComputePenetration(_boxCollider, position, rotation, other, other.transform.position, other.transform.rotation,
+                            out Vector3 direction, out float distance) || distance <= 0f)
+                        continue;
+                    position += direction * distance;
+                    moved = true;
+                }
+                if (!moved)
+                    break;
+            }
+            return position;
         }
 
         /// <summary>The turn pivot relative to the body origin, in the body's (unscaled) rotation frame.</summary>
@@ -473,17 +572,25 @@ namespace RyanAssets.Characters.Client {
             _characterAnimator.Jump();
         }
 
-        private void TryWallJump() {
-            bool jumpPressed = _input.jump && !_jumpHeldLastStep;
-            if (!jumpPressed || _wallSurface == null || Time.fixedTime < _nextWallJump
+        /// <summary>
+        /// Kicks off the wall-jump surface touched in the last <see cref="wallContactGrace"/> seconds if jump
+        /// was pressed this step. Returns whether it jumped. Normal movement calls it on its own while airborne;
+        /// a wall-slide mode calls it while clinging.
+        /// </summary>
+        public bool TryWallJump() {
+            if (!JumpPressed || _wallSurface == null || Time.fixedTime < _nextWallJump
                 || Time.fixedTime - _wallContactTime > wallContactGrace)
-                return;
+                return false;
             _nextWallJump = Time.fixedTime + wallJumpCooldown;
-            Launch(_wallNormal * _wallSurface.AwaySpeed + Up * _wallSurface.UpSpeed);
-            // Face away from the wall so the kick reads clearly and steering starts from there.
-            _facing = _moveDirection = _wallNormal;
+            Vector3 normal = _wallNormal;
+            Launch(normal * _wallSurface.AwaySpeed + Up * _wallSurface.UpSpeed);
+            // Turn away from the wall quickly so the kick reads clearly and steering starts from there.
+            _moveDirection = _kickFacing = normal;
+            _kickTurnUntil = Time.fixedTime + wallJumpTurnSeconds;
             _turnVelocity = 0f;
             _wallSurface = null;
+            WallJumped?.Invoke(normal);
+            return true;
         }
 
         private void ApplyGravity(float dt) {
@@ -499,17 +606,24 @@ namespace RyanAssets.Characters.Client {
             Vector3 up = Up;
             Vector2 input = GetAdaptedMoveVector(_input);
             bool hasInput = input.sqrMagnitude > 0f;
-            bool sprinting = _input.sprint && hasInput && sprintSpeed > 0f
+            bool kickTurning = Time.fixedTime < _kickTurnUntil;
+            bool sprinting = SprintEnabled && _input.sprint && hasInput && sprintSpeed > 0f
                 && StaminaController.ConsumeStamina(sprintStaminaPerSecond * dt);
-            float targetSpeed = !hasInput ? 0f : sprinting ? sprintSpeed : walkSpeed;
-            float inputMagnitude = _input.analogMovement ? input.magnitude : 1f;
-            _speed = Mathf.Lerp(_speed, targetSpeed, dt * acceleration);
+            float targetSpeed = !hasInput && !_boostMoves ? 0f : sprinting ? sprintSpeed : walkSpeed;
+            targetSpeed *= _boostSpeed;
+            float inputMagnitude = !_input.analogMovement || (_boostMoves && !hasInput) ? 1f : input.magnitude;
+            _speed = Mathf.Lerp(_speed, targetSpeed, dt * acceleration * _boostAcceleration);
             if (_speed < 0.01f)
                 _speed = 0f;
 
             if (hasInput) {
                 _moveDirection = CameraRelativeDirection(input, up);
-                TurnToward(_moveDirection, up);
+                // Just after a wall jump the body turns away from the wall whatever the stick says.
+                TurnToward(kickTurning ? _kickFacing : _moveDirection, up, kickTurning ? wallJumpTurnSmoothTime : turnSmoothTime);
+            } else if (kickTurning) {
+                TurnToward(_kickFacing, up, wallJumpTurnSmoothTime);
+            } else if (_boostMoves) {
+                _moveDirection = _facing;
             } else if (_ground.GroundRotationDelta != Quaternion.identity) {
                 _facing = PlanarOrFallback(_ground.GroundRotationDelta * _facing, up, _facing);
             }
@@ -553,9 +667,9 @@ namespace RyanAssets.Characters.Client {
             return PlanarOrFallback(right * input.x + forward * input.y, up, _facing);
         }
 
-        private void TurnToward(Vector3 direction, Vector3 up) {
+        private void TurnToward(Vector3 direction, Vector3 up, float smoothTime) {
             float remaining = Vector3.SignedAngle(_facing, direction, up);
-            float step = Mathf.SmoothDampAngle(0f, remaining, ref _turnVelocity, turnSmoothTime);
+            float step = Mathf.SmoothDampAngle(0f, remaining, ref _turnVelocity, smoothTime);
             _facing = PlanarOrFallback(Quaternion.AngleAxis(step, up) * _facing, up, direction);
         }
 

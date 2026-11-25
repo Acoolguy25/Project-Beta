@@ -34,8 +34,10 @@ namespace RyanAssets.Cameras {
         [Header("Gravity")]
         [Tooltip("Turn the orbit with the character's gravity so walls and ceilings can be walked on comfortably.")]
         [SerializeField] private bool alignToGravity = true;
-        [Tooltip("How fast the camera's up follows a new gravity direction (degrees per second).")]
-        [SerializeField, Min(1f)] private float gravityAlignSpeed = 240f;
+        [Tooltip("Fastest the camera's up may turn to follow the character's smoothed gravity up (degrees per second). " +
+                 "The smoothed up already eases over a few tenths of a second, so this only catches a character that was teleported or whose " +
+                 "gravity was snapped; keep it high or the camera lags behind the body.")]
+        [SerializeField, Min(1f)] private float gravityFollowSpeed = 1440f;
 
         private CinemachineCamera cinemachineCamera;
         private CinemachineInputAxisController cinemachineInputAxisController;
@@ -150,7 +152,7 @@ namespace RyanAssets.Cameras {
 
             // Upside-down flips roll about the view direction, so the camera stays behind the character
             // and forward on screen stays forward.
-            Quaternion turn = CharacterGravity.TurnToward(gravityFrame.up, TargetUp, transform.forward, gravityAlignSpeed * deltaTime);
+            Quaternion turn = CharacterGravity.TurnToward(gravityFrame.up, TargetUp, transform.forward, gravityFollowSpeed * deltaTime);
             gravityFrame.rotation = turn * gravityFrame.rotation;
         }
 

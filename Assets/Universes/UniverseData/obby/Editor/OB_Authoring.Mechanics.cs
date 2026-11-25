@@ -12,6 +12,7 @@ namespace Universes.UniverseData.obby.Editor {
         sealed class MechanicPrefabs {
             public GameObject beam, onOffBlock, onOffSwitchPad, onOffSwitchBlock, pendulum, crusher, laser, rollingLog, turntable;
             public GameObject cannon, mushroom, gravityFlipPad, gravityFlipOrb, risingLava, star, ice, wind;
+            public GameObject ghost, honey, ring, swing, plank;
             public Material onOffSolidA, onOffGhostA, onOffSolidB, onOffGhostB;
         }
 
@@ -355,6 +356,72 @@ namespace Universes.UniverseData.obby.Editor {
                 field.streaks = ps;
                 m.wind = Save(root, "Wind");
             }
+            // ---- round 2
+            {   // Ghost: a Beat-style block with its own cycle; pale and glowing when solid, a faint outline when not.
+                var solid = BlockMat("GhostSolid", OB_Palette.Ghost, 0.06f, 0.5f);
+                var outline = Mat("GhostOutline", OB_Palette.Ghost, emission: 0.25f, alpha: 0.12f);
+                var warn = Mat("GhostWarn", OB_Palette.Ghost, emission: 1.2f, alpha: 0.35f);
+                var go = Cube("Ghost", null, Vector3.zero, Vector3.one, solid);
+                var block = go.AddComponent<TimedToggleBlock>();
+                block.visuals = new[] { go.GetComponent<Renderer>() };
+                block.solidMaterial = solid;
+                block.ghostMaterial = outline;
+                block.warnMaterial = warn;
+                block.warnSeconds = 0.5f;
+                block.warnBeforeSolidSeconds = 0.6f;
+                m.ghost = Save(go, "Ghost");
+            }
+            {   // Honey: a scaled slab plus a trigger over its top that slows walkers (StickyZone fits it in Configure).
+                var honeyMat = BlockMat("Honey", OB_Palette.Honey, 0.04f, 0.2f, smoothness: 0.9f, detail: Tex("Stripes"), detailStrength: 0.1f);
+                var go = Cube("Honey", null, Vector3.zero, Vector3.one, honeyMat);
+                var field = go.AddComponent<BoxCollider>();
+                field.isTrigger = true;
+                go.AddComponent<StickyZone>();
+                m.honey = Save(go, "Honey");
+            }
+            {   // Ring: a trigger launcher; a hoop of glowing bars lies in its XY plane and is sized by BoostRing.Configure.
+                var ringMat = Mat("RingGlow", OB_Palette.Ring, emission: 2.2f, alpha: 0.9f);
+                var root = new GameObject("BoostRing");
+                var box = Trigger(root, Vector3.zero, Vector3.one);
+                var pad = root.AddComponent<LaunchPad>();
+                pad.cooldown = 0.25f;
+                var hoop = new GameObject("Hoop").transform;
+                hoop.SetParent(root.transform, false);
+                const int bars = 14;
+                for (int i = 0; i < bars; i++) {
+                    float angle = i * Mathf.PI * 2f / bars;
+                    var bar = Cube($"Bar{i}", hoop, new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * 0.5f, new Vector3(0.28f, 0.07f, 1f), ringMat, false);
+                    bar.transform.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + 90f);
+                    bar.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+                }
+                root.AddComponent<BoostRing>().hoop = hoop;
+                m.ring = Save(root, "BoostRing");
+            }
+            {   // Swing: origin at the pivot; the platform and its two ropes hang below and swing with the root (NetworkPlatform).
+                var board = BlockMat("SwingBoard", OB_Palette.Wood, 0.06f, 0f, detail: Tex("Stripes"), detailStrength: 0.25f);
+                var rope = Mat("SwingRope", OB_Palette.Rope, smoothness: 0.15f);
+                var root = new GameObject("Swing");
+                var body = root.AddComponent<Rigidbody>();
+                body.isKinematic = true;
+                body.useGravity = false;
+                root.AddComponent<NetworkPlatform>();
+                root.AddComponent<GroundMotionTransfer>().transferRotation = false;
+                var swing = root.AddComponent<SwingPlatform>();
+                swing.platform = Cube("Board", root.transform, Vector3.down, Vector3.one, board).transform;
+                var left = Cube("RopeL", root.transform, Vector3.zero, Vector3.one, rope, false);
+                var right = Cube("RopeR", root.transform, Vector3.zero, Vector3.one, rope, false);
+                swing.ropes = new[] { left.transform, right.transform };
+                Cube("Anchor", root.transform, Vector3.zero, new Vector3(1.6f, 0.5f, 1.6f), steel, false);
+                m.swing = Save(root, "Swing");
+            }
+            {   // Plank: a scaled crumbling board, wooden.
+                var planks = BlockMat("Plank", OB_Palette.Wood, 0.1f, 0f, detail: Tex("Cracks"), detailStrength: 0.6f);
+                var root = new GameObject("Plank");
+                root.AddComponent<BoxCollider>();
+                var visual = Cube("Visual", root.transform, Vector3.zero, Vector3.one, planks, false);
+                root.AddComponent<CrumbleBlock>().visual = visual.transform;
+                m.plank = Save(root, "Plank");
+            }
             return m;
         }
 
@@ -424,6 +491,11 @@ namespace Universes.UniverseData.obby.Editor {
             course.star = m.star;
             course.ice = m.ice;
             course.wind = m.wind;
+            course.ghost = m.ghost;
+            course.honey = m.honey;
+            course.ring = m.ring;
+            course.swing = m.swing;
+            course.plank = m.plank;
             course.onOffSolidA = m.onOffSolidA;
             course.onOffGhostA = m.onOffGhostA;
             course.onOffSolidB = m.onOffSolidB;

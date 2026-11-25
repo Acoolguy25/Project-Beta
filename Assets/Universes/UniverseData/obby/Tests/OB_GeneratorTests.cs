@@ -145,14 +145,38 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.Greater(checks, 20000);
         }
 
-        /// <summary>The hardest main-path jump of each tier, as a fraction of a full sprint jump.</summary>
+        [Test] public void EveryRequiredJumpIsFairAtWalkSpeedAndOnlyProRoutesAskForADash() {
+            int required = 0, pro = 0, dashOnly = 0;
+            foreach (var c in Courses(60)) {
+                foreach (var j in c.jumpChecks) {
+                    string at = Where(c, j.stage, j.segment) + (j.pro ? " (pro)" : "");
+                    if (j.pro) {
+                        pro++;
+                        Assert.GreaterOrEqual(j.speed, Move.walkSpeed, at);
+                        Assert.LessOrEqual(j.speed, Move.sprintSpeed, at);
+                        if (j.airTime <= 0f && j.gap > Move.walkSpeed * Move.LandTime(j.rise, j.gravityScale, j.launchSpeed) * Rules.requiredGapCeiling) dashOnly++;
+                        continue;
+                    }
+                    required++;
+                    Assert.LessOrEqual(j.speed, Move.walkSpeed + 1e-3f, $"{at}: required jumps are designed for walk speed");
+                    if (j.airTime > 0f) continue;
+                    float walkReach = Move.walkSpeed * Move.LandTime(j.rise, j.gravityScale, j.launchSpeed);
+                    Assert.LessOrEqual(j.gap, walkReach * Rules.requiredGapCeiling + 1e-3f, $"{at}: a walking jump cannot cross {j.gap:F2} m (reach {walkReach:F2} m)");
+                }
+            }
+            Assert.Greater(required, 10000);
+            Assert.Greater(pro, 100);
+            Assert.Greater(dashOnly, pro / 4, "pro routes are where a dash pays off");
+        }
+
+        /// <summary>The hardest main-path jump of each tier, as a fraction of a full WALKING jump.</summary>
         static float[] HardestJumps(int seeds) {
             var hardest = new float[OB_Tiers.Count];
             for (int seed = 1; seed <= seeds; seed++) {
                 var c = Make(seed);
                 foreach (var j in c.jumpChecks) {
                     if (j.pro || j.airTime > 0f || j.stage >= c.StageCount) continue;
-                    float fraction = j.gap / (Move.sprintSpeed * Move.LandTime(j.rise, j.gravityScale, j.launchSpeed));
+                    float fraction = j.gap / (Move.walkSpeed * Move.LandTime(j.rise, j.gravityScale, j.launchSpeed));
                     int t = (int)c.stages[j.stage].tier;
                     hardest[t] = Mathf.Max(hardest[t], fraction);
                 }
@@ -162,10 +186,10 @@ namespace Universes.UniverseData.obby.Tests {
 
         [Test] public void BasicHasRealJumpsAndExtremeIsASkillTest() {
             float[] hardest = HardestJumps(150);
-            Assert.Greater(hardest[(int)OB_Tier.Basic], 0.33f, "Basic still asks for real jumps");
-            Assert.Less(hardest[(int)OB_Tier.Basic], 0.5f, "Basic stays forgiving");
-            Assert.Greater(hardest[(int)OB_Tier.Hard], 0.6f, "Hard needs a run-up");
-            Assert.Greater(hardest[(int)OB_Tier.Extreme], 0.82f, "Extreme goes near the limit of a sprint jump");
+            Assert.Greater(hardest[(int)OB_Tier.Basic], 0.45f, "Basic still asks for real jumps");
+            Assert.Less(hardest[(int)OB_Tier.Basic], 0.7f, "Basic stays forgiving");
+            Assert.Greater(hardest[(int)OB_Tier.Hard], 0.65f, "Hard needs a clean take-off");
+            Assert.Greater(hardest[(int)OB_Tier.Extreme], 0.82f, "Extreme goes near the limit of a walking jump");
             for (int t = 1; t < OB_Tiers.Count; t++)
                 Assert.Greater(hardest[t], hardest[t - 1], $"tier {(OB_Tier)t} is harder than the one before");
         }
@@ -335,7 +359,7 @@ namespace Universes.UniverseData.obby.Tests {
                     Assert.IsTrue(perched, $"{Where(c, s.index, -1)}: the star floats over nothing");
                     // ...reached by recorded pro jumps, which are harder than the stage's main path allows.
                     var pro = c.jumpChecks.Where(j => j.stage == s.index && j.pro).ToList();
-                    Assert.GreaterOrEqual(pro.Count, 2, $"{Where(c, s.index, -1)}: no recorded pro route");
+                    Assert.GreaterOrEqual(pro.Count, Rules.Tier(s.tier).proHops, $"{Where(c, s.index, -1)}: no recorded pro route");
                     var rule = Rules.Tier(s.tier);
                     Assert.Greater(rule.proGapFraction, rule.gapFraction.y, $"tier {s.tier}: pro routes are harder");
                     Assert.Greater(pro.Max(j => j.gap / j.maxGap), 0.75f, $"{Where(c, s.index, -1)}: the pro route is no test");

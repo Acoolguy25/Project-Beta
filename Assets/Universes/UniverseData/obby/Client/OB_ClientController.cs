@@ -101,6 +101,8 @@ namespace Universes.UniverseData.obby.Client {
         public OB_Atmosphere atmosphere;
         [Tooltip("Parkour moves and ragdoll for the local player; hazards knock the character limp.")]
         public CharacterParkour parkour;
+        [Tooltip("The opt-in Dash: the obby turns it on while it is shown (and the sprint key stops sprinting).")]
+        public CharacterDash dash;
         [Tooltip("Velocity (m/s, along up) a hazard flings the character with before the respawn.")]
         [Min(0f)] public float hazardFling = 11f;
         [Tooltip("Random sideways part (m/s) of the hazard fling.")]
@@ -173,9 +175,15 @@ namespace Universes.UniverseData.obby.Client {
             if (backdrop != null && course != null) backdrop.Arrange(null, course.LobbySpawn);
         }
 
-        void OnEnable() => RisingLava.ChaseStarted += OnLavaChase;
+        void OnEnable() {
+            RisingLava.ChaseStarted += OnLavaChase;
+            if (dash != null) dash.SetEnabled(true);
+        }
 
-        void OnDisable() => RisingLava.ChaseStarted -= OnLavaChase;
+        void OnDisable() {
+            RisingLava.ChaseStarted -= OnLavaChase;
+            if (dash != null) dash.SetEnabled(false);
+        }
 
         void OnLavaChase(RisingLava lava) => Toast("THE LAVA IS RISING!  <size=75%><alpha=#CC>CLIMB!</size>", OB_Palette.Lava, 2.5f);
 
@@ -300,6 +308,8 @@ namespace Universes.UniverseData.obby.Client {
                         // Same numbering as the stage card: reaching checkpoint 3 starts stage 4.
                         Toast($"CHECKPOINT  <size=75%><alpha=#CC>STAGE {message.checkpoint + 1} / {total}</size>", OB_Palette.Go);
                     if (fx != null) fx.Checkpoint(newTier, accent, course.Layout.stages[message.checkpoint].spawn);
+                    // A flip pad holds until the next one: a flip never carries into the next stage.
+                    if (CharacterMovement.Local != null && CharacterMovement.Local.Gravity != null) CharacterMovement.Local.Gravity.Clear();
                     ShowSplit(message);
                     ShowTierSplit(message);
                     Punch.Pop(stageCard, stagePopFrom, stagePopSeconds);
@@ -334,6 +344,10 @@ namespace Universes.UniverseData.obby.Client {
                     break;
                 case OB_ProgressReason.Fell:
                     Toast("Back to your checkpoint.", OB_Palette.InkSoft, 1.5f);
+                    if (fx != null) fx.Fell();
+                    break;
+                case OB_ProgressReason.OutOfBounds:
+                    Toast("Out of bounds. Back to your checkpoint.", OB_Palette.InkSoft, 1.5f);
                     if (fx != null) fx.Fell();
                     break;
             }
@@ -612,7 +626,8 @@ namespace Universes.UniverseData.obby.Client {
             Vector2 size = hintLabel.GetPreferredValues(hintLabel.text, room, 0f);
             size.x = Mathf.Min(size.x, room);
             hintBacking.sizeDelta = size + hintBackingPadding * 2f;
-            hintBacking.anchoredPosition = -hintBackingPadding;
+            // The hint's text is centred in its box, so the backing is centred under the race clock with it.
+            hintBacking.anchoredPosition = new Vector2((room - size.x) * 0.5f - hintBackingPadding.x, -hintBackingPadding.y);
         }
 
         /// <summary>

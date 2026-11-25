@@ -74,6 +74,12 @@ namespace Universes.UniverseData.obby {
         public static readonly Color IceDeep = Hex(0x7FCBF2);
         public static readonly Color Wind = Hex(0x73B8FF);
         public static readonly Color CrusherStone = Hex(0x8E97B0);
+        public static readonly Color Ghost = Hex(0xD9F4FF);
+        public static readonly Color Honey = Hex(0xFFB42E);
+        public static readonly Color HoneyDeep = Hex(0xC9731A);
+        public static readonly Color Ring = Hex(0x39E6C0);
+        public static readonly Color Lift = Hex(0x7C8CFF);
+        public static readonly Color Rope = Hex(0xD7B98A);
 
         // Neutral blocks (lobby, checkpoint pads, movers)
         public static readonly Color Stone = Hex(0xE4E9F5);

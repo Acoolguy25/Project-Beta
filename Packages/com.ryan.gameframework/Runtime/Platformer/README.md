@@ -24,6 +24,9 @@ game's server with `PlatformerQuery` against replicated positions.
 | `RisingLava` | Per-player lava chase: starts when the local player is over its footprint, rises at a set speed to a set height; `Rise` and `IsOver` are static so the server runs the same chase (`ChaseStarted` event) | `surface` transform; the server decides deaths |
 | `IceSurface` | Slippery ground: its `traction` (0-1) limits how fast a standing character can change velocity, so it slides and keeps its speed | Solid collider (found from the ground with `GetComponentInParent`) |
 | `WindVolume` | Pushes the local character along `localDirection` while inside, at `speed` plus a cosine gust on `PlatformerClock`; sizes its optional streak particles to the box (`Resize`, `Entered` event) | Trigger collider |
+| `StickyZone` | Honey: a trigger over a slab that cuts the local character's walking pace to `keep` of normal while grounded (a push against its steering); `Entered` event | Solid slab + a second trigger collider (fitted in `Configure`) |
+| `BoostRing` | A hoop that fires whoever enters it along a fixed velocity (sizes its trigger and hoop; the launching is the `LaunchPad` beside it) | Trigger collider + `LaunchPad` |
+| `SwingPlatform` | Trapeze: a platform hanging a rope's length below the pivot (this object); the swing is a `NetworkPlatform` rotation the game configures from `MotionDelta` / `MotionSpeed` | Rigidbody + `NetworkPlatform` + board collider |
 | `HazardVolume` | Marks lava/spikes; the server sends touching characters back | Any collider |
 | `KnockbackSurface` | Bumper / sweeper: a hit flings the character along the obstacle's motion (hard hits ragdoll it) | Solid collider on a moving object |
 | `CheckpointMarker` | Flag presentation for a reached checkpoint | Renderers |
