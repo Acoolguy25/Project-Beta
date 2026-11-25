@@ -244,7 +244,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         // ---------------------------------------------------------------- round card
         static void BuildRoundCard(RectTransform canvas, HS_ClientController hud) {
             RectTransform layer = Layer(canvas, "Round");
-            RectTransform card = Card(layer, "RoundCard", new Vector2(0.5f, 1f), new Vector2(0f, -66f), new Vector2(460f, 96f), UIColorRole.SurfaceRaised, 20f);
+            RectTransform card = Card(layer, "RoundCard", new Vector2(0.5f, 1f), new Vector2(0f, -66f), new Vector2(460f, 96f), UIColorRole.Overlay, 20f);
             hud.roundCard = Fader(layer, false);
 
             // Centre: phase over timer, countdown bar along the bottom.
@@ -290,7 +290,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         // ---------------------------------------------------------------- role card and location
         static void BuildRoleCard(RectTransform canvas, HS_ClientController hud) {
             RectTransform layer = Layer(canvas, "Role");
-            RectTransform card = Card(layer, "RoleCard", Vector2.zero, new Vector2(16f, 16f), new Vector2(400f, 100f), UIColorRole.SurfaceRaised, 18f);
+            RectTransform card = Card(layer, "RoleCard", Vector2.zero, new Vector2(16f, 16f), new Vector2(400f, 100f), UIColorRole.Overlay, 18f);
             hud.roleCard = Fader(layer, false);
             RectTransform accent = Pinned(card, "Accent", new Vector2(0f, 0.5f), new Vector2(10f, 0f), new Vector2(6f, 64f));
             hud.roleAccent = Free(Rounded(accent, UIColorRole.Success, 3f, raycast: false));
@@ -308,7 +308,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             RectTransform chipLayer = Layer(canvas, "Location");
             RectTransform chip = Pinned(chipLayer, "LocationChip", Vector2.zero, new Vector2(16f, 126f), new Vector2(LocationChipWidth, 38f));
             Shadow(chip, 16f, 4f, 0.3f);
-            Rounded(chip, UIColorRole.Surface, 19f, raycast: false);
+            Rounded(chip, UIColorRole.Overlay, 19f, raycast: false);
             Row(chip.gameObject, 8f, Pad(12, 0), TextAnchor.MiddleLeft, controlWidth: false);
             Icon(chip, LocationIcon, 18f, UIColorRole.Accent);
             hud.locationLabel = Text(chip, "Room", "Living Room", UIText.Strong, UIColorRole.TextPrimary);
@@ -335,7 +335,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             RectTransform layer = Layer(canvas, "Taunt");
             RectTransform prompt = Pinned(layer, "TauntPrompt", new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(300f, 52f));
             Shadow(prompt, 20f, 6f, 0.4f);
-            Rounded(prompt, UIColorRole.SurfaceRaised, 26f, raycast: false);
+            Rounded(prompt, UIColorRole.Overlay, 26f, raycast: false);
             RectTransform row = Fill(prompt, "Row", 16f, 0f, 16f, 6f);
             Row(row.gameObject, 10f, Pad(0), TextAnchor.MiddleCenter);
             KeyHint(row, "R", UIColorRole.TextPrimary);
@@ -362,7 +362,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
 
             RectTransform row = Node(list, "FeedRow");
             Size(row, -1f, 36f, 1f);
-            Rounded(row, UIColorRole.Surface, 10f, raycast: false);
+            Rounded(row, UIColorRole.Overlay, 10f, raycast: false);
             Row(row.gameObject, 8f, Pad(10, 0), TextAnchor.MiddleLeft, controlWidth: false);
             var feedRow = row.gameObject.AddComponent<HS_FeedRow>();
             feedRow.icon = Icon(row, TagIcon, 18f, UIColorRole.Warning);
@@ -390,7 +390,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             // Just under the round card: clear of the character's head and of the world popups above it (taunt XP).
             RectTransform toast = Pinned(layer, "Toast", new Vector2(0.5f, 0.78f), Vector2.zero, new Vector2(780f, 64f));
             Shadow(toast, 24f, 6f, 0.4f);
-            Rounded(toast, UIColorRole.SurfaceRaised, 32f, raycast: false);
+            Rounded(toast, UIColorRole.Overlay, 32f, raycast: false);
             Row(toast.gameObject, 12f, Pad(22, 0), TextAnchor.MiddleCenter);
             hud.toastIcon = Icon(toast, InfoIcon, 28f, UIColorRole.Warning);
             hud.toastLabel = Text(toast, "Message", "Run and hide!", UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
@@ -491,7 +491,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             RectTransform layer = Layer(canvas, "Points");
             RectTransform chip = Pinned(layer, "PointsChip", Vector2.zero, new Vector2(16f + LocationChipWidth + 8f, 126f), new Vector2(PointsChipWidth, 38f));
             Shadow(chip, 16f, 4f, 0.3f);
-            Rounded(chip, UIColorRole.Surface, 19f, raycast: false);
+            Rounded(chip, UIColorRole.Overlay, 19f, raycast: false);
             Row(chip.gameObject, 8f, Pad(12, 0), TextAnchor.MiddleLeft, controlWidth: false);
             Icon(chip, PointsIcon, 18f, UIColorRole.Warning);
             hud.pointsLabel = Text(chip, "Points", "0", UIText.Strong, UIColorRole.TextPrimary);
@@ -526,7 +526,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             RectTransform layer = Layer(canvas, "Event");
             RectTransform chip = Pinned(layer, "EventChip", new Vector2(0.5f, 1f), new Vector2(0f, -170f), new Vector2(260f, 40f));
             Shadow(chip, 16f, 4f, 0.35f);
-            Rounded(chip, UIColorRole.SurfaceRaised, 20f, raycast: false);
+            Rounded(chip, UIColorRole.Overlay, 20f, raycast: false);
             Row(chip.gameObject, 8f, Pad(14, 0), TextAnchor.MiddleCenter, controlWidth: false);
             hud.eventIcon = Free(Icon(chip, BlackoutIcon, 20f, UIColorRole.Warning));
             hud.eventLabel = Text(chip, "Event", "BLACKOUT 0:18", UIText.Strong, UIColorRole.Warning, TextAlignmentOptions.MidlineLeft);

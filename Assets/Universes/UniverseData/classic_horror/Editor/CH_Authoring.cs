@@ -1011,7 +1011,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
 
         /// <summary>Bottom centre: the subtitles, as a card that fades in for each line (with static over Mara's radio).</summary>
         static void BuildRadio(RectTransform canvas, CH_RadioFeed radio) {
-            RectTransform card = HudKit.Card(canvas, "RadioTranscript", new Vector2(0.5f, 0f), new Vector2(0f, 120f), new Vector2(820f, 120f));
+            RectTransform card = HudKit.Card(canvas, "RadioTranscript", new Vector2(0.5f, 0f), new Vector2(0f, 120f), new Vector2(820f, 120f), seeThrough: true);
             HudKit.AccentStripe(card, Amber, 4f, left: true);
             UIKit.Row(card.gameObject, 16f, new RectOffset(22, 26, 18, 18), TextAnchor.UpperLeft);
             UIKit.FitContent(card.gameObject, false, true);
