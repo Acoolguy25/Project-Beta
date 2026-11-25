@@ -15,15 +15,30 @@ namespace Universes.UniverseData.tower_defense {
         [Tooltip("Height of the pad's top surface; towers stand on it.")]
         public float topHeight = 0.6f;
 
+        [Tooltip("The helipad model: hidden while the cell only shows its grid ring.")]
+        public GameObject padModel;
+        [Tooltip("Thinner, dimmer glow for a grid ring.")]
+        [Range(0f, 1f)] public float ringAlpha = 0.45f;
+
+        public enum Style { Pad, Ring }
+        [HideInInspector] public Style style = Style.Pad;
         [HideInInspector] public Color builtColor;
         [HideInInspector] public bool built, focused;
+
+        /// <summary>A full pad (helipad plus glow) or just a faint grid ring.</summary>
+        public void SetStyle(Style value) {
+            style = value;
+            if (padModel != null) padModel.SetActive(value == Style.Pad);
+            Refresh();
+        }
 
         /// <summary>Recolours the glow ring for the pad's current state.</summary>
         public void Refresh() {
             if (glow == null) return;
             Color c = focused ? focusedColor : built ? builtColor : idleColor;
+            if (style == Style.Ring) c.a *= ringAlpha;
             glow.startColor = glow.endColor = c;
-            glow.widthMultiplier = focused ? 0.35f : 0.22f;
+            glow.widthMultiplier = style == Style.Ring ? 0.12f : focused ? 0.35f : 0.22f;
         }
     }
 }

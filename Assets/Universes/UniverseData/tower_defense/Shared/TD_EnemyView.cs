@@ -7,6 +7,8 @@ namespace Universes.UniverseData.tower_defense {
     /// </summary>
     public sealed class TD_EnemyView : MonoBehaviour {
         public Transform body;
+        [Tooltip("Wheels, rotors, suspension and banking; null on a plain body.")]
+        public TD_EnemyAnimator animator;
         [Tooltip("The vehicle's renderers: tinted while slowed and flashed when hit.")]
         public Renderer[] bodyRenderers;
         [Tooltip("Scaled on X from 0 to 1 with the enemy's health.")]

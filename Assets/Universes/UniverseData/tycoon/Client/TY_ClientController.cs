@@ -106,7 +106,11 @@ namespace Universes.UniverseData.tycoon.Client {
             return filter.sharedMesh.bounds.extents.y * body.localScale.y - body.localPosition.y;
         }
 
+        TY_BuildPreview preview;
+
         void Start() {
+            preview = gameObject.AddComponent<TY_BuildPreview>();
+            preview.Setup(map.ghostMaterial, PadLanes.Length);
             visuals = new PlotVisual[map.PlotCount];
             for (int i = 0; i < visuals.Length; i++) {
                 var v = visuals[i] = new PlotVisual();
@@ -339,6 +343,9 @@ namespace Universes.UniverseData.tycoon.Client {
                 // Investments are the owner's own business: other players' plots do not show the pad.
                 bool show = owned && item >= 0 && (mine || PadLanes[lane] != TY_ItemKind.Invest);
                 if (pad.gameObject.activeSelf != show) pad.gameObject.SetActive(show);
+                // Your own pads hover a see-through copy of what they would build, where it would stand.
+                if (mine) preview.Set(lane, show ? item : -1, show ? map.itemPrefabs[item] : null, map.plots[index].itemRoot, pad.transform, TY_Lanes.Color(PadLanes[lane]));
+                else preview.Release(lane, pad.transform);
                 if (!show) continue;
                 var data = TY_Catalog.Items[item];
                 long price = TY_Catalog.Price(item, rebirths, mine && hasWallet ? wallet.invested : 0);

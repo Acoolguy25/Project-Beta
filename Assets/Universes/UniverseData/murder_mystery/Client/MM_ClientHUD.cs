@@ -268,11 +268,13 @@ namespace Universes.UniverseData.murder_mystery.Client {
 
         void OnEnable() {
             ToolControls.interactPressed += TryThrow;
+            CharacterControls.LockKeyboardZoom(); // E is this game's action key, not camera zoom
             MoodVolume.Apply(mood, moodFadeSeconds);
         }
 
         void OnDisable() {
             ToolControls.interactPressed -= TryThrow;
+            CharacterControls.UnlockKeyboardZoom();
             MoodVolume.Clear(moodFadeSeconds);
             ClearDroppedGun();
             gunOnFloor = false;

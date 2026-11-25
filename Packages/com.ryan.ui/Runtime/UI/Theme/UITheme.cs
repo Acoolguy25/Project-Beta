@@ -29,6 +29,11 @@ namespace RyanAssets.UI {
         Currency,
         /// <summary>System lines in chat (joins, leaves, server notices).</summary>
         SystemText,
+        /// <summary>
+        /// A see-through backing for HUD pieces that stay on screen while playing (wallets, goals, shops):
+        /// the game stays visible behind it. Modal cards use <see cref="SurfaceRaised"/> instead.
+        /// </summary>
+        Overlay,
     }
 
     /// <summary>
@@ -48,6 +53,8 @@ namespace RyanAssets.UI {
         [Header("Surfaces")]
         public Color surface = Hex(0x0F1218, 0.72f);
         public Color surfaceRaised = Hex(0x151922, 0.97f);
+        [Tooltip("Backing of always-on in-play HUD pieces; see through enough to read the game behind it.")]
+        public Color overlay = Hex(0x0F1218, 0.45f);
         public Color surfaceInset = Hex(0xFFFFFF, 0.06f);
         public Color surfaceHover = Hex(0xFFFFFF, 0.12f);
         public Color stroke = Hex(0xFFFFFF, 0.09f);
@@ -136,6 +143,7 @@ namespace RyanAssets.UI {
             UIColorRole.Danger => danger,
             UIColorRole.Currency => currency,
             UIColorRole.SystemText => systemText,
+            UIColorRole.Overlay => overlay,
             _ => Color.magenta,
         };
 

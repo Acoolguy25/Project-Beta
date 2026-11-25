@@ -25,6 +25,11 @@ namespace Universes.UniverseData.tycoon {
         /// income for good, kept through rebirths. Value: income added per level (0.05 = +5%). Appended.
         /// </summary>
         Invest,
+        /// <summary>
+        /// Scenery bought for looks only: no income. Built decorations stay through every rebirth and are
+        /// never needed for the rebirth. Appended.
+        /// </summary>
+        Decor,
     }
 
     /// <summary>One purchasable thing on a plot. Positions are in plot space: +Z faces the plaza.</summary>
@@ -69,6 +74,7 @@ namespace Universes.UniverseData.tycoon {
             TY_ItemKind.Rebirth => "More income, +perk token",
             TY_ItemKind.Landmark => $"x{value:0.##} income, kept",
             TY_ItemKind.Invest => $"+{value * 100:0}% income, kept",
+            TY_ItemKind.Decor => "Looks great, no income",
             _ => "",
         };
     }
@@ -124,8 +130,12 @@ namespace Universes.UniverseData.tycoon {
             TY_ItemKind.Utility => new Vector3(13.5f, 0f, 7f),
             TY_ItemKind.Landmark => new Vector3(0f, 0f, 6f),
             TY_ItemKind.Invest => new Vector3(4f, 0f, 14f),
+            TY_ItemKind.Decor => new Vector3(-10.5f, 0f, 2.2f),
             _ => new Vector3(0f, 0f, 14f),
         };
+
+        /// <summary>Plot-space z of the strip of lawn just outside the front wall, where the decorations stand.</summary>
+        public const float YardZ = PlotSize * 0.5f + 2.6f;
 
         static Vector3 Dropper(int k) => new(-16f + k * 3.25f, 0f, BeltZ);
         static Vector3 Lot(float x, float z) => new(x, 0f, z);
@@ -172,6 +182,17 @@ namespace Universes.UniverseData.tycoon {
 
             // Bought again and again once the factory is complete: a use for late cash (see InvestPrice).
             /*28*/ new("INVEST", 0, -1, TY_ItemKind.Invest, 0.05, 0, Vector3.zero),
+
+            // Decorations: a lane of their own that earns nothing. They dress the yard outside the front wall, where
+            // every player passing on the plaza path sees them (the lot inside is full), and every rebirth keeps
+            // them. Positions are the middle of each set; a test keeps them outside the wall.
+            /*29*/ new("Flower Beds", 400, 11, TY_ItemKind.Decor, 0, 0, Lot(0f, YardZ)),
+            /*30*/ new("Garden Trees", 1_500, 29, TY_ItemKind.Decor, 0, 0, Lot(0f, YardZ + 3f)),
+            /*31*/ new("Park Benches", 4_000, 30, TY_ItemKind.Decor, 0, 0, Lot(0f, YardZ + 1.2f)),
+            /*32*/ new("Gate Flags", 9_000, 31, TY_ItemKind.Decor, 0, 0, Lot(0f, YardZ - 1.4f)),
+            /*33*/ new("Duck Pond", 20_000, 32, TY_ItemKind.Decor, 0, 0, Lot(-12f, YardZ + 5f)),
+            /*34*/ new("Fairy Lights", 45_000, 33, TY_ItemKind.Decor, 0, 0, Lot(0f, -18.8f)),
+            /*35*/ new("Hot-Air Balloon", 100_000, 34, TY_ItemKind.Decor, 0, 0, Lot(13f, YardZ + 5f)),
         };
 
         public static int Count => Items.Length;
@@ -182,10 +203,12 @@ namespace Universes.UniverseData.tycoon {
         public static ulong AllButRebirth { get; } = ((1ul << Count) - 1ul) & ~(1ul << RebirthIndex) & ~(1ul << InvestIndex);
         /// <summary>Every landmark.</summary>
         public static ulong LandmarkMask { get; } = KindMask(TY_ItemKind.Landmark);
+        /// <summary>Every decoration (kept through rebirths, never needed for one).</summary>
+        public static ulong DecorMask { get; } = KindMask(TY_ItemKind.Decor);
         /// <summary>Every collector upgrade (kept through rebirths by the Head Office level unlock).</summary>
         public static ulong UtilityMask { get; } = KindMask(TY_ItemKind.Utility);
-        /// <summary>The factory a rebirth needs complete: everything except the rebirth and the landmarks.</summary>
-        public static ulong BaseMask { get; } = AllButRebirth & ~LandmarkMask;
+        /// <summary>The factory a rebirth needs complete: everything except the rebirth, the landmarks and the decorations.</summary>
+        public static ulong BaseMask { get; } = AllButRebirth & ~LandmarkMask & ~DecorMask;
         /// <summary>Items in <see cref="BaseMask"/>: the "x/22 built" of the build plan.</summary>
         public static int BaseCount { get; } = OwnedCount(BaseMask);
         public static int LandmarkCount { get; } = OwnedCount(LandmarkMask);
@@ -262,9 +285,9 @@ namespace Universes.UniverseData.tycoon {
             return -1;
         }
 
-        /// <summary>What a plot keeps through a rebirth: the starter, every landmark, and (Head Office) the collector lane.</summary>
+        /// <summary>What a plot keeps through a rebirth: the starter, every landmark and decoration, and (Head Office) the collector lane.</summary>
         public static ulong RebirthKeeps(ulong purchased, bool keepCollectorLane) =>
-            StarterMask | (purchased & LandmarkMask) | (keepCollectorLane ? purchased & UtilityMask : 0ul);
+            StarterMask | (purchased & (LandmarkMask | DecorMask)) | (keepCollectorLane ? purchased & UtilityMask : 0ul);
 
         // ---------------------------------------------------------------- prices
         /// <summary>

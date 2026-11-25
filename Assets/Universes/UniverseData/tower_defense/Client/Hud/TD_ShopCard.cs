@@ -1,5 +1,7 @@
 using TMPro;
+using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Universes.UniverseData.tower_defense.Client {
@@ -8,7 +10,11 @@ namespace Universes.UniverseData.tower_defense.Client {
     /// tower the player has not unlocked yet shows a level badge ("LV 3") over a darkened portrait,
     /// so the next unlock is always in sight.
     /// </summary>
-    public sealed class TD_ShopCard : MonoBehaviour {
+    public sealed class TD_ShopCard : MonoBehaviour, IPointerClickHandler {
+        /// <summary>Raised with <see cref="index"/> when the card is clicked (it arms or drops the tower).</summary>
+        public event Action<int> Clicked;
+        [Tooltip("Position in the shop (the tower kind).")]
+        public int index;
         public RectTransform body;
         public Image outline, portrait, costIcon;
         public TMP_Text costLabel;
@@ -24,6 +30,10 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Tooltip("Hidden while locked (the price is replaced by the level badge).")]
         public GameObject costGroup;
         public Color lockedPortrait = new(0.25f, 0.27f, 0.32f, 1f);
+
+        public void OnPointerClick(PointerEventData eventData) {
+            if (eventData.button == PointerEventData.InputButton.Left) Clicked?.Invoke(index);
+        }
 
         bool selected;
         Color accent, danger, normalCost;

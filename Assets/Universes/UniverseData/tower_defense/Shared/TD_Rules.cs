@@ -28,7 +28,7 @@ namespace Universes.UniverseData.tower_defense {
 
         public TD_EnemyStats(string name, int health, float speed, int reward, int leakDamage, bool flying, float armor,
             float shield = 0f, float heal = 0f, int splits = 0, string trait = "", string counter = "") {
-            this.name = name; this.health = health; this.speed = speed; this.reward = reward;
+            this.name = name; this.health = health; this.speed = speed * TD_Rules.WorldScale; this.reward = reward;
             this.leakDamage = leakDamage; this.flying = flying; this.armor = armor;
             this.shield = shield; this.heal = heal; this.splits = splits; this.trait = trait; this.counter = counter;
         }
@@ -53,9 +53,9 @@ namespace Universes.UniverseData.tower_defense {
 
         public TD_TowerStats(string name, int cost, float range, float damage, float fireRate, float splash, float slow, bool hitsAir, string blurb,
             int chain = 0, float minRange = 0f, string unlockId = "") {
-            this.name = name; this.cost = cost; this.range = range; this.damage = damage; this.fireRate = fireRate;
-            this.splash = splash; this.slow = slow; this.hitsAir = hitsAir; this.blurb = blurb;
-            this.chain = chain; this.minRange = minRange; this.unlockId = unlockId ?? "";
+            this.name = name; this.cost = cost; this.range = range * TD_Rules.WorldScale; this.damage = damage; this.fireRate = fireRate;
+            this.splash = splash * TD_Rules.WorldScale; this.slow = slow; this.hitsAir = hitsAir; this.blurb = blurb;
+            this.chain = chain; this.minRange = minRange * TD_Rules.WorldScale; this.unlockId = unlockId ?? "";
         }
     }
 
@@ -76,8 +76,17 @@ namespace Universes.UniverseData.tower_defense {
         public const int StartCash = 400;
         /// <summary>Waves in a Normal or Hard game; Endless keeps going (<see cref="TD_Modes"/>).</summary>
         public const int WaveCount = 20;
-        public const float FlyHeight = 7f;
-        public const float SlotReach = 6f;
+        /// <summary>
+        /// Every distance below (lane, tower cells, ranges, speeds, blasts) is written in the original design
+        /// metres and multiplied by this, so the whole battlefield is one tight, readable size and the time an
+        /// enemy spends in a tower's range does not change.
+        /// </summary>
+        public const float WorldScale = 0.6f;
+        public const float FlyHeight = 7f * WorldScale;
+        /// <summary>Metres between neighbouring tower cells.</summary>
+        public const float CellSize = 4.5f;
+        /// <summary>A player can build on, upgrade or sell a cell this close to their character.</summary>
+        public const float PlaceReach = 26f;
         public const float SlowSeconds = 1.6f;
         /// <summary>Share of everything spent on a tower (build plus upgrades) paid back when it is sold.</summary>
         public const float SellRefundRate = 0.7f;
@@ -94,15 +103,15 @@ namespace Universes.UniverseData.tower_defense {
         /// </summary>
         public const float ShieldBlockBelow = 30f;
         /// <summary>Medics heal enemies up to this many metres ahead or behind them on the road.</summary>
-        public const float HealRadius = 12f;
+        public const float HealRadius = 12f * WorldScale;
         /// <summary>Splash damage on enemies around the one a shell was aimed at, as a share of the hit.</summary>
         public const float SplashFalloff = 0.6f;
         /// <summary>A chain shot jumps at most this far (metres) to its next enemy.</summary>
-        public const float ChainRange = 11f;
+        public const float ChainRange = 11f * WorldScale;
         /// <summary>Damage kept on each jump of a chain shot.</summary>
         public const float ChainFalloff = 0.8f;
         /// <summary>Drones released by a destroyed carrier spread out this far behind it (metres).</summary>
-        public const float SplitSpacing = 1.4f;
+        public const float SplitSpacing = 1.4f * WorldScale;
         /// <summary>Health grows by this factor per wave past wave 20 in Endless, on top of the normal curve.</summary>
         public const float EndlessGrowth = 1.12f;
         /// <summary>From this wave on a Heavy Tank comes every <see cref="BossEvery"/> waves.</summary>
@@ -111,19 +120,81 @@ namespace Universes.UniverseData.tower_defense {
         /// <summary>Fast forward runs while more than half of the players vote for it.</summary>
         public static bool FastVotePasses(int votes, int players) => players > 0 && votes * 2 > players;
 
-        /// <summary>Lane from the enemy hangar to the base, on flat ground (y = 0).</summary>
-        public static readonly Vector3[] Lane = {
-            new(-70f, 0f, -48f), new(-70f, 0f, 28f), new(-36f, 0f, 28f), new(-36f, 0f, -30f), new(0f, 0f, -30f),
-            new(0f, 0f, 40f), new(34f, 0f, 40f), new(34f, 0f, -44f), new(70f, 0f, -44f), new(70f, 0f, 10f)
-        };
+        /// <summary>
+        /// The road from the dark tunnel the enemies drive out of to the base, on flat ground (y = 0). The
+        /// first point is deep inside the tunnel (enemies start there, out of sight) and the second is its mouth.
+        /// </summary>
+        public static readonly Vector3[] Lane = Scaled(
+            new Vector3(-70f, 0f, -70f), new Vector3(-70f, 0f, -48f), new Vector3(-70f, 0f, 28f), new Vector3(-36f, 0f, 28f), new Vector3(-36f, 0f, -30f), new Vector3(0f, 0f, -30f),
+            new Vector3(0f, 0f, 40f), new Vector3(34f, 0f, 40f), new Vector3(34f, 0f, -44f), new Vector3(70f, 0f, -44f), new Vector3(70f, 0f, 10f));
 
-        /// <summary>Tower pads beside the lane.</summary>
-        public static readonly Vector3[] Slots = {
-            new(-61f, 0f, -24f), new(-79f, 0f, 6f), new(-53f, 0f, 19f), new(-53f, 0f, 37f), new(-45f, 0f, 4f),
-            new(-27f, 0f, 14f), new(-18f, 0f, -21f), new(-18f, 0f, -39f), new(-9f, 0f, 2f), new(9f, 0f, 20f),
-            new(17f, 0f, 49f), new(17f, 0f, 31f), new(25f, 0f, 0f), new(43f, 0f, -18f), new(52f, 0f, -35f),
-            new(52f, 0f, -53f), new(61f, 0f, -20f), new(79f, 0f, -24f)
-        };
+        /// <summary>Road width in metres; towers stay off it.</summary>
+        public const float RoadWidth = 9f * WorldScale;
+        /// <summary>The rectangle (x, z min and max) cells may cover.</summary>
+        public static readonly Vector4 BuildArea = new(-54f, -40f, 54f, 34f);
+        /// <summary>Cells reach at most this far from the road: placing out of range of everything is a choice too.</summary>
+        const float CellMaxRoadDistance = 18f;
+
+        /// <summary>
+        /// Every tower cell: a grid anywhere beside the road (off the road, the enemy tunnel and the base), so
+        /// where a tower goes is the player's choice. The index of a cell is its slot number on the wire.
+        /// </summary>
+        public static readonly Vector3[] Slots = BuildCells();
+
+        static Vector3[] Scaled(params Vector3[] design) {
+            var result = new Vector3[design.Length];
+            for (int i = 0; i < design.Length; i++) result[i] = design[i] * WorldScale;
+            return result;
+        }
+
+        static Vector3[] BuildCells() {
+            var cells = new List<Vector3>();
+            Vector3 mouth = Lane[1], end = Lane[^1];
+            for (float x = BuildArea.x; x <= BuildArea.z + 0.01f; x += CellSize)
+                for (float z = BuildArea.y; z <= BuildArea.w + 0.01f; z += CellSize) {
+                    var cell = new Vector3(x, 0f, z);
+                    float road = DistanceToLane(cell);
+                    if (road < RoadWidth * 0.5f + 1.7f || road > CellMaxRoadDistance) continue;
+                    if (FlatDistance(cell, mouth) < 12f || FlatDistance(cell, end) < 20f) continue;
+                    cells.Add(cell);
+                }
+            return cells.ToArray();
+        }
+
+        static float FlatDistance(Vector3 a, Vector3 b) => Mathf.Sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z));
+
+        /// <summary>Metres from <paramref name="p"/> to the nearest point of the road's centre line.</summary>
+        public static float DistanceToLane(Vector3 p) {
+            float best = float.MaxValue;
+            for (int i = 0; i + 1 < Lane.Length; i++) {
+                Vector3 a = Lane[i], ab = Lane[i + 1] - a;
+                float t = Mathf.Clamp01(((p.x - a.x) * ab.x + (p.z - a.z) * ab.z) / (ab.x * ab.x + ab.z * ab.z));
+                best = Mathf.Min(best, FlatDistance(p, a + ab * t));
+            }
+            return best;
+        }
+
+        /// <summary>The cell nearest to a ground point, however far (-1 only without cells).</summary>
+        public static int NearestCell(Vector3 point) {
+            int best = -1;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < Slots.Length; i++) {
+                float d = (Slots[i].x - point.x) * (Slots[i].x - point.x) + (Slots[i].z - point.z) * (Slots[i].z - point.z);
+                if (d < bestSqr) { bestSqr = d; best = i; }
+            }
+            return best;
+        }
+
+        /// <summary>The cell nearest to a ground point (or -1 when no cell is within half a cell of it).</summary>
+        public static int CellAt(Vector3 point) {
+            int best = -1;
+            float bestSqr = CellSize * CellSize * 0.5f;
+            for (int i = 0; i < Slots.Length; i++) {
+                float d = (Slots[i].x - point.x) * (Slots[i].x - point.x) + (Slots[i].z - point.z) * (Slots[i].z - point.z);
+                if (d < bestSqr) { bestSqr = d; best = i; }
+            }
+            return best;
+        }
 
         public static readonly TD_EnemyStats[] Enemies = {
             new("Scout", 70, 7.5f, 6, 2, false, 0f),

@@ -207,6 +207,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Min(0.1f)] public float sellPopupSize = 1.3f;
         [Tooltip("Build markers rise out of the ghost at this many metres per second.")]
         [Min(0.1f)] public float markerLiftSpeed = 12f;
+        [Tooltip("While a tower is in hand, cells within this many cells of the aim show their grid ring.")]
+        [Min(1)] public int gridCells = 3;
 
         [Header("Game over")]
         [Tooltip("Confetti burst at the base on victory.")]

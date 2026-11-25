@@ -19,7 +19,7 @@ namespace Universes.UniverseData.tower_defense {
 
         public TD_AbilityStats(string name, string unlockId, int cooldownWaves, float damage, float radius, float stunSeconds, string blurb) {
             this.name = name; this.unlockId = unlockId; this.cooldownWaves = cooldownWaves; this.damage = damage;
-            this.radius = radius; this.stunSeconds = stunSeconds; this.blurb = blurb;
+            this.radius = radius * TD_Rules.WorldScale; this.stunSeconds = stunSeconds; this.blurb = blurb;
         }
     }
 

@@ -153,7 +153,7 @@ namespace Universes.UniverseData.tycoon.Tests {
         public void RebirthsKeepLandmarksAndOnlyHeadOfficeKeepsTheCollector() {
             ulong built = TY_Catalog.AllButRebirth;
             ulong kept = TY_Catalog.RebirthKeeps(built, false);
-            Assert.AreEqual(TY_Catalog.StarterMask | TY_Catalog.LandmarkMask, kept);
+            Assert.AreEqual(TY_Catalog.StarterMask | TY_Catalog.LandmarkMask | TY_Catalog.DecorMask, kept);
             ulong office = TY_Catalog.RebirthKeeps(built, true);
             Assert.AreEqual(kept | TY_Catalog.UtilityMask, office);
             Assert.Greater(TY_Catalog.Multiplier(kept, 1, NoPerks), TY_Catalog.Multiplier(TY_Catalog.StarterMask, 1, NoPerks),
@@ -323,7 +323,7 @@ namespace Universes.UniverseData.tycoon.Tests {
             TY_RebirthResult first = rewards.Rebirth(0, built, headOffice: false, extraTokens: 0);
             Assert.AreEqual(1, first.rebirths);
             Assert.AreEqual("Rebirth 1", first.Label);
-            Assert.AreEqual(TY_Catalog.StarterMask | (built & TY_Catalog.LandmarkMask), first.kept);
+            Assert.AreEqual(TY_Catalog.StarterMask | (built & (TY_Catalog.LandmarkMask | TY_Catalog.DecorMask)), first.kept);
             Assert.AreEqual(TY_Perks.TokensPerRebirth, first.tokens);
             Assert.AreEqual(rewards.rebirthXp, first.xp);
             Assert.AreEqual(TY_Catalog.LandmarkOpenedBy(1), first.landmark);

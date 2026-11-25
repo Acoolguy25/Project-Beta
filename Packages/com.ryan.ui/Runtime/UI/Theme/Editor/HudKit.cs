@@ -34,15 +34,17 @@ namespace RyanAssets.UI.Editor {
         /// <summary>A screen-space HUD canvas; HUDs sit below the shared top bar (50) and menus.</summary>
         public static RectTransform Canvas(string name, int sortingOrder) => UIKit.Canvas(name, sortingOrder);
 
-        /// <summary>A translucent panel straight over the game (theme <see cref="UIColorRole.Surface"/>).</summary>
+        /// <summary>A see-through panel straight over the game (theme <see cref="UIColorRole.Overlay"/>): for anything that stays on screen while playing.</summary>
         public static Image Glass(Component target, float radius = GlassRadius, float opacity = 1f, bool raycast = false) =>
-            UIKit.Rounded(target, UIColorRole.Surface, radius, opacity, raycast);
+            UIKit.Rounded(target, UIColorRole.Overlay, radius, opacity, raycast);
 
         /// <summary>
         /// An opaque card with a soft shadow, pinned at <paramref name="anchor"/>. With
         /// <paramref name="popup"/> it starts hidden and fades/pops in through <see cref="HudPopup"/>.
+        /// A card that stays on screen while playing passes <paramref name="seeThrough"/> for the
+        /// <see cref="UIColorRole.Overlay"/> backing instead of the opaque one (modal cards keep the opaque one).
         /// </summary>
-        public static RectTransform Card(Transform parent, string name, Vector2 anchor, Vector2 position, Vector2 size, bool popup = true, bool shadow = true) {
+        public static RectTransform Card(Transform parent, string name, Vector2 anchor, Vector2 position, Vector2 size, bool popup = true, bool shadow = true, bool seeThrough = false) {
             RectTransform card = UIKit.Pinned(parent, name, anchor, position, size);
             if (shadow) {
                 // The shadow is a child so it fades, pops and hides with the card.
@@ -57,7 +59,7 @@ namespace RyanAssets.UI.Editor {
                 shade.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
             }
             RectTransform body = UIKit.Fill(card, "Body");
-            UIKit.Rounded(body, UIColorRole.SurfaceRaised, CardRadius, raycast: false);
+            UIKit.Rounded(body, seeThrough ? UIColorRole.Overlay : UIColorRole.SurfaceRaised, CardRadius, raycast: false);
             body.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
             if (popup)
                 Popup(card, false);

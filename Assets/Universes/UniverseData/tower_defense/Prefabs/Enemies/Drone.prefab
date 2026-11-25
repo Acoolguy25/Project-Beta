@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5381624037462874685}
   - component: {fileID: 816796547243531896}
+  - component: {fileID: 5009202941230696737}
   m_Layer: 0
   m_Name: Drone
   m_TagString: Untagged
@@ -49,6 +50,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Universes.UniverseData.tower_defense.Shared::Universes.UniverseData.tower_defense.TD_EnemyView
   body: {fileID: 2807562267252242745}
+  animator: {fileID: 5009202941230696737}
   bodyRenderers:
   - {fileID: 3851308278286410167}
   healthFill: {fileID: 4065070514742990272}
@@ -66,6 +68,28 @@ MonoBehaviour:
   seen: 0
   slowed: 0
   tinted: 0
+--- !u!114 &5009202941230696737
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1270643202548658697}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27c74ba94b93fe284b2b188efe253234, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.tower_defense.Shared::Universes.UniverseData.tower_defense.TD_EnemyAnimator
+  style: 4
+  body: {fileID: 2807562267252242745}
+  wheelTurnsPerMetre: 1.0150188
+  rockHeight: 0.023519998
+  rockFrequency: 9
+  pitchDegrees: 3
+  rotorSpeed: 1800
+  hoverHeight: 0.0686
+  hoverFrequency: 2.2
+  bankDegrees: 22
 --- !u!1 &2622016424319000925
 GameObject:
   m_ObjectHideFlags: 0
@@ -93,8 +117,8 @@ Transform:
   m_GameObject: {fileID: 2622016424319000925}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.7, z: 0}
-  m_LocalScale: {x: 2.52, y: 2.52, z: 2.52}
+  m_LocalPosition: {x: 0, y: 0.48999998, z: 0}
+  m_LocalScale: {x: 1.7639999, y: 1.7639999, z: 1.7639999}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5381624037462874685}
@@ -426,7 +450,7 @@ Transform:
   m_GameObject: {fileID: 8354143559369211929}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 3.16, z: 0}
+  m_LocalPosition: {x: 0, y: 2.572, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -477,8 +501,8 @@ Transform:
   m_GameObject: {fileID: 8404356710043771722}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: -6.94, z: 0}
-  m_LocalScale: {x: 2.24, y: 2.24, z: 1}
+  m_LocalPosition: {x: 0, y: -4.1400003, z: 0}
+  m_LocalScale: {x: 1.568, y: 1.568, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5381624037462874685}
@@ -554,27 +578,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 472532, guid: debe308a6be824b239c65a42b6c0f1a4, type: 3}
       propertyPath: m_LocalScale.x
-      value: 0.44871554
+      value: 0.31410086
       objectReference: {fileID: 0}
     - target: {fileID: 472532, guid: debe308a6be824b239c65a42b6c0f1a4, type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.44871554
+      value: 0.31410086
       objectReference: {fileID: 0}
     - target: {fileID: 472532, guid: debe308a6be824b239c65a42b6c0f1a4, type: 3}
       propertyPath: m_LocalScale.z
-      value: 0.44871554
+      value: 0.31410086
       objectReference: {fileID: 0}
     - target: {fileID: 472532, guid: debe308a6be824b239c65a42b6c0f1a4, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.0010128021
+      value: 0.00070893764
       objectReference: {fileID: 0}
     - target: {fileID: 472532, guid: debe308a6be824b239c65a42b6c0f1a4, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.09267898
+      value: 0.064875275
       objectReference: {fileID: 0}
     - target: {fileID: 472532, guid: debe308a6be824b239c65a42b6c0f1a4, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.004292488
+      value: -0.0030047297
       objectReference: {fileID: 0}
     - target: {fileID: 472532, guid: debe308a6be824b239c65a42b6c0f1a4, type: 3}
       propertyPath: m_LocalRotation.w

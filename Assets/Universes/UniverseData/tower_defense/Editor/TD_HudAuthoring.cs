@@ -31,7 +31,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const float Gap = 12f;
         const float CardRadius = 14f;
         /// <summary>Shop card size: six cards fit between the level chip (bottom left) and the tower card (bottom right) at 1920 wide.</summary>
-        static readonly Vector2 CardSize = new(168f, 196f);
+        static readonly Vector2 CardSize = new(168f, 172f);
         static readonly Vector2 ModeCardSize = new(264f, 292f);
         /// <summary>Top of the retention toasts (canvas units from the top): below the leaderboard with four rows.</summary>
         const float ToastsTop = 260f;
@@ -306,7 +306,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         // ---------------------------------------------------------------- next wave
         static void NextWave(RectTransform root, TD_Hud hud) {
             RectTransform panel = Pinned(root, "NextWave", new Vector2(0.5f, 1f), new Vector2(0f, PillRowTop), new Vector2(0f, 48f));
-            Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
+            Rounded(panel, UIColorRole.Overlay, 24f, raycast: false);
             Row(panel.gameObject, 10f, Pad(16, 6), TextAnchor.MiddleCenter);
             FitContent(panel.gameObject, true, false);
             panel.gameObject.AddComponent<CanvasGroup>();
@@ -343,7 +343,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         // ---------------------------------------------------------------- fast forward (shown during waves, where the next-wave preview sits in build phases)
         static void SpeedPill(RectTransform root, TD_Hud hud) {
             RectTransform panel = Pinned(root, "FastForward", new Vector2(0.5f, 1f), new Vector2(0f, PillRowTop), new Vector2(0f, 48f));
-            Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
+            Rounded(panel, UIColorRole.Overlay, 24f, raycast: false);
             Row(panel.gameObject, 10f, Pad(6, 6), TextAnchor.MiddleCenter);
             FitContent(panel.gameObject, true, false);
             panel.gameObject.AddComponent<CanvasGroup>();
@@ -371,7 +371,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             holder.gameObject.AddComponent<CanvasGroup>();
             hud.bossPanel = holder.gameObject.AddComponent<TD_Fader>();
             RectTransform panel = Fill(holder, "Card");
-            Rounded(panel, UIColorRole.Surface, 24f, raycast: false);
+            Rounded(panel, UIColorRole.Overlay, 24f, raycast: false);
             Row(panel.gameObject, 8f, Pad(14, 6), TextAnchor.MiddleLeft);
             TdIcon(panel, "enemy_boss", 22f, Theme.danger);
             hud.bossLabel = Label(panel, "Name", "HEAVY TANK", UIText.Strong, UIColorRole.TextPrimary);
@@ -397,7 +397,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Size(slot, CardSize.x, CardSize.y + 14f);
             var card = slot.gameObject.AddComponent<TD_ShopCard>();
             card.group = slot.gameObject.AddComponent<CanvasGroup>();
-            card.group.blocksRaycasts = false;
+            card.group.blocksRaycasts = true;
+            card.index = index;
 
             RectTransform body = Node(slot, "Body");
             body.anchorMin = new Vector2(0f, 0f);
@@ -412,10 +413,10 @@ namespace Universes.UniverseData.tower_defense.Editor {
             card.outline.type = Image.Type.Sliced;
             card.outline.pixelsPerUnitMultiplier = UIThemeAssets.RoundedSpriteRadius / (CardRadius + 3f);
             card.outline.raycastTarget = false;
-            Rounded(Fill(body, "Background"), UIColorRole.SurfaceRaised, CardRadius, raycast: false);
+            Rounded(Fill(body, "Background"), UIColorRole.Overlay, CardRadius, raycast: true); // the card's click target
 
             // Picture area tinted with the tower's colour.
-            RectTransform art = Fill(body, "Art", 8f, 8f, 8f, 82f);
+            RectTransform art = Fill(body, "Art", 8f, 8f, 8f, 58f);
             Image artBack = Rounded(art, UIColorRole.SurfaceInset, CardRadius - 4f, raycast: false);
             Object.DestroyImmediate(artBack.GetComponent<UIThemeColor>());
             artBack.color = new Color(accent.r, accent.g, accent.b, 0.22f);
@@ -445,7 +446,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             locked.gameObject.SetActive(false);
 
             // Name, price and capabilities.
-            RectTransform info = Fill(body, "Info", 14f, CardSize.y - 80f, 14f, 10f);
+            RectTransform info = Fill(body, "Info", 14f, CardSize.y - 52f, 14f, 8f);
             Column(info.gameObject, 2f, null, TextAnchor.UpperLeft);
             RectTransform head = Group(info, "Head", false, 6f, TextAnchor.MiddleLeft);
             var title = Label(head, "Name", stats.name, UIText.Title, UIColorRole.TextPrimary);
@@ -456,10 +457,6 @@ namespace Universes.UniverseData.tower_defense.Editor {
             card.costIcon = TdIcon(cost, "coins", 16f, Theme.currency);
             card.costLabel = Label(cost, "Cost", $"${stats.cost}", UIText.Strong, UIColorRole.Currency, TextAlignmentOptions.MidlineRight);
             Object.DestroyImmediate(card.costLabel.GetComponent<UIThemeColor>());
-            var blurb = Label(info, "Blurb", stats.blurb, UIText.Small, UIColorRole.TextSecondary);
-            blurb.enableAutoSizing = true;
-            blurb.fontSizeMin = 10f;
-            blurb.fontSizeMax = 13f;
             RectTransform tags = Group(info, "Stats", false, 10f, TextAnchor.MiddleLeft);
             Stat(tags, "damage", TD_Rules.Damage(kind, 1).ToString("0"));
             Stat(tags, "range", TD_Rules.Range(kind, 1).ToString("0") + "m");
@@ -546,7 +543,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         // ---------------------------------------------------------------- messages
         static void PromptPill(RectTransform root, TD_Hud hud) {
             RectTransform pill = Pinned(root, "Prompt", new Vector2(0.5f, 0f), new Vector2(0f, CardSize.y + 48f), new Vector2(0f, 40f));
-            Rounded(pill, UIColorRole.Surface, 20f, raycast: false);
+            Rounded(pill, UIColorRole.Overlay, 20f, raycast: false);
             Row(pill.gameObject, 8f, Pad(18, 0), TextAnchor.MiddleCenter);
             FitContent(pill.gameObject, true, false);
             pill.gameObject.AddComponent<CanvasGroup>();
@@ -556,7 +553,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         static void ToastPill(RectTransform root, TD_Hud hud) {
             RectTransform pill = Pinned(root, "Toast", new Vector2(0.5f, 1f), new Vector2(0f, StatusTop - 172f), new Vector2(0f, 44f));
-            Rounded(pill, UIColorRole.SurfaceRaised, 22f, raycast: false);
+            Rounded(pill, UIColorRole.Overlay, 22f, raycast: false);
             Row(pill.gameObject, 10f, Pad(18, 0), TextAnchor.MiddleCenter);
             FitContent(pill.gameObject, true, false);
             pill.gameObject.AddComponent<CanvasGroup>();
@@ -641,7 +638,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 RectTransform body = Fill(holder, "Body");
                 pill.punch = body;
                 Shadow(body, 18f, 5f, 0.35f);
-                pill.back = Rounded(body, UIColorRole.Surface, AbilityPillSize.y * 0.5f, raycast: false);
+                pill.back = Rounded(body, UIColorRole.Overlay, AbilityPillSize.y * 0.5f, raycast: false);
                 Object.DestroyImmediate(body.GetComponent<UIThemeColor>()); // coloured by state at runtime
                 Row(body.gameObject, 10f, Pad(14, 6), TextAnchor.MiddleLeft);
                 RectTransform key = KeyHint(body, i == 0 ? "F" : "V", UIColorRole.TextPrimary);

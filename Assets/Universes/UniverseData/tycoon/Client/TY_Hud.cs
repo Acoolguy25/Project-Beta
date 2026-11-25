@@ -51,6 +51,12 @@ namespace Universes.UniverseData.tycoon.Client {
 
         [Header("Build list")]
         public GameObject buildPanel;
+        [Tooltip("The lane list inside the build plan; the plan's header folds it away.")]
+        public GameObject planBody;
+        public Button planToggle;
+        public Image planChevron;
+        public Sprite planOpenIcon, planClosedIcon;
+        public Key planKey = Key.B;
         public Image buildFill;
         public TMP_Text buildText;
         public TY_BuildCard[] laneCards;
@@ -125,6 +131,8 @@ namespace Universes.UniverseData.tycoon.Client {
             rebirthBadge.SetActive(false);
             rebirthCard.SetActive(false);
             buildPanel.SetActive(false);
+            planToggle.onClick.AddListener(TogglePlan);
+            SetPlanOpen(false);
             goalCard.gameObject.SetActive(false);
             perksButton.onClick.AddListener(TogglePerks);
             perksClose.onClick.AddListener(TogglePerks);
@@ -141,6 +149,7 @@ namespace Universes.UniverseData.tycoon.Client {
         void OnDestroy() {
             perksButton.onClick.RemoveListener(TogglePerks);
             perksClose.onClick.RemoveListener(TogglePerks);
+            planToggle.onClick.RemoveListener(TogglePlan);
             foreach (var row in perkRows) row.Upgrade -= RequestPerk;
             if (offlineCard != null) offlineCard.Closed -= OfflineLanded;
         }
@@ -153,6 +162,14 @@ namespace Universes.UniverseData.tycoon.Client {
             TickRush();
             var keyboard = Keyboard.current;
             if (keyboard != null && keyboard[perksKey].wasPressedThisFrame && !TextFieldFocused()) TogglePerks();
+            if (keyboard != null && keyboard[planKey].wasPressedThisFrame && !TextFieldFocused() && buildPanel.activeSelf) TogglePlan();
+        }
+
+        void TogglePlan() => SetPlanOpen(!planBody.activeSelf);
+
+        void SetPlanOpen(bool open) {
+            planBody.SetActive(open);
+            planChevron.sprite = open ? planOpenIcon : planClosedIcon;
         }
 
         static bool TextFieldFocused() {
@@ -314,6 +331,7 @@ namespace Universes.UniverseData.tycoon.Client {
             int cheapest = -1;
             long cheapestPrice = 0;
             foreach (int i in TY_Catalog.AvailableItems(p.purchased, p.rebirths)) {
+                if (TY_Catalog.Items[i].kind == TY_ItemKind.Decor) continue; // scenery is never the next step
                 long price = TY_Catalog.Price(i, p.rebirths);
                 if (cheapest < 0 || price < cheapestPrice) { cheapest = i; cheapestPrice = price; }
             }

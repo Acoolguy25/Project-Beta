@@ -111,8 +111,8 @@ namespace Universes.UniverseData.war_valley.Server {
 
         WV_TroopBrain SpawnTroop(Vector3 deployCenter, TeamConfig team, WV_TroopKind kind, int clientId) {
             // Scattered around the muster point so a queued pair does not arrive inside each other.
-            Vector3 spawnPosition = ServerPathfinding.GetRandomPositionOnCircle(
-                deployCenter, WV_Rules.TroopSpawnRadius);
+            WV_NavAreas.TryFindSpawnPosition(
+                deployCenter, WV_Rules.TroopSpawnRadius, WV_NavAreas.GetAreaMask((team ?? WV_Permissions.GetCommanderTeam(clientId)).realTeam), out Vector3 spawnPosition);
 
             LocalNPC npc = ServerNPC.SpawnNPC(troopPrefab, location: spawnPosition);
             if (npc == null)

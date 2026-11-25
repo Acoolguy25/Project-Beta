@@ -56,6 +56,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Tooltip("The shop dock; hidden while the result card shows.")]
         public CanvasGroup shopGroup;
         public TD_ShopCard[] shopCards;
+        /// <summary>A shop card was clicked (its index).</summary>
+        public event System.Action<int> CardClicked;
         [Tooltip("Index-aligned with TD_TowerKind; also used by the info card.")]
         public Sprite[] towerPortraits;
 
@@ -115,7 +117,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Min(0.1f)] public float bannerSeconds = 2.2f;
 
         // Key labels come from TD_ClientController (SetKeys), which reads the keys.
-        string readyKey = "R", fastForwardKey = "G", interactKey = "E";
+        string readyKey = "R", fastForwardKey = "G", interactKey = "E", dropKey = "Q";
         readonly string[] abilityKeys = { "F", "V" };
 
         int shownCash = -1, shownBase = -1, shownBosses = -1, shownChipWave = -1, shownTitleWave = -1, myVote = -1;
@@ -136,6 +138,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             theme = UITheme.Active;
             for (int i = 0; i < shopCards.Length; i++)
                 shopCards[i].Init(TD_Palette.Tower((TD_TowerKind)i), theme.danger, theme.currency);
+            foreach (var card in shopCards) card.Clicked += index => CardClicked?.Invoke(index);
             toast.Set(false, true);
             banner.Set(false, true);
             result.Set(false, true);
@@ -159,6 +162,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         /// <summary>Key names shown in the pills and prompts, as the controller has them bound.</summary>
+        public void SetDropKey(string key) => dropKey = key;
+
         public void SetKeys(string ready, string fastForward, string interact) {
             readyKey = ready;
             fastForwardKey = fastForward;
@@ -527,10 +532,14 @@ namespace Universes.UniverseData.tower_defense.Client {
             info.ShowBuild(selected, Portrait(selected), cash, unlockLevel);
             var t = TD_Rules.Tower(selected);
             string action = unlockLevel > 0 ? $"<color=#B4BCC8>The {t.name} unlocks at level {unlockLevel}</color>"
-                : cash >= t.cost ? $"<b>{interactKey}</b>  Build {t.name}"
+                : cash >= t.cost ? $"<b>Click</b> / <b>{interactKey}</b>  Build {t.name}"
                 : $"<color=#{ColorUtility.ToHtmlStringRGB(theme.danger)}>Need ${t.cost - cash} more for a {t.name}</color>";
-            Prompt($"{action}     <color=#B4BCC8><b>1-{TD_Rules.Towers.Length}</b>  Change tower</color>");
+            Prompt($"{action}     <color=#B4BCC8><b>{dropKey}</b>  Put away     <b>1-{TD_Rules.Towers.Length}</b>  Change tower</color>");
         }
+
+        /// <summary>A tower is in hand but the aim is off the grid.</summary>
+        public void ShowPlaceHint(TD_TowerKind kind) =>
+            Prompt($"<color=#B4BCC8>Aim at the ground beside the road to place the {TD_Rules.Tower(kind).name}     <b>{dropKey}</b>  Put away</color>");
 
         /// <param name="canSell">False for another player's tower: no sell offer, the card says who can sell it.</param>
         /// <param name="upgradeDiscount">The viewer's upgrade discount (Field Engineers): they pay the upgrade.</param>

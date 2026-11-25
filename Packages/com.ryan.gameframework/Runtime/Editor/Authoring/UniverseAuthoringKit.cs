@@ -128,7 +128,20 @@ namespace RyanAssets.Authoring {
             go.transform.localScale = scale;
             go.GetComponent<Renderer>().sharedMaterial = material;
             if (!collider) Object.DestroyImmediate(go.GetComponent<Collider>());
+            else if (type == PrimitiveType.Cylinder) UseExactCollider(go);
             return go;
+        }
+
+        /// <summary>
+        /// Gives a squashed or stretched cylinder a mesh collider that matches what is drawn. The primitive's
+        /// own capsule collider cannot be flattened: scaling its height below its radius leaves a dome as wide
+        /// as the disc, an invisible wall around anything built as a flat plaza, pad or stand.
+        /// </summary>
+        public static void UseExactCollider(GameObject go) {
+            var capsule = go.GetComponent<CapsuleCollider>();
+            if (capsule == null) return;
+            Object.DestroyImmediate(capsule);
+            go.AddComponent<MeshCollider>().sharedMesh = go.GetComponent<MeshFilter>().sharedMesh;
         }
 
         public static GameObject Empty(string name, Transform parent, Vector3 position = default) {

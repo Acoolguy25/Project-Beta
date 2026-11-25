@@ -134,8 +134,8 @@ namespace Universes.UniverseData.tower_defense.Server {
             base.OnPlayerAdded(player);
             player.cameraTypes.Clear();
             player.cameraTypes.Add(GameCameraType.ThirdPersonCamera);
-            player.walkSpeed.Value = 14f;
-            player.sprintSpeed.Value = 24f;
+            player.walkSpeed.Value = 14f * TD_Rules.WorldScale;
+            player.sprintSpeed.Value = 24f * TD_Rules.WorldScale;
             player.staminaMax.Value = 400f;
             player.staminaRegen.Value = 80f;
             var run = runs[player.Owner] = new Run();
@@ -503,7 +503,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             if (phase is TD_Phase.Vote or TD_Phase.Waiting) return "Vote for a mode first: the game starts in a moment.";
             if (!TD_Simulation.IsSlot(slot) || (int)kind >= TD_Rules.Towers.Length) return "That is not a tower pad.";
             if (!LocalCharacter.Characters.TryGetValue(connection, out var character) || character == null || character.IsDead) return "Respawn first.";
-            if (!FocusPicker.InReach(character.transform.position, TD_Rules.Slots[slot], TD_Rules.SlotReach, 2.5f)) return "Walk closer to the pad.";
+            if (!FocusPicker.InReach(character.transform.position, TD_Rules.Slots[slot], TD_Rules.PlaceReach, 2.5f)) return "Walk closer to that spot.";
             var existing = sim.Towers[slot];
             var stats = TD_Rules.Tower(existing != null ? existing.kind : kind);
             if (existing == null && stats.unlockId.Length > 0 && !retention.IsUnlocked(connection, stats.unlockId))
@@ -551,7 +551,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             var tower = TD_Simulation.IsSlot(slot) ? sim.Towers[slot] : null;
             if (tower == null) return "There is no tower to sell there.";
             if (!LocalCharacter.Characters.TryGetValue(connection, out var character) || character == null || character.IsDead) return "Respawn first.";
-            if (!FocusPicker.InReach(character.transform.position, TD_Rules.Slots[slot], TD_Rules.SlotReach, 2.5f)) return "Walk closer to the tower.";
+            if (!FocusPicker.InReach(character.transform.position, TD_Rules.Slots[slot], TD_Rules.PlaceReach, 2.5f)) return "Walk closer to the tower.";
             if (tower.owner >= 0 && tower.owner != connection.ClientId && TryOwner(tower.owner, out _, out _))
                 return $"Only {ownerNames[slot]} can sell this {TD_Rules.Tower(tower.kind).name}.";
             sim.Sell(slot, out var sold);

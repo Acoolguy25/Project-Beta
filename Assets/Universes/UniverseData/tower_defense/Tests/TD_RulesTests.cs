@@ -5,14 +5,21 @@ using UnityEngine;
 namespace Universes.UniverseData.tower_defense.Tests {
     public class TD_RulesTests {
         [Test]
-        public void SlotsSitBesideTheLaneNotOnIt() {
-            var lane = TD_Rules.LaneTrack;
+        public void CellsFormAGridBesideTheLaneNotOnIt() {
+            Assert.LessOrEqual(TD_Rules.Slots.Length, 255, "slot numbers travel as bytes");
+            Assert.Greater(TD_Rules.Slots.Length, 120, "the grid should give players real choices");
             for (int i = 0; i < TD_Rules.Slots.Length; i++) {
-                Vector3 slot = TD_Rules.Slots[i];
-                float d = Vector3.Distance(lane.Evaluate(lane.Project(slot)), slot);
-                Assert.That(d, Is.InRange(6.5f, 14f), $"slot {i} is {d:0.0} m from the road");
-                for (int j = 0; j < i; j++) Assert.Greater(Vector3.Distance(slot, TD_Rules.Slots[j]), 6f, $"slots {i} and {j} overlap");
+                Vector3 cell = TD_Rules.Slots[i];
+                Assert.Greater(TD_Rules.DistanceToLane(cell), TD_Rules.RoadWidth * 0.5f + 1.6f, $"cell {i} is on the road");
+                for (int j = 0; j < i; j++) Assert.GreaterOrEqual(Vector3.Distance(cell, TD_Rules.Slots[j]), TD_Rules.CellSize - 0.01f, $"cells {i} and {j} overlap");
             }
+        }
+
+        [Test]
+        public void TheDefenceIsOneTightSize() {
+            var lane = TD_Rules.LaneTrack;
+            Assert.Less(lane.Length, 520f, "the road should be short enough to read at a glance");
+            Assert.AreEqual(TD_TestCells.At(8), TD_Rules.CellAt(TD_Rules.Slots[TD_TestCells.At(8)] + new Vector3(0.5f, 0f, 0.5f)));
         }
 
         [Test]

@@ -13,3 +13,4 @@
 Both downloads came from the authors' own GitHub organisations, contain only models, textures and SVG
 icons (no executables or scripts were imported), and were checked for the license file before use.
 Tower and enemy portraits in `UI/Portraits/` are rendered from the prefabs by `Editor/TD_Portraits.cs`.
+- KayKit Medieval Hexagon Pack (CC0, https://kaylousberg.itch.io/kaykit-medieval-hexagon): tiles, nature, props, and since 2026-11-25 the buildings (tower bases under every tower, the village along the field edges, mills by the base).

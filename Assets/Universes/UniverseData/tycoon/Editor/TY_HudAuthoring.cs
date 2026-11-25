@@ -189,7 +189,7 @@ namespace Universes.UniverseData.tycoon.Editor {
 
         static RectTransform Card(Transform parent, string name, Vector2 anchor, Vector2 position, float width, int padding = 16, float spacing = 10f) {
             RectTransform card = UIKit.Pinned(parent, name, anchor, position, new Vector2(width, 100f));
-            UIKit.Rounded(card, UIColorRole.SurfaceRaised, 18f, 0.94f);
+            UIKit.Rounded(card, UIColorRole.Overlay, 18f);
             UIKit.Column(card.gameObject, spacing, UIKit.Pad(padding));
             UIKit.FitContent(card.gameObject, false, true);
             return card;
@@ -198,7 +198,7 @@ namespace Universes.UniverseData.tycoon.Editor {
         /// <summary>A card inside a stack (a column layout sizes it, so it has no size fitter of its own).</summary>
         static RectTransform StackCard(Transform stack, string name, int padding = 16, float spacing = 10f) {
             RectTransform card = UIKit.Node(stack, name);
-            UIKit.Rounded(card, UIColorRole.SurfaceRaised, 18f, 0.94f);
+            UIKit.Rounded(card, UIColorRole.Overlay, 18f);
             UIKit.Column(card.gameObject, spacing, UIKit.Pad(padding));
             return card;
         }
@@ -369,14 +369,25 @@ namespace Universes.UniverseData.tycoon.Editor {
             RectTransform card = Card(root, "BuildPlan", new Vector2(1f, 0f), new Vector2(-margin, margin), 410f, 14, 8f);
             hud.buildPanel = card.gameObject;
 
+            // The header is a button: the lane list below it folds away (B), so the plan costs one line of screen by default.
             RectTransform header = HRow(card, "Header", 8f, 28f);
             TyIcon(header, "construction", 22f, UIKit.Theme.warning);
             Label(header, "Title", "Build plan", UIText.Title, UIColorRole.TextPrimary).fontSize = 20f;
             Spacer(header);
             hud.buildText = Label(header, "Count", $"0/{TY_Catalog.BaseCount} built", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.MidlineRight);
+            hud.planOpenIcon = HudKit.Icon("keyboard_arrow_up");
+            hud.planClosedIcon = HudKit.Icon("expand_more");
+            hud.planChevron = HudKit.Icon(header, "expand_more", 22f, UIKit.Theme.textSecondary);
+            var toggleImage = header.gameObject.AddComponent<Image>();
+            toggleImage.color = Color.clear;
+            hud.planToggle = header.gameObject.AddComponent<Button>();
+            hud.planToggle.targetGraphic = toggleImage;
             hud.buildFill = Bar(card, "BuildBar", 8f, UIKit.Theme.warning);
 
-            hud.laneCards = TY_Lanes.BuildLanes.Select(lane => LaneCard(card, lane)).ToArray();
+            RectTransform lanes = UIKit.Node(card, "Lanes");
+            UIKit.Column(lanes.gameObject, 8f);
+            hud.planBody = lanes.gameObject;
+            hud.laneCards = TY_Lanes.BuildLanes.Select(lane => LaneCard(lanes, lane)).ToArray();
 
             // Rebirth card: only shown once every lane is complete.
             RectTransform rebirth = UIKit.Node(card, "RebirthCard");
@@ -460,7 +471,7 @@ namespace Universes.UniverseData.tycoon.Editor {
 
         static void BuildHint(RectTransform root, TY_Hud hud, float margin) {
             RectTransform pill = UIKit.Pinned(root, "Hint", new Vector2(0.5f, 0f), new Vector2(0f, margin), new Vector2(600f, HintHeight));
-            UIKit.Rounded(pill, UIColorRole.Surface, 22f, raycast: false);
+            UIKit.Rounded(pill, UIColorRole.Overlay, 22f, raycast: false);
             UIKit.Row(pill.gameObject, 10f, UIKit.Pad(18, 0), TextAnchor.MiddleCenter);
             UIKit.FitContent(pill.gameObject, true, false);
             hud.hintIcon = TyIcon(pill, "flag", 22f, UIKit.Theme.warning);
@@ -473,7 +484,7 @@ namespace Universes.UniverseData.tycoon.Editor {
 
         static void BuildToast(RectTransform root, TY_Hud hud) {
             RectTransform toast = UIKit.Pinned(root, "Toast", new Vector2(0.5f, 1f), new Vector2(0f, -78f), new Vector2(520f, 56f));
-            UIKit.Rounded(toast, UIColorRole.SurfaceRaised, 16f, raycast: false);
+            UIKit.Rounded(toast, UIColorRole.Overlay, 16f, raycast: false);
             UIKit.Row(toast.gameObject, 12f, new RectOffset(0, 22, 0, 0), TextAnchor.MiddleLeft);
             UIKit.FitContent(toast.gameObject, true, false);
             hud.toast = toast.gameObject.AddComponent<CanvasGroup>();

@@ -142,7 +142,8 @@ namespace Universes.UniverseData.tycoon.Tests {
                         challengesPaid++;
                         AddXp((int)Math.Round(challengeXp), day);
                     }
-                    int next = TY_Catalog.AvailableItems(purchased, rebirths).OrderBy(i => TY_Catalog.Price(i, rebirths)).First();
+                    // Decorations earn nothing, so the model player (who only builds to grow income) never buys them.
+                    int next = TY_Catalog.AvailableItems(purchased, rebirths).Where(i => TY_Catalog.Items[i].kind != TY_ItemKind.Decor).OrderBy(i => TY_Catalog.Price(i, rebirths)).First();
                     long price = TY_Catalog.Price(next, rebirths);
                     if (cash < price) {
                         double rate = Income() * (1 + CoinRate() * coins.incomeSeconds * Lucky());

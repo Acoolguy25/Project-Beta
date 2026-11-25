@@ -32,6 +32,8 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         [Header("Keys")]
         public Key sellKey = Key.X;
+        [Tooltip("Puts the tower in hand away (a click on its card, Backspace and Escape do too).")]
+        public Key dropKey = Key.Q;
         public Key fastForwardKey = Key.G;
         [Tooltip("Fires the EMP (the Airstrike is on the Tool map's Journal action, F).")]
         public Key empKey = Key.V;
@@ -87,7 +89,10 @@ namespace Universes.UniverseData.tower_defense.Client {
         readonly bool[] pendingPop = new bool[TD_Rules.Slots.Length];
         readonly bool[] present = new bool[TD_Rules.Slots.Length];
         readonly TD_SlotView[] slotViews = new TD_SlotView[TD_Rules.Slots.Length];
-        readonly List<Vector3> slotPositions = new(TD_Rules.Slots);
+        readonly List<int> shownGrid = new();
+        readonly Stack<TD_SlotView> padPool = new();
+        float padTop;
+        bool placing;
         GameObject[] ghosts;
         float[] markerLift;
         Renderer[][] ghostRenderers;
@@ -120,30 +125,30 @@ namespace Universes.UniverseData.tower_defense.Client {
         void Start() {
             // World popups stay off the status bar, pill row, toast and banner, and the kit's toast column.
             fx.guard = new TD_ScreenGuard(hud.keepClear, FindChild(retentionHud != null ? retentionHud.transform : null, "Toasts") as RectTransform, tuning);
+            hud.SetDropKey(dropKey.ToString());
             hud.SetKeys(BindingLabel("ReloadTool", "R"), fastForwardKey.ToString(), BindingLabel("Interact", "E"));
             hud.SetAbilityKeys(BindingLabel("Journal", "F"), empKey.ToString());
-            for (int i = 0; i < TD_Rules.Slots.Length; i++) {
-                var go = Instantiate(map.slotPrefab, TD_Rules.Slots[i], Quaternion.identity, map.transform);
-                go.name = $"Slot {i + 1}";
-                slotViews[i] = go.GetComponent<TD_SlotView>();
-                slotViews[i].Refresh();
-            }
+            padTop = map.slotPrefab.GetComponent<TD_SlotView>().topHeight;
             ShowShop();
         }
 
         void OnEnable() {
             ToolControls.interactPressed += Interact;
+            CharacterControls.LockKeyboardZoom(); // E is this game's action key, not camera zoom
             ToolControls.toolBarHotkeyPressed += Select;
             ToolControls.reloadToolPressed += ToggleReady;
             ToolControls.journalPressed += CallAirstrike;
+            hud.CardClicked += PickCard;
             if (retentionHud != null) retentionHud.LevelChanged += OnLevelChanged;
         }
 
         void OnDisable() {
             ToolControls.interactPressed -= Interact;
+            CharacterControls.UnlockKeyboardZoom();
             ToolControls.toolBarHotkeyPressed -= Select;
             ToolControls.reloadToolPressed -= ToggleReady;
             ToolControls.journalPressed -= CallAirstrike;
+            hud.CardClicked -= PickCard;
             if (retentionHud != null) retentionHud.LevelChanged -= OnLevelChanged;
         }
 
@@ -155,7 +160,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (hasAbilities) hud.ShowAbilities(abilities, hasState ? state.phase : TD_Phase.Waiting, level);
         }
 
-        void ShowShop() => hud.ShowShop(selected, hasState ? state.cash : 0, hasState, Level);
+        void ShowShop() => hud.ShowShop(placing ? selected : -1, hasState ? state.cash : 0, hasState, Level);
 
         static Transform FindChild(Transform root, string name) {
             if (root == null) return null;
@@ -211,7 +216,6 @@ namespace Universes.UniverseData.tower_defense.Client {
             ReadKeys();
             MoveEnemies(Time.deltaTime);
             TurnTowers(Time.deltaTime);
-            BobMarkers();
             UpdateBadges();
             ScreenConfetti();
             fx.Update();
@@ -226,8 +230,41 @@ namespace Universes.UniverseData.tower_defense.Client {
                 return;
             }
             if (key < 1 || key > TD_Rules.Towers.Length) return;
-            selected = key - 1;
+            Arm(key - 1);
+        }
+
+        /// <summary>A click on a shop card: arms that tower for placing, or drops it when it is already in hand.</summary>
+        void PickCard(int index) {
+            if (hasState && state.phase == TD_Phase.Vote) return;
+            if (placing && selected == index) Drop();
+            else Arm(index);
+        }
+
+        /// <summary>Takes a tower in hand: its ghost follows the aim and a click (or the build key) places it.</summary>
+        void Arm(int index) {
+            if (index < 0 || index >= TD_Rules.Towers.Length) return;
+            var kind = (TD_TowerKind)index;
+            if (!TD_Retention.CanBuild(Level, kind)) {
+                hud.Toast($"The {TD_Rules.Tower(kind).name} unlocks at level {TD_Retention.LevelOf(TD_Rules.Tower(kind).unlockId)}.", TD_Hud.ToastKind.Info, tuning.shortToastSeconds);
+                return;
+            }
+            selected = index;
+            placing = true;
+            GameSfx.Play(SfxCue.UiClick);
+            RefreshPlacement();
+        }
+
+        /// <summary>Puts the tower in hand away without building.</summary>
+        void Drop() {
+            if (!placing) return;
+            placing = false;
+            GameSfx.Play(SfxCue.UiClick);
+            RefreshPlacement();
+        }
+
+        void RefreshPlacement() {
             ShowShop();
+            UpdateGrid();
             if (focusedSlot >= 0) Highlight(focusedSlot, true); // re-preview the range of the new pick
             RefreshFocusCard();
         }
@@ -272,16 +309,29 @@ namespace Universes.UniverseData.tower_defense.Client {
         void Interact() {
             UpdateFocus();
             if (focusedSlot < 0 || manager == null || !manager.Started) return;
+            if (towerViews[focusedSlot] == null && !placing) return; // an empty cell needs a tower in hand
+            if (towerViews[focusedSlot] == null && !InPlaceReach(focusedSlot)) {
+                hud.Toast("Too far: walk closer to build there.", TD_Hud.ToastKind.Bad, tuning.shortToastSeconds);
+                GameSfx.Play(SfxCue.Error);
+                return;
+            }
             manager.Broadcast(new TD_BuildRequest { slot = (byte)focusedSlot, kind = (TD_TowerKind)selected });
         }
 
         void ReadKeys() {
             var keyboard = Keyboard.current;
             if (keyboard == null || !Application.isFocused || TextFieldFocused()) return;
+            if (placing && (keyboard[dropKey].wasPressedThisFrame || keyboard[Key.Backspace].wasPressedThisFrame || keyboard[Key.Escape].wasPressedThisFrame)) Drop();
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && !PointerOverUi()) {
+                if (placing || focusedSlot >= 0 && towerViews[focusedSlot] != null) Interact();
+            }
             if (keyboard[sellKey].wasPressedThisFrame) Sell();
             if (keyboard[fastForwardKey].wasPressedThisFrame) ToggleFastForward();
             if (keyboard[empKey].wasPressedThisFrame) UseAbility(TD_Ability.Emp);
         }
+
+        static bool PointerOverUi() => EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
 
         static bool TextFieldFocused() {
             var selectedObject = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
@@ -320,35 +370,105 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         // ---------------------------------------------------------------- focus + placement preview
+        /// <summary>Metres from the camera's aim (the cursor when it is free, else the screen centre) to the ground.</summary>
+        const float AimLimit = 400f;
+
         void UpdateFocus() {
             var character = LocalPlayer.Character;
             var cam = Camera.main;
             int previous = focusedSlot;
             focusedSlot = -1;
-            if (character != null && !character.IsDead && cam != null && hasState)
-                focusedSlot = FocusPicker.Pick(cam.transform.position, cam.transform.forward, slotPositions, TD_Rules.SlotReach, 0.2f, body: character.transform.position);
+            if (character != null && !character.IsDead && cam != null && hasState) focusedSlot = AimedCell(cam);
             if (focusedSlot == previous) return;
             if (previous >= 0) Highlight(previous, false);
             if (focusedSlot >= 0) Highlight(focusedSlot, true);
+            UpdateGrid();
             RefreshFocusCard();
+        }
+
+        /// <summary>The cell under the aim: a tower the ray hits, else the grid cell on the ground there.</summary>
+        int AimedCell(Camera cam) {
+            Vector2 screen = Cursor.lockState == CursorLockMode.Locked || Mouse.current == null
+                ? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f) : Mouse.current.position.ReadValue();
+            var ray = cam.ScreenPointToRay(screen);
+            if (Physics.Raycast(ray, out var hit, AimLimit, ~0, QueryTriggerInteraction.Ignore)) {
+                var tower = hit.collider.GetComponentInParent<TD_TowerView>();
+                if (tower != null) {
+                    int slot = System.Array.IndexOf(towerViews, tower);
+                    if (slot >= 0) return slot;
+                }
+            }
+            var ground = new Plane(Vector3.up, Vector3.zero);
+            return ground.Raycast(ray, out float t) && t < AimLimit ? TD_Rules.CellAt(ray.GetPoint(t)) : -1;
+        }
+
+        bool InPlaceReach(int slot) {
+            var character = LocalPlayer.Character;
+            return character != null && FocusPicker.InReach(character.transform.position, TD_Rules.Slots[slot], TD_Rules.PlaceReach, 2.5f);
+        }
+
+        // ---------------------------------------------------------------- grid + pads
+        /// <summary>The pad of a cell (made on first use): a helipad under a tower or the aimed cell, a faint ring on the other nearby cells.</summary>
+        TD_SlotView Pad(int slot) {
+            if (slotViews[slot] != null) return slotViews[slot];
+            TD_SlotView view;
+            if (padPool.Count > 0) view = padPool.Pop();
+            else {
+                view = Instantiate(map.slotPrefab, map.transform).GetComponent<TD_SlotView>();
+                if (view.marker != null) view.marker.gameObject.SetActive(false);
+            }
+            view.transform.position = TD_Rules.Slots[slot];
+            view.gameObject.SetActive(true);
+            view.built = false;
+            view.focused = false;
+            slotViews[slot] = view;
+            return view;
+        }
+
+        void ReleasePad(int slot) {
+            var view = slotViews[slot];
+            if (view == null) return;
+            view.gameObject.SetActive(false);
+            if (view.rangeRing != null) view.rangeRing.gameObject.SetActive(false);
+            padPool.Push(view);
+            slotViews[slot] = null;
+        }
+
+        /// <summary>While a tower is in hand, rings mark the cells around the aim; towers always keep their pad.</summary>
+        void UpdateGrid() {
+            shownGrid.Clear();
+            if (placing && focusedSlot >= 0) {
+                Vector3 centre = TD_Rules.Slots[focusedSlot];
+                float radius = TD_Rules.CellSize * tuning.gridCells;
+                for (int i = 0; i < TD_Rules.Slots.Length; i++)
+                    if (!present[i] && (TD_Rules.Slots[i] - centre).sqrMagnitude <= radius * radius) shownGrid.Add(i);
+            }
+            for (int i = 0; i < slotViews.Length; i++) {
+                bool inGrid = shownGrid.Contains(i);
+                if (!present[i] && !inGrid) {
+                    ReleasePad(i);
+                    continue;
+                }
+                Pad(i).SetStyle(present[i] || i == focusedSlot ? TD_SlotView.Style.Pad : TD_SlotView.Style.Ring);
+            }
         }
 
         /// <summary>Whether the selected tower can go on an empty pad right now (unlocked, money and phase).</summary>
         bool CanBuildSelected => hasState && state.phase is TD_Phase.Build or TD_Phase.Wave && state.cash >= TD_Rules.Towers[selected].cost
-            && TD_Retention.CanBuild(Level, (TD_TowerKind)selected);
+            && TD_Retention.CanBuild(Level, (TD_TowerKind)selected) && (focusedSlot < 0 || InPlaceReach(focusedSlot));
 
         bool CanUpgrade(int slot) => hasState && state.phase is TD_Phase.Build or TD_Phase.Wave
             && towerSnaps[slot].level < TD_Rules.MaxLevel && state.cash >= TD_Rules.UpgradeCost(towerSnaps[slot].kind, towerSnaps[slot].level, Perks.upgradeDiscount);
 
         void Highlight(int slot, bool on) {
-            var pad = slotViews[slot];
             bool empty = towerViews[slot] == null;
+            var pad = empty && !(on && placing) ? null : Pad(slot);
             if (pad != null) {
                 pad.focused = on;
                 pad.Refresh();
                 if (pad.rangeRing != null) {
-                    pad.rangeRing.gameObject.SetActive(on && empty);
-                    if (on && empty) {
+                    pad.rangeRing.gameObject.SetActive(on && empty && placing);
+                    if (on && empty && placing) {
                         var kind = (TD_TowerKind)selected;
                         SetRing(pad.rangeRing, TD_Daily.Range(kind, 1, Modifier), CanBuildSelected ? TD_Palette.Tower(kind) : invalidColor, rangeRingAlpha);
                     }
@@ -383,7 +503,7 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         /// <summary>A see-through copy of the selected tower on the focused empty pad, red when it cannot be built.</summary>
         void UpdateGhost() {
-            int wanted = focusedSlot >= 0 && towerViews[focusedSlot] == null && map.ghostPrefabs != null && selected < map.ghostPrefabs.Length ? selected : -1;
+            int wanted = placing && focusedSlot >= 0 && towerViews[focusedSlot] == null && map.ghostPrefabs != null && selected < map.ghostPrefabs.Length ? selected : -1;
             if (wanted != ghostKind) {
                 if (ghostKind >= 0 && ghosts[ghostKind] != null) ghosts[ghostKind].SetActive(false);
                 ghostKind = wanted;
@@ -391,8 +511,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (ghostKind < 0) return;
             var ghost = Ghost(ghostKind);
             if (ghost == null) return;
-            var pad = slotViews[focusedSlot];
-            ghost.transform.position = TD_Rules.Slots[focusedSlot] + Vector3.up * (pad != null ? pad.topHeight : 0f);
+            ghost.transform.position = TD_Rules.Slots[focusedSlot] + Vector3.up * padTop;
             ghost.SetActive(true);
             Color color = CanBuildSelected ? TD_Palette.Tower((TD_TowerKind)ghostKind) : invalidColor;
             color.a = Mathf.Clamp01(ghostAlpha + Mathf.Sin(Time.time * ghostPulseSpeed) * ghostPulse);
@@ -411,7 +530,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         }
 
         void RefreshFocusCard() {
-            if (focusedSlot < 0 || !hasState) hud.ClearFocus();
+            if (focusedSlot < 0 && placing && hasState) hud.ShowPlaceHint((TD_TowerKind)selected);
+            else if (focusedSlot < 0 || !hasState) hud.ClearFocus();
             else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), CanSell(towerSnaps[focusedSlot]), Perks.upgradeDiscount);
             else {
                 var kind = (TD_TowerKind)selected;
@@ -587,16 +707,18 @@ namespace Universes.UniverseData.tower_defense.Client {
                     towerViews[i] = null;
                     if (i == focusedSlot) Highlight(i, true); // back to an empty pad: preview the selected tower
                 }
+            }
+            UpdateGrid();
+            for (int i = 0; i < present.Length; i++) {
                 var pad = slotViews[i];
                 if (pad == null) continue;
-                if (pad.marker != null) pad.marker.gameObject.SetActive(!present[i]);
                 pad.built = present[i];
                 if (present[i]) pad.builtColor = TD_Palette.Tower(towerSnaps[i].kind);
                 pad.Refresh();
             }
         }
 
-        Vector3 PadTop(int slot) => TD_Rules.Slots[slot] + Vector3.up * (slotViews[slot] != null ? slotViews[slot].topHeight : 0f);
+        Vector3 PadTop(int slot) => TD_Rules.Slots[slot] + Vector3.up * padTop;
 
         void OnTowerEvent(TD_TowerEventBroadcast message, Channel channel) {
             if (message.slot >= towerViews.Length) return;
@@ -803,26 +925,11 @@ namespace Universes.UniverseData.tower_defense.Client {
                 view.transform.SetPositionAndRotation(p, Quaternion.Slerp(view.seen ? view.transform.rotation : Quaternion.LookRotation(forward), Quaternion.LookRotation(forward), 1f - Mathf.Exp(-10f * dt)));
                 view.seen = true;
                 view.hitFlash = Mathf.MoveTowards(view.hitFlash, 0f, dt * 6f);
-                if (view.body != null) {
-                    // A small shudder when hit sells the impact.
-                    float shake = view.hitFlash * 0.12f;
-                    view.body.localPosition = new Vector3(Mathf.Sin(Time.time * 80f) * shake, 0f, 0f);
-                }
+                // A small shudder when hit sells the impact; the animator also turns wheels and rotors.
+                float shake = Mathf.Sin(Time.time * 80f) * view.hitFlash * 0.12f * TD_Rules.WorldScale;
+                if (view.animator != null) view.animator.Animate(view.speed, dt, shake);
+                else if (view.body != null) view.body.localPosition = new Vector3(shake, 0f, 0f);
                 PaintBody(view);
-            }
-        }
-
-        void BobMarkers() {
-            for (int i = 0; i < slotViews.Length; i++) {
-                var marker = slotViews[i] != null ? slotViews[i].marker : null;
-                if (marker == null || !marker.gameObject.activeSelf) continue;
-                Vector3 p = marker.localPosition;
-                // On the focused pad the marker floats up out of the build ghost instead of through it.
-                markerLift ??= new float[slotViews.Length];
-                float lift = i == focusedSlot && ghostKind >= 0 ? markerGhostLift : 0f;
-                markerLift[i] = Mathf.MoveTowards(markerLift[i], lift, Time.deltaTime * tuning.markerLiftSpeed);
-                p.y = markerHeight + markerLift[i] + Mathf.Sin(Time.time * 2.2f + i * 0.7f) * 0.25f;
-                marker.localPosition = p;
             }
         }
 
