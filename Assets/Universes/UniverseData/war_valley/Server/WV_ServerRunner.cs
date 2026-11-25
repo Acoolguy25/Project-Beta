@@ -313,11 +313,17 @@ namespace Universes.UniverseData.war_valley.Server
             if (prefab == null)
                 return;
 
-            Vector3 spawnLocation = ServerPathfinding.GetRandomPositionOnCircle(center, SpawnRadius);
+            if (!WV_NavAreas.TryFindSpawnPosition(center, SpawnRadius, WV_NavAreas.GetAreaMask(WV_Alliances.GetWaveSide()), out Vector3 spawnLocation))
+                Debug.LogWarning($"War Valley: no NavMesh near the enemy spawn at {center}; the wave's units may be stranded.", this);
             LocalNPC npc = ServerNPC.SpawnNPC(prefab, location: spawnLocation);
             GameCharacter character = npc.GetComponent<GameCharacter>();
             character.SetTeam(new TeamConfig(WV_Alliances.GetWaveSide()));
             character.DisplayName = displayName;
+            // The robot body picks a random paint on spawn, which left a wave in every colour.
+            // Every invader carries its side's one colour, the way a commander's troops carry theirs.
+            RobotColor robotColor = npc.GetComponent<RobotColor>();
+            if (robotColor != null)
+                robotColor.ApplyColor(WV_Alliances.GetWaveSide());
             // The body - proportions, health, speed, damage - comes from the kind's build, and the
             // wave's own health growth scales the base it is applied to.
             character.ApplyBuild(

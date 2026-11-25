@@ -47,6 +47,36 @@ namespace Universes.UniverseData.war_valley.Shared {
                 agent.areaMask = GetAreaMask(team.realTeam);
         }
 
+        /// <summary>Attempts at a random spot before a spawn falls back to the middle of its muster point.</summary>
+        const int SpawnAttempts = 12;
+
+        /// <summary>
+        /// A spot on the NavMesh within <paramref name="radius"/> of <paramref name="center"/> for a
+        /// new soldier. A random point near a map edge can land beyond the mesh (or the map), which
+        /// strands whoever spawns there; each candidate is snapped onto the mesh for
+        /// <paramref name="areaMask"/> and rejected if it falls outside the map, and the muster point
+        /// itself is the last resort. Returns false only when no mesh exists near the centre.
+        /// </summary>
+        public static bool TryFindSpawnPosition(Vector3 center, float radius, int areaMask, out Vector3 position) {
+            WV_PlayArea playArea = WV_PlayArea.Current;
+            for (int attempt = 0; attempt < SpawnAttempts; attempt++) {
+                Vector2 offset = Random.insideUnitCircle * radius;
+                var candidate = new Vector3(center.x + offset.x, center.y, center.z + offset.y);
+                if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, SpawnSnapDistance, areaMask))
+                    continue;
+                if (playArea != null && !playArea.MapArea.Contains(new Vector2(hit.position.x, hit.position.z)))
+                    continue;
+                position = hit.position;
+                return true;
+            }
+            if (NavMesh.SamplePosition(center, out NavMeshHit fallback, radius + SpawnSnapDistance, areaMask)) {
+                position = fallback.position;
+                return true;
+            }
+            position = center;
+            return false;
+        }
+
         /// <summary>How far from its spawn point a new soldier may be moved to stand on the NavMesh (m).</summary>
         public const float SpawnSnapDistance = 10f;
 
