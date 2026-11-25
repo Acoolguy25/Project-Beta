@@ -4,131 +4,89 @@ using RyanAssets.Core;
 using UnityEngine;
 
 namespace Universes.UniverseData.obby {
-    public enum OB_PieceKind : byte {
-        Platform, CheckpointPad, Finish, Lava, Spring, Boost, GravityZone, Conveyor,
-        Crumble, Beat, WallJumpWall, Mover, SpinnerBar, SpinnerCross, Coin
-    }
-
-    public enum OB_StageKind : byte {
-        Hops, Springs, MoonLeap, Conveyors, Crumble, Beat, WallJump, Movers, Spinner, LavaRun, Boost,
-        // Added later: keep new kinds at the end so existing values (sent over the network) stay stable.
-        WallWalk, CeilingRun
-    }
-
-    /// <summary>One placed course piece. Field meaning per kind is documented on <see cref="OB_CourseGenerator"/>.</summary>
-    [Serializable]
-    public struct OB_Piece {
-        public OB_PieceKind kind;
-        public int stage;
-        /// <summary>World position of the piece origin (box centre for scaled boxes, base for pads).</summary>
-        public Vector3 position;
-        public float yaw;
-        /// <summary>Full box size for scaled pieces.</summary>
-        public Vector3 size;
-        public Vector3 vector;
-        public float speed, period, phase;
-        public int group;
-    }
-
-    /// <summary>The character movement the course is designed around. Keep it equal to what the server applies.</summary>
-    [Serializable]
-    public struct OB_Movement {
-        public float walkSpeed;
-        public float jumpHeight;
-        [Tooltip("Gravity magnitude (positive).")]
-        public float gravity;
-        [Tooltip("Matches CharacterMovement.ExternalAirDamping; used to size boost gaps.")]
-        public float airMomentumDamping;
-        [Tooltip("Height of the character's collider; gravity stages size their clearances from it.")]
-        public float bodyHeight;
-
-        public static OB_Movement Default => new() {
-            walkSpeed = 10f, jumpHeight = 2.6f, gravity = 30f, airMomentumDamping = 0.6f, bodyHeight = 5.6f
-        };
-        public float JumpSpeed => Mathf.Sqrt(2f * gravity * jumpHeight);
-        public float AirTime(float gravityScale = 1f) => 2f * JumpSpeed / (gravity * gravityScale);
-        public float FlatJumpReach(float gravityScale = 1f) => walkSpeed * AirTime(gravityScale);
-    }
-
-    /// <summary>A plain jump between two surfaces, recorded so tests can prove every course is jumpable.</summary>
-    public struct OB_JumpCheck {
-        public int stage;
-        public float gap, rise, maxGap, maxRise;
-    }
-
-    public sealed class OB_Stage {
-        public int index;
-        public OB_StageKind kind;
-        /// <summary>Difficulty tier (and theme) of this stage; see <see cref="OB_Tiers"/>.</summary>
-        public OB_Tier tier;
-        /// <summary>0..1 intensity used to size the stage. Rises through each tier, easing off at the next.</summary>
-        public float difficulty;
-        /// <summary>Top centre of the checkpoint a player respawns on while this stage is next.</summary>
-        public Vector3 spawn;
-        /// <summary>Volume that awards this checkpoint. Unused for stage 0 (the lobby).</summary>
-        public Bounds checkpoint;
-        /// <summary>Below this height a player on this stage has fallen and goes back to <see cref="spawn"/>.</summary>
-        public float killY;
-        public Vector3 coin;
-    }
-
-    public sealed class OB_CourseLayout {
-        public int seed;
-        public OB_Movement movement;
-        public readonly List<OB_Piece> pieces = new();
-        public readonly List<OB_JumpCheck> jumpChecks = new();
-        public OB_Stage[] stages;
-        public Bounds finish;
-        public Vector3 finishTop;
-        public int StageCount => stages.Length;
-    }
-
     /// <summary>
-    /// Deterministic course generator. The same seed, stage count, movement and start always give the
-    /// same pieces on every peer, so the server sends only the seed. The course is split into
-    /// <see cref="OB_Tiers"/> (Basic to Extreme); stages get harder through each tier, with a short
-    /// breather at the start of the next, and the hardest tiers mix extra hazards into their stages.
+    /// Deterministic course generator. The same seed, stage count, movement, rules and start always give
+    /// the same pieces on every peer, so the server sends only the seed.
     /// <para>
-    /// Piece fields by kind: Spring/Boost <c>vector</c> = pad-space launch velocity; GravityZone
-    /// <c>speed</c> = gravity scale, <c>vector</c> = world gravity direction (zero keeps it; strength
-    /// only); Conveyor <c>vector</c> = local push direction, <c>speed</c>;
-    /// Crumble <c>speed</c> = crumble delay, <c>period</c> = respawn delay; Beat <c>period</c>,
-    /// <c>phase</c>, <c>group</c>; WallJumpWall <c>vector.x</c> = away speed, <c>vector.y</c> = up speed;
-    /// Mover <c>vector</c> = world travel, <c>speed</c>, <c>phase</c>; SpinnerBar/Cross <c>speed</c> =
-    /// signed degrees per second, <c>phase</c>.
+    /// A course is split into <see cref="OB_Tiers"/> (Basic to Extreme). Each stage is a checkpoint pad
+    /// followed by a chain of <em>segments</em>: small mechanic modules (a spring climb, a wall walk, a
+    /// hammer bridge...) that each start at the far edge of the surface the player stands on and end on
+    /// a surface the next one starts from, so a stage reads as a little level. The tier rule
+    /// (<see cref="OB_CourseRules"/>) sets how many segments a stage chains, which mechanics it may use,
+    /// how far and how high its jumps reach and how big its platforms are; difficulty climbs through each
+    /// tier and eases off at the start of the next.
+    /// </para>
+    /// <para>
+    /// Every plain jump is recorded with <see cref="CheckJump"/> against the tier's limits, and tests hold
+    /// every recorded jump to a physical ceiling, so the hardest stages demand precision, never luck.
+    /// Segment code works in a local frame: x across, y up, z along the path; z = 0 is the far edge of the
+    /// surface the segment starts from, whose top is at y = 0.
     /// </para>
     /// </summary>
-    public sealed class OB_CourseGenerator {
+    public sealed partial class OB_CourseGenerator {
         public const float PadSize = 6f;
         public const float FinishSize = 10f;
         public const float KillDepth = 12f;
         public const int MaxStages = 60;
+        /// <summary>
+        /// The shipped course length: four stages per tier. Long enough to see every world and every
+        /// mechanic, short enough to finish well inside the race timer: par is about 606 to 668 s (seeds 1 to
+        /// 100) against the 1500 s race, so the race lasts about 2.2 times par at the least, and bronze (1.7x
+        /// par) always fits (tests hold bronze inside the race on this length).
+        /// </summary>
+        public const int DefaultStageCount = 24;
         /// <summary>Height of a coin above the surface it is collected from.</summary>
-        const float CoinLift = 1.6f;
+        public const float CoinLift = 1.6f;
+        /// <summary>Height of a star above the pro-route platform it waits on.</summary>
+        public const float StarLift = 2.2f;
+        /// <summary>Size of the rest platform between segments in the gentler tiers.</summary>
+        const float RestSize = 4.5f;
+        /// <summary>Size of the perch a stage adds when its star route found no room elsewhere.</summary>
+        const float StarPerchSize = 7f;
+        /// <summary>How far hops wander sideways from the stage's centre line.</summary>
+        const float PathHalfWidth = 5f;
+        /// <summary>Segments never place solid pieces further back than this behind their start edge.</summary>
+        public const float SegmentBackReach = 2f;
 
         readonly SeededStoryRandom rng;
         readonly OB_CourseLayout layout;
         readonly OB_Movement m;
+        readonly OB_CourseRules rules;
         Vector3 origin;
         float yaw;
         Quaternion rotation;
-        int stage;
-        float minTop;
-        Vector3 coin;
+        int stage, segment, nextChannel;
+        OB_TierRule tier;
+        /// <summary>0..1 position of the current stage inside its tier.</summary>
+        float tierProgress;
+        float minTop, maxCeiling, par;
+        bool flips;
+        readonly List<Vector3> coinCandidates = new();
+        readonly List<int> coinCandidateSegments = new();
         Vector3 lastTop;
         Vector2 lastSize;
+        /// <summary>Upper limit on <see cref="ReachSpeed"/> while a segment builds jumps from a slow surface (ice).</summary>
+        float reachCap = float.PositiveInfinity;
+        /// <summary>Per-mechanic shapes.</summary>
+        OB_MechanicRules Tune => rules.mechanics;
 
-        OB_CourseGenerator(int seed, OB_Movement movement) {
+        OB_CourseGenerator(int seed, OB_Movement movement, OB_CourseRules courseRules) {
             rng = new SeededStoryRandom(seed);
             m = movement;
+            rules = courseRules;
             layout = new OB_CourseLayout { seed = seed, movement = movement };
         }
 
-        public static OB_CourseLayout Generate(int seed, int stageCount, OB_Movement movement, Vector3 start, float startYaw, Vector3 lobbySpawn) {
+        public static OB_CourseLayout Generate(int seed, int stageCount, OB_Movement movement, Vector3 start, float startYaw, Vector3 lobbySpawn) =>
+            Generate(seed, stageCount, movement, start, startYaw, lobbySpawn, OB_CourseRules.Default);
+
+        public static OB_CourseLayout Generate(int seed, int stageCount, OB_Movement movement, Vector3 start, float startYaw,
+            Vector3 lobbySpawn, OB_CourseRules rules) {
             if (movement.gravity <= 0f || movement.jumpHeight <= 0f || movement.walkSpeed <= 0f)
                 throw new ArgumentException("Course movement needs positive gravity, jump height and walk speed.", nameof(movement));
-            if (movement.bodyHeight <= 0f) movement.bodyHeight = OB_Movement.Default.bodyHeight; // older scenes
-            var generator = new OB_CourseGenerator(seed, movement);
+            if (rules == null) throw new ArgumentNullException(nameof(rules));
+            rules.Validate();
+            var generator = new OB_CourseGenerator(seed, movement.Sanitised(), rules);
             return generator.Build(Mathf.Clamp(stageCount, 1, MaxStages), start, startYaw, lobbySpawn);
         }
 
@@ -136,17 +94,23 @@ namespace Universes.UniverseData.obby {
         float Value() => rng.Next(1 << 24) / (float)(1 << 24);
         float Range(float min, float max) => min + (max - min) * Value();
         bool Chance(float probability) => Value() < probability;
-        static float Lerp(float a, float b, float t) => a + (b - a) * t;
+        float Sign() => Chance(0.5f) ? 1f : -1f;
+        static float Lerp(float a, float b, float t) => a + (b - a) * Mathf.Clamp01(t);
 
         // ---------------------------------------------------------------- frame helpers
         Vector3 World(Vector3 local) => origin + rotation * local;
         Vector3 World(float x, float y, float z) => World(new Vector3(x, y, z));
+        Vector3 WorldDirection(Vector3 local) => rotation * local;
 
         int Add(OB_Piece piece) {
             piece.stage = stage;
+            piece.segment = segment;
             layout.pieces.Add(piece);
             return layout.pieces.Count - 1;
         }
+
+        /// <summary>Changes a placed piece in place.</summary>
+        void Edit(int index, Func<OB_Piece, OB_Piece> change) => layout.pieces[index] = change(layout.pieces[index]);
 
         /// <summary>Adds a box whose top face is centred on <paramref name="localTop"/>.</summary>
         int Box(OB_PieceKind kind, Vector3 localTop, Vector3 size, bool standable = true) {
@@ -158,22 +122,42 @@ namespace Universes.UniverseData.obby {
 
         int Platform(Vector3 localTop, Vector3 size) => Box(OB_PieceKind.Platform, localTop, size);
 
+        /// <summary>Adds a non-box piece at a local point.</summary>
+        int Place(OB_PieceKind kind, Vector3 local, Vector3 size = default) =>
+            Add(new OB_Piece { kind = kind, position = World(local), yaw = yaw, size = size });
+
         /// <summary>Records a plain jump from the last surface to this one and makes it the last surface.</summary>
-        void Step(Vector3 top, Vector2 size, float gravityScale = 1f) {
+        void Step(Vector3 top, Vector2 size, float gravityScale = 1f, bool pro = false) {
+            CheckJump(EdgeGap(top, size), top.y - lastTop.y, gravityScale, pro);
+            Land(top, size);
+        }
+
+        /// <summary>Edge-to-edge distance across from the last surface to a surface at <paramref name="top"/>.</summary>
+        float EdgeGap(Vector3 top, Vector2 size) {
             float dx = Mathf.Max(0f, Mathf.Abs(top.x - lastTop.x) - (size.x + lastSize.x) * 0.5f);
             float dz = Mathf.Max(0f, Mathf.Abs(top.z - lastTop.z) - (size.y + lastSize.y) * 0.5f);
-            CheckJump(Mathf.Sqrt(dx * dx + dz * dz), top.y - lastTop.y, gravityScale);
-            Land(top, size);
+            return Mathf.Sqrt(dx * dx + dz * dz);
         }
 
         /// <summary>
         /// Records a jump of <paramref name="gap"/> across and <paramref name="rise"/> up, measured in the
-        /// player's own frame (on a wall or ceiling "up" is away from that surface).
+        /// player's own frame (on a wall or ceiling "up" is away from that surface), against this tier's limits.
         /// </summary>
-        void CheckJump(float gap, float rise, float gravityScale = 1f) {
+        void CheckJump(float gap, float rise, float gravityScale = 1f, bool pro = false, float launchSpeed = 0f) {
+            float fraction = pro ? tier.proGapFraction : tier.gapFraction.y;
             layout.jumpChecks.Add(new OB_JumpCheck {
-                stage = stage, gap = gap, rise = rise,
-                maxGap = m.FlatJumpReach(gravityScale) * 0.7f, maxRise = m.jumpHeight * 0.75f / gravityScale
+                stage = stage, segment = segment, gap = gap, rise = rise, pro = pro,
+                gravityScale = gravityScale, speed = ReachSpeed, launchSpeed = launchSpeed,
+                maxGap = Reach(rise, gravityScale, launchSpeed) * fraction + 0.001f,
+                maxRise = launchSpeed > 0f ? m.Apex(gravityScale, launchSpeed) * tier.riseFraction : MaxRise(gravityScale)
+            });
+        }
+
+        /// <summary>Records mid-air steering: <paramref name="offset"/> metres sideways during <paramref name="airTime"/> seconds of flight.</summary>
+        void CheckSteer(float offset, float airTime) {
+            layout.jumpChecks.Add(new OB_JumpCheck {
+                stage = stage, segment = segment, gap = offset, airTime = airTime, gravityScale = 1f, speed = m.walkSpeed,
+                maxGap = m.walkSpeed * airTime * tier.gapFraction.y + 0.001f, maxRise = float.PositiveInfinity
             });
         }
 
@@ -186,7 +170,7 @@ namespace Universes.UniverseData.obby {
             Add(new OB_Piece {
                 kind = OB_PieceKind.GravityZone, yaw = yaw, speed = scale,
                 position = World((min + max) * 0.5f), size = max - min,
-                vector = localDown == Vector3.zero ? Vector3.zero : rotation * localDown.normalized
+                vector = localDown == Vector3.zero ? Vector3.zero : WorldDirection(localDown.normalized)
             });
         }
 
@@ -196,27 +180,111 @@ namespace Universes.UniverseData.obby {
             lastSize = size;
         }
 
-        /// <summary>Returns the local exit for the next checkpoint pad, checking the jump onto it.</summary>
-        Vector3 Exit(float gap, float gravityScale = 1f) {
-            Vector3 exit = new(0f, lastTop.y, lastTop.z + lastSize.y * 0.5f + gap);
-            Step(exit + Vector3.forward * (PadSize * 0.5f), new Vector2(PadSize, PadSize), gravityScale);
-            return exit;
+        /// <summary>Offers a coin spot (local); the stage picks one of its segments' offers.</summary>
+        void Coin(Vector3 local) {
+            coinCandidates.Add(World(local));
+            coinCandidateSegments.Add(segment);
         }
+
+        /// <summary>Adds clean-run seconds to the stage's par.</summary>
+        void Par(float seconds) => par += Mathf.Max(0f, seconds);
+
+        /// <summary>A new on/off switch channel, unique on the course.</summary>
+        int NewChannel() => ++nextChannel;
+
+        /// <summary>
+        /// Moves the local frame so z = 0 is the far edge of the last surface and its top is at y = 0,
+        /// centred on x = 0: every segment starts from there.
+        /// </summary>
+        void Rebase() {
+            origin = World(new Vector3(lastTop.x, lastTop.y, lastTop.z + lastSize.y * 0.5f));
+            lastTop = new Vector3(0f, 0f, -lastSize.y * 0.5f);
+        }
+
+        // ---------------------------------------------------------------- jump sizing
+        /// <summary>
+        /// Speed this tier's jumps are designed around (walking in the easy tiers, toward sprinting later),
+        /// capped while jumps leave a surface the player cannot reach that speed on.
+        /// </summary>
+        float ReachSpeed => Mathf.Min(Lerp(m.walkSpeed, m.sprintSpeed, tier.reachSpeed), reachCap);
+
+        /// <summary>How far across a jump at <see cref="ReachSpeed"/> carries when it lands <paramref name="rise"/> higher.</summary>
+        float Reach(float rise, float gravityScale = 1f, float launchSpeed = 0f) => ReachSpeed * m.LandTime(rise, gravityScale, launchSpeed);
+
+        /// <summary>The tier's highest step up.</summary>
+        float MaxRise(float gravityScale = 1f) => m.jumpHeight * tier.riseFraction / gravityScale;
+
+        /// <summary>A gap tension for this tier: later stages in a tier and a little randomness pull it toward the tier's hardest.</summary>
+        float Tension(float bias = 0f) => Lerp(tier.gapFraction.x, tier.gapFraction.y, tierProgress * 0.6f + Value() * 0.4f + bias);
+
+        /// <summary>A hop platform size for this tier (smaller later in the tier).</summary>
+        float HopSize() => Lerp(tier.platformSize.y, tier.platformSize.x, tierProgress * 0.5f + Value() * 0.5f);
+
+        /// <summary>
+        /// Where the next hop's top goes: <paramref name="tension"/> of the reach from the last surface's
+        /// edge, shifted <paramref name="lateral"/> sideways and <paramref name="rise"/> up.
+        /// </summary>
+        Vector3 NextHop(Vector2 size, float rise, float lateral, float tension, float gravityScale = 1f, float launchSpeed = 0f) {
+            float gap = Mathf.Max(0.5f, Reach(rise, gravityScale, launchSpeed) * tension);
+            float x = Mathf.Clamp(lastTop.x + lateral, -PathHalfWidth, PathHalfWidth);
+            float halfWidths = (size.x + lastSize.x) * 0.5f;
+            float dx = Mathf.Max(0f, Mathf.Abs(x - lastTop.x) - halfWidths);
+            if (dx > gap * 0.75f) {
+                // Too far sideways for the gap: keep the shift, but within the gap.
+                dx = gap * 0.75f;
+                x = lastTop.x + Mathf.Sign(x - lastTop.x) * (halfWidths + dx);
+            }
+            float dz = Mathf.Sqrt(Mathf.Max(0f, gap * gap - dx * dx));
+            return new Vector3(x, lastTop.y + rise, lastTop.z + lastSize.y * 0.5f + dz + size.y * 0.5f);
+        }
+
+        /// <summary>Places a hop (a box of <paramref name="kind"/>), records the jump onto it and returns its piece index.</summary>
+        int Hop(Vector2 size, float rise, float lateral, float tension, OB_PieceKind kind = OB_PieceKind.Platform, float height = 1f,
+            float gravityScale = 1f) {
+            Vector3 top = NextHop(size, rise, lateral, tension, gravityScale);
+            int index = Box(kind, top, new Vector3(size.x, height, size.y));
+            Par(HopPar(EdgeGap(top, size), rise, size.y, gravityScale));
+            Step(top, size, gravityScale);
+            return index;
+        }
+
+        /// <summary>
+        /// Clean-run seconds for one hop: reacting and landing, the jump itself (the run across the gap, or
+        /// the real flight when that is longer, as in low gravity) and running over the landing surface.
+        /// </summary>
+        float HopPar(float gap, float rise, float depth, float gravityScale = 1f, float launchSpeed = 0f) {
+            float speed = Mathf.Max(0.1f, ReachSpeed);
+            float flight = m.LandTime(Mathf.Min(rise, m.Apex(gravityScale, launchSpeed) * 0.95f), gravityScale, launchSpeed) * rules.parFlightShare;
+            return rules.parPerHop + Mathf.Max(gap / speed, flight) + depth * rules.parRunShare / speed;
+        }
+
+        /// <summary>A rise for a hop: from a small drop up to the tier's highest step.</summary>
+        float HopRise(float upChance = 0.6f) => Chance(upChance) ? Range(0.2f, 1f) * MaxRise() : -Range(0.2f, 1.6f);
 
         // ---------------------------------------------------------------- course
         OB_CourseLayout Build(int stageCount, Vector3 start, float startYaw, Vector3 lobbySpawn) {
             layout.stages = new OB_Stage[stageCount];
             origin = start;
             yaw = startYaw;
-            OB_StageKind[] kinds = PickKinds(stageCount);
+            OB_StageKind[][] plan = PlanSegments(stageCount);
+            var stars = new StarPlan(rules.starsPerTier, stageCount);
             for (stage = 0; stage < stageCount; stage++) {
+                int firstPiece = layout.pieces.Count;
                 rotation = Quaternion.Euler(0f, yaw, 0f);
                 var info = new OB_Stage {
-                    index = stage, kind = kinds[stage],
+                    index = stage, segments = plan[stage], kind = Signature(plan[stage]),
                     tier = OB_Tiers.TierOf(stage, stageCount),
                     difficulty = OB_Tiers.Difficulty(stage, stageCount)
                 };
+                tier = rules.Tier(info.tier);
+                tierProgress = OB_Tiers.ProgressInTier(stage, stageCount);
                 minTop = float.PositiveInfinity;
+                maxCeiling = float.NegativeInfinity;
+                flips = false;
+                par = 0f;
+                coinCandidates.Clear();
+                coinCandidateSegments.Clear();
+                segment = -1;
                 if (stage == 0) {
                     info.spawn = lobbySpawn;
                     minTop = lobbySpawn.y;
@@ -229,431 +297,119 @@ namespace Universes.UniverseData.obby {
                 }
                 // Every stage starts at the far edge of the surface the player is standing on.
                 Land(new Vector3(0f, 0f, -PadSize * 0.5f), new Vector2(PadSize, PadSize));
-                coin = new Vector3(0f, 1.5f, 2f);
-                Vector3 exit = BuildStage(info.kind, info.difficulty);
-                info.coin = World(coin);
+
+                bool wantStar = stars.Wants(info.tier, stage, rng);
+                int starAfter = wantStar ? rng.Next(plan[stage].Length) : -1;
+                for (int i = 0; i < plan[stage].Length; i++) {
+                    segment = i;
+                    Rebase();
+                    // A tier's new mechanic is met first in a gentler form.
+                    bool intro = IsIntroduction(plan[stage][i], info.tier) && stars.IsFirstStageOfTier(stage);
+                    BuildSegment(plan[stage][i], Mathf.Max(0f, info.difficulty - (intro ? 0.1f : 0f)));
+                    if (!info.hasStar && wantStar && i >= starAfter && TryProRoute(out Vector3 star)) {
+                        info.hasStar = true;
+                        info.star = star;
+                        stars.Placed(info.tier);
+                    }
+                    if (i < plan[stage].Length - 1 && tier.restBetweenSegments) Rest();
+                }
+                // No segment left room for the pro route: it branches off a perch before the exit.
+                if (wantStar && !info.hasStar) {
+                    Rebase();
+                    Hop(new Vector2(StarPerchSize, StarPerchSize), 0f, 0f, Tension(Tune.restTension));
+                    if (TryProRoute(out Vector3 star)) {
+                        info.hasStar = true;
+                        info.star = star;
+                        stars.Placed(info.tier);
+                    }
+                }
+                segment = -1;
+                Vector3 exit = Exit(Tension(Tune.entryTension) * Reach(0f));
+                if (coinCandidates.Count == 0) Coin(new Vector3(exit.x, CoinLift, exit.z - 1f));
+                int pick = rng.Next(coinCandidates.Count);
+                info.coin = coinCandidates[pick];
+                info.coinSegment = coinCandidateSegments[pick];
                 info.killY = minTop - KillDepth;
+                info.par = par;
                 layout.stages[stage] = info;
-                Add(new OB_Piece { kind = OB_PieceKind.Coin, position = info.coin, yaw = yaw, size = Vector3.one });
+                Add(new OB_Piece { kind = OB_PieceKind.Coin, position = info.coin, yaw = yaw, size = Vector3.one, segment = -1 });
+                if (info.hasStar) Add(new OB_Piece { kind = OB_PieceKind.Star, position = info.star, yaw = yaw, size = Vector3.one, segment = -1 });
+                info.region = Region(firstPiece, stage == 0 ? lobbySpawn : info.spawn);
+                // A flipped player falls up, so a flip stage gets an upper kill height: clear of everything
+                // in the stage (a wall kick shaft or a climb can rise past the flip ceiling), not just the ceiling.
+                if (flips) info.killTop = Mathf.Max(maxCeiling, info.region.max.y) + KillDepth;
+                layout.ceilingY = Mathf.Max(layout.ceilingY, info.region.max.y + KillDepth);
                 origin = World(exit);
                 yaw = Mathf.Clamp(yaw + Range(-25f, 25f), startYaw - 50f, startYaw + 50f);
             }
             stage = stageCount;
+            segment = -1;
             rotation = Quaternion.Euler(0f, yaw, 0f);
             Vector3 finishTop = new(0f, 0f, FinishSize * 0.5f);
             Box(OB_PieceKind.Finish, finishTop, new Vector3(FinishSize, 1f, FinishSize));
             layout.finishTop = World(finishTop);
             layout.finish = new Bounds(layout.finishTop + Vector3.up * 2f, new Vector3(FinishSize, 4f, FinishSize));
+            FuseCrumbles();
             return layout;
         }
 
-        OB_StageKind[] PickKinds(int count) {
-            var kinds = new OB_StageKind[count];
-            var all = (OB_StageKind[])Enum.GetValues(typeof(OB_StageKind));
-            var bag = new List<OB_StageKind>();
-            kinds[0] = OB_StageKind.Hops;
-            for (int i = 1; i < count; i++) {
-                if (bag.Count == 0) { bag.AddRange(all); rng.Shuffle(bag); }
-                int pick = bag[0] == kinds[i - 1] && bag.Count > 1 ? 1 : 0;
-                kinds[i] = bag[pick];
-                bag.RemoveAt(pick);
+        /// <summary>World box around the pieces placed from <paramref name="firstPiece"/> on (this stage's), and <paramref name="spawn"/>.</summary>
+        Bounds Region(int firstPiece, Vector3 spawn) {
+            var region = new Bounds(spawn, Vector3.zero);
+            for (int i = firstPiece; i < layout.pieces.Count; i++) {
+                OB_Piece piece = layout.pieces[i];
+                float c = Mathf.Abs(Mathf.Cos(piece.yaw * Mathf.Deg2Rad)), s = Mathf.Abs(Mathf.Sin(piece.yaw * Mathf.Deg2Rad));
+                Vector3 half = piece.size * 0.5f;
+                region.Encapsulate(new Bounds(piece.position, 2f * new Vector3(c * half.x + s * half.z, half.y, s * half.x + c * half.z)));
             }
-            return kinds;
+            return region;
         }
 
-        Vector3 BuildStage(OB_StageKind kind, float d) => kind switch {
-            OB_StageKind.Hops => Hops(d),
-            OB_StageKind.Springs => Springs(d),
-            OB_StageKind.MoonLeap => MoonLeap(d),
-            OB_StageKind.Conveyors => Conveyors(d),
-            OB_StageKind.Crumble => Crumble(d),
-            OB_StageKind.Beat => Beat(d),
-            OB_StageKind.WallJump => WallJump(d),
-            OB_StageKind.Movers => Movers(d),
-            OB_StageKind.Spinner => Spinner(d),
-            OB_StageKind.LavaRun => LavaRun(d),
-            OB_StageKind.Boost => Boost(d),
-            OB_StageKind.WallWalk => WallWalk(d),
-            OB_StageKind.CeilingRun => CeilingRun(d),
-            _ => Hops(d)
-        };
-
-        // ---------------------------------------------------------------- stages
-        // Every size below lerps from a gentle Basic value (d = 0) to an Extreme one (d = 1). Plain
-        // jumps stay inside CheckJump's limits (70% of a flat running jump across, 75% of the jump
-        // height up), so the hardest stages demand precision, never luck. From Hard onward, stages also
-        // mix in a second hazard (crumbling hops, crumbling stepping stones, double spinners).
-
-        /// <summary>Probability that an optional extra hazard appears, ramping in above <paramref name="from"/>.</summary>
-        float MixChance(float d, float from) => Mathf.Clamp01((d - from) / (1f - from)) * 0.75f;
-
-        /// <summary>Turns the piece at <paramref name="index"/> into a block that crumbles shortly after it is touched.</summary>
-        void MakeCrumble(int index, float d) {
-            var piece = layout.pieces[index];
-            piece.kind = OB_PieceKind.Crumble;
-            piece.speed = Lerp(0.8f, 0.3f, d);
-            piece.period = 3f;
-            layout.pieces[index] = piece;
+        /// <summary>A rest platform: a calm hop onto room to stand between two ideas.</summary>
+        void Rest() {
+            Rebase();
+            Hop(new Vector2(RestSize, RestSize), 0f, 0f, Tension(Tune.restTension));
         }
 
-        Vector3 Hops(float d) {
-            int count = 4 + rng.Next(3) + Mathf.RoundToInt(d * 6f);
-            float z = 0f, x = 0f, y = 0f;
-            for (int i = 0; i < count; i++) {
-                float w = Lerp(3.4f, 1.5f, d) * Range(0.9f, 1.1f);
-                z += Lerp(2f, 4.6f, d) * Range(0.85f, 1f);
-                x = Mathf.Clamp(x + Range(-1f, 1f) * Lerp(0.6f, 2.4f, d), -4f, 4f);
-                y += Range(-0.6f, Lerp(0.5f, 1.6f, d));
-                var top = new Vector3(x, y, z + w * 0.5f);
-                int index = Platform(top, new Vector3(w, 1f, w));
-                if (i > 0 && Chance(MixChance(d, 0.55f))) MakeCrumble(index, d);
-                Step(top, new Vector2(w, w));
-                if (i == count / 2) coin = top + Vector3.up * CoinLift;
-                z += w;
-            }
-            return Exit(Lerp(2f, 4f, d));
-        }
-
-        float SpringSpeed(float rise) => Mathf.Sqrt(2f * m.gravity * (rise + 2.5f));
-
-        Vector3 Springs(float d) {
-            var baseTop = new Vector3(0f, 0f, 1.5f + 3.5f);
-            Platform(baseTop, new Vector3(6f, 1f, 7f));
-            Step(baseTop, new Vector2(6f, 7f));
-            float rise = Lerp(5f, 9f, d);
-            Add(new OB_Piece { kind = OB_PieceKind.Spring, position = World(0f, 0f, 5f), yaw = yaw, vector = new Vector3(0f, SpringSpeed(rise), 0f) });
-            coin = new Vector3(0f, rise * 0.8f, 5f);
-            bool second = d > 0.35f;
-            float ledgeDepth = second ? 7f : 5f, ledgeWidth = Lerp(5f, 3.2f, d);
-            var ledge = new Vector3(Range(-1.5f, 1.5f) * (1f + d), rise, 9.5f + ledgeDepth * 0.5f);
-            Platform(ledge, new Vector3(ledgeWidth, 1f, ledgeDepth));
-            Land(ledge, new Vector2(ledgeWidth, ledgeDepth));
-            if (second) {
-                float rise2 = Lerp(4f, 8f, d), size = Lerp(5f, 3f, d);
-                Add(new OB_Piece { kind = OB_PieceKind.Spring, position = World(ledge.x, rise, 12f), yaw = yaw, vector = new Vector3(0f, SpringSpeed(rise2), 0f) });
-                var top = new Vector3(Mathf.Clamp(ledge.x + Range(-2f, 2f), -3f, 3f), rise + rise2, 18f + 2.5f);
-                Platform(top, new Vector3(size, 1f, size));
-                Land(top, new Vector2(size, size));
-            }
-            return Exit(Lerp(2f, 4f, d));
-        }
-
-        Vector3 MoonLeap(float d) {
-            float scale = Lerp(0.42f, 0.28f, d);
-            int count = 3 + Mathf.RoundToInt(d * 2f);
-            float z = 0f, y = 0f, highest = 0f;
-            for (int i = 0; i < count; i++) {
-                float w = Lerp(4f, 2.2f, d);
-                z += m.FlatJumpReach(scale) * Lerp(0.33f, 0.6f, d);
-                y += Range(-1f, 2.5f);
-                highest = Mathf.Max(highest, y);
-                var top = new Vector3(Range(-2f, 2f), y, z + w * 0.5f);
-                Platform(top, new Vector3(w, 1f, w));
-                Step(top, new Vector2(w, w), scale);
-                if (i == count / 2) coin = top + Vector3.up * 4f;
-                z += w;
-            }
-            Vector3 exit = Exit(3f, scale);
-            Field(new Vector3(-11f, -KillDepth, -2f), new Vector3(11f, highest + 14f, exit.z + 1f), Vector3.zero, scale);
+        /// <summary>Returns the local exit for the next checkpoint pad, checking the jump onto it.</summary>
+        Vector3 Exit(float gap, float gravityScale = 1f) {
+            Vector3 exit = new(lastTop.x, lastTop.y, lastTop.z + lastSize.y * 0.5f + gap);
+            Par(HopPar(gap, 0f, 0f, gravityScale));
+            Step(exit + Vector3.forward * (PadSize * 0.5f), new Vector2(PadSize, PadSize), gravityScale);
             return exit;
         }
 
-        Vector3 Conveyors(float d) {
-            int count = 3 + Mathf.RoundToInt(d * 3f);
-            float width = Lerp(4.6f, 2.2f, d), length = 5f, z = 1.5f;
-            Vector3 previous = Vector3.zero;
-            for (int i = 0; i < count; i++) {
-                Vector3 direction = i == 0 ? Vector3.back : rng.Next(3) switch { 0 => Vector3.back, 1 => Vector3.left, _ => Vector3.right };
-                if (direction != Vector3.back && direction == previous) direction = -direction;
-                previous = direction;
-                float speed = direction == Vector3.back ? Lerp(3f, 8f, d) : Lerp(1.8f, 5f, d);
-                var top = new Vector3(0f, 0f, z + length * 0.5f);
-                int index = Box(OB_PieceKind.Conveyor, top, new Vector3(width, 0.6f, length));
-                var piece = layout.pieces[index];
-                piece.vector = direction;
-                piece.speed = speed;
-                layout.pieces[index] = piece;
-                if (i == 0) Step(top, new Vector2(width, length)); else Land(top, new Vector2(width, length));
-                if (i == count / 2) coin = top + new Vector3(width * 0.5f - 0.5f, 1.2f, 0f);
-                z += length;
+        void BuildSegment(OB_StageKind kind, float d) {
+            switch (kind) {
+                case OB_StageKind.Hops: Hops(d); break;
+                case OB_StageKind.Springs: Springs(d); break;
+                case OB_StageKind.MoonLeap: MoonLeap(d); break;
+                case OB_StageKind.Conveyors: Conveyors(d); break;
+                case OB_StageKind.Crumble: Crumble(d); break;
+                case OB_StageKind.Beat: Beat(d); break;
+                case OB_StageKind.WallJump: WallJump(d); break;
+                case OB_StageKind.Movers: Movers(d); break;
+                case OB_StageKind.Spinner: Spinner(d); break;
+                case OB_StageKind.LavaRun: LavaRun(d); break;
+                case OB_StageKind.Boost: Boost(d); break;
+                case OB_StageKind.WallWalk: WallWalk(d); break;
+                case OB_StageKind.CeilingRun: CeilingRun(d); break;
+                case OB_StageKind.OnOff: OnOff(d); break;
+                case OB_StageKind.Hammers: Hammers(d); break;
+                case OB_StageKind.Crushers: Crushers(d); break;
+                case OB_StageKind.Lasers: Lasers(d); break;
+                case OB_StageKind.LogRoll: LogRoll(d); break;
+                case OB_StageKind.Turntables: Turntables(d); break;
+                case OB_StageKind.Cannons: Cannons(d); break;
+                case OB_StageKind.Mushrooms: Mushrooms(d); break;
+                case OB_StageKind.BeamWalk: BeamWalk(d); break;
+                case OB_StageKind.Corkscrew: Corkscrew(d); break;
+                case OB_StageKind.GravityFlip: GravityFlip(d); break;
+                case OB_StageKind.LavaRise: LavaRise(d); break;
+                case OB_StageKind.WindGaps: WindGaps(d); break;
+                case OB_StageKind.IceRink: IceRink(d); break;
+                default: Hops(d); break;
             }
-            return Exit(Lerp(2f, 3.5f, d));
-        }
-
-        Vector3 Crumble(float d) {
-            int count = 5 + Mathf.RoundToInt(d * 7f);
-            float size = Lerp(2.2f, 1.7f, d);
-            float z = 0f, x = 0f, y = 0f;
-            for (int i = 0; i < count; i++) {
-                z += Lerp(0.5f, 3.2f, d);
-                x = Mathf.Clamp(x + Range(-1f, 1f) * Lerp(0f, 2f, d), -3f, 3f);
-                y += Range(0f, Lerp(0.35f, 0.9f, d));
-                var top = new Vector3(x, y, z + size * 0.5f);
-                int index = Box(OB_PieceKind.Crumble, top, new Vector3(size, 0.6f, size));
-                var piece = layout.pieces[index];
-                piece.speed = Lerp(0.9f, 0.25f, d);
-                piece.period = 3f;
-                layout.pieces[index] = piece;
-                Step(top, new Vector2(size, size));
-                if (i == count / 2) coin = top + Vector3.up * CoinLift;
-                z += size;
-            }
-            return Exit(Lerp(1.5f, 3.5f, d));
-        }
-
-        Vector3 Beat(float d) {
-            int count = 6 + Mathf.RoundToInt(d * 6f);
-            float size = Lerp(2.6f, 2f, d);
-            float period = Lerp(4.6f, 2.2f, d);
-            float z = 0f, y = 0f;
-            int group = 0;
-            for (int i = 0; i < count; i++) {
-                z += Lerp(0.8f, 3.4f, d);
-                y += Range(-0.2f, Lerp(0.4f, 0.9f, d));
-                var top = new Vector3(Range(-1.5f, 1.5f), y, z + size * 0.5f);
-                bool rest = d < 0.35f && i % 3 == 2;
-                if (rest) {
-                    Platform(top, new Vector3(size, 0.8f, size));
-                } else {
-                    int index = Box(OB_PieceKind.Beat, top, new Vector3(size, 0.8f, size));
-                    var piece = layout.pieces[index];
-                    piece.group = group;
-                    piece.period = period;
-                    piece.phase = group == 0 ? 0f : period * 0.5f;
-                    layout.pieces[index] = piece;
-                    group = 1 - group;
-                }
-                Step(top, new Vector2(size, size));
-                if (i == count / 2) coin = top + Vector3.up * CoinLift;
-                z += size;
-            }
-            return Exit(Lerp(2f, 3f, d));
-        }
-
-        Vector3 WallJump(float d) {
-            float gapBetween = Lerp(4.2f, 3.2f, d), height = Lerp(6f, 14f, d), length = 5f;
-            float floorStart = 1.5f, floorLength = length + 2f;
-            var floor = new Vector3(0f, 0f, floorStart + floorLength * 0.5f);
-            Platform(floor, new Vector3(gapBetween + 1.6f, 1f, floorLength));
-            Step(floor, new Vector2(gapBetween + 1.6f, floorLength));
-            float wallZ = floorStart + 1f + length * 0.5f;
-            float upSpeed = Mathf.Sqrt(2f * m.gravity * 1.9f), awaySpeed = Lerp(6.5f, 7.5f, d);
-            for (int side = -1; side <= 1; side += 2) {
-                int index = Box(OB_PieceKind.WallJumpWall, new Vector3(side * (gapBetween * 0.5f + 0.3f), height + 1f, wallZ),
-                    new Vector3(0.6f, height + 1f, length), standable: false);
-                var piece = layout.pieces[index];
-                piece.vector = new Vector3(awaySpeed, upSpeed, 0f);
-                layout.pieces[index] = piece;
-            }
-            coin = new Vector3(0f, height * 0.6f, wallZ);
-            float ledgeSize = Lerp(5f, 3.5f, d);
-            var ledge = new Vector3(0f, height, floorStart + 1f + length + 0.6f + ledgeSize * 0.5f);
-            Platform(ledge, new Vector3(ledgeSize, 1f, ledgeSize));
-            Land(ledge, new Vector2(ledgeSize, ledgeSize));
-            return Exit(Lerp(2.5f, 3.5f, d));
-        }
-
-        Vector3 Movers(float d) {
-            if (Chance(0.5f)) {
-                // Ferry: one platform shuttles across a wide gap.
-                float gap = Lerp(9f, 20f, d), size = Lerp(3.2f, 2.4f, d), landingWidth = Lerp(6f, 4f, d);
-                var start = new Vector3(0f, 0f, size * 0.5f + 0.3f);
-                Add(new OB_Piece {
-                    kind = OB_PieceKind.Mover, position = World(start - Vector3.up * 0.3f), yaw = yaw,
-                    size = new Vector3(size, 0.6f, size), vector = rotation * new Vector3(0f, 0f, gap - size - 0.6f),
-                    speed = Lerp(2.6f, 5.5f, d), phase = Range(0f, 10f)
-                });
-                coin = new Vector3(0f, CoinLift, gap * 0.5f);
-                var landing = new Vector3(0f, 0f, gap + 2.5f);
-                Platform(landing, new Vector3(landingWidth, 1f, 5f));
-                Land(landing, new Vector2(landingWidth, 5f));
-            } else {
-                // Shuttles: platforms slide side to side across the path.
-                int count = 2 + Mathf.RoundToInt(d * 3f);
-                float size = Lerp(3f, 2.2f, d);
-                float z = 0f;
-                for (int i = 0; i < count; i++) {
-                    z += Lerp(2.2f, 4f, d);
-                    float amplitude = Lerp(2.5f, 5.5f, d);
-                    var top = new Vector3(-amplitude, 0f, z + size * 0.5f);
-                    Add(new OB_Piece {
-                        kind = OB_PieceKind.Mover, position = World(top - Vector3.up * 0.3f), yaw = yaw,
-                        size = new Vector3(size, 0.6f, size), vector = rotation * new Vector3(amplitude * 2f, 0f, 0f),
-                        speed = Lerp(2.2f, 5.5f, d), phase = Range(0f, 10f)
-                    });
-                    minTop = Mathf.Min(minTop, World(top).y);
-                    // A rider can wait for the platform to pass the centre line.
-                    Step(new Vector3(0f, 0f, top.z), new Vector2(size, size));
-                    if (i == 0) coin = new Vector3(0f, CoinLift, top.z);
-                    z += size;
-                }
-            }
-            return Exit(Lerp(2.5f, 3.5f, d));
-        }
-
-        Vector3 Spinner(float d) {
-            // From Insane onward a second, counter-rotating arena follows the first.
-            int arenas = d > 0.75f ? 2 : 1;
-            float z = 1.5f, direction = Chance(0.5f) ? 1f : -1f;
-            for (int i = 0; i < arenas; i++) {
-                var arena = new Vector3(0f, 0f, z + 6f);
-                Platform(arena, new Vector3(12f, 1f, 12f));
-                Step(arena, new Vector2(12f, 12f));
-                Add(new OB_Piece {
-                    kind = d > 0.45f ? OB_PieceKind.SpinnerCross : OB_PieceKind.SpinnerBar,
-                    position = World(0f, 0.55f, arena.z), yaw = yaw, size = new Vector3(11.4f, 0.5f, 0.5f),
-                    speed = Lerp(70f, 220f, d) * direction, phase = Range(0f, 10f)
-                });
-                if (i == 0) coin = new Vector3(0f, 2.4f, arena.z);
-                direction = -direction;
-                z += 12f + Lerp(2f, 3.5f, d);
-            }
-            return Exit(Lerp(2.5f, 3.5f, d));
-        }
-
-        Vector3 LavaRun(float d) {
-            float stone = Lerp(1.8f, 1.3f, d);
-            int count = 6 + Mathf.RoundToInt(d * 8f);
-            float z = 0f, x = 0f;
-            for (int i = 0; i < count; i++) {
-                z += Lerp(1.4f, 4.2f, d) * Range(0.85f, 1f);
-                x = (i % 2 == 0 ? 1f : -1f) * Range(0.5f, 2.2f);
-                var top = new Vector3(x, 0.2f, z + stone * 0.5f);
-                int index = Platform(top, new Vector3(stone, 1.2f, stone));
-                if (Chance(MixChance(d, 0.65f))) MakeCrumble(index, d);
-                Step(top, new Vector2(stone, stone));
-                if (i == count / 2) coin = top + Vector3.up * CoinLift;
-                z += stone;
-            }
-            float lavaLength = z + 1.5f;
-            Box(OB_PieceKind.Lava, new Vector3(0f, -0.6f, lavaLength * 0.5f), new Vector3(8f, 0.4f, lavaLength), standable: false);
-            return Exit(Lerp(1.5f, 3.5f, d));
-        }
-
-        Vector3 Boost(float d) {
-            var runway = new Vector3(0f, 0f, 1.5f + 4f);
-            Platform(runway, new Vector3(4f, 1f, 8f));
-            Step(runway, new Vector2(4f, 8f));
-            const float up = 9f, forward = 24f, drop = 1.5f, padZ = 6.5f;
-            Add(new OB_Piece { kind = OB_PieceKind.Boost, position = World(0f, 0f, padZ), yaw = yaw, vector = new Vector3(0f, up, forward) });
-            // Distance the fading boost alone carries a player who lets go of the controls.
-            float flight = (up + Mathf.Sqrt(up * up + 2f * m.gravity * drop)) / m.gravity;
-            float k = Mathf.Max(0.01f, m.airMomentumDamping);
-            float carry = forward * (1f - Mathf.Exp(-k * flight)) / k;
-            float gap = Mathf.Min(Lerp(6.5f, 9f, d), carry - (9.5f - padZ) - 1f);
-            float length = Mathf.Max(14f, carry + m.walkSpeed * flight - (9.5f - padZ) - gap + 2f);
-            float width = Lerp(8f, 4f, d);
-            coin = new Vector3(0f, 2.5f, 9.5f + gap * 0.5f);
-            var landing = new Vector3(Range(-1f, 1f) * (1f + d), -drop, 9.5f + gap + length * 0.5f);
-            Platform(landing, new Vector3(width, 1f, length));
-            Land(landing, new Vector2(width, length));
-            return Exit(Lerp(2.5f, 3.5f, d));
-        }
-
-        // Gravity-direction stages. A field turns "down" toward a surface beside or above the path.
-        // Each field ends flush with that surface so a player standing on it stays inside, and its far
-        // end opens over a landing, so walking out of it drops the player back to normal gravity on
-        // solid ground. Sizes allow for the character turning over about its middle
-        // (OB_Movement.bodyHeight tall, about a third as wide).
-        const float GravityPathHalfWidth = 2.5f;
-        const float GravityFieldStart = 3f;
-
-        /// <summary>Approach floor from the stage start into the start of the field.</summary>
-        void GravityApproach(float halfWidth) {
-            var approach = new Vector3(0f, 0f, (GravityFieldStart + 1f) * 0.5f);
-            Platform(approach, new Vector3(halfWidth * 2f, 1f, GravityFieldStart + 1f));
-            Step(approach, new Vector2(halfWidth * 2f, GravityFieldStart + 1f));
-        }
-
-        void WallSegment(float x, float top, float height, float thickness, float fromZ, float toZ) {
-            if (toZ - fromZ < 0.01f) return;
-            Box(OB_PieceKind.Platform, new Vector3(x, top, (fromZ + toZ) * 0.5f), new Vector3(thickness, height, toZ - fromZ), standable: false);
-        }
-
-        /// <summary>Wall Walk: gravity turns sideways, onto a tall wall that players run along.</summary>
-        Vector3 WallWalk(float d) {
-            const float halfWidth = GravityPathHalfWidth, thickness = 1f, overrun = 1.5f;
-            float side = Chance(0.5f) ? 1f : -1f;
-            // The wall stands clear of the approach so a player turning over beside it does not
-            // swing their feet into it; they fall the rest of the way.
-            float wallGap = m.bodyHeight * 0.35f;
-            float face = side * (halfWidth + wallGap);
-            float bottom = -1.5f, top = Mathf.Max(m.bodyHeight + 2f, Lerp(7f, 8f, d)), height = top - bottom;
-            GravityApproach(halfWidth);
-
-            // Falling across onto the wall carries the player forward, so the first obstacle comes after
-            // room to land. Obstacles (gaps in the wall or lava strips across it) sit a running jump
-            // apart, so clearing one never lands the player on the next.
-            float settle = m.walkSpeed * Mathf.Sqrt(2f * (halfWidth * 2f + wallGap) / m.gravity);
-            float spacing = m.FlatJumpReach() + 3f;
-            int obstacles = 1 + Mathf.RoundToInt(d * 3f);
-            float first = GravityFieldStart + settle + 3f;
-            float wallEnd = first + (obstacles - 1) * spacing + Lerp(7f, 6f, d) + overrun;
-            float wallX = face + side * thickness * 0.5f;
-            float z = GravityFieldStart;
-            for (int i = 0; i < obstacles; i++) {
-                float centre = first + i * spacing;
-                if (Chance(0.5f)) {
-                    float gap = Lerp(2.2f, 4.5f, d);
-                    WallSegment(wallX, top, height, thickness, z, centre - gap * 0.5f);
-                    z = centre + gap * 0.5f;
-                    CheckJump(gap, 0f);
-                } else {
-                    float strip = Lerp(1.4f, 3.5f, d);
-                    Box(OB_PieceKind.Lava, new Vector3(face - side * 0.2f, top, centre), new Vector3(0.4f, height, strip), standable: false);
-                    CheckJump(strip, 0f);
-                }
-            }
-            WallSegment(wallX, top, height, thickness, z, wallEnd);
-            // Between the first two obstacles (or after the only one), near the wall's high edge.
-            float coinZ = obstacles > 1 ? first + spacing * 0.5f : first + 4f;
-            coin = new Vector3(face - side * CoinLift, top - 2f, coinZ);
-
-            float fieldEnd = wallEnd - overrun;
-            float near = -side * halfWidth;
-            Field(new Vector3(Mathf.Min(near, face), bottom + 0.5f, GravityFieldStart),
-                new Vector3(Mathf.Max(near, face), top, fieldEnd), new Vector3(side, 0f, 0f));
-
-            // Leaving the field drops the player down the wall face onto this landing.
-            const float landingLength = 9f;
-            float landingWidth = halfWidth + Mathf.Abs(face);
-            var landing = new Vector3((near + face) * 0.5f, bottom, fieldEnd + landingLength * 0.5f);
-            Platform(landing, new Vector3(landingWidth, 1f, landingLength));
-            Land(landing, new Vector2(landingWidth, landingLength));
-            return Exit(2.5f);
-        }
-
-        /// <summary>Ceiling Run: gravity flips upward and players run upside down along a ceiling.</summary>
-        Vector3 CeilingRun(float d) {
-            const float thickness = 1f, overrun = 1.5f;
-            float halfWidth = Lerp(GravityPathHalfWidth, 1.6f, d);
-            // High enough to walk under upright, low enough that the flip is a short fall.
-            float height = m.bodyHeight + Lerp(2f, 3.5f, d);
-            GravityApproach(halfWidth);
-
-            // Lava hanging under the ceiling. Patches sit a full running jump apart, so a jump over one
-            // never comes down on the next.
-            int patches = 1 + Mathf.RoundToInt(d * 2f);
-            float patch = Lerp(1.4f, 3.5f, d);
-            float spacing = m.FlatJumpReach() + patch + 3f;
-            float first = GravityFieldStart + 7f;
-            for (int i = 0; i < patches; i++) {
-                Box(OB_PieceKind.Lava, new Vector3(0f, height, first + i * spacing), new Vector3(halfWidth * 2f, 0.3f, patch), standable: false);
-                CheckJump(patch, 0f);
-            }
-
-            float start = GravityFieldStart - 0.5f;
-            float fieldEnd = first + (patches - 1) * spacing + Lerp(7f, 6f, d), end = fieldEnd + overrun;
-            Box(OB_PieceKind.Platform, new Vector3(0f, height + thickness, (start + end) * 0.5f),
-                new Vector3(halfWidth * 2f, thickness, end - start), standable: false);
-            coin = new Vector3(0f, height - CoinLift, fieldEnd - 1.2f); // past the last patch, still under the ceiling
-            Field(new Vector3(-halfWidth, -1f, GravityFieldStart), new Vector3(halfWidth, height, fieldEnd), Vector3.up);
-
-            const float landingLength = 8f;
-            var landing = new Vector3(0f, 0f, fieldEnd + landingLength * 0.5f);
-            Platform(landing, new Vector3(6f, 1f, landingLength));
-            Land(landing, new Vector2(6f, landingLength));
-            return Exit(2.5f);
         }
     }
 }

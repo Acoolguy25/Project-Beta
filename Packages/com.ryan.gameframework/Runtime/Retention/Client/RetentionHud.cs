@@ -112,6 +112,8 @@ namespace RyanAssets.Retention.Client {
         public RetentionSnapshotBroadcast Snapshot => snapshot;
         public bool Hidden => hidden;
         public bool ChallengesOpen => challengesPanel != null && challengesPanel.Visible;
+        /// <summary>Whether the end-of-match summary card is on screen (games make room for it).</summary>
+        public bool SummaryVisible => summaryCard != null && summaryCard.Visible;
 
         /// <summary>Raised when the player's level changes (and on the first snapshot), e.g. to refresh locked items in a shop.</summary>
         public event Action<int> LevelChanged;
@@ -204,12 +206,18 @@ namespace RyanAssets.Retention.Client {
                 challengesPanel.SetKey(key);
                 if (challengesPanel.closeButton != null) challengesPanel.closeButton.onClick.AddListener(CloseChallenges);
             }
-            if (summaryCard != null) summaryCard.FinalLevelShown += ReleaseChipLevel;
+            if (summaryCard != null) {
+                summaryCard.FinalLevelShown += ReleaseChipLevel;
+                summaryCard.LevelShown += OnCardLevel;
+            }
             ApplyVisibility();
         }
 
         void OnDestroy() {
-            if (summaryCard != null) summaryCard.FinalLevelShown -= ReleaseChipLevel;
+            if (summaryCard != null) {
+                summaryCard.FinalLevelShown -= ReleaseChipLevel;
+                summaryCard.LevelShown -= OnCardLevel;
+            }
             if (levelChip != null && levelChip.button != null) levelChip.button.onClick.RemoveListener(ToggleChallenges);
             if (challengesPanel != null && challengesPanel.closeButton != null) challengesPanel.closeButton.onClick.RemoveListener(CloseChallenges);
         }
@@ -366,10 +374,16 @@ namespace RyanAssets.Retention.Client {
             SummaryReceived?.Invoke(message);
             // The match's XP arrives just before its summary: keep the chip on the level the match
             // started at, so it does not give the card's level-up away, until the card gets there.
+            // A game that grants XP during the match already showed some of it on the chip; the chip
+            // never steps back below what it shows, and follows the card's level-ups from there.
             if (summaryCard != null) {
                 holdChipLevel = true;
                 heldLevel = message.levelBefore;
                 heldFraction = message.levelXpNeededBefore > 0 ? Mathf.Clamp01((float)message.levelXpBefore / message.levelXpNeededBefore) : 1f;
+                if (levelChip != null && levelChip.ShownLevel > heldLevel && levelChip.ShownLevel <= message.levelAfter) {
+                    heldLevel = levelChip.ShownLevel;
+                    heldFraction = levelChip.ShownFraction;
+                }
                 RefreshLevel();
             }
             pendingSummary = message;
@@ -411,6 +425,15 @@ namespace RyanAssets.Retention.Client {
                 else levelChip.SetLevel(snapshot.level, fraction);
             }
             if (challengesPanel != null) challengesPanel.SetLevel(snapshot.level, snapshot.levelXp, snapshot.levelXpNeeded);
+        }
+
+        /// <summary>The summary card crossed into <paramref name="level"/>: the held chip keeps up with it.</summary>
+        void OnCardLevel(int level) {
+            if (!holdChipLevel || level <= heldLevel) return;
+            heldLevel = level;
+            heldFraction = 0f;
+            RefreshLevel();
+            if (levelChip != null && !hidden) levelChip.Bump(feel.levelPunch);
         }
 
         /// <summary>Lets the chip show the current level again (the card reached it, or closed).</summary>

@@ -84,7 +84,9 @@ Shader "Universes/Obby/Cloud"
 
                 half3 view = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 half rim = pow(1.0 - saturate(dot(n, view)), _RimPower);
-                color += _RimColor.rgb * rim * _RimStrength * (0.4 + 0.6 * lit);
+                // Under a tier's override the rim takes the tier's lit-top colour, so dark tiers get no white halo.
+                half3 rimColor = lerp(_RimColor.rgb, CloudTop() * 1.3h, _ObbyCloudTop.a);
+                color += rimColor * rim * _RimStrength * (0.4 + 0.6 * lit);
 
                 color = MixFog(color, input.fogFactor);
                 return half4(color, 1);

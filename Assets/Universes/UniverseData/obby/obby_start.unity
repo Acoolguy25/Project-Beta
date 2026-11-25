@@ -15,7 +15,7 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.69803923, g: 0.81960785, b: 0.9647059, a: 1}
+  m_FogColor: {r: 0.63529414, g: 0.7764706, b: 0.9490196, a: 1}
   m_FogMode: 1
   m_FogDensity: 0.01
   m_LinearFogStart: 160
@@ -37,7 +37,7 @@ RenderSettings:
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 433957486}
+  m_Sun: {fileID: 405780051}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -119,73 +119,110 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1001 &55999737
+--- !u!1 &405780050
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 405780052}
+  - component: {fileID: 405780051}
+  m_Layer: 0
+  m_Name: Sun
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!108 &405780051
+Light:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 405780050}
+  m_Enabled: 1
+  serializedVersion: 13
+  m_Type: 1
+  m_Color: {r: 1, g: 0.94509804, b: 0.8392157, a: 1}
+  m_Intensity: 1.2
+  m_Range: 10
+  m_SpotAngle: 30
+  m_InnerSpotAngle: 21.80208
+  m_CookieSize2D: {x: 0.5, y: 0.5}
+  m_Shadows:
+    m_Type: 2
+    m_Resolution: -1
+    m_CustomResolution: -1
+    m_Strength: 0.75
+    m_Bias: 0.05
+    m_NormalBias: 0.4
+    m_NearPlane: 0.2
+    m_CullingMatrixOverride:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    m_UseCullingMatrixOverride: 0
+  m_Cookie: {fileID: 0}
+  m_DrawHalo: 0
+  m_Flare: {fileID: 0}
+  m_RenderMode: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingLayerMask: 1
+  m_Lightmapping: 4
+  m_LightShadowCasterMode: 0
+  m_AreaSize: {x: 1, y: 1}
+  m_BounceIntensity: 1
+  m_ColorTemperature: 6570
+  m_UseColorTemperature: 0
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_UseBoundingSphereOverride: 0
+  m_UseViewFrustumForShadowCasterCull: 1
+  m_ForceVisible: 0
+  m_ShapeRadius: 0.025
+  m_ShadowAngle: 0
+  m_LightUnit: 1
+  m_LuxAtDistance: 1
+  m_EnableSpotReflector: 1
+--- !u!4 &405780052
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 405780050}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.34178162, y: -0.28073305, z: 0.10776333, w: 0.8903715}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &560953543
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Modification:
     serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 100
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5903110614145787150, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      propertyPath: m_Name
-      value: Lobby
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 5599904305644054241, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
-  m_SourcePrefab: {fileID: 100100000, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
---- !u!1001 &293536281
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 760124103}
+    m_TransformParent: {fileID: 855450042}
     m_Modifications:
     - target: {fileID: 4598517209392122553, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
       propertyPath: m_Name
@@ -248,17 +285,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
---- !u!1 &293536282 stripped
+--- !u!1 &560953544 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4598517209392122553, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
-  m_PrefabInstance: {fileID: 293536281}
+  m_PrefabInstance: {fileID: 560953543}
   m_PrefabAsset: {fileID: 0}
---- !u!4 &293536283 stripped
+--- !u!4 &560953545 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8039996867337958508, guid: 25b6d3c1f6caee3ce85ab85809101077, type: 3}
-  m_PrefabInstance: {fileID: 293536281}
+  m_PrefabInstance: {fileID: 560953543}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &433957485
+--- !u!1 &855450040
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -266,105 +303,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 433957487}
-  - component: {fileID: 433957486}
-  m_Layer: 0
-  m_Name: Sun
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!108 &433957486
-Light:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 433957485}
-  m_Enabled: 1
-  serializedVersion: 13
-  m_Type: 1
-  m_Color: {r: 1, g: 0.94509804, b: 0.8392157, a: 1}
-  m_Intensity: 1.2
-  m_Range: 10
-  m_SpotAngle: 30
-  m_InnerSpotAngle: 21.80208
-  m_CookieSize2D: {x: 0.5, y: 0.5}
-  m_Shadows:
-    m_Type: 2
-    m_Resolution: -1
-    m_CustomResolution: -1
-    m_Strength: 0.75
-    m_Bias: 0.05
-    m_NormalBias: 0.4
-    m_NearPlane: 0.2
-    m_CullingMatrixOverride:
-      e00: 1
-      e01: 0
-      e02: 0
-      e03: 0
-      e10: 0
-      e11: 1
-      e12: 0
-      e13: 0
-      e20: 0
-      e21: 0
-      e22: 1
-      e23: 0
-      e30: 0
-      e31: 0
-      e32: 0
-      e33: 1
-    m_UseCullingMatrixOverride: 0
-  m_Cookie: {fileID: 0}
-  m_DrawHalo: 0
-  m_Flare: {fileID: 0}
-  m_RenderMode: 0
-  m_CullingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RenderingLayerMask: 1
-  m_Lightmapping: 4
-  m_LightShadowCasterMode: 0
-  m_AreaSize: {x: 1, y: 1}
-  m_BounceIntensity: 1
-  m_ColorTemperature: 6570
-  m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
-  m_UseBoundingSphereOverride: 0
-  m_UseViewFrustumForShadowCasterCull: 1
-  m_ForceVisible: 0
-  m_ShapeRadius: 0.025
-  m_ShadowAngle: 0
-  m_LightUnit: 1
-  m_LuxAtDistance: 1
-  m_EnableSpotReflector: 1
---- !u!4 &433957487
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 433957485}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0.34178162, y: -0.28073305, z: 0.10776333, w: 0.8903715}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &760124101
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 760124103}
-  - component: {fileID: 760124102}
+  - component: {fileID: 855450042}
+  - component: {fileID: 855450041}
   m_Layer: 0
   m_Name: Course
   m_TagString: Untagged
@@ -372,13 +312,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &760124102
+--- !u!114 &855450041
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 760124101}
+  m_GameObject: {fileID: 855450040}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a1ee9dc91a2ffd74a9572562129563bf, type: 3}
@@ -390,10 +330,600 @@ MonoBehaviour:
     gravity: 30
     airMomentumDamping: 0.6
     bodyHeight: 5.6
+    sprintSpeed: 15
+    launchProtection: 0.2
+    slipAcceleration: 60
   sprintSpeed: 15
-  lobbySpawn: {fileID: 1893400998}
-  courseStart: {fileID: 1079643364}
-  startGate: {fileID: 293536282}
+  rules:
+    tiers:
+    - segments: {x: 2, y: 2}
+      reachSpeed: 0
+      gapFraction: {x: 0.42, y: 0.6}
+      riseFraction: 0.55
+      platformSize: {x: 3, y: 3.8}
+      beamWidth: 1.8
+      mixChance: 0
+      restBetweenSegments: 1
+      proGapFraction: 0.72
+      introduces: 00010314150907y
+    - segments: {x: 2, y: 3}
+      reachSpeed: 0.1
+      gapFraction: {x: 0.5, y: 0.68}
+      riseFraction: 0.62
+      platformSize: {x: 2.6, y: 3.3}
+      beamWidth: 1.5
+      mixChance: 0.1
+      restBetweenSegments: 1
+      proGapFraction: 0.78
+      introduces: 040506020a0d13120by
+    - segments: {x: 3, y: 3}
+      reachSpeed: 0.3
+      gapFraction: {x: 0.55, y: 0.74}
+      riseFraction: 0.68
+      platformSize: {x: 2.2, y: 2.8}
+      beamWidth: 1.2
+      mixChance: 0.25
+      restBetweenSegments: 1
+      proGapFraction: 0.82
+      introduces: 080e10110c1719y
+    - segments: {x: 3, y: 4}
+      reachSpeed: 0.5
+      gapFraction: {x: 0.6, y: 0.8}
+      riseFraction: 0.72
+      platformSize: {x: 1.8, y: 2.4}
+      beamWidth: 1
+      mixChance: 0.45
+      restBetweenSegments: 0
+      proGapFraction: 0.86
+      introduces: 0f161ay
+    - segments: {x: 4, y: 4}
+      reachSpeed: 0.65
+      gapFraction: {x: 0.66, y: 0.87}
+      riseFraction: 0.76
+      platformSize: {x: 1.5, y: 2}
+      beamWidth: 0.8
+      mixChance: 0.6
+      restBetweenSegments: 0
+      proGapFraction: 0.9
+      introduces: 18y
+    - segments: {x: 4, y: 4}
+      reachSpeed: 0.8
+      gapFraction: {x: 0.72, y: 0.93}
+      riseFraction: 0.8
+      platformSize: {x: 1.3, y: 1.7}
+      beamWidth: 0.65
+      mixChance: 0.75
+      restBetweenSegments: 0
+      proGapFraction: 0.96
+      introduces: 
+    starsPerTier: 3
+    physicalGapCeiling: 0.92
+    physicalRiseCeiling: 0.85
+    parPerHop: 0.35
+    parRunShare: 0.2
+    parFlightShare: 1
+    mechanics:
+      onOff:
+        runs:
+          easy: 2
+          hard: 3.5
+        blocks:
+          easy: 2
+          hard: 3
+        extraBlocks: 1
+        bumpFromDifficulty: 0.45
+        bumpChance: 0.6
+        buttonPar: 0.8
+        bumpPar: 1.4
+        bumpRoom: 1.5
+        blockRise: {x: -0.2, y: 0.6}
+        padRise: {x: -0.2, y: 0.4}
+        blockJink: 2
+        blockThickness: 0.8
+      hammers:
+        hammers:
+          easy: 2
+          hard: 4
+        easyWidth: 3.6
+        hardWidthScale: 1.6
+        minWidth: 1.6
+        spacing:
+          easy: 7
+          hard: 5.5
+        arm:
+          easy: 8
+          hard: 9.5
+        amplitude:
+          easy: 50
+          hard: 70
+        period:
+          easy: 3.4
+          hard: 2
+        headWidth:
+          easy: 1.6
+          hard: 2.2
+        headDepth: 2.2
+        endRoom: 2.5
+        splitFromDifficulty: 0.6
+        splitTension: -0.4
+        splitTensionScale: 0.5
+        bridgeThickness: 0.8
+        phaseJitter: 0.2
+        parShare: 0.35
+      crushers:
+        crushers:
+          easy: 2
+          hard: 4
+        width:
+          easy: 5
+          hard: 3.6
+        depth:
+          easy: 4
+          hard: 3.2
+        safe:
+          easy: 4.5
+          hard: 3
+        period:
+          easy: 3.2
+          hard: 2
+        hold:
+          easy: 0.8
+          hard: 0.5
+        lead: 3
+        overhang: 0.5
+        waveBelowDifficulty: 0.7
+        tail: 1
+        parShare: 0.6
+      lasers:
+        gates:
+          easy: 3
+          hard: 6
+        width:
+          easy: 5
+          hard: 3.6
+        spacing:
+          easy: 6
+          hard: 4.5
+        period:
+          easy: 2.8
+          hard: 1.6
+        onFraction:
+          easy: 0.4
+          hard: 0.55
+        lowBeamFromDifficulty: 0.35
+        lowBeamChance: 0.6
+        waveBelowDifficulty: 0.65
+        lead: 3
+        overhang: 0.3
+        lowBeamTop: 0.9
+        lowBeamHeight: 0.6
+        lowBeamDepth: 0.4
+        parShare: 0.4
+      logs:
+        logs:
+          easy: 1
+          hard: 3
+        radius:
+          easy: 1.6
+          hard: 1.1
+        length:
+          easy: 9
+          hard: 14
+        spin:
+          easy: 2.5
+          hard: 6
+        rise: 0.4
+        jink: 1
+        parFactor: 1.4
+      turntables:
+        discs:
+          easy: 1
+          hard: 3
+        diameter:
+          easy: 14
+          hard: 10
+        spin:
+          easy: 25
+          hard: 60
+        posts:
+          easy: 2
+          hard: 4
+        riseShare: 0.5
+        tension: -0.1
+        thickness: 1
+        parExtra: 0.6
+      cannons:
+        twoFromDifficulty: 0.5
+        up:
+          easy: 14
+          hard: 17
+        forward:
+          easy: 16
+          hard: 24
+        offset:
+          easy: 0.05
+          hard: 0.45
+        target:
+          easy: 8
+          hard: 4.5
+        pad: {x: 5, y: 6}
+        cannonBack: 1.5
+        rise: {x: -2, y: 3}
+        islandExtra: 4
+        parExtra: 1.2
+      mushrooms:
+        caps:
+          easy: 3
+          hard: 5
+        cap:
+          easy: 3.4
+          hard: 1.8
+        bounce:
+          easy: 4.5
+          hard: 6.5
+        rise: 2
+        jink: 3
+        landingRise: {x: -1, y: 2}
+        parShare: 0.8
+      beams:
+        beams:
+          easy: 3
+          hard: 5
+        extraWidth: 0.6
+        length: {x: 6, y: 10}
+        crumbleShare: 0.4
+        rise: {x: -0.5, y: 0.8}
+        jink: {x: 2, y: 4}
+        centering: 0.3
+        tensionScale: 0.75
+        thickness: 0.6
+        parShare: 0.4
+      lavaRise:
+        steps:
+          easy: 6
+          hard: 9
+        slack:
+          easy: 1.7
+          hard: 1.3
+        delay:
+          easy: 1.5
+          hard: 0.8
+        startBelow: 2.5
+        baseSize: 6
+        topSize: 5
+        sideRoom: 4
+        lavaFloor: 6
+        zigzag: {x: 2, y: 3.5}
+        stepRise: {x: 0.75, y: 1}
+        topRise: {x: 0.5, y: 0.9}
+        tension: -0.1
+      wind:
+        hops:
+          easy: 4
+          hard: 7
+        calm:
+          easy: 0.22
+          hard: 0.38
+        gust:
+          easy: 0.25
+          hard: 0.5
+        period:
+          easy: 3.6
+          hard: 2.4
+        size:
+          easy: 3.6
+          hard: 2.6
+        upChance: 0.5
+        riseScale: 0.5
+        jink: 1.5
+        parShare: 0.25
+      ice:
+        sheets:
+          easy: 3
+          hard: 5
+        width:
+          easy: 5
+          hard: 3.2
+        traction:
+          easy: 0.2
+          hard: 0.1
+        length: {x: 8, y: 12}
+        runUpMargin: 1
+        rise: {x: -0.8, y: 0.3}
+        jink: {x: 1.5, y: 3}
+        centering: 0.3
+        tension: -0.25
+        thickness: 0.8
+        parShare: 0.5
+      flip:
+        width:
+          easy: 5
+          hard: 3.4
+        headroom:
+          easy: 2.5
+          hard: 4
+        twoCeilingsFromDifficulty: 0.55
+        lavaFromDifficulty: 0.3
+        patch:
+          easy: 1.4
+          hard: 3
+      corkscrew:
+        halfWidth:
+          easy: 5.5
+          hard: 4.6
+        twoStripsFromDifficulty: 0.6
+        strip:
+          easy: 1.4
+          hard: 3
+      crumbleMix:
+        fuse:
+          easy: 0.8
+          hard: 0.3
+        regrow: 3
+      hops:
+        hops: 3
+        extraHops: 1
+        hopsOverTier: 2
+        wander:
+          easy: 1.5
+          hard: 4
+        crumbleShare: 0.5
+      springs:
+        baseSize: {x: 6, y: 7}
+        baseUpChance: 0.3
+        springForward: 1.5
+        overshoot: 2.5
+        padReach: 2.5
+        rise:
+          easy: 5
+          hard: 9
+        coinShare: 0.8
+        secondFromDifficulty: 0.35
+        ledgeDepth: 5
+        ledgeDepthWithSecond: 7
+        ledgeWidth:
+          easy: 5
+          hard: 3.2
+        ledgeJink: 1.5
+        firstPar: 2.4
+        secondPar: 2.2
+        secondRise:
+          easy: 4
+          hard: 8
+        secondSize:
+          easy: 5
+          hard: 3
+        secondSpringForward: 2.5
+        secondJink: 2
+        secondMaxOffset: 3
+      moonLeap:
+        gravity:
+          easy: 0.42
+          hard: 0.28
+        leaps:
+          easy: 3
+          hard: 5
+        sizeScale: 1.2
+        rise: {x: -1, y: 2.5}
+        jink: 2
+        tensionScale: 0.85
+        parPerLeap: 1.2
+        landing: 5
+        sideHalf: 11
+        headroom: 14
+        coinLift: 4
+      conveyors:
+        belts:
+          easy: 3
+          hard: 6
+        width:
+          easy: 4.6
+          hard: 2.2
+        length: 5
+        backSpeed:
+          easy: 3
+          hard: 8
+        sideSpeed:
+          easy: 1.8
+          hard: 5
+        thickness: 0.6
+        parFactor: 1.6
+      crumble:
+        blocks:
+          easy: 5
+          hard: 10
+        size:
+          easy: 2.4
+          hard: 1.6
+        riseShare: {x: 0, y: 0.5}
+        jink:
+          easy: 0.5
+          hard: 2.5
+        fuse:
+          easy: 0.9
+          hard: 0.25
+        thickness: 0.6
+      beat:
+        blocks:
+          easy: 6
+          hard: 11
+        size:
+          easy: 2.8
+          hard: 2
+        period:
+          easy: 4.6
+          hard: 2.2
+        restBelowDifficulty: 0.35
+        riseShare: {x: -0.2, y: 0.6}
+        jink: 1.5
+        tension: -0.1
+        thickness: 0.8
+        parShare: 0.25
+      wallJump:
+        gap:
+          easy: 4.2
+          hard: 3.2
+        height:
+          easy: 6
+          hard: 16
+        length: 5
+        thickness: 0.6
+        ledgeGap: 0.6
+        floorExtraLength: 2
+        floorExtraWidth: 1.6
+        kickHeight: 1.9
+        awaySpeed:
+          easy: 6.5
+          hard: 7.5
+        ledgeSize:
+          easy: 5
+          hard: 3.5
+        coinShare: 0.6
+        climbRate: 2.5
+        parExtra: 1
+      movers:
+        ferryChance: 0.5
+        ferryGap:
+          easy: 9
+          hard: 20
+        ferrySize:
+          easy: 3.2
+          hard: 2.4
+        landingWidth:
+          easy: 6
+          hard: 4
+        ferrySpeed:
+          easy: 2.6
+          hard: 5.5
+        boarding: 0.3
+        landingDepth: 5
+        landingBeyond: 2.5
+        sliders:
+          easy: 2
+          hard: 5
+        sliderSize:
+          easy: 3
+          hard: 2.2
+        sliderSpeed:
+          easy: 2.2
+          hard: 5.5
+        amplitude:
+          easy: 2.5
+          hard: 5.5
+        sliderTensionScale: 0.7
+        thickness: 0.6
+      spinner:
+        arena: 12
+        barLength: 11.4
+        barHeight: 0.55
+        crossFromDifficulty: 0.45
+        twoFromDifficulty: 0.75
+        speed:
+          easy: 70
+          hard: 220
+        parPerArena: 1.8
+        arenaTensionScale: 0.7
+      lavaRun:
+        stones:
+          easy: 5
+          hard: 11
+        sizeShare: 0.8
+        minSize: 1.2
+        zigzag: {x: 1, y: 3}
+        rise: 0.3
+        crumbleShare: 0.6
+        thickness: 1.2
+        lakeWidth: 12
+        lakeDepth: 0.4
+        lakeBelow: 1.2
+      boost:
+        up: 9
+        forward: 24
+        drop: 1.5
+        runwayLength: 8
+        runwayWidth: 4
+        padFromEnd: 3
+        gap:
+          easy: 6.5
+          hard: 9
+        landingWidth:
+          easy: 8
+          hard: 4
+        minLanding: 14
+        jink: 1
+      gravity:
+        pathHalfWidth: 2.5
+        fieldStart: 3
+        landingLength: 9
+        landingStop: 3
+        thickness: 1
+        overrun: 1.5
+        settleRoom: 3
+        obstacleRoom: 3
+        tail:
+          easy: 7
+          hard: 6
+        parExtra: 1.5
+      wallWalk:
+        wallGapShare: 0.35
+        bottom: -1.5
+        top:
+          easy: 7
+          hard: 8
+        topOverBody: 2
+        obstacles:
+          easy: 1
+          hard: 4
+        gapChance: 0.5
+        gap:
+          easy: 2.2
+          hard: 4.5
+        strip:
+          easy: 1.4
+          hard: 3.5
+        coinAfter: 4
+        coinBelowTop: 2
+      ceilingRun:
+        halfWidth:
+          easy: 2.5
+          hard: 1.6
+        headroom:
+          easy: 2
+          hard: 3.5
+        patches:
+          easy: 1
+          hard: 3
+        patch:
+          easy: 1.4
+          hard: 3.5
+        firstPatchMin: 7
+        landingLength: 8
+        landingWidth: 6
+        coinBeforeEnd: 1.2
+      gravityShapes:
+        corkscrewApproach: 6
+        corkscrewFaceRoom: 1.6
+        corkscrewSectionRoom: 2
+        corkscrewParPerTurn: 0.8
+        flipRunway: 7
+        flipLanding: 10
+        flipCeilingBack: 4
+        flipForcedGap: 1.15
+        flipPatches:
+          easy: 1
+          hard: 2
+        flipParExtra: 1.6
+        arrowDepth: 2
+        arrowHeight: 2
+        orbAhead: 2.5
+        orbSize: 3
+        orbJumpShare: 0.55
+      entryTension: -0.2
+      restTension: -0.3
+    crumbleCrossMargin: 0.3
+  lobbySpawn: {fileID: 1121736591}
+  courseStart: {fileID: 1762748296}
+  startGate: {fileID: 560953544}
   platform: {fileID: 3870345185510741857, guid: b85ffaca80095b41cb876bf60a6cdccb, type: 3}
   checkpointPad: {fileID: 8634422729409926794, guid: ad1018e48a796ef96b13fed5065db883, type: 3}
   finishPad: {fileID: 573235629339966414, guid: d55fea2a96fa14a4eb9992746579e482, type: 3}
@@ -409,6 +939,23 @@ MonoBehaviour:
   spinnerBar: {fileID: 7056555154772840218, guid: ab520e29d9a46c1c5ab324f292df0a70, type: 3}
   spinnerCross: {fileID: 2614071531501944502, guid: fd74456ef6754aa12bdfd45cfce7aade, type: 3}
   coin: {fileID: 6026656014297036305, guid: bacf547d8463fa3ce83a4df05a9a92d7, type: 3}
+  beam: {fileID: 3450504732612291073, guid: fe010fbeb1336784fb2b8c741afeae17, type: 3}
+  onOffBlock: {fileID: 565427120201584923, guid: 49baa0c32f6011ac99a8d47b2bd8099e, type: 3}
+  onOffSwitchPad: {fileID: 6483457954793318356, guid: 678daa70c816b1812a7311b8269d6581, type: 3}
+  onOffSwitchBlock: {fileID: 2697224788677027892, guid: 9858211f0a76db934bc35e3c762343cc, type: 3}
+  pendulum: {fileID: 8725955950552733780, guid: c1465b5226c6d578fb3d7344e48fbb03, type: 3}
+  crusher: {fileID: 381040360754549571, guid: 692fe769bdd734abea2445a8e243777b, type: 3}
+  laser: {fileID: 5985508101504509368, guid: 9728dd63515a7b16ea355acc5c5664ed, type: 3}
+  rollingLog: {fileID: 1769114614266272900, guid: 25858252e504bff14a67f6a223773475, type: 3}
+  turntable: {fileID: 7416551299617361512, guid: 5e8fc4ea2b3ed5ea39c96ef6d02d6d19, type: 3}
+  cannon: {fileID: 3953447552989167699, guid: 679902ff66bb7f80a9168caf88c584ad, type: 3}
+  mushroom: {fileID: 5546219832993107084, guid: 2947942e7439d7779b242d0531519abe, type: 3}
+  gravityFlipPad: {fileID: 2425356100753390251, guid: 601187dbbc265b41cbb7778d2727b241, type: 3}
+  gravityFlipOrb: {fileID: 8197789698284827719, guid: 5bc204ede108433f28ded2dedcff008d, type: 3}
+  risingLava: {fileID: 5747790663714742077, guid: 289537ffebdecff9c9eb4f67c9e43448, type: 3}
+  star: {fileID: 5959399019636995541, guid: 21505c9dc42531ba984bf15919e1792d, type: 3}
+  ice: {fileID: 3872621395260548843, guid: 703ccf71eb294753daace791b6e40955, type: 3}
+  wind: {fileID: 6803729999735895655, guid: 2ddbbebdfacf0bfacba536bfe26637aa, type: 3}
   tierPlatforms:
   - materials:
     - {fileID: 2100000, guid: 9d615713eadabffc3a2fce18d4d45e50, type: 2}
@@ -432,59 +979,92 @@ MonoBehaviour:
   beatGhostA: {fileID: 2100000, guid: 657afad947dcb5a55a37eafce7f00e9b, type: 2}
   beatSolidB: {fileID: 2100000, guid: 0b1f3b4bcd22968a98cd2372fb3b137a, type: 2}
   beatGhostB: {fileID: 2100000, guid: 12d54ba004560b4ddbf6db948ba26201, type: 2}
+  onOffSolidA: {fileID: 2100000, guid: 38d1c8d8929e8166a8713d466dbcf404, type: 2}
+  onOffGhostA: {fileID: 2100000, guid: d672e0a00eae7e622a1648c58a623da1, type: 2}
+  onOffSolidB: {fileID: 2100000, guid: 80febe66c9a1869c68f1a679ac04aada, type: 2}
+  onOffGhostB: {fileID: 2100000, guid: 96d9acd9426634deabcf3535ec9007bb, type: 2}
   tileMetres: 2
   directionalFieldTint: {r: 0.3, g: 0.85, b: 1, a: 0.09}
   clientPrefab: {fileID: 2049112302594447213, guid: 546f354047fda669fbdfd0a4d9312c3e, type: 3}
---- !u!4 &760124103
+--- !u!4 &855450042
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 760124101}
+  m_GameObject: {fileID: 855450040}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1893400998}
-  - {fileID: 1079643364}
-  - {fileID: 293536283}
+  - {fileID: 1121736591}
+  - {fileID: 1762748296}
+  - {fileID: 560953545}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1079643363
-GameObject:
+--- !u!1001 &1094536032
+PrefabInstance:
   m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1079643364}
-  m_Layer: 0
-  m_Name: CourseStart
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1079643364
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1079643363}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 100, z: 9}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 760124103}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1893400997
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 100
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2535922043665835476, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5903110614145787150, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      propertyPath: m_Name
+      value: Lobby
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5599904305644054241, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
+  m_SourcePrefab: {fileID: 100100000, guid: 362f6dd71042b0369bbce928b4bb9cf5, type: 3}
+--- !u!1 &1121736590
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -492,7 +1072,7 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1893400998}
+  - component: {fileID: 1121736591}
   m_Layer: 0
   m_Name: LobbySpawn
   m_TagString: Untagged
@@ -500,25 +1080,56 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &1893400998
+--- !u!4 &1121736591
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1893400997}
+  m_GameObject: {fileID: 1121736590}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 100, z: -3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 760124103}
+  m_Father: {fileID: 855450042}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1762748295
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1762748296}
+  m_Layer: 0
+  m_Name: CourseStart
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1762748296
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1762748295}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 100, z: 9}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 855450042}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 433957487}
-  - {fileID: 760124103}
-  - {fileID: 55999737}
+  - {fileID: 405780052}
+  - {fileID: 855450042}
+  - {fileID: 1094536032}

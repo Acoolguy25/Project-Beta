@@ -15,7 +15,10 @@
         "Unity.TextMeshPro",
         "Unity.ugui",
         "Unity.RenderPipelines.Universal.Runtime",
-        "Unity.RenderPipelines.Core.Runtime"
+        "Unity.RenderPipelines.Core.Runtime",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Retention.Editor"
     ],
     "includePlatforms": [
         "Editor"

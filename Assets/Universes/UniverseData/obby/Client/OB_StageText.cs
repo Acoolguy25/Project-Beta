@@ -1,0 +1,66 @@
+namespace Universes.UniverseData.obby.Client {
+    /// <summary>The name and one-line hint the HUD shows for each course mechanic.</summary>
+    public static class OB_StageText {
+        public static string Name(OB_StageKind kind) => kind switch {
+            OB_StageKind.Hops => "Skyhop",
+            OB_StageKind.Springs => "Spring Climb",
+            OB_StageKind.MoonLeap => "Moon Leap",
+            OB_StageKind.Conveyors => "Belt Run",
+            OB_StageKind.Crumble => "Crumble Bridge",
+            OB_StageKind.Beat => "Beat Blocks",
+            OB_StageKind.WallJump => "Wall Kick Shaft",
+            OB_StageKind.Movers => "Sky Ferry",
+            OB_StageKind.Spinner => "Sweeper",
+            OB_StageKind.LavaRun => "Lava Stones",
+            OB_StageKind.Boost => "Boost Gap",
+            OB_StageKind.WallWalk => "Wall Walk",
+            OB_StageKind.CeilingRun => "Ceiling Run",
+            OB_StageKind.OnOff => "ON/OFF Blocks",
+            OB_StageKind.Hammers => "Hammer Bridge",
+            OB_StageKind.Crushers => "Thwomp Alley",
+            OB_StageKind.Lasers => "Laser Gates",
+            OB_StageKind.LogRoll => "Log Roll",
+            OB_StageKind.Turntables => "Turntables",
+            OB_StageKind.Cannons => "Cannon Shot",
+            OB_StageKind.Mushrooms => "Bounce Shrooms",
+            OB_StageKind.BeamWalk => "Balance Beams",
+            OB_StageKind.Corkscrew => "Corkscrew",
+            OB_StageKind.GravityFlip => "Flip Gap",
+            OB_StageKind.LavaRise => "Lava Rise",
+            OB_StageKind.WindGaps => "Gust Gaps",
+            OB_StageKind.IceRink => "Ice Rink",
+            _ => kind.ToString()
+        };
+
+        public static string Hint(OB_StageKind kind) => kind switch {
+            OB_StageKind.Hops => "Jump from platform to platform. Shift sprints, C slides; catch ledges and wall run to save a jump.",
+            OB_StageKind.Springs => "Land on a spring to launch, then steer onto the ledge.",
+            OB_StageKind.MoonLeap => "Low gravity! Your jumps go much higher and farther.",
+            OB_StageKind.Conveyors => "Belts push you around. Walk against them.",
+            OB_StageKind.Crumble => "Cracked blocks fall soon after you land. Keep moving.",
+            OB_StageKind.Beat => "Pink and blue blocks swap on the beat. They blink before vanishing.",
+            OB_StageKind.WallJump => "Jump into a striped wall, then press Jump again to kick off it.",
+            OB_StageKind.Movers => "Ride the moving platforms across.",
+            OB_StageKind.Spinner => "Jump over the sweeper. If it hits you, you go flying!",
+            OB_StageKind.LavaRun => "Hop across the stones. Lava sends you back.",
+            OB_StageKind.Boost => "Run over the boost pad to fly across the gap.",
+            OB_StageKind.WallWalk => "Step into the glowing field and gravity pulls you onto the wall. Run along it!",
+            OB_StageKind.CeilingRun => "Gravity flips upside down here. Run along the ceiling and jump the lava.",
+            OB_StageKind.OnOff => "Hit the switch to swap red and blue blocks. Only the solid colour holds you.",
+            OB_StageKind.Hammers => "Time your run between the swinging hammers. A hit knocks you off.",
+            OB_StageKind.Crushers => "Crushers shake, then slam. Wait in the gaps and dash under on the rise.",
+            OB_StageKind.Lasers => "Lasers flicker before they switch on. Cross while they are off; jump the low beams.",
+            OB_StageKind.LogRoll => "The logs roll you sideways. Lean against the spin as you walk.",
+            OB_StageKind.Turntables => "The discs spin and their posts shove. Cross with the turn, then jump.",
+            OB_StageKind.Cannons => "Step into the cannon and steer in the air to land on the island.",
+            OB_StageKind.Mushrooms => "Every cap bounces you up again. Steer from cap to cap.",
+            OB_StageKind.BeamWalk => "Narrow beams. Walk, don't sprint, and keep to the middle.",
+            OB_StageKind.Corkscrew => "Gravity turns with the tube: wall, ceiling, wall. Hop the lava strips.",
+            OB_StageKind.GravityFlip => "The arrow throws you onto the ceiling. Run across and hit the arrow back down.",
+            OB_StageKind.LavaRise => "The lava rises as soon as you start. Climb! It stops just under the top.",
+            OB_StageKind.WindGaps => "Crosswinds blow you sideways. Aim upwind and jump in the calm between gusts.",
+            OB_StageKind.IceRink => "Ice! You keep sliding. Line up early and carry your speed into each jump.",
+            _ => ""
+        };
+    }
+}

@@ -50,6 +50,9 @@ namespace RyanAssets.Retention.Editor {
         const string InfoIcon = "trending_up";
         const string WarningIcon = "warning";
         const string CloseIcon = "close";
+        const string LockIcon = "lock";
+        /// <summary>Shown in the unlock block's reserved space until the unlock is revealed.</summary>
+        const string PlaceholderText = "NEW UNLOCK COMING UP";
 
         [MenuItem("Ryan/Retention/Rebuild HUD")]
         public static void BuildMenu() {
@@ -134,6 +137,16 @@ namespace RyanAssets.Retention.Editor {
         }
 
         // ---------------------------------------------------------------- level chip
+
+        /// <summary>A lock and a caption in the unlock block's reserved space, so it never reads as an empty box.</summary>
+        static void UnlockTeaser(RectTransform placeholder, RetentionHudStyle style) {
+            RectTransform teaser = Fill(placeholder, "Teaser");
+            Row(teaser.gameObject, 8f, null, TextAnchor.MiddleCenter, controlWidth: false, controlHeight: false);
+            Color tint = Color.Lerp(style.unlock, Color.white, 0.35f);
+            tint.a = 0.7f;
+            HudKit.Icon(teaser, LockIcon, 20f, tint);
+            Text(teaser, "Text", PlaceholderText, UIText.Caption, UIColorRole.TextSecondary);
+        }
 
         static RetentionLevelChip LevelChip(RectTransform root, RetentionHudStyle style) {
             RectTransform rect = Pinned(root, "LevelChip", Vector2.zero, Vector2.zero, new Vector2(300f, ChipHeight));
@@ -352,12 +365,14 @@ namespace RyanAssets.Retention.Editor {
             RectTransform unlock = Node(card, "Unlock");
             Rounded(unlock, UIColorRole.SurfaceInset, 12f, raycast: false);
             Row(unlock.gameObject, 14f, new RectOffset(14, 14, 12, 12), TextAnchor.MiddleLeft);
-            // A faint outline holds the unlock's place until it is revealed (it ignores the block's fade).
+            // A faint outline holds the unlock's place until it is revealed (it ignores the block's fade),
+            // with a locked teaser in it, so the reserved space never reads as an empty box.
             RectTransform placeholder = Fill(unlock, "Placeholder");
             placeholder.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
             Rounded(placeholder, UIColorRole.TextPrimary, 12f, 0.05f, raycast: false);
             placeholder.gameObject.AddComponent<CanvasGroup>().ignoreParentGroups = true;
             summary.unlockPlaceholder = placeholder.gameObject;
+            UnlockTeaser(placeholder, style);
             HudKit.Emblem(unlock, "Emblem", UnlockIcon, 64f, style.unlock, out summary.unlockDisc, out summary.unlockIcon);
             RectTransform unlockInfo = Node(unlock, "Info");
             Column(unlockInfo.gameObject, 2f, null, TextAnchor.MiddleLeft);

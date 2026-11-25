@@ -161,6 +161,7 @@ MonoBehaviour:
   stretchVisual: {fileID: 648866676135401894}
   stretchAmount: 0.6
   launchAudio: {fileID: 0}
+  aimVisual: {fileID: 0}
 --- !u!1 &5311740777304343070
 GameObject:
   m_ObjectHideFlags: 0

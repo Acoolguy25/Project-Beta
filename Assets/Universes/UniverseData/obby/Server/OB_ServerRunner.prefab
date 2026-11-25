@@ -50,7 +50,7 @@ MonoBehaviour:
     _editor_value: 0
   DebugTimerSpeed:
     _editor_value: 10
-  stageCount: 30
+  stageCount: 24
   raceSeconds: 1500
   closingSeconds: 45
   countdownSeconds: 5
@@ -60,13 +60,40 @@ MonoBehaviour:
   teleportGrace: 0.6
   hazardRespawnDelay: 1.2
   checkpointXP: 5
+  starXP: 25
+  tierRecordXP: 20
   coinGold: 3
   finishXP: 60
   finishGold: 25
-  podiumGold: 1e000000000000000f000000000000000500000000000000q
+  medalXP: 3c000000230000000f000000i
+  podiumGold: 1e0000000f00000005000000i
+  retentionTuning:
+    levels:
+      maxLevel: 50
+      firstLevelXp: 100
+      extraXpPerLevel: 25
+      growth: 1
+    streak:
+      firstDayXp: 25
+      xpPerExtraDay: 15
+      firstDayGold: 10
+      goldPerExtraDay: 5
+      maxBonusDays: 7
+      lineFormat: Daily streak (day {0})
+    dailyChallengeCount: 3
+    accountXpScale: 1
   coinTimeBonus: 0.5
+  starTimeBonus: 3
   medalTimes:
-    goldPerStage: 9
-    silverPerStage: 13
-    bronzePerStage: 18
+    goldFactor: 1.25
+    silverFactor: 1.5
+    bronzeFactor: 1.7
+  staminaMax: 250
+  staminaRegen: 60
+  staminaCooldown: 0
+  lavaMargin: 0.3
+  positionBufferSeconds: 0.05
+  maxHazardRewind: 0.35
+  hazardGrace: 0.05
+  viewDelaySmoothing: 0.25
   standingsInterval: 0.5

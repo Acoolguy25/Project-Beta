@@ -19,7 +19,10 @@
         "GUID:e7e4dbfbc34d5f14994d531945dbd3e4",
         "RyanAssets.UI",
         "RyanAssets.GameFeel",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "GUID:6c58dd73ce4085142b6d8732f7dee76c"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -10,6 +10,7 @@ using RyanAssets.Levels.Server;
 using RyanAssets.Levels.Shared;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
+using RyanAssets.Shared.Requests;
 using RyanAssets.Progress;
 using RyanAssets.Server.ServerCore;
 using UnityEngine;
@@ -98,7 +99,7 @@ namespace RyanAssets.Retention.Server {
                 if (state.AnnouncedLevel <= 0) state.AnnouncedLevel = LevelsCalc.GetRank(data.xp.Value);
                 AddAccountXp(data, (ulong)accountXp);
                 // One chat line per match: inside a match, the level is announced when it finishes.
-                if (state.Match == null && !state.Finishing) AnnounceLevel(state);
+                if (state.Match == null && !state.Finishing) service.AnnounceLevel(state);
             }
 
             public void SaveSoon(RetentionPlayer player) => service.MarkSaveDue((Player)player);
@@ -121,14 +122,16 @@ namespace RyanAssets.Retention.Server {
         }
 
         /// <summary>Says in chat that the player reached a new account level (the highest one only).</summary>
-        static void AnnounceLevel(Player state) {
+        void AnnounceLevel(Player state) {
             PlayerData data = state.Data;
             if (data == null || state.AnnouncedLevel <= 0) return;
             int level = LevelsCalc.GetRank(data.xp.Value);
             if (level <= state.AnnouncedLevel) return;
             state.AnnouncedLevel = level;
-            if (InstanceFinder.ServerManager != null && InstanceFinder.ServerManager.Started)
-                ServerChat.SendSystemMessage(new($"{data.GetPlayerName()} has reached level {level}!", SystemMessageSource.PlayerLevelUp));
+            if (InstanceFinder.ServerManager == null || !InstanceFinder.ServerManager.Started) return;
+            var line = new SystemMessageBroadcast($"{data.GetPlayerName()} has reached level {level}!", SystemMessageSource.PlayerLevelUp);
+            if (AnnounceLevelToSelf || state.Connection == null) ServerChat.SendSystemMessage(line);
+            else ServerChat.SendSystemMessageExcept(state.Connection, line);
         }
 
         readonly Func<TSave, RetentionSave> blockOf;
@@ -172,6 +175,12 @@ namespace RyanAssets.Retention.Server {
         /// is applied and sent (a completion never waits).
         /// </summary>
         public float ProgressFlushInterval { get; set; } = 0.25f;
+
+        /// <summary>
+        /// Whether the "has reached level N" chat line also goes to the player who levelled (true, the
+        /// default) or only to everyone else, for a game whose HUD already shows that player their level.
+        /// </summary>
+        public bool AnnounceLevelToSelf { get; set; } = true;
 
         /// <summary>Raised on the server when a player reaches an unlock (once per unlock, as it happens).</summary>
         public event Action<NetworkConnection, UnlockDefinition> Unlocked;

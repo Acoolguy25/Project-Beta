@@ -4,9 +4,9 @@ namespace Universes.UniverseData.obby {
     public enum OB_Phase : byte { Waiting, Countdown, Racing, Closing, Results }
 
     /// <summary>Why a player's progress changed, so the client can react.</summary>
-    public enum OB_ProgressReason : byte { Sync, Checkpoint, Coin, Finish, Hazard, Fell }
+    public enum OB_ProgressReason : byte { Sync, Checkpoint, Coin, Finish, Hazard, Fell, Star }
 
-    /// <summary>Medal for a finish time (after the coin bonus); see <see cref="OB_MedalTimes"/>.</summary>
+    /// <summary>Medal for a finish time (after the coin and star bonuses); see <see cref="OB_MedalTimes"/>.</summary>
     public enum OB_Medal : byte { None, Bronze, Silver, Gold }
 
     /// <summary>The course every peer builds. The same seed always produces the same course.</summary>
@@ -17,8 +17,23 @@ namespace Universes.UniverseData.obby {
         // Appended fields.
         /// <summary>Seconds each coin takes off a finish time on this course.</summary>
         public float coinBonus;
-        /// <summary>Gold medal pace in scored seconds per stage (splits are shown against it).</summary>
+        /// <summary>Average gold medal pace in scored seconds per stage (for display; splits use <see cref="goldFactor"/>).</summary>
         public float goldPerStage;
+        /// <summary>Seconds each star takes off a finish time.</summary>
+        public float starBonus;
+        /// <summary>Gold target as a multiple of par: a split's gold pace is this times the par of the stages done.</summary>
+        public float goldFactor;
+        /// <summary><see cref="OB_CourseRules.Hash"/> of the rules the server built from (0: unknown).</summary>
+        public int rulesHash;
+    }
+
+    /// <summary>
+    /// A client's shared-clock time, sent a few times a second. The server compares it with its own
+    /// clock to learn how far behind the server the moment a player saw is (clock skew plus travel
+    /// time), and judges timed hazards (lasers, crushers) at that moment.
+    /// </summary>
+    public struct OB_ViewClock : IBroadcast {
+        public double time;
     }
 
     /// <summary>A client without the current course asks for it (and its own progress).</summary>
@@ -57,6 +72,14 @@ namespace Universes.UniverseData.obby {
         public OB_Medal medal;
         /// <summary>The finish beat this player's saved best scored time.</summary>
         public bool personalBest;
+        /// <summary>Stars collected, one bit per stage.</summary>
+        public ulong stars;
+        /// <summary>When this update closes a tier (its last checkpoint or the finish): seconds the tier took, else 0.</summary>
+        public float tierTime;
+        /// <summary>The player's saved best for that tier before this run (0 when none).</summary>
+        public float tierBest;
+        /// <summary>The tier closed by <see cref="tierTime"/>.</summary>
+        public OB_Tier tier;
     }
 
     public struct OB_ResultEntry {
@@ -71,6 +94,7 @@ namespace Universes.UniverseData.obby {
         public OB_Medal medal;
         /// <summary>The racer's connection id, so a client can always show its own row.</summary>
         public int clientId;
+        public int stars;
     }
 
     public struct OB_ResultsBroadcast : IBroadcast {
@@ -79,6 +103,7 @@ namespace Universes.UniverseData.obby {
         // Appended fields: this course's medal targets (scored seconds) and the bonus per coin.
         public float goldTime, silverTime, bronzeTime;
         public float coinBonus;
+        public float starBonus;
     }
 
     /// <summary>Where one racer is, for the race strip and overtake toasts.</summary>

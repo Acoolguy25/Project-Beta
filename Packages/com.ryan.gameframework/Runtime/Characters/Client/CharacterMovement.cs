@@ -89,6 +89,9 @@ namespace RyanAssets.Characters.Client {
         [SerializeField, FormerlySerializedAs("WallContactGrace"), Min(0f)] private float wallContactGrace = 0.15f;
         [Tooltip("Minimum seconds between wall jumps.")]
         [SerializeField, FormerlySerializedAs("WallJumpCooldown"), Min(0f)] private float wallJumpCooldown = 0.2f;
+        [Tooltip("On slippery ground (ISurfaceTraction, such as ice), the fastest planar velocity change (m/s²) at traction 1; " +
+                 "a surface's traction scales it. Normal ground keeps instant steering.")]
+        [SerializeField, Min(0f)] private float slipAcceleration = 60f;
 
         // ------------------------------------------------------------------ public state
         /// <summary>The movement controller driving the local player's character, if any.</summary>
@@ -119,6 +122,8 @@ namespace RyanAssets.Characters.Client {
         public BoxCollider BodyCollider => _boxCollider;
         /// <summary>Layers that count as world geometry for probes (everything but characters).</summary>
         public int WorldMask => _stepMask;
+        /// <summary>Grip of the ground the character stands on: 1 on normal ground and in the air, less on ice (<see cref="ISurfaceTraction"/>).</summary>
+        public float Traction { get; private set; } = 1f;
         /// <summary>Raised when the character touches a surface that knocks it back, with the knockback velocity.</summary>
         public event System.Action<Vector3> KnockedBack;
 
@@ -158,7 +163,9 @@ namespace RyanAssets.Characters.Client {
         private float _externalProtectedUntil = float.NegativeInfinity;
         private Collider _surfaceCollider;
         private ISurfaceVelocity _surface;
+        private ISurfaceTraction _traction;
         private Vector3 _lastSurfaceVelocity;
+        private Vector3 _push, _pendingPush;
 
         private Vector3 _wallNormal;
         private IWallJumpSurface _wallSurface;
@@ -264,7 +271,8 @@ namespace RyanAssets.Characters.Client {
         /// Used by springs, bounce pads, boost panels and wall jumps.
         /// </summary>
         public void Launch(Vector3 velocity) {
-            if (_body == null)
+            // A kinematic body (ledge pull-up, ragdoll) is placed by script: there is nothing to launch.
+            if (_body == null || _body.isKinematic)
                 return;
             Vector3 up = Up;
             Vector3 current = _body.linearVelocity;
@@ -275,6 +283,13 @@ namespace RyanAssets.Characters.Client {
             if (_characterAnimator != null)
                 _characterAnimator.Jump();
         }
+
+        /// <summary>
+        /// Pushes the character with <paramref name="velocity"/> (its planar part) on the next physics step
+        /// only, on top of steering. Call it every step for a steady push, such as wind from a trigger's
+        /// OnTriggerStay; pushes from several sources add up. The push stops the moment calls stop.
+        /// </summary>
+        public void AddPush(Vector3 velocity) => _pendingPush += velocity;
 
         /// <summary>Gives <paramref name="mode"/> the first look at every physics step (see <see cref="IMovementMode"/>).</summary>
         public void AddMode(IMovementMode mode) {
@@ -341,6 +356,9 @@ namespace RyanAssets.Characters.Client {
             if (!CanSimulate)
                 return;
             float dt = Time.fixedDeltaTime;
+            // Triggers report after the physics step, so pushes gathered then act on this step.
+            _push = _pendingPush;
+            _pendingPush = Vector3.zero;
             _gravity.Resolve();
             UpdateGravityFrame(dt);
             UpdateGroundState();
@@ -507,10 +525,13 @@ namespace RyanAssets.Characters.Client {
                 _externalVelocity += _lastSurfaceVelocity;
             _lastSurfaceVelocity = surfaceVelocity;
             DampExternalVelocity(dt);
-            move += surfaceVelocity + _externalVelocity;
+            move += surfaceVelocity + _externalVelocity + _push;
 
             // Steer only the planar velocity; gravity and jumps own the part along up.
             Vector3 velocityChange = Vector3.ProjectOnPlane(move - _body.linearVelocity, up);
+            // Slippery ground only lets the velocity change slowly, so the character slides.
+            if (Traction < 1f)
+                velocityChange = Vector3.ClampMagnitude(velocityChange, Traction * slipAcceleration * dt);
             _body.AddForce(velocityChange, ForceMode.VelocityChange);
             _body.angularVelocity = Vector3.zero;
         }
@@ -543,7 +564,10 @@ namespace RyanAssets.Characters.Client {
             if (ground != _surfaceCollider) {
                 _surfaceCollider = ground;
                 _surface = ground != null ? ground.GetComponentInParent<ISurfaceVelocity>() : null;
+                _traction = ground != null ? ground.GetComponentInParent<ISurfaceTraction>() : null;
             }
+            Traction = _traction == null || (_traction is Behaviour grip && !grip.isActiveAndEnabled)
+                ? 1f : Mathf.Clamp01(_traction.Traction);
             if (_surface == null || (_surface is Behaviour behaviour && !behaviour.isActiveAndEnabled))
                 return Vector3.zero;
             return Vector3.ProjectOnPlane(_surface.GetSurfaceVelocity(_body.position), up);

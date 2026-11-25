@@ -50,6 +50,11 @@ namespace RyanAssets.Retention.Client {
             if (keyCap != null) keyCap.SetActive(!string.IsNullOrEmpty(key));
         }
 
+        /// <summary>The level the chip shows now; -1 before the first <see cref="SetLevel"/>.</summary>
+        public int ShownLevel => shownLevel;
+        /// <summary>The fill the chip's bar shows now (0..1).</summary>
+        public float ShownFraction => bar != null ? bar.Value : 0f;
+
         public void SetLevel(int level, float fraction) {
             if (bar != null) bar.Value = fraction;
             if (level == shownLevel || levelLabel == null) return;

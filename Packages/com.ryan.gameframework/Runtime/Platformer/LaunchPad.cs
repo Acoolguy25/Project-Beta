@@ -19,10 +19,17 @@ namespace RyanAssets.Platformer {
         public Transform stretchVisual;
         [Min(0f)] public float stretchAmount = 0.6f;
         public AudioSource launchAudio;
+        [Tooltip("Optional visual (a cannon barrel) turned so its +Z points along the launch velocity.")]
+        public Transform aimVisual;
 
         public Vector3 WorldLaunchVelocity => transform.TransformDirection(localLaunchVelocity);
 
-        public void Configure(Vector3 localVelocity) => localLaunchVelocity = localVelocity;
+        public void Configure(Vector3 localVelocity) {
+            localLaunchVelocity = localVelocity;
+            if (aimVisual != null && localVelocity.sqrMagnitude > 0.0001f)
+                aimVisual.localRotation = Quaternion.LookRotation(localVelocity.normalized,
+                    Mathf.Abs(localVelocity.normalized.y) > 0.99f ? Vector3.forward : Vector3.up);
+        }
 
 #if !UNITY_SERVER
         /// <summary>
@@ -44,6 +51,8 @@ namespace RyanAssets.Platformer {
 
         void OnTriggerStay(Collider other) {
             if (Time.time < nextLaunch || !LocalBody.TryGet(other, out CharacterMovement movement)) return;
+            // Mid pull-up or ragdolled: the body is kinematic and cannot be launched; try again once it is free.
+            if (movement.Body == null || movement.Body.isKinematic) return;
             Vector3 velocity = WorldLaunchVelocity;
             // A character already rising fast from this pad must not be relaunched every step.
             float launchRise = Vector3.Dot(velocity, movement.Up);

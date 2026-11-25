@@ -8,8 +8,9 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
-using RyanAssets.Levels.Server;
 using RyanAssets.Platformer;
+using RyanAssets.Retention;
+using RyanAssets.Retention.Server;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
 using RyanAssets.Shared.Declarations;
@@ -20,11 +21,14 @@ using Channel = FishNet.Transporting.Channel;
 namespace Universes.UniverseData.obby.Server {
     /// <summary>
     /// Runs obby races: picks a seed, has every peer build the same course, and decides checkpoints,
-    /// coins, hazards, falls and finishes from the replicated character positions.
+    /// coins, stars, hazards (including each player's rising-lava chase), falls and finishes from the
+    /// replicated character positions. Rewards, levels and daily challenges go through the shared
+    /// retention kit (see <see cref="OB_Retention"/>); tier times and stars are saved in
+    /// <see cref="OB_SaveData"/>. The progress half of the runner is in OB_ServerRunner.Progress.cs.
     /// </summary>
-    public sealed class OB_ServerRunner : ServerRunner {
+    public sealed partial class OB_ServerRunner : ServerRunner {
         [Header("Race")]
-        [SerializeField, Range(1, OB_CourseGenerator.MaxStages)] int stageCount = 30;
+        [SerializeField, Range(1, OB_CourseGenerator.MaxStages)] int stageCount = OB_CourseGenerator.DefaultStageCount;
         [SerializeField, Min(30)] int raceSeconds = 1500;
         [Tooltip("Once the first player finishes, everyone else has this long to finish too.")]
         [SerializeField, Min(5)] int closingSeconds = 45;
@@ -38,29 +42,65 @@ namespace Universes.UniverseData.obby.Server {
         [SerializeField, Min(0f)] float teleportGrace = 0.6f;
         [Tooltip("Seconds between touching a hazard and the respawn, while the client shows the character knocked limp.")]
         [SerializeField, Min(0f)] float hazardRespawnDelay = 1.2f;
-        [Header("Rewards")]
-        [SerializeField] ulong checkpointXP = 5;
-        [SerializeField] ulong coinGold = 3;
-        [SerializeField] ulong finishXP = 60;
-        [SerializeField] ulong finishGold = 25;
+        [Header("Rewards (paid through the retention kit)")]
+        [Tooltip("XP for each checkpoint reached, paid as it happens.")]
+        [SerializeField, Min(0)] int checkpointXP = 5;
+        [Tooltip("XP for each star, paid as it happens.")]
+        [SerializeField, Min(0)] int starXP = 25;
+        [Tooltip("XP for beating your best time through a tier.")]
+        [SerializeField, Min(0)] int tierRecordXP = 20;
+        [Tooltip("Gold for each coin, paid on the end-of-race card.")]
+        [SerializeField, Min(0)] int coinGold = 3;
+        [SerializeField, Min(0)] int finishXP = 60;
+        [SerializeField, Min(0)] int finishGold = 25;
+        [Tooltip("XP for a gold, silver and bronze medal.")]
+        [SerializeField] int[] medalXP = { 60, 35, 15 };
         [Tooltip("Extra gold for the top three of the final results (races with two or more racers only).")]
-        [SerializeField] ulong[] podiumGold = { 30, 15, 5 };
+        [SerializeField] int[] podiumGold = { 30, 15, 5 };
+        [Header("Retention (levels, unlocks, daily challenges, streak)")]
+        [SerializeField] RetentionTuning retentionTuning = new();
         [Header("Scoring")]
         [Tooltip("Seconds each collected coin takes off a finish time. Results are ranked by this scored time.")]
         [SerializeField, Min(0f)] float coinTimeBonus = 0.5f;
-        [Tooltip("Scored seconds per stage for each medal.")]
+        [Tooltip("Seconds each collected star takes off a finish time (a pro route costs time; this pays some back).")]
+        [SerializeField, Min(0f)] float starTimeBonus = 3f;
+        [Tooltip("Medal targets as multiples of the course par.")]
         [SerializeField] OB_MedalTimes medalTimes = OB_MedalTimes.Default;
+        [Header("Stamina")]
+        [Tooltip("Stamina pool. Sprinting and jumping spend it; at zero the robot can neither sprint nor jump.")]
+        [SerializeField, Min(0f)] float staminaMax = 250f;
+        [Tooltip("Stamina regained per second.")]
+        [SerializeField, Min(0f)] float staminaRegen = 60f;
+        [Tooltip("Seconds after spending stamina before it regenerates. Courses size every hop for a sprint, so this " +
+                 "stays 0: with a delay, a held sprint never regenerates and a long chain empties the pool (no jumps).")]
+        [SerializeField, Min(0f)] float staminaCooldown = 0f;
+        [Header("Hazards")]
+        [Tooltip("How far the robot's feet may dip below rising lava before it counts (forgives a frame of latency).")]
+        [SerializeField, Min(0f)] float lavaMargin = 0.3f;
+        [Tooltip("Laser gates and crushers are judged at the moment the player saw, not the server's now: this is " +
+                 "how long a position spends in the server's network transform buffer after it arrives (s). " +
+                 "Clock skew and travel time are measured per player from their view-clock messages.")]
+        [SerializeField, Min(0f)] float positionBufferSeconds = 0.05f;
+        [Tooltip("Upper bound on how far back a timed hazard is judged (s), so a client cannot claim an arbitrary delay.")]
+        [SerializeField, Min(0f)] float maxHazardRewind = 0.35f;
+        [Tooltip("A laser or crusher counts only while it has been deadly this long before, and stays deadly this long after, " +
+                 "the moment the player saw (s): the same forgiveness at both ends of each deadly window.")]
+        [SerializeField, Min(0f)] float hazardGrace = 0.05f;
+        [Tooltip("How quickly a player's measured view delay follows new samples (0..1 per sample).")]
+        [SerializeField, Range(0.01f, 1f)] float viewDelaySmoothing = 0.25f;
         [Tooltip("Shortest gap between standings updates (the race strip on every client).")]
         [SerializeField, Min(0.05f)] float standingsInterval = 0.5f;
 
         const string StageColumn = "Stage";
         const string CoinColumn = "Coins";
         const float CoinRadius = 1.7f;
+        const float StarRadius = 1.9f;
         const float HazardSkin = 0.05f;
 
         sealed class Runner {
             public int checkpoint;
             public ulong coins;
+            public ulong stars;
             public bool finished;
             public float finishTime;
             /// <summary>Finish time minus the coin bonus.</summary>
@@ -76,15 +116,30 @@ namespace Universes.UniverseData.obby.Server {
             public float graceUntil;
             /// <summary>When a pending hazard respawn happens (0 when none is pending).</summary>
             public float respawnAt;
+            /// <summary>Race time the current tier started, and whether it has gone without a fall or hazard so far.</summary>
+            public float tierStart;
+            public bool tierClean = true;
+            /// <summary>The last tier this runner closed, its time and the saved best before it (sent with the progress that closed it).</summary>
+            public OB_Tier closedTier;
+            public float closedTierTime, closedTierBest;
+            /// <summary>Time this runner's rising-lava chase on the current stage started (negative: not started).</summary>
+            public float lavaStart = -1f;
+            /// <summary>In this race's retention summary (BeginMatch was called).</summary>
+            public bool inMatch;
         }
 
         readonly Dictionary<NetworkConnection, Runner> runners = new();
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
         readonly List<HazardVolume> hazards = new();
+        readonly TimedHazards timedHazards = new();
+        /// <summary>Per player: how far the server's clock is ahead of the moment they saw (smoothed), see <see cref="OB_ViewClock"/>.</summary>
+        readonly Dictionary<NetworkConnection, float> viewDelays = new();
+        readonly Dictionary<NetworkConnection, float> viewClockTimes = new();
+        RetentionService<OB_SaveData> retention;
         OB_Course course;
         OB_CourseLayout layout;
         OB_Phase phase;
-        int round, finishCount, lastSeed, secondsLeft;
+        int round, finishCount, lastSeed, secondsLeft, builtRulesHash;
         float raceStart, raceDeadline;
         string headline = "";
         float previousRespawnTime;
@@ -100,7 +155,13 @@ namespace Universes.UniverseData.obby.Server {
             ServerPlayerCharacter.RespawnTime = respawnSeconds;
             ServerPlayerCharacter.SpawnLocationFunction = SpawnPosition;
             PlayerData.OnPlayerRemoved += OnPlayerLeft;
+            // The HUD's level chip and the summary card already show a racer their new level, so their own
+            // chat stays clear of it; everyone else still sees the line.
+            retention = new RetentionService<OB_SaveData>(OB_Retention.Rules(retentionTuning), save => save.retention) {
+                AnnounceLevelToSelf = false,
+            };
             InstanceFinder.ServerManager.RegisterBroadcast<OB_CourseRequest>(OnCourseRequest);
+            InstanceFinder.ServerManager.RegisterBroadcast<OB_ViewClock>(OnViewClock);
         }
 
         // ---------------------------------------------------------------- players
@@ -120,17 +181,21 @@ namespace Universes.UniverseData.obby.Server {
                 player.jumpHeight.Value = course.movement.jumpHeight;
                 player.gravity.Value = -course.movement.gravity;
             }
-            player.staminaMax.Value = 250f;
-            player.staminaRegen.Value = 60f;
+            player.staminaMax.Value = staminaMax;
+            player.staminaRegen.Value = staminaRegen;
+            player.staminaCooldown.Value = staminaCooldown;
         }
 
         protected override void OnPlayerAdded(PlayerData player) {
             base.OnPlayerAdded(player);
-            RunnerFor(player.Owner);
+            Runner runner = RunnerFor(player.Owner);
             PreparePlayer(player);
             SendCourse(player.Owner);
             standingsDirty = true;
             PlayerProgress.Load<OB_SaveData>(player, OB_SaveData.Universe).Forget();
+            retention.PlayerJoined(player);
+            // Joining a race under way: the end-of-race card covers the rest of it.
+            if (phase is OB_Phase.Countdown or OB_Phase.Racing or OB_Phase.Closing) BeginMatch(player.Owner, runner);
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -143,6 +208,8 @@ namespace Universes.UniverseData.obby.Server {
         void OnPlayerLeft(PlayerData player) {
             runners.Remove(player.Owner);
             requestTimes.Remove(player.Owner);
+            viewDelays.Remove(player.Owner);
+            viewClockTimes.Remove(player.Owner);
             standingsDirty = true;
         }
 
@@ -176,11 +243,16 @@ namespace Universes.UniverseData.obby.Server {
             lastSeed = seed;
             round++;
             layout = course.Build(seed, stageCount);
+            builtRulesHash = (course.rules ?? OB_CourseRules.Default).Hash();
+            IndexCourse();
             course.SetGateClosed(true);
             finishCount = 0;
             headline = "";
             foreach (var runner in runners.Values) ResetRunner(runner);
-            foreach (var player in PlayerData.Players.Values) { RunnerFor(player.Owner); WriteLeaderboard(player); }
+            foreach (var player in PlayerData.Players.Values) {
+                BeginMatch(player.Owner, RunnerFor(player.Owner));
+                WriteLeaderboard(player);
+            }
             InstanceFinder.ServerManager.Broadcast(MakeCourse());
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
             foreach (var connection in runners.Keys) SendProgress(connection, OB_ProgressReason.Sync);
@@ -214,8 +286,9 @@ namespace Universes.UniverseData.obby.Server {
             course.SetGateClosed(true);
             SetMusic(MusicSelection.VictoryMusic);
             var final = FinalOrder();
-            AwardPodium(final);
+            RecordPlaces(final);
             InstanceFinder.ServerManager.Broadcast(MakeResults(final));
+            FinishMatches(final);
             var winner = final.Count > 0 && final[0].Value.finished ? final[0] : default;
             // Times are on every client's results board, so the top bar only names the winner.
             headline = winner.Key == null ? "Nobody finished this one. New course next!"
@@ -261,52 +334,92 @@ namespace Universes.UniverseData.obby.Server {
                         break;
                     }
                     if (layout.finish.Contains(centre)) Finish(pair.Key, runner);
-                    for (int s = 0; s < layout.StageCount && s < 64; s++) {
-                        ulong bit = 1UL << s;
-                        if ((runner.coins & bit) != 0 || (centre - layout.stages[s].coin).sqrMagnitude > CoinRadius * CoinRadius) continue;
-                        runner.coins |= bit;
-                        runner.lastEventTime = RaceTime;
-                        Award(pair.Key, 0, coinGold, "a coin");
-                        PlayerProgress.Modify<OB_SaveData>(pair.Key, save => save.totalCoins++);
-                        if (PlayerData.TryGetPlayerData(pair.Key, out var player)) WriteLeaderboard(player);
-                        SendProgress(pair.Key, OB_ProgressReason.Coin);
-                    }
+                    CollectPickups(pair.Key, runner, centre);
                 }
 
                 PlatformerQuery.GetBox(body, HazardSkin, out Vector3 boxCenter, out Vector3 halfExtents, out Quaternion orientation);
-                if (PlatformerQuery.Overlap(scene, boxCenter, halfExtents, orientation, hazards) > 0) {
+                if (TouchesHazard(scene, pair.Key, boxCenter, halfExtents, orientation) || InRisingLava(runner, bounds)) {
                     SendBack(character, runner, OB_ProgressReason.Hazard);
                     continue;
                 }
-                float killY = runner.finished ? layout.finishTop.y - OB_CourseGenerator.KillDepth
-                    : layout.stages[Mathf.Clamp(runner.checkpoint, 0, layout.StageCount - 1)].killY;
-                if (bounds.min.y < killY) SendBack(character, runner, OB_ProgressReason.Fell);
+                // Falls are judged by the reached stage the player is physically over, so going back for a
+                // missed star is safe; after a gravity flip a player can fall up, past the ceilings.
+                float killY = layout.finishTop.y - OB_CourseGenerator.KillDepth, killTop = float.PositiveInfinity;
+                if (!runner.finished) layout.KillHeights(runner.checkpoint, centre, out killY, out killTop);
+                if (bounds.min.y < killY || bounds.max.y > killTop) SendBack(character, runner, OB_ProgressReason.Fell);
             }
         }
 
+        /// <summary>
+        /// Whether the body box touches a hazard. Steady hazards (lava, spikes) are judged on the server's
+        /// physics now; laser gates and crushers at the shared-clock moment this player saw (see
+        /// <see cref="SeenTime"/>), so a player who visibly cleared a beam or a slam is not sent back.
+        /// </summary>
+        bool TouchesHazard(PhysicsScene scene, NetworkConnection connection, Vector3 center, Vector3 halfExtents, Quaternion orientation) {
+            if (PlatformerQuery.Overlap(scene, center, halfExtents, orientation, hazards) > 0)
+                foreach (var hazard in hazards)
+                    if (!timedHazards.Contains(hazard)) return true;
+            return timedHazards.Hits(center, halfExtents, orientation, SeenTime(connection), hazardGrace);
+        }
+
+        /// <summary>The shared-clock moment a player saw when they were where the server now has them.</summary>
+        double SeenTime(NetworkConnection connection) {
+            float delay = viewDelays.TryGetValue(connection, out float measured) ? measured : 0f;
+            return PlatformerClock.Now - Mathf.Clamp(delay + positionBufferSeconds, 0f, maxHazardRewind);
+        }
+
+        void OnViewClock(NetworkConnection connection, OB_ViewClock message, Channel channel) {
+            if (!connection.IsAuthenticated || double.IsNaN(message.time) || double.IsInfinity(message.time)) return;
+            // A few samples a second are plenty; more are ignored.
+            if (viewClockTimes.TryGetValue(connection, out float previous) && Time.unscaledTime - previous < 0.1f) return;
+            viewClockTimes[connection] = Time.unscaledTime;
+            float sample = Mathf.Clamp((float)(PlatformerClock.Now - message.time), 0f, maxHazardRewind);
+            viewDelays[connection] = viewDelays.TryGetValue(connection, out float smoothed)
+                ? Mathf.Lerp(smoothed, sample, viewDelaySmoothing)
+                : sample;
+        }
+
         void ReachCheckpoint(NetworkConnection connection, Runner runner, int checkpoint) {
-            int gained = checkpoint - runner.checkpoint;
+            int previous = runner.checkpoint;
+            int gained = checkpoint - previous;
             runner.checkpoint = checkpoint;
             runner.lastEventTime = runner.checkpointTime = RaceTime;
+            runner.lavaStart = -1f;
             standingsDirty = true;
-            Award(connection, checkpointXP * (ulong)gained, 0, "a checkpoint");
+            retention.AddXp(connection, checkpointXP * gained, "Checkpoints", announce: false);
+            retention.Count(connection, OB_Retention.CheckpointsStat, gained);
+            for (int s = previous; s < checkpoint; s++) CountStageCleared(connection, layout.stages[s]);
             PlayerProgress.Modify<OB_SaveData>(connection, save => save.RecordStage(checkpoint));
+            OB_Tier from = OB_Tiers.TierOf(previous, layout.StageCount), to = OB_Tiers.TierOf(checkpoint, layout.StageCount);
+            if (to != from) {
+                CloseTier(connection, runner, from);
+                runner.tierStart = runner.checkpointTime;
+                runner.tierClean = true;
+                retention.Reach(connection, OB_Retention.TierStat, (int)to + 1);
+            }
             if (PlayerData.TryGetPlayerData(connection, out var player)) WriteLeaderboard(player);
             SendProgress(connection, OB_ProgressReason.Checkpoint);
+            runner.closedTierTime = 0f;
         }
 
         void Finish(NetworkConnection connection, Runner runner) {
+            int previous = runner.checkpoint;
             runner.finished = true;
             runner.finishTime = RaceTime;
             runner.lastEventTime = runner.finishTime;
             runner.checkpoint = layout.StageCount;
             int stages = layout.StageCount;
-            runner.scoredTime = OB_Scoring.ScoredTime(runner.finishTime, OB_Scoring.CountCoins(runner.coins), coinTimeBonus);
-            runner.medal = medalTimes.Award(runner.scoredTime, stages);
+            runner.scoredTime = OB_Scoring.ScoredTime(runner.finishTime, OB_Scoring.CountCoins(runner.coins), coinTimeBonus,
+                OB_Scoring.CountCoins(runner.stars), starTimeBonus);
+            runner.medal = medalTimes.Award(runner.scoredTime, layout.TotalPar);
             // Provisional: a later finisher with more coins can still beat this scored time.
             runner.place = 1 + runners.Values.Count(r => r != runner && r.finished && r.scoredTime < runner.scoredTime);
             bool firstFinisher = ++finishCount == 1;
-            Award(connection, finishXP, finishGold, "finishing");
+            for (int s = previous; s < stages; s++) CountStageCleared(connection, layout.stages[s]);
+            CloseTier(connection, runner, OB_Tiers.TierOf(stages - 1, stages));
+            retention.Count(connection, OB_Retention.FinishStat);
+            if (runner.medal >= OB_Medal.Silver) retention.Count(connection, OB_Retention.SilverStat);
+            if (runner.medal == OB_Medal.Gold) retention.Count(connection, OB_Retention.GoldStat);
             float finishTime = runner.finishTime, scoredTime = runner.scoredTime;
             OB_Medal medal = runner.medal;
             bool personalBest = false;
@@ -321,6 +434,7 @@ namespace Universes.UniverseData.obby.Server {
             }
             if (PlayerData.TryGetPlayerData(connection, out var player)) WriteLeaderboard(player);
             SendProgress(connection, OB_ProgressReason.Finish);
+            runner.closedTierTime = 0f;
             BroadcastRound();
         }
 
@@ -329,6 +443,7 @@ namespace Universes.UniverseData.obby.Server {
         /// shows the character knocked limp, so the teleport waits <see cref="hazardRespawnDelay"/>.
         /// </summary>
         void SendBack(LocalCharacter character, Runner runner, OB_ProgressReason reason) {
+            runner.tierClean = false;
             if (reason == OB_ProgressReason.Hazard && hazardRespawnDelay > 0f) runner.respawnAt = Time.time + hazardRespawnDelay;
             else Respawn(character, runner);
             SendProgress(character.Owner, reason);
@@ -336,6 +451,7 @@ namespace Universes.UniverseData.obby.Server {
 
         void Respawn(LocalCharacter character, Runner runner) {
             runner.respawnAt = 0f;
+            runner.lavaStart = -1f;
             runner.graceUntil = Time.time + teleportGrace;
             character.TeleportTo(SpawnPosition(character.Owner));
         }
@@ -345,7 +461,12 @@ namespace Universes.UniverseData.obby.Server {
 
         static void ResetRunner(Runner runner) {
             runner.checkpoint = 0;
-            runner.coins = 0;
+            runner.coins = runner.stars = 0;
+            runner.tierStart = 0f;
+            runner.tierClean = true;
+            runner.closedTierTime = runner.closedTierBest = 0f;
+            runner.lavaStart = -1f;
+            runner.inMatch = false;
             runner.finished = false;
             runner.finishTime = runner.scoredTime = runner.lastEventTime = runner.checkpointTime = 0f;
             runner.medal = OB_Medal.None;
@@ -366,25 +487,11 @@ namespace Universes.UniverseData.obby.Server {
             return order;
         }
 
-        /// <summary>
-        /// Podium gold, wins and podiums go by the final results, after every coin bonus is known. A race
-        /// alone is no contest: the finish reward and medal still count, places do not.
-        /// </summary>
-        void AwardPodium(List<KeyValuePair<NetworkConnection, Runner>> final) {
-            if (final.Count < 2) return;
-            for (int i = 0; i < final.Count; i++) {
-                if (!final[i].Value.finished) break;
-                int place = i + 1;
-                final[i].Value.place = place;
-                if (i < podiumGold.Length) Award(final[i].Key, 0, podiumGold[i], "a podium place");
-                PlayerProgress.Modify<OB_SaveData>(final[i].Key, save => save.RecordPlace(place));
-            }
-        }
-
         // ---------------------------------------------------------------- messages
         OB_CourseBroadcast MakeCourse() => new() {
             seed = layout?.seed ?? 0, stageCount = layout?.StageCount ?? 0, round = round, coinBonus = coinTimeBonus,
-            goldPerStage = medalTimes.goldPerStage
+            goldPerStage = layout != null ? medalTimes.Target(OB_Medal.Gold, layout.TotalPar) / layout.StageCount : 0f,
+            starBonus = starTimeBonus, goldFactor = medalTimes.goldFactor, rulesHash = builtRulesHash
         };
 
         void SendCourse(NetworkConnection connection) {
@@ -406,7 +513,8 @@ namespace Universes.UniverseData.obby.Server {
                 seed = layout.seed, checkpoint = runner.checkpoint, coins = runner.coins, finished = runner.finished,
                 finishTime = runner.finishTime, place = runner.place, reason = reason,
                 raceTime = runner.lastEventTime, scoredTime = runner.scoredTime, medal = runner.medal,
-                personalBest = runner.personalBest
+                personalBest = runner.personalBest, stars = runner.stars,
+                tierTime = runner.closedTierTime, tierBest = runner.closedTierBest, tier = runner.closedTier
             });
         }
 
@@ -436,12 +544,13 @@ namespace Universes.UniverseData.obby.Server {
             entries = final.Select(r => new OB_ResultEntry {
                 name = NameOf(r.Key), finished = r.Value.finished, time = r.Value.finishTime,
                 stage = r.Value.checkpoint, coins = OB_Scoring.CountCoins(r.Value.coins),
-                scoredTime = r.Value.scoredTime, medal = r.Value.medal, clientId = r.Key.ClientId
+                scoredTime = r.Value.scoredTime, medal = r.Value.medal, clientId = r.Key.ClientId,
+                stars = OB_Scoring.CountCoins(r.Value.stars)
             }).ToArray(),
-            goldTime = medalTimes.Target(OB_Medal.Gold, layout.StageCount),
-            silverTime = medalTimes.Target(OB_Medal.Silver, layout.StageCount),
-            bronzeTime = medalTimes.Target(OB_Medal.Bronze, layout.StageCount),
-            coinBonus = coinTimeBonus
+            goldTime = medalTimes.Target(OB_Medal.Gold, layout.TotalPar),
+            silverTime = medalTimes.Target(OB_Medal.Silver, layout.TotalPar),
+            bronzeTime = medalTimes.Target(OB_Medal.Bronze, layout.TotalPar),
+            coinBonus = coinTimeBonus, starBonus = starTimeBonus
         };
 
         void WriteLeaderboard(PlayerData player) {
@@ -461,12 +570,6 @@ namespace Universes.UniverseData.obby.Server {
         static string NameOf(NetworkConnection connection) =>
             PlayerData.GetPlayerName(connection) is { Length: > 0 } name ? name : $"Racer {connection.ClientId}";
 
-        static void Award(NetworkConnection connection, ulong xp, ulong gold, string reason) {
-            if (xp == 0 && gold == 0) return;
-            if (!LevelsServer.AwardPlayerXPAndGold(connection, xp, gold))
-                Debug.LogWarning($"Obby could not award {reason} rewards to connection {connection.ClientId}.");
-        }
-
         static void SetMusic(MusicSelection selection) {
             if (SharedGlobalEvents.Instance != null && SharedGlobalEvents.Instance.MusicTrack.Value != selection)
                 SharedGlobalEvents.Instance.MusicTrack.Value = selection;
@@ -480,9 +583,13 @@ namespace Universes.UniverseData.obby.Server {
 
         protected override void OnDestroy() {
             PlayerData.OnPlayerRemoved -= OnPlayerLeft;
+            retention?.Dispose();
             ServerPlayerCharacter.RespawnTime = previousRespawnTime;
             if (ServerPlayerCharacter.SpawnLocationFunction == SpawnPosition) ServerPlayerCharacter.SpawnLocationFunction = null;
-            if (InstanceFinder.ServerManager != null) InstanceFinder.ServerManager.UnregisterBroadcast<OB_CourseRequest>(OnCourseRequest);
+            if (InstanceFinder.ServerManager != null) {
+                InstanceFinder.ServerManager.UnregisterBroadcast<OB_CourseRequest>(OnCourseRequest);
+                InstanceFinder.ServerManager.UnregisterBroadcast<OB_ViewClock>(OnViewClock);
+            }
             base.OnDestroy();
         }
     }

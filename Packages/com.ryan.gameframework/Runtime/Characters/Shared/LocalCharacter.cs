@@ -154,8 +154,11 @@ namespace RyanAssets.Characters.Shared {
 
             if (TryGetComponent(out Rigidbody rootBody)) {
                 rootBody.position = position;
-                rootBody.linearVelocity = Vector3.zero;
-                rootBody.angularVelocity = Vector3.zero;
+                // Kinematic bodies (server proxies, a pull-up or ragdoll) have no velocity to clear.
+                if (!rootBody.isKinematic) {
+                    rootBody.linearVelocity = Vector3.zero;
+                    rootBody.angularVelocity = Vector3.zero;
+                }
             }
 
             Physics.SyncTransforms();
