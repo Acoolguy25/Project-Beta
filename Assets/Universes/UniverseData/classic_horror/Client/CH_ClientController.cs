@@ -151,6 +151,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             // A catch is always fatal and lives are what count: the shared health bar has nothing to say here.
             RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = true;
             ToolControls.interactPressed += Interact;
+            CharacterControls.LockKeyboardZoom(); // E is this game's action key, not camera zoom
             ToolControls.journalPressed += OpenJournal;
             ToolControls.reloadToolPressed += PutDown;
         }
@@ -158,6 +159,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         void OnDisable() {
             RyanAssets.Client.ClientUI.Topbar.ClientHealthbar.Suppressed = false;
             ToolControls.interactPressed -= Interact;
+            CharacterControls.UnlockKeyboardZoom();
             ToolControls.journalPressed -= OpenJournal;
             ToolControls.reloadToolPressed -= PutDown;
             objectiveCompass?.SetDisplayAllowed(false);

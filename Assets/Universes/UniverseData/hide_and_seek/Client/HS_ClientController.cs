@@ -283,6 +283,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
 
         void OnEnable() {
             ToolControls.interactPressed += TryTag;
+            CharacterControls.LockKeyboardZoom(); // E is this game's action key, not camera zoom
             ToolControls.primaryPressed += TryTag;
             ToolControls.reloadToolPressed += TryTaunt;
             NameTagManager.CharacterTagFilter = ShowTag;
@@ -290,6 +291,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
 
         void OnDisable() {
             ToolControls.interactPressed -= TryTag;
+            CharacterControls.UnlockKeyboardZoom();
             ToolControls.primaryPressed -= TryTag;
             ToolControls.reloadToolPressed -= TryTaunt;
             if (NameTagManager.CharacterTagFilter == ShowTag) NameTagManager.CharacterTagFilter = null;

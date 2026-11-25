@@ -56,7 +56,7 @@ namespace Universes.UniverseData.tower_defense.Tests {
                 var steps = new List<Step>();
                 for (int start = 0; start < order.Length; start += group)
                     for (int level = 1; level <= TD_Rules.MaxLevel; level++)
-                        for (int i = start; i < start + group && i < order.Length; i++) steps.Add(new Step(order[i], TD_TowerKind.Gunner));
+                        for (int i = start; i < start + group && i < order.Length; i++) steps.Add(new Step(TD_TestCells.At(order[i]), TD_TowerKind.Gunner));
                 return steps.ToArray();
             }
         }
@@ -75,7 +75,7 @@ namespace Universes.UniverseData.tower_defense.Tests {
                     "G" => TD_TowerKind.Gunner, "C" => TD_TowerKind.Cannon, "F" => TD_TowerKind.Frost,
                     "S" => TD_TowerKind.Sniper, "T" => TD_TowerKind.Tesla, _ => TD_TowerKind.Mortar,
                 };
-                steps[i] = new Step(entries[i].slot, kind);
+                steps[i] = new Step(TD_TestCells.At(entries[i].slot), kind);
             }
             return steps;
         }

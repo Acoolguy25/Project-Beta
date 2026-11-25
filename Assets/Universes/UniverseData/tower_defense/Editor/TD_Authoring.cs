@@ -47,7 +47,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         };
 
         /// <summary>The Tesla's glowing coil orb: size (m) and how far above the mast's top it floats.</summary>
-        const float CoilSize = 1.1f, CoilLift = 0.4f;
+        const float CoilSize = 1.1f * Visual, CoilLift = 0.4f * Visual;
         /// <summary>Gold Trim: a ring of this radius (fraction of the pad) around the tower's foot.</summary>
         const float GoldTrimRadius = 0.46f;
 
@@ -88,12 +88,14 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         /// <summary>The Airstrike jet (flies along +Z over the road) and its length in metres.</summary>
         const string JetModel = "Jet_Prefebs/Jet_02_Prefeb.prefab";
-        const float JetSize = 11f;
+        const float JetSize = 11f * Visual;
         /// <summary>Points of a Tesla bolt (more = finer kinks).</summary>
         const int ArcPoints = 12;
 
         /// <summary>Width of a tower pad (the helipad model) in metres.</summary>
-        const float PadSize = 5.4f;
+        const float PadSize = 3.6f;
+        /// <summary>Models (towers, enemies, the jet) are drawn at this share of their design size so they fit the smaller battlefield and its cells.</summary>
+        const float Visual = 0.7f;
 
         [MenuItem("Ryan/Tower Defense/Build Client Assets")]
         public static void BuildClientAssets() {
@@ -265,6 +267,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             float top = pad != null ? RendererBounds(pad).max.y : 0.3f;
             if (pad == null) Debug.LogWarning("[TowerDefense] HeliPad prefab missing; the tower pad has no model.");
             view.topHeight = top;
+            view.padModel = pad;
             view.glow = FlatRing("Glow", root.transform, PadSize * 0.4f, top + 0.04f, m.ring);
             var marker = Empty("Marker", root.transform, new Vector3(0f, 2.6f, 0f));
             marker.AddComponent<Billboard>();
@@ -281,6 +284,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         static GameObject Tower(TD_TowerKind kind, Materials m) {
             var stats = TD_Rules.Tower(kind);
             var (models, size) = TowerModels[(int)kind];
+            size *= Visual;
             var root = new GameObject(FileName(kind));
             var view = root.AddComponent<TD_TowerView>();
             var head = Empty("Head", root.transform);
@@ -454,6 +458,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// <summary>A see-through copy of a tower's level-1 model, previewed on a pad before building (tinted by the client).</summary>
         static GameObject Ghost(TD_TowerKind kind, Materials m) {
             var (models, size) = TowerModels[(int)kind];
+            size *= Visual;
             var root = new GameObject(FileName(kind) + " Ghost");
             var turret = TurretModel(kind, models[0], root.transform, size, m);
             if (turret != null) {
@@ -463,9 +468,19 @@ namespace Universes.UniverseData.tower_defense.Editor {
             return Kit.Save(root, "Ghosts");
         }
 
+        /// <summary>How each enemy travels: wheels, tracks, rotors, a hovercraft cushion or a drone's buzz.</summary>
+        static TD_EnemyAnimator.Style AnimationStyle(TD_EnemyKind kind) => kind switch {
+            TD_EnemyKind.Scout or TD_EnemyKind.Apc or TD_EnemyKind.Medic => TD_EnemyAnimator.Style.Wheeled,
+            TD_EnemyKind.Tank or TD_EnemyKind.Boss or TD_EnemyKind.Shield => TD_EnemyAnimator.Style.Tracked,
+            TD_EnemyKind.Chopper => TD_EnemyAnimator.Style.Helicopter,
+            TD_EnemyKind.Carrier => TD_EnemyAnimator.Style.Hover,
+            _ => TD_EnemyAnimator.Style.Drone,
+        };
+
         static GameObject Enemy(TD_EnemyKind kind, Materials m) {
             var stats = TD_Rules.Enemy(kind);
             var (model, size) = EnemyModels[(int)kind];
+            size *= Visual;
             var root = new GameObject(stats.name);
             var view = root.AddComponent<TD_EnemyView>();
             var body = Empty("Body", root.transform);
@@ -474,6 +489,13 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 Cube("Hull", body.transform, new Vector3(0f, size * 0.25f, 0f), new Vector3(size * 0.5f, size * 0.4f, size), m.barFill, false);
             NoShadows(body);
             view.bodyRenderers = body.GetComponentsInChildren<Renderer>();
+            var animator = root.AddComponent<TD_EnemyAnimator>();
+            animator.body = body.transform;
+            animator.style = AnimationStyle(kind);
+            animator.wheelTurnsPerMetre = 1f / (Mathf.PI * size * 0.16f); // wheel diameter is about a sixth of the vehicle's length
+            animator.rockHeight = size * 0.012f;
+            animator.hoverHeight = size * 0.035f;
+            view.animator = animator;
 
             // Soft contact shadow (on the ground even for flying enemies).
             var blob = Primitive(PrimitiveType.Quad, "Shadow", root.transform, new Vector3(0f, (stats.flying ? -TD_Rules.FlyHeight : 0f) + 0.06f, 0f), new Vector3(size * 0.8f, size * 0.8f, 1f), m.blob, false);
@@ -587,7 +609,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             var mapGo = new GameObject("TowerDefenseMap");
             var map = mapGo.AddComponent<TD_Map>();
             Vector3 end = TD_Rules.Lane[^1];
-            map.playerSpawn = Empty("PlayerSpawn", mapGo.transform, end + new Vector3(-8f, 0f, -12f)).transform;
+            map.playerSpawn = Empty("PlayerSpawn", mapGo.transform, end + new Vector3(-8f, 0f, -12f) * TD_Rules.WorldScale).transform;
             map.towerPrefabs = towers;
             map.ghostPrefabs = ghosts;
             map.baseModel = baseModel;
@@ -646,29 +668,30 @@ namespace Universes.UniverseData.tower_defense.Editor {
             EditorSceneManager.OpenScene(Kit.StartScene(Universe), OpenSceneMode.Single);
             var map = Object.FindAnyObjectByType<TD_Map>();
             string dir = PreviewDir(Universe);
-            int[] built = { 0, 2, 5, 6, 8, 9, 12, 13 };
-            for (int i = 0; i < TD_Rules.Slots.Length; i++) {
+            // A handful of towers on cells beside the road (old pad numbers, see TD_TestCells in the tests).
+            Vector2[] built = { new(-61f, -24f), new(-53f, 19f), new(-27f, 14f), new(-18f, -21f), new(-9f, 2f), new(9f, 20f), new(25f, 0f), new(43f, -18f) };
+            for (int k = 0; k < built.Length; k++) {
+                int cell = TD_Rules.NearestCell(new Vector3(built[k].x, 0f, built[k].y) * TD_Rules.WorldScale);
                 var pad = (GameObject)PrefabUtility.InstantiatePrefab(map.slotPrefab, map.transform);
-                pad.transform.position = TD_Rules.Slots[i];
+                pad.transform.position = TD_Rules.Slots[cell];
                 var slot = pad.GetComponent<TD_SlotView>();
-                int k = System.Array.IndexOf(built, i);
-                if (k < 0) continue;
                 slot.marker.gameObject.SetActive(false);
                 var tower = ((GameObject)PrefabUtility.InstantiatePrefab(map.towerPrefabs[k % map.towerPrefabs.Length], map.transform)).GetComponent<TD_TowerView>();
-                tower.transform.position = TD_Rules.Slots[i] + Vector3.up * slot.topHeight;
+                tower.transform.position = TD_Rules.Slots[cell] + Vector3.up * slot.topHeight;
                 tower.ShowLevel(1 + k % TD_Rules.MaxLevel);
             }
             var kinds = new[] { TD_EnemyKind.Scout, TD_EnemyKind.Drone, TD_EnemyKind.Apc, TD_EnemyKind.Shield, TD_EnemyKind.Medic, TD_EnemyKind.Chopper, TD_EnemyKind.Boss, TD_EnemyKind.Carrier };
             for (int i = 0; i < kinds.Length; i++) {
                 var go = (GameObject)PrefabUtility.InstantiatePrefab(map.enemyPrefabs[(int)kinds[i]], map.transform);
-                Vector3 p = TD_Rules.EnemyPosition(kinds[i], 40f + i * 22f, out Vector3 f);
+                Vector3 p = TD_Rules.EnemyPosition(kinds[i], 24f + i * 13f, out Vector3 f);
                 go.transform.SetPositionAndRotation(p, Quaternion.LookRotation(f));
             }
             var cam = PreviewCamera();
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
-            Shoot(cam, new Vector3(-20f, 110f, -135f), new Vector3(0f, 0f, -5f), Path.Combine(dir, "overview.png"), 1600, 900);
-            Shoot(cam, new Vector3(-62f, 14f, 50f), new Vector3(-40f, 2f, 10f), Path.Combine(dir, "lane.png"), 1600, 900);
-            Shoot(cam, new Vector3(-75f, 24f, 58f), new Vector3(-35f, 0f, 5f), Path.Combine(dir, "thumbnail.png"), 640, 360);
+            Shoot(cam, new Vector3(0f, 55f, -70f), new Vector3(0f, 0f, -5f), Path.Combine(dir, "overview.png"), 1600, 900);
+            Shoot(cam, new Vector3(-30f, 9f, -62f), new Vector3(-42f, 2f, -36f), Path.Combine(dir, "tunnel.png"), 1600, 900);
+            Shoot(cam, new Vector3(-38f, 9f, 30f), new Vector3(-24f, 1f, 6f), Path.Combine(dir, "lane.png"), 1600, 900);
+            Shoot(cam, new Vector3(-45f, 14f, 35f), new Vector3(-21f, 0f, 3f), Path.Combine(dir, "thumbnail.png"), 640, 360);
             Object.DestroyImmediate(cam.gameObject);
             Kit.PublishThumbnail(Universe, Path.Combine(dir, "thumbnail.png"));
             EditorSceneManager.OpenScene(Kit.StartScene(Universe), OpenSceneMode.Single);

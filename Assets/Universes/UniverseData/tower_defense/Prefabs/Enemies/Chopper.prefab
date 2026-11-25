@@ -28,7 +28,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 3.16, y: 0.42, z: 0.02}
+  m_LocalScale: {x: 2.3600001, y: 0.42, z: 0.02}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8717841311721389293}
@@ -117,8 +117,8 @@ Transform:
   m_GameObject: {fileID: 5280179178330595190}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.5, z: 0}
-  m_LocalScale: {x: 5.3999996, y: 5.3999996, z: 5.3999996}
+  m_LocalPosition: {x: 0, y: 1.05, z: 0}
+  m_LocalScale: {x: 3.7799997, y: 3.7799997, z: 3.7799997}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 6482910808851791988}
@@ -205,7 +205,7 @@ Transform:
   m_GameObject: {fileID: 6562390012489958955}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.5, y: 0, z: -0.03}
+  m_LocalPosition: {x: -1.1, y: 0, z: -0.03}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -239,8 +239,8 @@ Transform:
   m_GameObject: {fileID: 6612944707411258176}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: -6.94, z: 0}
-  m_LocalScale: {x: 4.8, y: 4.8, z: 1}
+  m_LocalPosition: {x: 0, y: -4.1400003, z: 0}
+  m_LocalScale: {x: 3.36, y: 3.36, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 6482910808851791988}
@@ -312,6 +312,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6482910808851791988}
   - component: {fileID: 6454371235256248888}
+  - component: {fileID: 279635525609499186}
   m_Layer: 0
   m_Name: Chopper
   m_TagString: Untagged
@@ -351,6 +352,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Universes.UniverseData.tower_defense.Shared::Universes.UniverseData.tower_defense.TD_EnemyView
   body: {fileID: 3606287106536714840}
+  animator: {fileID: 279635525609499186}
   bodyRenderers:
   - {fileID: 858107279783656740}
   - {fileID: 858107279783671598}
@@ -376,6 +378,28 @@ MonoBehaviour:
   seen: 0
   slowed: 0
   tinted: 0
+--- !u!114 &279635525609499186
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6842479343461291661}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27c74ba94b93fe284b2b188efe253234, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Universes.UniverseData.tower_defense.Shared::Universes.UniverseData.tower_defense.TD_EnemyAnimator
+  style: 2
+  body: {fileID: 3606287106536714840}
+  wheelTurnsPerMetre: 0.47367546
+  rockHeight: 0.050399996
+  rockFrequency: 9
+  pitchDegrees: 3
+  rotorSpeed: 1800
+  hoverHeight: 0.147
+  hoverFrequency: 2.2
+  bankDegrees: 22
 --- !u!1 &6869234364804423353
 GameObject:
   m_ObjectHideFlags: 0
@@ -402,7 +426,7 @@ Transform:
   m_GameObject: {fileID: 6869234364804423353}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 5.4, z: 0}
+  m_LocalPosition: {x: 0, y: 4.14, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -485,8 +509,8 @@ Transform:
   m_GameObject: {fileID: 7317281962655764457}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.5, y: 0, z: 0}
-  m_LocalScale: {x: 3, y: 0.26, z: 0.02}
+  m_LocalPosition: {x: 1.1, y: 0, z: 0}
+  m_LocalScale: {x: 2.2, y: 0.26, z: 0.02}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8799612709990608773}
@@ -562,27 +586,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 410788, guid: 6a38a06fbf46042e0897198b4804ed24, type: 3}
       propertyPath: m_LocalScale.x
-      value: 0.61368
+      value: 0.42957598
       objectReference: {fileID: 0}
     - target: {fileID: 410788, guid: 6a38a06fbf46042e0897198b4804ed24, type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.61368
+      value: 0.42957598
       objectReference: {fileID: 0}
     - target: {fileID: 410788, guid: 6a38a06fbf46042e0897198b4804ed24, type: 3}
       propertyPath: m_LocalScale.z
-      value: 0.61368
+      value: 0.42957598
       objectReference: {fileID: 0}
     - target: {fileID: 410788, guid: 6a38a06fbf46042e0897198b4804ed24, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.0021383762
+      value: 0.0014967918
       objectReference: {fileID: 0}
     - target: {fileID: 410788, guid: 6a38a06fbf46042e0897198b4804ed24, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.598429
+      value: 0.41890034
       objectReference: {fileID: 0}
     - target: {fileID: 410788, guid: 6a38a06fbf46042e0897198b4804ed24, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.3733847
+      value: 0.26136923
       objectReference: {fileID: 0}
     - target: {fileID: 410788, guid: 6a38a06fbf46042e0897198b4804ed24, type: 3}
       propertyPath: m_LocalRotation.w

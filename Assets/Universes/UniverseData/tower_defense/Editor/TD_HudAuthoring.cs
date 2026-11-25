@@ -397,7 +397,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             Size(slot, CardSize.x, CardSize.y + 14f);
             var card = slot.gameObject.AddComponent<TD_ShopCard>();
             card.group = slot.gameObject.AddComponent<CanvasGroup>();
-            card.group.blocksRaycasts = false;
+            card.group.blocksRaycasts = true;
+            card.index = index;
 
             RectTransform body = Node(slot, "Body");
             body.anchorMin = new Vector2(0f, 0f);
@@ -412,7 +413,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
             card.outline.type = Image.Type.Sliced;
             card.outline.pixelsPerUnitMultiplier = UIThemeAssets.RoundedSpriteRadius / (CardRadius + 3f);
             card.outline.raycastTarget = false;
-            Rounded(Fill(body, "Background"), UIColorRole.Overlay, CardRadius, raycast: false);
+            Rounded(Fill(body, "Background"), UIColorRole.Overlay, CardRadius, raycast: true); // the card's click target
 
             // Picture area tinted with the tower's colour.
             RectTransform art = Fill(body, "Art", 8f, 8f, 8f, 58f);

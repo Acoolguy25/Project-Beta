@@ -37,9 +37,18 @@ namespace RyanAssets.Input {
             zoomOutAction = zoomActionsAsset?.FindAction("Character/ZoomOut", false);
             routeModifierAction = zoomActionsAsset?.FindAction("Character/RouteModifier", false);
         }
+        static int keyboardZoomLocks;
+        [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetZoomLocks() => keyboardZoomLocks = 0;
+        /// <summary>
+        /// Turns the Q / E camera zoom keys off while a game uses E for its own action (interact, throw, tag).
+        /// Every call needs a matching <see cref="UnlockKeyboardZoom"/>; the scroll wheel still zooms.
+        /// </summary>
+        public static void LockKeyboardZoom() => keyboardZoomLocks++;
+        public static void UnlockKeyboardZoom() => keyboardZoomLocks = Mathf.Max(0, keyboardZoomLocks - 1);
         public float KeyboardZoom {
             get {
-                if (playerInput == null || !playerInput.inputIsActive)
+                if (playerInput == null || !playerInput.inputIsActive || keyboardZoomLocks > 0)
                     return 0f;
 
                 // PlayerInput may use a private copy of the asset. Cache its live actions.
