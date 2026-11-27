@@ -45,7 +45,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 GameObject model = PlaceFitted(
                     Load<GameObject>(run.ModelPath), probe.transform, Vector3.zero, run.ModelYaw,
                     run.FootprintCells * WV_Rules.GridSize, "Model");
-                MatchModelHeight(model, 3f);
+                MatchModelHeight(model, WallHeight);
                 return WorldBounds(model);
             } finally {
                 UnityEngine.Object.DestroyImmediate(probe);

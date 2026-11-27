@@ -64,7 +64,7 @@ namespace Universes.UniverseData.war_valley.Editor {
             public float ResearchRate = 1f;
             /// <summary>Turn applied to the model before it is fitted, for art that runs along the wrong axis.</summary>
             public float ModelYaw;
-            public float ShieldRadius = 18f;
+            public float ShieldRadius = 32f;
             public long ShieldHealth = 1500;
             public float ShieldRegenerationSeconds = 30f;
         }
@@ -88,14 +88,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_mineshaft", DisplayName = "Mineshaft", Category = "Economy",
                 Description = "Extracts ore. The backbone of any War Valley war chest.",
                 ModelPath = PackRoot + "/Building_Prefebs/OilTank_Prefeb.prefab",
-                FootprintCells = 2, Cost = 350, BuildSeconds = 12f, MaxHealth = 650,
+                FootprintCells = 4, HeightLimit = 9f, Cost = 350, BuildSeconds = 12f, MaxHealth = 650,
                 Role = StructureRole.Income, IncomePerTick = 35
             },
             new() {
                 Id = "wv_refinery", DisplayName = "Refinery", Category = "Economy",
                 Description = "Processes ore at scale. Expensive, slow to raise, and worth it.",
                 ModelPath = PackRoot + "/Building_Prefebs/MilitaryBase_Prefeb.prefab",
-                FootprintCells = 3, Cost = 900, BuildSeconds = 28f, MaxHealth = 1200,
+                FootprintCells = 6, HeightLimit = 18f, Cost = 900, BuildSeconds = 28f, MaxHealth = 1200,
                 Role = StructureRole.Income, IncomePerTick = 90
             },
             new() {
@@ -104,7 +104,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_barracks", DisplayName = "Barracks", Category = "Military",
                 Description = "Trains Knifemen, Gunners, Shrimp, Speedies, Skinny Legends and Punks. Click it to train.",
                 ModelPath = PackRoot + "/Building_Prefebs/PersonLivePlace_Prefeb.prefab",
-                FootprintCells = 2, Cost = 350, BuildSeconds = 15f, MaxHealth = 850,
+                FootprintCells = 5, HeightLimit = 14f, Cost = 350, BuildSeconds = 15f, MaxHealth = 850,
                 Role = StructureRole.Production,
                 Trains = new[] {
                     WV_TroopKind.Knife, WV_TroopKind.Gunner, WV_TroopKind.Shrimp,
@@ -115,7 +115,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_vehicle_hangar", DisplayName = "Vehicle Hangar", Category = "Military",
                 Description = "Builds tanks, APCs and artillery.",
                 ModelPath = PackRoot + "/Building_Prefebs/VehicleHangar_01_Prefeb.prefab",
-                FootprintCells = 3, Cost = 700, BuildSeconds = 28f, MaxHealth = 1400,
+                FootprintCells = 6, HeightLimit = 16f, Cost = 700, BuildSeconds = 28f, MaxHealth = 1400,
                 Role = StructureRole.Production,
                 Produces = new[] { WV_UnitKind.APC, WV_UnitKind.Tank, WV_UnitKind.Artillery }
             },
@@ -123,14 +123,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_helipad", DisplayName = "Helipad", Category = "Air",
                 Description = "Launches attack choppers.",
                 ModelPath = PackRoot + "/Building_Prefebs/HeliPad_Prefeb.prefab",
-                FreePlacement = true, FootprintCells = 2, Cost = 650, BuildSeconds = 22f, MaxHealth = 700,
+                FreePlacement = true, FootprintCells = 5, HeightLimit = 5f, Cost = 650, BuildSeconds = 22f, MaxHealth = 700,
                 Role = StructureRole.Production, Produces = new[] { WV_UnitKind.Chopper }
             },
             new() {
                 Id = "wv_airfield", DisplayName = "Airfield", Category = "Air",
                 Description = "Directs jets, bombers and reconnaissance drones.",
                 ModelPath = PackRoot + "/Building_Prefebs/ControlTower_Prefeb.prefab",
-                FreePlacement = true, FootprintCells = 3, Cost = 1000, BuildSeconds = 32f, MaxHealth = 1100, HeightLimit = 8f,
+                FreePlacement = true, FootprintCells = 4, Cost = 1000, BuildSeconds = 32f, MaxHealth = 1100, HeightLimit = 24f,
                 Role = StructureRole.Production,
                 Produces = new[] { WV_UnitKind.UAV, WV_UnitKind.Jet, WV_UnitKind.Bomber }
             },
@@ -140,14 +140,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_radar", DisplayName = "Research Station", Category = "Support",
                 Description = "Runs research for your side. Every extra station adds research speed.",
                 ModelPath = PackRoot + "/Building_Prefebs/Radar_Prefeb.prefab",
-                FreePlacement = true, FootprintCells = 2, Cost = 450, BuildSeconds = 18f, MaxHealth = 650, HeightLimit = 5f,
+                FreePlacement = true, FootprintCells = 3, Cost = 450, BuildSeconds = 18f, MaxHealth = 650, HeightLimit = 14f,
                 Role = StructureRole.Research, ResearchRate = 1f
             },
             new() {
                 Id = "wv_missile_battery", DisplayName = "Missile Battery", Category = "Defense",
                 Description = "Surface-to-air battery. Engages aircraft only.",
                 ModelPath = PackRoot + "/Building_Prefebs/MissilePort_Prefeb.prefab",
-                FreePlacement = true, FootprintCells = 2, Cost = 600, BuildSeconds = 22f, MaxHealth = 900,
+                FreePlacement = true, FootprintCells = 3, HeightLimit = 12f, Cost = 600, BuildSeconds = 22f, MaxHealth = 900,
                 Role = StructureRole.Turret, TurretRange = 44f, TurretDamage = 65, TurretCooldown = 2f,
                 AntiAir = true
             },
@@ -155,14 +155,14 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Id = "wv_guard_post", DisplayName = "Guard Post", Category = "Defense",
                 Description = "Manned emplacement covering a ground approach.",
                 ModelPath = PackRoot + "/Building_Prefebs/GuardPoint_01_Prefeb.prefab",
-                FreePlacement = true, FootprintCells = 1, Cost = 275, BuildSeconds = 10f, MaxHealth = 600, HeightLimit = 4f,
+                FreePlacement = true, FootprintCells = 2, Cost = 275, BuildSeconds = 10f, MaxHealth = 600, HeightLimit = 10f,
                 Role = StructureRole.Turret, TurretRange = 28f, TurretDamage = 32, TurretCooldown = 1.2f
             },
             new() {
                 Id = "wv_watchtower", DisplayName = "Watchtower", Category = "Defense",
                 Description = "Cheap picket that shoots back.",
                 ModelPath = PackRoot + "/Building_Prefebs/LightTower_Prefeb.prefab",
-                FreePlacement = true, FootprintCells = 1, Cost = 200, BuildSeconds = 8f, MaxHealth = 450,
+                FreePlacement = true, FootprintCells = 2, HeightLimit = 16f, Cost = 200, BuildSeconds = 8f, MaxHealth = 450,
                 Role = StructureRole.Turret, TurretRange = 22f, TurretDamage = 22, TurretCooldown = 1.1f
             },
             new() {
@@ -213,9 +213,9 @@ namespace Universes.UniverseData.war_valley.Editor {
                               "anything inside until they break it, and it recharges 30s later while the " +
                               "generator stands. Each new generator must overlap one of your shields.",
                 ModelPath = PackRoot + "/Building_Prefebs/SpeakerTower_Prefeb.prefab",
-                FreePlacement = true, FootprintCells = 2, Cost = 1000, BuildSeconds = 28f, MaxHealth = 900,
+                FreePlacement = true, FootprintCells = 3, HeightLimit = 16f, Cost = 1000, BuildSeconds = 28f, MaxHealth = 900,
                 Role = StructureRole.ShieldGenerator,
-                ShieldRadius = 18f, ShieldHealth = 1500, ShieldRegenerationSeconds = 30f
+                ShieldRadius = 32f, ShieldHealth = 1500, ShieldRegenerationSeconds = 30f
             }
         };
 
@@ -224,56 +224,56 @@ namespace Universes.UniverseData.war_valley.Editor {
                 Kind = WV_UnitKind.Infantry, DisplayName = "Infantry", UsesRobotRig = true,
                 Cost = 120, BuildSeconds = 8f, MaxHealth = 150, MoveSpeed = 14f, TurnSpeed = 420f,
                 AttackRange = 16f, DetectionRadius = 22f, AttackDamage = 18, AttackCooldown = 1.2f,
-                Radius = 0.6f, Height = 2.2f, ModelSpan = 1.8f
+                Radius = 1.4f, Height = 5.5f, ModelSpan = 5.5f
             },
             new() {
                 Kind = WV_UnitKind.APC, DisplayName = "APC",
                 ModelPath = PackRoot + "/APC_Prefebs/APC_01_Prefeb.prefab",
                 Cost = 280, BuildSeconds = 12f, MaxHealth = 450, MoveSpeed = 14f, TurnSpeed = 200f,
                 AttackRange = 20f, DetectionRadius = 26f, AttackDamage = 30, AttackCooldown = 1f,
-                Radius = 1.6f, Height = 2.6f, ModelSpan = 5f
+                Radius = 2.8f, Height = 5.5f, ModelSpan = 11f
             },
             new() {
                 Kind = WV_UnitKind.Tank, DisplayName = "Tank",
                 ModelPath = PackRoot + "/Tank_Prefebs/Tank_01_Prefeb.prefab",
                 Cost = 450, BuildSeconds = 18f, MaxHealth = 700, MoveSpeed = 11f, TurnSpeed = 140f,
                 AttackRange = 28f, DetectionRadius = 34f, AttackDamage = 70, AttackCooldown = 2.2f,
-                Radius = 1.8f, Height = 2.6f, ModelSpan = 6f
+                Radius = 3f, Height = 6f, ModelSpan = 14f
             },
             new() {
                 Kind = WV_UnitKind.Artillery, DisplayName = "Artillery",
                 ModelPath = PackRoot + "/SelfPropelledArtillery_Prefebs/SelfPropelledArtillery_01_Prefeb.prefab",
                 Cost = 600, BuildSeconds = 24f, MaxHealth = 400, MoveSpeed = 8f, TurnSpeed = 110f,
                 AttackRange = 45f, DetectionRadius = 50f, AttackDamage = 110, AttackCooldown = 4f,
-                Radius = 1.8f, Height = 2.8f, ModelSpan = 6.5f
+                Radius = 3f, Height = 6f, ModelSpan = 15f
             },
             new() {
                 Kind = WV_UnitKind.Chopper, DisplayName = "Chopper",
                 ModelPath = PackRoot + "/Chopper_Prefebs/Chopper_01_Prefeb.prefab",
                 Cost = 550, BuildSeconds = 20f, MaxHealth = 380, MoveSpeed = 22f, TurnSpeed = 150f,
                 AttackRange = 26f, DetectionRadius = 34f, AttackDamage = 45, AttackCooldown = 1.4f,
-                Radius = 2f, Height = 3f, ModelSpan = 7f
+                Radius = 4f, Height = 6f, ModelSpan = 14f
             },
             new() {
                 Kind = WV_UnitKind.UAV, DisplayName = "UAV",
                 ModelPath = PackRoot + "/UAV_Prefebs/UAV_01_Prefeb.prefab",
                 Cost = 350, BuildSeconds = 14f, MaxHealth = 180, MoveSpeed = 26f, TurnSpeed = 170f,
                 AttackRange = 18f, DetectionRadius = 40f, AttackDamage = 22, AttackCooldown = 1.6f,
-                Radius = 1.5f, Height = 2f, ModelSpan = 5f
+                Radius = 3f, Height = 4f, ModelSpan = 8f
             },
             new() {
                 Kind = WV_UnitKind.Jet, DisplayName = "Jet",
                 ModelPath = PackRoot + "/Jet_Prefebs/Jet_01_Prefeb.prefab",
                 Cost = 750, BuildSeconds = 24f, MaxHealth = 320, MoveSpeed = 34f, TurnSpeed = 150f,
                 AttackRange = 30f, DetectionRadius = 40f, AttackDamage = 70, AttackCooldown = 2f,
-                Radius = 2f, Height = 2.4f, ModelSpan = 8f
+                Radius = 4f, Height = 5f, ModelSpan = 14f
             },
             new() {
                 Kind = WV_UnitKind.Bomber, DisplayName = "Bomber",
                 ModelPath = PackRoot + "/Bomber_Prefebs/Bomber_01_Prefeb.prefab",
                 Cost = 950, BuildSeconds = 32f, MaxHealth = 500, MoveSpeed = 30f, TurnSpeed = 80f,
                 AttackRange = 24f, DetectionRadius = 34f, AttackDamage = 140, AttackCooldown = 5f,
-                Radius = 2.6f, Height = 3f, ModelSpan = 10f
+                Radius = 5.5f, Height = 6f, ModelSpan = 20f
             }
         };
     }

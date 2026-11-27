@@ -9,7 +9,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6023554707022427422}
-  - component: {fileID: 8461178891052548485}
   m_Layer: 0
   m_Name: WV_SelectionRing
   m_TagString: Untagged
@@ -33,19 +32,6 @@ Transform:
   - {fileID: 1708149891517962859}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8461178891052548485
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2854674636289431624}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a61f96069a9dea4438991f3d0698a695, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Universes.UniverseData.war_valley.Shared::Universes.UniverseData.war_valley.Shared.WV_GroundDecal
-  groundOffset: 0.08
 --- !u!1 &5502119720498228832
 GameObject:
   m_ObjectHideFlags: 0

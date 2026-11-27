@@ -64,7 +64,7 @@ namespace Universes.UniverseData.war_valley.Editor {
 
         static void FitStructureHeight(StructureDef def, GameObject model) {
             if (def.Shape != StructureShape.Block) {
-                MatchModelHeight(model, 3f);
+                MatchModelHeight(model, WallHeight);
                 return;
             }
             Bounds bounds = WorldBounds(model);
@@ -106,7 +106,7 @@ namespace Universes.UniverseData.war_valley.Editor {
                         foreach (string postName in new[] { "PostLeft", "PostRight" }) {
                             Transform post = root.transform.Find("Building/" + postName);
                             if (post != null)
-                                MatchModelHeight(post.gameObject, 3f);
+                                MatchModelHeight(post.gameObject, WallHeight);
                         }
                     }
                     Bounds bounds = WorldBounds(model);

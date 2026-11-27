@@ -64,7 +64,13 @@ namespace Universes.UniverseData.war_valley.Editor {
         const string GatePostPath = PackRoot + "/Building_Prefebs/Fence_02_Cornor_Prefeb.prefab";
 
         /// <summary>Thinnest a wall's collision box is allowed to be, so it reliably stops a body or a shot.</summary>
-        const float MinWallDepth = 0.6f;
+        const float MinWallDepth = 1.5f;
+
+        /// <summary>
+        /// Height of every wall, fence, gate and joint post (m). A soldier stands about 5.5 m tall
+        /// (the robot body is scaled 3x), so a barrier has to rise clear above one.
+        /// </summary>
+        const float WallHeight = 7f;
 
         /// <summary>Metres of construction site left around a thin structure's strip on each axis.</summary>
         const float SitePadding = 1.5f;
