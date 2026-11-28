@@ -21,6 +21,11 @@ namespace Universes.UniverseData.classic_horror.Tests {
             lines.AddRange(CH_Story.LostLines);
             lines.AddRange(CH_Story.CatchLines);
             lines.AddRange(CH_Story.Whispers);
+            lines.AddRange(CH_Story.HushLines);
+            lines.AddRange(new[] {
+                CH_Story.LineEngineTip, CH_Story.LineEngineMiss, CH_Story.LineEngineStarts, CH_Story.LineHymnListen, CH_Story.LineHymnWrong,
+                CH_Story.LineLockTip, CH_Story.LineLockOpen, CH_Story.LineCraneHears
+            });
             foreach (CH_ItemKind kind in System.Enum.GetValues(typeof(CH_ItemKind)))
                 for (int singer = 0; singer < CH_Story.SingerCount; singer++) {
                     lines.Add(CH_Story.PickUpLine(kind, singer));

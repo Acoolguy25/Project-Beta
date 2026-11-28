@@ -42,6 +42,33 @@ namespace Universes.UniverseData.classic_horror {
             "THE CHOIR SINGS ON\nNobody left Hollowmere. On still nights fishermen on the reservoir hear new voices in the chapel, singing slightly out of tune."
         };
 
+        /// <summary>The minigames' names as the prompt and the panel title them.</summary>
+        public static string StationTitle(CH_PuzzleKind kind, int singer) => kind switch {
+            CH_PuzzleKind.Engine => "The ferry's engine",
+            CH_PuzzleKind.Hymn => $"{SingerName(singer)}'s hymn",
+            _ => "The bell's locks"
+        };
+
+        /// <summary>What the prompt says at a station ("Sing Agnes Pell's hymn").</summary>
+        public static string StationPrompt(CH_PuzzleKind kind, int singer) => kind switch {
+            CH_PuzzleKind.Engine => "Turn the engine over",
+            CH_PuzzleKind.Hymn => $"Sing {SingerName(singer)}'s hymn",
+            _ => "Pick the bell's locks"
+        };
+
+        /// <summary>The panel's one-line instruction for each minigame.</summary>
+        public static string StationHint(CH_PuzzleKind kind) => kind switch {
+            CH_PuzzleKind.Engine => "Pull the cord (E) as the needle crosses the green. A miss roars across the water.",
+            CH_PuzzleKind.Hymn => "Listen to the hymn, then sing it back: keys 1 2 3 4. A wrong note wails.",
+            _ => "Turn the dial (A / D) until it runs hot, then set the lock (E). A wrong lock clanks the chain."
+        };
+
+        public const string LineEngineTip = "engine_tip", LineEngineMiss = "engine_miss", LineEngineStarts = "engine_starts";
+        public const string LineHymnListen = "hymn_listen", LineHymnWrong = "hymn_wrong";
+        public const string LineLockTip = "lock_tip", LineLockOpen = "lock_open", LineLockClank = "lock_clank";
+        public const string LineCraneHears = "crane_hears";
+        public static readonly string[] HushLines = { "hush_1", "hush_2" };
+
         public static string ItemName(CH_ItemKind kind) => ItemNames[(int)kind];
 
         public static string ItemInSentence(CH_ItemKind kind) => ItemsInSentence[(int)kind];

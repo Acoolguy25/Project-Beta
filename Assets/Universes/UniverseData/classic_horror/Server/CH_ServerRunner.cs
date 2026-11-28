@@ -24,7 +24,7 @@ namespace Universes.UniverseData.classic_horror.Server {
     /// Runs one night of The Drowned Choir: the prologue, three acts and the departure, with the items, the hiding places,
     /// the voice lines, the scares and Father Crane. Everything that decides the night happens here; clients present it.
     /// </summary>
-    public sealed class CH_ServerRunner : ServerRunner {
+    public sealed partial class CH_ServerRunner : ServerRunner {
         [Header("Night")]
         [Tooltip("Spawns each investigator gets per night, counting the first. Losing the last one leaves them watching.")]
         [SerializeField, Min(1)] int livesPerPlayer = 3;
@@ -161,6 +161,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             PlayerData.OnPlayerRemoved += OnPlayerLeft;
             InstanceFinder.ServerManager.RegisterBroadcast<CH_InteractRequest>(OnInteract);
             InstanceFinder.ServerManager.RegisterBroadcast<CH_StateRequest>(OnStateRequest);
+            RegisterPuzzleHandlers();
         }
 
         // ---- Players ---------------------------------------------------------------------------------------------------
@@ -190,7 +191,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         void ApplyMovement(PlayerData player) {
             if (player == null) return;
             LocalCharacter character = player.GetCharacter();
-            bool hiding = character != null && hidden.ContainsKey(character);
+            // Working a station or hiding means standing still.
+            bool hiding = character != null && (hidden.ContainsKey(character) || openStations.ContainsKey(player.Owner));
             bool heavy = night != null && night.CarriedBy(CarrierKey(player.Owner))?.Kind == CH_ItemKind.Fuel;
             player.walkSpeed.Value = hiding ? 0f : heavy ? heavyWalkSpeed : walkSpeed;
             player.sprintSpeed.Value = hiding ? 0f : heavy ? heavyWalkSpeed : sprintSpeed;
@@ -252,6 +254,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             DropCarried(player.Owner, at, character != null ? character.transform.eulerAngles.y : 0f);
             lastDryGround.Remove(player.Owner);
             if (character != null) hidden.Remove(character);
+            openStations.Remove(player.Owner);
         }
 
         // ---- The night ---------------------------------------------------------------------------------------------------
@@ -272,6 +275,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             lastSeed = seed;
             night = new CH_Night(seed, BuildLayout(seed));
             CacheTitles();
+            CacheStationTitles();
             ResetNightState();
             foreach (var player in PlayerData.Players.Values) { player.lives.Value = livesPerPlayer; PreparePlayer(player); }
             acceptingPlayers = true;
@@ -351,6 +355,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             warnings.Clear();
             nextApparition.Clear();
             hidden.Clear();
+            ResetPuzzles();
             earQueue.Clear();
             requestTimes.Clear();
             snapshotTimes.Clear();
@@ -379,6 +384,7 @@ namespace Universes.UniverseData.classic_horror.Server {
         /// <summary>Holds the night for a cutscene: everyone is safe, the priest is still, every client plays the scene.</summary>
         async UniTask PlayCutscene(CH_Phase scene, CancellationToken token) {
             ReleaseEveryoneFromHiding();
+            CloseAllStations("");
             night.Enter(scene);
             phaseStarted = Time.time;
             SetGlobalInvul(true);
@@ -409,6 +415,8 @@ namespace Universes.UniverseData.classic_horror.Server {
             releaseAt = Time.time + grace;
             if (act != CH_Phase.Stranded && returnTheLostEachAct) ReturnTheLost();
             nextAmbientScare = Time.time + Mathf.Max(grace, RandomRange(ambientScareInterval) * 0.6f);
+            nextHush = 0f;
+            hushUntil = 0f;
             switch (act) {
                 case CH_Phase.Stranded:
                     QueueEar("stranded_hint", 22f);
@@ -420,6 +428,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                     break;
                 case CH_Phase.Sermon:
                     monster?.Warp(map.altar.position + map.altar.forward * actStartAltarDistance.y);
+                    QueueEar(CH_Story.LineLockTip, 4f);
                     break;
             }
             BroadcastState();
@@ -454,6 +463,8 @@ namespace Universes.UniverseData.classic_horror.Server {
                 return;
             }
             KeepHiddenInPlace();
+            UpdateStations();
+            UpdateHush();
             TrackDryGround();
             UpdateBoarding();
             UpdateMusic();
@@ -585,12 +596,14 @@ namespace Universes.UniverseData.classic_horror.Server {
 
             if (request.target == CH_Target.Hide) { ToggleHiding(connection, character, request.id); return; }
             if (hidden.ContainsKey(character)) { Reject(connection, request.target, "Leave your hiding place first."); return; }
+            if (openStations.ContainsKey(connection)) { Reject(connection, request.target, "Finish what you are doing first."); return; }
             if (request.target == CH_Target.Drop) { PutDown(connection, character); return; }
             if (!TryGetInteractPoint(request.target, request.id, out Vector3 point)) { Reject(connection, request.target, "That's gone."); return; }
             if (!CanReach(character, point)) { Reject(connection, request.target, "Move closer."); return; }
 
             int key = CarrierKey(connection);
             if (request.target == CH_Target.Item) {
+                if (!night.CanTake(night.GetItem(request.id))) { Reject(connection, request.target, "The bell is chained to the altar. Pick its locks first."); return; }
                 if (!night.TryPickUp(key, request.id, out CH_Night.Item swapped, out bool firstTouch)) { Reject(connection, request.target, "You can't take that now."); return; }
                 OnPickedUp(connection, character, night.GetItem(request.id), firstTouch);
                 if (swapped != null) Debug.Log($"[Drowned Choir] client {connection.ClientId} swapped {swapped.Kind} for {night.GetItem(request.id).Kind}");
@@ -625,10 +638,12 @@ namespace Universes.UniverseData.classic_horror.Server {
             _ => "Bring the missing part here."
         };
 
-        bool CanReach(LocalCharacter character, Vector3 point) {
+        bool CanReach(LocalCharacter character, Vector3 point) => CanReach(character, point, interactionReach);
+
+        bool CanReach(LocalCharacter character, Vector3 point, float reach) {
             Vector3 eye = character.CharacterCamera != null ? character.CharacterCamera.position : character.transform.position + Vector3.up * 1.6f;
             int mask = ~LayerMask.GetMask("Character", "LocalCharacter", "UI", "Ignore Raycast");
-            return Vector3.Distance(eye, point) <= interactionReach + 0.5f && WorldInteraction.CanReach(eye, point, interactionReach + 0.5f, mask);
+            return Vector3.Distance(eye, point) <= reach + 0.5f && WorldInteraction.CanReach(eye, point, reach + 0.5f, mask);
         }
 
         bool TryGetInteractPoint(CH_Target target, int id, out Vector3 point) {
@@ -705,7 +720,6 @@ namespace Universes.UniverseData.classic_horror.Server {
             int singer = item.Singer;
             PlayerProgress.Modify<CH_SaveData>(connection, save => {
                 save.itemsDelivered++;
-                if (slot.Kind == CH_SlotKind.Grave && singer >= 0) save.singersMet |= 1 << singer;
             });
             string line = CH_Story.PlaceLine(item.Kind, singer);
             switch (slot.Kind) {
@@ -713,15 +727,11 @@ namespace Universes.UniverseData.classic_horror.Server {
                     QueueEar(line, 0f);
                     if (night.PartsFixed == 1) QueueEar("stranded_two_left", 0f);
                     else if (night.PartsFixed == 2) QueueEar("stranded_one_left", 0f);
+                    else QueueEar(CH_Story.LineEngineTip, 0f);
                     break;
                 case CH_SlotKind.Grave:
-                    // The singer speaks from their grave, then the chapel answers.
-                    Broadcast(line, CH_VoiceMode.World, slot.Position + Vector3.up * 1.2f);
-                    if (night.SingersFreed == 1) QueueEar("mara_chapel_1", 6f);
-                    if (night.SingersFreed == 2) {
-                        QueueEar("mara_chapel_2", 6f);
-                        if (!angryCalled) { angryCalled = true; SpeakFromMonster("crane_angry"); }
-                    }
+                    // The relic is laid; the singer is not free until their hymn is sung (a station at the grave).
+                    if (!hymnTipCalled) { hymnTipCalled = true; QueueEar(CH_Story.LineHymnListen, 1f); }
                     break;
                 case CH_SlotKind.LilyMarker:
                     QueueEar(line, 0f);
@@ -872,6 +882,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (night == null || night.IsOver || damage == DamageType.Despawn) return;
             if (eliminated.Contains(character.Owner) || reviving.Contains(character.Owner)) return;
             hidden.Remove(character);
+            CloseStation(character.Owner, CH_PuzzleEvent.Closed, "");
             bool carrying = night.CarriedBy(CarrierKey(character.Owner)) != null;
             bool chased = monster != null && monster.IsHunting && monster.Quarry == character;
             DropCarried(character.Owner, character.transform.position, character.transform.eulerAngles.y);
@@ -1022,7 +1033,9 @@ namespace Universes.UniverseData.classic_horror.Server {
                 bellSpot = PoseOf(map.altar),
                 boatSlots = Array.ConvertAll(map.boatSlots, PoseOf),
                 graves = Array.ConvertAll(map.graves, PoseOf),
-                lilyMarker = PoseOf(map.lilyMarker)
+                lilyMarker = PoseOf(map.lilyMarker),
+                engine = PoseOf(map.engineStation),
+                bellLock = PoseOf(map.bellLockStation)
             };
         }
 
@@ -1247,7 +1260,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             Objective(out string objective, out string detail, out int progress, out int total);
             return new CH_StateBroadcast {
                 seed = night.Seed, phase = night.Phase, phaseSeconds = Time.time - phaseStarted,
-                objective = objective, detail = detail, items = itemViews, slots = slotViews, hides = hideViews,
+                objective = objective, detail = detail, items = itemViews, slots = slotViews, hides = hideViews, stations = MakeStationViews(),
                 progress = progress, progressTotal = total,
                 countdown = night.Phase == CH_Phase.Boarding ? Mathf.Max(0, Mathf.CeilToInt(boardingEnds - Time.time)) : 0,
                 monsterId = monster != null ? monster.Entity.ObjectId : -1,
@@ -1273,19 +1286,24 @@ namespace Universes.UniverseData.classic_horror.Server {
             detail = "";
             switch (night.Phase) {
                 case CH_Phase.Stranded:
-                    objective = "Repair the boat";
-                    detail = "Find fuel, a toolbox and a lantern. Bring them to the boat.";
-                    progress = night.PartsFixed; total = CH_Story.BoatParts.Length;
+                    bool fitted = night.PartsFixed == CH_Story.BoatParts.Length;
+                    objective = fitted ? "Start the engine" : "Repair the boat";
+                    detail = fitted ? "The parts are in. Turn the engine over at the boat: pull the cord as the needle crosses the green."
+                        : "Find fuel, a toolbox and a lantern. Bring them to the boat.";
+                    progress = night.PartsFixed + (night.EngineStarted ? 1 : 0); total = CH_Story.BoatParts.Length + 1;
                     break;
                 case CH_Phase.Choir:
                     objective = "Free the drowned choir";
-                    detail = "Lay each singer's belonging on their grave by the chapel.";
+                    detail = night.RelicsLaid > night.SingersFreed ? "Sing the hymn back at the grave: listen, then play the notes (1 2 3 4)."
+                        : "Lay each singer's belonging on their grave by the chapel, then sing their hymn.";
                     progress = night.SingersFreed; total = CH_Story.SingersPerNight;
                     break;
                 case CH_Phase.Sermon:
                     bool carried = BellTaken();
-                    objective = carried ? "Carry the bell to the boat" : "Take Crane's bell from the chapel altar";
-                    detail = carried ? "He hears it. R puts it down for a teammate." : "Mara is in the chapel. Take his bell and he will let her go.";
+                    objective = carried ? "Carry the bell to the boat" : night.BellUnchained ? "Take Crane's bell from the chapel altar" : "Pick the bell's three locks";
+                    detail = carried ? "He hears it. R puts it down for a teammate."
+                        : night.BellUnchained ? "Mara is in the chapel. Take his bell and he will let her go."
+                        : "The bell is chained to the altar. Turn each dial until it runs hot, then set the lock. Every clank carries.";
                     break;
                 case CH_Phase.Boarding:
                     objective = "GET TO THE BOAT";
@@ -1328,6 +1346,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                 InstanceFinder.ServerManager.UnregisterBroadcast<CH_InteractRequest>(OnInteract);
                 InstanceFinder.ServerManager.UnregisterBroadcast<CH_StateRequest>(OnStateRequest);
             }
+            UnregisterPuzzleHandlers();
             base.OnDestroy();
         }
     }

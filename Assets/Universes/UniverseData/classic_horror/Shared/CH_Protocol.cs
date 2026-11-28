@@ -64,7 +64,11 @@ namespace Universes.UniverseData.classic_horror {
     }
 
     /// <summary>Atmospheric events the server schedules for everyone (<see cref="CH_AmbientScareBroadcast"/>).</summary>
-    public enum CH_AmbientScare : byte { DoorSlam = 0, DistantCry = 1, LightsOut = 2, ChapelBell = 3 }
+    public enum CH_AmbientScare : byte {
+        DoorSlam = 0, DistantCry = 1, LightsOut = 2, ChapelBell = 3,
+        /// <summary>The choir stops: the lamps gutter and, for <see cref="CH_AmbientScareBroadcast.seconds"/>, he hears everything (see <see cref="CH_PuzzleTuning"/>).</summary>
+        Hush = 4
+    }
 
     /// <summary>How a voice line is heard.</summary>
     public enum CH_VoiceMode : byte {
@@ -93,6 +97,30 @@ namespace Universes.UniverseData.classic_horror {
     }
 
     public struct CH_StateRequest : IBroadcast { public byte version; }
+
+    /// <summary>An investigator at a station (<see cref="CH_Night.Station"/>): open it, close it, or play its next move.</summary>
+    public struct CH_PuzzleRequest : IBroadcast {
+        public int seed;
+        public int stationId;
+        public CH_PuzzleAction action;
+        /// <summary>Press: the note. Probe and Set: the dial's angle in degrees.</summary>
+        public float value;
+    }
+
+    /// <summary>The server's answer to the investigator working a station, and only to them.</summary>
+    public struct CH_PuzzleBroadcast : IBroadcast {
+        public int seed;
+        public int stationId;
+        public CH_PuzzleKind kind;
+        public CH_PuzzleEvent evt;
+        public int progress, total, mistakes;
+        public float warmth;
+        public float zoneCenter, zoneWidth, sweepSpeed;
+        /// <summary>A hymn's notes; empty for the other minigames.</summary>
+        public int[] sequence;
+        /// <summary>Why a station was refused or closed, or a line for the panel.</summary>
+        public string message;
+    }
 
     public struct CH_ItemView {
         public int id;
@@ -123,6 +151,20 @@ namespace Universes.UniverseData.classic_horror {
         public string title;
     }
 
+    public struct CH_StationView {
+        public int id;
+        public CH_PuzzleKind kind;
+        public Vector3 position;
+        public float yaw;
+        /// <summary>For a hymn, whose it is (<see cref="CH_Story.Singers"/>); otherwise -1.</summary>
+        public sbyte singer;
+        /// <summary>It can be worked right now.</summary>
+        public bool available;
+        public bool done;
+        public int progress, total;
+        public string title;
+    }
+
     public struct CH_HideView {
         public int id;
         /// <summary>The hidden investigator's character (network object id), or -1.</summary>
@@ -139,6 +181,7 @@ namespace Universes.UniverseData.classic_horror {
         public CH_ItemView[] items;
         public CH_SlotView[] slots;
         public CH_HideView[] hides;
+        public CH_StationView[] stations;
         public int progress, progressTotal;
         /// <summary>Seconds left on the boarding call, or 0.</summary>
         public int countdown;
@@ -183,5 +226,7 @@ namespace Universes.UniverseData.classic_horror {
         public int singersMet;
         /// <summary>Quickest escape in seconds, or 0.</summary>
         public int bestSeconds;
+        /// <summary>Minigames finished across all nights, and hymns among them.</summary>
+        public int puzzlesSolved, hymnsSung;
     }
 }

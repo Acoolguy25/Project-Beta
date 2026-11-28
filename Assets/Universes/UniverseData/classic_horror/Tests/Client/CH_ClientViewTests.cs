@@ -7,11 +7,11 @@ using Universes.UniverseData.classic_horror.Client;
 namespace Universes.UniverseData.classic_horror.Tests {
     /// <summary>The night's client views: the shared health bar stays out of it, and hiding looks out through the door.</summary>
     public sealed class CH_ClientViewTests {
-        GameObject cameraObject, viewObject, torchObject;
+        GameObject cameraObject, viewObject, torchObject, panelObject;
 
         [TearDown] public void TearDown() {
             ClientHealthbar.Suppressed = false;
-            foreach (GameObject made in new[] { cameraObject, viewObject, torchObject }) if (made != null) Object.DestroyImmediate(made);
+            foreach (GameObject made in new[] { cameraObject, viewObject, torchObject, panelObject }) if (made != null) Object.DestroyImmediate(made);
         }
 
         [Test] public void TheHealthBarIsHiddenWhileSuppressedAndBackWhenCleared() {
@@ -46,6 +46,21 @@ namespace Universes.UniverseData.classic_horror.Tests {
             view.Exit();
             Assert.AreEqual(0.05f, camera.nearClipPlane, 1e-5f, "Leaving gives the camera back as it was.");
             Assert.IsFalse(view.Active);
+        }
+
+        [Test] public void TheMinigamePanelCanBeResetBeforeItHasEverBeenShown() {
+            // Authored hidden: its object is inactive, so Awake has not run when a new night first resets it.
+            panelObject = new GameObject("Minigame card");
+            panelObject.SetActive(false);
+            var panel = panelObject.AddComponent<CH_PuzzlePanel>();
+            panel.group = panelObject.AddComponent<CanvasGroup>();
+            int sent = 0;
+            panel.Bind((action, station, value) => { sent++; return true; });
+            Assert.DoesNotThrow(panel.ForceClose);
+            Assert.IsFalse(panel.IsOpen);
+            panel.Request(3);
+            Assert.AreEqual(1, sent, "Asking to open a station sends one request.");
+            Assert.AreEqual(3, panel.StationId, "It remembers which station it asked for.");
         }
 
         static void Hold(CH_HidingView view) =>

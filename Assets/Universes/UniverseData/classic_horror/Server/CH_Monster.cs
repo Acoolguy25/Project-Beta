@@ -22,6 +22,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         const float ThinkInterval = 0.1f;
         const float NavigationRadius = 0.25f, NavigationHeight = 1.9f;
         const float SamplePositionRadius = 3f;
+        /// <summary>A noise over water or a wall is investigated at the nearest walkable ground within this distance.</summary>
+        const float NoiseSnapRadius = 12f;
         /// <summary>How far above or below a wanted spot a NavMesh point may be and still count as the same floor.</summary>
         const float SameFloorHeight = 0.5f;
         /// <summary>How far above or below a steering target its NavMesh point may be (a step, a slope) before it counts as another floor.</summary>
@@ -278,7 +280,8 @@ namespace Universes.UniverseData.classic_horror.Server {
                 bool seen = clear && distance < tuning.SightRange(lit, chasing)
                     && (chasing || distance < tuning.closeSenseRadius || tuning.InSightCone(transform.forward, target - eye));
                 speeds.TryGetValue(character, out float speed);
-                bool heard = distance < tuning.HearingRange(speed, bell);
+                float hearing = Mathf.Max(tuning.HearingRange(speed, bell), runner.PuzzleNoiseOf(character), runner.HushHearingOf(speed));
+                bool heard = distance < hearing;
                 bool close = distance < tuning.closeSenseRadius;
                 if (!seen && !heard && !close) continue;
                 if (seen || (close && clear)) lastSeen[character] = Time.time;
@@ -401,6 +404,27 @@ namespace Universes.UniverseData.classic_horror.Server {
                 if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, SamplePositionRadius, agent.areaMask)) sweepPoints.Add(hit.position);
             }
             runner.OnChaseLost(escaped);
+        }
+
+        /// <summary>
+        /// A noise he did not see the source of (a missed engine strike, a wrong note, a lock clanking): he goes to where it
+        /// came from and sweeps the area. It never interrupts a chase, a catch, a stare or a wardrobe he is on his way to.
+        /// </summary>
+        public void Investigate(Vector3 at, float seconds) {
+            if (suspended || State is Mode.Chase or Mode.OpenHidingPlace or Mode.Held or Mode.Feed || agent == null || !agent.enabled) return;
+            lastKnownPosition = at;
+            lastKnownVelocity = Vector3.zero;
+            State = Mode.Search;
+            searchUntil = Time.time + seconds;
+            sweepPoints.Clear();
+            sweepHeading = null;
+            checkedHidingPlaces.Clear();
+            // The noise itself first, then round about it.
+            if (NavMesh.SamplePosition(at, out NavMeshHit source, NoiseSnapRadius, agent.areaMask)) sweepPoints.Add(source.position);
+            for (int i = 0; i < 3; i++) {
+                Vector2 offset = RandomInCircle() * (tuning.searchRadius * 0.5f);
+                if (NavMesh.SamplePosition(at + new Vector3(offset.x, 0f, offset.y), out NavMeshHit hit, SamplePositionRadius, agent.areaMask)) sweepPoints.Add(hit.position);
+            }
         }
 
         void Sweep() {

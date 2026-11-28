@@ -39,6 +39,22 @@ namespace Universes.UniverseData.classic_horror {
             public bool Filled => Item >= 0;
         }
 
+        /// <summary>
+        /// A place where an investigator stops to work a minigame (<see cref="CH_PuzzleRun"/>): the ferry's engine, the
+        /// bell's locks, and a hymn at each singer's grave. <see cref="Progress"/> is kept here, so stepping away or being
+        /// chased off loses nothing.
+        /// </summary>
+        public sealed class Station {
+            public int Id;
+            public CH_PuzzleKind Kind;
+            public Vector3 Position;
+            public float Yaw;
+            /// <summary>For a hymn: whose it is (<see cref="CH_Story.Singers"/>); otherwise -1.</summary>
+            public int Singer = -1;
+            public bool Done;
+            public int Progress;
+        }
+
         /// <summary>Where the night's items and slots are, chosen by the runner from the map's anchors.</summary>
         public struct Layout {
             /// <summary>Resting places for the three boat parts, in <see cref="CH_Story.BoatParts"/> order.</summary>
@@ -55,6 +71,10 @@ namespace Universes.UniverseData.classic_horror {
             public Pose[] graves;
             /// <summary>Lily's marker on the jetty steps.</summary>
             public Pose lilyMarker;
+            /// <summary>The ferry's engine, which has to be turned over once its parts are fitted.</summary>
+            public Pose engine;
+            /// <summary>The locks that chain the bell to the altar.</summary>
+            public Pose bellLock;
         }
 
         public readonly int Seed;
@@ -62,10 +82,16 @@ namespace Universes.UniverseData.classic_horror {
         public readonly int[] Singers = new int[CH_Story.SingersPerNight];
         public readonly List<Item> Items = new();
         public readonly List<Slot> Slots = new();
+        public readonly List<Station> Stations = new();
         public CH_Phase Phase { get; private set; } = CH_Phase.Waiting;
         /// <summary>Boat parts fitted so far.</summary>
         public int PartsFixed => CountFilled(CH_SlotKind.BoatFuel, CH_SlotKind.BoatToolbox, CH_SlotKind.BoatLantern);
-        public int SingersFreed => CountFilled(CH_SlotKind.Grave);
+        /// <summary>Singers whose relic is laid on their grave (the hymn is still to be sung).</summary>
+        public int RelicsLaid => CountFilled(CH_SlotKind.Grave);
+        /// <summary>Singers set free: relic laid and hymn sung.</summary>
+        public int SingersFreed => CountDone(CH_PuzzleKind.Hymn);
+        public bool EngineStarted => CountDone(CH_PuzzleKind.Engine) > 0;
+        public bool BellUnchained => CountDone(CH_PuzzleKind.BellLock) > 0;
         public bool MusicBoxReturned => CountFilled(CH_SlotKind.LilyMarker) > 0;
         public bool BellAboard => CountFilled(CH_SlotKind.BoatBell) > 0;
         public bool IsOver => Phase is CH_Phase.Complete or CH_Phase.Failed;
@@ -94,6 +120,17 @@ namespace Universes.UniverseData.classic_horror {
                 AddSlot(CH_SlotKind.Grave, CH_ItemKind.Hymnal, layout.graves[singer]).Singer = singer;
             AddSlot(CH_SlotKind.LilyMarker, CH_ItemKind.MusicBox, layout.lilyMarker);
             AddSlot(CH_SlotKind.BoatBell, CH_ItemKind.Bell, layout.boatSlots[3]);
+
+            AddStation(CH_PuzzleKind.Engine, layout.engine);
+            AddStation(CH_PuzzleKind.BellLock, layout.bellLock);
+            for (int singer = 0; singer < layout.graves.Length && singer < CH_Story.SingerCount; singer++)
+                AddStation(CH_PuzzleKind.Hymn, layout.graves[singer]).Singer = singer;
+        }
+
+        Station AddStation(CH_PuzzleKind kind, Pose pose) {
+            var station = new Station { Id = Stations.Count, Kind = kind, Position = pose.position, Yaw = YawOf(pose.rotation) };
+            Stations.Add(station);
+            return station;
         }
 
         Item AddItem(CH_ItemKind kind, Pose pose, CH_ItemState state) {
@@ -120,6 +157,45 @@ namespace Universes.UniverseData.classic_horror {
                 if (slot.Filled && System.Array.IndexOf(kinds, slot.Kind) >= 0) count++;
             return count;
         }
+
+        int CountDone(CH_PuzzleKind kind) {
+            int count = 0;
+            foreach (Station station in Stations) if (station.Done && station.Kind == kind) count++;
+            return count;
+        }
+
+        public Station GetStation(int id) => id >= 0 && id < Stations.Count ? Stations[id] : null;
+
+        /// <summary>
+        /// Whether a minigame can be worked now: the engine once its three parts are fitted, a hymn once the singer's relic
+        /// lies on their grave (and only for tonight's singers), the bell's locks once Act III has begun.
+        /// </summary>
+        public bool IsAvailable(Station station) {
+            if (station == null || station.Done || IsOver) return false;
+            switch (station.Kind) {
+                case CH_PuzzleKind.Engine:
+                    return Phase == CH_Phase.Stranded && PartsFixed == CH_Story.BoatParts.Length;
+                case CH_PuzzleKind.Hymn:
+                    if (Phase != CH_Phase.Choir || !IsSingerTonight(station.Singer)) return false;
+                    foreach (Slot slot in Slots) if (slot.Kind == CH_SlotKind.Grave && slot.Singer == station.Singer) return slot.Filled;
+                    return false;
+                default:
+                    return Phase == CH_Phase.Sermon;
+            }
+        }
+
+        /// <summary>The point an investigator reaches for (and the client focuses) at a station.</summary>
+        public static Vector3 StationReachPoint(CH_PuzzleKind kind, Vector3 position) =>
+            position + Vector3.up * (kind == CH_PuzzleKind.Engine ? ReachLiftAboard : kind == CH_PuzzleKind.Hymn ? ReachLiftAshore : BellLockLift);
+
+        /// <summary>The bell's locks sit on the altar a little above the table's top.</summary>
+        public const float BellLockLift = 1.2f;
+
+        /// <summary>Whether <paramref name="item"/> may be picked up now: the bell stays chained to the altar until its locks are open.</summary>
+        public bool CanTake(Item item) => item != null && (item.Kind != CH_ItemKind.Bell || BellUnchained);
+
+        /// <summary>For a hymn, how many singers were set free before this one: each hymn is one note longer than the last.</summary>
+        public int HymnOrder(Station station) => station.Kind == CH_PuzzleKind.Hymn ? SingersFreed : 0;
 
         /// <summary>Moves the night to <paramref name="next"/> and reveals that act's items.</summary>
         public void Enter(CH_Phase next) {
@@ -154,7 +230,7 @@ namespace Universes.UniverseData.classic_horror {
             swapped = null;
             firstTouch = false;
             Item item = GetItem(itemId);
-            if (item == null || item.State != CH_ItemState.Resting || !CH_Story.IsPlayable(Phase)) return false;
+            if (item == null || item.State != CH_ItemState.Resting || !CH_Story.IsPlayable(Phase) || !CanTake(item)) return false;
             Item held = CarriedBy(carrier);
             if (held != null) {
                 held.State = CH_ItemState.Resting;
@@ -248,7 +324,7 @@ namespace Universes.UniverseData.classic_horror {
 
         /// <summary>The act that the current state has earned, or the current phase if it is not finished yet.</summary>
         public CH_Phase EarnedPhase() => Phase switch {
-            CH_Phase.Stranded when PartsFixed == CH_Story.BoatParts.Length => CH_Phase.Taking,
+            CH_Phase.Stranded when PartsFixed == CH_Story.BoatParts.Length && EngineStarted => CH_Phase.Taking,
             CH_Phase.Choir when SingersFreed == CH_Story.SingersPerNight => CH_Phase.ChapelOpens,
             CH_Phase.Sermon when BellAboard => CH_Phase.Boarding,
             _ => Phase
@@ -265,6 +341,7 @@ namespace Universes.UniverseData.classic_horror {
         public bool IsObjective(Item item) {
             if (item.State is CH_ItemState.Hidden or CH_ItemState.Placed) return false;
             if (item.Kind == CH_ItemKind.MusicBox) return false; // a secret; it never gets an arrow
+            if (item.Kind == CH_ItemKind.Bell && !BellUnchained) return false; // the locks come first
             return DestinationFor(item) != null;
         }
 

@@ -625,6 +625,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             client.interactionKey = key.gameObject;
             client.interactionPrompt = HudKit.Popup(interaction, false);
             BuildBoarding(gameplay, client);
+            BuildPuzzle(gameplay, client);
 
             BuildHiding(canvas, client);
             BuildRadio(canvas, client.radio);
@@ -823,6 +824,8 @@ namespace Universes.UniverseData.classic_horror.Editor {
             ambient.lightsOut = Sound(0.7f, 0.8f, 0f, 0f, "Packages/com.ryan.gameframework/Runtime/Tools/Flashlight/flashlight_off.mp3",
                 AudioFolder + "creak-1.ogg");
             ambient.chapelBell = Sound(0.9f, 0.55f, 30f, 280f, AudioFolder + "chapel-bell-1.ogg", AudioFolder + "chapel-bell-2.ogg");
+            // The wind dropping to nothing but a low breath: the choir has stopped.
+            ambient.hush = Sound(0.6f, 0.55f, 0f, 0f, FloodedSounds + "WindHowl.mp3");
 
             CH_Journal journal = client.journal;
             journal.openSound = Clip(AudioFolder + "journal-open.ogg");

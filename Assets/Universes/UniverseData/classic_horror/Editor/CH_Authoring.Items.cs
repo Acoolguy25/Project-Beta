@@ -337,13 +337,14 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 root.name = "MaraActor";
                 Material oilskin = Material("MaraOilskin", MaraOilskin);
                 oilskin.SetTexture("_BaseMap", WeatheringTexture("MaraOilskinWear"));
-                oilskin.SetFloat("_Smoothness", 0.5f);
+                oilskin.SetFloat("_Smoothness", 0.22f);
                 foreach (var collider in root.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(collider);
                 var animator = root.GetComponent<Animator>() ?? root.AddComponent<Animator>();
                 animator.runtimeAnimatorController = controller;
                 animator.applyRootMotion = false;
                 animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 DressAsSkipper(root, animator, oilskin);
+                root.transform.localScale = Vector3.one * MaraScale; // the crew robot is small; a skipper stands nearly as tall as the priest
                 foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 var actor = root.AddComponent<CH_Puppet>();
                 actor.animator = animator;
@@ -369,20 +370,25 @@ namespace Universes.UniverseData.classic_horror.Editor {
             public const float BrimTilt = -12f, BrimBack = 0.022f, BraidBead = 0.03f;
             // Coat: a lathed body from hips to a standing collar, and a flared skirt to below the knee.
             public const float CoatHip = 0.104f, CoatChest = 0.112f, CoatShoulder = 0.118f, CoatCollar = 0.05f, CollarHeight = 0.032f, CoatDepth = 0.68f;
-            public const float SkirtBelowKnee = 0.07f, SkirtHem = 0.14f, ButtonSize = 0.012f;
-            // Arms: a shoulder cap where the sleeve meets the coat, sleeves, a cuff over the wrist, a glove with a thumb.
-            public const float ShoulderCap = 0.074f, UpperSleeve = 0.068f, LowerSleeve = 0.062f, Cuff = 0.07f, CuffLength = 0.03f;
-            public static readonly Vector3 Glove = new(0.05f, 0.072f, 0.032f);
+            public const float SkirtBelowKnee = 0.07f, SkirtHem = 0.15f, SkirtDepth = 1.3f, ButtonSize = 0.012f;
+            // Arms: a shoulder cap where the sleeve meets the coat, sleeves, a cuff over the wrist.
+            public const float ShoulderCap = 0.08f, ElbowCap = 0.07f, UpperSleeve = 0.068f, LowerSleeve = 0.062f, Cuff = 0.07f, CuffLength = 0.03f;
+            // Bare hands: a palm, four fingers and a thumb.
+            public static readonly Vector3 Palm = new(0.05f, 0.05f, 0.022f);
+            public const float FingerWidth = 0.0125f, FingerSpacing = 0.0115f, FingerStart = 0.05f, FingerLength = 0.05f;
             // Legs: overalls under the coat, rubber boots to mid-calf.
             public const float Thigh = 0.08f, Shin = 0.064f, Boot = 0.072f, BootFoot = 0.058f, BootTopDown = 0.45f;
         }
+
+        /// <summary>Her height against the crew robot's, so she stands about nine tenths as tall as the priest.</summary>
+        const float MaraScale = 1.3f;
 
         static readonly Color MaraHair = new(0.2f, 0.1f, 0.06f), MaraLips = new(0.36f, 0.16f, 0.14f), MaraEyes = new(0.06f, 0.04f, 0.035f);
 
         /// <summary>
         /// Dresses the crew body as a skipper and takes the robot's own mesh away, so nothing of it shows: a lathed
         /// oilskin coat with a standing collar, buttons and a skirt to below the knee, shoulder caps, sleeves, cuffs and
-        /// gloves, overalls and rubber boots, a head with a face, ear flaps and a sou'wester, and a braid. Each piece
+        /// bare hands, overalls and rubber boots, a head with a face, ear flaps and a sou'wester, and a braid. Each piece
         /// is parented to the bone it covers so it moves with her walk. Sizes are fractions of her height
         /// (<see cref="SkipperCut"/>), measured in the model's bind pose.
         /// </summary>
@@ -434,6 +440,10 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 piece.transform.SetParent(bone, true);
             }
             Vector3 Ring(float above, float halfWidth) => new(above, halfWidth, halfWidth * SkipperCut.CoatDepth);
+            // Part-way from the coat's oval to the skirt's circle, so the two meet without a ledge.
+            Vector3 Flare(float above, float halfWidth, float t) => new(above, halfWidth, halfWidth * Mathf.Lerp(SkipperCut.CoatDepth, SkipperCut.SkirtDepth, t));
+            // The skirt is round, so a stride has room inside it instead of pushing a leg through the front.
+            Vector3 Round(float above, float halfWidth) => new(above, halfWidth, halfWidth * SkipperCut.SkirtDepth);
 
             // The coat: from the hips, out over the chest and shoulders, in to a standing collar round her neck.
             float torso = (neck.position.y - hips.position.y) / height;
@@ -449,7 +459,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             }
             float skirt = (hips.position.y - knee.position.y) / height + SkipperCut.SkirtBelowKnee;
             Lathe("Coat skirt", hips, hips.position + up * (0.03f * height), new[] {
-                Ring(0f, SkipperCut.CoatHip * 1.02f), Ring(-skirt * 0.5f, (SkipperCut.CoatHip + SkipperCut.SkirtHem) * 0.5f * 1.04f), Ring(-skirt, SkipperCut.SkirtHem),
+                Ring(0f, SkipperCut.CoatHip * 1.02f), Flare(-skirt * 0.4f, (SkipperCut.CoatHip + SkipperCut.SkirtHem) * 0.5f * 1.04f, 0.5f), Round(-skirt, SkipperCut.SkirtHem),
             });
 
             void Arm(HumanBodyBones upper, HumanBodyBones lower, HumanBodyBones hand) {
@@ -457,14 +467,23 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 if (shoulder == null || elbow == null || wrist == null) return;
                 Vector3 towardHand = (wrist.position - elbow.position).normalized;
                 Ball(upper + " shoulder", shoulder, shoulder.position, Vector3.one * SkipperCut.ShoulderCap, oilskin);
+                Ball(lower + " elbow", elbow, elbow.position, Vector3.one * SkipperCut.ElbowCap, oilskin);
                 Piece(upper + " sleeve", shoulder, shoulder.position, elbow.position, SkipperCut.UpperSleeve, oilskin);
                 Piece(lower + " sleeve", elbow, elbow.position, wrist.position - towardHand * (SkipperCut.CuffLength * height), SkipperCut.LowerSleeve, oilskin);
                 var cuff = Ball(lower + " cuff", elbow, wrist.position - towardHand * (SkipperCut.CuffLength * 0.5f * height),
                     new Vector3(SkipperCut.Cuff, SkipperCut.CuffLength * 0.5f, SkipperCut.Cuff), oilskin, 0f, PrimitiveType.Cylinder);
                 cuff.transform.rotation = Quaternion.FromToRotation(up, towardHand) * Quaternion.LookRotation(forward, up);
-                var glove = Ball(hand + " glove", wrist, wrist.position + towardHand * (SkipperCut.Glove.y * 0.45f * height), SkipperCut.Glove, rubber);
-                glove.transform.rotation = Quaternion.FromToRotation(up, towardHand) * Quaternion.LookRotation(right * (upper == HumanBodyBones.LeftUpperArm ? -1f : 1f), up);
-                Piece(hand + " thumb", wrist, wrist.position + forward * (0.012f * height), wrist.position + forward * (0.03f * height) + towardHand * (0.03f * height), 0.016f, rubber);
+                // A bare hand, so she has fingers to hold a tiller with: palm, four fingers (the middle two longest) and a thumb.
+                var palm = Ball(hand + " palm", wrist, wrist.position + towardHand * (SkipperCut.Palm.y * 0.5f * height), SkipperCut.Palm, skin);
+                palm.transform.rotation = Quaternion.FromToRotation(up, towardHand) * Quaternion.LookRotation(right * (upper == HumanBodyBones.LeftUpperArm ? -1f : 1f), up);
+                Vector3 across = Vector3.Cross(towardHand, forward).normalized;
+                for (int finger = 0; finger < 4; finger++) {
+                    float length = SkipperCut.FingerLength * (finger == 1 || finger == 2 ? 1f : 0.86f);
+                    Vector3 knuckle = wrist.position + towardHand * (SkipperCut.FingerStart * height) + across * ((finger - 1.5f) * SkipperCut.FingerSpacing * height);
+                    Piece($"{hand} finger {finger + 1}", wrist, knuckle, knuckle + towardHand * (length * height), SkipperCut.FingerWidth, skin);
+                }
+                Piece(hand + " thumb", wrist, wrist.position + forward * (0.012f * height) + towardHand * (0.018f * height),
+                    wrist.position + forward * (0.03f * height) + towardHand * (0.05f * height), 0.017f, skin);
             }
             Arm(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand);
             Arm(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand);
@@ -523,7 +542,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 for (int s = 0; s <= Segments; s++) {
                     float angle = Mathf.PI + s * Mathf.PI * 2f / Segments; // starts at the back
                     vertices.Add(new Vector3(Mathf.Sin(angle) * rings[r].y, rings[r].x, Mathf.Cos(angle) * rings[r].z) * scale);
-                    uvs.Add(new Vector2(s / (float)Segments, r / (float)(rings.Length - 1)));
+                    uvs.Add(new Vector2(s / (float)Segments, rings[r].x * 1.3f)); // about as many texels along the cloth as round it, so wear reads as mottling, not stripes
                 }
             int stride = Segments + 1;
             for (int r = 0; r < rings.Length - 1; r++)

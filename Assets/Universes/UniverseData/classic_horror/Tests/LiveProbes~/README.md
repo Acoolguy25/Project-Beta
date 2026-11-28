@@ -33,4 +33,11 @@ private fields by reflection to set up a moment, and never ships.
 | `srv_hold.cs` / `srv_release.cs` | server | Suspends Crane where he stands (he can hang mid-stride) and lets him go. |
 | `srv_lives.cs`, `srv_state.cs` | server | Tops lives up to 9; prints the phase, items, Crane and players. |
 
+| `cli_engine_bot.cs` | client | Opens the engine and pulls the cord as the needle crosses the green, using the panel's own state. |
+| `cli_hymn_bot.cs`, `cli_wrong.cs` | client | Sings the hymn the panel was sent (or a wrong note on purpose). |
+| `cli_lock_bot.cs` | client | Feels round the bell's dial with probes, then sets each ring at the warmest angle. |
+| `cli_hide.cs` | client | Climbs into the nearest hiding place through the controller. |
+| `srv_relics.cs`, `srv_fit.cs` | server | Lays tonight's relics on their graves; fits the boat's parts. |
+| `srv_place_seen.tpl`, `srv_place_unseen.tpl` | server | Places Crane so he does or does not see the investigator climb in, for the hiding trace. |
+
 `corner_chase.sh` replays the try-9 sight-break run end to end.

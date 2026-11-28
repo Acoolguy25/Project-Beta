@@ -415,3 +415,63 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 812ba1852450631489bb6c5f874c21cd, type: 3}
     radio: 0
     seconds: 1.3039229
+  - id: engine_tip
+    speaker: MARA
+    text: Every part is in. Now prime the engine and pull the cord as the needle crosses the green. Every miss carries across the water.
+    clip: {fileID: 8300000, guid: bd6949b7c5c3bfdcb97d6aa97c9278f6, type: 3}
+    radio: 1
+    seconds: 6.39356
+  - id: engine_miss
+    speaker: MARA
+    text: Too early! He heard that!
+    clip: {fileID: 8300000, guid: 92348623c8d03f2498762dcca42b935f, type: 3}
+    radio: 1
+    seconds: 1.842449
+  - id: engine_starts
+    speaker: MARA
+    text: She is running!
+    clip: {fileID: 8300000, guid: fc6d83589843d7f5088fac001b1b9583, type: 3}
+    radio: 1
+    seconds: 1.819229
+  - id: hymn_listen
+    speaker: THE DROWNED
+    text: Listen. Then sing it back to me.
+    clip: {fileID: 8300000, guid: 95aa0198ca346862681101d02c22ff5c, type: 3}
+    radio: 0
+    seconds: 5.580952
+  - id: hymn_wrong
+    speaker: THE DROWNED
+    text: No. Not like that. Again.
+    clip: {fileID: 8300000, guid: 64a11b9cffbbe3ddfbd1f205a0ccafc6, type: 3}
+    radio: 0
+    seconds: 5.6424265
+  - id: lock_tip
+    speaker: MARA
+    text: The bell is chained with three locks. Turn each dial until it hums hot, then set it. Slowly.
+    clip: {fileID: 8300000, guid: d24cfae79da7d42fca5f30712141ec84, type: 3}
+    radio: 1
+    seconds: 5.6389117
+  - id: lock_open
+    speaker: MARA
+    text: That is all three. The bell is loose. Take it, and he will come.
+    clip: {fileID: 8300000, guid: 9f888dd2eff2115068a09fd2f6909d79, type: 3}
+    radio: 1
+    seconds: 3.3053062
+  - id: crane_hears
+    speaker: FATHER CRANE
+    text: I hear you.
+    clip: {fileID: 8300000, guid: 260c7b48b4bf13ff69d7545a78626e80, type: 3}
+    radio: 0
+    seconds: 3.291315
+  - id: hush_1
+    speaker: ???
+    text: Hush.
+    clip: {fileID: 8300000, guid: 2a84a70bd2b9774a7be95c809774a5e5, type: 3}
+    radio: 0
+    seconds: 1.2424489
+  - id: hush_2
+    speaker: ???
+    text: Hush now. He is listening.
+    clip: {fileID: 8300000, guid: 84b270c361171b4219365a003fd884c8, type: 3}
+    radio: 0
+    seconds: 2.6071882

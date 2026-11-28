@@ -11,6 +11,9 @@ namespace Universes.UniverseData.classic_horror.Client {
         public SfxSound distantCry = new();
         public SfxSound lightsOut = new();
         public SfxSound chapelBell = new();
+        [Tooltip("The Hush: the choir falls silent and the wind drops to a whisper.")]
+        public SfxSound hush = new();
+        [SerializeField] Color hushColor = new(0.78f, 0.82f, 0.95f);
         [Tooltip("A door slam this close (metres) jolts the camera.")]
         [SerializeField, Min(0f)] float doorShakeRadius = 22f;
         [SerializeField, Range(0f, 1f)] float doorShake = 0.3f;
@@ -35,6 +38,11 @@ namespace Universes.UniverseData.classic_horror.Client {
                     break;
                 case CH_AmbientScare.ChapelBell:
                     GameSfx.PlayAt(chapelBell, scare.position);
+                    break;
+                case CH_AmbientScare.Hush:
+                    GameSfx.Play(hush);
+                    atmosphere?.Hush(scare.seconds);
+                    ScreenFx.ShowText("HUSH\nstand still", hushColor, Mathf.Min(3.5f, scare.seconds), 0.3f);
                     break;
             }
         }

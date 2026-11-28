@@ -50,6 +50,9 @@ namespace Universes.UniverseData.classic_horror.Client {
         public CanvasGroup hidingOverlay;
         public TMP_Text hidingLabel;
 
+        [Header("Minigames")]
+        public CH_PuzzlePanel puzzle;
+
         [Header("Boarding")]
         public HudPopup boardingPopup;
         public TMP_Text boardingLabel;
@@ -89,7 +92,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField] bool equipFlashlightOnSpawn = true;
         [SerializeField, Min(0.1f)] float footstepPaceMultiplier = 3f;
 
-        enum FocusKind { None, Item, Slot, Hide }
+        enum FocusKind { None, Item, Slot, Hide, Station }
 
         readonly List<Vector3> navigationObjectives = new();
         // Teammates in a hiding place, with the renderers this switched off (only those come back on), and everyone hidden now.
@@ -130,6 +133,8 @@ namespace Universes.UniverseData.classic_horror.Client {
             endingPopup.HideImmediate();
             interactionPrompt.HideImmediate();
             boardingPopup?.HideImmediate();
+            puzzle.Bind(SendPuzzle);
+            puzzle.SingerOfStation = SingerOfStation;
             if (hidingOverlay != null) hidingOverlay.alpha = 0f;
             radio.Clear();
             chapterLabel.text = CH_Story.Title;
@@ -178,6 +183,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             manager.UnregisterBroadcast<CH_AmbientScareBroadcast>(OnAmbientScare);
             manager.UnregisterBroadcast<CH_VoiceBroadcast>(OnVoice);
             manager.UnregisterBroadcast<CH_ProgressBroadcast>(OnProgress);
+            manager.UnregisterBroadcast<CH_PuzzleBroadcast>(OnPuzzle);
         }
 
         void Update() {
@@ -191,6 +197,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                 manager.RegisterBroadcast<CH_AmbientScareBroadcast>(OnAmbientScare);
                 manager.RegisterBroadcast<CH_VoiceBroadcast>(OnVoice);
                 manager.RegisterBroadcast<CH_ProgressBroadcast>(OnProgress);
+                manager.RegisterBroadcast<CH_PuzzleBroadcast>(OnPuzzle);
                 items.Bind(map, manager);
             }
             if (manager != null && manager.Started && Time.unscaledTime > nextSnapshot && !hasState) {
@@ -241,6 +248,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             if (!fresh && next.phase != previous && CH_Story.ActCard(next.phase) is string card)
                 ScreenFx.ShowText(card, actTitleColor, actTitleSeconds, actTitleSize);
             items.Apply(next, LocalCharacterId(), LocalCarried(), fresh);
+            UpdateStations(next);
             UpdateHiddenCharacters(next);
             UpdateBoarding(next);
             ShowEnding(next);
@@ -257,6 +265,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             voice.ResetNight();
             items.ResetNight();
             cutscenes.Stop();
+            puzzle.ForceClose();
             cutscenePhase = CH_Phase.Waiting;
             feedbackUntil = 0;
             endingShown = false;
@@ -271,6 +280,28 @@ namespace Universes.UniverseData.classic_horror.Client {
             promptKind = FocusKind.None;
             promptIndex = -1;
         }
+
+        void OnPuzzle(CH_PuzzleBroadcast message, Channel channel) {
+            if (!hasState || message.seed != state.seed) return;
+            puzzle.OnBroadcast(message);
+            nextFocus = 0;
+        }
+
+        /// <summary>The bell's chains are shown until its locks are picked.</summary>
+        void UpdateStations(CH_StateBroadcast next) {
+            if (map.bellChains == null || next.stations == null) return;
+            bool chained = !BellUnchained(next);
+            if (map.bellChains.activeSelf != chained) map.bellChains.SetActive(chained);
+        }
+
+        static bool BellUnchained(CH_StateBroadcast from) {
+            if (from.stations == null) return true;
+            foreach (CH_StationView station in from.stations) if (station.kind == CH_PuzzleKind.BellLock) return station.done;
+            return true;
+        }
+
+        int SingerOfStation(int stationId) =>
+            hasState && state.stations != null && stationId >= 0 && stationId < state.stations.Length ? state.stations[stationId].singer : -1;
 
         void OnVoice(CH_VoiceBroadcast line, Channel channel) {
             if (!hasState || line.seed != state.seed) return;
@@ -317,6 +348,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                 if (cutscenePhase != next.phase) {
                     cutscenePhase = next.phase;
                     journal.Close();
+                    puzzle.ForceClose();
                     placedItems.Clear();
                     items.CollectPlaced(placedItems);
                     apparitions.Cancel();
@@ -466,7 +498,7 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         string Summary(CH_StateBroadcast next) {
             int freed = 0, total = 0;
-            foreach (CH_SlotView slot in next.slots) if (slot.kind == CH_SlotKind.Grave && slot.filled) freed++;
+            if (next.stations != null) foreach (CH_StationView station in next.stations) if (station.kind == CH_PuzzleKind.Hymn && station.done) freed++;
             foreach (CH_ItemView item in next.items) if (item.kind is CH_ItemKind.Hymnal or CH_ItemKind.Photograph or CH_ItemKind.Candle) total++;
             bool musicBox = System.Array.Exists(next.slots, slot => slot.kind == CH_SlotKind.LilyMarker && slot.filled);
             string secret = musicBox ? "Lily's music box returned" : "Somewhere in Hollowmere, a music box is still waiting...";
@@ -481,7 +513,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             int singers = 0;
             for (int i = 0; i < CH_Story.SingerCount; i++) if ((record.singersMet & (1 << i)) != 0) singers++;
             string best = record.bestSeconds > 0 ? FormatTime(record.bestSeconds) : "--:--";
-            return $"Endings {endings}/{RealEndings.Length}   ·   Singers met {singers}/{CH_Story.SingerCount}   ·   Best escape {best}   ·   Nights {record.nightsPlayed}";
+            return $"Endings {endings}/{RealEndings.Length}   ·   Singers met {singers}/{CH_Story.SingerCount}   ·   Best escape {best}   ·   Minigames {record.puzzlesSolved}   ·   Nights {record.nightsPlayed}";
         }
 
         static readonly byte[] RealEndings = { CH_Story.EndingTrue, CH_Story.EndingEscaped, CH_Story.EndingDrowned };
@@ -494,7 +526,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             string prompt = null;
             Camera camera = Camera.main;
             bool canAct = camera != null && LocalPlayer.Character != null && !LocalPlayer.Character.IsDead
-                && !journal.IsOpen && !NightOver && !InCutscene && CH_Story.IsPlayable(state.phase);
+                && !journal.IsOpen && !NightOver && !InCutscene && CH_Story.IsPlayable(state.phase) && !puzzle.IsOpen;
             objectiveCompass?.SetDisplayAllowed(canAct && !LocalHidden);
             if (!canAct) {
                 SetFocusedGlow(null);
@@ -514,11 +546,17 @@ namespace Universes.UniverseData.classic_horror.Client {
             for (int i = 0; i < state.items.Length; i++) {
                 CH_ItemView item = state.items[i];
                 if (item.state != CH_ItemState.Resting || (pendingKind == FocusKind.Item && item.id == pendingId)) continue;
+                if (item.kind == CH_ItemKind.Bell && !BellUnchained(state)) continue; // chained to the altar
                 Consider(FocusKind.Item, i, item.position + Vector3.up * 0.3f);
             }
             if (carried.HasValue) {
                 for (int i = 0; i < state.slots.Length; i++)
                     if (state.slots[i].open) Consider(FocusKind.Slot, i, CH_Night.SlotReachPoint(state.slots[i].kind, state.slots[i].position));
+            }
+            if (!carried.HasValue && state.stations != null) {
+                for (int i = 0; i < state.stations.Length; i++)
+                    if (state.stations[i].available && puzzle.StationId != state.stations[i].id)
+                        Consider(FocusKind.Station, i, CH_Night.StationReachPoint(state.stations[i].kind, state.stations[i].position));
             }
             if (map.hidingSpots != null) {
                 for (int i = 0; i < map.hidingSpots.Length; i++) {
@@ -536,11 +574,15 @@ namespace Universes.UniverseData.classic_horror.Client {
                     focusPrompt = PromptFor(focusKind, focusIndex, carried);
                 }
                 prompt = focusPrompt;
-                focusId = focusKind switch { FocusKind.Item => state.items[focusIndex].id, FocusKind.Slot => state.slots[focusIndex].id, _ => focusIndex };
+                focusId = focusKind switch {
+                    FocusKind.Item => state.items[focusIndex].id, FocusKind.Slot => state.slots[focusIndex].id,
+                    FocusKind.Station => state.stations[focusIndex].id, _ => focusIndex
+                };
             }
             SetFocusedGlow(focusKind == FocusKind.Item ? items.GlowOf(focusId) : null);
             bool actionable = prompt != null;
             if (Time.unscaledTime < feedbackUntil && !string.IsNullOrEmpty(feedback)) { prompt = feedback; actionable = false; }
+            else if (puzzle.Feedback is string refusal && !string.IsNullOrEmpty(refusal)) { prompt = refusal; actionable = false; }
             interactionPrompt.SetVisible(prompt != null);
             if (prompt == null) return;
             if (interactionLabel.text != prompt) interactionLabel.text = prompt;
@@ -568,6 +610,8 @@ namespace Universes.UniverseData.classic_horror.Client {
                     return carried.HasValue ? $"Swap for {name}" : $"Take {name}";
                 case FocusKind.Slot:
                     return SlotPrompt(state.slots[index], carried ?? CH_ItemKind.Fuel);
+                case FocusKind.Station:
+                    return CH_Story.StationPrompt(state.stations[index].kind, state.stations[index].singer);
                 default:
                     return $"Hide in the {map.hidingSpots[index].label}";
             }
@@ -589,7 +633,9 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         void Interact() {
             if (!hasState) return;
+            if (puzzle.IsOpen) { puzzle.Action(); return; }
             UpdateFocus();
+            if (focusKind == FocusKind.Station && focusId >= 0 && !InCutscene) { puzzle.Request(focusId); return; }
             if (focusKind == FocusKind.Hide && LocalHidden) { Send(CH_Target.Hide, -1); return; }
             if (focusKind == FocusKind.None || focusId < 0) return;
             CH_Target target = focusKind switch { FocusKind.Item => CH_Target.Item, FocusKind.Slot => CH_Target.Slot, _ => CH_Target.Hide };
@@ -601,6 +647,7 @@ namespace Universes.UniverseData.classic_horror.Client {
 
         /// <summary>R: set down what you carry, at your feet.</summary>
         void PutDown() {
+            if (puzzle.IsOpen) { puzzle.Step(); return; }
             if (!hasState || LocalHidden || !CH_Story.IsPlayable(state.phase) || LocalCarried() == null) return;
             if (LocalPlayer.Character == null || LocalPlayer.Character.IsDead) return;
             Send(CH_Target.Drop, -1);
@@ -609,6 +656,12 @@ namespace Universes.UniverseData.classic_horror.Client {
         bool Send(CH_Target target, int id) {
             if (manager == null || !manager.Started || journal.IsOpen || InCutscene) return false;
             manager.Broadcast(new CH_InteractRequest { seed = state.seed, target = target, id = id });
+            return true;
+        }
+
+        bool SendPuzzle(CH_PuzzleAction action, int station, float value) {
+            if (manager == null || !manager.Started || !hasState || InCutscene) return false;
+            manager.Broadcast(new CH_PuzzleRequest { seed = state.seed, stationId = station, action = action, value = value });
             return true;
         }
 
@@ -640,6 +693,8 @@ namespace Universes.UniverseData.classic_horror.Client {
                 } else {
                     foreach (CH_ItemView item in state.items)
                         if (item.objective && item.state == CH_ItemState.Resting) navigationObjectives.Add(item.position);
+                    if (state.stations != null)
+                        foreach (CH_StationView station in state.stations) if (station.available) navigationObjectives.Add(station.position);
                 }
             }
             objectiveCompass?.SetObjectives(navigationObjectives);

@@ -16,7 +16,9 @@ namespace Universes.UniverseData.classic_horror.Tests {
                 bellSpot = At(80),
                 boatSlots = new[] { At(1), At(2), At(3), At(4) },
                 graves = Enumerable.Range(0, CH_Story.SingerCount).Select(i => At(100 + i)).ToArray(),
-                lilyMarker = At(5)
+                lilyMarker = At(5),
+                engine = At(6),
+                bellLock = At(7)
             };
         }
 
@@ -41,11 +43,46 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Deliver(night, Ben, Item(night, CH_ItemKind.Lantern), Slot(night, CH_SlotKind.BoatLantern));
         }
 
-        static void FreeSingers(CH_Night night) {
+        static readonly CH_PuzzleTuning Tuning = new();
+
+        /// <summary>The relics laid on their graves; the singers are not free until their hymns are sung.</summary>
+        static void LayRelics(CH_Night night) {
             foreach (CH_ItemKind relic in CH_Story.Relics) {
                 CH_Night.Item item = Item(night, relic);
                 Deliver(night, Ana, item, Slot(night, CH_SlotKind.Grave, item.Singer));
             }
+        }
+
+        static void FreeSingers(CH_Night night) {
+            LayRelics(night);
+            foreach (int singer in night.Singers) SingHymn(night, singer);
+        }
+
+        static CH_Night.Station Station(CH_Night night, CH_PuzzleKind kind, int singer = -1) =>
+            night.Stations.First(station => station.Kind == kind && (singer < 0 || station.Singer == singer));
+
+        /// <summary>Strikes the cord exactly when the needle crosses the middle of the green zone, three times.</summary>
+        static void StartEngine(CH_Night night) {
+            CH_Night.Station station = Station(night, CH_PuzzleKind.Engine);
+            var run = new CH_PuzzleRun(station, night.Seed, Tuning, 0f);
+            float now = 0f;
+            while (!station.Done) {
+                int index = station.Progress;
+                now += CH_PuzzleRun.ZoneCenter(night.Seed, index, Tuning.ZoneWidth(index)) / Tuning.SweepSpeed(index);
+                run.Strike(now);
+            }
+        }
+
+        static void SingHymn(CH_Night night, int singer) {
+            CH_Night.Station station = Station(night, CH_PuzzleKind.Hymn, singer);
+            var run = new CH_PuzzleRun(station, night.Seed, Tuning, 0f, night.HymnOrder(station));
+            foreach (int note in run.Sequence) run.Press(note);
+        }
+
+        static void PickLocks(CH_Night night) {
+            CH_Night.Station station = Station(night, CH_PuzzleKind.BellLock);
+            var run = new CH_PuzzleRun(station, night.Seed, Tuning, 0f);
+            foreach (float angle in CH_PuzzleRun.LockAngles(night.Seed, Tuning.lockRings, Tuning.lockMinimumSeparation)) run.Set(angle);
         }
 
         [Test] public void SameSeedChoosesTheSameThreeDifferentSingers() {
@@ -160,6 +197,8 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Deliver(night, Ana, Item(night, CH_ItemKind.Fuel), Slot(night, CH_SlotKind.BoatFuel));
             Assert.AreEqual(CH_Phase.Stranded, night.EarnedPhase());
             FixBoat2(night);
+            Assert.AreEqual(CH_Phase.Stranded, night.EarnedPhase(), "The parts are in, but the engine still has to be turned over.");
+            StartEngine(night);
             Assert.AreEqual(CH_Phase.Taking, night.EarnedPhase());
             night.Enter(CH_Phase.Taking);
             night.Enter(CH_Phase.Choir);
@@ -205,14 +244,19 @@ namespace Universes.UniverseData.classic_horror.Tests {
         [Test] public void FullNightWithTheMusicBoxEarnsTheTrueEnding() {
             CH_Night night = Started();
             FixBoat(night);
+            StartEngine(night);
             night.Enter(CH_Phase.Taking);
             night.Enter(CH_Phase.Choir);
             Deliver(night, Ben, Item(night, CH_ItemKind.MusicBox), Slot(night, CH_SlotKind.LilyMarker));
-            FreeSingers(night);
+            LayRelics(night);
+            Assert.AreEqual(CH_Phase.Choir, night.EarnedPhase(), "Relics laid is not enough: the hymns are still to be sung.");
+            foreach (int singer in night.Singers) SingHymn(night, singer);
             Assert.AreEqual(CH_Phase.ChapelOpens, night.EarnedPhase());
             night.Enter(CH_Phase.ChapelOpens);
             Assert.AreEqual(CH_ItemState.Resting, Item(night, CH_ItemKind.Bell).State, "The bell is on the altar when the doors open.");
             night.Enter(CH_Phase.Sermon);
+            Assert.IsFalse(night.TryPickUp(Ana, Item(night, CH_ItemKind.Bell).Id, out _, out _), "The bell is chained to the altar until its locks are picked.");
+            PickLocks(night);
             Deliver(night, Ana, Item(night, CH_ItemKind.Bell), Slot(night, CH_SlotKind.BoatBell));
             Assert.AreEqual(CH_Phase.Boarding, night.EarnedPhase());
             night.Enter(CH_Phase.Boarding);

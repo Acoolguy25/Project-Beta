@@ -66,3 +66,13 @@ whisper_behind	???	whisper	Behind you.
 whisper_dont	???	whisper	Don't turn around.
 whisper_sees	???	whisper	He sees you.
 whisper_join	???	whisper	Join us.
+engine_tip	MARA	mara_radio	Every part is in. Now prime the engine and pull the cord as the needle crosses the green. Every miss carries across the water.
+engine_miss	MARA	mara_radio	Too early! He heard that!
+engine_starts	MARA	mara_radio	She is running!
+hymn_listen	THE DROWNED	ghost_f	Listen. Then sing it back to me.
+hymn_wrong	THE DROWNED	ghost_f2	No. Not like that. Again.
+lock_tip	MARA	mara_radio	The bell is chained with three locks. Turn each dial until it hums hot, then set it. Slowly.
+lock_open	MARA	mara_radio	That is all three. The bell is loose. Take it, and he will come.
+crane_hears	FATHER CRANE	crane	I hear you.
+hush_1	???	whisper	Hush.
+hush_2	???	whisper	Hush now. He is listening.

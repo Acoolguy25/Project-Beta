@@ -23,6 +23,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const string BoatPrefab = Pack + "Props/Prop_Boat_A.prefab";
         const string JettyPrefab = Pack + "Buildings/Structures1/Struct_Docking_A.prefab";
         const string WardrobePrefab = Pack + "Props/Prop_Cabinet_A.prefab";
+        const string CupboardPrefab = Pack + "Props/Prop_Cabinet_B.prefab";
         const string AltarPrefab = Pack + "Props/Prop_SmallTable_A.prefab";
         const string MarkerStonePrefab = Pack + "Props/Prop_Gravestone_E.prefab";
         const string SetName = "Story Set";
@@ -32,6 +33,15 @@ namespace Universes.UniverseData.classic_horror.Editor {
         static readonly Vector3 PulpitHint = new(648.5f, 17.5f, 512.5f);
         static readonly Rect Graveyard = new(588f, 425f, 58f, 100f);
         // Extra wardrobes in the vestry end of the chapel, so Act III has somewhere to hide.
+        // Hiding places in the village, by prop: what the prompt calls each ("Hide in the cupboard").
+        static readonly (string prop, string label)[] HidingProps = { ("Prop_Cabinet_A", "wardrobe"), ("Prop_Cabinet_B", "cupboard") };
+        // Where you work a minigame you cannot hide, so cover is put close by: a hiding place within this many metres of each station.
+        const float CoverMinimumDistance = 7f, CoverMaximumDistance = 17f;
+        /// <summary>
+        /// Cover is kept this far from the jetty's boarding point, where the arrival and prologue cutscenes are filmed, so a
+        /// cabinet never stands in a shot. The locker beside the engine (which is on the ferry) is allowed closer.
+        /// </summary>
+        const float CutsceneStageClearance = 11f, EngineCoverStageClearance = 4f, EngineCoverMaximumDistance = 26f;
         static readonly (Vector3 position, float yaw)[] ChapelWardrobes = { (new(641.2f, 17.5f, 509.6f), 90f), (new(655.8f, 17.5f, 509.6f), -90f) };
         // Bedrooms where Lily's music box can turn up, off the routes the acts send you along.
         static readonly (Vector3 position, string label)[] MusicBoxHints = {
@@ -77,6 +87,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 map.lilyMarker = BuildLilyMarker(set, harbour);
                 map.graves = BuildGraves(set);
                 map.altar = BuildAltar(set);
+                BuildStations(set, map, harbour);
                 map.hidingSpots = BuildHidingSpots(set, map);
                 map.musicBoxSpots = BuildMusicBoxSpots(set);
                 map.cutscenes = BuildCutscenes(set, map, harbour);
@@ -455,6 +466,22 @@ namespace Universes.UniverseData.classic_horror.Editor {
             return top;
         }
 
+        // ---- The minigame stations ------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// The ferry's engine (an outboard on the stern, which is where its parts are fitted) and the chains and padlocks that
+        /// hold the bell to the altar. The hymn stations are the graves themselves.
+        /// </summary>
+        static void BuildStations(Transform set, CH_Map map, Harbour harbour) {
+            Transform group = Group(set, "Minigames");
+            map.engineStation = Mark(group, "Engine station", map.boatSlots[0].position, harbour.outward);
+            CH_Authoring.BuildEngineProp(harbour.ferry, harbour.stern.position, harbour.outward);
+            Vector3 nave = map.altar.forward;
+            map.bellLockStation = Mark(group, "Bell lock station", map.altar.position, nave);
+            GameObject chains = CH_Authoring.BuildBellChains(group, map.altar.position, nave);
+            map.bellChains = chains;
+        }
+
         // ---- Hiding places -------------------------------------------------------------------------------------------------
 
         /// <summary>
@@ -463,22 +490,30 @@ namespace Universes.UniverseData.classic_horror.Editor {
         /// </summary>
         static CH_HidingSpot[] BuildHidingSpots(Transform set, CH_Map map) {
             Transform group = Group(set, "Hiding places");
-            var wardrobes = new List<Transform>();
+            var furniture = new List<(Transform body, string label)>();
             foreach (Transform candidate in Object.FindObjectsByType<Transform>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)) {
-                if (!candidate.name.StartsWith("Prop_Cabinet") || PrefabUtility.GetNearestPrefabInstanceRoot(candidate) != candidate.gameObject) continue;
+                if (PrefabUtility.GetNearestPrefabInstanceRoot(candidate) != candidate.gameObject) continue;
+                string label = null;
+                foreach (var (prop, name) in HidingProps) if (candidate.name.StartsWith(prop)) label = name;
+                if (label == null) continue;
                 if (candidate.position.y < waterLevel - 0.2f || candidate.position.y > waterLevel + 4.5f) continue;
                 if (Vector3.Distance(candidate.position, map.arrival.position) > 260f) continue;
-                wardrobes.Add(candidate);
+                furniture.Add((candidate, label));
             }
             foreach (var (position, yaw) in ChapelWardrobes) {
                 GameObject added = Instance(WardrobePrefab, group, "Vestry wardrobe");
                 added.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
                 AddObstacle(added);
-                wardrobes.Add(added.transform);
+                furniture.Add((added.transform, "vestry cabinet"));
             }
+            // Cover beside each minigame: the engine at the jetty, the hymns in the graveyard, the locks in the chapel.
+                        PlaceCover(group, furniture, map.arrival.position, WardrobePrefab, "ferryman's locker", 1, map.boardingPoint.position, CutsceneStageClearance);
+            PlaceCover(group, furniture, map.engineStation.position, WardrobePrefab, "boatman's locker", 1, map.boardingPoint.position, EngineCoverStageClearance, EngineCoverMaximumDistance);
+            foreach (Transform grave in map.graves) PlaceCover(group, furniture, grave.position, CupboardPrefab, "gravedigger's cupboard", 1);
+            PlaceCover(group, furniture, map.bellLockStation.position, CupboardPrefab, "choir cupboard", 1);
             Physics.SyncTransforms();
             var spots = new List<CH_HidingSpot>();
-            foreach (Transform wardrobe in wardrobes) {
+            foreach (var (wardrobe, label) in furniture) {
                 Bounds body = WorldBounds(wardrobe.gameObject);
                 Vector3 centre = new(body.center.x, body.min.y, body.center.z);
                 Vector3 front = OpenSide(centre + Vector3.up * 1f, wardrobe.forward, wardrobe.right, out float clearance);
@@ -490,11 +525,51 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 spot.transform.SetPositionAndRotation(centre, Quaternion.LookRotation(front));
                 spot.inside = Mark(spot.transform, "Inside", centre + front * (Extent(body, front) - 0.15f), -front);
                 spot.exit = Mark(spot.transform, "Exit", exit, -front);
-                spot.label = "wardrobe";
+                spot.label = label;
                 spots.Add(spot);
             }
             if (spots.Count < 4) Debug.LogWarning($"Classic Horror: only {spots.Count} hiding places were usable.");
+            foreach (CH_PuzzleKind kind in System.Enum.GetValues(typeof(CH_PuzzleKind))) {
+                Transform station = kind == CH_PuzzleKind.Engine ? map.engineStation : kind == CH_PuzzleKind.BellLock ? map.bellLockStation : null;
+                Vector3[] places = station != null ? new[] { station.position } : System.Array.ConvertAll(map.graves, grave => grave.position);
+                foreach (Vector3 place in places) {
+                    float nearest = float.MaxValue;
+                    foreach (CH_HidingSpot spot in spots) nearest = Mathf.Min(nearest, Vector3.Distance(place, spot.Exit));
+                    if (nearest > CoverMaximumDistance + 10f) Debug.LogWarning($"Classic Horror: the nearest hiding place to the {kind} at {place} is {nearest:0} m away.");
+                }
+            }
             return spots.ToArray();
+        }
+
+        /// <summary>
+        /// Stands <paramref name="count"/> cabinets in the open ground between <see cref="CoverMinimumDistance"/> and
+        /// <see cref="CoverMaximumDistance"/> of <paramref name="around"/>, doors facing it, each on the NavMesh with room to
+        /// stand in front of it, so there is somewhere to run to from a station. Positions are tried in a fixed spiral, so a
+        /// rebuild puts them in the same places.
+        /// </summary>
+        static void PlaceCover(Transform group, List<(Transform body, string label)> furniture, Vector3 around, string prefab, string label, int count, Vector3? stage = null, float stageClearance = 0f, float maximumDistance = CoverMaximumDistance) {
+            int placed = 0;
+            for (int attempt = 0; attempt < 90 && placed < count; attempt++) {
+                float angle = attempt * 137.5f * Mathf.Deg2Rad;
+                float distance = Mathf.Lerp(CoverMinimumDistance, maximumDistance, (attempt % 7) / 6f);
+                Vector3 spot = around + new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)) * distance;
+                spot.y = GroundHeight(spot);
+                if (spot.y < waterLevel + 0.1f || !NavMesh.SamplePosition(spot, out NavMeshHit onMesh, 0.6f, NavMesh.AllAreas)) continue;
+                if (Mathf.Abs(onMesh.position.y - spot.y) > 0.4f) continue;
+                if (stage.HasValue && Vector3.ProjectOnPlane(spot - stage.Value, Vector3.up).magnitude < stageClearance) continue;
+                Quaternion facing = Quaternion.LookRotation(Vector3.ProjectOnPlane(around - spot, Vector3.up));
+                // Room for the body, with nothing standing in it.
+                if (Physics.CheckBox(spot + Vector3.up * 1f, new Vector3(0.7f, 0.95f, 0.6f), facing, mask, QueryTriggerInteraction.Ignore)) continue;
+                bool crowded = false;
+                foreach (var (other, _) in furniture) if (Vector3.Distance(other.position, spot) < 3.5f) { crowded = true; break; }
+                if (crowded) continue;
+                GameObject added = Instance(prefab, group, label);
+                added.transform.SetPositionAndRotation(spot, facing);
+                AddObstacle(added);
+                furniture.Add((added.transform, label));
+                placed++;
+            }
+            if (placed < count) Debug.LogWarning($"Classic Horror: only {placed} of {count} \"{label}\" hiding places fitted near {around}.");
         }
 
         // ---- The music box -------------------------------------------------------------------------------------------------
@@ -899,36 +974,60 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const float LakeMistHeight = 0.35f, LakeMistReach = 70f, LakeMistPuffSize = 4.5f, LakeMistAlpha = 0.05f;
         const int LakeMistPuffs = 700;
 
-        /// <summary>The ferry's wake: foam puffs per metre sailed, how long each lasts, and how wide it starts and spreads.</summary>
-        const float WakePerMetre = 3f, WakeSeconds = 6f, WakeStartSize = 0.9f, WakeSpreadSize = 3.2f, WakeAlpha = 0.4f;
+        /// <summary>
+        /// The ferry's wake: foam puffs per metre sailed, how long each lasts, how wide it starts and spreads, and how fast
+        /// the two arms of the V drift outward from the hull (metres per second).
+        /// </summary>
+        const float WakePerMetre = 4f, WakeSeconds = 9f, WakeStartSize = 1f, WakeSpreadSize = 3.6f, WakeAlpha = 0.5f, WakeArmSpeed = 0.9f;
 
         /// <summary>
         /// Foam that the ferry leaves behind when a scene sails it: emitted at the stern by distance travelled (so a moored
-        /// boat leaves none), in world space so the trail stays on the water, widening and fading as it falls behind.
+        /// boat leaves none), in world space so the trail stays on the water, widening and fading as it falls behind. A
+        /// centre trail and two arms drifting out to either side make a V that lasts several boat lengths.
         /// </summary>
         static ParticleSystem BuildFerryWake(Harbour harbour) {
             var wake = new GameObject("Ferry Wake");
             wake.transform.SetParent(harbour.ferry, false);
             Vector3 stern = harbour.stern.position;
             wake.transform.position = new Vector3(stern.x, lakeSurface + 0.04f, stern.z) + harbour.outward * 0.4f;
-            var particles = wake.AddComponent<ParticleSystem>();
+            ParticleSystem centre = ConfigureWake(wake, 0f, 0.2f);
+            foreach (float side in new[] { -1f, 1f }) {
+                var arm = new GameObject(side < 0f ? "Wake port arm" : "Wake starboard arm");
+                arm.transform.SetParent(wake.transform, false);
+                arm.transform.localPosition = new Vector3(side * 0.5f, 0f, 0f);
+                ConfigureWake(arm, side * WakeArmSpeed, 0.6f);
+            }
+            return centre;
+        }
+
+        /// <summary>One trail of foam on <paramref name="holder"/>, drifting sideways at <paramref name="drift"/> m/s (in the hull's own frame).</summary>
+        static ParticleSystem ConfigureWake(GameObject holder, float drift, float alphaScale) {
+            var particles = holder.AddComponent<ParticleSystem>();
             particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var main = particles.main;
             main.playOnAwake = false;
             main.loop = true;
             main.startLifetime = WakeSeconds;
             main.startSpeed = 0f;
-            main.startSize = WakeStartSize;
+            main.startSize = new ParticleSystem.MinMaxCurve(WakeStartSize * 0.7f, WakeStartSize * 1.3f);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-            main.startColor = new Color(1f, 1f, 1f, WakeAlpha);
-            main.maxParticles = 400;
+            main.startColor = new Color(1f, 1f, 1f, WakeAlpha * alphaScale * 2f);
+            main.maxParticles = 600;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             var emission = particles.emission;
             emission.rateOverTime = 0f;
             emission.rateOverDistance = WakePerMetre;
             var shape = particles.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(1.2f, 0f, 0.3f);
+            shape.scale = new Vector3(drift == 0f ? 1.2f : 0.4f, 0f, 0.3f);
+            if (drift != 0f) {
+                var spread = particles.velocityOverLifetime;
+                spread.enabled = true;
+                spread.space = ParticleSystemSimulationSpace.Local;
+                spread.x = new ParticleSystem.MinMaxCurve(drift * 0.7f, drift * 1.3f);
+                spread.y = 0f;
+                spread.z = 0f;
+            }
             var size = particles.sizeOverLifetime;
             size.enabled = true;
             size.size = new ParticleSystem.MinMaxCurve(WakeSpreadSize / WakeStartSize, AnimationCurve.EaseInOut(0f, 1f / (WakeSpreadSize / WakeStartSize), 1f, 1f));
@@ -938,7 +1037,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
                 new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.08f), new GradientAlphaKey(0.5f, 0.5f), new GradientAlphaKey(0f, 1f) });
             fade.color = gradient;
-            var renderer = wake.GetComponent<ParticleSystemRenderer>();
+            var renderer = holder.GetComponent<ParticleSystemRenderer>();
             renderer.renderMode = ParticleSystemRenderMode.HorizontalBillboard;
             renderer.sharedMaterial = CH_Authoring.FerryWakeMaterial();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

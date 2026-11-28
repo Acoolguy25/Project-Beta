@@ -9,7 +9,7 @@ namespace Universes.UniverseData.classic_horror {
     /// </summary>
     public sealed class CH_SaveData : ProgressData {
         public const string Universe = "classic_horror";
-        public override int LatestVersion => 2;
+        public override int LatestVersion => 3;
 
         /// <summary>Nights the player saw through to an ending (escaped or drowned).</summary>
         public int nightsPlayed;
@@ -29,6 +29,12 @@ namespace Universes.UniverseData.classic_horror {
         public int timesCaught;
         /// <summary>Quickest escape in seconds; 0 until the first one.</summary>
         public int fastestEscapeSeconds;
+        /// <summary>Minigames the player finished themselves: engine starts, hymns sung and locks picked (version 3).</summary>
+        public int puzzlesSolved;
+        /// <summary>Hymns sung to the end (a part of <see cref="puzzlesSolved"/>).</summary>
+        public int hymnsSung;
+        /// <summary>Wrong notes, missed strikes and wrong locks: each one he heard (version 3).</summary>
+        public int mistakesMade;
 
         public void RecordEnding(byte ending, int nightSeconds) {
             nightsPlayed++;
@@ -39,10 +45,18 @@ namespace Universes.UniverseData.classic_horror {
             if (nightSeconds > 0 && (fastestEscapeSeconds == 0 || nightSeconds < fastestEscapeSeconds)) fastestEscapeSeconds = nightSeconds;
         }
 
+        /// <summary>A minigame the player finished: <paramref name="kind"/> and their mistakes while they worked it.</summary>
+        public void RecordPuzzle(CH_PuzzleKind kind, int mistakes) {
+            puzzlesSolved++;
+            if (kind == CH_PuzzleKind.Hymn) hymnsSung++;
+            mistakesMade += Math.Max(0, mistakes);
+        }
+
         /// <summary>The record as the ending card shows it.</summary>
         public CH_ProgressBroadcast ToBroadcast() => new() {
             nightsPlayed = nightsPlayed, escapes = escapes, trueEndings = trueEndings,
-            endingsSeen = endingsSeen, singersMet = singersMet, bestSeconds = fastestEscapeSeconds
+            endingsSeen = endingsSeen, singersMet = singersMet, bestSeconds = fastestEscapeSeconds,
+            puzzlesSolved = puzzlesSolved, hymnsSung = hymnsSung
         };
 
         /// <summary>Version 1 was the investigation game: its closed cases count as escapes, its fastest case as the record.</summary>
@@ -64,6 +78,9 @@ namespace Universes.UniverseData.classic_horror {
             chasesEscaped = Math.Max(0, chasesEscaped);
             timesCaught = Math.Max(0, timesCaught);
             fastestEscapeSeconds = Math.Max(0, fastestEscapeSeconds);
+            puzzlesSolved = Math.Max(0, puzzlesSolved);
+            hymnsSung = Math.Clamp(hymnsSung, 0, puzzlesSolved);
+            mistakesMade = Math.Max(0, mistakesMade);
         }
     }
 }

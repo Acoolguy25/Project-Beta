@@ -1,5 +1,6 @@
 using RyanAssets.GameFeel;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace Universes.UniverseData.classic_horror.Client {
     /// <summary>
@@ -23,6 +24,9 @@ namespace Universes.UniverseData.classic_horror.Client {
         [Tooltip("How quickly lamps come back after a lights-out scare.")]
         [SerializeField, Min(0.05f)] float lightsReturnSeconds = 0.6f;
 
+        [Tooltip("Lamp brightness during the Hush, as a share of normal.")]
+        [SerializeField, Range(0.05f, 1f)] float hushLampLevel = 0.3f;
+
         [Header("Flashlight dust")]
         [Tooltip("Dust motes kept around the camera; lit particles, so they only show inside a light.")]
         public ParticleSystem dustMotesPrefab;
@@ -37,7 +41,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         ParticleSystem dustMotes;
         Color[] glowColors = new Color[0];
         MaterialPropertyBlock glowBlock;
-        float threat, lightsOutUntil = -100f;
+        float threat, lightsOutUntil = -100f, hushUntil = -100f;
 
         public float LightsOutAmount { get; private set; }
         /// <summary>The lamps' resting intensity; the map lighting menu writes it into the scene so edit mode matches play.</summary>
@@ -49,6 +53,11 @@ namespace Universes.UniverseData.classic_horror.Client {
         /// <summary>Every lamp goes out for <paramref name="seconds"/> and then stutters back.</summary>
         public void LightsOut(float seconds) {
             lightsOutUntil = Time.time + Mathf.Max(0.1f, seconds);
+        }
+
+        /// <summary>The Hush: the lamps sink to a third and breathe slowly for <paramref name="seconds"/>.</summary>
+        public void Hush(float seconds) {
+            hushUntil = Time.time + Mathf.Max(0.5f, seconds);
         }
 
         void Awake() {
@@ -68,6 +77,20 @@ namespace Universes.UniverseData.classic_horror.Client {
             UpdateLightsOut();
             UpdateLamps();
             FollowCamera();
+            DitherCamera();
+        }
+
+        Camera ditheredCamera;
+
+        /// <summary>
+        /// Turns on the camera's output dithering. The night is very dark and the mist very faint, so without it the
+        /// 8-bit framebuffer shows the mist and the water as hard-edged bands.
+        /// </summary>
+        void DitherCamera() {
+            Camera main = Camera.main;
+            if (main == null || main == ditheredCamera) return;
+            ditheredCamera = main;
+            main.GetUniversalAdditionalCameraData().dithering = true;
         }
 
         void UpdateLightsOut() {
@@ -79,6 +102,13 @@ namespace Universes.UniverseData.classic_horror.Client {
             float recovery = Mathf.Clamp01((Time.time - lightsOutUntil) / lightsReturnSeconds);
             bool dipped = Mathf.PerlinNoise(Time.time * StutterSpeed, 0.5f) > 0.5f;
             LightsOutAmount = (1f - recovery) * (dipped ? 1f : StutterLowAmount);
+        }
+
+        /// <summary>1 outside a Hush; during one, a slow breathing dim around <see cref="hushLampLevel"/>.</summary>
+        float HushDimming(float seed) {
+            if (Time.time >= hushUntil) return 1f;
+            float breath = 0.5f + 0.5f * Mathf.Sin(Time.time * 1.6f + seed);
+            return Mathf.Lerp(hushLampLevel * 0.6f, hushLampLevel, breath);
         }
 
         /// <summary>Remembers each lamp glass's authored emission, so the flicker can scale it.</summary>
@@ -99,7 +129,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                 Light lamp = map.practicalLights[i];
                 if (lamp == null) continue;
                 float flicker = lampFlickerFloor + Mathf.PerlinNoise(Time.time * lampFlickerSpeed, lamp.transform.position.x) * lampFlickerRange;
-                lamp.intensity = Mathf.Lerp(lampIntensity, flicker, threat) * (1f - LightsOutAmount);
+                lamp.intensity = Mathf.Lerp(lampIntensity, flicker, threat) * (1f - LightsOutAmount) * HushDimming(lamp.transform.position.x);
                 SetGlow(i, lampIntensity > 0f ? lamp.intensity / lampIntensity : 0f);
             }
         }

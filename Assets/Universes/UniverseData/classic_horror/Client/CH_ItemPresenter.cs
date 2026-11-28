@@ -104,7 +104,30 @@ namespace Universes.UniverseData.classic_horror.Client {
             localCharacterId = localId;
             foreach (CH_ItemView item in state.items) ApplyItem(item, fresh);
             foreach (CH_SlotView slot in state.slots) ApplySlot(slot, state, localCarried);
+            if (state.stations != null) foreach (CH_StationView station in state.stations) ApplyStation(station);
         }
+
+        /// <summary>A station that can be worked right now is marked like a place an item goes; an unfinished hymn's grave stays dark.</summary>
+        void ApplyStation(CH_StationView station) {
+            int key = StationMarkerKey + station.id;
+            bool show = station.available;
+            if (show && !markers.ContainsKey(key) && map.slotMarkerPrefab != null) {
+                GameObject marker = Instantiate(map.slotMarkerPrefab, map.transform);
+                marker.name = $"Marker: {station.title}";
+                Vector3 at = station.kind == CH_PuzzleKind.Hymn ? GroundBelow(station.position + Vector3.up * 0.5f) : station.position;
+                marker.transform.SetPositionAndRotation(at, Quaternion.Euler(0f, station.yaw, 0f));
+                markers.Add(key, marker);
+            }
+            if (markers.TryGetValue(key, out GameObject existing) && existing.activeSelf != show) existing.SetActive(show);
+            // The grave's candles are lit when the singer is free, not when their relic is laid.
+            if (station.kind == CH_PuzzleKind.Hymn && station.done && !candles.ContainsKey(station.id) && map.graveCandlesPrefab != null) {
+                GameObject flames = Instantiate(map.graveCandlesPrefab, map.transform);
+                flames.transform.SetPositionAndRotation(GroundBelow(station.position + Vector3.up * 0.5f), Quaternion.Euler(0f, station.yaw, 0f));
+                candles.Add(station.id, flames);
+            }
+        }
+
+        const int StationMarkerKey = 10000;
 
         void ApplyItem(CH_ItemView item, bool fresh) {
             if (!views.TryGetValue(item.id, out View view)) {
@@ -191,11 +214,6 @@ namespace Universes.UniverseData.classic_horror.Client {
                 markers.Add(slot.id, marker);
             }
             if (markers.TryGetValue(slot.id, out GameObject existing) && existing.activeSelf != show) existing.SetActive(show);
-            if (slot.kind == CH_SlotKind.Grave && slot.filled && !candles.ContainsKey(slot.id) && map.graveCandlesPrefab != null) {
-                GameObject lit = Instantiate(map.graveCandlesPrefab, map.transform);
-                lit.transform.SetPositionAndRotation(GroundBelow(slot.position + Vector3.up * 0.5f), Quaternion.Euler(0f, slot.yaw, 0f));
-                candles.Add(slot.id, lit);
-            }
         }
 
         void HoldInView(View view, Camera camera) {

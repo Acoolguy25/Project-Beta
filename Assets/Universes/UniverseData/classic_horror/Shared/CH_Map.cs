@@ -26,6 +26,12 @@ namespace Universes.UniverseData.classic_horror {
         public Transform lilyMarker;
         [Tooltip("The chapel altar, where the bell waits in Act III.")]
         public Transform altar;
+        [Tooltip("The ferry's engine, at the boat's stern: the first minigame (turn it over once its parts are fitted).")]
+        public Transform engineStation;
+        [Tooltip("The three locks that chain the bell to the altar: the last minigame.")]
+        public Transform bellLockStation;
+        [Tooltip("The chain and padlocks around the bell, shown until the locks are picked.")]
+        public GameObject bellChains;
         [Tooltip("Places the music box can be hidden (it picks one each night).")]
         public Transform[] musicBoxSpots = new Transform[0];
         public CH_HidingSpot[] hidingSpots = new CH_HidingSpot[0];
@@ -60,6 +66,7 @@ namespace Universes.UniverseData.classic_horror {
             && searchLocations != null && searchLocations.Length >= 7
             && boatSlots != null && boatSlots.Length == 4 && System.Array.TrueForAll(boatSlots, slot => slot != null)
             && graves != null && graves.Length == CH_Story.SingerCount && System.Array.TrueForAll(graves, grave => grave != null)
-            && lilyMarker != null && altar != null && boardingPoint != null;
+            && lilyMarker != null && altar != null && boardingPoint != null
+            && engineStation != null && bellLockStation != null;
     }
 }
