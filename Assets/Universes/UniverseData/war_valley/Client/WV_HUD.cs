@@ -4,6 +4,7 @@ using System.Text;
 using RyanAssets.Characters.Shared;
 using RyanAssets.Client.ClientUI.Command;
 using RyanAssets.Core;
+using RyanAssets.Retention.Client;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -78,6 +79,22 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("Wave banner, approach arrows, and the flag alarm.")]
         [SerializeField] WV_WaveDrama waveDrama;
 
+        [Header("Campaign")]
+        [Tooltip("The hand of doctrine cards dealt between waves.")]
+        [SerializeField] WV_DoctrineOfferPanel doctrinePanel;
+        [Tooltip("The round's tier, the commander's stars and next goal, and their doctrines.")]
+        [SerializeField] WV_CampaignCard campaignCard;
+        [Tooltip("The shared retention HUD: level chip, daily challenges, toasts and the round summary.")]
+        [SerializeField] RetentionHud retentionHud;
+        [Tooltip("The retention HUD's round summary card, which shares the left edge with the campaign card.")]
+        [SerializeField] RetentionSummaryCard retentionSummary;
+        [Tooltip("War Valley's tier choice, drawn over the shared vote.")]
+        [SerializeField] WV_TierChoicePanel tierChoice;
+        [Tooltip("Stars and tier unlocks, revealed beside the round summary.")]
+        [SerializeField] WV_CampaignReveal campaignReveal;
+        [Tooltip("Gap kept between the campaign card and an approach arrow pinned to the left edge.")]
+        [SerializeField, Min(0f)] float arrowCardClearance = 24f;
+
         readonly StringBuilder builder = new();
         readonly Dictionary<string, int> troopCounts = new();
         readonly Dictionary<WV_UnitKind, int> unitCounts = new();
@@ -85,6 +102,10 @@ namespace Universes.UniverseData.war_valley.Client {
         RectTransform structureRect;
         RectTransform optionRect;
         float optionRestingY;
+        bool summaryWasVisible;
+
+        /// <summary>The round summary card closed (Continue, its close button, or it timed out).</summary>
+        public event Action SummaryClosed;
 
         public WV_CommandMenu CommandMenu => commandMenu;
         public WV_RangeIndicator TroopRangeIndicator => troopRangeIndicator;
@@ -93,6 +114,11 @@ namespace Universes.UniverseData.war_valley.Client {
         public FundsTransferPanel DonatePanel => donatePanel;
         public WV_HealthBarLayer HealthBars => healthBars;
         public WV_WaveDrama WaveDrama => waveDrama;
+        public WV_DoctrineOfferPanel DoctrinePanel => doctrinePanel;
+        public WV_CampaignCard CampaignCard => campaignCard;
+        public RetentionHud RetentionHud => retentionHud;
+        public WV_TierChoicePanel TierChoice => tierChoice;
+        public WV_CampaignReveal CampaignReveal => campaignReveal;
 
         /// <summary>The funds card's Donate button was clicked.</summary>
         public event Action DonateClicked;
@@ -114,6 +140,11 @@ namespace Universes.UniverseData.war_valley.Client {
             SetSelectionBoxVisible(false);
             if (selectionPanel != null)
                 selectionPanel.SetActive(false);
+            // The campaign card waits for the server's first status rather than showing placeholders.
+            if (campaignCard != null)
+                campaignCard.gameObject.SetActive(false);
+            if (doctrinePanel != null)
+                doctrinePanel.Hide();
             if (structurePanel != null)
                 structurePanel.Hide();
             if (optionMenu != null)
@@ -164,6 +195,28 @@ namespace Universes.UniverseData.war_valley.Client {
         /// overlaps it.
         /// </summary>
         void LateUpdate() {
+            // The round's tier vote fills the middle of the screen: the retention HUD (its summary card
+            // and toasts wait) and the campaign card step out of its way until it closes.
+            bool voting = RyanAssets.Shared.Global.SharedGlobalEvents.isVoting;
+            if (retentionHud != null)
+                retentionHud.SetHidden(voting);
+            // The campaign card shares the left edge with the challenges panel and the round summary.
+            bool summaryVisible = retentionSummary != null && retentionSummary.Visible;
+            if (campaignCard != null)
+                campaignCard.SetCovered(voting || (retentionHud != null && retentionHud.ChallengesOpen) || summaryVisible);
+            if (summaryWasVisible && !summaryVisible)
+                SummaryClosed?.Invoke();
+            summaryWasVisible = summaryVisible;
+            // An approach arrow pinned to the left edge is drawn beside the campaign card, not through it.
+            if (waveDrama != null) {
+                float clearance = 0f;
+                if (campaignCard != null && campaignCard.Showing) {
+                    var card = (RectTransform)campaignCard.transform;
+                    clearance = card.anchoredPosition.x + card.rect.width * (1f - card.pivot.x) + arrowCardClearance;
+                }
+                waveDrama.LeftClearance = clearance;
+            }
+
             if (optionRect == null || !optionMenu.IsOpen)
                 return;
 
@@ -318,6 +371,10 @@ namespace Universes.UniverseData.war_valley.Client {
             foreach (KeyValuePair<string, int> entry in troopCounts)
                 builder.Append("\n").Append(entry.Value).Append(" × ").Append(entry.Key);
             builder.Append("</color>");
+            // The army's health as a figure, so a doctrine that toughens it (Hardened Infantry) shows here.
+            if (maxHealth > 0)
+                builder.Append("\n<size=85%><color=#7FE08A>").Append(health.ToString("N0")).Append(" / ")
+                    .Append(maxHealth.ToString("N0")).Append(" health</color></size>");
             selectionLabel.text = builder.ToString();
             if (selectionHealthFill != null)
                 selectionHealthFill.fillAmount = maxHealth > 0 ? Mathf.Clamp01(health / (float)maxHealth) : 1f;

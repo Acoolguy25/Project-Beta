@@ -74,6 +74,10 @@ namespace Universes.UniverseData.war_valley.Client {
         [Tooltip("Ground pings, the acknowledgement blip, and selection ring pulses for orders.")]
         [SerializeField] WV_OrderFeedbackTuning orderFeedback = new();
 
+        [Header("Camera")]
+        [Tooltip("How far the commander's camera may pull back over the valley.")]
+        [SerializeField] WV_CommanderCameraTuning commanderCamera = new();
+
         readonly List<int> orderScratch = new();
         readonly List<StructureComponent> structureScratch = new();
         readonly List<RaycastResult> uiHits = new();
@@ -84,10 +88,12 @@ namespace Universes.UniverseData.war_valley.Client {
         WV_StructureInspector inspector;
         WV_ResearchPresenter research;
         WV_DonationsPresenter donations;
+        WV_DoctrinePresenter doctrines;
         WV_BaseAlerts alerts;
         WV_BattleFeedback battle;
         WV_OrderFeedback orders;
         readonly WV_CameraPostProcessing postProcessing = new();
+        WV_CommanderCamera cameraRange;
         PointerEventData uiPointer;
         EventSystem uiPointerSystem;
         float nextSummaryTime;
@@ -137,9 +143,11 @@ namespace Universes.UniverseData.war_valley.Client {
             inspector = new WV_StructureInspector(hud, () => LocalClientId, selection.CountOwnTroops, ArmRallyPoint);
             research = new WV_ResearchPresenter(hud, () => LocalClientId, inspector.MarkDirty);
             donations = new WV_DonationsPresenter(hud, () => LocalClientId);
+            doctrines = new WV_DoctrinePresenter(hud);
             alerts = new WV_BaseAlerts(hud.SetHint);
             battle = new WV_BattleFeedback(battleFeedback, selection);
             orders = new WV_OrderFeedback(orderFeedback, selection);
+            cameraRange = new WV_CommanderCamera(commanderCamera);
             BindBattlefieldHud();
             hud.SellClicked += RequestSell;
             hud.ResearchClicked += ToggleResearch;
@@ -238,6 +246,7 @@ namespace Universes.UniverseData.war_valley.Client {
             selection?.Disable();
             battle?.Disable();
             postProcessing.Release();
+            cameraRange?.Release();
             inspector?.Clear();
 
             if (StructureMenu.AvailabilityProvider == GetStructureAvailability)
@@ -252,6 +261,12 @@ namespace Universes.UniverseData.war_valley.Client {
                 InstanceFinder.ClientManager.UnregisterBroadcast<WV_Notice>(HandleNotice);
                 InstanceFinder.ClientManager.UnregisterBroadcast<WV_WaveStarted>(HandleWaveStarted);
                 InstanceFinder.ClientManager.UnregisterBroadcast<WV_RoundEnded>(HandleRoundEnded);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_DoctrineOffer>(doctrines.HandleOffer);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_DoctrineState>(doctrines.HandleState);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_CampaignStatus>(doctrines.HandleCampaign);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_TierBallot>(doctrines.HandleBallot);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_DoctrineEffect>(doctrines.HandleEffect);
+                InstanceFinder.ClientManager.UnregisterBroadcast<WV_RoundBriefing>(HandleBriefing);
             }
             broadcastsRegistered = false;
         }
@@ -260,6 +275,7 @@ namespace Universes.UniverseData.war_valley.Client {
             selection?.ReleaseRoster();
             UnbindCommandMenu();
             donations?.Dispose();
+            doctrines?.Dispose();
             GameHelp.Changed -= HandleGameHelpChanged;
             if (hud != null) {
                 hud.SellClicked -= RequestSell;
@@ -279,6 +295,12 @@ namespace Universes.UniverseData.war_valley.Client {
             InstanceFinder.ClientManager.RegisterBroadcast<WV_Notice>(HandleNotice);
             InstanceFinder.ClientManager.RegisterBroadcast<WV_WaveStarted>(HandleWaveStarted);
             InstanceFinder.ClientManager.RegisterBroadcast<WV_RoundEnded>(HandleRoundEnded);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_DoctrineOffer>(doctrines.HandleOffer);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_DoctrineState>(doctrines.HandleState);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_CampaignStatus>(doctrines.HandleCampaign);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_TierBallot>(doctrines.HandleBallot);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_DoctrineEffect>(doctrines.HandleEffect);
+            InstanceFinder.ClientManager.RegisterBroadcast<WV_RoundBriefing>(HandleBriefing);
         }
 
         /// <summary>
@@ -307,13 +329,23 @@ namespace Universes.UniverseData.war_valley.Client {
         void HandleNotice(WV_Notice notice, Channel channel) => hud.SetHint(notice.message);
 
         void HandleWaveStarted(WV_WaveStarted wave, Channel channel) {
+            alerts.Muted = false;
             if (hud.WaveDrama != null)
                 hud.WaveDrama.ShowWave(wave);
         }
 
         void HandleRoundEnded(WV_RoundEnded result, Channel channel) {
+            // A base knocked about under the result banner is not news.
+            alerts.Muted = true;
             if (hud.WaveDrama != null)
                 hud.WaveDrama.ShowRoundEnd(result);
+            if (hud.CampaignReveal != null)
+                hud.CampaignReveal.SetResult(result);
+        }
+
+        void HandleBriefing(WV_RoundBriefing briefing, Channel channel) {
+            alerts.Muted = false;
+            doctrines.HandleBriefing(briefing, channel);
         }
 
         void MarkEconomyDirty() => economyDirty = true;
@@ -352,6 +384,9 @@ namespace Universes.UniverseData.war_valley.Client {
                 research.RefreshSummary();
                 RefreshForces();
                 donations.RefreshIfOpen();
+                // The selection's health figure follows fights and doctrines, not only selection changes.
+                if (SelectionCount > 0)
+                    hud.RefreshSelection(selection.Units, selection.Troops);
             }
 
             if (sellConfirmUntil > 0f && Time.unscaledTime >= sellConfirmUntil)
@@ -368,6 +403,7 @@ namespace Universes.UniverseData.war_valley.Client {
             HandlePointer();
             alerts.Tick(LocalClientId);
             postProcessing.Tick();
+            cameraRange.Tick();
         }
 
         // --- Build menu gates -------------------------------------------------

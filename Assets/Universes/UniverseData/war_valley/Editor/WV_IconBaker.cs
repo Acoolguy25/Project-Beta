@@ -104,9 +104,18 @@ namespace Universes.UniverseData.war_valley.Editor {
                 texture.ReadPixels(new Rect(0f, 0f, IconSize, IconSize), 0, 0);
                 texture.Apply();
 
-                File.WriteAllBytes(path, texture.EncodeToPNG());
+                bool blank = IsSingleColour(texture);
+                if (blank) {
+                    // A headless Editor (-nographics) "renders" every pixel the same grey. Writing that
+                    // would replace a good icon with a flat tile, so the previous icon is kept instead.
+                    Debug.LogWarning($"War Valley: the {iconName} icon rendered blank (no graphics device?); kept the existing icon.");
+                } else {
+                    File.WriteAllBytes(path, texture.EncodeToPNG());
+                }
                 Object.DestroyImmediate(texture);
                 camera.targetTexture = null;
+                if (blank)
+                    return AssetDatabase.LoadAssetAtPath<Sprite>(path);
             } finally {
                 RenderTexture.active = previousActive;
                 if (target != null) {
@@ -143,6 +152,18 @@ namespace Universes.UniverseData.war_valley.Editor {
             }
             // The icon is square, so the wider axis is the one that decides the fit.
             return Mathf.Max(maxY, maxX) * 1.06f;
+        }
+
+        /// <summary>True when every pixel of <paramref name="texture"/> is the same colour.</summary>
+        static bool IsSingleColour(Texture2D texture) {
+            Color32[] pixels = texture.GetPixels32();
+            Color32 first = pixels[0];
+            for (int i = 1; i < pixels.Length; i++) {
+                Color32 pixel = pixels[i];
+                if (pixel.r != first.r || pixel.g != first.g || pixel.b != first.b || pixel.a != first.a)
+                    return false;
+            }
+            return true;
         }
 
         static void ApplySpriteImportSettings(string path) {

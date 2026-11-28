@@ -59,7 +59,8 @@ namespace Universes.UniverseData.war_valley.Shared {
                 if (building.IsPaying && building.owned.IsOwnedBy(clientId))
                     total += building.IncomePerMinute;
             }
-            return total;
+            // Doctrines (Deep Veins) raise what a commander's sites pay; the rate shown follows.
+            return (int)WV_CommanderModifiers.Scale(total, WV_CommanderBonuses.For(clientId).IncomeMultiplier);
         }
 
 #if UNITY_SERVER
@@ -79,7 +80,9 @@ namespace Universes.UniverseData.war_valley.Shared {
                 return;
 
             nextPayoutTime = now + WV_Rules.IncomeTickSeconds;
-            WV_Economy.Instance?.Credit(owned.OwnerClientId, incomePerTick);
+            int owner = owned.OwnerClientId;
+            WV_Economy.Instance?.Credit(owner,
+                WV_CommanderModifiers.Scale(incomePerTick, WV_CommanderBonuses.For(owner).IncomeMultiplier));
         }
 #endif
     }

@@ -139,6 +139,8 @@ namespace Universes.UniverseData.war_valley.Shared {
         public int enemyCount;
         public bool isSurge;
         public bool hasBoss;
+        /// <summary>A <see cref="WV_DifficultyTier"/> value: the round's tier. Appended in the retention pass.</summary>
+        public byte difficulty;
     }
 
     /// <summary>Sent to every commander when a round ends, so the client can play the result.</summary>
@@ -149,5 +151,28 @@ namespace Universes.UniverseData.war_valley.Shared {
         public int waveReached;
         public int wavesHeld;
         public int enemiesDefeated;
+        /// <summary>A <see cref="WV_DifficultyTier"/> value: the round's tier. Appended in the retention pass.</summary>
+        public byte difficulty;
+        /// <summary>Stars the round earned (0 for a loss or an Endless round).</summary>
+        public byte stars;
+        /// <summary>True for an Endless round, which ends only when the flag falls.</summary>
+        public bool endless;
+        // ---- appended in retention try 2: sent to each commander on their own, so it carries their result.
+        /// <summary>True when this commander's win does not count: they were present for too few waves.</summary>
+        public bool lateJoin;
+        /// <summary>True when this round was this commander's first win on its tier.</summary>
+        public bool firstWin;
+        /// <summary>One bit per <see cref="WV_DifficultyTier"/> this round unlocked for this commander.</summary>
+        public byte unlockedTiers;
+        /// <summary>The share of the flag's health (in percent) it must keep for 3 stars.</summary>
+        public byte threeStarPercent;
+        /// <summary>The share of the flag's health (in percent) the round left it with at its lowest.</summary>
+        public byte lowestFlagPercent;
+        /// <summary>Each tier in <see cref="unlockedTiers"/>, lowest first: its display name, for the unlock tile.</summary>
+        public string[] unlockedNames;
+        /// <summary>Parallel to <see cref="unlockedNames"/>: what the tier changes, in one line.</summary>
+        public string[] unlockedDescriptions;
+        /// <summary>The share of the flag's health (in percent) it must keep for 2 stars.</summary>
+        public byte twoStarPercent;
     }
 }

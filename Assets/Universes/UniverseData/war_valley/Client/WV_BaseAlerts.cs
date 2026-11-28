@@ -57,6 +57,12 @@ namespace Universes.UniverseData.war_valley.Client {
             trackedClientId = WV_Owned.NoOwner;
         }
 
+        /// <summary>
+        /// True between a round's end and the next round's first wave: a base being knocked about under
+        /// the result banner is not news, so no alert is shown (the base is still tracked).
+        /// </summary>
+        public bool Muted { get; set; }
+
         public void Tick(int localClientId) {
             float now = Time.unscaledTime;
             if (now < nextSweep)
@@ -105,7 +111,7 @@ namespace Universes.UniverseData.war_valley.Client {
                 lost.Add(pair.Key);
                 Tracked entry = pair.Value;
                 bool died = entry.Entity == null || entry.Entity.IsDead || entry.LastHealth <= 0;
-                if (announce && died && entry.WasOperational)
+                if (announce && died && entry.WasOperational && !Muted)
                     show($"<color={LossColor}>{entry.Name} destroyed!</color>");
             }
             foreach (WV_Owned owned in lost)
@@ -149,7 +155,7 @@ namespace Universes.UniverseData.war_valley.Client {
             entry.LastHealth = health;
             // Units are in the fight on purpose; their owner is already watching them. Buildings
             // are what get hit while the commander is looking somewhere else.
-            if (!hit || !entry.IsStructure || now < entry.NextAttackAlert || now < nextGlobalAttackAlert)
+            if (!hit || Muted || !entry.IsStructure || now < entry.NextAttackAlert || now < nextGlobalAttackAlert)
                 return;
 
             entry.NextAttackAlert = now + PerTargetAttackCooldown;

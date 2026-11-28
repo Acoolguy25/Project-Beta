@@ -117,6 +117,21 @@ namespace Universes.UniverseData.war_valley.Editor {
         }
 
         /// <summary>
+        /// Re-renders every build-menu and production icon without touching the prefabs, which keep
+        /// pointing at the same sprite files. Needs a graphical Editor: a headless one renders blank.
+        /// </summary>
+        [MenuItem("Ryan/War Valley/Rebake Icons")]
+        public static void RebakeIcons() {
+            EnsureFolders();
+            foreach (StructureDef def in Structures)
+                WV_IconBaker.Bake(Load<GameObject>(def.ModelPath), def.AssetName ?? PrefabName(def.DisplayName));
+            foreach (UnitDef def in Units)
+                WV_IconBaker.Bake(Load<GameObject>(def.UsesRobotRig ? RobotModelPath : def.ModelPath), def.Kind.ToString());
+            AssetDatabase.SaveAssets();
+            Debug.Log($"War Valley: rebaked {Structures.Length + Units.Length} icons.");
+        }
+
+        /// <summary>
         /// Rebuilds every structure and unit once per Editor session when any of them is missing or
         /// predates <see cref="AuthoringVersion"/>. Skipped in batch mode, in play mode, and in a
         /// ParrelSync clone - a clone shares this project's assets, and two Editors rebuilding the

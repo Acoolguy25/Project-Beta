@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using RyanAssets.GameFeel;
+using RyanAssets.Retention.Client;
 using RyanAssets.UI.GameHud;
 using UnityEngine;
+using UnityEngine.UI;
 using Universes.UniverseData.war_valley.Shared;
 
 namespace Universes.UniverseData.war_valley.Client {
@@ -35,6 +37,25 @@ namespace Universes.UniverseData.war_valley.Client {
         [SerializeField, Range(50, 100)] int detailTextPercent = 85;
         [Tooltip("Size of the confetti burst over the flag when the round is won.")]
         [SerializeField, Min(0.1f)] float victoryConfettiScale = 4f;
+        [Tooltip("A won round whose win does not count for this commander (they joined late).")]
+        [SerializeField] Color lateJoinAccent = new(0.55f, 0.66f, 0.58f, 1f);
+        [Tooltip("Theme icons by name, for the fronts' emblems; the HUD builder points this at the retention HUD's table.")]
+        [SerializeField] RetentionIcons icons;
+
+        [Header("Stars")]
+        [Tooltip("The row of star icons on the result banner, shown for a starred tier's win.")]
+        [SerializeField] GameObject starRow;
+        [SerializeField] Image[] bannerStars = Array.Empty<Image>();
+        [SerializeField] Color starOn = new(1f, 0.8f, 0.3f, 1f);
+        [SerializeField] Color starOff = new(1f, 1f, 1f, 0.16f);
+        [Tooltip("Seconds after the banner opens before the first star fills.")]
+        [SerializeField, Min(0f)] float firstStarDelay = 0.7f;
+        [Tooltip("Seconds between stars.")]
+        [SerializeField, Min(0.05f)] float starStepSeconds = 0.45f;
+
+        [Header("Round Briefing")]
+        [Tooltip("Seconds the round's briefing (today's front and the tier) stays up.")]
+        [SerializeField, Min(0.5f)] float briefingSeconds = 6f;
 
         [Header("Sound")]
         [Tooltip("Volume of the kit's war horn blown as a wave begins.")]
@@ -97,6 +118,18 @@ namespace Universes.UniverseData.war_valley.Client {
         float lastDanger;
         bool alarmOnHint;
         readonly Vector3[] bannerCorners = new Vector3[4];
+        WV_DifficultyTier roundTier;
+        WV_Front roundFront;
+        string roundTierName;
+        int starsToShow;
+        int starsShown;
+        float nextStarAt;
+
+        /// <summary>
+        /// Canvas units kept clear on the left while the campaign card is up, so an arrow pinned to the
+        /// left edge is drawn beside the card rather than through it. 0 when nothing is there.
+        /// </summary>
+        public float LeftClearance { get; set; }
 
         /// <summary>Where alarm text goes: the HUD's hint line, given by the controller.</summary>
         public void Bind(Action<string> hint) => showHint = hint;
@@ -117,17 +150,70 @@ namespace Universes.UniverseData.war_valley.Client {
 
         // --- Waves --------------------------------------------------------------
 
+        /// <summary>
+        /// The round's tier and the day's front are settled: a banner names the front and its rules, and
+        /// from now on every wave banner carries the tier's colour and a "VETERAN · IRON STORM" line.
+        /// </summary>
+        public void ShowBriefing(WV_RoundBriefing briefing) {
+            roundTier = (WV_DifficultyTier)briefing.difficulty;
+            roundFront = (WV_Front)briefing.front;
+            roundTierName = string.IsNullOrEmpty(briefing.difficultyName) ? roundTier.ToString() : briefing.difficultyName;
+            HideStars();
+            if (banner == null)
+                return;
+            string xp = briefing.xpBonusPercent > 0 ? $" (+{briefing.xpBonusPercent}% XP)" : string.Empty;
+            string tierLine = $"<size={detailTextPercent}%><color=#{ColorUtility.ToHtmlStringRGB(WV_TierStyle.Accent(roundTier))}>" +
+                              $"{roundTierName.ToUpperInvariant()}</color>{xp} - {briefing.tierDescription}</size>";
+            if (roundFront == WV_Front.None) {
+                SetKicker("THE ROUND", WV_TierStyle.Accent(roundTier));
+                banner.Show(waveIcon, WV_TierStyle.Accent(roundTier), roundTierName.ToUpperInvariant(), tierLine, briefingSeconds);
+            } else {
+                SetKicker($"TODAY'S FRONT  ·  {roundTierName.ToUpperInvariant()} ROUND", WV_TierStyle.Accent(roundTier));
+                Sprite icon = icons != null ? icons.Get(WV_TierStyle.FrontIcon(roundFront)) : waveIcon;
+                banner.Show(icon, WV_TierStyle.FrontAccent(roundFront), WV_DailyFront.Title(roundFront).ToUpperInvariant(),
+                    $"{Capitalise(briefing.frontRules)}\n{tierLine}", briefingSeconds);
+            }
+            GameSfx.Play(SfxCue.Go, 0.8f);
+        }
+
+        static string Capitalise(string text) =>
+            string.IsNullOrEmpty(text) ? string.Empty : char.ToUpperInvariant(text[0]) + text.Substring(1);
+
+        /// <summary>The banner's small line above the title, in <paramref name="color"/>, or hidden when empty.</summary>
+        void SetKicker(string text, Color color) {
+            if (banner == null || banner.kicker == null)
+                return;
+            bool show = !string.IsNullOrEmpty(text);
+            banner.kicker.gameObject.SetActive(show);
+            banner.kicker.text = text ?? string.Empty;
+            banner.kicker.color = color;
+        }
+
+        string RoundKicker() {
+            string tier = (string.IsNullOrEmpty(roundTierName) ? roundTier.ToString() : roundTierName).ToUpperInvariant();
+            return roundFront == WV_Front.None ? tier : $"{tier}  ·  {WV_DailyFront.Title(roundFront).ToUpperInvariant()}";
+        }
+
         public void ShowWave(WV_WaveStarted wave) {
             var theme = (WV_WaveTheme)wave.theme;
             WV_WavePlan.DecodeApproaches(wave.approaches, activeApproaches);
             arrowsUntil = Time.unscaledTime + arrowSeconds;
+            HideStars();
+            roundTier = (WV_DifficultyTier)wave.difficulty;
 
-            Color accent = wave.hasBoss ? bossAccent : wave.isSurge ? surgeAccent : waveAccent;
+            // A plain wave wears the tier's colour, so a Veteran round never looks like a Recruit one;
+            // a surge and a boss keep their warning colours.
+            Color accent = wave.hasBoss ? bossAccent : wave.isSurge ? surgeAccent
+                : roundTier == WV_DifficultyTier.Recruit ? waveAccent : WV_TierStyle.Accent(roundTier);
+            SetKicker(RoundKicker(), WV_TierStyle.Accent(roundTier));
             // The title stays short enough for one line of the banner; the theme leads the
             // subtitle instead, and only when it is not a plain assault.
-            string title = wave.waveNumber >= wave.waveCount
-                ? "FINAL WAVE"
-                : $"WAVE {wave.waveNumber}/{wave.waveCount}";
+            // A wave count of 0 is an Endless round, which has no final wave.
+            string title = wave.waveCount <= 0
+                ? $"ENDLESS WAVE {wave.waveNumber}"
+                : wave.waveNumber >= wave.waveCount
+                    ? "FINAL WAVE"
+                    : $"WAVE {wave.waveNumber}/{wave.waveCount}";
             // The subtitle is broken on purpose into at most two lines that each fit the banner:
             // who comes and from where, then what kind of wave it is. A plain assault needs no
             // second line; a boss wave names its boss there instead of the theme's advice.
@@ -152,17 +238,72 @@ namespace Universes.UniverseData.war_valley.Client {
             if (alarmOnHint)
                 showHint?.Invoke(string.Empty);
             alarmOnHint = false;
-            // One fact per line, so neither wraps and leaves a word alone.
-            string subtitle = result.victory
-                ? $"All {result.wavesHeld} waves held\n{result.enemiesDefeated:N0} enemies defeated"
-                : $"Fell on wave {result.waveReached} after holding {result.wavesHeld}\n{result.enemiesDefeated:N0} enemies defeated";
+            // One fact per line, so neither wraps and leaves a word alone. Stars are drawn as icons
+            // that fill one by one, not written; a win that does not count says so instead.
+            var tier = (WV_DifficultyTier)result.difficulty;
+            string tierName = !string.IsNullOrEmpty(roundTierName) && roundTier == tier ? roundTierName : tier.ToString();
+            bool starred = result.victory && !result.lateJoin && WV_Campaign.HasStars(tier);
+            string subtitle;
+            if (result.victory && result.lateJoin)
+                subtitle = $"Joined late - this win earns no stars\n<size={detailTextPercent}%>Be there from the start to win {tierName}</size>";
+            else if (result.victory) {
+                subtitle = $"All {result.wavesHeld} waves held on {tierName}\n{result.enemiesDefeated:N0} enemies defeated";
+                if (starred && result.stars < WV_Campaign.MaxStars && result.threeStarPercent > 0)
+                    subtitle += $"\n<size={detailTextPercent}%>The flag kept {result.lowestFlagPercent}% - 3 stars needs {result.threeStarPercent}%</size>";
+            } else if (result.endless)
+                subtitle = $"Endless: fell on wave {result.waveReached}\n{result.enemiesDefeated:N0} enemies defeated";
+            else
+                subtitle = $"Fell on wave {result.waveReached} after holding {result.wavesHeld}\n{result.enemiesDefeated:N0} enemies defeated";
+            SetKicker(result.victory && result.firstWin && !result.lateJoin ? $"FIRST {tierName.ToUpperInvariant()} WIN" : RoundKicker(),
+                result.victory ? victoryAccent : WV_TierStyle.Accent(tier));
             if (banner != null)
                 banner.Show(result.victory ? victoryIcon : defeatIcon,
-                    result.victory ? victoryAccent : defeatAccent,
+                    result.victory ? (result.lateJoin ? lateJoinAccent : victoryAccent) : defeatAccent,
                     result.victory ? "VICTORY" : "DEFEAT", subtitle, resultBannerSeconds);
+            if (starred)
+                RevealStars(result.stars);
+            else
+                HideStars();
             GameSfx.Play(result.victory ? SfxCue.Win : SfxCue.Lose);
             if (result.victory && WV_Flag.Instance != null)
                 GameFx.Play(FxKind.Confetti, WV_Flag.Instance.transform.position, victoryConfettiScale);
+        }
+
+        void RevealStars(int stars) {
+            if (starRow == null)
+                return;
+            starRow.SetActive(true);
+            foreach (Image star in bannerStars) {
+                if (star == null)
+                    continue;
+                star.color = starOff;
+                star.transform.localScale = Vector3.one;
+            }
+            starsToShow = Mathf.Clamp(stars, 0, bannerStars.Length);
+            starsShown = 0;
+            nextStarAt = Time.unscaledTime + firstStarDelay;
+        }
+
+        void HideStars() {
+            starsToShow = starsShown = 0;
+            if (starRow != null)
+                starRow.SetActive(false);
+        }
+
+        /// <summary>Fills the next star with a pop and a rising chime, one at a time.</summary>
+        void TickStars(float now) {
+            if (starsShown >= starsToShow || now < nextStarAt)
+                return;
+            Image star = bannerStars[starsShown];
+            starsShown++;
+            nextStarAt = now + starStepSeconds;
+            if (star == null)
+                return;
+            star.color = starOn;
+            Punch.Pop(star.transform, 0.4f, 0.35f);
+            GameSfx.Play(SfxCue.Pickup, 1f, GameSfx.Semitones(starsShown * 3f));
+            if (starsShown == WV_Campaign.MaxStars)
+                GameSfx.Play(SfxCue.LevelUp, 0.7f);
         }
 
         string DescribeSides() {
@@ -181,6 +322,7 @@ namespace Universes.UniverseData.war_valley.Client {
         // --- Per frame ----------------------------------------------------------
 
         void LateUpdate() {
+            TickStars(Time.unscaledTime);
             Camera camera = Camera.main;
             WatchFlag();
             if (camera == null) {
@@ -227,7 +369,7 @@ namespace Universes.UniverseData.war_valley.Client {
             if (behind)
                 point = size - point;
 
-            var min = new Vector2(edgeMargin, bottomMargin);
+            var min = new Vector2(Mathf.Max(edgeMargin, LeftClearance), bottomMargin);
             Vector2 max = size - new Vector2(edgeMargin, GetTopClearance(size, scale));
             bool onScreen = !behind && point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y;
 

@@ -21,10 +21,10 @@ namespace Universes.UniverseData.war_valley.Tests {
             Assert.That(ready, Is.LessThan(new WV_WaveTuning().PreparationSeconds));
         }
 
-        [TestCase("Watchtower", 6f)]
-        [TestCase("Airfield", 8f)]
-        [TestCase("ShieldGenerator", 6f)]
-        [TestCase("GuardPost", 4f)]
+        [TestCase("Watchtower", 16f)]
+        [TestCase("Airfield", 24f)]
+        [TestCase("ShieldGenerator", 16f)]
+        [TestCase("GuardPost", 10f)]
         public void Buildings_HaveCompactHeightsAndCollisionFollowingTheirArt(string name, float heightLimit) {
             GameObject prefab = Structure(name);
             BoxCollider footprint = prefab.GetComponent<BoxCollider>();

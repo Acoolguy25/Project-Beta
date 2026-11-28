@@ -54,6 +54,29 @@ namespace Universes.UniverseData.war_valley.Server {
             TargetFlag();
         }
 
+        /// <summary>
+        /// The round is lost: every wave enemy stops where it stands, so the fight does not go on under
+        /// the result banner and knock down a base whose round is already over.
+        /// </summary>
+        public static void StandDownAll() {
+            if (!GameCharacter.TeamToCharacter.TryGetValue(WV_Alliances.GetWaveSide(), out var wave) || wave == null)
+                return;
+            foreach (GameCharacter character in wave.ToArray()) {
+                if (character == null || !character.TryGetComponent(out WV_NPC brain))
+                    continue;
+                brain.StandDown();
+            }
+        }
+
+        private void StandDown() {
+            if (combat != null)
+                combat.SetCombatEnabled(false);
+            localNPC.SetTargetingType(NPCTargetingType.None);
+            if (agent != null && agent.isOnNavMesh)
+                agent.isStopped = true;
+            enabled = false;
+        }
+
         private void Update() {
             UpdateWallTraversal();
         }

@@ -300,8 +300,10 @@ namespace Universes.UniverseData.war_valley.Shared {
         void StartFrontItem() {
             // Floored rather than trusted: a multiplier small enough to round the duration to zero
             // would finish an item in the same frame it was queued, which reads as a free unit.
+            // The payer's doctrines (Drill Sergeants) speed up their own orders, wherever they queue them.
+            float doctrine = WV_CommanderBonuses.For(GetQueuedPayer(0)).ProductionTimeMultiplier;
             float duration = Mathf.Max(
-                0.1f, GetBuildSeconds(GetQueuedItem(0)) * Mathf.Max(0.001f, BuildDurationMultiplier));
+                0.1f, GetBuildSeconds(GetQueuedItem(0)) * Mathf.Max(0.001f, BuildDurationMultiplier) * doctrine);
             currentItemDuration.Value = duration;
             currentItemCompletionTime.Value = NetworkHelper.ServerTime + duration;
         }
@@ -352,7 +354,9 @@ namespace Universes.UniverseData.war_valley.Shared {
             // The unit belongs to whoever paid for it, which is not always the building's owner:
             // an ally queueing at this hangar gets their own tank, in their own colour.
             WV_Unit unit = clone.GetComponent<WV_Unit>();
-            unit.Init(unit.UnitMaxHealth);
+            // Armored Columns: the payer's doctrines raise the health of every vehicle they receive.
+            unit.Init(WV_CommanderModifiers.Scale(unit.UnitMaxHealth,
+                WV_CommanderBonuses.For(payerClientId).VehicleHealthMultiplier));
             unit.SetTeam(WV_Permissions.GetCommanderTeam(payerClientId));
             clone.GetComponent<WV_Owned>().SetOwnerClientId(payerClientId);
 
