@@ -46,11 +46,13 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Tooltip("Smaller, higher banner for a capture during play (the big one is for the result).")]
         public HudBanner captureBanner;
         public CTF_Waypoints waypoints;
+        [Tooltip("The tactical map (left side); this tells it about radar sweeps.")]
+        public CTF_Minimap minimap;
 
         [Header("Icons")]
         public Sprite flagIcon;
         public Sprite homeIcon, carriedIcon, droppedIcon, attackIcon, defendIcon, victoryIcon, defeatIcon;
-        public Sprite healthIcon, speedIcon;
+        public Sprite healthIcon, speedIcon, radarIcon;
 
         [Header("Look")]
         [Tooltip("Post-processing mood applied while this game is loaded.")]
@@ -87,6 +89,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         public Color drawColor = new(0.85f, 0.87f, 0.9f);
         public Color healthColor = new(0.35f, 1f, 0.45f);
         public Color speedColor = new(1f, 0.85f, 0.25f);
+        [Tooltip("The side-lane radar (matches CTF_Authoring.PowerUpColor).")]
+        public Color radarColor = new(0.4f, 0.88f, 1f);
         [Tooltip("Today's twist: the toast shown as each match counts down, and the chip's colour.")]
         public Color twistColor = new(0.55f, 0.85f, 1f);
         [Min(0.5f)] public float twistToastSeconds = 6f;
@@ -162,6 +166,24 @@ namespace Universes.UniverseData.capture_the_flag.Client {
 
         public bool HasTeam => hasTeam;
         public CTF_Team MyTeam => myTeam;
+        public bool HasState => hasState;
+        public CTF_Phase Phase => state.phase;
+        public CTF_Map Map => map;
+        /// <summary>The latest everyone-in-play roster (players and bots, with teams and alive flags).</summary>
+        public CTF_RosterBroadcast Roster => lastRoster;
+        /// <summary>A flag's last known state from the server.</summary>
+        public CTF_FlagSnap FlagSnap(CTF_Team team) => Snap(team);
+        /// <summary>Where a flag is drawn right now (smoothed, riding its carrier).</summary>
+        public Vector3 FlagShown(CTF_Team team) => shown[(int)team];
+        /// <summary>The match summary card is up (other side-panels step aside for it).</summary>
+        public bool SummaryShowing => summaryCard != null && summaryCard.Visible;
+        /// <summary>The shared retention HUD nested in this one (its challenges panel shares the left column).</summary>
+        public RetentionHud Retention {
+            get {
+                FindRetention();
+                return retentionHud;
+            }
+        }
 
         NameTagManager.ViewOverride tagView;
         RetentionHud retentionHud;
@@ -357,6 +379,32 @@ namespace Universes.UniverseData.capture_the_flag.Client {
 
         string CarrierName(int clientId) => carrierNames.TryGetValue(clientId, out string name) ? name : "an enemy";
 
+        /// <summary>A player's or bot's name from the roster (or flag events), empty when unknown.</summary>
+        public string ActorName(int actorId) {
+            if (TryRosterView(actorId, out var view)) return view.name;
+            return carrierNames.TryGetValue(actorId, out string name) ? name : "";
+        }
+
+        /// <summary>Which team a player or bot is on, from the last roster.</summary>
+        public bool TryActorTeam(int actorId, out CTF_Team team) {
+            bool found = TryRosterView(actorId, out var view);
+            team = view.team;
+            return found;
+        }
+
+        bool TryRosterView(int actorId, out CTF_BotView view) {
+            foreach (var list in new[] { lastRoster.players, lastRoster.bots }) {
+                if (list == null) continue;
+                foreach (var entry in list)
+                    if (entry.actorId == actorId) {
+                        view = entry;
+                        return true;
+                    }
+            }
+            view = default;
+            return false;
+        }
+
         void PlaceFlag(int i, CTF_FlagSnap snap) {
             var view = views[i];
             if (view == null) return;
@@ -397,7 +445,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         }
 
         /// <summary>A player's or bot's current body, by actor id (null while it has none here).</summary>
-        Transform ActorBody(int actorId) {
+        public Transform ActorBody(int actorId) {
             if (!CTF_Rules.IsBotId(actorId)) {
                 var character = CharacterLookup.ByClientId(actorId);
                 return character != null ? character.transform : null;
@@ -691,11 +739,15 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             if (message.index < 0 || message.index >= map.powerUps.Length) return;
             var spot = map.powerUps[message.index];
             spot.SetAvailable(false);
-            bool health = message.kind == CTF_PowerUpKind.Health;
-            Color color = health ? healthColor : speedColor;
-            GameFx.Play(health ? FxKind.Heal : FxKind.ShockwaveRing, spot.Position, color, powerUpFxScale);
+            Color color = PowerUpColor(message.kind);
+            GameFx.Play(message.kind == CTF_PowerUpKind.Health ? FxKind.Heal : FxKind.ShockwaveRing, spot.Position, color, powerUpFxScale);
             GameSfx.PlayAt(SfxCue.Pickup, spot.Position);
+            if (message.kind == CTF_PowerUpKind.Radar) {
+                OnRadar(message, color);
+                return;
+            }
             if (message.playerId != MyId) return;
+            bool health = message.kind == CTF_PowerUpKind.Health;
             ScreenFx.ShowText(health ? "+HEALTH" : "SPEED BOOST", color, powerUpTextSeconds, powerUpTextSize);
             toasts.Push(health ? healthIcon : speedIcon, color, health ? "You patched up." : $"Speed boost for {Mathf.RoundToInt(message.seconds)} s!", powerUpToastSeconds);
             if (!health) {
@@ -703,6 +755,29 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 speedLinesUntil = Time.time + message.seconds;
             }
         }
+
+        /// <summary>
+        /// A radar sweep: the taker's team sees every enemy on the minimap for a while, and the other
+        /// team is told it has been spotted (so the sweep is a threat, not a secret).
+        /// </summary>
+        void OnRadar(CTF_PowerUpBroadcast message, Color color) {
+            if (!hasTeam || !TryActorTeam(message.playerId, out CTF_Team team)) return;
+            bool ours = team == myTeam;
+            int seconds = Mathf.RoundToInt(message.seconds);
+            if (minimap != null) minimap.Sweep(team, message.seconds);
+            if (message.playerId == MyId) ScreenFx.ShowText("RADAR SWEEP", color, powerUpTextSeconds, powerUpTextSize);
+            string who = CTF_Rules.PlayerLabel(ActorName(message.playerId), message.playerId == MyId, ours);
+            toasts.Push(radarIcon, ours ? color : dangerColor,
+                ours ? $"{who} swept the radar: enemies shown for {seconds} s"
+                     : $"<b>Spotted!</b> {who} swept the radar ({seconds} s)", powerUpToastSeconds + 1f);
+            if (!ours) GameSfx.Play(SfxCue.Alarm);
+        }
+
+        Color PowerUpColor(CTF_PowerUpKind kind) => kind switch {
+            CTF_PowerUpKind.Health => healthColor,
+            CTF_PowerUpKind.Radar => radarColor,
+            _ => speedColor,
+        };
 
         void OnResultNote(CTF_ResultNoteBroadcast message, Channel channel) {
             resultNote = message;

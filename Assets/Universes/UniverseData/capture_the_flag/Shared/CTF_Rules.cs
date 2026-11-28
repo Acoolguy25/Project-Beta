@@ -4,8 +4,11 @@ using UnityEngine;
 namespace Universes.UniverseData.capture_the_flag {
     public enum CTF_Team : byte { Red, Blue }
     public enum CTF_FlagState : byte { Home, Carried, Dropped }
-    /// <summary>What a mid-lane power-up gives. Stored in the map scene, so only ever append.</summary>
-    public enum CTF_PowerUpKind : byte { Health, Speed }
+    /// <summary>
+    /// What a power-up gives. Stored in the map scene, so only ever append. Radar shows the taker's
+    /// team every enemy on the minimap for a while (see <see cref="CTF_MapMath"/>).
+    /// </summary>
+    public enum CTF_PowerUpKind : byte { Health, Speed, Radar }
     /// <summary>How someone died, for the kill feed icon. Only ever append.</summary>
     public enum CTF_KillCause : byte { Other, Gun, Melee, Fall }
 

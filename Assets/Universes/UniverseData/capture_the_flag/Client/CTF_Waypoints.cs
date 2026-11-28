@@ -13,6 +13,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Tooltip("Index 0 red flag, 1 blue flag.")]
         public CTF_WaypointMarker[] flagMarkers = new CTF_WaypointMarker[2];
         public CTF_WaypointMarker homeMarker;
+        [Tooltip("Over whoever just eliminated you, until you are back (see CTF_CombatFeedback).")]
+        public CTF_WaypointMarker killerMarker;
         [Tooltip("Metres above the target the marker points at (the robot is about 5.6 m tall).")]
         [Min(0f)] public float heightOffset = 6f;
         [Header("Safe area (share of the screen kept clear for the HUD)")]
@@ -45,7 +47,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
 
         Camera cam;
         readonly Vector3[] corners = new Vector3[4];
-        readonly Vector2[] placed = new Vector2[3];
+        readonly Vector2[] placed = new Vector2[4];
         int placedCount, placedFrame = -1;
 
         public void SetFlag(int index, bool show, Vector3 target, Sprite icon, Color color) =>
@@ -53,6 +55,10 @@ namespace Universes.UniverseData.capture_the_flag.Client {
 
         public void SetHome(bool show, Vector3 target, Sprite icon, Color color) =>
             Place(homeMarker, show, target, icon, color);
+
+        public void SetKiller(bool show, Vector3 target, Sprite icon, Color color) {
+            if (killerMarker != null) Place(killerMarker, show, target, icon, color);
+        }
 
         void Place(CTF_WaypointMarker marker, bool show, Vector3 target, Sprite icon, Color color) {
             // The player switches between camera modes, each its own Camera: follow the live one.

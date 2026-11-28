@@ -56,6 +56,8 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         [SerializeField, Min(1)] long healAmount = 100;
         [SerializeField, Min(1f)] float speedBoostMultiplier = 1.35f;
         [SerializeField, Min(0.5f)] float speedBoostSeconds = 8f;
+        [Tooltip("Seconds a side-lane radar shows the taker's team every enemy on the minimap.")]
+        [SerializeField, Min(0.5f)] float radarSeconds = 8f;
         [Tooltip("Seconds of speed boost for taking a flag off its stand, so the carrier can clear the base before the defenders respawn beside it (try 1: 1 to 3 captures in an 8-minute match without it). 0 turns it off.")]
         [SerializeField, Min(0f)] float grabHeadStartSeconds = 5f;
         [Tooltip("Seconds a carrier cannot be hurt after taking a flag off its stand (live run before this: the carrier died within 2 s of 39 of 40 grabs). 0 turns it off.")]

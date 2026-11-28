@@ -171,13 +171,20 @@ namespace Universes.UniverseData.capture_the_flag.Server {
                     PowerUpTaken(actor);
                     InstanceFinder.ServerManager.Broadcast(new CTF_PowerUpBroadcast {
                         index = i, kind = spots[i].kind, playerId = actor.Id,
-                        seconds = spots[i].kind == CTF_PowerUpKind.Speed ? speedBoostSeconds : 0f
+                        seconds = PowerUpSeconds(spots[i].kind)
                     });
                     BroadcastState();
                     break;
                 }
             }
         }
+
+        /// <summary>How long a power-up's effect lasts, for the broadcast (0 for an instant one).</summary>
+        float PowerUpSeconds(CTF_PowerUpKind kind) => kind switch {
+            CTF_PowerUpKind.Speed => speedBoostSeconds,
+            CTF_PowerUpKind.Radar => radarSeconds,
+            _ => 0f,
+        };
 
         bool TryApply(CTF_PowerUpKind kind, CTF_Actor actor) {
             var body = actor.Character;
@@ -191,6 +198,10 @@ namespace Universes.UniverseData.capture_the_flag.Server {
                 case CTF_PowerUpKind.Speed:
                     actor.BoostedUntil = Time.time + speedBoostSeconds;
                     RefreshSpeed(actor);
+                    return true;
+                case CTF_PowerUpKind.Radar:
+                    // Nothing changes on the server: every client already knows where everyone is, and the
+                    // taker's team's minimaps show the enemies for the broadcast's seconds.
                     return true;
                 default:
                     Debug.LogWarning($"Flag Wars has no rule for power-up kind {kind}.", this);

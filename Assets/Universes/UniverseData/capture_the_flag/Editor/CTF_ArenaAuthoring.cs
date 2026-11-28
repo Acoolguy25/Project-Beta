@@ -82,6 +82,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         const float FullCoverLength = 8f, FullCoverThickness = 1.4f;
         const float BlastCapHeight = 0.6f, BlastCapOverhang = 0.4f;
         const float HealthPowerUpX = -48f;
+        /// <summary>Radar pads sit on the half-way line of each side lane (clear of the catwalk ramps and containers).</summary>
+        const float RadarPowerUpZ = LaneZ + 2f;
         /// <summary>
         /// Where players wait for the match: on the south lane road, 46 m from the centre, facing the
         /// bridge, so a lone player sees the arena and the "FLAG WARS" title instead of a wall.
@@ -139,6 +141,9 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         public static Bounds NavMeshVolume => new(new Vector3(0f, NavMeshVolumeHeight * 0.5f - 2f, 0f),
             new Vector3(HalfLength * 2f + NavMeshVolumeMargin, NavMeshVolumeHeight, HalfWidth * 2f + NavMeshVolumeMargin));
         const float NavMeshVolumeHeight = 30f, NavMeshVolumeMargin = 4f;
+
+        /// <summary>The fenced field on the ground plane (x = world x, y = world z), for the minimap.</summary>
+        public static UnityEngine.Rect FieldRect => UnityEngine.Rect.MinMaxRect(-HalfLength, -HalfWidth, HalfLength, HalfWidth);
 
         /// <summary>Opens a new scene, builds the arena and returns the configured map object.</summary>
         public static GameObject Build(GameObject[] powerUpPrefabs) {
@@ -573,6 +578,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             var spots = new List<CTF_PowerUp>();
             Mirrored((p, y) => spots.Add(PowerUp(prefabs[(int)CTF_PowerUpKind.Health], mapRoot, p)), new Vector3(HealthPowerUpX, 0f, 0f), 0f);
             spots.Add(PowerUp(prefabs[(int)CTF_PowerUpKind.Speed], mapRoot, new Vector3(0f, BridgeHeight, 0f)));
+            // A radar in each side lane, at the half-way line: a reason to take the long way round.
+            Mirrored((p, y) => spots.Add(PowerUp(prefabs[(int)CTF_PowerUpKind.Radar], mapRoot, p)), new Vector3(0f, 0f, RadarPowerUpZ), 0f);
             return spots.ToArray();
         }
 

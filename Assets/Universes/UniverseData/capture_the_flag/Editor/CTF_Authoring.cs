@@ -108,14 +108,22 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         }
 
         /// <summary>Colour of each power-up's icon and ring (matches the HUD colours in CTF_ClientController).</summary>
-        static Color PowerUpColor(CTF_PowerUpKind kind) => kind == CTF_PowerUpKind.Health ? new Color(0.35f, 1f, 0.45f) : new Color(1f, 0.85f, 0.25f);
+        internal static Color PowerUpColor(CTF_PowerUpKind kind) => kind switch {
+            CTF_PowerUpKind.Health => new Color(0.35f, 1f, 0.45f),
+            CTF_PowerUpKind.Radar => new Color(0.4f, 0.88f, 1f),
+            _ => new Color(1f, 0.85f, 0.25f),
+        };
 
         /// <summary>Icon size and height over the pad, in metres (the robot is about 5.6 m tall).</summary>
         const float PowerUpIconScale = 3.4f, PowerUpIconHeight = 3f;
         /// <summary>Ring glow: bright enough to read in daylight, low enough that bloom keeps its colour.</summary>
         const float PowerUpRingEmission = 0.9f, PowerUpRingAlpha = 0.3f;
 
-        static string PowerUpIcon(CTF_PowerUpKind kind) => kind == CTF_PowerUpKind.Health ? "favorite" : "bolt";
+        internal static string PowerUpIcon(CTF_PowerUpKind kind) => kind switch {
+            CTF_PowerUpKind.Health => "favorite",
+            CTF_PowerUpKind.Radar => "visibility",
+            _ => "bolt",
+        };
 
         /// <summary>
         /// A power-up: a small landing pad, a glowing ring as wide as the pickup reach, and the
@@ -158,7 +166,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             var hud = CTF_HudAuthoring.Build();
             var flags = new[] { BuildFlag(CTF_Team.Red), BuildFlag(CTF_Team.Blue) };
-            var powerUps = new[] { BuildPowerUp(CTF_PowerUpKind.Health), BuildPowerUp(CTF_PowerUpKind.Speed) };
+            // In CTF_PowerUpKind order: the arena indexes this array by kind.
+            var powerUps = new[] { BuildPowerUp(CTF_PowerUpKind.Health), BuildPowerUp(CTF_PowerUpKind.Speed), BuildPowerUp(CTF_PowerUpKind.Radar) };
             var mapGo = CTF_ArenaAuthoring.Build(powerUps);
             var map = mapGo.GetComponent<CTF_Map>();
             map.flagPrefabs = flags;
@@ -168,6 +177,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             // Bots walk the arena on the shared robot's NavMesh.
             CTF_NavMeshAuthoring.Bake(mapGo, CTF_ArenaAuthoring.NavMeshVolume);
             Kit.SaveActiveScene(Kit.StartScene(Universe));
+            // The minimap's picture is the arena just built, seen from above.
+            CTF_MinimapAuthoring.RenderInto(map, CTF_HudAuthoring.PrefabPath);
         }
 
         [MenuItem("Ryan/Flag Wars/Register Scenes")]

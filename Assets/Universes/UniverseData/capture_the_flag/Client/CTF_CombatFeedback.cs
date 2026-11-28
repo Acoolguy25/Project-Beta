@@ -42,6 +42,17 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         public HudPopup respawnCard;
         public TMP_Text respawnCount;
         public TMP_Text respawnBy;
+        [Tooltip("The fight that killed you: hits each way this life and the range.")]
+        public TMP_Text respawnFight;
+        [Tooltip("The Payback nudge under it.")]
+        public TMP_Text respawnPayback;
+        [Tooltip("Kills closer than this (metres) read \"up close\" instead of a distance.")]
+        [Min(0f)] public float closeRangeMetres = 8f;
+        [Tooltip("You had them nearly beaten when you dealt at least this share of their health (\"So close!\").")]
+        [Range(0f, 1f)] public float nearlyShare = 0.5f;
+        [Tooltip("For the killer's marker and their body; the controller knows bots' bodies.")]
+        public CTF_ClientController hud;
+        public CTF_Waypoints waypoints;
 
         [Header("World effects")]
         [Tooltip("Metres above the victim's feet where impact sparks play (about chest height on the robot).")]
@@ -79,6 +90,11 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         ClientManager manager;
         LocalCharacter watched;
         float respawnAt, hitMarkerUntil;
+        readonly CTF_DeathRecap recap = new();
+        int killerId = -1;
+        CTF_Team killerTeam;
+        Vector3 deathAt;
+        long knownMaxHealth;
         int shownSeconds = -1;
         string verbHex, masteryHex;
         int lastDamage = int.MinValue;
@@ -129,6 +145,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 hitMarker.Hide();
             }
             if (respawnAt <= 0f) return;
+            MarkKiller();
             int seconds = Mathf.CeilToInt(respawnAt - Time.time);
             if (seconds <= 0) {
                 HideRespawn();
@@ -148,6 +165,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             watched.Health.OnChange += OnLocalHealth;
             SetLowHealth(1f);
             HideRespawn();
+            recap.Clear();
+            knownMaxHealth = character.MaxHealth.Value;
         }
 
         void OnLocalCharacterRemoved(LocalCharacter character) {
@@ -163,6 +182,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             if (asServer || watched == null) return;
             long max = watched.MaxHealth.Value;
             if (max <= 0) return;
+            knownMaxHealth = max;
             if (next < previous && next > 0) ScreenFx.DamagePulse(Mathf.Clamp01((previous - next) / (float)max) * damagePulseScale);
             SetLowHealth(next / (float)max);
         }
@@ -176,14 +196,26 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         void HideRespawn() {
             respawnAt = 0f;
             shownSeconds = -1;
+            killerId = -1;
             respawnCard.Hide();
+            if (waypoints != null) waypoints.SetKiller(false, Vector3.zero, null, Color.white);
+        }
+
+        /// <summary>While you wait, a skull marker sits over whoever eliminated you (through walls), for the Payback.</summary>
+        void MarkKiller() {
+            if (waypoints == null) return;
+            Transform body = killerId >= 0 && hud != null ? hud.ActorBody(killerId) : null;
+            waypoints.SetKiller(body != null, body != null ? body.position : Vector3.zero, skullIcon, CTF_Rules.Color(killerTeam));
         }
 
         // ---------------------------------------------------------------- broadcasts
         void OnHit(CTF_HitBroadcast message, Channel channel) {
+            int me = MyId;
+            recap.Hit(me, message.attackerId, message.victimId, message.damage);
+            if (message.victimId == me && message.killed) deathAt = message.position;
             GameFx.Play(FxKind.Sparks, message.position + Vector3.up * impactHeight, impactTint, impactScale);
             if (message.killed) GameFx.Poof(message.position, poofHeight, poofTint, poofScale);
-            if (message.attackerId != MyId || message.victimId == MyId) return;
+            if (message.attackerId != me || message.victimId == me) return;
             hitMarkerIcon.color = message.killed ? killColor : hitColor;
             hitMarker.Show();
             hitMarkerUntil = Time.time + hitMarkerSeconds;
@@ -218,11 +250,37 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             SetLowHealth(1f);
             ScreenFx.Flash(new Color(killColor.r, killColor.g, killColor.b, deathFlashAlpha));
             respawnBy.text = hasKiller
-                ? $"Eliminated by {Name(message.killerName, message.killerTeam, false, startsSentence: false)}"
+                ? $"Eliminated by {Name(message.killerName, message.killerTeam, false, startsSentence: false)}" +
+                  (message.cause == CTF_KillCause.Gun ? $" <color={verbHex}>· {CTF_Loadouts.Get(message.weapon).title}</color>" : "")
                 : message.cause == CTF_KillCause.Fall ? "You fell off the map" : "You were eliminated";
+            ShowRecap(message, hasKiller);
             respawnAt = Time.time + message.respawnSeconds;
             shownSeconds = -1;
             respawnCard.Show();
+        }
+
+        /// <summary>The fight line, the range and the Payback nudge under "Eliminated by".</summary>
+        void ShowRecap(in CTF_KillBroadcast message, bool hasKiller) {
+            bool enemy = hasKiller && message.killerId >= 0 && message.killerId != MyId && !IsMyTeam(message.killerTeam);
+            killerId = enemy ? message.killerId : -1;
+            killerTeam = message.killerTeam;
+            if (respawnFight != null) {
+                string fight = enemy ? CTF_DeathRecap.FightLine(recap.Get(message.killerId)) : "";
+                Transform body = enemy && hud != null ? hud.ActorBody(message.killerId) : null;
+                if (body != null && deathAt != Vector3.zero) {
+                    string range = CTF_DeathRecap.RangeText(Vector3.Distance(deathAt, body.position), closeRangeMetres);
+                    fight = fight.Length > 0 ? $"{fight}\n{range}" : range;
+                }
+                respawnFight.text = fight;
+                respawnFight.gameObject.SetActive(fight.Length > 0);
+            }
+            if (respawnPayback != null) {
+                // Everyone spawns with the same health, so your own max stands in for theirs.
+                string line = enemy ? CTF_DeathRecap.PaybackLine(recap.Get(message.killerId), knownMaxHealth, nearlyShare, CTF_MedalTracker.Get(CTF_Medal.Payback).xp) : "";
+                respawnPayback.text = line;
+                respawnPayback.gameObject.SetActive(line.Length > 0);
+            }
+            deathAt = Vector3.zero;
         }
 
         static string Fate(CTF_KillCause cause, bool isMe) =>

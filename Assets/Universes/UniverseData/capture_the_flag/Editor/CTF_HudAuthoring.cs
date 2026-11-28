@@ -15,7 +15,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
     /// <summary>
     /// Generates FlagWarsHUD from the shared HudKit: scoreboard and flag chips, team card, objective
     /// pill, flag toasts and banners, edge-of-screen waypoints, hit marker, kill feed and respawn card,
-    /// the loadout card (G/H), the medal popup, and the shared retention HUD (level chip, challenges,
+    /// the loadout card (G/H), the medal popup, the tactical minimap (CTF_MinimapAuthoring), and the shared retention HUD (level chip, challenges,
     /// toasts, match summary) nested and placed for this layout. The prefab carries
     /// <see cref="CTF_ClientController"/>, <see cref="CTF_CombatFeedback"/>, <see cref="CTF_GunFeel"/>,
     /// <see cref="CTF_LoadoutHud"/> and <see cref="CTF_MedalFeed"/>. Client Editor only; the server clone
@@ -31,7 +31,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
         /// <summary>Crosshair, in pixels: tick length and thickness, gap from the centre, cooldown ring size.</summary>
         const float TickLength = 9f, TickWidth = 2f, TickGap = 6f, DotSize = 3f, RingSize = 34f;
         const string RingTexture = "CrosshairRing";
-        const string PrefabPath = CTF_Authoring.Root + "/Prefabs/FlagWarsHUD.prefab";
+        internal const string PrefabPath = CTF_Authoring.Root + "/Prefabs/FlagWarsHUD.prefab";
         const string KitBeamPath = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Prefabs/FxBeaconBeam.prefab";
         /// <summary>How far the beam's motes may lean out of the column while they rise.</summary>
         const float MoteSpreadDegrees = 6f;
@@ -63,6 +63,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             hud.defeatIcon = HudKit.Icon("tombstone");
             hud.healthIcon = HudKit.Icon("favorite");
             hud.speedIcon = HudKit.Icon("bolt");
+            hud.radarIcon = HudKit.Icon(CTF_Authoring.PowerUpIcon(CTF_PowerUpKind.Radar));
             hud.beacons.beamPrefab = BuildFlagBeam();
 
             // Waypoints first so every card draws over them.
@@ -88,6 +89,10 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             BuildMedals(root, hud.toasts);
             hud.rosterBoard = BuildRosterBoard(root);
             BuildCareerCard(root);
+            // The tactical map shares the left column with the challenges panel (J), and steps aside for it.
+            hud.minimap = CTF_MinimapAuthoring.Build(root, hud, new Vector2(StackLeft, LevelChipBottom + LevelChipClearance));
+            combat.hud = hud;
+            combat.waypoints = hud.waypoints;
             // Edge markers never sit on the right-hand feeds (try-3 review: a flag marker hid a kill feed line).
             hud.waypoints.keepClear = new[] { (RectTransform)combat.killFeed.transform, (RectTransform)hud.toasts.transform };
             hud.waypoints.topMargin = WaypointTopMargin;
@@ -387,6 +392,7 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
                 Marker(area, "BlueFlagMarker", "flying_flag", CTF_Rules.Color(CTF_Team.Blue)),
             };
             waypoints.homeMarker = Marker(area, "HomeMarker", "home", Color.white);
+            waypoints.killerMarker = Marker(area, "KillerMarker", "skull", CTF_Rules.Color(CTF_Team.Blue));
             return waypoints;
         }
 
@@ -464,6 +470,16 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             combat.respawnCount.fontSize = 56f;
             combat.respawnBy = UIKit.Text(card, "By", "Eliminated", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
             combat.respawnBy.richText = true;
+            // The fight that killed you, and the nudge to get even.
+            combat.respawnFight = UIKit.Text(card, "Fight", "", UIText.Small, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            combat.respawnFight.richText = true;
+            combat.respawnFight.overflowMode = TextOverflowModes.Overflow;
+            UIKit.Size(combat.respawnFight, 312f);
+            combat.respawnPayback = UIKit.Text(card, "Payback", "", UIText.Small, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+            combat.respawnPayback.richText = true;
+            Object.DestroyImmediate(combat.respawnPayback.GetComponent<UIThemeColor>());
+            combat.respawnPayback.color = new Color(1f, 0.8f, 0.25f);
+            UIKit.Size(combat.respawnPayback, 312f);
             combat.respawnCard = card.GetComponent<HudPopup>();
             return combat;
         }
