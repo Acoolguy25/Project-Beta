@@ -134,6 +134,10 @@ namespace Universes.UniverseData.obby.Client {
         const float ViewClockInterval = 0.2f;
         float progressShown, progressTarget, progressVelocity, hintShownAt;
         int hintStage = -1;
+        // Mechanics whose hint this session already showed, and the hint text for the current stage part ("" = none).
+        ulong hintsShown;
+        string hintText = "";
+        OB_StageKind hintKind;
         // The segment of the current stage the local player is on (named on the stage card).
         int segmentStage = -1, shownSegment;
         float nextTrack;
@@ -488,7 +492,8 @@ namespace Universes.UniverseData.obby.Client {
         }
 
         void AppendRow(in OB_ResultEntry entry, int place, bool mine) {
-            string rank = ColorUtility.ToHtmlStringRGB(place switch {
+            // Podium colours only for finishers: a racer who ran out of time is placed, but never shown as a gold "1st".
+            string rank = ColorUtility.ToHtmlStringRGB(!entry.finished ? OB_Palette.Paper : place switch {
                 1 => OB_Palette.Gold,
                 2 => OB_Palette.Silver,
                 3 => OB_Palette.Bronze,
@@ -579,11 +584,26 @@ namespace Universes.UniverseData.obby.Client {
                 shownSegment = 0;
                 nextTrack = 0f;
             }
-            // A new stage, or a new segment of it, brings its hint back up.
+            var current = layout.stages[Mathf.Clamp(checkpoint, 0, layout.StageCount - 1)];
+            int parts = current.segments.Length;
+            OB_StageKind part = parts > 0 ? current.segments[Mathf.Clamp(shownSegment, 0, parts - 1)] : current.kind;
+            ulong seen = hasProgress ? progress.seenMechanics : 0UL;
+            // A new stage, or a new segment of it, brings up its mechanic's hint: only while the player has never
+            // cleared that mechanic (saved on the server), and once per session.
             int hintFor = finished ? -2 : checkpoint * 16 + shownSegment;
             if (hintFor != hintStage) {
                 hintStage = hintFor;
                 hintShownAt = Time.unscaledTime;
+                hintKind = part;
+                bool teach = !finished && !OB_StageHints.Has(seen | hintsShown, part);
+                hintText = teach ? OB_StageText.Hint(part) : "";
+                if (teach && hintText.Length > 0) {
+                    hintsShown |= OB_StageHints.Bit(part);
+                    hintText = $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Gold)}><b>NEW</b></color>  {hintText}";
+                }
+            } else if (!finished && OB_StageHints.Has(seen, hintKind)) {
+                // The save arrived after the hint went up: this player already knows the mechanic.
+                hintText = "";
             }
             OB_Tier tier = finished ? OB_Tier.Extreme : TierAt(checkpoint);
             Color accent = OB_Themes.Get(tier).accent;
@@ -592,7 +612,6 @@ namespace Universes.UniverseData.obby.Client {
             tierLabel.text = OB_Tiers.Name(tier).ToUpperInvariant();
             tierLabel.color = accent.grayscale > 0.55f ? OB_Palette.Ink : OB_Palette.Paper;
             if (atmosphere != null) atmosphere.SetTier(tier);
-            var current = layout.stages[Mathf.Clamp(checkpoint, 0, layout.StageCount - 1)];
             if (finished) {
                 // The finish toast gives way to the results board, so a new best also stays on the card.
                 stageLabel.text = progress.personalBest ? $"<color=#{ColorUtility.ToHtmlStringRGB(OB_Palette.Go)}>NEW BEST!</color>" : "FINISHED";
@@ -602,12 +621,10 @@ namespace Universes.UniverseData.obby.Client {
             } else {
                 stageLabel.text = $"STAGE {checkpoint + 1}<alpha=#88> / {layout.StageCount}";
                 // Named after the segment the player is on, with its place in the stage when it chains several.
-                int parts = current.segments.Length;
-                OB_StageKind part = parts > 0 ? current.segments[Mathf.Clamp(shownSegment, 0, parts - 1)] : current.kind;
                 stageNameLabel.text = parts > 1
                     ? $"{OB_StageText.Name(part)}<size=60%><alpha=#99>  {Mathf.Clamp(shownSegment, 0, parts - 1) + 1}/{parts}</size>"
                     : OB_StageText.Name(part);
-                hintLabel.text = OB_StageText.Hint(part);
+                hintLabel.text = hintText;
                 progressTarget = layout.StageCount > 0 ? (float)checkpoint / layout.StageCount : 0f;
             }
             int coins = OB_Scoring.CountCoins(hasProgress ? progress.coins : 0);

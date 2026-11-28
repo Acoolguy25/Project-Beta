@@ -62,8 +62,9 @@ namespace Universes.UniverseData.obby.Server {
         [Header("Scoring")]
         [Tooltip("Seconds each collected coin takes off a finish time. Results are ranked by this scored time.")]
         [SerializeField, Min(0f)] float coinTimeBonus = 0.5f;
-        [Tooltip("Seconds each collected star takes off a finish time (a pro route costs time; this pays some back).")]
-        [SerializeField, Min(0f)] float starTimeBonus = 3f;
+        [Tooltip("Seconds each collected star takes off a finish time. A pro route costs about 5 s (one dash hop out, a walk back) " +
+            "to 12 s (a second dash hop waits for the dash to refill), so a star pays back about what its detour costs.")]
+        [SerializeField, Min(0f)] float starTimeBonus = 5f;
         [Tooltip("Medal targets as multiples of the course par.")]
         [SerializeField] OB_MedalTimes medalTimes = OB_MedalTimes.Default;
         [Header("Stamina (the kit's pool; the dash has its own charge on CharacterDash)")]
@@ -204,16 +205,25 @@ namespace Universes.UniverseData.obby.Server {
             PreparePlayer(player);
             SendCourse(player.Owner);
             standingsDirty = true;
-            PlayerProgress.Load<OB_SaveData>(player, OB_SaveData.Universe).Forget();
+            LoadSave(player).Forget();
             retention.PlayerJoined(player);
             // Joining a race under way: the end-of-race card covers the rest of it.
             if (phase is OB_Phase.Countdown or OB_Phase.Racing or OB_Phase.Closing) BeginMatch(player.Owner, runner);
         }
 
+        /// <summary>Loads the player's save, then resends their progress so the client knows which hints they have seen.</summary>
+        async UniTaskVoid LoadSave(PlayerData player) {
+            await PlayerProgress.Load<OB_SaveData>(player, OB_SaveData.Universe);
+            if (player != null && player.Owner != null && player.Owner.IsActive) SendProgress(player.Owner, OB_ProgressReason.Sync);
+        }
+
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
             character.CanSpectate.Value = true;
-            RunnerFor(character.Owner).graceUntil = Time.time + teleportGrace;
+            Runner added = RunnerFor(character.Owner);
+            added.graceUntil = Time.time + teleportGrace;
+            // A new character appears at the spawn: the speed check starts a fresh window there.
+            added.sampleTime = 0f;
             if (PlayerData.TryGetPlayerData(character.Owner, out var player)) PreparePlayer(player);
         }
 
@@ -540,7 +550,8 @@ namespace Universes.UniverseData.obby.Server {
                 finishTime = runner.finishTime, place = runner.place, reason = reason,
                 raceTime = runner.lastEventTime, scoredTime = runner.scoredTime, medal = runner.medal,
                 personalBest = runner.personalBest, stars = runner.stars,
-                tierTime = runner.closedTierTime, tierBest = runner.closedTierBest, tier = runner.closedTier
+                tierTime = runner.closedTierTime, tierBest = runner.closedTierBest, tier = runner.closedTier,
+                seenMechanics = PlayerProgress.TryGet(connection, out OB_SaveData save) ? save.seenMechanics : 0UL
             });
         }
 

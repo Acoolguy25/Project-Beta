@@ -29,17 +29,23 @@ namespace Universes.UniverseData.obby.Client {
             OB_StageKind.LavaRise => "Lava Rise",
             OB_StageKind.WindGaps => "Gust Gaps",
             OB_StageKind.IceRink => "Ice Rink",
+            OB_StageKind.LiftShaft => "Lift Shaft",
+            OB_StageKind.GhostPath => "Ghost Path",
+            OB_StageKind.HoneySwamp => "Honey Swamp",
+            OB_StageKind.BoostRings => "Boost Rings",
+            OB_StageKind.Swings => "Trapeze",
+            OB_StageKind.RopeBridge => "Rope Bridge",
             _ => kind.ToString()
         };
 
         public static string Hint(OB_StageKind kind) => kind switch {
-            OB_StageKind.Hops => "Jump from platform to platform. Shift sprints, C slides; catch ledges and wall run to save a jump.",
+            OB_StageKind.Hops => "Jump from platform to platform. Shift dashes (it recharges on the ground); catch ledges to save a jump.",
             OB_StageKind.Springs => "Land on a spring to launch, then steer onto the ledge.",
             OB_StageKind.MoonLeap => "Low gravity! Your jumps go much higher and farther.",
             OB_StageKind.Conveyors => "Belts push you around. Walk against them.",
             OB_StageKind.Crumble => "Cracked blocks fall soon after you land. Keep moving.",
             OB_StageKind.Beat => "Pink and blue blocks swap on the beat. They blink before vanishing.",
-            OB_StageKind.WallJump => "Jump into a striped wall, then press Jump again to kick off it.",
+            OB_StageKind.WallJump => "Jump into a striped wall to cling and slide, then press Jump to kick off to the other wall.",
             OB_StageKind.Movers => "Ride the moving platforms across.",
             OB_StageKind.Spinner => "Jump over the sweeper. If it hits you, you go flying!",
             OB_StageKind.LavaRun => "Hop across the stones. Lava sends you back.",
@@ -60,6 +66,12 @@ namespace Universes.UniverseData.obby.Client {
             OB_StageKind.LavaRise => "The lava rises as soon as you start. Climb! It stops just under the top.",
             OB_StageKind.WindGaps => "Crosswinds blow you sideways. Aim upwind and jump in the calm between gusts.",
             OB_StageKind.IceRink => "Ice! You keep sliding. Line up early and carry your speed into each jump.",
+            OB_StageKind.LiftShaft => "Ride the lifts up and down. Hop across when a lift stops beside a ledge.",
+            OB_StageKind.GhostPath => "Ghost blocks fade in and out. Jump onto the next one as it appears.",
+            OB_StageKind.HoneySwamp => "Honey slows you down. Keep going and jump from the firm pads.",
+            OB_StageKind.BoostRings => "Fly through the glowing rings: each one launches you on to the next.",
+            OB_StageKind.Swings => "Jump onto the trapeze, ride it across and jump off at the far end.",
+            OB_StageKind.RopeBridge => "The planks drop soon after you step on them. Run, don't stop!",
             _ => ""
         };
     }

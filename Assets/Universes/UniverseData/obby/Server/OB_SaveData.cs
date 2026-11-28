@@ -6,8 +6,8 @@ namespace Universes.UniverseData.obby.Server {
     /// <summary>What Sky Obby remembers about a player between sessions. Written only by the server.</summary>
     public sealed class OB_SaveData : ProgressData {
         public const string Universe = OB_Retention.Universe;
-        /// <summary>2: retention block, stars, tier bests.</summary>
-        public override int LatestVersion => 2;
+        /// <summary>2: retention block, stars, tier bests. 3: mechanics seen (hints shown once).</summary>
+        public override int LatestVersion => 3;
 
         /// <summary>Fastest finish in seconds (clock time, before the coin bonus); 0 until the first finish.</summary>
         public float bestFinishTime;
@@ -38,6 +38,19 @@ namespace Universes.UniverseData.obby.Server {
         public int[] tierBestStars = new int[OB_Tiers.Count];
         /// <summary>Tiers cleared without a fall or hazard, and with every coin and star.</summary>
         public int cleanTiers, perfectTiers;
+
+        // Version 3.
+        /// <summary>
+        /// Course mechanics this player has cleared at least once, one bit per <see cref="OB_StageKind"/>. The client shows a
+        /// mechanic's how-to hint only until it is in here, so a returning player is not taught the same thing every race.
+        /// </summary>
+        public ulong seenMechanics;
+
+        /// <summary>Marks every mechanic of <paramref name="stage"/> as seen.</summary>
+        public void RecordSeen(OB_Stage stage) {
+            if (stage.segments == null || stage.segments.Length == 0) seenMechanics |= OB_StageHints.Bit(stage.kind);
+            else foreach (var kind in stage.segments) seenMechanics |= OB_StageHints.Bit(kind);
+        }
 
         public void RecordStage(int stage) => bestStage = Math.Max(bestStage, stage);
 

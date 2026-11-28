@@ -36,6 +36,31 @@ namespace Universes.UniverseData.obby.Tests {
             }
         }
 
+        [Test] public void EveryDefaultCourseHasEnoughStagesForTheNewMechanicChallenges() {
+            // A daily challenge must be doable in one full race of the default course.
+            var stats = new Dictionary<string, OB_StageKind[]> {
+                [OB_Retention.RingsStat] = new[] { OB_StageKind.BoostRings },
+                [OB_Retention.RidesStat] = new[] { OB_StageKind.Swings, OB_StageKind.LiftShaft },
+                [OB_Retention.VanishStat] = new[] { OB_StageKind.GhostPath, OB_StageKind.RopeBridge },
+            };
+            for (int seed = 1; seed <= 40; seed++) {
+                var c = OB_CourseGenerator.Generate(seed * 7919, OB_CourseGenerator.DefaultStageCount, Move, Start, 0f, Lobby, Rules);
+                foreach (var pair in stats) {
+                    int target = OB_Retention.Challenges.Single(ch => ch.statKey == pair.Key).target;
+                    int stages = c.stages.Count(s => s.segments.Any(k => pair.Value.Contains(k)));
+                    Assert.GreaterOrEqual(stages, target, $"seed {c.seed}: only {stages} stages count for {pair.Key}");
+                }
+            }
+        }
+
+        [Test] public void HintMasksHoldEveryStageKind() {
+            foreach (OB_StageKind kind in System.Enum.GetValues(typeof(OB_StageKind))) {
+                Assert.AreNotEqual(0UL, OB_StageHints.Bit(kind), $"{kind} has no seen bit");
+                Assert.IsTrue(OB_StageHints.Has(OB_StageHints.Bit(kind), kind));
+                Assert.IsFalse(OB_StageHints.Has(0UL, kind));
+            }
+        }
+
         [Test] public void LiftsRideBetweenLedgesOneShortHopFromTheirStops() {
             int lifts = 0;
             foreach (var (c, pieces, stage, segment) in Segments(OB_StageKind.LiftShaft, 25)) {

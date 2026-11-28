@@ -102,6 +102,13 @@ namespace Universes.UniverseData.obby.Server {
         void CountStageCleared(NetworkConnection connection, OB_Stage stage) {
             if (Array.Exists(stage.segments, OB_CourseGenerator.IsGravity)) retention.Count(connection, OB_Retention.GravityStat);
             if (Array.IndexOf(stage.segments, OB_StageKind.LavaRise) >= 0) retention.Count(connection, OB_Retention.LavaStat);
+            if (Array.IndexOf(stage.segments, OB_StageKind.BoostRings) >= 0) retention.Count(connection, OB_Retention.RingsStat);
+            if (Array.IndexOf(stage.segments, OB_StageKind.Swings) >= 0 || Array.IndexOf(stage.segments, OB_StageKind.LiftShaft) >= 0)
+                retention.Count(connection, OB_Retention.RidesStat);
+            if (Array.IndexOf(stage.segments, OB_StageKind.GhostPath) >= 0 || Array.IndexOf(stage.segments, OB_StageKind.RopeBridge) >= 0)
+                retention.Count(connection, OB_Retention.VanishStat);
+            // Cleared once: its how-to hint is not shown to this player again.
+            PlayerProgress.Modify<OB_SaveData>(connection, save => save.RecordSeen(stage));
         }
 
         /// <summary>

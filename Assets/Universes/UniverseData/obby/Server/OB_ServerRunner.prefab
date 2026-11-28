@@ -83,11 +83,11 @@ MonoBehaviour:
     dailyChallengeCount: 3
     accountXpScale: 1
   coinTimeBonus: 0.5
-  starTimeBonus: 3
+  starTimeBonus: 5
   medalTimes:
-    goldFactor: 1.05
+    goldFactor: 1
     silverFactor: 1.3
-    bronzeFactor: 1.6
+    bronzeFactor: 1.75
   staminaMax: 0
   staminaRegen: 60
   staminaCooldown: 0
