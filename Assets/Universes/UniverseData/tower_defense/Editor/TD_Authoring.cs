@@ -65,8 +65,12 @@ namespace Universes.UniverseData.tower_defense.Editor {
         const float TeamPaint = 0.8f, TeamGlow = 0.1f;
         /// <summary>Greyscale copies of the pack textures the Artillery uses, named "{texture}_Team.png".</summary>
         const string TeamTextureFolder = Root + "/Textures/Team";
-        /// <summary>Glowing trim bands in the tower's colour around the turret's base, per level (index 0 = level 1): the colour says which tower, the count which level.</summary>
+        /// <summary>Plinth plates in the tower's colour under the turret, per level (index 0 = level 1): the colour says which tower, the count which level.</summary>
         static readonly int[] TrimBands = { 1, 2, 3 };
+        /// <summary>Height of one plinth plate under a turret, in metres.</summary>
+        const float PlateHeight = 0.16f;
+        /// <summary>Plinth radius as a share of the pad's width: the top of the stone tower it sits on.</summary>
+        const float PlinthWidth = 0.34f;
         /// <summary>Extra fit size for models whose long barrel makes them read small at the tower's size.</summary>
         static readonly Dictionary<string, float> ModelFit = new() {
             ["Turret_04_Prefeb"] = 1.4f, ["Turret_01_Prefeb"] = 1.1f,
@@ -132,15 +136,21 @@ namespace Universes.UniverseData.tower_defense.Editor {
 
         // ---------------------------------------------------------------- textures + materials
         static void BuildTextures() {
-            // Worn dirt road: warm sand with pebbles, darker wheel ruts and soft darker shoulders.
+            // Worn dirt road: warm packed earth in soft blotches, two wheel ruts, scattered round pebbles and
+            // darker shoulders. Tiles along V (the road's length), so every noise below wraps at the edge.
+            const int Size = 256;
             Kit.SaveTexture("Road", (u, v) => {
-                float grain = Hash(Mathf.Floor(u * 96f), Mathf.Floor(v * 96f));
-                float pebble = Hash(Mathf.Floor(u * 24f) + 7f, Mathf.Floor(v * 24f)) > 0.93f ? 0.82f : 1f;
-                float rut = Mathf.Abs(Mathf.Abs(u - 0.5f) - 0.2f) < 0.045f ? 0.9f : 1f;
-                float shoulder = Mathf.SmoothStep(0.8f, 1f, Mathf.Abs(u - 0.5f) * 2f);
-                float c = (0.92f + 0.08f * grain) * pebble * rut * (1f - 0.18f * shoulder);
-                return new Color(0.86f * c, 0.7f * c, 0.5f * c);
-            }, 256);
+                float blotch = TileNoise(u, v, 6) * 0.6f + TileNoise(u, v, 18) * 0.3f + TileNoise(u, v, 64) * 0.1f;
+                float grain = Hash(Mathf.Floor(u * Size), Mathf.Floor(v * Size));
+                float wobble = (TileNoise(0.37f, v, 10) - 0.5f) * 0.05f;
+                float rutDistance = Mathf.Abs(Mathf.Abs(u - 0.5f + wobble) - 0.21f);
+                float rut = 1f - 0.16f * (1f - Mathf.SmoothStep(0.02f, 0.07f, rutDistance));
+                float shoulder = Mathf.SmoothStep(0.72f, 1f, Mathf.Abs(u - 0.5f) * 2f);
+                float c = (0.84f + 0.16f * blotch + 0.05f * (grain - 0.5f)) * rut * (1f - 0.22f * shoulder);
+                var dirt = new Color(0.84f * c, 0.68f * c, 0.49f * c);
+                float pebble = Pebble(u, v, 14);
+                return pebble > 0f ? Color.Lerp(dirt, new Color(0.62f, 0.56f, 0.48f) * (0.85f + 0.25f * pebble), Mathf.Clamp01(pebble * 2.5f) * 0.8f) : dirt;
+            }, Size);
             Kit.SaveTexture("Blob", (u, v) => {
                 float d = Vector2.Distance(new Vector2(u, v), new Vector2(0.5f, 0.5f)) * 2f;
                 return new Color(0f, 0f, 0f, Mathf.Clamp01(1f - d) * 0.55f);
@@ -153,6 +163,31 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 importer.wrapMode = TextureWrapMode.Clamp;
                 importer.SaveAndReimport();
             }
+        }
+
+        /// <summary>Smooth value noise on a <paramref name="cells"/>-cell grid that wraps at 0 and 1 in both axes (0..1).</summary>
+        static float TileNoise(float u, float v, int cells) {
+            float x = Mathf.Repeat(u, 1f) * cells, y = Mathf.Repeat(v, 1f) * cells;
+            int x0 = Mathf.FloorToInt(x), y0 = Mathf.FloorToInt(y);
+            float fx = x - x0, fy = y - y0;
+            fx = fx * fx * (3f - 2f * fx);
+            fy = fy * fy * (3f - 2f * fy);
+            float Corner(int i, int j) => Hash((x0 + i) % cells + 0.5f, (y0 + j) % cells + 0.5f);
+            return Mathf.Lerp(Mathf.Lerp(Corner(0, 0), Corner(1, 0), fx), Mathf.Lerp(Corner(0, 1), Corner(1, 1), fx), fy);
+        }
+
+        /// <summary>
+        /// A round pebble in some of the cells of a <paramref name="cells"/> grid (wrapping): 0 outside one,
+        /// rising to 1 at its centre.
+        /// </summary>
+        static float Pebble(float u, float v, int cells) {
+            float x = Mathf.Repeat(u, 1f) * cells, y = Mathf.Repeat(v, 1f) * cells;
+            int cx = Mathf.FloorToInt(x), cy = Mathf.FloorToInt(y);
+            if (Hash(cx + 11.3f, cy + 4.1f) < 0.72f) return 0f;
+            float px = 0.25f + 0.5f * Hash(cx + 2.7f, cy + 9.9f), py = 0.25f + 0.5f * Hash(cx + 6.1f, cy + 1.3f);
+            float radius = 0.09f + 0.1f * Hash(cx + 3.3f, cy + 7.7f);
+            float d = Vector2.Distance(new Vector2(x - cx, y - cy), new Vector2(px, py));
+            return Mathf.Clamp01(1f - d / radius);
         }
 
         /// <summary>The KayKit atlas on URP Lit with a tint, used to pull the pack's lime grass toward a deeper green.</summary>
@@ -192,6 +227,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             public Material barBack, barFill, frost, blob, star, marker, ring, rangeRing, bossRing, tracer, projectile, ghost;
             public Material shield, shieldFill, healRing, gold, coil;
             public Material[] trims;
+            /// <summary>Painted (barely glowing) tower-colour plates under the turrets, per <see cref="TD_TowerKind"/>.</summary>
+            public Material[] plinths;
         }
 
         static Materials BuildMaterials() {
@@ -216,6 +253,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 coil = Kit.Mat("TeslaCoil", TD_Palette.Tower(TD_TowerKind.Tesla), emission: 1.1f, smoothness: 0.6f),
                 trims = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>()
                     .Select(k => Kit.Mat("Trim" + k, TD_Palette.Tower(k), emission: 0.6f, smoothness: 0.5f)).ToArray(),
+                plinths = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>()
+                    .Select(k => Kit.Mat("Plinth" + k, TD_Palette.Tower(k), emission: 0.12f, smoothness: 0.35f)).ToArray(),
             };
         }
 
@@ -299,11 +338,11 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 string model = models[Mathf.Min(level, models.Length) - 1];
                 var turret = TurretModel(kind, model, tier.transform, size, m);
                 if (turret == null) continue;
-                // Stars sit just above this level's own model, not at a height shared by all levels.
-                view.badgeHeight[level - 1] = RendererBounds(turret).max.y - root.transform.position.y + BadgeGap;
                 tierBounds[level - 1] = RendererBounds(turret).size * LevelScale[level - 1];
                 Paint(turret, kind, level);
-                Bands(turret, tier.transform, kind, level, m);
+                Plinth(turret, tier.transform, kind, level, m);
+                // Stars sit just above this level's own model, not at a height shared by all levels.
+                view.badgeHeight[level - 1] = RendererBounds(turret).max.y - root.transform.position.y + BadgeGap;
                 if (level == 1) {
                     var b = RendererBounds(turret);
                     var box = root.AddComponent<BoxCollider>();
@@ -414,18 +453,25 @@ namespace Universes.UniverseData.tower_defense.Editor {
             return team;
         }
 
-        /// <summary>Glowing bands in the tower's colour stacked around the turret's base, <see cref="TrimBands"/> per level (1/2/3).</summary>
-        static void Bands(GameObject turret, Transform tier, TD_TowerKind kind, int level, Materials m) {
+        /// <summary>
+        /// A stepped plinth in the tower's colour under the turret, <see cref="TrimBands"/> plates per level
+        /// (1/2/3, each a little narrower): the colour says which tower and the steps which level, and the
+        /// turret stands on it instead of hovering inside floating rings. Lifts the turret by its height.
+        /// </summary>
+        static void Plinth(GameObject turret, Transform tier, TD_TowerKind kind, int level, Materials m) {
             int count = TrimBands[level - 1];
             if (count <= 0) return;
             var b = RendererBounds(turret);
-            float radius = Mathf.Max(b.extents.x, b.extents.z) * 0.62f;
+            // As wide as the stone tower's top at every level (the whole tower grows with its level scale).
+            float radius = PadSize * PlinthWidth / LevelScale[level - 1];
             float bottom = b.min.y - tier.position.y;
             for (int i = 0; i < count; i++) {
-                var band = FlatRing($"TrimBand{i + 1}", tier, radius, bottom + 0.3f + i * 0.45f, m.trims[(int)kind], 40);
-                band.widthMultiplier = 0.3f;
-                band.alignment = LineAlignment.View;
+                float r = radius * (1f - i * 0.12f);
+                var plate = Primitive(PrimitiveType.Cylinder, $"Plinth{i + 1}", tier, new Vector3(0f, bottom + (i + 0.5f) * PlateHeight, 0f),
+                    new Vector3(r * 2f, PlateHeight * 0.5f, r * 2f), m.plinths[(int)kind], false);
+                NoShadows(plate);
             }
+            turret.transform.localPosition += Vector3.up * (count * PlateHeight);
         }
 
         static Material Painted(Material source, string name, Color paint, Color emission = default, Texture baseMap = null) {

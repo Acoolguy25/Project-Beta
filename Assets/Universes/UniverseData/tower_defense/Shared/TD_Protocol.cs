@@ -34,6 +34,12 @@ namespace Universes.UniverseData.tower_defense {
         public bool gold;
         /// <summary>The builder's towers hit harder (Veteran Crews), for the info card.</summary>
         public bool veteran;
+        /// <summary>What it shoots at. Appended 2026-11-28; First from older servers.</summary>
+        public TD_TargetMode target;
+        /// <summary>Enemies it destroyed this game. Appended 2026-11-28.</summary>
+        public int kills;
+        /// <summary>Damage it dealt this game (health and shield, rounded). Appended 2026-11-28.</summary>
+        public int damage;
     }
 
     public struct TD_Shot {
@@ -184,5 +190,13 @@ namespace Universes.UniverseData.tower_defense {
         public bool[] unlocked;
         /// <summary>Waves until ready, index = <see cref="TD_Ability"/> (0 = ready).</summary>
         public byte[] wavesLeft;
+    }
+}
+
+namespace Universes.UniverseData.tower_defense {
+    /// <summary>Change what the tower on a pad shoots at (its builder, or anyone for an unclaimed tower).</summary>
+    public struct TD_TargetRequest : IBroadcast {
+        public byte slot;
+        public TD_TargetMode mode;
     }
 }

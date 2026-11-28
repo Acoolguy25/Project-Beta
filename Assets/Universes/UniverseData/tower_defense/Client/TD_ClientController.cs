@@ -18,7 +18,7 @@ namespace Universes.UniverseData.tower_defense.Client {
     /// Draws the defence from server snapshots (enemies, shields, heals, towers, shots, chains), feeds
     /// the <see cref="TD_Hud"/> and sends mode-vote, build, upgrade, sell, ready, fast-forward and
     /// ability requests. Keys: 1-3 vote for a mode before wave 1; then 1-6 pick a tower, E builds or
-    /// upgrades the pad in front of you, X (twice) sells the tower there, R votes to start the next
+    /// upgrades the pad in front of you, X (twice) sells the tower there, T cycles its target, R votes to start the next
     /// wave early, G votes for fast forward, F calls an Airstrike and V fires an EMP. All feedback
     /// (blasts, popups, shake, sounds, base alarm) is a reaction to server broadcasts. The key names
     /// the HUD shows come from here. Unlocks come from the shared retention HUD's level.
@@ -32,6 +32,8 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         [Header("Keys")]
         public Key sellKey = Key.X;
+        [Tooltip("Cycles what the focused tower shoots at (First, Last, Strongest, Closest).")]
+        public Key targetKey = Key.T;
         [Tooltip("Puts the tower in hand away (a click on its card, Backspace and Escape do too).")]
         public Key dropKey = Key.Q;
         public Key fastForwardKey = Key.G;
@@ -327,6 +329,7 @@ namespace Universes.UniverseData.tower_defense.Client {
                 if (placing || focusedSlot >= 0 && towerViews[focusedSlot] != null) Interact();
             }
             if (keyboard[sellKey].wasPressedThisFrame) Sell();
+            if (keyboard[targetKey].wasPressedThisFrame) CycleTarget();
             if (keyboard[fastForwardKey].wasPressedThisFrame) ToggleFastForward();
             if (keyboard[empKey].wasPressedThisFrame) UseAbility(TD_Ability.Emp);
         }
@@ -358,7 +361,21 @@ namespace Universes.UniverseData.tower_defense.Client {
             hud.Toast($"Press {sellKey} again to sell the {TD_Rules.Tower(tower.kind).name} for ${TD_InfoPanel.RefundOf(tower)}", TD_Hud.ToastKind.Money, sellConfirmSeconds);
         }
 
-        /// <summary>Whether this client may sell <paramref name="tower"/>: unclaimed, or built by this player (same rule as the server).</summary>
+        /// <summary>Asks the server to aim the focused tower at the next <see cref="TD_TargetMode"/>; its reply toasts the result.</summary>
+        void CycleTarget() {
+            UpdateFocus();
+            if (focusedSlot < 0 || towerViews[focusedSlot] == null || manager == null || !manager.Started) return;
+            var tower = towerSnaps[focusedSlot];
+            if (!CanSell(tower)) {
+                hud.Toast($"Only {tower.owner} can retarget this {TD_Rules.Tower(tower.kind).name}.", TD_Hud.ToastKind.Bad, tuning.shortToastSeconds);
+                GameSfx.Play(SfxCue.Error);
+                return;
+            }
+            manager.Broadcast(new TD_TargetRequest { slot = (byte)focusedSlot, mode = TD_Targeting.Next(tower.target) });
+            GameSfx.Play(SfxCue.UiClick);
+        }
+
+        /// <summary>Whether this client may sell (or retarget) <paramref name="tower"/>: unclaimed, or built by this player (same rule as the server).</summary>
         bool CanSell(in TD_TowerSnap tower) => tower.ownerId < 0 || (manager != null && manager.Connection != null && tower.ownerId == manager.Connection.ClientId);
 
         void ToggleFastForward() {
@@ -532,7 +549,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         void RefreshFocusCard() {
             if (focusedSlot < 0 && placing && hasState) hud.ShowPlaceHint((TD_TowerKind)selected);
             else if (focusedSlot < 0 || !hasState) hud.ClearFocus();
-            else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), CanSell(towerSnaps[focusedSlot]), Perks.upgradeDiscount);
+            else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), targetKey.ToString(), CanSell(towerSnaps[focusedSlot]), Perks.upgradeDiscount);
             else {
                 var kind = (TD_TowerKind)selected;
                 hud.ShowFocusPad(kind, state.cash, TD_Retention.CanBuild(Level, kind) ? 0 : TD_Retention.LevelOf(TD_Rules.Tower(kind).unlockId));

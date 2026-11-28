@@ -13,6 +13,8 @@ namespace Universes.UniverseData.tower_defense.Client {
         public TMP_Text title, subtitle, damageValue, rangeValue, rateValue, actionLabel, tagsLabel;
         [Tooltip("What selling the focused tower pays back (hidden on an empty pad).")]
         public TMP_Text sellLabel;
+        [Tooltip("A built tower's targeting mode (and the key that cycles it) and what it has done this game.")]
+        public TMP_Text targetLabel, recordLabel;
         public Image[] stars;
         public Color starOn = new(1f, 0.8f, 0.24f), starOff = new(1f, 1f, 1f, 0.15f);
         public Color actionReady = new(0.2f, 0.78f, 0.48f), actionBlocked = new(0.95f, 0.33f, 0.36f), actionDone = new(1f, 1f, 1f, 0.12f);
@@ -32,11 +34,15 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (unlockLevel > 0) Action($"Unlocks at level {unlockLevel}", actionDone);
             else Action($"Build  ${t.cost}", cash >= t.cost ? actionReady : actionBlocked);
             sellLabel.gameObject.SetActive(false);
+            // Same rows as a built tower's card, so the card keeps its size: how it will aim, and what it sells back for.
+            ShowRecord(true);
+            if (targetLabel != null) targetLabel.text = $"Target  <b>{TD_Targeting.Name(TD_Targeting.Default(kind))}</b>   <color=#B4BCC8>change it once built</color>";
+            if (recordLabel != null) recordLabel.text = $"<color=#B4BCC8>Sells back for ${TD_Rules.SellRefund(kind, 1)}</color>";
             fader.Set(true);
         }
 
         /// <summary>Shows a built tower, its upgrade (at <paramref name="upgradeCost"/>, the viewer's price) and its sale value.</summary>
-        public void ShowTower(TD_TowerSnap tower, Sprite towerPortrait, int cash, string sellKey, bool canSell, int upgradeCost) {
+        public void ShowTower(TD_TowerSnap tower, Sprite towerPortrait, int cash, string sellKey, string targetKey, bool canSell, int upgradeCost) {
             var t = TD_Rules.Tower(tower.kind);
             string owner = string.IsNullOrEmpty(tower.owner) ? "Unclaimed" : $"Built by {tower.owner}";
             if (tower.veteran) owner += $"  <color=#7CFF8A>Veteran +{Mathf.RoundToInt((TD_Retention.VeteranDamage - 1f) * 100f)}%</color>";
@@ -52,10 +58,24 @@ namespace Universes.UniverseData.tower_defense.Client {
             sellLabel.text = canSell
                 ? $"<b>{sellKey}</b> ×2  Sell for ${refund}  <color=#B4BCC8>{note}</color>"
                 : $"<color=#B4BCC8>Only {tower.owner} can sell this tower</color>";
+            ShowRecord(true);
+            if (targetLabel != null) {
+                string mode = $"Target  <b>{TD_Targeting.Name(tower.target)}</b>";
+                targetLabel.text = canSell ? $"{mode}   <color=#B4BCC8><b>{targetKey}</b> change</color>" : mode;
+            }
+            if (recordLabel != null)
+                recordLabel.text = tower.kills > 0 || tower.damage > 0
+                    ? $"{tower.kills} {(tower.kills == 1 ? "kill" : "kills")}  ·  {TD_Targeting.Short(tower.damage)} damage"
+                    : "<color=#B4BCC8>No hits yet</color>";
             fader.Set(true);
         }
 
         public void Hide() => fader.Set(false);
+
+        void ShowRecord(bool show) {
+            if (targetLabel != null) targetLabel.gameObject.SetActive(show);
+            if (recordLabel != null) recordLabel.gameObject.SetActive(show);
+        }
 
         void Header(TD_TowerKind kind, Sprite towerPortrait, string heading, string sub, int level, float damageScale = 1f) {
             portrait.sprite = towerPortrait;

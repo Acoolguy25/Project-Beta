@@ -14,6 +14,12 @@ namespace Universes.UniverseData.tower_defense {
         public TD_TowerPerks perks = TD_TowerPerks.None;
         /// <summary>Cash spent on it so far (build plus upgrades, after discounts).</summary>
         public int spent;
+        /// <summary>Which enemy in range it shoots (players can change it).</summary>
+        public TD_TargetMode target;
+        /// <summary>Enemies it destroyed this game.</summary>
+        public int kills;
+        /// <summary>Health and shield it took off enemies this game (overkill not counted).</summary>
+        public float damageDealt;
 
         public int Refund => Mathf.RoundToInt(spent * perks.refundRate);
     }
@@ -206,33 +212,41 @@ namespace Universes.UniverseData.tower_defense {
         }
 
         /// <summary>
-        /// Picks a target in range: snipers take the toughest enemy (health plus shield), frost the one not
-        /// yet slowed (shields make it immune), everyone else the one furthest along the road.
+        /// Picks a target in range by the tower's <see cref="TD_SimTower.target"/> mode. Frost first looks for
+        /// enemies it can still slow (not shielded, not already slowed), so it spreads its chill instead of
+        /// re-freezing one enemy.
         /// </summary>
         TD_SimEnemy Target(TD_SimTower tower) {
             float range = TD_Daily.Range(tower.kind, tower.level, Modifier);
+            Vector2 at = Flat(TD_Rules.Slots[tower.slot]);
             TD_SimEnemy target = null;
+            float targetSqr = 0f;
+            bool frost = tower.kind == TD_TowerKind.Frost;
             foreach (var e in Enemies) {
                 if (!InRange(tower, e, range)) continue;
-                if (target == null || Better(tower.kind, e, target)) target = e;
+                float sqr = (Flat(TD_Rules.LaneTrack.Evaluate(e.distance)) - at).sqrMagnitude;
+                if (target == null || Better(tower, frost, e, target, sqr, targetSqr)) {
+                    target = e;
+                    targetSqr = sqr;
+                }
             }
             return target;
         }
 
-        bool Better(TD_TowerKind kind, TD_SimEnemy e, TD_SimEnemy current) {
-            switch (kind) {
-                case TD_TowerKind.Sniper: {
-                    float a = e.health + e.shield, b = current.health + current.shield;
-                    if (!Mathf.Approximately(a, b)) return a > b;
-                    break;
-                }
-                case TD_TowerKind.Frost: {
-                    bool open = !e.Shielded && Time >= e.slowUntil, currentOpen = !current.Shielded && Time >= current.slowUntil;
-                    if (open != currentOpen) return open;
-                    break;
-                }
+        bool Better(TD_SimTower tower, bool frost, TD_SimEnemy e, TD_SimEnemy current, float sqr, float currentSqr) {
+            if (frost) {
+                bool open = !e.Shielded && Time >= e.slowUntil, currentOpen = !current.Shielded && Time >= current.slowUntil;
+                if (open != currentOpen) return open;
             }
-            return e.distance > current.distance;
+            return TD_Targeting.Prefers(tower.target, e, current, sqr, currentSqr);
+        }
+
+        /// <summary>Sets what the tower on <paramref name="slot"/> shoots at; false when the pad is empty or the mode unknown.</summary>
+        public bool SetTarget(int slot, TD_TargetMode mode) {
+            var tower = IsSlot(slot) ? Towers[slot] : null;
+            if (tower == null || !TD_Targeting.IsValid(mode)) return false;
+            tower.target = mode;
+            return true;
         }
 
         void Fire(TD_SimTower tower, float dt) {
@@ -301,8 +315,13 @@ namespace Universes.UniverseData.tower_defense {
 
         /// <summary>One hit, its reward, its shield break and, for a carrier, the drones it releases.</summary>
         TD_HitResult Hit(int slot, int owner, TD_SimEnemy e, float raw, bool pierce, bool ignoreBlock = false) {
-            float distance = e.distance;
+            float distance = e.distance, before = e.health + e.shield;
             var result = TD_Battle.Strike(Enemies, e, raw, pierce, Events.killed, ignoreBlock);
+            var tower = IsSlot(slot) ? Towers[slot] : null;
+            if (tower != null) {
+                tower.damageDealt += Mathf.Max(0f, before - (result == TD_HitResult.Killed ? 0f : e.health + e.shield));
+                if (result == TD_HitResult.Killed) tower.kills++;
+            }
             if (result == TD_HitResult.ShieldBroken)
                 Events.shieldBreaks.Add(new TD_Kill { enemy = e.id, kind = e.kind, slot = slot, owner = owner });
             if (result != TD_HitResult.Killed) return result;
@@ -408,7 +427,7 @@ namespace Universes.UniverseData.tower_defense {
             cost = TD_Rules.Tower(kind).cost;
             if (Cash < cost) return TD_BuildResult.NoCash;
             Cash -= cost;
-            Towers[slot] = new TD_SimTower { slot = (byte)slot, kind = kind, owner = owner, perks = perks, spent = cost };
+            Towers[slot] = new TD_SimTower { slot = (byte)slot, kind = kind, owner = owner, perks = perks, spent = cost, target = TD_Targeting.Default(kind) };
             return TD_BuildResult.Built;
         }
 

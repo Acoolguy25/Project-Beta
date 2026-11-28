@@ -543,9 +543,9 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         /// <param name="canSell">False for another player's tower: no sell offer, the card says who can sell it.</param>
         /// <param name="upgradeDiscount">The viewer's upgrade discount (Field Engineers): they pay the upgrade.</param>
-        public void ShowFocusTower(in TD_TowerSnap tower, int cash, string sellKey, bool canSell, float upgradeDiscount) {
+        public void ShowFocusTower(in TD_TowerSnap tower, int cash, string sellKey, string targetKey, bool canSell, float upgradeDiscount) {
             int cost = TD_Rules.UpgradeCost(tower.kind, tower.level, upgradeDiscount);
-            info.ShowTower(tower, Portrait(tower.kind), cash, sellKey, canSell, cost);
+            info.ShowTower(tower, Portrait(tower.kind), cash, sellKey, targetKey, canSell, cost);
             string sell = canSell ? $"<b>{sellKey}</b>  Sell +${TD_InfoPanel.RefundOf(tower)}" : "";
             if (tower.level >= TD_Rules.MaxLevel) {
                 Prompt(sell);

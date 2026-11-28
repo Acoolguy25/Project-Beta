@@ -36,7 +36,7 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// <summary>Top of the retention toasts (canvas units from the top): below the leaderboard with four rows.</summary>
         const float ToastsTop = 260f;
         static readonly Vector2 AbilityPillSize = new(236f, 54f);
-        const float InfoHeight = 290f;
+        const float InfoHeight = 334f;
         const float StatusTop = -60f;
         /// <summary>Top of the pill row under the status bar (next wave, fast forward, boss).</summary>
         const float PillRowTop = StatusTop - 112f;
@@ -520,6 +520,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             info.damageValue = StatRow(content, "damage", "Damage");
             info.rangeValue = StatRow(content, "range", "Range");
             info.rateValue = StatRow(content, "rate", "Fire rate");
+            info.targetLabel = Label(content, "Target", "", UIText.Small, UIColorRole.TextPrimary);
+            info.recordLabel = Label(content, "Record", "", UIText.Small, UIColorRole.TextSecondary);
             info.sellLabel = Label(content, "Sell", "", UIText.Small, UIColorRole.TextSecondary);
 
             RectTransform action = Node(content, "Action");

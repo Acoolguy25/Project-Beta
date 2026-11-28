@@ -27,6 +27,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
         /// <summary>How far the hex ground and scenery extend past the field.</summary>
         const float Margin = 70f;
         const float RoadWidth = 9f;
+        /// <summary>How much wider than the road the grass verge under it is (both sides together).</summary>
+        const float VergeExtra = 3f;
         const int Seed = 1337;
 
         /// <summary>The lane and cells in design metres (the world root scales them down again).</summary>
@@ -89,7 +91,18 @@ namespace Universes.UniverseData.tower_defense.Editor {
             float colStep = across * 0.75f, rowStep = flat;
 
             // The pack's grass is a bright lime; a tint pulls it toward a meadow green that reads better under the HUD.
-            var grass = TD_Authoring.Tinted("HexGrass", KayKit + "tiles/base/hexagons_medieval.png", new Color(0.6f, 0.7f, 0.56f));
+            // Three shades picked by smooth noise give the meadow patches of lush, plain and sun-dried grass
+            // instead of one flat colour.
+            string atlas = KayKit + "tiles/base/hexagons_medieval.png";
+            Material[] shades = {
+                TD_Authoring.Tinted("HexGrassLush", atlas, new Color(0.5f, 0.64f, 0.5f)),
+                TD_Authoring.Tinted("HexGrass", atlas, new Color(0.6f, 0.7f, 0.56f)),
+                TD_Authoring.Tinted("HexGrassDry", atlas, new Color(0.68f, 0.7f, 0.5f)),
+            };
+            Material Shade(float x, float z) {
+                float n = Mathf.PerlinNoise(x * 0.018f + 31.7f, z * 0.018f + 12.3f) + 0.2f * (Mathf.PerlinNoise(x * 0.05f + 5f, z * 0.05f + 77f) - 0.5f);
+                return shades[n < 0.4f ? 0 : n < 0.66f ? 1 : 2];
+            }
             float minX = Field.xMin - Margin, maxX = Field.xMax + Margin, minZ = Field.yMin - Margin, maxZ = Field.yMax + Margin;
             int cols = Mathf.CeilToInt((cornersOnX ? maxX - minX : maxZ - minZ) / colStep) + 1;
             int rows = Mathf.CeilToInt((cornersOnX ? maxZ - minZ : maxX - minX) / rowStep) + 1;
@@ -102,7 +115,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     lift += outside > 0f ? (float)random.NextDouble() * 0.4f : 0f;
                     // Tiles stand on the floor: their top is at y = 0 inside the field.
                     var tile = Kay(KayKit + "tiles/base/hex_grass", parent, new Vector3(x, lift - thickness, z), HexWidth, 0f);
-                    foreach (var renderer in tile.GetComponentsInChildren<MeshRenderer>()) renderer.sharedMaterial = grass;
+                    var shade = Shade(x, z);
+                    foreach (var renderer in tile.GetComponentsInChildren<MeshRenderer>()) renderer.sharedMaterial = shade;
                 }
         }
 
@@ -118,10 +132,15 @@ namespace Universes.UniverseData.tower_defense.Editor {
             var lane = DesignLane;
             string meshes = TD_Authoring.Root + "/Meshes";
             var road = TD_Authoring.Kit.Mat("Road", Color.white, TD_Authoring.Kit.Tex("Road"), smoothness: 0.05f);
-            var verge = TD_Authoring.Kit.Mat("RoadVerge", new Color(0.5f, 0.56f, 0.3f), smoothness: 0.05f);
+            // A trodden band of darker, thinner grass either side of the dirt, so the road sinks into the meadow.
+            var verge = TD_Authoring.Kit.Mat("RoadVerge", new Color(0.42f, 0.5f, 0.26f), smoothness: 0.05f);
             var parent = Empty("Road", world).transform;
-            Piece("Verge", parent, TD_Meshes.Ribbon(meshes, "RoadVerge", lane, RoadWidth + 2.4f, 0.14f, 0.1f), verge);
-            Piece("Road", parent, TD_Meshes.Ribbon(meshes, "Road", lane, RoadWidth, 0.2f, 0.06f), road);
+            // Rounded bends (one radius for both strips, so neither inner edge folds); enemies still drive the
+            // sharp centre line, which stays well inside the dirt at every corner.
+            float corner = (RoadWidth + VergeExtra) * 0.5f + 0.5f;
+            Piece("Verge", parent, TD_Meshes.RoundedStrip(meshes, "RoadVerge", lane, RoadWidth + VergeExtra, 0.14f, 0.1f, corner), verge);
+            Piece("Road", parent, TD_Meshes.RoundedStrip(meshes, "Road", lane, RoadWidth, 0.2f, 0.06f, corner), road);
+            RoadStones(parent, lane);
 
             // Hazard stripe where enemies reach the base.
             Vector3 end = lane[^1], into = (end - lane[^2]).normalized;
@@ -137,6 +156,29 @@ namespace Universes.UniverseData.tower_defense.Editor {
             renderer.sharedMaterial = material;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic);
+        }
+
+        /// <summary>
+        /// Small rocks dotted along both road edges (seeded, a few metres apart, never on a corner's inside),
+        /// so the dirt has a kerb that reads from the top-down camera.
+        /// </summary>
+        static void RoadStones(Transform parent, Vector3[] lane) {
+            var random = new System.Random(Seed + 3);
+            var stones = Empty("EdgeStones", parent).transform;
+            string[] rocks = { "rock_single_A", "rock_single_B", "rock_single_C", "rock_single_D", "rock_single_E" };
+            float edge = RoadWidth * 0.5f + 0.2f; // on the dirt's lip, so towers on the nearest cells barely touch them
+            for (int s = 1; s + 1 < lane.Length; s++) { // the first leg is inside the tunnel
+                Vector3 a = lane[s], b = lane[s + 1], dir = (b - a).normalized, side = Vector3.Cross(Vector3.up, dir);
+                float length = Vector3.Distance(a, b);
+                for (float d = 6f; d < length - 6f; d += 5f + (float)random.NextDouble() * 6f) {
+                    foreach (float sign in new[] { -1f, 1f }) {
+                        if (random.NextDouble() < 0.35) continue;
+                        Vector3 p = a + dir * (d + (float)random.NextDouble() * 1.5f) + side * sign * (edge + (float)random.NextDouble() * 0.4f);
+                        if (DistanceToRoad(p) < edge - 0.2f) continue; // a bend of the next leg
+                        Kay(Nature + rocks[random.Next(rocks.Length)], stones, p, 0.7f + (float)random.NextDouble() * 0.9f, (float)random.NextDouble() * 360f);
+                    }
+                }
+            }
         }
 
         static float DistanceToRoad(Vector3 p) {
@@ -203,7 +245,25 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 ("blue", "building_windmill_blue", 92f, 30f, 13f, -90f), ("blue", "building_watermill_blue", 92f, -22f, 12f, -90f),
                 ("blue", "building_well_blue", 86f, 14f, 4f, 0f),
             };
-            foreach (var h in houses) Kay($"{Buildings}{h.folder}/{h.model}", village, new Vector3(h.x, 0f, h.z), h.size, h.yaw, solid: true);
+            // Each house steps a little off the row and turns a little, and a few village props and trees stand
+            // between neighbours, so the edges read as a lived-in hamlet rather than a parade of models.
+            var random = new System.Random(Seed + 11);
+            float Jitter(float range) => ((float)random.NextDouble() * 2f - 1f) * range;
+            string[] yard = { "barrel", "crate_A_small", "crate_B_big", "sack", "wheelbarrow", "bucket_water", "resource_lumber", "crate_open", "pallet" };
+            string[] trees = { "tree_single_A", "tree_single_B", "trees_A_small", "trees_B_small" };
+            for (int i = 0; i < houses.Length; i++) {
+                var h = houses[i];
+                bool row = Mathf.Abs(h.z) > 55f; // the north and south rows (the mills stand alone by the base)
+                var at = new Vector3(h.x + (row ? Jitter(2.5f) : 0f), 0f, h.z + (row ? Jitter(3.5f) : 0f));
+                Kay($"{Buildings}{h.folder}/{h.model}", village, at, h.size, h.yaw + (row ? Jitter(12f) : 0f), solid: true);
+                if (!row || i + 1 >= houses.Length || Mathf.Abs(houses[i + 1].z - h.z) > 6f) continue;
+                // Between this house and the next one in the row: two props and a tree.
+                var gap = (at + new Vector3(houses[i + 1].x, 0f, houses[i + 1].z)) * 0.5f;
+                float back = Mathf.Sign(h.z); // away from the field
+                Kay(Props + yard[random.Next(yard.Length)], village, gap + new Vector3(Jitter(1.5f), 0f, -back * 3f + Jitter(1f)), 1.6f + Jitter(0.3f), Jitter(180f));
+                Kay(Props + yard[random.Next(yard.Length)], village, gap + new Vector3(Jitter(2f), 0f, -back * 1f + Jitter(1f)), 1.4f + Jitter(0.3f), Jitter(180f));
+                Kay(Nature + trees[random.Next(trees.Length)], village, gap + new Vector3(Jitter(2f), 0f, back * 4f), 6f + Jitter(1.5f), Jitter(180f), solid: true);
+            }
         }
 
         static GameObject MilitaryModel(Transform parent, string model, Vector3 position, float size, float yaw) {
@@ -232,10 +292,18 @@ namespace Universes.UniverseData.tower_defense.Editor {
                 return part;
             }
             float wall = 2.5f, half = width * 0.5f;
-            Part("WallLeft", new Vector3(-half - wall * 0.5f, height * 0.5f, -length * 0.5f), new Vector3(wall, height, length), dark);
-            Part("WallRight", new Vector3(half + wall * 0.5f, height * 0.5f, -length * 0.5f), new Vector3(wall, height, length), dark);
-            Part("Roof", new Vector3(0f, height + wall * 0.5f, -length * 0.5f), new Vector3(width + wall * 2f, wall, length), dark);
-            Part("Back", new Vector3(0f, height * 0.5f, -length - wall * 0.5f), new Vector3(width + wall * 2f, height + wall, wall), dark);
+            // Stone shell outside, a black lining inside: from the field it reads as masonry, and the
+            // opening is still a dark hole the enemies roll out of.
+            Part("WallLeft", new Vector3(-half - wall * 0.5f, height * 0.5f, -length * 0.5f), new Vector3(wall, height, length), stone);
+            Part("WallRight", new Vector3(half + wall * 0.5f, height * 0.5f, -length * 0.5f), new Vector3(wall, height, length), stone);
+            Part("Roof", new Vector3(0f, height + wall * 0.5f, -length * 0.5f), new Vector3(width + wall * 2f, wall, length), stone);
+            Part("Back", new Vector3(0f, height * 0.5f, -length - wall * 0.5f), new Vector3(width + wall * 2f, height + wall, wall), stone);
+            const float Lining = 0.12f;
+            Part("LiningLeft", new Vector3(-half + Lining * 0.5f, height * 0.5f, -length * 0.5f), new Vector3(Lining, height, length), dark);
+            Part("LiningRight", new Vector3(half - Lining * 0.5f, height * 0.5f, -length * 0.5f), new Vector3(Lining, height, length), dark);
+            Part("LiningRoof", new Vector3(0f, height - Lining * 0.5f, -length * 0.5f), new Vector3(width, Lining, length), dark);
+            Part("LiningBack", new Vector3(0f, height * 0.5f, -length + Lining * 0.5f), new Vector3(width, height, Lining), dark);
+            Part("LiningFloor", new Vector3(0f, 0.25f, -length * 0.5f), new Vector3(width, 0.1f, length), dark);
             // Stone portal frame with a hazard band over the opening.
             float pillar = 3f;
             Part("PillarLeft", new Vector3(-half - pillar * 0.5f - 0.2f, (height + wall) * 0.5f, 0.6f), new Vector3(pillar, height + wall, pillar), stone);
@@ -253,6 +321,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             };
             for (int i = 0; i < mounds.Length; i++)
                 Kay(Nature + hills[random.Next(hills.Length)], root.transform, mounds[i], 24f + i % 3 * 4f, (float)random.NextDouble() * 360f);
+            // A wooded mountain behind it, so the road visibly comes out of the hills.
+            Kay(Nature + "mountain_B_grass_trees", root.transform, new Vector3(0f, 0f, -length - 20f), 46f, 30f);
         }
 
         static float Yaw(Vector3 dir) => Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;

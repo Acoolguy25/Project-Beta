@@ -126,6 +126,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             server.RegisterBroadcast<TD_SpeedRequest>(OnSpeedRequest);
             server.RegisterBroadcast<TD_ModeVoteRequest>(OnModeVoteRequest);
             server.RegisterBroadcast<TD_AbilityRequest>(OnAbilityRequest);
+            server.RegisterBroadcast<TD_TargetRequest>(OnTargetRequest);
         }
 
         Vector3 SpawnPosition(NetworkConnection connection) => (map != null ? map.SpawnPoint() : Vector3.zero) + Vector3.up * 1.2f;
@@ -562,6 +563,29 @@ namespace Universes.UniverseData.tower_defense.Server {
             return $"Sold the {TD_Rules.Tower(sold.kind).name} for ${sold.Refund}.";
         }
 
+        void OnTargetRequest(NetworkConnection connection, TD_TargetRequest request, Channel channel) {
+            if (!connection.IsAuthenticated || map == null) return;
+            string message = TrySetTarget(connection, request.slot, request.mode, out bool accepted);
+            if (message != null) Reply(connection, accepted, message);
+        }
+
+        /// <summary>Same ownership rule as selling: the builder, or anyone once the builder has left. Null = say nothing (spam guard).</summary>
+        string TrySetTarget(NetworkConnection connection, int slot, TD_TargetMode mode, out bool accepted) {
+            accepted = false;
+            if (phase is TD_Phase.Victory or TD_Phase.Defeat) return "The game is over. New game soon!";
+            var tower = TD_Simulation.IsSlot(slot) ? sim.Towers[slot] : null;
+            if (tower == null) return "There is no tower there.";
+            if (!TD_Targeting.IsValid(mode)) return "Unknown targeting mode.";
+            string name = TD_Rules.Tower(tower.kind).name;
+            if (tower.owner >= 0 && tower.owner != connection.ClientId && TryOwner(tower.owner, out _, out _))
+                return $"Only {ownerNames[slot]} can retarget this {name}.";
+            if (!VoteAllowed(connection)) return null;
+            sim.SetTarget(slot, mode);
+            accepted = true;
+            MarkDirty();
+            return $"{name} targets {TD_Targeting.Name(mode)}: {TD_Targeting.Blurb(mode)}.";
+        }
+
         /// <summary>False when <paramref name="connection"/> voted or called an ability less than voteInterval ago (spam guard).</summary>
         bool VoteAllowed(NetworkConnection connection) {
             if (!runs.TryGetValue(connection, out var run)) return false;
@@ -684,6 +708,7 @@ namespace Universes.UniverseData.tower_defense.Server {
                     slot = t.slot, kind = t.kind, level = (byte)t.level, owner = ownerNames[t.slot] ?? "",
                     ownerId = TryOwner(t.owner, out _, out _) ? t.owner : -1,
                     refund = t.Refund, gold = t.perks.gold, veteran = t.perks.damageScale > 1f,
+                    target = t.target, kills = t.kills, damage = Mathf.RoundToInt(Mathf.Min(t.damageDealt, 2e9f)),
                 });
             }
             var votes = ModeVotes();
@@ -801,6 +826,7 @@ namespace Universes.UniverseData.tower_defense.Server {
                 server.UnregisterBroadcast<TD_SpeedRequest>(OnSpeedRequest);
                 server.UnregisterBroadcast<TD_ModeVoteRequest>(OnModeVoteRequest);
                 server.UnregisterBroadcast<TD_AbilityRequest>(OnAbilityRequest);
+                server.UnregisterBroadcast<TD_TargetRequest>(OnTargetRequest);
             }
             base.OnDestroy();
         }
