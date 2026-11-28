@@ -20,6 +20,18 @@ namespace Universes.UniverseData.capture_the_flag.Tests {
         }
 
         [Test]
+        public void DroppedFlagReturnsAfterAHoldAndFallsBackWhenLeft() {
+            float hold = CTF_Rules.DefaultReturnHoldSeconds;
+            float p = 0f;
+            for (int i = 0; i < 10; i++) p = CTF_Rules.ReturnStep(p, 1, hold / 20f, hold);
+            Assert.That(p, Is.EqualTo(0.5f).Within(1e-4f), "one defender: half way after half the hold");
+            Assert.That(CTF_Rules.ReturnStep(p, 0, hold / 4f, hold), Is.EqualTo(0.25f).Within(1e-4f), "nobody on it: falls back at the same rate");
+            Assert.That(CTF_Rules.ReturnStep(0f, 3, hold / 2f, hold), Is.EqualTo(1f), "three defenders are twice as fast");
+            Assert.That(CTF_Rules.ReturnStep(0f, 0, 1f, hold), Is.EqualTo(0f), "never below zero");
+            Assert.That(CTF_Rules.ReturnStep(0f, 1, 0.01f, 0f), Is.EqualTo(1f), "hold 0 = return on touch");
+        }
+
+        [Test]
         public void WinnerAndOtherTeam() {
             Assert.That(CTF_Rules.Winner(1, 1), Is.Null);
             Assert.That(CTF_Rules.Winner(3, 1), Is.EqualTo(CTF_Team.Red));
@@ -50,10 +62,11 @@ namespace Universes.UniverseData.capture_the_flag.Tests {
 
         [Test]
         public void CarryingSlowsAndBoostStacks() {
-            Assert.That(CTF_Rules.SpeedMultiplier(false, false, 1.4f), Is.EqualTo(1f));
-            Assert.That(CTF_Rules.SpeedMultiplier(true, false, 1.4f), Is.EqualTo(CTF_Rules.CarrierSpeedMultiplier));
-            Assert.That(CTF_Rules.SpeedMultiplier(false, true, 1.4f), Is.EqualTo(1.4f));
-            Assert.That(CTF_Rules.SpeedMultiplier(true, true, 1.4f), Is.EqualTo(CTF_Rules.CarrierSpeedMultiplier * 1.4f).Within(1e-5f));
+            float carrier = CTF_Rules.CarrierSpeedMultiplier;
+            Assert.That(CTF_Rules.SpeedMultiplier(false, carrier, false, 1.4f, 1f), Is.EqualTo(1f));
+            Assert.That(CTF_Rules.SpeedMultiplier(true, carrier, false, 1.4f, 1f), Is.EqualTo(carrier));
+            Assert.That(CTF_Rules.SpeedMultiplier(false, carrier, true, 1.4f, 1f), Is.EqualTo(1.4f));
+            Assert.That(CTF_Rules.SpeedMultiplier(true, carrier, true, 1.4f, 1f), Is.EqualTo(carrier * 1.4f).Within(1e-5f));
         }
 
         [Test]
@@ -85,11 +98,11 @@ namespace Universes.UniverseData.capture_the_flag.Tests {
         }
 
         [Test]
-        public void OneHitLeftBeatsTheHeartbeat() {
-            Assert.That(CTF_Rules.LowHealthSignal(1f, 0.5f, 0.2f), Is.EqualTo(1f));
-            Assert.That(CTF_Rules.LowHealthSignal(0.5f, 0.5f, 0.2f), Is.EqualTo(0.2f).Within(1e-5f));
-            Assert.That(CTF_Rules.LowHealthSignal(0.25f, 0.5f, 0.2f), Is.EqualTo(0.1f).Within(1e-5f));
-            Assert.That(CTF_Rules.LowHealthSignal(0f, 0.5f, 0.2f), Is.EqualTo(1f), "dead: no heartbeat");
+        public void OneHitLeftBeatsTheEdgeVignette() {
+            Assert.That(CTF_Rules.LowHealthEdge(1f, 0.5f, 0.55f), Is.Zero);
+            Assert.That(CTF_Rules.LowHealthEdge(0.5f, 0.5f, 0.55f), Is.EqualTo(0.55f).Within(1e-5f));
+            Assert.That(CTF_Rules.LowHealthEdge(0.25f, 0.5f, 0.55f), Is.EqualTo(0.775f).Within(1e-5f));
+            Assert.That(CTF_Rules.LowHealthEdge(0f, 0.5f, 0.55f), Is.Zero, "dead: no warning");
         }
     }
 }

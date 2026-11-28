@@ -1,9 +1,13 @@
 using System.Collections.Generic;
 using FishNet;
 using FishNet.Managing.Client;
+using FishNet.Object;
 using FishNet.Transporting;
 using RyanAssets.Characters.Client;
+using RyanAssets.Characters.Shared;
+using RyanAssets.Client.ClientUI.NameTag;
 using RyanAssets.GameFeel;
+using RyanAssets.Retention.Client;
 using RyanAssets.Rounds;
 using RyanAssets.UI.GameHud;
 using TMPro;
@@ -22,6 +26,10 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         public TMP_Text redScoreLabel;
         public TMP_Text blueScoreLabel, timerLabel, phaseLabel;
         public HudChip redFlagStatus, blueFlagStatus;
+        [Tooltip("Under the scoreboard: the team size and the bots' tier (\"4v4 · Regular bots\"), hidden without bots.")]
+        public HudChip botsChip;
+        [Tooltip("Under the bots chip: today's twist (\"Today: Flag Frenzy - grabs and captures pay 2x XP\").")]
+        public HudChip twistChip;
 
         [Header("Team and objective")]
         public HudPopup teamCard;
@@ -35,6 +43,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Header("Events")]
         public HudToastFeed toasts;
         public HudBanner banner;
+        [Tooltip("Smaller, higher banner for a capture during play (the big one is for the result).")]
+        public HudBanner captureBanner;
         public CTF_Waypoints waypoints;
 
         [Header("Icons")]
@@ -77,6 +87,15 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         public Color drawColor = new(0.85f, 0.87f, 0.9f);
         public Color healthColor = new(0.35f, 1f, 0.45f);
         public Color speedColor = new(1f, 0.85f, 0.25f);
+        [Tooltip("Today's twist: the toast shown as each match counts down, and the chip's colour.")]
+        public Color twistColor = new(0.55f, 0.85f, 1f);
+        [Min(0.5f)] public float twistToastSeconds = 6f;
+        [Tooltip("Perk effects (Adrenaline's burst, the healing perks): centre text size and the ring/heal effect size on the player.")]
+        [Range(0.1f, 1f)] public float perkTextSize = 0.35f;
+        [Min(0.1f)] public float perkFxScale = 1.2f;
+
+        [Tooltip("Sudden death's centre text.")]
+        public Color suddenDeathColor = new(1f, 0.45f, 0.2f);
 
         [Header("Danger")]
         [Tooltip("Edge vignette while an enemy carries your flag.")]
@@ -86,12 +105,32 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Min(0f)] public float dangerPulsesPerSecond = 1.2f;
         [Min(0.1f)] public float dangerFlashSeconds = 1.2f;
 
+        [Header("Name tags")]
+        [Tooltip("Height of a name tag above a character's feet (the shared tag's offset, times the body scale).")]
+        public float nameTagHeight = 5.5f;
+        [Tooltip("Tags higher on screen than this (0-1) and within the scoreboard's column are hidden, so no tag shows " +
+                 "over the score (try 1: a bot tag across it). At the result every tag is hidden.")]
+        [Range(0.5f, 1f)] public float nameTagTopBand = 0.76f;
+        [Range(0f, 0.5f)] public float scoreboardHalfWidth = 0.24f;
+        [Tooltip("Tags fade between these distances and never cover more than this share of the screen (the shared defaults, 60-95 m and 0.07, kept far tags at full size).")]
+        [Min(0f)] public float tagFadeStart = 35f;
+        [Min(0f)] public float tagFadeEnd = 60f;
+        [Range(0.01f, 0.2f)] public float tagMaxScreen = 0.045f;
+        [Tooltip("While the roster board is open, no tag draws over it.")]
+        public CTF_RosterBoard rosterBoard;
+
+        [Header("Retention HUD (the shared kit's, nested in this HUD)")]
+        [Tooltip("The match summary closes when the countdown reaches this many seconds (and at FIGHT at the latest), so a long card never covers the start of play.")]
+        [Min(0)] public int closeSummaryAt = 3;
+        [Tooltip("Hide the level chip while the summary card plays: the kit holds it at the match's starting level until the card's bar fills, which read as a level lost beside the loadout card.")]
+        public bool hideChipDuringSummary = true;
+
         [Header("Flag placement")]
         [Tooltip("Where a carried flag rides, relative to the carrier (world metres along its up/forward).")]
         public float carriedHeight = 2.1f;
         public float carriedBack = 0.4f;
-        [Tooltip("The flag you carry yourself rides this far behind your camera, so it never blocks your own view.")]
-        [Min(0f)] public float ownCarriedBack = 1.5f;
+        [Tooltip("The flag you carry yourself rides this far behind your camera, so it never blocks your own view (its cloth reaches about a metre, and the try-1 run showed 1.5 m let it into the bottom of the view).")]
+        [Min(0f)] public float ownCarriedBack = 3.5f;
         [Range(0.1f, 1f)] public float carriedScale = 0.55f;
         [Min(1f)] public float carriedFollow = 30f;
         [Min(1f)] public float looseFollow = 12f;
@@ -104,18 +143,73 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         bool hasState, hasTeam, bigCountdownStarted, labelsShown = true;
         CTF_Team myTeam;
         float nextRequest, stateAt, speedLinesUntil;
+        CTF_DailyTwist twist;
+        string twistText = "";
+        /// <summary>Your own result for the coming Won event (a late joiner's team win does not count).</summary>
+        CTF_ResultNoteBroadcast resultNote;
+        bool hasResultNote;
         readonly CTF_FlagView[] views = new CTF_FlagView[2];
-        /// <summary>Names from flag events, so the scoreboard can say who carries a flag.</summary>
+        /// <summary>Names from flag events and the bot roster, so the scoreboard can say who carries a flag.</summary>
         readonly Dictionary<int, string> carrierNames = new();
+        /// <summary>Bots by actor id: name, team and the network object of their current body.</summary>
+        readonly Dictionary<int, CTF_BotView> bots = new();
         readonly Vector3[] shown = new Vector3[2];
         // What the HUD shows now, so text is rebuilt only when it changes (not every frame).
         readonly int[] chipKeys = { -1, -1 };
         readonly int[] labelKeys = { -1, -1 };
         int shownLeft = -1, shownPhase = -1, objectiveKey = -1, shownDistance = -1, shownRed = -1, shownBlue = -1;
-        bool dangerOn;
+        bool dangerOn, shownSuddenDeath;
 
         public bool HasTeam => hasTeam;
         public CTF_Team MyTeam => myTeam;
+
+        NameTagManager.ViewOverride tagView;
+        RetentionHud retentionHud;
+        RetentionSummaryCard summaryCard;
+        bool chipHidden;
+
+        void FindRetention() {
+            if (retentionHud == null) retentionHud = GetComponentInChildren<RetentionHud>(true);
+            if (summaryCard == null && retentionHud != null) summaryCard = retentionHud.GetComponentInChildren<RetentionSummaryCard>(true);
+        }
+
+        /// <summary>The next match is about to start: the last one's summary card goes.</summary>
+        void CloseSummary() {
+            FindRetention();
+            if (summaryCard != null && summaryCard.Visible) summaryCard.Hide();
+        }
+
+        /// <summary>The level chip hides while the summary card plays (see <see cref="hideChipDuringSummary"/>).</summary>
+        void SyncLevelChip() {
+            if (!hideChipDuringSummary) return;
+            FindRetention();
+            if (retentionHud == null || summaryCard == null) return;
+            bool hide = summaryCard.Visible;
+            if (hide == chipHidden) return;
+            chipHidden = hide;
+            retentionHud.SetLevelChipVisible(!hide);
+        }
+
+        void OnEnable() {
+            NameTagManager.CharacterTagFilter = ShowTag;
+            tagView = NameTagManager.OverrideView(tagFadeStart, tagFadeEnd, tagMaxScreen);
+        }
+
+        void OnDisable() {
+            if (NameTagManager.CharacterTagFilter == ShowTag) NameTagManager.CharacterTagFilter = null;
+            tagView?.Dispose();
+            tagView = null;
+        }
+
+        /// <summary>No name tag over the top HUD (the score and its chips), over the open board, or at the result.</summary>
+        bool ShowTag(GameCharacter character) {
+            if (hasState && state.phase == CTF_Phase.Results) return false;
+            if (rosterBoard != null && rosterBoard.IsOpen) return false;
+            Camera cam = Camera.main;
+            if (cam == null) return true;
+            Vector3 p = cam.WorldToViewportPoint(character.transform.position + Vector3.up * (nameTagHeight * character.BodyScale.y));
+            return p.z <= 0f || p.y < nameTagTopBand || Mathf.Abs(p.x - 0.5f) >= scoreboardHalfWidth;
+        }
 
         void Awake() {
             map = GetComponentInParent<CTF_Map>();
@@ -145,6 +239,9 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             manager.UnregisterBroadcast<CTF_TeamBroadcast>(OnTeam);
             manager.UnregisterBroadcast<CTF_EventBroadcast>(OnEvent);
             manager.UnregisterBroadcast<CTF_PowerUpBroadcast>(OnPowerUp);
+            manager.UnregisterBroadcast<CTF_RosterBroadcast>(OnRoster);
+            manager.UnregisterBroadcast<CTF_PerkBroadcast>(OnPerk);
+            manager.UnregisterBroadcast<CTF_ResultNoteBroadcast>(OnResultNote);
             manager.OnClientConnectionState -= OnConnectionState;
         }
 
@@ -164,12 +261,16 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 manager.RegisterBroadcast<CTF_TeamBroadcast>(OnTeam);
                 manager.RegisterBroadcast<CTF_EventBroadcast>(OnEvent);
                 manager.RegisterBroadcast<CTF_PowerUpBroadcast>(OnPowerUp);
+                manager.RegisterBroadcast<CTF_RosterBroadcast>(OnRoster);
+                manager.RegisterBroadcast<CTF_PerkBroadcast>(OnPerk);
+                manager.RegisterBroadcast<CTF_ResultNoteBroadcast>(OnResultNote);
                 manager.OnClientConnectionState += OnConnectionState;
             }
             if (manager != null && manager.Started && (!hasState || !hasTeam) && Time.unscaledTime > nextRequest) {
                 nextRequest = Time.unscaledTime + stateRequestSeconds;
                 manager.Broadcast(new CTF_StateRequest());
             }
+            SyncLevelChip();
             if (speedLinesUntil > 0f && Time.time >= speedLinesUntil) {
                 speedLinesUntil = 0f;
                 ScreenFx.SetSpeedLines(0f);
@@ -187,9 +288,24 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 shownLeft = left;
                 timerLabel.text = clock ? RoundFormat.Clock(left) : "--:--";
             }
+            if (state.suddenDeath != shownSuddenDeath) {
+                shownSuddenDeath = state.suddenDeath;
+                if (shownSuddenDeath) {
+                    phaseLabel.text = "Sudden death";
+                    ScreenFx.ShowText("SUDDEN DEATH\n<size=45%>next capture wins</size>", suddenDeathColor, 2.4f, 0.6f);
+                    GameSfx.Play(SfxCue.Horn);
+                }
+            }
             if ((int)state.phase != shownPhase) {
                 shownPhase = (int)state.phase;
-                if (state.phase == CTF_Phase.Playing) phaseLabel.SetText("First to {0}", state.capturesToWin);
+                if (state.phase == CTF_Phase.Countdown) {
+                    hasResultNote = false;
+                    // Every match starts by naming the day's twist, so nobody misses it.
+                    // Short enough for one toast line; the chip under the scoreboard says what it does.
+                    if (twist != CTF_DailyTwist.None) toasts.Push(speedIcon, twistColor, $"Today's twist: <b>{CTF_Daily.Title(twist)}</b>", twistToastSeconds);
+                }
+                if (state.phase == CTF_Phase.Playing && state.suddenDeath) phaseLabel.text = "Sudden death";
+                else if (state.phase == CTF_Phase.Playing) phaseLabel.SetText("First to {0}", state.capturesToWin);
                 else phaseLabel.text = state.phase switch {
                     CTF_Phase.Countdown => "Get ready",
                     CTF_Phase.Results => "Match over",
@@ -211,11 +327,18 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             bool danger = hasTeam && state.phase == CTF_Phase.Playing && Snap(myTeam).state == CTF_FlagState.Carried;
             if (danger == dangerOn) return;
             dangerOn = danger;
-            ScreenFx.SetDanger(danger ? dangerStrength : 0f, dangerColor, dangerMaxAlpha, dangerPulsesPerSecond);
+            CTF_EdgeVignette.Set(CTF_EdgeVignette.Source.FlagTaken, danger ? dangerStrength : 0f, dangerColor, dangerMaxAlpha, dangerPulsesPerSecond);
         }
 
         /// <summary>A key for a flag's shown state: changes exactly when its label or chip text would.</summary>
-        static int FlagKey(CTF_FlagSnap snap) => snap.state == CTF_FlagState.Carried ? 3 + Mathf.Max(0, snap.carrierId) : (int)snap.state;
+        static int FlagKey(CTF_FlagSnap snap) => snap.state switch {
+            CTF_FlagState.Carried => 3 + Mathf.Max(0, snap.carrierId),
+            CTF_FlagState.Dropped when ReturnPercent(snap) > 0 => -10 - ReturnPercent(snap),
+            _ => (int)snap.state,
+        };
+
+        /// <summary>A dropped flag's return progress in whole tens of percent (0 while nobody is returning it).</summary>
+        static int ReturnPercent(CTF_FlagSnap snap) => Mathf.FloorToInt(Mathf.Clamp01(snap.returnProgress) * 10f) * 10;
 
         CTF_FlagSnap Snap(CTF_Team team) => team == CTF_Team.Red ? state.redFlag : state.blueFlag;
 
@@ -225,7 +348,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             chipKeys[i] = key;
             (Sprite icon, string text) = snap.state switch {
                 CTF_FlagState.Carried => (carriedIcon, snap.carrierId == MyId ? "You have it" : $"Taken by {CarrierName(snap.carrierId)}"),
-                CTF_FlagState.Dropped => (droppedIcon, "Dropped"),
+                CTF_FlagState.Dropped => (droppedIcon, ReturnPercent(snap) > 0 ? $"Returning {ReturnPercent(snap)}%" : "Dropped"),
                 _ => (homeIcon, "Home"),
             };
             chip.SetIcon(icon);
@@ -240,9 +363,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             Vector3 target = snap.position;
             Transform carrier = null;
             if (snap.state == CTF_FlagState.Carried) {
-                var character = CharacterLookup.ByClientId(snap.carrierId);
-                if (character != null) {
-                    carrier = character.transform;
+                carrier = ActorBody(snap.carrierId);
+                if (carrier != null) {
                     target = carrier.position + carrier.up * carriedHeight - CarryBack(carrier, snap.carrierId == MyId);
                 }
             }
@@ -251,17 +373,37 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             view.transform.position = shown[i];
             view.transform.localScale = Vector3.one * (snap.state == CTF_FlagState.Carried ? carriedScale : 1f);
             var team = (CTF_Team)i;
-            if ((int)snap.state != labelKeys[i]) {
-                labelKeys[i] = (int)snap.state;
+            int labelKey = snap.state == CTF_FlagState.Dropped ? -10 - ReturnPercent(snap) : (int)snap.state;
+            if (labelKey != labelKeys[i]) {
+                labelKeys[i] = labelKey;
                 view.Show(snap.state switch {
                     CTF_FlagState.Carried => "",
-                    CTF_FlagState.Dropped => $"<color={CTF_Rules.Hex(team)}>{CTF_Rules.Name(team)} FLAG</color>\n<size=70%>dropped</size>",
+                    CTF_FlagState.Dropped => $"<color={CTF_Rules.Hex(team)}>{CTF_Rules.Name(team)} FLAG</color>\n<size=70%>" +
+                                             (ReturnPercent(snap) > 0 ? $"returning {ReturnPercent(snap)}%" : "dropped") + "</size>",
                     _ => $"<color={CTF_Rules.Hex(team)}>{CTF_Rules.Name(team)} FLAG</color>"
                 }, snap.state == CTF_FlagState.Home);
             }
             // No beacons over the results: the flags are home and the banner has the stage.
             if (state.phase == CTF_Phase.Results) beacons.Stop(i);
-            else beacons.Refresh(i, snap.state, shown[i], carrier, CTF_Rules.Color(team));
+            else beacons.Refresh(i, snap.state, shown[i], carrier, CTF_Rules.Color(team), carrier != null && HasFlagTrail(snap.carrierId));
+        }
+
+        /// <summary>Whether player <paramref name="actorId"/> unlocked Flag Trail (level 24), from the last roster.</summary>
+        bool HasFlagTrail(int actorId) {
+            var players = lastRoster.players;
+            if (players == null) return false;
+            foreach (var p in players) if (p.actorId == actorId) return p.flagTrail;
+            return false;
+        }
+
+        /// <summary>A player's or bot's current body, by actor id (null while it has none here).</summary>
+        Transform ActorBody(int actorId) {
+            if (!CTF_Rules.IsBotId(actorId)) {
+                var character = CharacterLookup.ByClientId(actorId);
+                return character != null ? character.transform : null;
+            }
+            if (manager == null || !bots.TryGetValue(actorId, out var bot) || bot.objectId < 0) return null;
+            return manager.Objects.Spawned.TryGetValue(bot.objectId, out NetworkObject body) && body != null ? body.transform : null;
         }
 
         /// <summary>
@@ -342,7 +484,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             Sprite icon;
             Color color;
             if (phase == CTF_Phase.Countdown) {
-                (text, icon, color) = ("Get ready! Pistol <b>1</b>, dagger <b>2</b>", attackIcon, CTF_Rules.Color(myTeam));
+                (text, icon, color) = ("Get ready! Change gun <b>G</b>, perk <b>H</b>", attackIcon, CTF_Rules.Color(myTeam));
             } else if (carrying) {
                 (text, icon, color) = mine == CTF_FlagState.Home
                     ? ("You have the flag! Run it home!", carriedIcon, CTF_Rules.Color(enemy))
@@ -350,11 +492,11 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             } else if (mine == CTF_FlagState.Carried) {
                 (text, icon, color) = ("Your flag was taken! Stop the carrier!", defendIcon, CTF_Rules.Color(myTeam));
             } else if (mine == CTF_FlagState.Dropped) {
-                (text, icon, color) = ("Your flag is down. Touch it to return it!", droppedIcon, CTF_Rules.Color(myTeam));
+                (text, icon, color) = ("Your flag is down. Stand on it to return it!", droppedIcon, CTF_Rules.Color(myTeam));
             } else if (theirs == CTF_FlagState.Carried) {
                 (text, icon, color) = ("A teammate has their flag. Cover them!", defendIcon, CTF_Rules.Color(myTeam));
             } else if (theirs == CTF_FlagState.Dropped) {
-                (text, icon, color) = ($"The <color={CTF_Rules.Hex(enemy)}>{CTF_Rules.Name(enemy)}</color> flag is down. Grab it!", droppedIcon, CTF_Rules.Color(enemy));
+                (text, icon, color) = ($"The <color={CTF_Rules.Hex(enemy)}>{CTF_Rules.Name(enemy)}</color> flag is down. Grab it before they return it!", droppedIcon, CTF_Rules.Color(enemy));
             } else {
                 (text, icon, color) = ($"Grab the <color={CTF_Rules.Hex(enemy)}>{CTF_Rules.Name(enemy)}</color> flag from their base!", flagIcon, CTF_Rules.Color(enemy));
             }
@@ -375,6 +517,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             state = message;
             hasState = true;
             stateAt = Time.unscaledTime;
+            if (message.phase == CTF_Phase.Playing || (message.phase == CTF_Phase.Countdown && message.secondsLeft <= closeSummaryAt)) CloseSummary();
             if (message.redScore != shownRed) redScoreLabel.SetText("{0}", shownRed = message.redScore);
             if (message.blueScore != shownBlue) blueScoreLabel.SetText("{0}", shownBlue = message.blueScore);
         }
@@ -387,6 +530,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             teamLabel.color = Color.Lerp(CTF_Rules.Color(myTeam), Color.white, 0.25f);
             teamDisc.color = CTF_Rules.Color(myTeam);
             teamCard.Show();
+            ShowBotsChip();
         }
 
         void OnEvent(CTF_EventBroadcast message, Channel channel) {
@@ -419,17 +563,27 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                     break;
                 case CTF_EventKind.Won: {
                     bool won = hasTeam && message.flag == myTeam;
+                    if (won && hasResultNote && !resultNote.winCounts) {
+                        // Joined late with no flag play: the team won, this player did not.
+                        banner.Show(flagIcon, drawColor, "JOINED LATE",
+                            $"<color={CTF_Rules.Hex(message.flag)}>{CTF_Rules.Name(message.flag)}</color> team wins {message.redScore}-{message.blueScore}. No win for you this match: grab a flag to count.{MvpLine(message)}",
+                            winBannerSeconds);
+                        GameSfx.Play(SfxCue.Horn);
+                        Celebrate(message.flag);
+                        break;
+                    }
                     string team = $"<color={CTF_Rules.Hex(message.flag)}>{CTF_Rules.Name(message.flag)}</color>";
                     banner.Show(won || !hasTeam ? victoryIcon : defeatIcon, CTF_Rules.Color(message.flag),
                         !hasTeam ? $"{CTF_Rules.Name(message.flag)} WINS" : won ? "VICTORY!" : "DEFEAT",
-                        $"{team} team wins the match {message.redScore}-{message.blueScore}.", winBannerSeconds);
+                        $"{team} team wins the match {message.redScore}-{message.blueScore}.{MvpLine(message)}", winBannerSeconds);
                     GameSfx.Play(won || !hasTeam ? SfxCue.Win : SfxCue.Lose);
-                    Celebrate(message.flag);
+                    // The losers see the winners' confetti at their stand, but no flash or shake of their own.
+                    Celebrate(message.flag, won || !hasTeam);
                     if (won) ConfettiAhead(CTF_Rules.Color(message.flag));
                     break;
                 }
                 case CTF_EventKind.Draw:
-                    banner.Show(flagIcon, drawColor, "DRAW", $"Time is up at {message.redScore}-{message.blueScore}.", winBannerSeconds);
+                    banner.Show(flagIcon, drawColor, "DRAW", $"Time is up at {message.redScore}-{message.blueScore}.{MvpLine(message)}", winBannerSeconds);
                     GameSfx.Play(SfxCue.Horn);
                     break;
             }
@@ -446,13 +600,65 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 toasts.Push(flagIcon, scorerColor, subtitle, flagToastSeconds);
                 return;
             }
-            banner.Show(flagIcon, scorerColor, ours ? "FLAG LOST" : "FLAG CAPTURED", subtitle, captureBannerSeconds);
+            (captureBanner != null ? captureBanner : banner).Show(flagIcon, scorerColor, ours ? "FLAG LOST" : "FLAG CAPTURED", subtitle, captureBannerSeconds);
             GameSfx.Play(ours ? SfxCue.Alarm : SfxCue.LevelUp);
             Celebrate(scorer);
         }
 
-        /// <summary>Two team-colour confetti bursts in front of the team's stand, a ring on it, a screen flash and a shake.</summary>
-        void Celebrate(CTF_Team team) {
+        /// <summary>"MVP: name, 2 flags · 7 eliminations" on its own line, or nothing when nobody earned it.</summary>
+        string MvpLine(CTF_EventBroadcast message) {
+            if (!message.hasMvp) return "";
+            string name = CTF_Rules.PlayerLabel(message.mvpName, message.mvpId == MyId, hasTeam && message.mvpTeam == myTeam);
+            var parts = new List<string>(3);
+            if (message.mvpCaptures > 0) parts.Add(message.mvpCaptures == 1 ? "1 flag" : $"{message.mvpCaptures} flags");
+            if (message.mvpKills > 0) parts.Add(message.mvpKills == 1 ? "1 elimination" : $"{message.mvpKills} eliminations");
+            if (message.mvpReturns > 0) parts.Add(message.mvpReturns == 1 ? "1 return" : $"{message.mvpReturns} returns");
+            string stats = parts.Count > 0 ? $"  <size=85%>{string.Join(" · ", parts)}</size>" : "";
+            return $"\n<b>MVP</b> <color={CTF_Rules.Hex(message.mvpTeam)}>{name}</color>{stats}";
+        }
+
+        void OnRoster(CTF_RosterBroadcast message, Channel channel) {
+            bots.Clear();
+            if (message.bots != null)
+                foreach (var bot in message.bots) {
+                    bots[bot.actorId] = bot;
+                    carrierNames[bot.actorId] = bot.name;
+                }
+            chipKeys[0] = chipKeys[1] = -1;
+            if (message.hasTwist) {
+                twist = message.twist;
+                twistText = message.twistText ?? "";
+                if (twistChip != null) {
+                    bool twistShown = twist != CTF_DailyTwist.None && twistText.Length > 0;
+                    twistChip.SetVisible(twistShown);
+                    if (twistShown) twistChip.Text = twistText;
+                }
+            }
+            lastRoster = message;
+            ShowBotsChip();
+        }
+
+        CTF_RosterBroadcast lastRoster;
+
+        /// <summary>The bots chip, from your side: each team's tier and size (they differ while the game helps new players).</summary>
+        void ShowBotsChip() {
+            if (botsChip == null) return;
+            var message = lastRoster;
+            bool show = message.teamSize > 0 && bots.Count > 0;
+            botsChip.SetVisible(show);
+            if (!show) return;
+            var mine = hasTeam ? myTeam : CTF_Team.Red;
+            var theirs = CTF_Rules.Other(mine);
+            botsChip.Text = hasTeam
+                ? CTF_BotRules.ChipText(message.teamSize, Pick(message.redSkill, message.blueSkill, mine), Pick(message.redSkill, message.blueSkill, theirs),
+                    Pick(message.redShort, message.blueShort, mine), Pick(message.redShort, message.blueShort, theirs))
+                : $"{message.teamSize}v{message.teamSize} · {message.skill} bots";
+        }
+
+        static T Pick<T>(T red, T blue, CTF_Team team) => team == CTF_Team.Red ? red : blue;
+
+        /// <summary>Two team-colour confetti bursts in front of the team's stand and a ring on it; with <paramref name="feel"/>, a screen flash and a shake too.</summary>
+        void Celebrate(CTF_Team team, bool feel = true) {
             Color color = CTF_Rules.Color(team);
             Vector3 stand = map.Stand(team);
             Vector3 field = map.Stand(CTF_Rules.Other(team)) - stand;
@@ -463,6 +669,7 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             GameFx.Play(FxKind.Confetti, front + side * captureConfettiOffset.z, color, captureConfettiScale);
             GameFx.Play(FxKind.Confetti, front - side * captureConfettiOffset.z, color, captureConfettiScale);
             GameFx.Play(FxKind.ShockwaveRing, stand, color, captureRingScale);
+            if (!feel) return;
             CameraShake.Kick(captureShake, captureShakeSeconds);
             ScreenFx.Flash(new Color(color.r, color.g, color.b, captureFlashAlpha));
         }
@@ -494,6 +701,27 @@ namespace Universes.UniverseData.capture_the_flag.Client {
             if (!health) {
                 ScreenFx.SetSpeedLines(speedLines);
                 speedLinesUntil = Time.time + message.seconds;
+            }
+        }
+
+        void OnResultNote(CTF_ResultNoteBroadcast message, Channel channel) {
+            resultNote = message;
+            hasResultNote = true;
+        }
+
+        /// <summary>A perk fired: a burst or heal on the player for everyone, and a word and speed lines for its owner.</summary>
+        void OnPerk(CTF_PerkBroadcast message, Channel channel) {
+            bool speed = message.perk == CTF_Perk.Adrenaline;
+            // Adrenaline is a burst of speed, Guardian a long-reach return (a ring), the others heal.
+            bool ring = speed || message.perk == CTF_Perk.Guardian;
+            Color color = speed ? speedColor : healthColor;
+            GameFx.Play(ring ? FxKind.ShockwaveRing : FxKind.Heal, message.position, color, perkFxScale);
+            if (message.actorId != MyId) return;
+            GameSfx.Play(speed ? SfxCue.Whoosh : SfxCue.Pickup);
+            ScreenFx.ShowText(CTF_Loadouts.Get(message.perk).title.ToUpperInvariant(), color, powerUpTextSeconds, perkTextSize);
+            if (speed && message.seconds > 0f) {
+                ScreenFx.SetSpeedLines(speedLines);
+                speedLinesUntil = Mathf.Max(speedLinesUntil, Time.time + message.seconds);
             }
         }
 

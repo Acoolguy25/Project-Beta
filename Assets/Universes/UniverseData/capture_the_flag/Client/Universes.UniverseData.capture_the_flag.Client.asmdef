@@ -18,7 +18,11 @@
         "RyanAssets.Tools.Shared",
         "RyanAssets.Tools.Client",
         "RyanAssets.Shared.Combat",
-        "RyanAssets.Cameras"
+        "RyanAssets.Cameras",
+        "RyanAssets.Retention",
+        "Unity.InputSystem",
+        "RyanAssets.Client.ClientUI.NameTag",
+        "RyanAssets.Retention.Client"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

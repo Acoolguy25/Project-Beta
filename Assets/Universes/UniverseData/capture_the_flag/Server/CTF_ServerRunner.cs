@@ -7,11 +7,11 @@ using FishNet;
 using FishNet.Connection;
 using RyanAssets.Characters.Shared;
 using RyanAssets.DataService;
-using RyanAssets.Levels.Server;
+using RyanAssets.Retention;
+using RyanAssets.Retention.Server;
 using RyanAssets.Rounds;
 using RyanAssets.Server.ServerCore;
 using RyanAssets.Server.ServerFeatures;
-using RyanAssets.Shared.Component;
 using RyanAssets.Shared.Declarations;
 using RyanAssets.Shared.Global;
 using UnityEngine;
@@ -19,26 +19,35 @@ using Channel = FishNet.Transporting.Channel;
 
 namespace Universes.UniverseData.capture_the_flag.Server {
     /// <summary>
-    /// Flag Wars: red vs blue with pistol and dagger. Run over the enemy flag to take it, bring it to
-    /// your own stand while your flag is home to score. Touch your dropped flag to send it home.
-    /// Mid-lane power-ups heal or speed you up. Teams, flags, captures, kills, hits and power-ups are
-    /// all decided here; clients only draw the broadcasts.
+    /// Flag Wars: red vs blue. Run over the enemy flag to take it, bring it to your own stand while your
+    /// flag is home to score. Stand on your dropped flag to send it home. Mid-lane power-ups heal or speed
+    /// you up. Empty slots are filled with server-driven bots (<see cref="CTF_BotSquad"/>), so one player
+    /// gets a full match. Levels unlock guns and perks; kills earn medals; the match ends on the shared
+    /// retention summary. Everything is decided here; clients only draw the broadcasts.
+    /// <para>This file: setup, players, the match loop and the messages. Flags and power-ups are in
+    /// <c>CTF_ServerRunner.Flags.cs</c>, kills and medals in <c>CTF_ServerRunner.Combat.cs</c>, XP and the
+    /// match-end summary in <c>CTF_ServerRunner.Rewards.cs</c>.</para>
     /// </summary>
-    public sealed class CTF_ServerRunner : ServerRunner {
+    public sealed partial class CTF_ServerRunner : ServerRunner, CTF_IBotWorld, CTF_BotSquad.IHost {
         [Header("Round")]
-        [Tooltip("The match waits until this many players are in. There are no bots, so a lone player waits on " +
-                 "\"Waiting for players (1/2)\" until a second one joins. Set it to 1 to test alone.")]
-        [SerializeField, Min(1)] int minPlayers = 2;
+        [Tooltip("Players needed before a match starts. With bots on, 1 is enough: bots take the empty slots.")]
+        [SerializeField, Min(1)] int minHumans = 1;
+        [Tooltip("Seconds the first match waits for friends once enough players are in (skipped when the teams are already full).")]
+        [SerializeField, Min(0)] int lobbySeconds = 12;
         [SerializeField, Min(1)] int countdownSeconds = 8;
-        [Tooltip("Top bar text during play. The score and goal are on the scoreboard, so this is just the game's name " +
-                 "(the shared top bar falls back to the universe id, \"Capture The Flag\", when it is empty).")]
+        [Tooltip("Top bar text during play. The score and goal are on the scoreboard, so this is just the game's name.")]
         [SerializeField] string playingTopMessage = "Flag Wars";
         [SerializeField, Min(30)] int matchSeconds = 480;
         [SerializeField, Min(3)] int resultsSeconds = 10;
         [SerializeField, Min(1)] int capturesToWin = CTF_Rules.CapturesToWin;
-        [SerializeField, Min(0.5f)] float respawnSeconds = 4f;
+        [Tooltip("Time up with the score level: this many seconds of sudden death (next capture wins, both flags go home). 0 = a draw at once.")]
+        [SerializeField, Min(0)] int suddenDeathSeconds = 120;
+        [Tooltip("Seconds before a player or bot comes back. Long enough that a team that wipes a defence can run a flag home (try 1: at 4 s an 8-minute match saw 56 grabs and 1 capture).")]
+        [SerializeField, Min(0.5f)] float respawnSeconds = 6f;
+        [Tooltip("A player who joins after this share of the match has gone only shares a win by making a flag play (grab, capture or return).")]
+        [SerializeField, Range(0f, 1f)] float lateJoinWinShare = 0.5f;
         [Header("Characters")]
-        [Tooltip("Health every character spawns with. Pistol and dagger hits deal 100, so 200 = two hits.")]
+        [Tooltip("Health every character (player or bot) spawns with. A sidearm hit deals 100, so 200 = two hits.")]
         [SerializeField, Min(1)] long characterHealth = 200;
         [SerializeField] float walkSpeed = 14f, sprintSpeed = 21f;
         [SerializeField, Min(0f)] float jumpHeight = 1.6f;
@@ -47,63 +56,55 @@ namespace Universes.UniverseData.capture_the_flag.Server {
         [SerializeField, Min(1)] long healAmount = 100;
         [SerializeField, Min(1f)] float speedBoostMultiplier = 1.35f;
         [SerializeField, Min(0.5f)] float speedBoostSeconds = 8f;
+        [Tooltip("Seconds of speed boost for taking a flag off its stand, so the carrier can clear the base before the defenders respawn beside it (try 1: 1 to 3 captures in an 8-minute match without it). 0 turns it off.")]
+        [SerializeField, Min(0f)] float grabHeadStartSeconds = 5f;
+        [Tooltip("Seconds a carrier cannot be hurt after taking a flag off its stand (live run before this: the carrier died within 2 s of 39 of 40 grabs). 0 turns it off.")]
+        [SerializeField, Min(0f)] float grabShieldSeconds = 0.8f;
+        [Tooltip("Seconds one defender must stand on a dropped flag to return it; more defenders are quicker, and an attacker in reach takes it back. 0 = return on touch.")]
+        [SerializeField, Min(0f)] float returnHoldSeconds = CTF_Rules.DefaultReturnHoldSeconds;
+        [Header("Bots")]
+        [SerializeField] CTF_BotSquadTuning bots = new();
+        [SerializeField] CTF_BotBrainTuning botBrain = new();
+        [Header("Guns and perks")]
+        [SerializeField] CTF_LoadoutTuning loadoutTuning = new();
+        [Header("Medals and MVP")]
+        [SerializeField] CTF_MedalTuning medalTuning = new();
+        [SerializeField] CTF_MvpWeights mvpWeights = new();
+        [Header("Daily twist (a rule change per UTC day)")]
+        [SerializeField] CTF_DailyTuning daily = new();
+        [Header("Retention (levels, unlocks, daily challenges, streak)")]
+        [SerializeField] RetentionTuning retentionTuning = CTF_Retention.DefaultTuning();
         [Header("Network")]
         [Tooltip("State broadcasts per second while playing (once a second otherwise).")]
         [SerializeField, Min(1f)] float snapshotsPerSecond = 10f;
-        [Header("Rewards (account XP/gold)")]
-        [SerializeField] ulong killXP = 10, captureXP = 50, captureGold = 20, returnXP = 10, winXP = 60, winGold = 25;
+        [Tooltip("Shortest time between two answered state requests from one client (seconds).")]
+        [SerializeField, Min(0f)] float stateRequestInterval = 1f;
 
         const string CapturesColumn = "Flags";
         const string KillsColumn = "Kills";
         static readonly ToolEnum[] Loadout = { ToolEnum.Pistol, ToolEnum.Dagger };
 
-        sealed class Flag {
-            public CTF_Team team;
-            public CTF_FlagState state;
-            public Vector3 position;
-            public NetworkConnection carrier;
-            public float droppedAt;
-        }
-
-        /// <summary>
-        /// Remembers who last damaged one character so the health drop that follows can be reported to
-        /// the attacker as a confirmed hit. Lives as long as the character (subscriptions die with it).
-        /// </summary>
-        sealed class DamageWatch {
-            readonly CTF_ServerRunner runner;
-            readonly GameCharacter victim;
-            IEntity attacker;
-
-            public DamageWatch(CTF_ServerRunner runner, GameCharacter victim) {
-                this.runner = runner;
-                this.victim = victim;
-                victim.OnDamage += OnDamage;
-                victim.Health.OnChange += OnHealthChanged;
-            }
-
-            void OnDamage(DamageType type, IEntity source) => attacker = source;
-
-            void OnHealthChanged(long previous, long next, bool asServer) {
-                if (!asServer || next >= previous || attacker == null) return;
-                var source = attacker;
-                attacker = null;
-                runner.ReportHit(source, victim, previous - next, next == 0);
-            }
-        }
-
-        readonly Dictionary<NetworkConnection, CTF_Team> teams = new();
+        readonly Dictionary<NetworkConnection, CTF_Actor> players = new();
+        readonly Dictionary<GameCharacter, CTF_Actor> bodies = new();
+        readonly List<CTF_Actor> actors = new();
         readonly Dictionary<NetworkConnection, float> requestTimes = new();
-        readonly Dictionary<NetworkConnection, float> boostedUntil = new();
-        readonly List<NetworkConnection> expiredBoosts = new();
-        readonly Flag[] flags = { new() { team = CTF_Team.Red }, new() { team = CTF_Team.Blue } };
         readonly System.Random random = new();
+        /// <summary>
+        /// Who was dealt into this match on which team, by player id, so a player who leaves and comes
+        /// back plays on for the same team with the same join time (no switching to the winning side).
+        /// </summary>
+        readonly Dictionary<string, (CTF_Team team, float joinedAtShare)> seats = new();
+        CTF_DailyTwist twist;
+        float matchStart, matchEnd;
+        RetentionService<CTF_SaveData> retention;
+        CTF_LoadoutService loadouts;
+        CTF_BotSquad squad;
         CTF_Map map;
         CTF_Phase phase;
         int redScore, blueScore, secondsLeft;
         string headline = "";
         float nextSnapshot, previousRespawnTime;
-        uint powerUpsReady, stateSequence;
-        float[] powerUpReadyAt = Array.Empty<float>();
+        bool firstMatchPlayed, suddenDeath;
 
         protected override void Awake() {
             base.Awake();
@@ -118,28 +119,117 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             previousRespawnTime = ServerPlayerCharacter.RespawnTime;
             ServerPlayerCharacter.RespawnTime = respawnSeconds;
             PlayerData.OnPlayerRemoved += OnPlayerLeft;
-            InstanceFinder.ServerManager.RegisterBroadcast<CTF_StateRequest>(OnStateRequest);
+            // The daily challenges and the twist read the same clock, so a QA day offset moves both.
+            retention = new RetentionService<CTF_SaveData>(CTF_Retention.Rules(retentionTuning), save => save.retention,
+                () => daily.Now(DateTime.UtcNow));
+            retention.Ready += OnRetentionReady;
+            retention.Unlocked += OnUnlocked;
+            loadouts = new CTF_LoadoutService(loadoutTuning, retention);
+            squad = new CTF_BotSquad(this, bots, botBrain);
+            var server = InstanceFinder.ServerManager;
+            server.RegisterBroadcast<CTF_StateRequest>(OnStateRequest);
+            server.RegisterBroadcast<CTF_LoadoutRequest>(OnLoadoutRequest);
         }
 
         static TeamColor Color(CTF_Team team) => team == CTF_Team.Red ? TeamColor.Red : TeamColor.Blue;
 
         Vector3 SpawnPosition(NetworkConnection connection) {
             if (map == null) return Vector3.up * 2f;
-            if (phase is CTF_Phase.Waiting || !teams.TryGetValue(connection, out var team)) return map.lobbySpawn.position + Vector3.up;
-            var spawns = map.Spawns(team);
-            return spawns[random.Next(spawns.Length)].position + Vector3.up;
+            if (phase is CTF_Phase.Waiting || BotsOnly || !players.TryGetValue(connection, out var actor)) return map.lobbySpawn.position + Vector3.up;
+            return TeamSpawn(actor.Team);
         }
 
         /// <summary>
-        /// Spawn facing the enemy base, so the first view is the field rather than a wall. While waiting
-        /// for players (or without a team yet) everyone uses the lobby spawn's own facing.
+        /// A spawn point of <paramref name="team"/> nobody stands on: the one farthest from every living
+        /// character (ties broken at random), so a bot and a player never appear inside each other.
         /// </summary>
+        Vector3 TeamSpawn(CTF_Team team) {
+            var spawns = map.Spawns(team);
+            int pick = random.Next(spawns.Length);
+            float best = -1f;
+            for (int k = 0; k < spawns.Length; k++) {
+                int i = (pick + k) % spawns.Length;
+                float nearest = float.MaxValue;
+                foreach (var actor in actors)
+                    if (actor.IsAlive) nearest = Mathf.Min(nearest, (actor.Character.transform.position - spawns[i].position).sqrMagnitude);
+                if (nearest <= best) continue;
+                best = nearest;
+                pick = i;
+            }
+            return spawns[pick].position + Vector3.up;
+        }
+
+        /// <summary>Spawn facing the enemy base, so the first view is the field rather than a wall.</summary>
         Quaternion SpawnRotation(NetworkConnection connection) {
             if (map == null) return Quaternion.identity;
-            if (phase is CTF_Phase.Waiting || !teams.TryGetValue(connection, out var team)) return map.lobbySpawn.rotation;
+            if (phase is CTF_Phase.Waiting || BotsOnly || !players.TryGetValue(connection, out var actor)) return map.lobbySpawn.rotation;
+            return Facing(actor.Team);
+        }
+
+        Quaternion Facing(CTF_Team team) {
             Vector3 toward = map.Stand(CTF_Rules.Other(team)) - map.Stand(team);
             toward.y = 0f;
             return toward.sqrMagnitude > 0f ? Quaternion.LookRotation(toward) : Quaternion.identity;
+        }
+
+        // ---------------------------------------------------------------- bot world (what bots may know)
+        public bool Moving => phase == CTF_Phase.Playing;
+        public bool Fighting => phase == CTF_Phase.Playing;
+        public CTF_Map Map => map;
+        public IReadOnlyList<CTF_Actor> Actors => actors;
+        public CTF_FlagState FlagState(CTF_Team flag) => flags[(int)flag].state;
+        public Vector3 FlagPosition(CTF_Team flag) => flags[(int)flag].position;
+        public CTF_Actor CarrierOf(CTF_Team flag) => flags[(int)flag].state == CTF_FlagState.Carried ? flags[(int)flag].carrier : null;
+        public bool PowerUpReady(int index) => CTF_Rules.IsReady(powerUpsReady, index);
+        public float SprintSpeed => sprintSpeed;
+
+        public float SpeedMultiplier(CTF_Actor actor) =>
+            CTF_Rules.SpeedMultiplier(IsCarrying(actor), loadoutTuning.CarrierSpeed(actor.LivePerk), actor.Boosted(Time.time), speedBoostMultiplier,
+                loadoutTuning.SpeedPerk(actor.LivePerk));
+
+        // ---------------------------------------------------------------- bot squad host
+        CTF_IBotWorld CTF_BotSquad.IHost.World => this;
+        long CTF_BotSquad.IHost.CharacterHealth => characterHealth;
+        float CTF_BotSquad.IHost.RespawnSeconds => respawnSeconds;
+        CTF_LoadoutTuning CTF_BotSquad.IHost.Loadouts => loadoutTuning;
+        Pose CTF_BotSquad.IHost.SpawnPose(CTF_Team team) => new(TeamSpawn(team), Facing(team));
+
+        void CTF_BotSquad.IHost.BodySpawned(CTF_Actor bot) {
+            Watch(bot, bot.Character);
+            // Clients find a bot's body (for the flag it carries) by its network object, new every life.
+            BroadcastRoster(null);
+        }
+
+        void CTF_BotSquad.IHost.BotRemoved(CTF_Actor bot) {
+            DropFlagsOf(bot, bot.Character != null ? bot.Character.transform.position : (Vector3?)null);
+            Forget(bot.Character);
+        }
+
+        void CTF_BotSquad.IHost.RosterChanged() {
+            RebuildActors();
+            BroadcastRoster(null);
+        }
+
+        void RebuildActors() {
+            actors.Clear();
+            // The QA baseline leaves the players in the lobby, out of the match: bots neither see nor count them.
+            if (!BotsOnly) actors.AddRange(players.Values);
+            if (squad != null) actors.AddRange(squad.Bots);
+        }
+
+        /// <summary>QA: a bots-only match (see <see cref="CTF_BotSquadTuning.qaBotsOnly"/>).</summary>
+        bool BotsOnly => squad != null && squad.BotsOnly;
+
+        int Humans(CTF_Team team) {
+            if (BotsOnly) return 0;
+            int n = 0;
+            foreach (var a in players.Values) if (a.Team == team && a.Connection.IsActive) n++;
+            return n;
+        }
+
+        /// <summary>Bots fill whatever the players leave open (during a match only).</summary>
+        void RebalanceBots() {
+            if (phase is CTF_Phase.Countdown or CTF_Phase.Playing) squad.Rebalance(Humans(CTF_Team.Red), Humans(CTF_Team.Blue), spawn: true);
         }
 
         // ---------------------------------------------------------------- players
@@ -153,110 +243,96 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             player.jumpHeight.Value = jumpHeight;
             player.tools.Clear();
             player.tools.AddRange(Loadout);
-            AssignTeam(player.Owner);
-            PlayerProgress.Load<CTF_SaveData>(player, CTF_SaveData.Universe).Forget();
+            var actor = ActorOf(player.Owner);
+            PlayerProgress.Load<CTF_SaveData>(player, CTF_SaveData.Universe).Forget(e => Debug.LogException(e, this));
+            retention.PlayerJoined(player);
+            // Joining a match under way: the summary card covers the rest of it, and a bot makes room.
+            if (phase == CTF_Phase.Playing) {
+                retention.BeginMatch(player.Owner);
+                Debug.Log($"[FlagWars] {actor} joined with {actor.JoinedAtShare:P0} of the match gone (win counts only with a flag play past {lateJoinWinShare:P0}).", this);
+            }
+            RebalanceBots();
+            BroadcastRoster(actor.Connection);
+        }
+
+        /// <summary>The player's actor, created (and put on the team with fewer players) on first sight.</summary>
+        CTF_Actor ActorOf(NetworkConnection connection) {
+            if (!players.TryGetValue(connection, out var actor)) {
+                var team = CTF_Rules.PickTeam(Humans(CTF_Team.Red), Humans(CTF_Team.Blue), redScore, blueScore, CTF_BotRules.FirstSide(random.Next()));
+                float joinedAt = phase == CTF_Phase.Playing ? CTF_Rules.ShareGone(matchStart, matchEnd, Time.time) : 0f;
+                // Back in the same match: the same team and the join time of the first visit.
+                if (phase is CTF_Phase.Countdown or CTF_Phase.Playing && seats.TryGetValue(SeatKey(connection), out var seat))
+                    (team, joinedAt) = seat;
+                actor = CTF_Actor.Player(connection, team);
+                actor.JoinedAtShare = joinedAt;
+                players[connection] = actor;
+                if (phase is CTF_Phase.Countdown or CTF_Phase.Playing) seats[SeatKey(connection)] = (team, joinedAt);
+                RebuildActors();
+            }
+            SendTeam(actor);
+            return actor;
+        }
+
+        static string SeatKey(NetworkConnection connection) {
+            string id = PlayerData.TryGetPlayerData(connection, out var player) ? player.player_id.Value : null;
+            return string.IsNullOrEmpty(id) ? "conn:" + connection.ClientId : id;
+        }
+
+        void SendTeam(CTF_Actor actor) {
+            if (PlayerData.TryGetPlayerData(actor.Connection, out var player)) player.SetPlayerTeam(new TeamConfig(Color(actor.Team)));
+            InstanceFinder.ServerManager.Broadcast(actor.Connection, new CTF_TeamBroadcast { team = actor.Team });
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
             base.OnCharacterAdded(character);
-            if (!teams.TryGetValue(character.Owner, out var team)) team = AssignTeam(character.Owner);
-            character.SetTeam(new TeamConfig(Color(team)));
+            var actor = ActorOf(character.Owner);
+            character.SetTeam(new TeamConfig(Color(actor.Team)));
             character.Init(characterHealth);
             // PlayerData.OnPlayerAdded and the character spawn are separate subscribers: make sure the loadout exists.
             foreach (var tool in Loadout) ServerTool.Instance.SpawnTool(character.NetworkObject, tool);
-            var owner = character.Owner;
-            character.OnDied += (source, killer) => OnCharacterDied(owner, character, source, killer);
-            _ = new DamageWatch(this, character);
-            // A fresh body keeps a running boost's speed.
-            RefreshSpeed(owner);
+            Watch(actor, character);
+            actor.NewLife();
+            loadouts.Arm(actor);
+            // A fresh body keeps a running boost's speed and the perk's.
+            RefreshSpeed(actor);
+            // Everyone's board and this body's gun look (clients find the body by its object id).
+            RosterDirty();
         }
 
-        CTF_Team AssignTeam(NetworkConnection connection) {
-            if (!teams.TryGetValue(connection, out var team)) {
-                int red = teams.Count(t => t.Value == CTF_Team.Red && t.Key.IsActive), blue = teams.Count(t => t.Value == CTF_Team.Blue && t.Key.IsActive);
-                team = CTF_Rules.PickTeam(red, blue, redScore, blueScore);
-                teams[connection] = team;
+        void OnRetentionReady(NetworkConnection connection, int level) {
+            if (!players.TryGetValue(connection, out var actor)) return;
+            loadouts.Ready(actor);
+            SendCareer(connection);
+            RosterDirty();
+            // Before the match the saved pick is worn at once; during play from the next life.
+            if (phase != CTF_Phase.Playing && actor.IsAlive) {
+                loadouts.Arm(actor);
+                RefreshSpeed(actor);
             }
-            if (PlayerData.TryGetPlayerData(connection, out var player)) player.SetPlayerTeam(new TeamConfig(Color(team)));
-            InstanceFinder.ServerManager.Broadcast(connection, new CTF_TeamBroadcast { team = team });
-            return team;
+        }
+
+        /// <summary>A level-up unlocked something (the kit shows the toast): the loadout card can offer it now.</summary>
+        void OnUnlocked(NetworkConnection connection, UnlockDefinition unlock) {
+            if (!players.TryGetValue(connection, out var actor)) return;
+            loadouts.Refresh(actor);
+            // A late unlock (trail, gold tracers) shows to everyone at once.
+            RosterDirty();
         }
 
         void OnPlayerLeft(PlayerData player) {
-            foreach (var flag in flags) if (flag.carrier == player.Owner) Drop(flag, flag.position);
-            teams.Remove(player.Owner);
-            requestTimes.Remove(player.Owner);
-            boostedUntil.Remove(player.Owner);
+            var connection = player.Owner;
+            if (connection == null || !players.TryGetValue(connection, out var actor)) return;
+            DropFlagsOf(actor, actor.Character != null ? actor.Character.transform.position : (Vector3?)null);
+            Forget(actor.Character);
+            players.Remove(connection);
+            requestTimes.Remove(connection);
+            loadouts.Left(connection);
+            RebuildActors();
+            // Nobody left to play with: the bots leave too (they come back with the next player).
+            if (ActiveHumans() == 0) squad.Clear();
+            else RebalanceBots();
+            BroadcastRoster(null);
         }
-
-        void OnCharacterDied(NetworkConnection owner, GameCharacter character, DamageType source, IEntity killer) {
-            foreach (var flag in flags)
-                if (flag.carrier == owner) Drop(flag, character != null ? character.transform.position : flag.position);
-            var killerCharacter = killer as GameCharacter;
-            bool killerIsPlayer = killerCharacter != null && killerCharacter.Owner != null && killerCharacter.Owner.IsValid;
-            bool credited = killerIsPlayer && killerCharacter.Owner != owner;
-            BroadcastKill(owner, character, credited ? killerCharacter.Owner : null, killerIsPlayer ? null : killerCharacter, source);
-            if (phase != CTF_Phase.Playing) return;
-            PlayerProgress.Modify<CTF_SaveData>(owner, save => save.deaths++);
-            if (credited && PlayerData.TryGetPlayerData(killerCharacter.Owner, out var p)) {
-                RoundLeaderboard.Add(p, KillsColumn, 1);
-                Award(killerCharacter.Owner, killXP, 0);
-                PlayerProgress.Modify<CTF_SaveData>(p, save => save.kills++);
-            }
-        }
-
-        // ---------------------------------------------------------------- combat feedback
-        void ReportHit(IEntity attacker, GameCharacter victim, long damage, bool killed) {
-            if (victim == null || attacker is not GameCharacter shooter || shooter.Owner == null || !shooter.Owner.IsValid) return;
-            InstanceFinder.ServerManager.Broadcast(new CTF_HitBroadcast {
-                attackerId = shooter.Owner.ClientId,
-                victimId = victim.OwnerId,
-                position = victim.transform.position,
-                damage = (int)Math.Min(damage, int.MaxValue),
-                killed = killed
-            });
-        }
-
-        /// <summary>
-        /// Tells everyone who eliminated whom. <paramref name="killer"/> is the credited player, if any;
-        /// <paramref name="otherKiller"/> a character that is not a player (a bot), named but never credited.
-        /// </summary>
-        void BroadcastKill(NetworkConnection victim, GameCharacter victimCharacter, NetworkConnection killer, GameCharacter otherKiller, DamageType source) {
-            InstanceFinder.ServerManager.Broadcast(new CTF_KillBroadcast {
-                killerId = killer != null ? killer.ClientId : -1,
-                killerName = killer != null ? NameOf(killer) : otherKiller != null ? otherKiller.DisplayName : "",
-                killerTeam = TeamOf(killer, otherKiller),
-                victimId = victim.ClientId,
-                victimName = NameOf(victim, victimCharacter),
-                victimTeam = TeamOf(victim, victimCharacter),
-                cause = Cause(source),
-                respawnSeconds = ServerPlayerCharacter.RespawnTime
-            });
-        }
-
-        /// <summary>
-        /// A player's account name, or their character's display name when the account has none, so a
-        /// feed line, toast or banner always has a name to print.
-        /// </summary>
-        static string NameOf(NetworkConnection connection, GameCharacter character = null) {
-            string name = PlayerData.GetPlayerName(connection);
-            if (!string.IsNullOrEmpty(name)) return name;
-            if (character == null && LocalCharacter.Characters.TryGetValue(connection, out var own)) character = own;
-            return character != null ? character.DisplayName : "";
-        }
-
-        /// <summary>A player's team from the roster, otherwise the character's own team colour.</summary>
-        CTF_Team TeamOf(NetworkConnection connection, GameCharacter character) {
-            if (connection != null && teams.TryGetValue(connection, out var team)) return team;
-            return character != null && character.GetTeam().realTeam == TeamColor.Blue ? CTF_Team.Blue : CTF_Team.Red;
-        }
-
-        static CTF_KillCause Cause(DamageType source) => source switch {
-            DamageType.Gun => CTF_KillCause.Gun,
-            DamageType.Melee => CTF_KillCause.Melee,
-            DamageType.Fall or DamageType.Despawn => CTF_KillCause.Fall,
-            _ => CTF_KillCause.Other
-        };
 
         // ---------------------------------------------------------------- round
         protected override async UniTask StartAsync(CancellationToken token) {
@@ -270,24 +346,33 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             SetLeaderboardEnabled(KillsColumn, true);
             SetMusic(MusicSelection.GameMusic);
             redScore = blueScore = 0;
+            firstBlood = false;
+            seats.Clear();
+            twist = daily.Today(DateTime.UtcNow);
+            loadouts.Twist = twist;
+            BroadcastRoster(null);
+            Debug.Log($"[FlagWars] daily twist: {CTF_Daily.Describe(twist, daily.xpMultiplier, daily.toughBotsResultBonus)} (day offset {daily.previewDayOffset}).", this);
             foreach (var flag in flags) Return(flag, false);
             ResetPowerUps();
-            // Rebalance for the new match.
-            var active = GetActivePlayers().Select(p => p.Owner).ToList();
-            TeamSplit.Shuffle(active, random);
-            teams.Clear();
-            for (int i = 0; i < active.Count; i++) teams[active[i]] = i % 2 == 0 ? CTF_Team.Red : CTF_Team.Blue;
-            foreach (var c in active) AssignTeam(c);
+            ShuffleTeams();
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
 
-            while (GetActivePlayersCount() < minPlayers) {
-                headline = $"Waiting for players ({GetActivePlayersCount()}/{minPlayers})";
-                SetTopMessage(headline);
-                BroadcastState();
-                await AwaitTime(1000, token);
-            }
+            await WaitForPlayersAsync(token);
 
+            // ---- countdown: bots join and everyone lines up at their base
             phase = CTF_Phase.Countdown;
+            ShuffleTeams();
+            seats.Clear();
+            foreach (var actor in players.Values) {
+                actor.JoinedAtShare = 0f;
+                if (actor.Connection.IsActive) seats[SeatKey(actor.Connection)] = (actor.Team, 0f);
+                loadouts.Refresh(actor);
+            }
+            ChooseBots();
+            squad.Rebalance(Humans(CTF_Team.Red), Humans(CTF_Team.Blue), spawn: false);
+            RebuildActors();
+            squad.SpawnAll();
+            foreach (var actor in players.Values) actor.ResetMatch();
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
             for (int i = countdownSeconds; i > 0; i--) {
                 secondsLeft = i;
@@ -297,17 +382,29 @@ namespace Universes.UniverseData.capture_the_flag.Server {
                 await AwaitTime(1000, token);
             }
 
+            // ---- play
             phase = CTF_Phase.Playing;
             SetGlobalInvul(false);
-            float end = Time.time + matchSeconds;
+            if (!BotsOnly) foreach (var actor in players.Values) retention.BeginMatch(actor.Connection);
+            matchStart = Time.time;
+            float end = matchEnd = Time.time + matchSeconds;
+            suddenDeath = false;
             while (true) {
                 token.ThrowIfCancellationRequested();
                 secondsLeft = Mathf.Max(0, Mathf.CeilToInt(end - Time.time));
-                if (secondsLeft == 0 || redScore >= capturesToWin || blueScore >= capturesToWin) break;
-                headline = $"RED {redScore}  -  {blueScore} BLUE";
-                // The scoreboard shows the score and clock; the shared top pill only names the game.
-                SetTopMessage(playingTopMessage);
-                await AwaitTime(500, token);
+                if (CTF_Rules.StartsSuddenDeath(redScore, blueScore, secondsLeft, suddenDeath, suddenDeathSeconds)) {
+                    // A level score at time-up ends on a moment: both flags home, next capture wins.
+                    suddenDeath = true;
+                    end = Time.time + suddenDeathSeconds;
+                    secondsLeft = suddenDeathSeconds;
+                    foreach (var flag in flags) Return(flag, false);
+                    Debug.Log($"[FlagWars] sudden death at {redScore}-{blueScore} ({suddenDeathSeconds} s).", this);
+                    BroadcastState();
+                }
+                if (CTF_Rules.MatchOver(redScore, blueScore, capturesToWin, secondsLeft, suddenDeath)) break;
+                headline = suddenDeath ? "SUDDEN DEATH - next capture wins" : $"RED {redScore}  -  {blueScore} BLUE";
+                SetTopMessage(suddenDeath ? "Sudden death" : playingTopMessage);
+                await AwaitTime(suddenDeath ? 100 : 500, token);
             }
 
             // ---- results
@@ -318,31 +415,105 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             var winner = CTF_Rules.Winner(redScore, blueScore);
             headline = winner is CTF_Team w ? $"{CTF_Rules.Name(w)} TEAM WINS {Math.Max(redScore, blueScore)}-{Math.Min(redScore, blueScore)}!" : $"DRAW {redScore}-{blueScore}";
             SetMusic(MusicSelection.VictoryMusic);
-            foreach (var pair in teams.Where(t => t.Key.IsActive)) {
-                bool won = winner is CTF_Team team && pair.Value == team;
-                if (won) Award(pair.Key, winXP, winGold);
-                PlayerProgress.Modify<CTF_SaveData>(pair.Key, save => {
-                    save.matchesPlayed++;
-                    if (won) save.wins++;
-                });
-            }
-            if (winner is CTF_Team wonTeam) Event(CTF_EventKind.Won, wonTeam, null);
-            else Event(CTF_EventKind.Draw, CTF_Team.Red, null);
+            FinishMatch(winner);
+            firstMatchPlayed = true;
             for (int i = resultsSeconds; i > 0; i--) {
                 secondsLeft = i;
-                // The banner names the winner and the score; the top pill only counts down.
                 SetTopMessage($"Next match in {i}");
                 BroadcastState();
                 await AwaitTime(1000, token);
             }
         }
 
-        // ---------------------------------------------------------------- flags
+        /// <summary>
+        /// Waits for <see cref="minHumans"/> players (two without bots). Before the first match a lone
+        /// player gets <see cref="lobbySeconds"/> for friends to join, then bots fill the teams.
+        /// </summary>
+        async UniTask WaitForPlayersAsync(CancellationToken token) {
+            int needed = squad.Fills ? minHumans : Math.Max(2, minHumans);
+            int full = squad.TeamSize * 2;
+            int lobbyLeft = firstMatchPlayed ? 0 : lobbySeconds;
+            while (true) {
+                int humans = ActiveHumans();
+                if (humans >= needed && (lobbyLeft <= 0 || humans >= full)) return;
+                if (humans < needed) {
+                    lobbyLeft = firstMatchPlayed ? 0 : lobbySeconds;
+                    headline = $"Waiting for players ({humans}/{needed})";
+                } else {
+                    secondsLeft = lobbyLeft;
+                    headline = $"Bots fill the empty slots in {lobbyLeft}. Invite friends to play together!";
+                    lobbyLeft--;
+                }
+                SetTopMessage(headline);
+                BroadcastState();
+                await AwaitTime(1000, token);
+            }
+        }
+
+        int ActiveHumans() => players.Values.Count(a => a.Connection.IsActive);
+
+        /// <summary>
+        /// Splits the players evenly at random (bots then even the numbers). Which colour the first
+        /// player gets is random too, so a lone player plays from both bases over time.
+        /// </summary>
+        void ShuffleTeams() {
+            var active = players.Values.Where(a => a.Connection.IsActive).ToList();
+            TeamSplit.Shuffle(active, random);
+            var first = CTF_BotRules.FirstSide(random.Next());
+            for (int i = 0; i < active.Count; i++) {
+                active[i].Team = i % 2 == 0 ? first : CTF_Rules.Other(first);
+                SendTeam(active[i]);
+            }
+        }
+
+        /// <summary>
+        /// Each team's bot tier and size for the match, from its players' saved results (see
+        /// <see cref="CTF_BotRules.Plan"/>), and the log line QA reads.
+        /// </summary>
+        void ChooseBots() {
+            var red = Standing(CTF_Team.Red);
+            var blue = Standing(CTF_Team.Blue);
+            var plan = squad.ChooseSkill(red, blue, CTF_Daily.BotTierBonus(twist, daily.toughBotTiers));
+            Debug.Log($"[FlagWars] bots: Red {plan.red}{ShortNote(plan.redShort)}, Blue {plan.blue}{ShortNote(plan.blueShort)} (base {plan.baseSkill}" +
+                      $"{(BotsOnly ? ", QA bots only" : "")}{(twist == CTF_DailyTwist.ToughBots ? $", Tough Bots +{daily.toughBotTiers} unless a loss" : "")}); " +
+                      $"players Red {Describe(red)}, Blue {Describe(blue)}.", this);
+        }
+
+        static string ShortNote(int shortBy) => shortBy > 0 ? $" ({shortBy} short)" : "";
+
+        static string Describe(in CTF_TeamStanding s) =>
+            s.humans == 0 ? "none" : $"{s.humans} (level {s.level:0.#}, tier {(CTF_BotSkill)s.tier}, losses {s.lossStreak}{(s.lostLast ? ", lost last" : "")}{(s.newcomer ? ", no win yet" : "")})";
+
+        CTF_TeamStanding Standing(CTF_Team team) {
+            var s = new CTF_TeamStanding { tier = CTF_BotRules.TierCount - 1 };
+            if (BotsOnly) return default;
+            float levels = 0f;
+            foreach (var actor in players.Values) {
+                if (!actor.Connection.IsActive || actor.Team != team) continue;
+                s.humans++;
+                levels += retention.LevelOf(actor.Connection);
+                // A save not read yet counts as a new player's.
+                var save = PlayerProgress.TryGet<CTF_SaveData>(actor.Connection, out var loaded) ? loaded : null;
+                s.tier = Math.Min(s.tier, save?.botTier ?? 0);
+                s.lossStreak = Math.Max(s.lossStreak, save?.lossStreak ?? 0);
+                s.lostLast |= (save?.lastMargin ?? 0) < 0;
+                s.newcomer |= (save?.wins ?? 0) == 0;
+            }
+            if (s.humans == 0) return default;
+            s.level = levels / s.humans;
+            return s;
+        }
+
+        void Update() {
+            if (map == null) return;
+            if (phase is CTF_Phase.Countdown or CTF_Phase.Playing) squad.Tick(Time.time);
+            FlushRoster();
+        }
+
         void FixedUpdate() {
             if (map == null) return;
-            foreach (var pair in LocalCharacter.Characters)
-                if (pair.Value != null && !pair.Value.IsDead && pair.Value.IsSpawned && pair.Value.transform.position.y < map.killY)
-                    pair.Value.Kill(DamageType.Despawn);
+            foreach (var actor in actors)
+                if (actor.IsAlive && actor.Character.transform.position.y < map.killY) actor.Character.Kill(DamageType.Despawn);
             ExpireBoosts();
             if (phase != CTF_Phase.Playing) {
                 if (Time.time > nextSnapshot) { nextSnapshot = Time.time + 1f; BroadcastState(); }
@@ -353,181 +524,101 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             if (Time.time > nextSnapshot) { nextSnapshot = Time.time + 1f / snapshotsPerSecond; BroadcastState(); }
         }
 
-        void UpdateFlag(Flag flag) {
-            if (flag.state == CTF_FlagState.Carried) {
-                if (!LocalCharacter.Characters.TryGetValue(flag.carrier, out var carrier) || carrier == null || carrier.IsDead) {
-                    Drop(flag, flag.position);
-                    return;
-                }
-                flag.position = carrier.transform.position;
-                // Score: carrier reaches their own stand while their own flag is home.
-                var carrierTeam = CTF_Rules.Other(flag.team);
-                if (flags[(int)carrierTeam].state == CTF_FlagState.Home && CTF_Rules.InReach(flag.position, map.Stand(carrierTeam), CTF_Rules.CaptureRange))
-                    Capture(flag, carrierTeam);
-                return;
-            }
-            if (flag.state == CTF_FlagState.Dropped && Time.time - flag.droppedAt > CTF_Rules.DropReturnSeconds) {
-                Return(flag, true);
-                return;
-            }
-            foreach (var pair in LocalCharacter.Characters) {
-                var character = pair.Value;
-                if (character == null || character.IsDead || !teams.TryGetValue(pair.Key, out var team)) continue;
-                if (!CTF_Rules.InReach(character.transform.position, flag.position, CTF_Rules.PickupRange)) continue;
-                if (team != flag.team) {
-                    flag.state = CTF_FlagState.Carried;
-                    flag.carrier = pair.Key;
-                    RefreshSpeed(pair.Key);
-                    Event(CTF_EventKind.Taken, flag.team, pair.Key);
-                    return;
-                }
-                if (flag.state == CTF_FlagState.Dropped) {
-                    Award(pair.Key, returnXP, 0);
-                    PlayerProgress.Modify<CTF_SaveData>(pair.Key, save => save.returns++);
-                    Event(CTF_EventKind.Returned, flag.team, pair.Key);
-                    Return(flag, false);
-                    return;
-                }
-            }
-        }
-
-        void Capture(Flag flag, CTF_Team scorer) {
-            var carrier = flag.carrier;
-            if (scorer == CTF_Team.Red) redScore++; else blueScore++;
-            if (PlayerData.TryGetPlayerData(carrier, out var p)) RoundLeaderboard.Add(p, CapturesColumn, 1);
-            Award(carrier, captureXP, captureGold);
-            PlayerProgress.Modify<CTF_SaveData>(carrier, save => save.captures++);
-            Event(CTF_EventKind.Captured, flag.team, carrier);
-            Return(flag, false);
-        }
-
-        void Drop(Flag flag, Vector3 at) {
-            if (flag.state != CTF_FlagState.Carried) return;
-            var carrier = flag.carrier;
-            flag.carrier = null;
-            RefreshSpeed(carrier);
-            if (map != null && at.y < map.killY + 2f) { Return(flag, true); return; }
-            flag.state = CTF_FlagState.Dropped;
-            flag.position = at;
-            flag.droppedAt = Time.time;
-            Event(CTF_EventKind.Dropped, flag.team, carrier);
-        }
-
-        void Return(Flag flag, bool announce) {
-            var carrier = flag.carrier;
-            flag.state = CTF_FlagState.Home;
-            flag.carrier = null;
-            if (carrier != null) RefreshSpeed(carrier);
-            if (map != null) flag.position = map.Stand(flag.team);
-            if (announce) Event(CTF_EventKind.Returned, flag.team, null);
-        }
-
-        bool IsCarrying(NetworkConnection connection) {
-            foreach (var flag in flags)
-                if (flag.state == CTF_FlagState.Carried && flag.carrier == connection) return true;
-            return false;
-        }
-
-        /// <summary>Applies the carrier slow-down and any running speed boost to a player's walk/sprint speed.</summary>
-        void RefreshSpeed(NetworkConnection connection) {
-            if (connection == null || !PlayerData.TryGetPlayerData(connection, out var player)) return;
-            bool boosted = boostedUntil.TryGetValue(connection, out float until) && Time.time < until;
-            float m = CTF_Rules.SpeedMultiplier(IsCarrying(connection), boosted, speedBoostMultiplier);
-            player.walkSpeed.Value = walkSpeed * m;
-            player.sprintSpeed.Value = sprintSpeed * m;
-        }
-
-        // ---------------------------------------------------------------- power-ups
-        void ResetPowerUps() {
-            int count = map.powerUps.Length;
-            powerUpReadyAt = new float[count];
-            powerUpsReady = 0;
-            for (int i = 0; i < count; i++) powerUpsReady = CTF_Rules.WithReady(powerUpsReady, i, true);
-            ClearBoosts();
-        }
-
-        void UpdatePowerUps() {
-            var spots = map.powerUps;
-            for (int i = 0; i < spots.Length; i++) {
-                if (!CTF_Rules.IsReady(powerUpsReady, i)) {
-                    if (Time.time >= powerUpReadyAt[i]) powerUpsReady = CTF_Rules.WithReady(powerUpsReady, i, true);
-                    continue;
-                }
-                foreach (var pair in LocalCharacter.Characters) {
-                    var character = pair.Value;
-                    if (character == null || character.IsDead || !teams.ContainsKey(pair.Key)) continue;
-                    if (!CTF_Rules.InReach(character.transform.position, spots[i].Position, CTF_Rules.PowerUpRange)) continue;
-                    if (!TryApply(spots[i].kind, pair.Key, character)) continue;
-                    powerUpsReady = CTF_Rules.WithReady(powerUpsReady, i, false);
-                    powerUpReadyAt[i] = Time.time + powerUpRespawnSeconds;
-                    PlayerProgress.Modify<CTF_SaveData>(pair.Key, save => save.powerUps++);
-                    InstanceFinder.ServerManager.Broadcast(new CTF_PowerUpBroadcast {
-                        index = i, kind = spots[i].kind, playerId = pair.Key.ClientId,
-                        seconds = spots[i].kind == CTF_PowerUpKind.Speed ? speedBoostSeconds : 0f
-                    });
-                    BroadcastState();
-                    break;
-                }
-            }
-        }
-
-        bool TryApply(CTF_PowerUpKind kind, NetworkConnection connection, LocalCharacter character) {
-            switch (kind) {
-                case CTF_PowerUpKind.Health: {
-                    long heal = CTF_Rules.HealAmount(character.Health.Value, character.MaxHealth.Value, healAmount);
-                    if (heal <= 0) return false; // full health: leave it for someone who needs it
-                    character.HealHealth(heal);
-                    return true;
-                }
-                case CTF_PowerUpKind.Speed:
-                    boostedUntil[connection] = Time.time + speedBoostSeconds;
-                    RefreshSpeed(connection);
-                    return true;
-                default:
-                    Debug.LogWarning($"Flag Wars has no rule for power-up kind {kind}.", this);
-                    return false;
-            }
-        }
-
-        void ExpireBoosts() {
-            if (boostedUntil.Count == 0) return;
-            expiredBoosts.Clear();
-            foreach (var pair in boostedUntil)
-                if (Time.time >= pair.Value) expiredBoosts.Add(pair.Key);
-            foreach (var connection in expiredBoosts) {
-                boostedUntil.Remove(connection);
-                RefreshSpeed(connection);
-            }
-        }
-
-        void ClearBoosts() {
-            expiredBoosts.Clear();
-            expiredBoosts.AddRange(boostedUntil.Keys);
-            boostedUntil.Clear();
-            foreach (var connection in expiredBoosts) RefreshSpeed(connection);
-        }
-
-        void Event(CTF_EventKind kind, CTF_Team flag, NetworkConnection player) {
-            InstanceFinder.ServerManager.Broadcast(new CTF_EventBroadcast {
-                kind = kind, flag = flag,
-                playerName = player != null ? NameOf(player) : "",
-                playerId = player != null ? player.ClientId : -1,
-                redScore = redScore, blueScore = blueScore
-            });
-            BroadcastState();
-        }
-
         // ---------------------------------------------------------------- messages
         void OnStateRequest(NetworkConnection connection, CTF_StateRequest request, Channel channel) {
             if (!connection.IsAuthenticated) return;
-            if (requestTimes.TryGetValue(connection, out float previous) && Time.unscaledTime - previous < 1f) return;
+            if (requestTimes.TryGetValue(connection, out float previous) && Time.unscaledTime - previous < stateRequestInterval) return;
             requestTimes[connection] = Time.unscaledTime;
-            if (teams.TryGetValue(connection, out var team)) InstanceFinder.ServerManager.Broadcast(connection, new CTF_TeamBroadcast { team = team });
+            if (players.TryGetValue(connection, out var actor)) {
+                SendTeam(actor);
+                loadouts.Refresh(actor);
+            }
+            BroadcastRoster(connection);
             InstanceFinder.ServerManager.Broadcast(connection, MakeState());
         }
 
+        void OnLoadoutRequest(NetworkConnection connection, CTF_LoadoutRequest request, Channel channel) {
+            if (!connection.IsAuthenticated || !players.TryGetValue(connection, out var actor)) return;
+            if (!loadouts.Request(actor, request)) return;
+            // Before the match the new pick is worn at once, so players can try each gun in the lobby.
+            if (phase != CTF_Phase.Playing && actor.IsAlive) {
+                loadouts.Arm(actor);
+                RefreshSpeed(actor);
+            }
+        }
+
+        string NameOf(CTF_Actor actor) {
+            if (actor == null) return "";
+            if (actor.IsBot) return actor.BotName;
+            string name = PlayerData.GetPlayerName(actor.Connection);
+            if (string.IsNullOrEmpty(name)) name = actor.Character != null ? actor.Character.DisplayName : "";
+            // The top of the track: a title everyone sees in the feeds and on the MVP line.
+            return retention.IsUnlocked(actor.Connection, CTF_Retention.UnlockFlagLegend) ? $"{CTF_Retention.LegendTitle} {name}" : name;
+        }
+
+        /// <summary>The twist the last roster sent to everyone carried (null = none sent yet).</summary>
+        CTF_DailyTwist? twistSent;
+
+        readonly List<CTF_BotView> viewBuffer = new();
+        bool rosterDirty;
+        float nextRosterAt;
+        /// <summary>Shortest gap between two roster broadcasts sent for a stat change (seconds).</summary>
+        const float RosterInterval = 0.25f;
+
+        /// <summary>A kill, flag play or new life changed the board: send the roster soon (batched).</summary>
+        void RosterDirty() => rosterDirty = true;
+
+        void FlushRoster() {
+            if (!rosterDirty || Time.time < nextRosterAt) return;
+            BroadcastRoster(null);
+        }
+
+        CTF_BotView View(CTF_Actor actor, string name) => new() {
+            actorId = actor.Id,
+            objectId = actor.Character != null && actor.Character.IsSpawned ? actor.Character.ObjectId : -1,
+            name = name,
+            team = actor.Team,
+            weapon = actor.IsBot ? actor.BotWeapon : actor.LiveWeapon,
+            kills = actor.Stats.kills, deaths = actor.Stats.deaths, captures = actor.Stats.captures, returns = actor.Stats.returns,
+            alive = actor.IsAlive,
+            flagTrail = !actor.IsBot && retention.IsUnlocked(actor.Connection, CTF_Retention.UnlockFlagTrail),
+            goldTracers = !actor.IsBot && retention.IsUnlocked(actor.Connection, CTF_Retention.UnlockGoldTracers),
+        };
+
+        void BroadcastRoster(NetworkConnection only) {
+            if (squad == null || InstanceFinder.ServerManager == null) return;
+            if (only == null) {
+                rosterDirty = false;
+                nextRosterAt = Time.time + RosterInterval;
+            }
+            var list = squad.Bots;
+            var views = new CTF_BotView[list.Count];
+            for (int i = 0; i < list.Count; i++) views[i] = View(list[i], list[i].BotName);
+            viewBuffer.Clear();
+            if (!BotsOnly)
+                foreach (var actor in players.Values)
+                    if (actor.Connection.IsActive) viewBuffer.Add(View(actor, NameOf(actor)));
+            var humans = viewBuffer.ToArray();
+            var plan = squad.Plan;
+            // The twist rides along only when it changed (or to the one client asking): bots respawn often.
+            bool sendTwist = only != null || twistSent != twist;
+            var message = new CTF_RosterBroadcast {
+                bots = views, skill = squad.Skill, teamSize = squad.Fills ? squad.TeamSize : 0,
+                hasTwist = sendTwist,
+                twist = sendTwist ? twist : CTF_DailyTwist.None,
+                twistText = sendTwist ? CTF_Daily.Describe(twist, daily.xpMultiplier, daily.toughBotsResultBonus) : "",
+                redSkill = plan.red, blueSkill = plan.blue, redShort = plan.redShort, blueShort = plan.blueShort,
+                players = humans,
+            };
+            if (only == null) twistSent = twist;
+            if (only != null) {
+                if (only.IsActive) InstanceFinder.ServerManager.Broadcast(only, message);
+            } else InstanceFinder.ServerManager.Broadcast(message);
+        }
+
         static CTF_FlagSnap Snap(Flag flag) => new() {
-            state = flag.state, position = flag.position, carrierId = flag.carrier != null ? flag.carrier.ClientId : -1
+            state = flag.state, position = flag.position, carrierId = flag.carrier != null ? flag.carrier.Id : -1,
+            returnProgress = flag.state == CTF_FlagState.Dropped ? flag.returnProgress : 0f,
         };
 
         CTF_StateBroadcast MakeState() => new() {
@@ -535,15 +626,13 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             redFlag = Snap(flags[0]), blueFlag = Snap(flags[1]), headline = headline,
             powerUpsReady = powerUpsReady,
             sequence = ++stateSequence,
-            capturesToWin = capturesToWin
+            capturesToWin = capturesToWin,
+            suddenDeath = suddenDeath && phase == CTF_Phase.Playing,
         };
 
-        void BroadcastState() => InstanceFinder.ServerManager.Broadcast(MakeState(), true, Channel.Unreliable);
+        uint stateSequence;
 
-        static void Award(NetworkConnection connection, ulong xp, ulong gold) {
-            if ((xp != 0 || gold != 0) && !LevelsServer.AwardPlayerXPAndGold(connection, xp, gold))
-                Debug.LogWarning($"Capture the flag could not award rewards to connection {connection.ClientId}.");
-        }
+        void BroadcastState() => InstanceFinder.ServerManager.Broadcast(MakeState(), true, Channel.Unreliable);
 
         static void SetMusic(MusicSelection selection) {
             if (SharedGlobalEvents.Instance != null && SharedGlobalEvents.Instance.MusicTrack.Value != selection)
@@ -562,7 +651,19 @@ namespace Universes.UniverseData.capture_the_flag.Server {
             PlayerData.OnPlayerRemoved -= OnPlayerLeft;
             if (ServerPlayerCharacter.SpawnLocationFunction == SpawnPosition) ServerPlayerCharacter.SpawnLocationFunction = null;
             if (ServerPlayerCharacter.SpawnRotationFunction == SpawnRotation) ServerPlayerCharacter.SpawnRotationFunction = null;
-            InstanceFinder.ServerManager?.UnregisterBroadcast<CTF_StateRequest>(OnStateRequest);
+            squad?.Clear();
+            foreach (var watch in watches.Values) watch.Release();
+            watches.Clear();
+            if (retention != null) {
+                retention.Ready -= OnRetentionReady;
+                retention.Unlocked -= OnUnlocked;
+                retention.Dispose();
+            }
+            var server = InstanceFinder.ServerManager;
+            if (server != null) {
+                server.UnregisterBroadcast<CTF_StateRequest>(OnStateRequest);
+                server.UnregisterBroadcast<CTF_LoadoutRequest>(OnLoadoutRequest);
+            }
             base.OnDestroy();
         }
     }

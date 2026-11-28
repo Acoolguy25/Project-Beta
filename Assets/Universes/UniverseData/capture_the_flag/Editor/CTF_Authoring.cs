@@ -11,8 +11,9 @@ using RyanAssets.UI.Editor;
 
 namespace Universes.UniverseData.capture_the_flag.Editor {
     /// <summary>
-    /// Builds Flag Wars: the three-lane arena (<see cref="CTF_ArenaAuthoring"/>), flag and power-up
-    /// prefabs, and the HUD (<see cref="CTF_HudAuthoring"/>). Safe to re-run. Server runner: run
+    /// Builds Flag Wars: the three-lane arena (<see cref="CTF_ArenaAuthoring"/>) and its bot NavMesh
+    /// (<see cref="CTF_NavMeshAuthoring"/>), flag and power-up prefabs, and the HUD
+    /// (<see cref="CTF_HudAuthoring"/>, which nests the retention HUD). Safe to re-run. Server runner: run
     /// <c>Universes.UniverseData.capture_the_flag.Editor.CTF_Authoring.BuildServerAssets</c> in the Linux Server profile.
     /// </summary>
     public static class CTF_Authoring {
@@ -164,6 +165,8 @@ namespace Universes.UniverseData.capture_the_flag.Editor {
             map.clientPrefab = hud;
             EditorUtility.SetDirty(map);
             if (!map.IsConfigured) throw new System.InvalidOperationException("[FlagWars] The generated CTF_Map is not configured; see CTF_ArenaAuthoring.");
+            // Bots walk the arena on the shared robot's NavMesh.
+            CTF_NavMeshAuthoring.Bake(mapGo, CTF_ArenaAuthoring.NavMeshVolume);
             Kit.SaveActiveScene(Kit.StartScene(Universe));
         }
 

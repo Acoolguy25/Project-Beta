@@ -5,7 +5,9 @@
         "FishNet.Runtime",
         "RyanAssets.Core",
         "RyanAssets.Rounds",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "RyanAssets.Retention",
+        "RyanAssets.Tools.Shared"
     ],
     "autoReferenced": true
 }

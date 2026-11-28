@@ -22,10 +22,21 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         [Min(0.1f)] public float trailScale = 1.6f;
         [Tooltip("Where the trail starts, in the carrier's local space (the robot root is scaled).")]
         public Vector3 trailOffset = new(0f, 0.8f, -0.15f);
+        [Header("Flag Trail (unlock at level 24)")]
+        [Tooltip("The unlocked trail's size: bigger and hotter than everyone's.")]
+        [Min(0.1f)] public float blazeScale = 2.8f;
+        [Tooltip("How far the unlocked trail's colour is pulled from the team colour toward the blaze colour.")]
+        [Range(0f, 1f)] public float blazeBlend = 0.45f;
+        public Color blazeColor = new(1f, 0.62f, 0.15f);
+        [Tooltip("Seconds between the sparks thrown off an unlocked trail.")]
+        [Min(0.03f)] public float blazeSparkInterval = 0.14f;
+        [Min(0.05f)] public float blazeSparkScale = 0.7f;
 
         readonly Beam[] beams = new Beam[2];
         readonly FxHandle[] trails = new FxHandle[2];
         readonly Transform[] trailTargets = new Transform[2];
+        readonly bool[] trailBlazing = new bool[2];
+        readonly float[] nextSpark = new float[2];
         MaterialPropertyBlock block;
         Transform parent;
 
@@ -38,14 +49,24 @@ namespace Universes.UniverseData.capture_the_flag.Client {
         /// <summary>Where the beams live; call once before the first <see cref="Refresh"/>.</summary>
         public void Init(Transform owner) => parent = owner;
 
-        /// <summary>Call every frame per flag (0 red, 1 blue) with where it is shown right now.</summary>
-        public void Refresh(int index, CTF_FlagState state, Vector3 position, Transform carrier, Color color) {
+        /// <summary>
+        /// Call every frame per flag (0 red, 1 blue) with where it is shown right now. <paramref name="blazing"/>:
+        /// the carrier unlocked Flag Trail, so the trail is bigger, hotter and throws sparks.
+        /// </summary>
+        public void Refresh(int index, CTF_FlagState state, Vector3 position, Transform carrier, Color color, bool blazing = false) {
             if (state == CTF_FlagState.Carried && carrier != null) {
                 StopBeam(index);
-                if (trailTargets[index] == carrier && trails[index].IsPlaying) return;
+                if (blazing && Time.time >= nextSpark[index]) {
+                    nextSpark[index] = Time.time + blazeSparkInterval;
+                    GameFx.Play(FxKind.Sparks, carrier.TransformPoint(trailOffset), -carrier.forward, Blaze(color), blazeSparkScale);
+                }
+                if (trailTargets[index] == carrier && trailBlazing[index] == blazing && trails[index].IsPlaying) return;
                 trails[index].Stop();
-                trails[index] = GameFx.Attach(FxKind.Trail, carrier, trailOffset, color, trailScale);
+                trails[index] = blazing
+                    ? GameFx.Attach(FxKind.Trail, carrier, trailOffset, Blaze(color), blazeScale)
+                    : GameFx.Attach(FxKind.Trail, carrier, trailOffset, color, trailScale);
                 trailTargets[index] = carrier;
+                trailBlazing[index] = blazing;
                 return;
             }
             if (trailTargets[index] != null) {
@@ -74,6 +95,8 @@ namespace Universes.UniverseData.capture_the_flag.Client {
                 trailTargets[i] = null;
             }
         }
+
+        Color Blaze(Color team) => Color.Lerp(team, blazeColor, blazeBlend);
 
         void StopBeam(int index) {
             var beam = beams[index];

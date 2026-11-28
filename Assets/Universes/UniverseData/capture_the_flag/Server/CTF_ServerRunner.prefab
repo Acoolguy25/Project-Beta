@@ -50,12 +50,27 @@ MonoBehaviour:
     _editor_value: 0
   DebugTimerSpeed:
     _editor_value: 10
-  minPlayers: 2
+  killXp: 10
+  flagTakeXp: 10
+  captureXp: 50
+  returnXp: 15
+  winXp: 100
+  winGold: 25
+  lossXp: 40
+  lossGold: 5
+  drawXp: 60
+  drawGold: 10
+  captureGold: 20
+  minHumans: 1
+  lobbySeconds: 12
   countdownSeconds: 8
+  playingTopMessage: Flag Wars
   matchSeconds: 480
   resultsSeconds: 10
   capturesToWin: 3
-  respawnSeconds: 4
+  suddenDeathSeconds: 120
+  respawnSeconds: 6
+  lateJoinWinShare: 0.5
   characterHealth: 200
   walkSpeed: 14
   sprintSpeed: 21
@@ -64,10 +79,168 @@ MonoBehaviour:
   healAmount: 100
   speedBoostMultiplier: 1.35
   speedBoostSeconds: 8
+  grabHeadStartSeconds: 5
+  bots:
+    fillWithBots: 1
+    teamSize: 4
+    autoSkill: 1
+    fixedSkill: 1
+    skillLevels: 0100000004000000090000000f000000i
+    adjustMargin: 2
+    assistBelowLevel: 6
+    assistAfterLosses: 2
+    newcomerEnemyShort: 1
+    qaBotsOnly: 0
+    nameFormat: '{0} [BOT]'
+    tiers:
+    - skill: 0
+      reactionSeconds: 1.2
+      shotHesitation: 0.8
+      aimErrorDegrees: 4.5
+      movingTargetErrorDegrees: 3.5
+      sightRange: 42
+      moveSpeed: 13.5
+      strafes: 0
+      seekHealthBelow: 0.35
+      weapons: 00y
+    - skill: 1
+      reactionSeconds: 0.65
+      shotHesitation: 0.35
+      aimErrorDegrees: 2
+      movingTargetErrorDegrees: 1.8
+      sightRange: 55
+      moveSpeed: 15.5
+      strafes: 1
+      seekHealthBelow: 0.45
+      weapons: 0001y
+    - skill: 2
+      reactionSeconds: 0.45
+      shotHesitation: 0.2
+      aimErrorDegrees: 1.2
+      movingTargetErrorDegrees: 1.2
+      sightRange: 65
+      moveSpeed: 17
+      strafes: 1
+      seekHealthBelow: 0.5
+      weapons: 000102y
+    - skill: 3
+      reactionSeconds: 0.3
+      shotHesitation: 0.08
+      aimErrorDegrees: 0.7
+      movingTargetErrorDegrees: 0.8
+      sightRange: 75
+      moveSpeed: 18.5
+      strafes: 1
+      seekHealthBelow: 0.55
+      weapons: 010203y
+  botBrain:
+    thinkSeconds: 0.3
+    scanSeconds: 0.2
+    viewDegrees: 220
+    nearbySense: 10
+    hurtMemorySeconds: 3
+    targetMemorySeconds: 1.2
+    switchTargetCloser: 0.6
+    chasers: 2
+    returners: 1
+    defendRadius: 12
+    middleRadius: 24
+    patrolSeconds: {x: 3, y: 6}
+    escortDistance: 7
+    strafeDistance: 5
+    strafeSeconds: {x: 0.7, y: 1.4}
+    closeInBelowRange: 35
+    healthSearchRange: 45
+    aimHeight: 3.2
+    turnDegreesPerSecond: 540
+    stuckDistance: 0.6
+    stuckSeconds: 2
+    unstickDistance: 8
+    navMeshSnap: 6
+  loadoutTuning:
+    weapons:
+    - damage: 100
+      clipShots: 1
+      reloadSeconds: 1.5
+      fireInterval: 0.35
+      roundsPerShot: 1
+      roundInterval: 0.1
+      worstAccuracy: 240
+      bestAccuracy: 300
+      range: 60
+    - damage: 35
+      clipShots: 2
+      reloadSeconds: 1.6
+      fireInterval: 0.45
+      roundsPerShot: 3
+      roundInterval: 0.08
+      worstAccuracy: 300
+      bestAccuracy: 330
+      range: 85
+    - damage: 36
+      clipShots: 2
+      reloadSeconds: 1.4
+      fireInterval: 0.6
+      roundsPerShot: 6
+      roundInterval: 0
+      worstAccuracy: 160
+      bestAccuracy: 230
+      range: 26
+    - damage: 150
+      clipShots: 2
+      reloadSeconds: 2.3
+      fireInterval: 0.85
+      roundsPerShot: 1
+      roundInterval: 0.1
+      worstAccuracy: 350
+      bestAccuracy: 360
+      range: 140
+    secondWindHeal: 50
+    fleetFootSpeed: 1.08
+    flagRunnerCarrierSpeed: 1
+    steadyAimAccuracy: 25
+    adrenalineSeconds: 4
+    guardianReturnReach: 3
+    requestCooldown: 0.15
+  medalTuning:
+    multiKillWindow: 4.5
+    defendRadius: 22
+    bodyguardRadius: 16
+    assistWindow: 5
+    streakMedals: 030000000500000008000000i
+    hatTrickCaptures: 3
+    xpMultiplier: 1
+  mvpWeights:
+    capture: 10
+    flagTake: 2
+    returnFlag: 3
+    kill: 1.5
+    carrierKill: 3
+    defend: 1
+    assist: 0.5
+    death: 0.5
+    minimumScore: 3
+  daily:
+    enabled: 1
+    xpMultiplier: 2
+    powerSurgeRespawnScale: 0.5
+    toughBotTiers: 1
+    toughBotsResultBonus: 0.25
+    previewDayOffset: 0
+  retentionTuning:
+    levels:
+      maxLevel: 30
+      firstLevelXp: 160
+      extraXpPerLevel: 55
+      growth: 1
+    streak:
+      firstDayXp: 25
+      xpPerExtraDay: 15
+      firstDayGold: 10
+      goldPerExtraDay: 5
+      maxBonusDays: 7
+      lineFormat: Daily streak (day {0})
+    dailyChallengeCount: 3
+    accountXpScale: 1
   snapshotsPerSecond: 10
-  killXP: 10
-  captureXP: 50
-  captureGold: 20
-  returnXP: 10
-  winXP: 60
-  winGold: 25
+  stateRequestInterval: 1

@@ -13,7 +13,13 @@
         "Unity.TextMeshPro",
         "Unity.ugui",
         "RyanAssets.UI",
-        "RyanAssets.UI.Editor"
+        "RyanAssets.UI.Editor",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Retention.Editor",
+        "Unity.AI.Navigation",
+        "RyanAssets.Characters.Shared",
+        "RyanAssets.GameFeel"
     ],
     "includePlatforms": [
         "Editor"

@@ -18,7 +18,10 @@
         "GUID:f51ebe6a0ceec4240a699833d6309b23",
         "RyanAssets.Core",
         "RyanAssets.Tools.Shared",
-        "RyanAssets.Progress"
+        "RyanAssets.Progress",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Server",
+        "RyanAssets.Tools.Client"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
