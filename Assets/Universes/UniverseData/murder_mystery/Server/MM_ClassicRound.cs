@@ -40,6 +40,10 @@ namespace Universes.murder_mystery.Server {
             public MM_Role role;
             public bool hero;
             public int kills, coins, xp;
+            /// <summary>The perk this character brings into the round (players only; read when the role is dealt).</summary>
+            public MM_Perk perk;
+            /// <summary>Sixth Sense: when the next ping goes out.</summary>
+            public float nextSenseAt = float.PositiveInfinity;
             public bool Alive => character != null && !character.IsDead;
             public bool IsPlayer => player != null;
         }
@@ -139,6 +143,7 @@ namespace Universes.murder_mystery.Server {
                 alias = character.DisplayName,
                 username = player != null ? player.username.Value : null,
                 role = role,
+                perk = PerkFor(player, role),
             };
             participants.Add(participant);
             byCharacter[character] = participant;
@@ -146,6 +151,20 @@ namespace Universes.murder_mystery.Server {
             if (player != null)
                 PlayerProgress.Modify<MM_SaveData>(player, save => save.RecordDealt(role));
         }
+
+        /// <summary>The perk a player brings as <paramref name="role"/>; NPCs have none.</summary>
+        static MM_Perk PerkFor(PlayerData player, MM_Role role) {
+            if (player == null)
+                return MM_Perk.None;
+            MM_SaveData save = MM_SaveData.Of(player);
+            return MM_Perks.ForRole(role,
+                MM_Perks.Sanitize(save.murdererPerk, MM_PerkSlot.Murderer, save.roundsPlayed),
+                MM_Perks.Sanitize(save.innocentPerk, MM_PerkSlot.Innocent, save.roundsPlayed));
+        }
+
+        /// <summary>The perk this character has this round (None for NPCs and anyone not dealt in).</summary>
+        public MM_Perk PerkOf(GameCharacter character) =>
+            character != null && byCharacter.TryGetValue(character, out Participant p) ? p.perk : MM_Perk.None;
 
         public static MM_Role RoleOf(TeamColor team) => team switch {
             TeamColor.Red => MM_Role.Murderer,
@@ -245,7 +264,23 @@ namespace Universes.murder_mystery.Server {
                 return true;
             if (lastThrowAt.TryGetValue(murderer, out float threwAt) && now - threwAt < tuning.throwPanicSeconds)
                 return true;
-            ToolBaseShared active = murderer.ActiveTool.Value;
+            return KnifeDrawn(murderer);
+        }
+
+        /// <summary>
+        /// <see cref="IsVisibleThreat"/> as seen from <paramref name="observer"/>: a murderer with the Ninja perk only
+        /// gives themselves away with a drawn knife up close (a kill or a throw still shows at any distance).
+        /// </summary>
+        public bool IsVisibleThreatFrom(GameCharacter murderer, Vector3 observer) {
+            if (!IsVisibleThreat(murderer))
+                return false;
+            if (PerkOf(murderer) != MM_Perk.Ninja || RecentlyAttacked(murderer, Mathf.Max(tuning.npcPanicAfterKillSeconds, tuning.throwPanicSeconds)))
+                return true;
+            return (murderer.transform.position - observer).sqrMagnitude <= tuning.ninjaKnifeNoticeDistance * tuning.ninjaKnifeNoticeDistance;
+        }
+
+        static bool KnifeDrawn(GameCharacter character) {
+            ToolBaseShared active = character.ActiveTool.Value;
             return active != null && active.toolEnum == ToolEnum.Dagger && active.equipped;
         }
 
@@ -320,9 +355,10 @@ namespace Universes.murder_mystery.Server {
             ToolBaseShared dagger = ServerTool.Instance.GetTool(thrower.NetworkObject, ToolEnum.Dagger);
             if (dagger == null)
                 return false;
-            nextThrowAt[thrower] = Time.time + tuning.throwCooldownSeconds;
+            float cooldown = tuning.ThrowCooldownFor(PerkOf(thrower));
+            nextThrowAt[thrower] = Time.time + cooldown;
             lastThrowAt[thrower] = Time.time;
-            throws.Launch(thrower, target, SkinOf(dagger), dagger.NetworkObject.ObjectId, tuning.throwCooldownSeconds);
+            throws.Launch(thrower, target, SkinOf(dagger), dagger.NetworkObject.ObjectId, cooldown);
             return true;
         }
 
@@ -350,6 +386,7 @@ namespace Universes.murder_mystery.Server {
             TickBoosts();
             if (Phase != MM_Phase.Hunt)
                 return;
+            TickSixthSense();
             if (Time.time >= nextCoinAt) {
                 nextCoinAt = Time.time + tuning.coinSpawnInterval;
                 SpawnCoins(1);
@@ -379,7 +416,7 @@ namespace Universes.murder_mystery.Server {
                 return true; // other modes and the lobby keep the shared coin behaviour
             if (Phase != MM_Phase.Hunt || !TryGetLivingCharacter(conn, out GameCharacter character))
                 return false;
-            return byCharacter.TryGetValue(character, out Participant p) && MM_RoundRules.BagHasRoom(p.coins, tuning.coinBagSize);
+            return byCharacter.TryGetValue(character, out Participant p) && MM_RoundRules.BagHasRoom(p.coins, tuning.BagSizeFor(p.perk));
         }
 
         public void OnCoinCollected(NetworkConnection conn, ulong gold, Vector3 position) {
@@ -391,7 +428,7 @@ namespace Universes.murder_mystery.Server {
             if (p.player != null)
                 PlayerProgress.Modify<MM_SaveData>(p.player, save => save.coinsCollected++);
             InstanceFinder.ServerManager.Broadcast(conn, new MM_CoinBroadcast {
-                position = position, coins = p.coins, coinCap = tuning.coinBagSize,
+                position = position, coins = p.coins, coinCap = tuning.BagSizeFor(p.perk),
             });
         }
 
@@ -404,7 +441,8 @@ namespace Universes.murder_mystery.Server {
             if (MM_SmokeRules.Check(Phase, p.role, p.hero, p.Alive, p.coins, tuning.smokeCoinCost, SmokeCooldown(character)) != MM_SmokeCheck.Ok)
                 return;
             float now = Time.time;
-            nextSmokeAt[character] = now + tuning.smokeCooldownSeconds;
+            float boostSeconds = tuning.SmokeBoostFor(p.perk);
+            nextSmokeAt[character] = now + tuning.SmokeCooldownFor(p.perk);
             smokedUntil[character] = now + tuning.smokeHideSeconds;
             p.coins -= tuning.smokeCoinCost;
             if (p.player != null) {
@@ -413,12 +451,12 @@ namespace Universes.murder_mystery.Server {
                     save.coinsCollected = MM_SmokeRules.LifetimeAfterSpending(save.coinsCollected, cost);
                     save.smokeBombs++;
                 });
-                Boost(p.player, now + tuning.smokeBoostSeconds);
+                Boost(p.player, now + boostSeconds);
             }
             MM_SmokeBroadcast message = new() {
                 position = character.transform.position,
                 characterObjectId = character.NetworkObject.ObjectId,
-                boostSeconds = tuning.smokeBoostSeconds,
+                boostSeconds = boostSeconds,
             };
             InstanceFinder.ServerManager.BroadcastExcept(conn, message);
             message.yours = true;
@@ -462,6 +500,50 @@ namespace Universes.murder_mystery.Server {
                 if (player != null)
                     runner.ApplyPlayerSpeed(player, 1f);
             boostedUntil.Clear();
+        }
+
+        // ---------- perks ----------
+
+        /// <summary>Sixth Sense: each player murderer with the perk gets a ping of where everyone is, every so often.</summary>
+        void TickSixthSense() {
+            float now = Time.time;
+            foreach (Participant p in participants) {
+                if (p.perk != MM_Perk.SixthSense || p.player == null || !p.Alive || now < p.nextSenseAt)
+                    continue;
+                p.nextSenseAt = now + tuning.sixthSenseIntervalSeconds;
+                SendSensePing(p);
+            }
+        }
+
+        void SendSensePing(Participant murderer) {
+            if (InstanceFinder.ServerManager == null || !murderer.player.Owner.IsActive)
+                return;
+            List<Vector3> positions = new(participants.Count);
+            foreach (Participant p in participants)
+                if (p.role != MM_Role.Murderer && p.Alive)
+                    positions.Add(p.character.transform.position);
+            InstanceFinder.ServerManager.Broadcast(murderer.player.Owner, new MM_SensePingBroadcast {
+                positions = positions.ToArray(),
+                seconds = tuning.sixthSenseRevealSeconds,
+            });
+        }
+
+        /// <summary>
+        /// Heartbeat: how close the nearest murderer with the knife out is to <paramref name="me"/> (0-255). A murderer
+        /// with the Ninja perk is not heard.
+        /// </summary>
+        byte HeartbeatFor(Participant me) {
+            if (me.perk != MM_Perk.Heartbeat || !me.Alive || me.role == MM_Role.Murderer)
+                return 0;
+            float best = 0f;
+            Vector3 position = me.character.transform.position;
+            foreach (Participant p in participants) {
+                if (p.role != MM_Role.Murderer || !p.Alive || p.perk == MM_Perk.Ninja || !KnifeDrawn(p.character))
+                    continue;
+                float distance = Vector3.Distance(position, p.character.transform.position);
+                best = Mathf.Max(best, MM_Perks.HeartbeatStrength(distance, tuning.heartbeatNearDistance, tuning.heartbeatRange));
+            }
+            return (byte)Mathf.RoundToInt(best * 255f);
         }
 
         // ---------- deaths ----------
@@ -688,6 +770,9 @@ namespace Universes.murder_mystery.Server {
             SecondsLeft = seconds;
             killClock.BeginHunt(Time.time);
             SyncAllDaggers();
+            float firstPing = Time.time + tuning.murdererGraceSeconds + tuning.sixthSenseIntervalSeconds;
+            foreach (Participant p in participants)
+                p.nextSenseAt = p.perk == MM_Perk.SixthSense ? firstPing : float.PositiveInfinity;
             SpawnCoins(tuning.coinsAtStart);
             nextCoinAt = Time.time + tuning.coinSpawnInterval;
             bool skipped = false;
@@ -880,6 +965,11 @@ namespace Universes.murder_mystery.Server {
                 return state;
             state.hero = me.hero;
             state.coins = me.coins;
+            state.coinCap = tuning.BagSizeFor(me.perk);
+            state.perk = me.perk;
+            state.heartbeat = Phase == MM_Phase.Hunt ? HeartbeatFor(me) : (byte)0;
+            if (me.perk == MM_Perk.SixthSense && me.Alive && Phase == MM_Phase.Hunt && !float.IsPositiveInfinity(me.nextSenseAt))
+                state.senseCooldown = Mathf.Max(0f, me.nextSenseAt - Time.time);
             if (me.role == MM_Role.Innocent && !me.hero && me.Alive) {
                 state.smokeCost = tuning.smokeCoinCost;
                 state.smokeCooldown = SmokeCooldown(me.character);

@@ -11,7 +11,8 @@ namespace Universes.murder_mystery.Server {
         public const string Universe = "murder_mystery";
         // 2: MM2-style rounds. Coins, knife-throw kills, survivals and role luck were added; the meeting
         // vote counter went with the meetings. 3: Classic win streaks. 4: smoke bombs (spending coins).
-        public override int LatestVersion => 4;
+        // 5: perks picked for each slot.
+        public override int LatestVersion => 5;
 
         /// <summary>Rounds of any mode the player was in when they started.</summary>
         public int roundsPlayed;
@@ -36,6 +37,8 @@ namespace Universes.murder_mystery.Server {
         public int murdererLuck, sheriffLuck;
         /// <summary>Classic rounds won and survived in a row (any role; anything else resets it), and the best streak ever.</summary>
         public int winStreak, bestWinStreak;
+        /// <summary>The perks the player brings as murderer and as innocent or sheriff (<see cref="MM_Perks"/>).</summary>
+        public MM_Perk murdererPerk, innocentPerk;
 
         public override void Migrate(int fromVersion, JObject stored) {
             // Older fields carry over by name; counters added since start at zero.
@@ -80,6 +83,19 @@ namespace Universes.murder_mystery.Server {
             sheriffLuck = Math.Max(0, sheriffLuck);
             winStreak = Math.Max(0, winStreak);
             bestWinStreak = Math.Max(winStreak, bestWinStreak);
+            murdererPerk = MM_Perks.Sanitize(murdererPerk, MM_PerkSlot.Murderer, roundsPlayed);
+            innocentPerk = MM_Perks.Sanitize(innocentPerk, MM_PerkSlot.Innocent, roundsPlayed);
+        }
+
+        /// <summary>The perk picked for <paramref name="slot"/>.</summary>
+        public MM_Perk PerkIn(MM_PerkSlot slot) => slot == MM_PerkSlot.Murderer ? murdererPerk : innocentPerk;
+
+        /// <summary>Steps the perk in <paramref name="slot"/> through the unlocked ones; returns the new pick.</summary>
+        public MM_Perk StepPerk(MM_PerkSlot slot, int step) {
+            MM_Perk next = MM_Perks.Step(slot, PerkIn(slot), step, roundsPlayed);
+            if (slot == MM_PerkSlot.Murderer) murdererPerk = next;
+            else innocentPerk = next;
+            return next;
         }
 
         // ---------------------------------------------------------------- reading (server)

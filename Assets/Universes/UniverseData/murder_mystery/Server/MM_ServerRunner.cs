@@ -106,6 +106,7 @@ namespace Universes.murder_mystery.Server {
             if (InstanceFinder.ServerManager != null) {
                 InstanceFinder.ServerManager.RegisterBroadcast<MM_ThrowKnifeRequest>(classic.OnThrowRequest, true);
                 InstanceFinder.ServerManager.RegisterBroadcast<MM_SmokeRequest>(classic.OnSmokeRequest, true);
+                InstanceFinder.ServerManager.RegisterBroadcast<MM_PerkRequest>(MM_PerkPicker.OnPerkRequest, true);
             } else {
                 Debug.LogError("[MM] No ServerManager when the runner woke: knife throws and smoke bombs from players will be ignored.", this);
             }
@@ -247,6 +248,7 @@ namespace Universes.murder_mystery.Server {
         /// <summary>Loads the player's saves; someone joining during the reveal then gets this round's results card.</summary>
         async UniTask LoadProgress(PlayerData player) {
             await PlayerProgress.Load<MM_SaveData>(player, MM_SaveData.Universe);
+            MM_PerkPicker.Send(player);
             if (player != null && mode == MM_Mode.Classic)
                 classic.SendResultsToLateJoiner(player);
         }
@@ -439,7 +441,8 @@ namespace Universes.murder_mystery.Server {
             character.SetTeam(new TeamConfig(MM_ClassicRound.TeamOf(role), TeamColor.None));
             classic.AddParticipant(character, null, role);
             // Townsfolk only run from a murderer with the knife out, or one they just saw kill.
-            npc.FleeThreatFilter = classic.IsVisibleThreat;
+            // (A murderer with the Ninja perk only gives the knife away up close.)
+            npc.FleeThreatFilter = murderer => classic.IsVisibleThreatFrom(murderer, npc.transform.position);
             npc.ConfigureFleeRadii(classicTuning.npcPanicDistance, classicTuning.npcPanicDistance * classicTuning.npcPanicClearMultiplier);
             switch (role) {
                 case MM_Role.Murderer:
@@ -617,6 +620,8 @@ namespace Universes.murder_mystery.Server {
 
             roundNumber++;
             PlayerProgress.ModifyAll<MM_SaveData>(save => save.roundsPlayed++);
+            // Rounds unlock perks: everyone's picker learns about a new one as the round starts.
+            MM_PerkPicker.SendAll();
             if (mode == MM_Mode.Classic) {
                 classic.Begin(roundNumber);
                 SpawnNpcs(players.Count);
@@ -752,6 +757,7 @@ namespace Universes.murder_mystery.Server {
             if (InstanceFinder.ServerManager != null && classic != null) {
                 InstanceFinder.ServerManager.UnregisterBroadcast<MM_ThrowKnifeRequest>(classic.OnThrowRequest);
                 InstanceFinder.ServerManager.UnregisterBroadcast<MM_SmokeRequest>(classic.OnSmokeRequest);
+                InstanceFinder.ServerManager.UnregisterBroadcast<MM_PerkRequest>(MM_PerkPicker.OnPerkRequest);
             }
             if (classic != null) {
                 classic.EndgameStarted -= OnClassicEndgame;

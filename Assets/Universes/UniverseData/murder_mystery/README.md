@@ -84,6 +84,28 @@ is the code defaults in `MM_ClassicTuning`: `MM_ServerRunner.prefab` (folder roo
 values in it. The prefab only saves from an Editor in the Linux Server build profile; once it is saved
 there, the values in the prefab win over the code defaults.
 
+### Perks
+
+MM2-style perks (`Shared/MM_Perks.cs`, unit-tested in `Tests/MM_PerkTests.cs`). Every player brings two: one
+for when they are dealt **murderer** (picked with **G**) and one for every other role (**H**; a hero keeps theirs).
+Shift+G / Shift+H step back. The picker card sits bottom left between rounds and during the role reveal; a pick
+made once the round has started applies from the next one (perks are read when the roles are dealt). During the
+hunt a chip over the E prompt names the perk in play. Perks unlock with murder mystery rounds played, and the
+round that unlocks one says "NEW PERK" with what it does.
+
+| Perk | Slot | Unlocks after | What it does (tuning in `MM_ClassicTuning`, "Perks") |
+|---|---|---|---|
+| Haste | Murderer | 2 rounds | Throw cooldown x0.65 (`hasteThrowCooldownMultiplier`). |
+| Ninja | Murderer | 8 rounds | A drawn knife makes townsfolk and NPC sheriffs notice you only within 8 m (`ninjaKnifeNoticeDistance`; kills and throws still show at any range), and the Heartbeat perk cannot hear you. |
+| Sixth Sense | Murderer | 16 rounds | Every 20 s (`sixthSenseIntervalSeconds`, first one 20 s after the grace period) the server sends you where every living non-murderer stands (`MM_SensePingBroadcast`); red markers show over them through walls for 2.5 s with a low bell. |
+| Lucky | Innocent | 1 round | Coin bag +15 (`luckyExtraBagCoins`). |
+| Light Feet | Innocent | 5 rounds | Smoke bomb cooldown x0.6 and the dash 1 s longer. |
+| Heartbeat | Innocent | 12 rounds | The server tells you (state `heartbeat`, 0-255) how close the nearest murderer with the knife out is, within 24 m (`heartbeatRange`, full at `heartbeatNearDistance` 6 m); a heartbeat and a red edge quicken as they close in. |
+
+NPCs have no perks. The picks are saved (`murdererPerk`, `innocentPerk`, save v5) and re-checked against the
+unlocks on load, so a hand-edited save cannot equip a locked perk. Server: `Server/MM_PerkPicker.cs` (requests,
+`MM_PerksBroadcast`) and the effects in `MM_ClassicRound`. Client: `Client/MM_PerkHud.cs`.
+
 ### NPC murderers and the sheriff
 
 `MM_NPC` lets NPC murderers prefer an armed sheriff over other targets: within `sheriffNoticeDistance`
@@ -177,9 +199,9 @@ the same frame with the volume off is a smooth gradient. The post-processing loo
 
 ## Saved progress
 
-`Server/MM_SaveData.cs` (version 3): rounds played, Classic wins per role, the current and best win
+`Server/MM_SaveData.cs` (version 5): rounds played, Classic wins per role, the current and best win
 streak (only a round your team won *and* you survived extends it, `MM_RoundRules.ExtendsStreak`), rounds survived, murders and throw kills, murderers shot, guns picked up, lifetime coins (which
-unlock knife skins), and the luck that raises a player's odds of being murderer or sheriff after rounds
+unlock knife skins), smoke bombs thrown, the two perk picks, and the luck that raises a player's odds of being murderer or sheriff after rounds
 without the role.
 
 ## Code

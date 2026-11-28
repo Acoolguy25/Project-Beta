@@ -78,6 +78,8 @@ namespace Universes.UniverseData.murder_mystery.Editor {
         const string StartScene = Root + "/murder_mystery_start.unity";
         const string Sounds = "Assets/Universes/UniverseData/classic_horror/Flooded_Grounds/Content/Sounds/";
         const string OwnSounds = Root + "/Audio/";
+        // Sixth Sense ping: a low chapel bell from the horror game's sounds.
+        const string SenseSound = "Assets/Universes/UniverseData/classic_horror/Audio/chapel-bell-1.ogg";
 
 
         [MenuItem("Ryan/Murder Mystery/Rebuild HUD and Knife")]
@@ -1003,8 +1005,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             hud.roleReveal = HudKit.Banner(root, "RoleReveal", new Vector2(0.5f, 1f), new Vector2(0f, -76f), 640f,
                 "innocent", RoleColor(MM_Role.Innocent), 80f, MM_ClientHUD.RoundStartKicker);
 
+            BuildSenseMarkers(root);
             BuildRoleChip(root, hud);
             BuildThrowPrompt(root, hud);
+            BuildPerks(root);
 
             // Between rounds, where the role chip sits during a round: your odds for the next one.
             hud.oddsChip = HudKit.Chip(root, "Odds", "dagger", "Next round", RoleColor(MM_Role.Murderer), 40f, UIText.Small);
@@ -1103,6 +1107,69 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             hud.coinChip = HudKit.Chip(chip, "Coins", "coins", "Bag 0/40", Gold, 30f);
             hud.coinChip.background.enabled = false;
             hud.roleChip = HudKit.Popup(chip, false);
+        }
+
+        /// <summary>
+        /// Perks (MM_PerkHud): the picker card bottom left above the skin chip between rounds ([G] murderer perk,
+        /// [H] innocent perk), and a chip over the E prompt that names the perk in play during the hunt.
+        /// </summary>
+        static void BuildPerks(RectTransform root) {
+            MM_PerkHud perks = root.gameObject.AddComponent<MM_PerkHud>();
+            // Two rows (murderer, innocent) so the card stays narrow and clear of the results card beside it.
+            RectTransform card = UIKit.Pinned(root, "PerkCard", Vector2.zero, new Vector2(20f, 304f), new Vector2(300f, 110f));
+            HudKit.Glass(card, 16f);
+            UIKit.Column(card.gameObject, 6f, new RectOffset(12, 18, 10, 10), TextAnchor.MiddleLeft);
+            UIKit.FitContent(card.gameObject, true, true);
+            UIKit.Text(card, "Caption", "Your perks", UIText.Caption, UIColorRole.TextMuted);
+            PerkSlot(card, "MurdererPerk", "G", out perks.murdererIcon, out perks.murdererName, out perks.murdererNote);
+            PerkSlot(card, "InnocentPerk", "H", out perks.innocentIcon, out perks.innocentName, out perks.innocentNote);
+            perks.card = HudKit.Popup(card, false);
+
+            perks.activeChip = HudKit.Chip(root, "ActivePerk", "eye", "Sixth Sense", RoleColor(MM_Role.Murderer), 36f, UIText.Small);
+            RectTransform chip = (RectTransform)perks.activeChip.transform;
+            chip.anchorMin = chip.anchorMax = chip.pivot = new Vector2(0.5f, 0f);
+            chip.anchoredPosition = new Vector2(0f, 290f);
+            perks.activeChip.label.richText = true;
+
+            perks.perkIcons = new Sprite[MM_Perks.All.Length];
+            for (int i = 0; i < perks.perkIcons.Length; i++)
+                perks.perkIcons[i] = HudKit.Icon(MM_Perks.All[i].icon);
+            perks.senseMarkerTemplate = (RectTransform)root.Find("SenseMarkers/SenseMarker");
+            perks.heartbeatSound = Sound(0.9f, OwnSounds + "heartbeat.ogg");
+            perks.heartbeatSound.pitchJitterSemitones = 0f;
+            perks.senseSound = Sound(0.5f, SenseSound);
+            perks.senseSound.pitch = 0.8f;
+        }
+
+        static void PerkSlot(RectTransform card, string name, string key, out Image icon, out TMP_Text label, out TMP_Text note) {
+            RectTransform slot = UIKit.Node(card, name);
+            UIKit.Row(slot.gameObject, 8f, null, TextAnchor.MiddleLeft);
+            HudKit.KeyCap(slot, key);
+            icon = HudKit.Icon(slot, "cancel", 28f, Color.white);
+            RectTransform text = UIKit.Node(slot, "Text");
+            UIKit.Column(text.gameObject, -2f, null, TextAnchor.MiddleLeft);
+            label = UIKit.Text(text, "Name", "No perk", UIText.Strong);
+            label.fontSize = 17f;
+            note = UIKit.Text(text, "Note", "As murderer", UIText.Caption, UIColorRole.TextMuted);
+        }
+
+        /// <summary>
+        /// Sixth Sense markers: a full-screen layer under the rest of the HUD with one authored marker (a red disc with a
+        /// person on it) that MM_PerkHud clones for each character a ping shows.
+        /// </summary>
+        static void BuildSenseMarkers(RectTransform root) {
+            RectTransform layer = UIKit.Fill(root, "SenseMarkers");
+            layer.SetAsFirstSibling();
+            RectTransform marker = HudKit.Emblem(layer, "SenseMarker", "person", 40f, RoleColor(MM_Role.Murderer), out Image disc, out _);
+            marker.anchorMin = marker.anchorMax = marker.pivot = new Vector2(0.5f, 0.5f);
+            marker.anchoredPosition = Vector2.zero;
+            disc.color = new Color(disc.color.r, disc.color.g, disc.color.b, 0.85f);
+            CanvasGroup group = marker.gameObject.AddComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
+            foreach (Graphic graphic in marker.GetComponentsInChildren<Graphic>(true))
+                graphic.raycastTarget = false;
+            marker.gameObject.SetActive(false);
         }
 
         /// <summary>

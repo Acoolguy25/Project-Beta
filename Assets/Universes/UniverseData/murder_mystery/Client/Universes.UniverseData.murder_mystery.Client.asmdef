@@ -18,7 +18,8 @@
         "RyanAssets.Item.FloatingTool",
         "RyanAssets.Cameras",
         "RyanAssets.Client.ClientUI.Spectate",
-        "Unity.Cinemachine"
+        "Unity.Cinemachine",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

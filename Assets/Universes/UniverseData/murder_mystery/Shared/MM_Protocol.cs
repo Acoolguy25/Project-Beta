@@ -49,6 +49,37 @@ namespace Universes.UniverseData.murder_mystery {
         /// <summary>Innocents: what a smoke bomb costs, and seconds until the next one may be thrown (0 = ready).</summary>
         public int smokeCost;
         public float smokeCooldown;
+        /// <summary>The perk that applies to this player this round (<see cref="MM_Perks"/>), None outside a round.</summary>
+        public MM_Perk perk;
+        /// <summary>Heartbeat perk: how close a murderer with the knife out is (0 = none near, 255 = right there).</summary>
+        public byte heartbeat;
+        /// <summary>Sixth Sense perk: seconds until the next ping.</summary>
+        public float senseCooldown;
+    }
+
+    /// <summary>Client asks to switch the perk in one slot to the next (step +1) or previous (-1) unlocked one.</summary>
+    public struct MM_PerkRequest : IBroadcast {
+        public MM_PerkSlot slot;
+        public int step;
+    }
+
+    /// <summary>
+    /// The receiving player's perks: what they picked for each slot, and the rounds they have played (which unlock
+    /// perks, <see cref="MM_Perks"/>). Sent on joining, after each change and when a round starts.
+    /// </summary>
+    public struct MM_PerksBroadcast : IBroadcast {
+        public MM_Perk murdererPerk, innocentPerk;
+        public int roundsPlayed;
+        /// <summary>The player changed <see cref="changedSlot"/> (show the pick), rather than a refresh.</summary>
+        public bool changed;
+        public MM_PerkSlot changedSlot;
+    }
+
+    /// <summary>Sixth Sense: where every living non-murderer stood at the moment of the ping. Sent to that murderer only.</summary>
+    public struct MM_SensePingBroadcast : IBroadcast {
+        public Vector3[] positions;
+        /// <summary>How long the markers stay up (seconds).</summary>
+        public float seconds;
     }
 
     /// <summary>Client (a murderer holding the knife) asks to throw it at a point in the world.</summary>

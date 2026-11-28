@@ -123,7 +123,7 @@ namespace Universes.murder_mystery.Server {
                 return;
             }
             foreach (GameCharacter murderer in round.LivingWithRole(MM_Role.Murderer)) {
-                if (!round.IsVisibleThreat(murderer))
+                if (!round.IsVisibleThreatFrom(murderer, transform.position))
                     continue;
                 if (Vector3.Distance(transform.position, murderer.transform.position) > tuning.npcSheriffSightDistance)
                     continue;

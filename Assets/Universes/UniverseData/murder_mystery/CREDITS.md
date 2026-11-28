@@ -12,7 +12,9 @@ github.com/ETdoFresh/kenney.nl (license files included in the mirror). Files wer
 | role_reveal.ogg | Music Jingles | Pizzicato jingles/jingles_PIZZI07.ogg |
 | kill_sting.ogg | Music Jingles | Hit jingles/jingles_HIT15.ogg |
 
-Also used, from elsewhere in the project: the horn when the sheriff goes down (`classic_horror/Flooded_Grounds/Content/Sounds/Horn.mp3`),
+`heartbeat.ogg` (Heartbeat perk) was synthesized for this project (two pitched low thumps, CC0 1.0), copied from hide_and_seek.
+
+Also used, from elsewhere in the project: the chapel bell for the Sixth Sense ping (`classic_horror/Audio/chapel-bell-1.ogg`), the horn when the sheriff goes down (`classic_horror/Flooded_Grounds/Content/Sounds/Horn.mp3`),
 and the shared game-feel kit's cues (see `Packages/com.ryan.gameframework/Runtime/GameFeel/Audio/CREDITS.md`).
 
 ## Icons

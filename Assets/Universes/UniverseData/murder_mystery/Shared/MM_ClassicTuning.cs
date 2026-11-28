@@ -171,6 +171,27 @@ namespace Universes.UniverseData.murder_mystery {
         [Tooltip("NPC murderers lose track of the innocent for this long after the bomb goes off (seconds).")]
         [Min(0f)] public float smokeHideSeconds = 3.5f;
 
+        [Header("Perks")]
+        [Tooltip("Haste: a murderer's throw cooldown is multiplied by this.")]
+        [Range(0.1f, 1f)] public float hasteThrowCooldownMultiplier = 0.65f;
+        [Tooltip("Ninja: a drawn knife makes townsfolk and NPC sheriffs notice the murderer only this close (metres). " +
+                 "Kills and throws are noticed as usual.")]
+        [Min(0f)] public float ninjaKnifeNoticeDistance = 8f;
+        [Tooltip("Sixth Sense: seconds between pings (the first comes this long after the grace period ends).")]
+        [Min(1f)] public float sixthSenseIntervalSeconds = 20f;
+        [Tooltip("Sixth Sense: how long the ping's markers stay on the murderer's screen (seconds).")]
+        [Min(0.2f)] public float sixthSenseRevealSeconds = 2.5f;
+        [Tooltip("Lucky: extra coins the bag holds.")]
+        [Min(0)] public int luckyExtraBagCoins = 15;
+        [Tooltip("Light Feet: the smoke bomb cooldown is multiplied by this.")]
+        [Range(0.1f, 1f)] public float lightFeetSmokeCooldownMultiplier = 0.6f;
+        [Tooltip("Light Feet: extra seconds of the smoke bomb's burst of speed.")]
+        [Min(0f)] public float lightFeetExtraBoostSeconds = 1f;
+        [Tooltip("Heartbeat: a murderer with the knife out starts the heartbeat this close (metres).")]
+        [Min(1f)] public float heartbeatRange = 24f;
+        [Tooltip("Heartbeat: at this distance or closer the heartbeat is at its strongest (metres).")]
+        [Min(0f)] public float heartbeatNearDistance = 6f;
+
         [Header("Rewards (XP)")]
         [Min(0)] public int xpPerKill = 10;
         [Tooltip("For the sheriff or hero who shoots a murderer.")]
@@ -185,6 +206,16 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0)] public int secondsLeftWhenPlayersOut = 25;
         [Tooltip("Players this close to a kill hear and see it (kill sting, sparks). The victim and the killer always do.")]
         [Min(0f)] public float killAudibleDistance = 45f;
+
+        /// <summary>The coin bag of a character with <paramref name="perk"/>.</summary>
+        public int BagSizeFor(MM_Perk perk) => coinBagSize + (perk == MM_Perk.Lucky ? luckyExtraBagCoins : 0);
+
+        /// <summary>Seconds between knife throws for a murderer with <paramref name="perk"/>.</summary>
+        public float ThrowCooldownFor(MM_Perk perk) => throwCooldownSeconds * (perk == MM_Perk.Haste ? hasteThrowCooldownMultiplier : 1f);
+
+        /// <summary>Seconds between smoke bombs, and the burst's length, for an innocent with <paramref name="perk"/>.</summary>
+        public float SmokeCooldownFor(MM_Perk perk) => smokeCooldownSeconds * (perk == MM_Perk.LightFeet ? lightFeetSmokeCooldownMultiplier : 1f);
+        public float SmokeBoostFor(MM_Perk perk) => smokeBoostSeconds + (perk == MM_Perk.LightFeet ? lightFeetExtraBoostSeconds : 0f);
 
         /// <summary>How many murderers and sheriffs a round with this many characters gets.</summary>
         public int MurderersFor(int characters) => MM_RoleOdds.RoleCount(characters, charactersPerMurderer);
