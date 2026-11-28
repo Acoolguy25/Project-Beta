@@ -37,6 +37,7 @@ namespace Universes.UniverseData.tycoon.Tests {
             list.Add(new Area("claim pad", Rect(TY_Catalog.ClaimPosition, new Vector2(TY_Catalog.PadSize.x, TY_Catalog.PadSize.z))));
             list.Add(new Area("collect pad", Rect(TY_Catalog.CollectPosition, new Vector2(TY_Catalog.PadSize.x, TY_Catalog.PadSize.z))));
             list.Add(new Area("daily chest", Square(TY_Catalog.ChestPosition, TY_Catalog.ChestPadSize)));
+            list.Add(new Area("pet crate", Square(TY_Catalog.CratePosition, TY_Catalog.ChestPadSize)));
             list.Add(new Area("spawn", Square(TY_Catalog.SpawnPosition, 2f)));
             Rect coins = TY_Catalog.GoldenArea;
             list.Add(new Area("gold coin area", coins));
@@ -100,6 +101,7 @@ namespace Universes.UniverseData.tycoon.Tests {
             foreach (TY_ItemKind lane in TY_Lanes.PadLanes)
                 pads.Add(new Area($"{TY_Lanes.Title(lane)} pad", Rect(TY_Catalog.LanePosition(lane), new Vector2(TY_Catalog.ButtonSize.x, TY_Catalog.ButtonSize.z))));
             pads.Add(new Area("daily chest", Square(TY_Catalog.ChestPosition, TY_Catalog.ChestPadSize)));
+            pads.Add(new Area("pet crate", Square(TY_Catalog.CratePosition, TY_Catalog.ChestPadSize)));
             pads.Add(new Area("spawn", Square(TY_Catalog.SpawnPosition, 2f)));
             for (int a = 0; a < pads.Count; a++)
                 for (int b = a + 1; b < pads.Count; b++)

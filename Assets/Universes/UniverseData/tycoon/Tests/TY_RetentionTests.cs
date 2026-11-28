@@ -245,7 +245,7 @@ namespace Universes.UniverseData.tycoon.Tests {
             Assert.GreaterOrEqual(pool.Length, 8);
             Assert.AreEqual(pool.Length, pool.Select(c => c.id).Distinct().Count(), "unique ids");
             string[] reported = { TY_Retention.StatCollect, TY_Retention.StatCoins, TY_Retention.StatBuilds, TY_Retention.StatRebirth, TY_Retention.StatRush,
-                TY_Retention.StatGoals, TY_Retention.StatMinutes, TY_Retention.StatEarn, TY_Retention.StatIncome };
+                TY_Retention.StatGoals, TY_Retention.StatMinutes, TY_Retention.StatEarn, TY_Retention.StatIncome, TY_Retention.StatHatch };
             foreach (ChallengeDefinition challenge in pool) {
                 CollectionAssert.Contains(reported, challenge.statKey, $"{challenge.id} counts a stat the server never reports");
                 Assert.Greater(challenge.target, 0);

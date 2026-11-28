@@ -11,6 +11,8 @@ namespace Universes.UniverseData.tycoon {
         OfflineEarnings,
         /// <summary>The daily chest was opened. amount = cash, extra = seconds until the next one.</summary>
         DailyChest,
+        /// <summary>A pet crate was opened. item = pet, amount = its level now, extra = <see cref="TY_Hatch.Flags"/>.</summary>
+        PetHatched,
     }
 
     public struct TY_PlotState {
@@ -26,6 +28,9 @@ namespace Universes.UniverseData.tycoon {
         /// <summary>Whether a gold coin is waiting on the plot, and where (plot space).</summary>
         public bool golden;
         public Vector3 goldenPosition;
+        /// <summary>The owner's following pet (<see cref="TY_Pets.Best"/>), or -1; and its level (appended).</summary>
+        public sbyte pet;
+        public byte petLevel;
     }
 
     /// <summary>Every plot, sent to everyone on change and about once a second for collector totals.</summary>
@@ -62,6 +67,10 @@ namespace Universes.UniverseData.tycoon {
         public int invested;
         /// <summary>That chest's prize: minutes of income and perk tokens (appended).</summary>
         public int chestMinutes, chestTokens;
+        /// <summary>Level of every pet (index of <see cref="TY_Pets.All"/>, 0 = not found), the crate's price and crates left until the pity guarantee (0 = none) (appended).</summary>
+        public byte[] pets;
+        public long cratePrice;
+        public int crateUntilPity;
     }
 
     /// <summary>Something happened to this player (purchase, collection, refusal).</summary>

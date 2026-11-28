@@ -8,7 +8,8 @@ using UnityEngine;
 namespace Universes.UniverseData.tycoon.Client {
     /// <summary>
     /// Draws Brick Tycoon from server state: who owns each plot, bought items, lane buy pads,
-    /// collector totals, gold coins, the local player's daily chest and the bricks that ride each belt,
+    /// collector totals, gold coins, the local player's daily chest and pet crate, every owner's pet and
+    /// the bricks that ride each belt,
     /// and feeds the HUD and the game feel. Bricks are cosmetic; cash is counted on the server.
     /// </summary>
     public sealed class TY_ClientController : MonoBehaviour {
@@ -60,6 +61,8 @@ namespace Universes.UniverseData.tycoon.Client {
             public FxHandle beacon;
             /// <summary>The daily chest: shown on the local player's own plot only.</summary>
             public TY_ChestView chest;
+            /// <summary>The pet crate: shown on the local player's own plot only.</summary>
+            public TY_CrateView crate;
             public bool hasState;
         }
 
@@ -107,10 +110,13 @@ namespace Universes.UniverseData.tycoon.Client {
         }
 
         TY_BuildPreview preview;
+        TY_PetFollowers pets;
 
         void Start() {
             preview = gameObject.AddComponent<TY_BuildPreview>();
             preview.Setup(map.ghostMaterial, PadLanes.Length);
+            pets = gameObject.AddComponent<TY_PetFollowers>();
+            pets.Setup(map, feedback);
             visuals = new PlotVisual[map.PlotCount];
             for (int i = 0; i < visuals.Length; i++) {
                 var v = visuals[i] = new PlotVisual();
@@ -134,7 +140,14 @@ namespace Universes.UniverseData.tycoon.Client {
                     v.chest = chest.GetComponent<TY_ChestView>();
                     chest.SetActive(false);
                 }
-                ApplyPlot(i, new TY_PlotState { plot = (byte)i, ownerId = -1 }, false);
+                if (map.cratePrefab != null) {
+                    var crate = Instantiate(map.cratePrefab, view.itemRoot);
+                    crate.transform.localPosition = TY_Catalog.CratePosition;
+                    crate.transform.localRotation = Quaternion.identity;
+                    v.crate = crate.GetComponent<TY_CrateView>();
+                    crate.SetActive(false);
+                }
+                ApplyPlot(i, new TY_PlotState { plot = (byte)i, ownerId = -1, pet = -1 }, false);
             }
             SetUpBelt();
             hud.offlineCard.Closed += feedback.OfflineCollected;
@@ -189,6 +202,7 @@ namespace Universes.UniverseData.tycoon.Client {
             hasWallet = true;
             chestBackAt = Time.unscaledTime + message.chestSeconds;
             RefreshPads();
+            RefreshCrate();
             RefreshHud();
         }
 
@@ -226,6 +240,9 @@ namespace Universes.UniverseData.tycoon.Client {
                     hud.PunchCash();
                     break;
                 case TY_EventKind.OfflineEarnings: feedback.WelcomeBack(); break;
+                case TY_EventKind.PetHatched when onPlot:
+                    feedback.PetHatched(visuals[e.plot].crate, map.PetPrefab(e.item), e.item, (int)e.amount, e.extra);
+                    break;
             }
         }
 
@@ -319,6 +336,9 @@ namespace Universes.UniverseData.tycoon.Client {
             }
             if (!owned) ClearOre(v);
             if (v.chest != null && v.chest.gameObject.activeSelf != mine) v.chest.gameObject.SetActive(mine);
+            if (v.crate != null && v.crate.gameObject.activeSelf != mine) v.crate.gameObject.SetActive(mine);
+            if (mine) RefreshCrate();
+            pets.Set(index, state.ownerId, owned ? state.pet : -1, state.petLevel, live);
             RefreshPads(index);
 
             // Only the first of several drops shakes the camera, so a restored build doesn't rattle for seconds.
@@ -530,6 +550,15 @@ namespace Universes.UniverseData.tycoon.Client {
             TY_ChestView chest = visuals[wallet.plot].chest;
             if (chest != null && chest.gameObject.activeSelf)
                 chest.Show(wallet.chestReady, chestBackAt - Time.unscaledTime, wallet.chestStreak, TY_DailyChest.PrizeText(wallet.chestMinutes, wallet.chestTokens));
+        }
+
+        // ---------------------------------------------------------------- pet crate
+        /// <summary>The local player's crate sign: price (green when affordable), pets found and the pity countdown.</summary>
+        void RefreshCrate() {
+            if (!hasWallet || wallet.plot < 0 || wallet.plot >= visuals.Length) return;
+            TY_CrateView crate = visuals[wallet.plot].crate;
+            if (crate != null && crate.gameObject.activeSelf)
+                crate.Show(wallet.cratePrice, wallet.cash >= wallet.cratePrice, TY_Pets.Found(wallet.pets), TY_Pets.Count, wallet.crateUntilPity);
         }
 
         // ---------------------------------------------------------------- auto-collector popups

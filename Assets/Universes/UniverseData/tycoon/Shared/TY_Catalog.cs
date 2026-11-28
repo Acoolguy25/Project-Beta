@@ -110,6 +110,8 @@ namespace Universes.UniverseData.tycoon {
         public static readonly Vector3 ChestPosition = new(-3.4f, 0f, 10.5f);
         /// <summary>Side of the chest's pad (the authored chest stands on it).</summary>
         public const float ChestPadSize = 2.6f;
+        /// <summary>The owner's pet crate, mirroring the chest on the other side of the spawn point.</summary>
+        public static readonly Vector3 CratePosition = new(3.4f, 0f, 10.5f);
         /// <summary>Inner face of the plot's wall (the Brick Walls building): nothing may stand past it.</summary>
         public const float WallInner = PlotSize * 0.5f - 0.6f;
         /// <summary>Half-width of the walkway from the front gate to the spawn point, kept clear of landmarks.</summary>

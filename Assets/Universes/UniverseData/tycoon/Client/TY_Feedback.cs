@@ -122,6 +122,14 @@ namespace Universes.UniverseData.tycoon.Client {
         [Tooltip("Screen flash when a goal is completed; alpha is the peak opacity.")]
         public Color goalFlash = new(0.36f, 0.85f, 1f, 0.18f);
         [Range(0f, 1f)] public float goalVolume = 0.8f;
+        [Header("Pet crate")]
+        [Tooltip("Seconds the crate rattles before it opens.")]
+        [Min(0f)] public float crateShakeSeconds = 0.7f;
+        [Tooltip("Seconds the hatched pet spins over the open crate before it hops off to its owner.")]
+        [Min(0.2f)] public float petRevealSeconds = 1.6f;
+        [Tooltip("Size of the pet while it is shown off over the crate.")]
+        [Min(0.1f)] public float petRevealScale = 2.8f;
+        [Min(0f)] public float petConfettiScale = 2.2f;
         [Header("Landmarks and the Brick Rocket")]
         public Color landmarkColor = new(1f, 0.82f, 0.3f);
         public Color landmarkFlash = new(1f, 0.82f, 0.3f, 0.3f);
@@ -566,5 +574,97 @@ namespace Universes.UniverseData.tycoon.Client {
                 yield return wait;
             }
         }
-    }
+
+        // ---------------------------------------------------------------- pet crate
+        /// <summary>A pet popped in beside its owner (a new best pet): a puff in its rarity's colour.</summary>
+        public void PetAppeared(Transform pet, TY_Rarity rarity) {
+            GameFx.Poof(pet.position, 0.6f, TY_Pets.RarityColor(rarity), 0.7f);
+            Punch.Pop(pet, 0.3f, 0.35f);
+        }
+
+        /// <summary>
+        /// The local player opened a pet crate: it rattles, the lid flies, and the pet spins over it in a burst of its
+        /// rarity's colour (rarer pets get a flash, a banner and a bigger fanfare), then poofs off to its owner's side.
+        /// </summary>
+        public void PetHatched(TY_CrateView crate, GameObject petPrefab, int pet, int level, long flags) {
+            if (crate == null || !TY_Pets.IsValid(pet)) return;
+            StartCoroutine(HatchRoutine(crate, petPrefab, pet, level, flags));
+        }
+
+        IEnumerator HatchRoutine(TY_CrateView crate, GameObject petPrefab, int pet, int level, long flags) {
+            TY_Pet data = TY_Pets.All[pet];
+            Color colour = TY_Pets.RarityColor(data.rarity);
+            Transform body = crate.body != null ? crate.body : crate.transform;
+            Quaternion bodyRest = body.localRotation;
+            Vector3 top = crate.transform.position + Vector3.up * 1.4f;
+            // Rattle: faster and faster ticks, rising in pitch.
+            int ticks = 0;
+            for (float t = 0f; t < crateShakeSeconds; t += Time.deltaTime) {
+                if (crate == null) yield break;
+                float k = t / Mathf.Max(0.01f, crateShakeSeconds);
+                body.localRotation = bodyRest * Quaternion.Euler(Mathf.Sin(t * 60f) * 6f * k, 0f, Mathf.Cos(t * 47f) * 6f * k);
+                if (t >= ticks * crateShakeSeconds / 5f) GameSfx.PlayAt(SfxCue.UiClick, top, 0.8f, GameSfx.Semitones(ticks++ * 2f));
+                yield return null;
+            }
+            if (crate == null) yield break;
+            body.localRotation = bodyRest;
+
+            // Open: lid up, burst, sound by rarity.
+            Transform lid = crate.lid;
+            Vector3 lidRest = lid != null ? lid.localPosition : Vector3.zero;
+            Quaternion lidRot = lid != null ? lid.localRotation : Quaternion.identity;
+            GameFx.Play(FxKind.Confetti, top, colour, petConfettiScale * (1f + 0.3f * (int)data.rarity));
+            GameFx.Play(FxKind.ShockwaveRing, crate.transform.position, colour, 2.5f + (int)data.rarity);
+            GameFx.Play(FxKind.CoinBurst, top, colour, 1.2f);
+            switch (data.rarity) {
+                case TY_Rarity.Common: GameSfx.PlayAt(SfxCue.Pickup, top); break;
+                case TY_Rarity.Uncommon:
+                case TY_Rarity.Rare: GameSfx.Play(SfxCue.LevelUp); break;
+                default:
+                    GameSfx.Play(SfxCue.Win);
+                    CameraShake.Explosion(top, landingShakeRadius, 0.35f);
+                    break;
+            }
+            string callout = TY_Hatch.MaxedFlag(flags) ? $"{data.name} MAX"
+                : TY_Hatch.IsNewFlag(flags) ? $"NEW! {data.name}" : $"{data.name} Lv {level}";
+            // Rare and better get the screen banner (which names the pet); the others a callout over the crate.
+            if (data.rarity >= TY_Rarity.Rare) {
+                ScreenFx.Flash(new Color(colour.r, colour.g, colour.b, 0.12f + 0.06f * (int)data.rarity));
+                ScreenFx.ShowText($"{TY_Pets.RarityName(data.rarity).ToUpperInvariant()}!\n<size=55%>{callout}</size>", colour, bannerSeconds + 0.8f, bannerSize);
+            } else {
+                FloatingText.Callout(top + Vector3.up * 2.2f, callout, colour, 1.3f, petRevealSeconds + 0.6f);
+            }
+
+            // Show off the pet over the crate.
+            Transform shown = petPrefab != null ? Instantiate(petPrefab, crate.transform).transform : null;
+            for (float t = 0f; t < petRevealSeconds; t += Time.deltaTime) {
+                if (crate == null) { if (shown != null) Destroy(shown.gameObject); yield break; }
+                float k = t / petRevealSeconds;
+                if (lid != null) {
+                    float open = Mathf.Clamp01(t / 0.25f);
+                    lid.localPosition = lidRest + Vector3.up * (1.4f * open) + Vector3.back * (0.6f * open);
+                    lid.localRotation = lidRot * Quaternion.Euler(-70f * open, 0f, 0f);
+                }
+                if (shown != null) {
+                    float grow = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.35f));
+                    shown.position = crate.transform.position + Vector3.up * (0.8f + 1.0f * grow + Mathf.Sin(k * Mathf.PI * 2f) * 0.1f);
+                    shown.rotation = Quaternion.Euler(0f, 160f + 400f * Mathf.SmoothStep(0f, 1f, k), 0f);
+                    shown.localScale = Vector3.one * petRevealScale * grow;
+                }
+                yield return null;
+            }
+            if (shown != null) {
+                GameFx.Poof(shown.position, 0.8f, colour, 1f);
+                Destroy(shown.gameObject);
+            }
+            // The lid drops back shut.
+            for (float t = 0f; t < 0.2f && lid != null; t += Time.deltaTime) {
+                lid.localPosition = Vector3.Lerp(lid.localPosition, lidRest, t / 0.2f);
+                lid.localRotation = Quaternion.Slerp(lid.localRotation, lidRot, t / 0.2f);
+                yield return null;
+            }
+            if (lid != null) { lid.localPosition = lidRest; lid.localRotation = lidRot; }
+            if (crate != null) Punch.Squash(body, 0.15f, 0.3f);
+        }
+}
 }

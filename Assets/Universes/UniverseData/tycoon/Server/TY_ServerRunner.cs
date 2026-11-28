@@ -22,7 +22,8 @@ namespace Universes.UniverseData.tycoon.Server {
     /// <summary>
     /// Brick Tycoon: players claim a plot, earn from droppers into a collector with a limited size,
     /// step on lane pads to build, grab gold coins, and rebirth for a permanent multiplier plus a
-    /// token for the perk shop; rebirths open landmarks that stay through every rebirth after. A goal
+    /// token for the perk shop; rebirths open landmarks that stay through every rebirth after. A pet
+    /// crate hatches collectible pets that follow their owner and boost income for good (Pets partial). A goal
     /// chain, a daily chest, offline earnings and the shared retention kit (levels with unlocks, daily
     /// challenges, streak, a summary card at each rebirth) give a next goal at every moment (see the
     /// Retention and Progress partials). Every rule (cash, prices, unlocks, claims, pickups) is decided
@@ -46,6 +47,10 @@ namespace Universes.UniverseData.tycoon.Server {
         [Tooltip("Test servers only: registers the StartRushHour and RushMultiplier commands (see TY_Commands). The command "
             + "service has no permissions, so any player could run them, and rush earnings are saved. Keep it off when shipping.")]
         [SerializeField] bool rushCommands;
+
+        [Header("Pet crate")]
+        [Tooltip("Brick Buddies: the crate's price, rarity odds and pity counter (see TY_Pets).")]
+        [SerializeField] TY_PetCrate petCrate = new();
 
         [Header("Rewards (game XP through the retention kit, which also pays account XP and gold)")]
         [SerializeField] TY_RewardTuning rewards = new();
@@ -87,6 +92,10 @@ namespace Universes.UniverseData.tycoon.Server {
             public int invested;
             /// <summary>The best income (rush hours left out) this player's plot has reached, saved: the daily chest pays from it.</summary>
             public double peakIncome;
+            /// <summary>Level of every pet (saved, kept through rebirths), crates opened, and crates since the last Epic or better.</summary>
+            public byte[] pets = new byte[TY_Pets.Count];
+            public int hatches, sinceEpic;
+            public bool onCrate;
             /// <summary>Goal stats of this frame (<see cref="statsFrame"/>), so a tick computes them once; -1 = stale.</summary>
             public TY_GoalStats stats;
             public int statsFrame = -1;
@@ -124,6 +133,7 @@ namespace Universes.UniverseData.tycoon.Server {
             InstanceFinder.ServerManager.RegisterBroadcast<TY_StateRequest>(OnStateRequest);
             InstanceFinder.ServerManager.RegisterBroadcast<TY_PerkRequest>(OnPerkRequest);
             rushHour.Validate();
+            petCrate.Validate();
             ValidateRetentionTuning();
             retention = new RetentionService<TY_SaveData>(TY_Retention.Rules(retentionTuning, unlockTuning, offline), save => save.retention);
             retention.Ready += OnRetentionReady;
@@ -131,6 +141,7 @@ namespace Universes.UniverseData.tycoon.Server {
 
         void OnValidate() {
             rushHour?.Validate();
+            petCrate?.Validate();
             ValidateRetentionTuning();
         }
 
@@ -186,14 +197,17 @@ namespace Universes.UniverseData.tycoon.Server {
         /// <summary>Cash per second the plot earns right now (rush hour included).</summary>
         double IncomeOf(Plot plot, Tycooner t) => BaseIncomeOf(plot.purchased, t, plot.owner) * RushMultiplierFor(plot.owner);
 
-        /// <summary>Income of a build without rush hours: the catalog's, the tuning scale, investments and the player's level unlocks.</summary>
+        /// <summary>Income of a build without rush hours: the catalog's, the tuning scale, investments, pets and the player's level unlocks.</summary>
         double BaseIncomeOf(ulong purchased, Tycooner t, NetworkConnection owner) =>
-            TY_Catalog.Income(purchased, t.rebirths, t.perks) * incomeScale * TY_Catalog.InvestMultiplier(t.invested) * LevelIncomeMultiplier(owner);
+            TY_Catalog.Income(purchased, t.rebirths, t.perks) * BoostsOf(t, owner);
+
+        /// <summary>The player's own multipliers on top of the catalog (tuning scale, investments, pets, level unlocks).</summary>
+        double BoostsOf(Tycooner t, NetworkConnection owner) =>
+            incomeScale * TY_Catalog.InvestMultiplier(t.invested) * TY_Pets.Multiplier(t.pets) * LevelIncomeMultiplier(owner);
 
         /// <summary>Everything on top of dropper income, as the wallet shows it.</summary>
         double MultiplierOf(ulong purchased, Tycooner t, NetworkConnection owner) =>
-            TY_Catalog.Multiplier(purchased, t.rebirths, t.perks) * incomeScale * TY_Catalog.InvestMultiplier(t.invested) * LevelIncomeMultiplier(owner)
-            * RushMultiplierFor(owner);
+            TY_Catalog.Multiplier(purchased, t.rebirths, t.perks) * BoostsOf(t, owner) * RushMultiplierFor(owner);
 
         // ---------------------------------------------------------------- lifecycle
         protected override async UniTask StartAsync(CancellationToken token) {
@@ -312,6 +326,10 @@ namespace Universes.UniverseData.tycoon.Server {
                 t.onCollector = onCollector;
                 if (plot.golden && map.GoldenZone(t.plot, plot.goldenPosition).ContainsFootprint(feet)) GrabGolden(pair.Key, t, plot);
                 if (ChestReady(t) && map.ChestZone(t.plot).ContainsFootprint(feet)) OpenChest(pair.Key, t, plot);
+                // Like the collector: one crate per step onto its pad.
+                bool onCrate = map.CrateZone(t.plot).ContainsFootprint(feet);
+                if (onCrate && !t.onCrate) TryHatch(pair.Key, t, plot);
+                t.onCrate = onCrate;
                 int pads = 0;
                 foreach (TY_ItemKind lane in TY_Lanes.PadLanes) {
                     int item = TY_Catalog.PadItem(plot.purchased, lane, t.rebirths);
@@ -505,6 +523,7 @@ namespace Universes.UniverseData.tycoon.Server {
         TY_PlotsBroadcast MakePlots() => new() {
             plots = plots.Select((p, i) => {
                 Tycooner t = p.owner != null && players.TryGetValue(p.owner, out var owner) ? owner : null;
+                int pet = t != null ? TY_Pets.Best(t.pets) : -1;
                 return new TY_PlotState {
                     plot = (byte)i,
                     ownerId = p.owner != null ? p.owner.ClientId : -1,
@@ -516,6 +535,8 @@ namespace Universes.UniverseData.tycoon.Server {
                     income = t != null ? (float)IncomeOf(p, t) : 0f,
                     golden = p.golden,
                     goldenPosition = p.goldenPosition,
+                    pet = (sbyte)pet,
+                    petLevel = pet >= 0 ? t.pets[pet] : (byte)0,
                 };
             }).ToArray()
         };
@@ -543,6 +564,7 @@ namespace Universes.UniverseData.tycoon.Server {
                 goalIndex = t.goalIndex, goalProgress = GoalStats(connection, t).Get(goal.stat), goalReward = GoalCash(connection, t, goal),
                 chestReady = chestReady, chestSeconds = chestReady ? 0f : RetentionDay.SecondsUntilReset(now),
                 chestStreak = chestDay, invested = t.invested, chestMinutes = chest.Minutes(chestDay), chestTokens = chest.Tokens(chestDay),
+                pets = t.pets, cratePrice = CratePrice(connection, t), crateUntilPity = petCrate.UntilPity(t.sinceEpic),
             });
         }
 

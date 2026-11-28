@@ -36,6 +36,9 @@ namespace Universes.UniverseData.tycoon.Server {
             t.chestDay = save.chestDay;
             t.invested = save.invested;
             t.peakIncome = save.peakIncome;
+            t.pets = save.PetLevels();
+            t.hatches = save.hatches;
+            t.sinceEpic = save.sinceEpic;
             t.statsFrame = -1;
             if (t.plot >= 0) RestoreBuild(t.plot, save);
             t.goalIndex = save.goalIndex >= 0 ? save.goalIndex : FirstGoalFor(connection, t, save.built);
@@ -131,6 +134,9 @@ namespace Universes.UniverseData.tycoon.Server {
             save.chestDay = t.chestDay;
             save.invested = t.invested;
             save.peakIncome = t.peakIncome;
+            save.SetPetLevels(t.pets);
+            save.hatches = t.hatches;
+            save.sinceEpic = t.sinceEpic;
             save.lastSeenUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             // Without a plot (not claimed yet, or already released on leave) the saved build is kept.
             if (t.plot >= 0 && t.plot < plots.Length && plots[t.plot].owner == connection) save.built = plots[t.plot].purchased;

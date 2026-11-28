@@ -379,9 +379,11 @@ namespace Universes.UniverseData.tycoon.Client {
                 TY_EventKind.RushHourOver => (iconRush, toastRush, toastRushOverSeconds),
                 TY_EventKind.Goal => (iconGoal, toastGoal, toastGoalSeconds),
                 TY_EventKind.DailyChest => (iconChest, toastGold, toastChestSeconds),
+                TY_EventKind.PetHatched => (iconPerk, TY_Pets.IsValid(e.item) ? TY_Pets.RarityColor(TY_Pets.All[e.item].rarity) : toastGold, toastPerkSeconds),
                 _ => (iconInfo, toastCash, toastDefaultSeconds),
             };
-            bool keep = e.kind is TY_EventKind.Goal or TY_EventKind.DailyChest or TY_EventKind.Rebirth or TY_EventKind.Perk;
+            bool keep = e.kind is TY_EventKind.Goal or TY_EventKind.DailyChest or TY_EventKind.Rebirth or TY_EventKind.Perk
+                || (e.kind == TY_EventKind.PetHatched && TY_Hatch.IsNewFlag(e.extra));
             var next = new HeldToast(icon != null ? icon : iconInfo, color, e.text, seconds, keep);
             // A reward toast on screen is not replaced at once: goals met together (or a goal and the chest)
             // come one after another; small news (a purchase) is dropped instead, the world shows it anyway.

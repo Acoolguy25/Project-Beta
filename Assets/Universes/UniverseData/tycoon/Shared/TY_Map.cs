@@ -22,6 +22,10 @@ namespace Universes.UniverseData.tycoon {
         public GameObject orePrefab, goldCoinPrefab;
         [Tooltip("The daily reward chest (with a TY_ChestView), placed on the local player's own plot.")]
         public GameObject chestPrefab;
+        [Tooltip("The pet crate (with a TY_CrateView), placed on the local player's own plot.")]
+        public GameObject cratePrefab;
+        [Tooltip("Index-aligned with TY_Pets.All: the model of each pet (followers and the hatch reveal).")]
+        public GameObject[] petPrefabs;
         public Material[] oreMaterials;
         [Tooltip("See-through material (a transparent lit shader) for the build previews that hover over a pad's item spot.")]
         public Material ghostMaterial;
@@ -34,6 +38,8 @@ namespace Universes.UniverseData.tycoon {
         public int PlotCount => plots?.Length ?? 0;
         public bool IsConfigured => PlotCount > 0 && plazaSpawn != null && itemPrefabs != null && itemPrefabs.Length == TY_Catalog.Count
             && padPrefabs != null && padPrefabs.Length == System.Enum.GetValues(typeof(TY_ItemKind)).Length;
+
+        public GameObject PetPrefab(int pet) => petPrefabs != null && pet >= 0 && pet < petPrefabs.Length ? petPrefabs[pet] : null;
 
         public Sprite Picture(int item) => itemPictures != null && item >= 0 && item < itemPictures.Length ? itemPictures[item] : null;
 
@@ -50,6 +56,7 @@ namespace Universes.UniverseData.tycoon {
         public ZoneBox ButtonZone(int plot, int item) => Zone(plot, TY_Catalog.LanePosition(TY_Catalog.Items[item].kind), TY_Catalog.ButtonSize);
         public ZoneBox GoldenZone(int plot, Vector3 local) => Zone(plot, local, PickupSize);
         public ZoneBox ChestZone(int plot) => Zone(plot, TY_Catalog.ChestPosition, PickupSize);
+        public ZoneBox CrateZone(int plot) => Zone(plot, TY_Catalog.CratePosition, PickupSize);
         public ZoneBox ClaimZone(int plot) => Zone(plot, TY_Catalog.ClaimPosition, TY_Catalog.PadSize);
         public ZoneBox CollectZone(int plot) => Zone(plot, TY_Catalog.CollectPosition, TY_Catalog.PadSize);
         public ZoneBox PlotZone(int plot) => Zone(plot, Vector3.zero, new Vector3(TY_Catalog.PlotSize, 30f, TY_Catalog.PlotSize));

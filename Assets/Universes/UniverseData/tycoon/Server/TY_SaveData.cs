@@ -37,6 +37,10 @@ namespace Universes.UniverseData.tycoon.Server {
         public int invested;
         /// <summary>The best income per second (rush hours left out) the player's plot has reached; the daily chest pays from it.</summary>
         public double peakIncome;
+        /// <summary>Level of every pet found (index of <see cref="TY_Pets.All"/>; 0 = not found). Kept through rebirths.</summary>
+        public int[] pets = Array.Empty<int>();
+        /// <summary>Pet crates opened in total, and since the last Epic or better (the pity counter).</summary>
+        public int hatches, sinceEpic;
 
         /// <summary>Levels, daily challenges and the play streak (retention kit).</summary>
         public RetentionSave retention = new();
@@ -44,7 +48,19 @@ namespace Universes.UniverseData.tycoon.Server {
         /// <summary>True for a player who has never earned or built anything (nothing to restore).</summary>
         public bool IsEmpty => cash <= 0 && lifetime <= 0 && rebirths == 0 && tokens == 0 && built == 0 && perks.Equals(default(TY_PerkLevels))
             && goalIndex <= 0 && coins == 0 && collects == 0 && chestDay == RetentionDay.None && invested == 0
-            && peakIncome <= 0;
+            && peakIncome <= 0 && hatches == 0 && TY_Pets.Found(PetLevels()) == 0;
+
+        /// <summary>The saved pets as the live collection (repaired to the current pet list).</summary>
+        public byte[] PetLevels() {
+            var levels = new byte[TY_Pets.Count];
+            if (pets != null) for (int i = 0; i < levels.Length && i < pets.Length; i++) levels[i] = (byte)Math.Clamp(pets[i], 0, TY_Pets.MaxLevel);
+            return levels;
+        }
+
+        public void SetPetLevels(byte[] levels) {
+            pets = new int[TY_Pets.Count];
+            if (levels != null) for (int i = 0; i < pets.Length && i < levels.Length; i++) pets[i] = levels[i];
+        }
 
         public override void Validate() {
             cash = Finite(cash);
@@ -62,6 +78,9 @@ namespace Universes.UniverseData.tycoon.Server {
             lastSeenUnix = Math.Max(0L, lastSeenUnix);
             invested = Math.Max(0, invested);
             peakIncome = Finite(peakIncome);
+            SetPetLevels(PetLevels());
+            hatches = Math.Max(0, hatches);
+            sinceEpic = Math.Max(0, sinceEpic);
             retention = RetentionSave.Repair(retention);
         }
 

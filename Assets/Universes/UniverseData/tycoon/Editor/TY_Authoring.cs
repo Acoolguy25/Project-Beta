@@ -34,7 +34,7 @@ namespace Universes.UniverseData.tycoon.Editor {
         public static void BuildClientAssets() {
             if (Application.isPlaying) throw new System.InvalidOperationException("Stop play mode first.");
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            Kit.EnsureFolders("Prefabs", "Prefabs/Items", "Prefabs/Pads", "Materials", "Textures", "Server", "UI", "UI/Pictures");
+            Kit.EnsureFolders("Prefabs", "Prefabs/Items", "Prefabs/Pads", "Prefabs/Pets", "Materials", "Textures", "Server", "UI", "UI/Pictures");
             TY_HudAuthoring.ImportIcons();
             BuildTextures();
             var p = BuildPrefabs();
@@ -94,8 +94,8 @@ namespace Universes.UniverseData.tycoon.Editor {
         }
 
         internal sealed class Prefabs {
-            public GameObject plotBase, ore, coin, chest;
-            public GameObject[] items, pads;
+            public GameObject plotBase, ore, coin, chest, crate;
+            public GameObject[] items, pads, pets;
             public Material[] plotMats, oreMats, floorMats;
             public Material grass, plaza, stone, city, space, proto, dungeon, medieval;
         }
@@ -183,6 +183,8 @@ namespace Universes.UniverseData.tycoon.Editor {
             p.ore = Brick(p.oreMats[0]);
             p.coin = Coin(p);
             p.chest = Chest(p, mats);
+            p.crate = Crate();
+            p.pets = PetPrefabs();
 
             p.items = new GameObject[TY_Catalog.Count];
             int dropperTier = 0, upgraderTier = 0;
@@ -750,6 +752,8 @@ namespace Universes.UniverseData.tycoon.Editor {
             map.orePrefab = p.ore;
             map.goldCoinPrefab = p.coin;
             map.chestPrefab = p.chest;
+            map.cratePrefab = p.crate;
+            map.petPrefabs = p.pets;
             map.oreMaterials = p.oreMats;
             map.ghostMaterial = Kit.Mat("BuildGhost", Color.white, emission: 0.5f, alpha: 0.4f);
             map.clientPrefab = hud;

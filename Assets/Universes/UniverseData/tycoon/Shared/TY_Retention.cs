@@ -37,6 +37,8 @@ namespace Universes.UniverseData.tycoon {
         public const string StatEarn = "earn";
         /// <summary>Income per second, reported with Reach.</summary>
         public const string StatIncome = "income";
+        /// <summary>A pet crate opened.</summary>
+        public const string StatHatch = "hatch";
 
         /// <summary>The level unlocks, worded from <paramref name="tuning"/> and <paramref name="offline"/>.</summary>
         public static UnlockDefinition[] Unlocks(TY_UnlockTuning tuning, TY_OfflineEarnings offline) {
@@ -68,6 +70,7 @@ namespace Universes.UniverseData.tycoon {
             new ChallengeDefinition("minutes_15", StatMinutes, 15, 200, 25, "Run your tycoon for {target} minutes"),
             new ChallengeDefinition("minutes_30", StatMinutes, 30, 300, 45, "Run your tycoon for {target} minutes"),
             new ChallengeDefinition("earn_50k", StatEarn, 50_000, 240, 35, "Earn $50K"),
+            new ChallengeDefinition("hatch_3", StatHatch, 3, 230, 30, "Open {target} pet crates"),
             new ChallengeDefinition("income_500", StatIncome, 500, 250, 35, "Reach $500/s income"),
         };
 

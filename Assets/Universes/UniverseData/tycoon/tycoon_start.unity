@@ -4453,6 +4453,18 @@ MonoBehaviour:
   orePrefab: {fileID: 5253397997026103030, guid: 88ab2d6588713aff2b9d760d87c7afa7, type: 3}
   goldCoinPrefab: {fileID: 5340458700912133821, guid: f5dee4479e1aed01dac18fe9d870bb0f, type: 3}
   chestPrefab: {fileID: 3318841750629226299, guid: 83c583f7d28420cf883fa96464791ba1, type: 3}
+  cratePrefab: {fileID: 1407403628489014256, guid: ab3009bf3891d5dad8caa416a396d314, type: 3}
+  petPrefabs:
+  - {fileID: 8415229288918653715, guid: 1f194ddf2b05c33be966188da972c674, type: 3}
+  - {fileID: 3416791183436121525, guid: 180e40376910277378b1b0f19c131ede, type: 3}
+  - {fileID: 1858852673514071057, guid: 74ce438e8741db8798d86dbb11c27843, type: 3}
+  - {fileID: 7541646478585491974, guid: aafe712efe662c29f9e7f75eff6124f1, type: 3}
+  - {fileID: 1569460062895413500, guid: a4bb9922f668b979d87c474ca51e63e7, type: 3}
+  - {fileID: 2743086656135675904, guid: c4ae53b5326c1074084774e2842becbc, type: 3}
+  - {fileID: 7115681733920210962, guid: 6082bb6143757f498bf93e08ddd6f716, type: 3}
+  - {fileID: 1536320646317844140, guid: 180a4a4bea31aef219314ff397077dc3, type: 3}
+  - {fileID: 4024405947731890715, guid: 8f8f1beb5775b9b6fa44b4c89e5636cb, type: 3}
+  - {fileID: 3916802459953131098, guid: b17ed3dc7ac34adfe8fb35ea0c85568f, type: 3}
   oreMaterials:
   - {fileID: 2100000, guid: a0703a628d62666a39303fb3ab81df15, type: 2}
   - {fileID: 2100000, guid: 345fab1305d21c2a598e18e6154a5dae, type: 2}
