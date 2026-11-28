@@ -97,6 +97,8 @@ namespace Universes.UniverseData.dot_invaders {
             winningTeamId = winnerTeamId;
             for (int i = 0; i < bases.Count; i++)
                 ClearSend(bases[i]);
+            // A bounty still up when the match ends simply lapses.
+            ResetBounty();
 
             // Rewards (XP and gold) are paid through the retention kit's summary card.
             RecordMatchProgress(winnerTeamId);
@@ -115,14 +117,15 @@ namespace Universes.UniverseData.dot_invaders {
         }
 
         static void SendTeamChatMessage(int teamId, string message) {
-            string teamName = GetDotInvadersTeamName(teamId, teamId >= NpcTeamIdStart);
-            string coloredTeamName = TeamConfig.ColorRichText(
-                teamName,
-                DI_Rules.Readable(TeamConfig.TeamToColor(DI_Rules.GetTeamColor(teamId)), DI_Rules.DefaultMinTeamLuminance));
             ServerChat.SendSystemMessage(new SystemMessageBroadcast(
-                $"{coloredTeamName} {message}",
+                $"{ColoredTeamName(teamId)} {message}",
                 SystemMessageSource.CustomMessage));
         }
+
+        /// <summary>"BLUE TEAM" in the team's readable colour, for chat lines.</summary>
+        static string ColoredTeamName(int teamId) =>
+            TeamConfig.ColorRichText(GetDotInvadersTeamName(teamId, teamId >= NpcTeamIdStart),
+                DI_Rules.Readable(TeamConfig.TeamToColor(DI_Rules.GetTeamColor(teamId)), DI_Rules.DefaultMinTeamLuminance));
 
         static string GetDotInvadersTeamName(int teamId, bool npc) {
             string name = DI_Rules.GetTeamColor(teamId).ToString().ToUpperInvariant();
@@ -251,6 +254,7 @@ namespace Universes.UniverseData.dot_invaders {
                 npcTierName = NpcTierName,
                 overdriveTeams = OverdriveTeams(),
             };
+            WriteBounty(ref state);
 
             for (int i = 0; i < baseCount; i++) {
                 state.basePositions[i] = bases[i].position;

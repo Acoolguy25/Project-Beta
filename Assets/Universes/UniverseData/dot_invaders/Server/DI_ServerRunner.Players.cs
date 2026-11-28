@@ -189,7 +189,7 @@ namespace Universes.UniverseData.dot_invaders {
             if (source.troops <= 0)
                 return;
 
-            QueueSend(source, route[1], source.troops, sendInterval);
+            QueueSend(source, route[1], DI_Rules.TroopsToSend(source.troops, request.percent), sendInterval);
             source.pendingRoute = (int[])route.Clone();
             BroadcastState();
         }

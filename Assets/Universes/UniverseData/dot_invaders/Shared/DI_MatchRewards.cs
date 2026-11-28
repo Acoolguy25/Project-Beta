@@ -12,6 +12,8 @@ namespace Universes.UniverseData.dot_invaders {
         public int teamCount;
         public int captures;
         public int eliminations;
+        /// <summary>Bounties the player's troops claimed.</summary>
+        public int bounties;
         /// <summary>The match took the player into a rank above any they held before.</summary>
         public bool newRank;
         public string rankName;
@@ -34,6 +36,9 @@ namespace Universes.UniverseData.dot_invaders {
         [Min(0)] public int captureXpCap = 60;
         [Tooltip("For each team whose last base the player took.")]
         [Min(0)] public int eliminationXp = 20;
+        [Tooltip("For each bounty the player's troops claimed.")]
+        [Min(0)] public int bountyXp = 25;
+        [Min(0)] public int bountyGold = 5;
         [Tooltip("Reaching a rank the player never held before.")]
         [Min(0)] public int newRankXp = 50;
         [Min(0)] public int newRankGold = 25;
@@ -52,6 +57,8 @@ namespace Universes.UniverseData.dot_invaders {
                 lines.Add(new RewardLine("Bases captured", Mathf.Min(captureXpCap, result.captures * captureXp), 0, result.captures));
             if (result.eliminations > 0)
                 lines.Add(new RewardLine("Teams eliminated", result.eliminations * eliminationXp, 0, result.eliminations));
+            if (result.bounties > 0)
+                lines.Add(new RewardLine("Bounties claimed", result.bounties * bountyXp, result.bounties * bountyGold, result.bounties));
             if (result.newRank)
                 lines.Add(new RewardLine($"New rank: {result.rankName}", newRankXp, newRankGold));
             return lines;

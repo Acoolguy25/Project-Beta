@@ -44,6 +44,7 @@ namespace Universes.UniverseData.dot_invaders {
             winningTeamId = -1;
             matchElapsed = 0f;
             matchInProgress = false;
+            ResetBounty();
 
             layoutIndex = Mathf.Clamp(boardIndex, 0, DI_BoardLayouts.All.Count - 1);
             layout = DI_BoardLayouts.All[layoutIndex];

@@ -455,6 +455,17 @@ MonoBehaviour:
   overdriveTextSize: 0.3
   overdriveTextSeconds: 1.4
   overdriveTextColor: {r: 1, g: 0.82, b: 0.3, a: 1}
+  bountyColor: {r: 1, g: 0.79, b: 0.29, a: 1}
+  bountyPostedRingScale: 9
+  bountyPostedVolume: 0.7
+  bountyClaimBurstScale: 6
+  bountyClaimRingScale: 11
+  bountyTextSize: 1.6
+  bountyClaimedFormat: +{0}
+  bountyYoursFormat: BOUNTY  +{0}
+  bountyCaptionSize: 0.3
+  bountyCaptionSeconds: 1.4
+  otherBountyVolume: 0.35
   effectHeight: 0.6
 --- !u!1 &5060468652190620228
 GameObject:

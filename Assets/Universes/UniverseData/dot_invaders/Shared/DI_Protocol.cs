@@ -73,6 +73,28 @@ namespace Universes.UniverseData.dot_invaders {
         public const float MinSendIntervalMultiplier = 0.125f;
         public const float MaxSendIntervalMultiplier = 10f;
 
+        /// <summary>The send amounts a player picks between (keys 1 to 4), as a share of each base's troops in percent.</summary>
+        public static readonly int[] SendPercents = { 25, 50, 75, 100 };
+        public const int FullSendPercent = 100;
+
+        /// <summary>
+        /// Troops an order of <paramref name="percent"/> takes from a garrison of <paramref name="troops"/>: at
+        /// least one while any are there, rounded up. 0 or anything outside 1-99 sends them all (older clients send 0).
+        /// </summary>
+        /// <summary>"3:07": whole seconds, rounded up, as minutes and seconds.</summary>
+        public static string FormatClock(float seconds) {
+            int whole = Mathf.Max(0, Mathf.CeilToInt(seconds));
+            return $"{whole / 60}:{whole % 60:00}";
+        }
+
+        public static int TroopsToSend(int troops, int percent) {
+            if (troops <= 0)
+                return 0;
+            if (percent <= 0 || percent >= FullSendPercent)
+                return troops;
+            return Mathf.Clamp(Mathf.CeilToInt(troops * percent / (float)FullSendPercent), 1, troops);
+        }
+
         public static System.Collections.Generic.SortedDictionary<int, DI_TeamPower> CalculatePower(DI_StateBroadcast state) {
             var teams = new System.Collections.Generic.SortedDictionary<int, DI_TeamPower>();
             if (state.baseTeams != null && state.baseTroops != null) {
@@ -238,6 +260,8 @@ namespace Universes.UniverseData.dot_invaders {
         public int sourceBaseId;
         public int targetBaseId;
         public int[] route;
+        // Appended: share of the garrison to send, in percent (see DI_Rules.TroopsToSend; 0 = all).
+        public int percent;
     }
 
     public struct DI_Route {
@@ -301,6 +325,11 @@ namespace Universes.UniverseData.dot_invaders {
         /// <summary>Active: seconds of Overdrive left. Locked: seconds until it can be used.</summary>
         public float yourAbilitySeconds;
         public bool yourMatchRated;
+        // Appended: the bounty on the board, if one is up (DI_BountyTuning).
+        public bool bountyActive;
+        public int bountyBaseId;
+        public float bountySeconds;
+        public int bountyTroops;
     }
 
     /// <summary>One player's captures and most bases held, this match and over all saved matches.</summary>
@@ -319,6 +348,9 @@ namespace Universes.UniverseData.dot_invaders {
         public int teamCount;
         /// <summary>Why the match was not rated ("Joined late"), when it was not.</summary>
         public string unratedReason;
+        // Appended: bounties the player's troops claimed, this match and over all saved matches.
+        public int matchBounties;
+        public int totalBounties;
     }
 
     /// <summary>

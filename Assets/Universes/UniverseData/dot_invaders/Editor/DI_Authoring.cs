@@ -47,8 +47,8 @@ namespace Universes.UniverseData.dot_invaders.Editor {
         const float CommanderChipHeight = 40f;
         const float PerkPanelWidth = 480f;
         const float PerkStatusWidth = 104f;
-        // Above the commander cluster: two chip rows and their spacing.
-        static readonly Vector2 PerkPanelOffset = new(-16f, 120f);
+        // Above the commander cluster: three chip rows (Overdrive, send amount, perks and rank) and their spacing.
+        static readonly Vector2 PerkPanelOffset = new(-16f, 168f);
         const float PerkRowHeight = 60f;
         // Board vote: tile width (picture plus padding), tagline box and the card's place, a little above centre.
         const float BoardVoteTileWidth = 240f;
@@ -66,6 +66,15 @@ namespace Universes.UniverseData.dot_invaders.Editor {
         const float FortressWallHeight = 0.35f;
         const float FortressTowerSize = 1f;
         const float MarkHeight = 0.25f;
+        // Bounty: gold diamonds circling outside the fortress walls' reach.
+        const int BountyDiamonds = 10;
+        const float BountyRadius = 4.4f;
+        static readonly Vector3 BountyDiamondSize = new(0.6f, 0.3f, 0.6f);
+        // Match timeline card: right edge, above the commander cluster and below the kit's toasts.
+        static readonly Vector2 TimelineAnchor = new(1f, 0f);
+        static readonly Vector2 TimelineOffset = new(-16f, 172f);
+        static readonly Vector2 TimelineGraphSize = new(340f, 120f);
+        static readonly Color TimelineAccent = new(0.5f, 0.85f, 1f);
         const int RangeEdgeSegments = 72;
         // Outlined, dark-backed board labels, so counts read over bloom and roads.
         const float LabelOutlineWidth = 0.22f;
@@ -242,11 +251,21 @@ namespace Universes.UniverseData.dot_invaders.Editor {
                         Vector3.one * FortressTowerSize);
                 }
 
+                GameObject bounty = Rebuild(root.transform, "BountyMark");
+                for (int i = 0; i < BountyDiamonds; i++) {
+                    float angle = 360f * i / BountyDiamonds;
+                    Quaternion turn = Quaternion.Euler(0f, angle, 0f);
+                    // Turned 45 degrees on their own axis, so each block reads as a diamond from above.
+                    MarkPart(bounty.transform, body, turn * new Vector3(0f, MarkHeight, BountyRadius),
+                        turn * Quaternion.Euler(0f, 45f, 0f), BountyDiamondSize);
+                }
+
                 LineRenderer edge = BuildRangeEdge(root.transform, road);
 
                 var view = new SerializedObject(root.GetComponent<DI_BaseView>());
                 view.FindProperty("factoryMark").objectReferenceValue = gear;
                 view.FindProperty("fortressMark").objectReferenceValue = fortress;
+                view.FindProperty("bountyMark").objectReferenceValue = bounty;
                 view.FindProperty("rangeEdge").objectReferenceValue = edge;
                 view.ApplyModifiedPropertiesWithoutUndo();
             });
@@ -488,6 +507,7 @@ namespace Universes.UniverseData.dot_invaders.Editor {
 
             BuildCommander(root, hud);
             Set(hud, "perkPanel", BuildPerkPanel(root));
+            Set(hud, "timeline", BuildTimeline(root));
             BuildBoardVote(root, banner);
             // The kit's level chip, challenges, toasts and summary card, at the kit's default placements.
             Set(hud, "retention", RetentionHudAuthoring.AddTo(root));
@@ -520,6 +540,12 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Button abilityButton = UIKit.Clickable(ability, CommanderChipHeight * 0.5f);
             HudPopup abilityPopup = HudKit.Popup(ability, false);
 
+            // The send amount gets its own row: beside the perks and rank it ran into the controls hint.
+            HudChip send = HudKit.Chip(commander, "SendAmount", "rally_troops", "Send all", PerkAccent, CommanderChipHeight);
+            send.background.raycastTarget = true;
+            HudKit.KeyCap(send.transform, "1-4");
+            Button sendButton = UIKit.Clickable((RectTransform)send.transform, CommanderChipHeight * 0.5f);
+
             RectTransform profile = UIKit.Node(commander, "Profile");
             UIKit.Row(profile.gameObject, 8f, null, TextAnchor.MiddleRight);
             UIKit.FitContent(profile.gameObject, true, false);
@@ -538,6 +564,48 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Set(hud, "perks", perks);
             Set(hud, "perksButton", perksButton);
             Set(hud, "rank", rank);
+            Set(hud, "sendAmount", send);
+            Set(hud, "sendAmountButton", sendButton);
+        }
+
+        /// <summary>The end-of-match timeline: a card with each team's power share over the match.</summary>
+        static DI_MatchTimeline BuildTimeline(RectTransform root) {
+            RectTransform card = HudKit.Card(root, "MatchTimeline", TimelineAnchor, TimelineOffset,
+                new Vector2(TimelineGraphSize.x + 36f, 220f));
+            UIKit.Column(card.gameObject, 8f, new RectOffset(18, 18, 14, 16));
+            UIKit.FitContent(card.gameObject, false, true);
+            HudKit.AccentStripe(card, TimelineAccent);
+
+            RectTransform header = UIKit.Node(card, "Header");
+            UIKit.Row(header.gameObject, 10f, null, TextAnchor.MiddleLeft);
+            HudKit.Icon(header, "trending_up", 22f, TimelineAccent);
+            TextMeshProUGUI title = UIKit.Text(header, "Title", "How the match went", UIText.Strong);
+            UIKit.Size(title, -1f, -1f, 1f);
+
+            RectTransform plot = UIKit.Node(card, "Graph");
+            HudKit.Fixed(plot, TimelineGraphSize.x, TimelineGraphSize.y);
+            UIKit.Rounded(plot, UIColorRole.SurfaceInset, 6f, raycast: false);
+            RectTransform area = UIKit.Fill(plot, "Area", 2f, 2f, 2f, 2f);
+            DI_PowerGraph graph = area.gameObject.AddComponent<DI_PowerGraph>();
+            graph.raycastTarget = false;
+
+            RectTransform axis = UIKit.Node(card, "Axis");
+            UIKit.Row(axis.gameObject, 0f, null, TextAnchor.MiddleLeft);
+            TextMeshProUGUI start = UIKit.Text(axis, "Start", "0:00", UIText.Caption, UIColorRole.TextMuted);
+            UIKit.Size(start, -1f, -1f, 1f);
+            TextMeshProUGUI end = UIKit.Text(axis, "End", "8:00", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.MidlineRight);
+            UIKit.Size(end, -1f, -1f, 1f);
+
+            TextMeshProUGUI summary = UIKit.Text(card, "Summary", "Your peak 40% at 3:12", UIText.Small, UIColorRole.TextSecondary);
+            summary.richText = true;
+            summary.textWrappingMode = TextWrappingModes.Normal;
+
+            DI_MatchTimeline timeline = card.gameObject.AddComponent<DI_MatchTimeline>();
+            Set(timeline, "popup", card.GetComponent<HudPopup>());
+            Set(timeline, "graph", graph);
+            Set(timeline, "endLabel", end);
+            Set(timeline, "summary", summary);
+            return timeline;
         }
 
         /// <summary>The perk picker: a card above the commander cluster with one template row, cloned per perk at runtime.</summary>

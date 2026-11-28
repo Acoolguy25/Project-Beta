@@ -788,6 +788,85 @@ namespace Universes.UniverseData.dot_invaders.Tests {
             Assert.That(Get(records[7], "mostBasesHeld"), Is.EqualTo(2));
         }
 
+        // --- Bounties ------------------------------------------------------------------------
+
+        [Test]
+        public void CapturingTheBountyBasePaysBonusTroopsAndCountsForThePlayer() {
+            AddBase(team: 0, troops: 10);
+            AddBase(team: -1, troops: 0);
+            AddBase(team: 1, troops: 10, position: new Vector2(20f, 0f));
+            Set(runner, "bountyBaseId", 1);
+            Set(runner, "bountySecondsLeft", 30f);
+            object dot = AddDot(0, 0, 1);
+            Set(dot, "ownerClientId", 7);
+            Call("ResolveArrival", dot);
+
+            var tuning = (DI_BountyTuning)Get(runner, "bounty");
+            Assert.That(Get(bases[1], "troops"), Is.EqualTo(1 + tuning.bonusTroops));
+            Assert.That(Get(runner, "bountyBaseId"), Is.EqualTo(-1));
+            var records = (IDictionary)Get(runner, "matchRecords");
+            Assert.That(Get(records[7], "bounties"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ReinforcingTheBountyBaseYouAlreadyHoldClaimsNothing() {
+            AddBase(team: 0, troops: 10);
+            AddBase(team: 0, troops: 4);
+            AddBase(team: 1, troops: 10);
+            Set(runner, "bountyBaseId", 1);
+            Set(runner, "bountySecondsLeft", 30f);
+            Call("ResolveArrival", AddDot(0, 0, 1));
+            Assert.That(Get(bases[1], "troops"), Is.EqualTo(5));
+            Assert.That(Get(runner, "bountyBaseId"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AnUnclaimedBountyExpiresAndTheNextOneWaitsForTheInterval() {
+            AddBase(team: 0, troops: 10, position: new Vector2(0f, 0f));
+            AddBase(team: -1, troops: 5, position: new Vector2(10f, 0f));
+            AddBase(team: 1, troops: 10, position: new Vector2(20f, 0f));
+            AddBase(team: 0, troops: 10, position: new Vector2(-10f, 0f));
+            AddBase(team: 1, troops: 10, position: new Vector2(30f, 0f));
+            var tuning = (DI_BountyTuning)Get(runner, "bounty");
+            tuning.candidatePool = 1;
+            Set(runner, "secondsRemaining", 600);
+            Call("ResetBounty");
+            Set(runner, "matchElapsed", tuning.firstAfterSeconds);
+            Call("UpdateBounty", 0.1f);
+            Assert.That(Get(runner, "bountyBaseId"), Is.EqualTo(1), "the neutral base between the two teams is the most contested");
+
+            Call("UpdateBounty", tuning.durationSeconds + 0.1f);
+            Assert.That(Get(runner, "bountyBaseId"), Is.EqualTo(-1));
+            Call("UpdateBounty", 0.1f);
+            Assert.That(Get(runner, "bountyBaseId"), Is.EqualTo(-1));
+            Set(runner, "matchElapsed", tuning.firstAfterSeconds + tuning.intervalSeconds + 1f);
+            Call("UpdateBounty", 0.1f);
+            Assert.That(Get(runner, "bountyBaseId"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void NoBountyIsPostedLateInTheMatch() {
+            AddBase(team: 0, troops: 10, position: new Vector2(0f, 0f));
+            AddBase(team: -1, troops: 5, position: new Vector2(10f, 0f));
+            AddBase(team: 1, troops: 10, position: new Vector2(20f, 0f));
+            var tuning = (DI_BountyTuning)Get(runner, "bounty");
+            Call("ResetBounty");
+            Set(runner, "secondsRemaining", tuning.minSecondsLeft - 1);
+            Set(runner, "matchElapsed", tuning.firstAfterSeconds + 1f);
+            Call("UpdateBounty", 0.1f);
+            Assert.That(Get(runner, "bountyBaseId"), Is.EqualTo(-1));
+        }
+
+        [Test]
+        public void NpcsRateABountyBaseAboveTheSameBaseWithoutOne() {
+            AddBase(team: 100, troops: 10);
+            AddBase(team: -1, troops: 5);
+            float before = (float)Call("NpcTargetPriority", 1, 100);
+            Set(runner, "bountyBaseId", 1);
+            float after = (float)Call("NpcTargetPriority", 1, 100);
+            Assert.That(after, Is.GreaterThan(before));
+        }
+
         // --- Perks, Overdrive and standings (retention pass) --------------------------------
 
         void GiveTeamPerks(int team, params string[] perks) =>

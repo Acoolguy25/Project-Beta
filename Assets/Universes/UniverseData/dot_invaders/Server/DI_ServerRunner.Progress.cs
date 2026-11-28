@@ -17,6 +17,7 @@ namespace Universes.UniverseData.dot_invaders {
             public int captures;
             public int mostBasesHeld;
             public int eliminations;
+            public int bounties;
         }
 
         RetentionService<DI_SaveData> retention;
@@ -121,6 +122,7 @@ namespace Universes.UniverseData.dot_invaders {
                     save.RecordMatch(won);
                     save.RecordCaptures(record.captures, record.mostBasesHeld);
                     save.eliminations += record.eliminations;
+                    save.RecordBounties(record.bounties);
                 });
                 RatingChange rating = RateFinishedPlayer(connection, team, results);
 
@@ -130,6 +132,7 @@ namespace Universes.UniverseData.dot_invaders {
                     teamCount = results.Count,
                     captures = record.captures,
                     eliminations = record.eliminations,
+                    bounties = record.bounties,
                     newRank = rating.newRank,
                     rankName = DI_Ranks.Of(rating.after).Name,
                 };
@@ -155,6 +158,8 @@ namespace Universes.UniverseData.dot_invaders {
                     placement = rating.placement,
                     teamCount = results.Count,
                     unratedReason = rating.unratedReason ?? string.Empty,
+                    matchBounties = record.bounties,
+                    totalBounties = saved ? progress.bountiesClaimed : record.bounties,
                 };
                 SendProfile(connection);
             }
@@ -175,10 +180,11 @@ namespace Universes.UniverseData.dot_invaders {
         /// <summary>A player leaving mid-match keeps the bases they took; the match itself is not counted.</summary>
         void RecordLeavingPlayerProgress(PlayerData player) {
             MatchRecord record = TakeMatchRecord(player.Owner.ClientId);
-            if (record.captures > 0 || record.eliminations > 0)
+            if (record.captures > 0 || record.eliminations > 0 || record.bounties > 0)
                 PlayerProgress.Modify<DI_SaveData>(player, save => {
                     save.RecordCaptures(record.captures, record.mostBasesHeld);
                     save.eliminations += record.eliminations;
+                    save.RecordBounties(record.bounties);
                 });
         }
 

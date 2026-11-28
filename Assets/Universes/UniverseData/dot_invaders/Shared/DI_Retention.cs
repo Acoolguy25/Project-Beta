@@ -27,6 +27,8 @@ namespace Universes.UniverseData.dot_invaders {
             public const string TroopsSent = "troops_sent";
             /// <summary>Enemy troops the player's troops destroyed, on the road or in a garrison.</summary>
             public const string TroopsDefeated = "troops_defeated";
+            /// <summary>Bounties the player's troops claimed.</summary>
+            public const string Bounties = "bounties";
         }
 
         /// <summary>The unlock table: one entry per perk at its level, plus the second slot.</summary>
@@ -53,6 +55,7 @@ namespace Universes.UniverseData.dot_invaders {
             new ChallengeDefinition("eliminate_2", Stats.Eliminations, 2, 130, 30, "Eliminate {target} teams"),
             new ChallengeDefinition("sent_600", Stats.TroopsSent, 600, 80, 15, "Send {target} troops into battle"),
             new ChallengeDefinition("defeated_400", Stats.TroopsDefeated, 400, 100, 20, "Defeat {target} enemy troops"),
+            new ChallengeDefinition("bounties_2", Stats.Bounties, 2, 110, 25, "Claim {target} bounties"),
         };
 
         /// <summary>The rules for <paramref name="tuning"/> (the runner's serialized kit tuning; null = kit defaults).</summary>

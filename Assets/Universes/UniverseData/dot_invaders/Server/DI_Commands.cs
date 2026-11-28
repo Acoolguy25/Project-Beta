@@ -61,6 +61,12 @@ namespace Universes.UniverseData.dot_invaders {
                 description = "Sets the board the next match is played on (open_field, archipelago, halo, three_lanes, honeycomb, skirmish, grand_frontier).",
                 arguments = new[] { new CommandArgumentConfig { name = "Board", type = CommandArgumentType.String } }
             },
+            new CommandConfig {
+                commandType = "Dot Invaders",
+                commandName = "Bounty",
+                description = "Posts a bounty on the most contested plain base now, replacing any that is up.",
+                arguments = Array.Empty<CommandArgumentConfig>()
+            },
         };
 
         static DI_ServerRunner runner;
@@ -87,6 +93,14 @@ namespace Universes.UniverseData.dot_invaders {
             ServerCommandService.RegisterCommand(Commands[17], SetFortressMultiplier, (_, _) => runner.FortressMultiplier);
             ServerCommandService.RegisterCommand(Commands[18], SetNpcTier, (_, _) => runner.ForcedNpcTier);
             ServerCommandService.RegisterCommand(Commands[19], SetNextBoard);
+            ServerCommandService.RegisterCommand(Commands[20], PostBounty);
+        }
+
+        static void PostBounty(NetworkConnection caller, string commandName, string[] args) {
+            if (!runner.PostBountyNow())
+                ServerChat.SendSystemMessage(caller, new SystemMessageBroadcast(
+                    "No bounty posted: it needs a running match and a plain base two teams can reach.",
+                    SystemMessageSource.CustomMessage));
         }
 
         static void SetNpcTier(NetworkConnection caller, string commandName, string[] args) {

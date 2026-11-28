@@ -69,6 +69,20 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Tooltip("Degrees per second a held factory's gear turns; a neutral factory stands still.")]
         [SerializeField] float factoryGearSpin = 25f;
 
+        [Header("Bounty")]
+        [Tooltip("Gold diamonds circling a base with a bounty on it (authored by DI_Authoring).")]
+        [SerializeField] GameObject bountyMark;
+        [SerializeField] Color bountyColor = new(1f, 0.79f, 0.29f);
+        [Tooltip("Brightness of the bounty mark; above 1 blooms.")]
+        [SerializeField, Min(0f)] float bountyGlow = 2.4f;
+        [Tooltip("Mark brightness swing, so the bounty catches the eye on a busy board.")]
+        [SerializeField, Range(0f, 1f)] float bountyPulseAmount = 0.45f;
+        [SerializeField, Min(0f)] float bountyPulseSpeed = 1.6f;
+        [Tooltip("Degrees per second the diamonds circle the base.")]
+        [SerializeField] float bountySpin = 40f;
+        [Tooltip("Shown above the base in the role label's place (bounties only go on plain bases). {0} bonus troops, {1} time left.")]
+        [SerializeField] string bountyLabelFormat = "BOUNTY +{0}  {1}";
+
         [Header("Labels")]
         [Tooltip("Font size of the role label (SPEED, FACTORY, FORTRESS); readable at the board's zoom.")]
         [SerializeField, Min(1f)] float roleLabelFontSize = 14f;
@@ -175,6 +189,9 @@ namespace Universes.UniverseData.dot_invaders.Client {
         const float PunchPeakTime = 0.25f;
         float superBasePulseTimer;
         Vector3 originalScale;
+        Renderer[] bountyMarkRenderers;
+        bool bounty;
+        int bountyShownSeconds = -1;
 
         public float PickRadius => bodyRenderer != null
             ? Mathf.Max(bodyRenderer.bounds.extents.x, bodyRenderer.bounds.extents.z) : 3.7f;
@@ -202,6 +219,9 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
             factoryMarkRenderers = factoryMark != null ? factoryMark.GetComponentsInChildren<Renderer>(true) : null;
             fortressMarkRenderers = fortressMark != null ? fortressMark.GetComponentsInChildren<Renderer>(true) : null;
+            bountyMarkRenderers = bountyMark != null ? bountyMark.GetComponentsInChildren<Renderer>(true) : null;
+            if (bountyMark != null)
+                bountyMark.SetActive(false);
             if (rangeEdge != null)
                 rangeEdge.widthMultiplier = rangeEdgeWidth;
             originalScale = transform.localScale;
@@ -235,7 +255,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
 
             RoleStyle style = Style(baseRole);
-            if (roleLabel != null && (baseRole != shownRole || multiplier != roleMultiplier)) {
+            // While a bounty is up the role label carries the bounty (see SetBounty).
+            if (roleLabel != null && !bounty && (baseRole != shownRole || multiplier != roleMultiplier)) {
                 shownRole = baseRole;
                 roleMultiplier = multiplier;
                 roleLabel.gameObject.SetActive(style != null);
@@ -261,6 +282,36 @@ namespace Universes.UniverseData.dot_invaders.Client {
             text.Append(tenths / 10);
             if (tenths % 10 != 0)
                 text.Append('.').Append(tenths % 10);
+        }
+
+        /// <summary>
+        /// Marks the base while a bounty is up on it: circling gold diamonds and a countdown label above the count.
+        /// Bounties only go on plain bases, so the label takes the role label's place.
+        /// </summary>
+        public void SetBounty(bool active, int bonusTroops, float secondsLeft) {
+            if (!active && !bounty)
+                return;
+            if (bountyMark != null && bountyMark.activeSelf != active)
+                bountyMark.SetActive(active);
+            if (!active) {
+                bounty = false;
+                bountyShownSeconds = -1;
+                // Let the next SetState put the role label back (or hide it on a plain base).
+                shownRole = (DI_BaseRole)(-1);
+                if (roleLabel != null && Style(role) == null)
+                    roleLabel.gameObject.SetActive(false);
+                return;
+            }
+            bounty = true;
+            if (roleLabel == null)
+                return;
+            roleLabel.gameObject.SetActive(true);
+            roleLabel.color = bountyColor;
+            int whole = Mathf.CeilToInt(Mathf.Max(0f, secondsLeft));
+            if (whole != bountyShownSeconds) {
+                bountyShownSeconds = whole;
+                roleLabel.SetText(string.Format(bountyLabelFormat, bonusTroops, DI_Rules.FormatClock(whole)));
+            }
         }
 
         public void SetSelected(bool value) {
@@ -452,19 +503,26 @@ namespace Universes.UniverseData.dot_invaders.Client {
             if (marks != null && style != null)
                 foreach (Renderer mark in marks)
                     SetRendererColor(mark, style.markColor, style.markColor * (markPulse * markGlow));
+            if (bounty && bountyMarkRenderers != null) {
+                float pulse = 1f - bountyPulseAmount + Mathf.PingPong(Time.unscaledTime * bountyPulseSpeed, bountyPulseAmount);
+                foreach (Renderer mark in bountyMarkRenderers)
+                    SetRendererColor(mark, bountyColor, bountyColor * (pulse * bountyGlow));
+            }
 
             if (glowRenderer == null)
                 return;
-            glowRenderer.gameObject.SetActive(!neutral || selected || neighbor || hovered);
+            glowRenderer.gameObject.SetActive(!neutral || selected || neighbor || hovered || bounty);
             bool highlighted = selected || hovered;
-            Color ring = highlighted ? selectedRingColor : neighbor ? neighborRingColor : teamColor;
+            // A neutral bounty base wears a gold ring; a held one keeps its team's ring and the gold diamonds say the rest.
+            Color ring = highlighted ? selectedRingColor : neighbor ? neighborRingColor
+                : neutral && bounty ? bountyColor : teamColor;
             float intensity = isSuperBase
                 ? 1f - superGlowSwing + Mathf.PingPong(Time.unscaledTime * superGlowSpeed, superGlowSwing) : 1f;
             intensity *= 1f + punchSwell * punchGlowBoost;
             SetRendererColor(glowRenderer, ring * (intensity * (highlighted ? selectedRingGlow : ringGlow)));
         }
 
-        bool Pulsing => isSuperBase || Style(role) is { pulseAmount: > 0f };
+        bool Pulsing => isSuperBase || bounty || Style(role) is { pulseAmount: > 0f };
 
         void LateUpdate() {
             if (cameraTransform != null) {
@@ -486,6 +544,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 UpdatePunch();
             else if (Pulsing)
                 RefreshGlow();
+            if (bounty && bountyMark != null)
+                bountyMark.transform.Rotate(0f, bountySpin * Time.unscaledDeltaTime, 0f, Space.Self);
             if (factoryMark != null && role == DI_BaseRole.Factory && !neutral)
                 factoryMark.transform.Rotate(0f, factoryGearSpin * Time.unscaledDeltaTime, 0f, Space.Self);
             if (shotLine != null && Time.unscaledTime >= shotUntil)

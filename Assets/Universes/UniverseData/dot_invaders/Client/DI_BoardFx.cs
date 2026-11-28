@@ -123,6 +123,23 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Min(0.1f)] float overdriveTextSeconds = 1.4f;
         [SerializeField] Color overdriveTextColor = new(1f, 0.82f, 0.3f);
 
+        [Header("Bounties")]
+        [SerializeField] Color bountyColor = new(1f, 0.79f, 0.29f);
+        [Tooltip("The gold ring that goes off on the base when a bounty is posted.")]
+        [SerializeField, Min(0f)] float bountyPostedRingScale = 9f;
+        [SerializeField, Range(0f, 1f)] float bountyPostedVolume = 0.7f;
+        [SerializeField, Min(0f)] float bountyClaimBurstScale = 6f;
+        [SerializeField, Min(0f)] float bountyClaimRingScale = 11f;
+        [Tooltip("Size of the floating +troops number over a claimed bounty.")]
+        [SerializeField, Min(0.1f)] float bountyTextSize = 1.6f;
+        [Tooltip("{0} the bonus troops.")]
+        [SerializeField] string bountyClaimedFormat = "+{0}";
+        [Tooltip("Caption when your team claims a bounty. {0} the bonus troops.")]
+        [SerializeField] string bountyYoursFormat = "BOUNTY  +{0}";
+        [SerializeField, Range(0.1f, 1f)] float bountyCaptionSize = 0.3f;
+        [SerializeField, Min(0.1f)] float bountyCaptionSeconds = 1.4f;
+        [SerializeField, Range(0f, 1f)] float otherBountyVolume = 0.35f;
+
         [Header("Placement")]
         [Tooltip("Height above the board effects play at, so they sit over roads and bases.")]
         [SerializeField, Min(0f)] float effectHeight = 0.6f;
@@ -155,6 +172,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 PresentCaptures(previous, next, views, teamColor);
                 PresentEliminations(previous, next, teamColor);
                 PresentOverdrive(previous, next, teamColor);
+                PresentBounty(previous, next, views);
             }
             if (previous.basePositions != null && !previous.matchEnded && next.matchEnded)
                 PresentMatchEnd(next);
@@ -300,6 +318,39 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 } else {
                     GameSfx.Play(SfxCue.Horn, otherOverdriveVolume);
                 }
+            }
+        }
+
+        /// <summary>
+        /// A newly posted bounty rings its base with gold; a claimed one bursts with coins and the bonus
+        /// troops float up (your own claim also gets a caption). An expired one simply goes away.
+        /// </summary>
+        void PresentBounty(in DI_StateBroadcast previous, in DI_StateBroadcast next, IReadOnlyList<DI_BaseView> views) {
+            bool wasUp = previous.bountyActive, isUp = next.bountyActive;
+            if (wasUp && (!isUp || next.bountyBaseId != previous.bountyBaseId)) {
+                int baseId = previous.bountyBaseId;
+                if (baseId >= 0 && baseId < next.baseTeams.Length && next.baseTeams[baseId] != previous.baseTeams[baseId] &&
+                    next.baseTeams[baseId] >= 0)
+                    PlayBountyClaim(next, baseId, previous.bountyTroops, views);
+            }
+            if (isUp && (!wasUp || next.bountyBaseId != previous.bountyBaseId) && next.bountyBaseId < next.basePositions.Length) {
+                GameFx.Play(FxKind.ShockwaveRing, World(next.basePositions[next.bountyBaseId]), bountyColor, bountyPostedRingScale);
+                GameSfx.Play(SfxCue.Alarm, bountyPostedVolume);
+            }
+        }
+
+        void PlayBountyClaim(in DI_StateBroadcast next, int baseId, int troops, IReadOnlyList<DI_BaseView> views) {
+            Vector3 position = World(next.basePositions[baseId]);
+            GameFx.Play(FxKind.CoinBurst, position, bountyClaimBurstScale);
+            GameFx.Play(FxKind.ShockwaveRing, position, bountyColor, bountyClaimRingScale);
+            FloatingText.Spawn(position, string.Format(bountyClaimedFormat, troops), bountyColor, bountyTextSize);
+            if (baseId < views.Count)
+                views[baseId].PlayPunch(capturePunch * 1.6f, capturePunchSeconds);
+            if (next.yourTeamId >= 0 && next.baseTeams[baseId] == next.yourTeamId) {
+                GameSfx.Play(SfxCue.Coin);
+                ScreenFx.ShowText(string.Format(bountyYoursFormat, troops), bountyColor, bountyCaptionSeconds, bountyCaptionSize);
+            } else {
+                GameSfx.Play(SfxCue.Coin, otherBountyVolume);
             }
         }
 

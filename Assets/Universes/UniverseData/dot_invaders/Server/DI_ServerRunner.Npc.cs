@@ -245,6 +245,9 @@ namespace Universes.UniverseData.dot_invaders {
                 priority += target.teamId < 0 ? NpcFactoryPriority : NpcFactoryPriority * 0.8f;
             if (target.isFortress)
                 priority += NpcFortressPriority;
+            // A bounty pays bonus troops to whoever takes it first, so it is worth racing for.
+            if (targetId == bountyBaseId && target.teamId != teamId)
+                priority += NpcBountyPriority;
             foreach (Vector2Int link in links) {
                 int neighbor = link.x == targetId ? link.y : link.y == targetId ? link.x : -1;
                 if (neighbor >= 0 && bases[neighbor].teamId == teamId && bases[neighbor].isSuperProducer) {

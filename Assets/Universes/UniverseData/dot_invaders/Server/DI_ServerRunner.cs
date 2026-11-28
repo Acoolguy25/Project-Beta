@@ -50,6 +50,8 @@ namespace Universes.UniverseData.dot_invaders {
         // Target priority a factory (doubled training) and a fortress (doubled defence) add.
         const float NpcFactoryPriority = 48f;
         const float NpcFortressPriority = 16f;
+        // Target priority a base with a bounty on it adds (about a neutral factory's worth).
+        const float NpcBountyPriority = 45f;
         const string BasesColumn = "Bases";
         const string TroopsColumn = "Troops";
         const string RatingColumn = "Rating";
@@ -239,6 +241,7 @@ namespace Universes.UniverseData.dot_invaders {
                 UpdateNpcTeams(SimulationStep);
                 UpdateBases(SimulationStep);
                 UpdateDots(SimulationStep);
+                UpdateBounty(SimulationStep);
                 CheckEliminatedTeams();
                 CheckEndConditions();
             }
@@ -266,6 +269,7 @@ namespace Universes.UniverseData.dot_invaders {
             matchRecords.Clear();
             matchSummaries.Clear();
             ClearMatchProgression();
+            ResetBounty();
             base.Reset();
         }
 

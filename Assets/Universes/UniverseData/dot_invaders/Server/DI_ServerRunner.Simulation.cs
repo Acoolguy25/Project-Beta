@@ -292,6 +292,7 @@ namespace Universes.UniverseData.dot_invaders {
             target.turretCooldown = turretFireRate;
             ClearSend(target);
             RecordCapture(dot.ownerClientId, dot.teamId, target);
+            ClaimBountyIfMarked(dot.targetBaseId, dot.ownerClientId, dot.teamId);
         }
 
         /// <summary>Queues a clash for the next snapshot's effects; presentation only.</summary>

@@ -33,10 +33,16 @@ namespace Universes.UniverseData.dot_invaders {
         /// <summary>Equipped commander perks (DI_Perks ids), in slot order.</summary>
         public List<string> perks = new();
 
+        // Added with bounties; an older save loads as none claimed.
+        /// <summary>Bounties the player's troops claimed, over all matches.</summary>
+        public int bountiesClaimed;
+
         public void RecordMatch(bool won) {
             matches++;
             if (won) wins++;
         }
+
+        public void RecordBounties(int claimed) => bountiesClaimed += Math.Max(0, claimed);
 
         public void RecordCaptures(int captures, int basesHeld) {
             basesCaptured += Math.Max(0, captures);
@@ -60,6 +66,7 @@ namespace Universes.UniverseData.dot_invaders {
             peakRating = Math.Max(peakRating, rating);
             ratedMatches = Math.Max(0, ratedMatches);
             eliminations = Math.Max(0, eliminations);
+            bountiesClaimed = Math.Max(0, bountiesClaimed);
             perks ??= new List<string>();
             perks.RemoveAll(id => DI_Perks.Find(id) == null);
             if (perks.Count > DI_Perks.MaxSlots) perks.RemoveRange(DI_Perks.MaxSlots, perks.Count - DI_Perks.MaxSlots);

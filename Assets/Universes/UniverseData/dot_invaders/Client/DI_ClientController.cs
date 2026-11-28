@@ -232,6 +232,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                     state.baseTeams[i] >= 0, state.baseTroops[i] >= state.superMaxCapacity);
                 baseViews[i].SetDefense(isTurret, state.baseTroops[i], shot, shotPosition,
                     state.turretRange, isSuper ? state.superMaxCapacity : state.maxCapacity);
+                baseViews[i].SetBounty(state.bountyActive && state.bountyBaseId == i, state.bountyTroops, state.bountySeconds);
             }
 
             int linkCount = state.linkSources == null || state.linkTargets == null
@@ -572,18 +573,22 @@ namespace Universes.UniverseData.dot_invaders.Client {
             return Rect.MinMaxRect(Mathf.Min(a.x, b.x), Mathf.Min(a.y, b.y), Mathf.Max(a.x, b.x), Mathf.Max(a.y, b.y));
         }
 
-        /// <summary>Routes every selected base to the target; the drag source keeps its previewed route.</summary>
+        /// <summary>
+        /// Routes every selected base to the target with the HUD's send amount; the drag source keeps its
+        /// previewed route.
+        /// </summary>
         void SendGroupRequest(int targetBaseId) {
-            SendRequest(dragSource, targetBaseId, previewRoute);
-            int troops = state.baseTroops[dragSource];
+            int percent = SendPercent;
+            SendRequest(dragSource, targetBaseId, percent, previewRoute);
+            int troops = DI_Rules.TroopsToSend(state.baseTroops[dragSource], percent);
             foreach (int baseId in selectedBases) {
                 if (baseId == dragSource || !IsValidBase(baseId) || baseId >= state.baseOwners.Length ||
                     state.baseOwners[baseId] != state.yourClientId)
                     continue;
                 int[] route = DI_Rules.FindRoute(state.basePositions, state.linkSources, state.linkTargets, baseId, targetBaseId);
                 if (route.Length >= 2) {
-                    SendRequest(baseId, targetBaseId, route);
-                    troops += state.baseTroops[baseId];
+                    SendRequest(baseId, targetBaseId, percent, route);
+                    troops += DI_Rules.TroopsToSend(state.baseTroops[baseId], percent);
                 }
             }
             if (boardFx != null)
@@ -609,11 +614,14 @@ namespace Universes.UniverseData.dot_invaders.Client {
             CancelDrag();
         }
 
-        static void SendRequest(int sourceBaseId, int targetBaseId, int[] route = null) {
+        int SendPercent => hud != null ? hud.SendPercent : DI_Rules.FullSendPercent;
+
+        static void SendRequest(int sourceBaseId, int targetBaseId, int percent = DI_Rules.FullSendPercent, int[] route = null) {
             InstanceFinder.ClientManager.Broadcast(new DI_SendRequest {
                 sourceBaseId = sourceBaseId,
                 targetBaseId = targetBaseId,
-                route = route
+                route = route,
+                percent = percent,
             });
         }
 

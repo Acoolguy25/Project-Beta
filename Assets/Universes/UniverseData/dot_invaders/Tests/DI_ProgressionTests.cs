@@ -360,7 +360,7 @@ namespace Universes.UniverseData.dot_invaders.Tests {
                 DI_Retention.Stats.Captures, DI_Retention.Stats.SpecialCaptures, DI_Retention.Stats.FactoryCaptures,
                 DI_Retention.Stats.FortressCaptures, DI_Retention.Stats.MostHeld, DI_Retention.Stats.Wins,
                 DI_Retention.Stats.Matches, DI_Retention.Stats.Podiums, DI_Retention.Stats.Eliminations,
-                DI_Retention.Stats.TroopsSent, DI_Retention.Stats.TroopsDefeated,
+                DI_Retention.Stats.TroopsSent, DI_Retention.Stats.TroopsDefeated, DI_Retention.Stats.Bounties,
             };
             var ids = new HashSet<string>();
             foreach (ChallengeDefinition challenge in DI_Retention.ChallengePool()) {
