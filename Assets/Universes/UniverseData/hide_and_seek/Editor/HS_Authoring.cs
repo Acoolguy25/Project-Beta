@@ -129,6 +129,62 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             return Kit.Save(root, "", "DecoyMarker");
         }
 
+        const string PumpkinModel = "Assets/ThirdParty/KayKit/HalloweenBits/Models/pumpkin_orange_jackolantern.fbx";
+        const string HaloTemplate = "Packages/com.ryan.gameframework/Runtime/GameFeel/Generated/Materials/FxDotAdd.mat";
+
+        /// <summary>
+        /// A glowing pumpkin of the pumpkin hunt (<see cref="HS_PumpkinView"/>): KayKit's jack-o'-lantern
+        /// (CC0), a breathing additive halo that faces the camera and a faint beam that shows across a yard.
+        /// No real light: the manor's surfaces already take URP's eight lights per object.
+        /// </summary>
+        static GameObject BuildPumpkin() {
+            var root = new GameObject("Pumpkin");
+            var body = Empty("Body", root.transform, new Vector3(0f, 0.25f, 0f));
+            if (Model(PumpkinModel, body.transform, CharacterHeight * 0.42f) == null)
+                throw new FileNotFoundException($"[HideAndSeek] Missing {PumpkinModel} (run git lfs pull).");
+            NoShadows(body);
+            var haloPivot = Empty("Halo", root.transform, new Vector3(0f, 1.2f, 0f));
+            var turn = haloPivot.AddComponent<RyanAssets.Rounds.Billboard>();
+            turn.facing = RyanAssets.Rounds.Billboard.Facing.LookAtCamera;
+            turn.yawOnly = false;
+            var halo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            halo.name = "Sprite";
+            Object.DestroyImmediate(halo.GetComponent<Collider>());
+            halo.transform.SetParent(haloPivot.transform, false);
+            // Pulled towards the camera (the billboard's -Z) so the pumpkin never hides it; large and soft, so it
+            // reads as candlelight spilling around the pumpkin rather than a solid disc.
+            halo.transform.localPosition = new Vector3(0f, 0f, -1.6f);
+            halo.transform.localScale = Vector3.one * CharacterHeight * 1.15f;
+            var haloRenderer = halo.GetComponent<MeshRenderer>();
+            haloRenderer.sharedMaterial = HaloMaterial(new Color(1f, 0.5f, 0.1f) * 1.1f);
+            haloRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            haloRenderer.receiveShadows = false;
+            haloRenderer.lightProbeUsage = LightProbeUsage.Off;
+            var beamMat = Kit.Mat("PumpkinBeam", new Color(1f, 0.55f, 0.15f), emission: 1.2f, alpha: 0.08f);
+            NoShadows(Primitive(PrimitiveType.Cylinder, "Beam", root.transform, new Vector3(0f, 8f, 0f), new Vector3(0.08f, 5.5f, 0.08f), beamMat, false));
+#if !UNITY_SERVER
+            var view = root.AddComponent<HS_PumpkinView>();
+            SetFields(view, ("body", body.transform), ("halo", haloRenderer));
+#endif
+            return Kit.Save(root, "", "Pumpkin");
+        }
+
+        /// <summary>The kit's soft additive dot, tinted (the manor's lamp glows use the same template).</summary>
+        static Material HaloMaterial(Color color) {
+            var template = AssetDatabase.LoadAssetAtPath<Material>(HaloTemplate)
+                ?? throw new FileNotFoundException($"[HideAndSeek] Missing {HaloTemplate}. Run Ryan > Game Feel > Rebuild.");
+            string path = $"{Root}/Materials/PumpkinHalo.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) {
+                material = new Material(template);
+                AssetDatabase.CreateAsset(material, path);
+            } else material.CopyPropertiesFromMaterial(template);
+            material.shader = template.shader;
+            material.SetColor("_BaseColor", new Color(color.r, color.g, color.b, 1f));
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
         /// <summary>A unit cone along +Z: apex at the origin, radius 1 at z = 1, bright at the lens and fading to the far end.</summary>
         static Mesh ConeMesh() {
             const string path = Root + "/Prefabs/FlashlightBeamCone.asset";
@@ -240,6 +296,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             var ping = BuildPing();
             var beam = BuildFlashlightBeam();
             var decoy = BuildDecoyMarker();
+            var pumpkin = BuildPumpkin();
             // Autumn dusk: soft warm sun, dim ambient, fog that hides the edge of the ground; the lamps do the rest (HS_ManorLighting).
             Light sun = Kit.NewLitScene(HS_ManorLighting.SkyTint, HS_ManorLighting.FogColor, HS_ManorLighting.FogStart, HS_ManorLighting.FogEnd,
                 HS_ManorLighting.SunEuler, HS_ManorLighting.SunIntensity);
@@ -273,6 +330,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             map.pingPrefab = ping;
             map.flashlightBeamPrefab = beam;
             map.decoyMarkerPrefab = decoy;
+            map.pumpkinPrefab = pumpkin;
             map.clientPrefab = hud;
             map.flickerLights = builder.FlickerLights.ToArray();
             map.flickerGlows = builder.FlickerGlows.ToArray();

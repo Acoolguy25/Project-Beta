@@ -25,8 +25,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
     /// <para>
     /// The other parts of the runner live beside this file: role abilities
     /// (<c>HS_ServerRunner.Abilities.cs</c>), round points, MVP, streaks and the retention kit
-    /// (<c>HS_ServerRunner.Scoring.cs</c>), mid-round map events (<c>HS_ServerRunner.Events.cs</c>) and the
-    /// hiding spots' doors (<c>HS_ServerRunner.Doors.cs</c>).
+    /// (<c>HS_ServerRunner.Scoring.cs</c>), mid-round map events (<c>HS_ServerRunner.Events.cs</c>), the
+    /// hiding spots' doors (<c>HS_ServerRunner.Doors.cs</c>) and the pumpkin hunt (<c>HS_ServerRunner.Pumpkins.cs</c>).
     /// </para>
     /// </summary>
     public sealed partial class HS_ServerRunner : ServerRunner {
@@ -97,6 +97,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             scoring.Validate();
             events.Validate();
             doorTuning.Validate();
+            pumpkinTuning.Validate();
             retention = new RetentionService<HS_SaveData>(HS_Retention.Rules(retentionTuning), save => save.retention, () => Now);
             retention.Unlocked += OnUnlocked;
             retention.Ready += OnRetentionReady;
@@ -169,6 +170,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             ForgetAbilities(c);
             ForgetScoring(c);
             ForgetDoors(c);
+            ForgetPumpkins(c);
             MarkDirty();
         }
 
@@ -219,6 +221,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             SetMusic(MusicSelection.GameMusic);
             ResetAbilities();
             ResetDoors();
+            ResetPumpkins();
             foreach (var key in roles.Keys.ToList()) roles[key] = HS_Role.None;
             ApplyAll();
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
@@ -258,6 +261,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             tauntsThisRound.Clear();
             ResetAbilities();
             ResetDoors();
+            ResetPumpkins();
             BeginRoundScoring();
 
             // ---- hide
@@ -284,6 +288,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             SetMusic(MusicSelection.HorrorChaseMusic);
             float start = Time.time, end = start + seekSeconds, lastTick = start;
             PlanEvent(seekSeconds);
+            StartPumpkins();
             int nextPing = pingFrom;
             while (true) {
                 token.ThrowIfCancellationRequested();
@@ -300,6 +305,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
 
             // ---- results
             StopEvent();
+            ResetPumpkins();
             ResetAbilities();
             phase = HS_Phase.Results;
             phaseSeconds = resultsSeconds;
@@ -454,6 +460,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
 
         void Update() {
             TickAbilities();
+            TickPumpkins();
             if (stateDirty && map != null) BroadcastState();
         }
 
@@ -461,7 +468,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             phase = phase, round = round, secondsLeft = secondsLeft, phaseSeconds = phaseSeconds, hidersLeft = HidersLeft, hidersAtStart = hidersAtStart, headline = headline,
             roles = roles.Where(r => r.Key.IsActive).Select(r => new HS_PlayerRole { clientId = r.Key.ClientId, role = r.Value, name = NameOf(r.Key) }).ToArray(),
             activeEvent = activeEvent, eventSecondsLeft = EventSecondsLeft, featuredEvent = FeaturedToday,
-            closedDoors = ClosedDoors,
+            closedDoors = ClosedDoors, pumpkins = LivePumpkins,
         };
 
         void BroadcastState() {

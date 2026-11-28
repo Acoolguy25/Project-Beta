@@ -42,6 +42,8 @@ namespace Universes.UniverseData.hide_and_seek {
         public GameObject flashlightBeamPrefab;
         [Tooltip("Shown only to the hider who threw a decoy, where it landed, for as long as it is live (HS_DecoyMarker).")]
         public GameObject decoyMarkerPrefab;
+        [Tooltip("A glowing pumpkin of the pumpkin hunt (HS_PumpkinView), placed on every client where the server lights one.")]
+        public GameObject pumpkinPrefab;
 
         public bool IsConfigured => hidePoints != null && hidePoints.Length > 0 && seekerSpawn != null && lobbySpawn != null;
 

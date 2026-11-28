@@ -38,7 +38,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         const string HiderIcon = "directions_run", SeekerIcon = "search", CaughtIcon = "pan_tool", SpectatorIcon = "visibility",
             WaitingIcon = "groups", HidingIcon = "visibility_off", SeekingIcon = "search", ResultsIcon = "emoji_events",
             PingIcon = "my_location", TagIcon = "pan_tool", DoorIcon = "door_front", InfoIcon = "timer", LocationIcon = "home", TimerIcon = "timer",
-            TauntIcon = "campaign", PointsIcon = "star", LockIcon = "lock", BlackoutIcon = "candle", FrenzyIcon = "siren", ShuffleIcon = "run";
+            TauntIcon = "campaign", PointsIcon = "star", LockIcon = "lock", BlackoutIcon = "candle", FrenzyIcon = "siren", ShuffleIcon = "run", PumpkinIcon = "local_fire_department";
 
         const string AudioFolder = HS_Authoring.Root + "/Audio";
         /// <summary>The kit's edge-only vignette (clear centre), reused for the blended hider's tint.</summary>
@@ -81,6 +81,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.blackoutIcon = UIThemeAssets.Icon(BlackoutIcon);
             hud.frenzyIcon = UIThemeAssets.Icon(FrenzyIcon);
             hud.shuffleIcon = UIThemeAssets.Icon(ShuffleIcon);
+            hud.pumpkinIcon = UIThemeAssets.Icon(PumpkinIcon);
             hud.abilityIcons = new Sprite[HS_Abilities.Count];
             for (int i = 1; i < HS_Abilities.Count; i++) hud.abilityIcons[i] = UIThemeAssets.Icon(HS_Abilities.Info((HS_Ability)i).Icon);
             AssignSounds(hud);
@@ -130,6 +131,10 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             // Closet doors: a creak you can place from the next room, and a wooden bang when one shuts.
             hud.doorOpenSound = Sound(0.9f, 1.5f, 0.1f, 10f, 90f, "door_creak_1", "door_creak_2");
             hud.doorCloseSound = Sound(KitAudioFolder, 0.8f, 1.5f, 0.1f, 10f, 90f, "build_1", "build_2", "build_3");
+            // Pumpkins: the grab carries across the house (that is the risk), a snuff a room or so, a new one lights up softly.
+            hud.pumpkinCollectSound = Sound(KitAudioFolder, 0.9f, 1f, 0.1f, 14f, 150f, "pickup");
+            hud.pumpkinSnuffSound = Sound(KitAudioFolder, 0.6f, 1.5f, 0.1f, 8f, 60f, "hit_1", "hit_2", "hit_3");
+            hud.pumpkinAppearSound = Sound(KitAudioFolder, 0.45f, 1f, 0.2f, 6f, 45f, "whoosh_1", "whoosh_2");
         }
 
         /// <summary>Ability sounds from the kit's library; 3D ones carry about a room or two (world units).</summary>

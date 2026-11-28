@@ -29,6 +29,8 @@ namespace Universes.UniverseData.hide_and_seek {
         public HS_RoundEvent featuredEvent;
         /// <summary>Which hiding-spot doors are shut (bit i = <see cref="HS_Map.doors"/>[i]), so a late joiner's doors match.</summary>
         public ulong closedDoors;
+        /// <summary>The glowing pumpkins out now (<see cref="HS_Pumpkins"/>), so a late joiner or a missed message still matches.</summary>
+        public HS_Pumpkin[] pumpkins;
     }
 
     /// <summary>A seeker tries to tag whoever is closest in front of them.</summary>
@@ -215,5 +217,21 @@ namespace Universes.UniverseData.hide_and_seek {
         public int clientId;
         /// <summary>A seeker opened it with a hider inside.</summary>
         public bool found;
+    }
+
+    // ---------------------------------------------------------------- pumpkin hunt (2026-11-28)
+
+    /// <summary>
+    /// Server -> everyone: a pumpkin lit up (<see cref="take"/> None) or was taken. Everyone hears a take where it
+    /// happened; seekers also see where a hider grabbed one.
+    /// </summary>
+    public struct HS_PumpkinBroadcast : IBroadcast {
+        public int id;
+        public UnityEngine.Vector3 position;
+        public HS_PumpkinTake take;
+        /// <summary>Who took it (-1 when it lit up).</summary>
+        public int clientId;
+        /// <summary>Pumpkins the taker has taken this round, counting this one (their "2/3" on the HUD).</summary>
+        public int count;
     }
 }

@@ -38,6 +38,8 @@ namespace Universes.UniverseData.hide_and_seek {
         public int bluffs;
         /// <summary>Rooms and yards this player searched as a seeker (first visit to each in a round).</summary>
         public int roomsSearched;
+        /// <summary>Glowing pumpkins this player grabbed as a hider, and snuffed out as a seeker.</summary>
+        public int pumpkins, pumpkinsSnuffed;
 
         public void RecordRound(bool survivedHiding) {
             roundsPlayed++;
@@ -89,6 +91,8 @@ namespace Universes.UniverseData.hide_and_seek {
             roundsLeft = Math.Max(0, roundsLeft);
             bluffs = Math.Max(0, bluffs);
             roomsSearched = Math.Max(0, roomsSearched);
+            pumpkins = Math.Max(0, pumpkins);
+            pumpkinsSnuffed = Math.Max(0, pumpkinsSnuffed);
         }
     }
 }
