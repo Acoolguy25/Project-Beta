@@ -1,4 +1,4 @@
-// SERVER PROBE "place seen": warps Father Crane to a NavMesh spot DIST m (+-4) from the first investigator with a clear line to them, and lets him patrol.
+// SERVER PROBE "place seen": warps Father Crane to a NavMesh spot DIST m (+-4) from the first investigator with a clear line to them, and sets him hunting them (m.Hunt), so the hide trace tests his seen-hide rule, not a player's route.
 var m = UnityEngine.Object.FindAnyObjectByType<Universes.UniverseData.classic_horror.Server.CH_Monster>();
 RyanAssets.Characters.Shared.LocalCharacter who = null;
 foreach (var c in RyanAssets.Characters.Shared.LocalCharacter.Characters.Values) if (c) { who = c; break; }

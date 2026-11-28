@@ -1,4 +1,4 @@
-// CLIENT BOT "night": plays a whole night through the real controls with no server-side staging. Walking drives the movement
+// CLIENT BOT "night": plays a whole night through the controller and the panel's entry points (what staging was used is stated in the run's report). Walking drives the movement
 // controls along a NavMesh path (as a player's stick would), aiming sets the first-person yaw and pitch, E is the controller's
 // own Interact, and the minigames go through the panel's own entry points: Sing (what G H J K do), TurnDial (what A / D do, the
 // panel's own Update turns the dial at its dial speed and sends the probes) and Action (E: the cord, the lock's Set). A batchmode
