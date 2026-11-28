@@ -529,8 +529,36 @@ namespace Universes.UniverseData.tower_defense.Editor {
             info.actionBack = Rounded(action, UIColorRole.Success, 10f, raycast: false);
             Object.DestroyImmediate(action.GetComponent<UIThemeColor>());
             Row(action.gameObject, 8f, Pad(12, 0), TextAnchor.MiddleCenter);
-            KeyHint(action, "E", UIColorRole.TextPrimary);
+            info.actionKey = KeyHint(action, "E", UIColorRole.TextPrimary).gameObject;
             info.actionLabel = Label(action, "Label", "Build", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
+
+            // Level 3 towers: the two elite forms side by side, in place of the action and sell rows.
+            RectTransform choices = Group(content, "EliteChoices", false, 8f, TextAnchor.MiddleLeft);
+            Size(choices, -1f, 58f, 1f);
+            info.choices = choices.gameObject;
+            info.choiceBack = new Image[TD_Elites.PathCount];
+            info.choiceKey = new TextMeshProUGUI[TD_Elites.PathCount];
+            info.choiceName = new TextMeshProUGUI[TD_Elites.PathCount];
+            info.choiceBlurb = new TextMeshProUGUI[TD_Elites.PathCount];
+            for (int i = 0; i < TD_Elites.PathCount; i++) {
+                RectTransform cell = Node(choices, $"Choice{i + 1}");
+                Size(cell, -1f, 58f, 1f);
+                info.choiceBack[i] = Rounded(cell, UIColorRole.SurfaceInset, 10f, raycast: false);
+                Object.DestroyImmediate(cell.GetComponent<UIThemeColor>());
+                Row(cell.gameObject, 5f, Pad(6, 4), TextAnchor.MiddleLeft);
+                RectTransform key = KeyHint(cell, i == 0 ? "E" : "Z", UIColorRole.TextPrimary);
+                info.choiceKey[i] = key.GetComponentInChildren<TextMeshProUGUI>();
+                RectTransform words = Group(cell, "Words", true, 0f, TextAnchor.MiddleLeft);
+                Size(words, -1f, -1f, 1f);
+                info.choiceName[i] = Label(words, "Name", "", UIText.Strong, UIColorRole.TextPrimary);
+                info.choiceName[i].fontSize = 13f;
+                info.choiceBlurb[i] = Label(words, "Blurb", "", UIText.Small, UIColorRole.TextSecondary);
+                info.choiceBlurb[i].fontSize = 11.5f;
+                info.choiceBlurb[i].textWrappingMode = TextWrappingModes.Normal;
+                info.choiceBlurb[i].overflowMode = TextOverflowModes.Truncate; // Inter has no ellipsis glyph
+                info.choiceBlurb[i].maxVisibleLines = 2;
+            }
+            choices.gameObject.SetActive(false);
         }
 
         static TextMeshProUGUI StatRow(Transform parent, string icon, string label) {

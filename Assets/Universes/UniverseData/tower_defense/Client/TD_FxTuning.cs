@@ -197,6 +197,10 @@ namespace Universes.UniverseData.tower_defense.Client {
         public Color dustTint = new(0.62f, 0.53f, 0.42f);
         [Min(0f)] public float buildDustScale = 2.4f;
         [Min(0f)] public float levelUpScale = 4f;
+        [Tooltip("Elite specialisation: its sparks and colour ring are this many times a level-up's, under a beam of the path's colour.")]
+        [Min(1f)] public float eliteBurstScale = 1.6f;
+        [Min(0f)] public float eliteBeamScale = 1.4f;
+        [Range(0f, 1f)] public float eliteShake = 0.25f;
         [Tooltip("Height of the level-up sparks above the pad.")]
         [Min(0f)] public float levelUpSparkHeight = 2f;
         [Tooltip("Squash (negative = flatten) of a tower as it levels up.")]

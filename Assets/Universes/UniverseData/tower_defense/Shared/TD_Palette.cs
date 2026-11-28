@@ -51,6 +51,11 @@ namespace Universes.UniverseData.tower_defense {
         public static readonly Color HealthMid = new(1f, 0.8f, 0.25f);
         public static readonly Color HealthLow = new(0.95f, 0.3f, 0.3f);
 
+        /// <summary>Elite forms: First (the action key's choice) glows amber, Second violet, on every tower.</summary>
+        public static readonly Color EliteFirst = new(1f, 0.62f, 0.16f), EliteSecond = new(0.72f, 0.42f, 1f);
+
+        public static Color Elite(TD_TowerPath path) => path == TD_TowerPath.Second ? EliteSecond : EliteFirst;
+
         public static Color Tower(TD_TowerKind kind) => Towers[(int)kind];
         public static Color Enemy(TD_EnemyKind kind) => Enemies[(int)kind];
         public static Color Mode(TD_Difficulty mode) => Modes[(int)mode];

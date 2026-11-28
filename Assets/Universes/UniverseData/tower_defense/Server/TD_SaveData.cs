@@ -19,6 +19,8 @@ namespace Universes.UniverseData.tower_defense.Server {
         public int gamesPlayed;
         public int towersBuilt;
         public int towersUpgraded;
+        /// <summary>Level 3 towers the player specialised into an elite form.</summary>
+        public int elitesMade;
         /// <summary>Heavy Tank bosses finished off by the player's towers.</summary>
         public int bossesDestroyed;
 
@@ -93,6 +95,7 @@ namespace Universes.UniverseData.tower_defense.Server {
             gamesPlayed = Math.Max(gamesWon, gamesPlayed);
             towersBuilt = Math.Max(0, towersBuilt);
             towersUpgraded = Math.Max(0, towersUpgraded);
+            elitesMade = Math.Max(0, elitesMade);
             bossesDestroyed = Math.Max(0, bossesDestroyed);
             bestStarsNormal = Math.Clamp(bestStarsNormal, 0, TD_Rules.MaxStars);
             bestStarsHard = Math.Clamp(bestStarsHard, 0, TD_Rules.MaxStars);

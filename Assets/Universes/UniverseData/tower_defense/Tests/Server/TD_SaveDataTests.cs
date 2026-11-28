@@ -70,7 +70,7 @@ namespace Universes.UniverseData.tower_defense.Server.Tests {
             var save = new TD_SaveData {
                 bestWave = -4, totalKills = -10, normalWins = 2, hardWins = -1, gamesWon = 0, gamesPlayed = 1,
                 towersBuilt = -1, towersUpgraded = -2, bossesDestroyed = -3, bestStarsNormal = 7, bestStarsHard = -2,
-                bestEndlessWave = -5, shieldsBroken = -6, abilitiesUsed = -7, retention = null,
+                bestEndlessWave = -5, shieldsBroken = -6, abilitiesUsed = -7, elitesMade = -8, retention = null,
             };
             save.Validate();
             Assert.AreEqual(0, save.bestWave);
@@ -81,6 +81,7 @@ namespace Universes.UniverseData.tower_defense.Server.Tests {
             Assert.AreEqual(0, save.towersBuilt);
             Assert.AreEqual(0, save.towersUpgraded);
             Assert.AreEqual(0, save.bossesDestroyed);
+            Assert.AreEqual(0, save.elitesMade);
             Assert.AreEqual(TD_Rules.MaxStars, save.bestStarsNormal);
             Assert.AreEqual(0, save.bestStarsHard);
             Assert.AreEqual(0, save.bestEndlessWave);

@@ -39,6 +39,10 @@ namespace Universes.UniverseData.tower_defense.Client {
         public Key fastForwardKey = Key.G;
         [Tooltip("Fires the EMP (the Airstrike is on the Tool map's Journal action, F).")]
         public Key empKey = Key.V;
+        [Tooltip("On a level 3 tower: specialises it into its second elite form (the action key picks the first).")]
+        public Key eliteKey = Key.Z;
+        [Tooltip("Degrees per second an elite tower's glowing cores orbit it.")]
+        public float eliteSpinSpeed = 80f;
         [Tooltip("Selling needs a second press of the sell key within this many seconds.")]
         [Min(0.5f)] public float sellConfirmSeconds = 2.5f;
 
@@ -128,6 +132,7 @@ namespace Universes.UniverseData.tower_defense.Client {
             // World popups stay off the status bar, pill row, toast and banner, and the kit's toast column.
             fx.guard = new TD_ScreenGuard(hud.keepClear, FindChild(retentionHud != null ? retentionHud.transform : null, "Toasts") as RectTransform, tuning);
             hud.SetDropKey(dropKey.ToString());
+            hud.SetEliteKey(eliteKey.ToString());
             hud.SetKeys(BindingLabel("ReloadTool", "R"), fastForwardKey.ToString(), BindingLabel("Interact", "E"));
             hud.SetAbilityKeys(BindingLabel("Journal", "F"), empKey.ToString());
             padTop = map.slotPrefab.GetComponent<TD_SlotView>().topHeight;
@@ -308,9 +313,23 @@ namespace Universes.UniverseData.tower_defense.Client {
             hud.Toast(ready ? "Ready! Waiting for the others..." : "Not ready", TD_Hud.ToastKind.Good, tuning.shortToastSeconds);
         }
 
-        void Interact() {
+        /// <summary>The action key (E): build, upgrade, or on a level 3 tower take its first elite form.</summary>
+        void Interact() => Interact(false);
+
+        /// <param name="click">A mouse click on the world: never buys an elite form (that is a choice, made on the card's keys).</param>
+        void Interact(bool click) {
             UpdateFocus();
             if (focusedSlot < 0 || manager == null || !manager.Started) return;
+            if (towerViews[focusedSlot] != null && TD_Elites.CanSpecialise(towerSnaps[focusedSlot].level, towerSnaps[focusedSlot].path)) {
+                if (click) {
+                    var kind = towerSnaps[focusedSlot].kind;
+                    hud.Toast($"Pick an elite form: {hud.InteractKey} {TD_Elites.Get(kind, TD_TowerPath.First).name}  or  {eliteKey} {TD_Elites.Get(kind, TD_TowerPath.Second).name}",
+                        TD_Hud.ToastKind.Info, tuning.shortToastSeconds);
+                } else Specialise(TD_TowerPath.First);
+                return;
+            }
+            // Fully upgraded: nothing to buy (a click would only fetch a refusal).
+            if (towerViews[focusedSlot] != null && TD_Elites.IsElite(towerSnaps[focusedSlot].path)) return;
             if (towerViews[focusedSlot] == null && !placing) return; // an empty cell needs a tower in hand
             if (towerViews[focusedSlot] == null && !InPlaceReach(focusedSlot)) {
                 hud.Toast("Too far: walk closer to build there.", TD_Hud.ToastKind.Bad, tuning.shortToastSeconds);
@@ -326,12 +345,27 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (placing && (keyboard[dropKey].wasPressedThisFrame || keyboard[Key.Backspace].wasPressedThisFrame || keyboard[Key.Escape].wasPressedThisFrame)) Drop();
             var mouse = Mouse.current;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame && !PointerOverUi()) {
-                if (placing || focusedSlot >= 0 && towerViews[focusedSlot] != null) Interact();
+                if (placing || focusedSlot >= 0 && towerViews[focusedSlot] != null) Interact(true);
             }
             if (keyboard[sellKey].wasPressedThisFrame) Sell();
             if (keyboard[targetKey].wasPressedThisFrame) CycleTarget();
             if (keyboard[fastForwardKey].wasPressedThisFrame) ToggleFastForward();
             if (keyboard[empKey].wasPressedThisFrame) UseAbility(TD_Ability.Emp);
+            if (keyboard[eliteKey].wasPressedThisFrame) Specialise(TD_TowerPath.Second);
+        }
+
+        /// <summary>Asks the server to turn the focused level 3 tower into elite form <paramref name="path"/>; its reply toasts the result.</summary>
+        void Specialise(TD_TowerPath path) {
+            UpdateFocus();
+            if (focusedSlot < 0 || towerViews[focusedSlot] == null || manager == null || !manager.Started) return;
+            var tower = towerSnaps[focusedSlot];
+            if (!TD_Elites.CanSpecialise(tower.level, tower.path)) return;
+            if (!TD_Retention.Owns(Level, TD_Retention.EliteUnlock)) {
+                hud.Toast($"Reach level {TD_Retention.EliteLevel} to specialise towers.", TD_Hud.ToastKind.Bad, tuning.shortToastSeconds);
+                GameSfx.Play(SfxCue.Error);
+                return;
+            }
+            manager.Broadcast(new TD_BuildRequest { slot = (byte)focusedSlot, kind = tower.kind, path = path });
         }
 
         static bool PointerOverUi() => EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
@@ -477,6 +511,15 @@ namespace Universes.UniverseData.tower_defense.Client {
         bool CanUpgrade(int slot) => hasState && state.phase is TD_Phase.Build or TD_Phase.Wave
             && towerSnaps[slot].level < TD_Rules.MaxLevel && state.cash >= TD_Rules.UpgradeCost(towerSnaps[slot].kind, towerSnaps[slot].level, Perks.upgradeDiscount);
 
+        /// <summary>Whether the focused level 3 tower can take an elite form now (unlocked, phase, and cash for the cheaper form).</summary>
+        bool CanSpecialise(int slot) {
+            var t = towerSnaps[slot];
+            if (!hasState || state.phase is not (TD_Phase.Build or TD_Phase.Wave) || !TD_Elites.CanSpecialise(t.level, t.path)
+                || !TD_Retention.Owns(Level, TD_Retention.EliteUnlock)) return false;
+            float discount = Perks.upgradeDiscount;
+            return state.cash >= Mathf.Min(TD_Elites.Cost(t.kind, TD_TowerPath.First, discount), TD_Elites.Cost(t.kind, TD_TowerPath.Second, discount));
+        }
+
         void Highlight(int slot, bool on) {
             bool empty = towerViews[slot] == null;
             var pad = empty && !(on && placing) ? null : Pad(slot);
@@ -497,12 +540,22 @@ namespace Universes.UniverseData.tower_defense.Client {
             Color color = TD_Palette.Tower(snap.kind);
             if (tower.rangeRing != null) {
                 tower.rangeRing.gameObject.SetActive(on);
-                if (on) SetRing(tower.rangeRing, TD_Daily.Range(snap.kind, snap.level, Modifier), color, rangeRingAlpha);
+                if (on) SetRing(tower.rangeRing, TD_Elites.Range(snap.kind, snap.level, snap.path, Modifier), color, rangeRingAlpha);
             }
             if (tower.nextRangeRing != null) {
-                bool next = on && snap.level < TD_Rules.MaxLevel;
-                tower.nextRangeRing.gameObject.SetActive(next);
-                if (next) SetRing(tower.nextRangeRing, TD_Daily.Range(snap.kind, snap.level + 1, Modifier), CanUpgrade(slot) ? color : invalidColor, nextRangeRingAlpha);
+                // The next step's reach: the next level, or at level 3 the longer of the two elite forms (when one adds range).
+                float now = TD_Elites.Range(snap.kind, snap.level, snap.path, Modifier), next = now;
+                bool can = false;
+                if (snap.level < TD_Rules.MaxLevel) {
+                    next = TD_Daily.Range(snap.kind, snap.level + 1, Modifier);
+                    can = CanUpgrade(slot);
+                } else if (TD_Elites.CanSpecialise(snap.level, snap.path)) {
+                    next = Mathf.Max(TD_Elites.Range(snap.kind, snap.level, TD_TowerPath.First, Modifier), TD_Elites.Range(snap.kind, snap.level, TD_TowerPath.Second, Modifier));
+                    can = CanSpecialise(slot);
+                }
+                bool show = on && next > now + 0.01f;
+                tower.nextRangeRing.gameObject.SetActive(show);
+                if (show) SetRing(tower.nextRangeRing, next, can ? color : invalidColor, nextRangeRingAlpha);
             }
         }
 
@@ -549,7 +602,9 @@ namespace Universes.UniverseData.tower_defense.Client {
         void RefreshFocusCard() {
             if (focusedSlot < 0 && placing && hasState) hud.ShowPlaceHint((TD_TowerKind)selected);
             else if (focusedSlot < 0 || !hasState) hud.ClearFocus();
-            else if (towerViews[focusedSlot] != null) hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), targetKey.ToString(), CanSell(towerSnaps[focusedSlot]), Perks.upgradeDiscount);
+            else if (towerViews[focusedSlot] != null)
+                hud.ShowFocusTower(towerSnaps[focusedSlot], state.cash, sellKey.ToString(), targetKey.ToString(), CanSell(towerSnaps[focusedSlot]), Perks.upgradeDiscount,
+                    TD_Retention.Owns(Level, TD_Retention.EliteUnlock));
             else {
                 var kind = (TD_TowerKind)selected;
                 hud.ShowFocusPad(kind, state.cash, TD_Retention.CanBuild(Level, kind) ? 0 : TD_Retention.LevelOf(TD_Rules.Tower(kind).unlockId));
@@ -706,15 +761,15 @@ namespace Universes.UniverseData.tower_defense.Client {
                         view = towerViews[t.slot] = go.GetComponent<TD_TowerView>();
                         view.aim = view.head != null ? view.head.rotation : Quaternion.identity;
                         towerSnaps[t.slot] = t;
-                        view.ShowLevel(t.level);
+                        view.ShowLevel(t.level, t.path);
                         if (pendingPop[t.slot]) Punch.Pop(view.head != null ? view.head : view.transform);
                         if (t.slot == focusedSlot) Highlight(t.slot, true);
                     }
                     pendingPop[t.slot] = false;
                     towerSnaps[t.slot] = t;
                     if (view.goldTrim != null && view.goldTrim.activeSelf != t.gold) view.goldTrim.SetActive(t.gold);
-                    if (view.shownLevel != t.level) {
-                        view.ShowLevel(t.level);
+                    if (view.shownLevel != t.level || view.shownPath != t.path) {
+                        view.ShowLevel(t.level, t.path);
                         if (t.slot == focusedSlot) Highlight(t.slot, true);
                     }
                 }
@@ -753,6 +808,14 @@ namespace Universes.UniverseData.tower_defense.Client {
                 case TD_TowerEvent.Sold:
                     fx.Sold(pad, message.amount);
                     break;
+                case TD_TowerEvent.Specialised: {
+                    var elite = TD_Elites.Get(message.tower, message.path);
+                    fx.Specialised(punch, pad, TD_Palette.Elite(message.path));
+                    string who = string.IsNullOrEmpty(message.player) ? "A player" : message.player;
+                    hud.Toast($"{who} made an elite {elite.name}!", TD_Hud.ToastKind.Good, tuning.toastSeconds);
+                    fx.guard?.Invalidate();
+                    break;
+                }
             }
         }
 
@@ -981,6 +1044,8 @@ namespace Universes.UniverseData.tower_defense.Client {
                 tower.head.rotation = Quaternion.RotateTowards(tower.head.rotation, wanted, tower.turnSpeed * dt);
                 tower.recoil = Mathf.MoveTowards(tower.recoil, 0f, dt * 4f);
                 tower.head.localPosition = new Vector3(0f, tower.head.localPosition.y, 0f) - tower.head.localRotation * Vector3.forward * (tower.recoil * 0.35f);
+                var spinner = tower.ActiveSpinner;
+                if (spinner != null) spinner.localRotation = Quaternion.Euler(0f, Time.time * eliteSpinSpeed + i * 37f, 0f);
             }
         }
 

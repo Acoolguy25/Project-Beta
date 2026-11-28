@@ -27,6 +27,14 @@ namespace Universes.UniverseData.tower_defense {
         public GameObject goldTrim;
         [Tooltip("Optional muzzle per level (index 0 = level 1), for towers whose models put the muzzle at different heights (Tesla coils); else muzzle.")]
         public Transform[] tierMuzzles;
+        [Tooltip("Elite dressing per path (index 0 = TD_TowerPath.First) on top of the level 3 model: crown plate, orbiting cores, foot glow.")]
+        public GameObject[] eliteParts;
+        [Tooltip("Badge stars in each path's colour (index 0 = First), shown instead of the gold level stars once specialised.")]
+        public GameObject[] eliteStars;
+        [Tooltip("Pivots the client spins around the tower's axis on elite towers (the orbiting cores), index 0 = First.")]
+        public Transform[] eliteSpinners;
+        [Tooltip("Uniform scale of an elite tower (level 3 is levelScale[2]).")]
+        public float eliteScale = TD_Elites.Scale;
 
         /// <summary>Where the current level's shots leave from.</summary>
         public Transform Muzzle => tierMuzzles != null && shownLevel >= 1 && shownLevel <= tierMuzzles.Length && tierMuzzles[shownLevel - 1] != null ? tierMuzzles[shownLevel - 1] : muzzle;
@@ -34,22 +42,38 @@ namespace Universes.UniverseData.tower_defense {
         [HideInInspector] public Quaternion aim = Quaternion.identity;
         [HideInInspector] public float recoil;
         [HideInInspector] public int shownLevel;
+        [HideInInspector] public TD_TowerPath shownPath;
 
-        /// <summary>Shows the model, stars and scale of <paramref name="level"/> (1-based).</summary>
-        public void ShowLevel(int level) {
+        /// <summary>The spinner of the elite form being shown, or null.</summary>
+        public Transform ActiveSpinner => TD_Elites.IsElite(shownPath) && eliteSpinners != null && (int)shownPath - 1 < eliteSpinners.Length
+            ? eliteSpinners[(int)shownPath - 1] : null;
+
+        /// <summary>Shows the model, stars and scale of <paramref name="level"/> (1-based) and, at level 3, its elite form.</summary>
+        public void ShowLevel(int level, TD_TowerPath path = TD_TowerPath.None) {
             shownLevel = level;
+            shownPath = level >= TD_Elites.Level ? path : TD_TowerPath.None;
+            bool elite = TD_Elites.IsElite(shownPath);
+            Toggle(eliteParts, shownPath);
+            Toggle(eliteStars, shownPath);
             if (tiers != null)
                 for (int i = 0; i < tiers.Length; i++)
                     if (tiers[i] != null) tiers[i].SetActive(i == Mathf.Min(level, tiers.Length) - 1);
             if (levelStars != null)
-                for (int i = 0; i < levelStars.Length; i++) levelStars[i].SetActive(i < level);
+                for (int i = 0; i < levelStars.Length; i++) levelStars[i].SetActive(!elite && i < level);
             if (badge != null && badgeHeight != null && badgeHeight.Length > 0) {
                 Vector3 p = badge.localPosition;
                 p.y = badgeHeight[Mathf.Clamp(level - 1, 0, badgeHeight.Length - 1)];
                 badge.localPosition = p;
             }
             float scale = levelScale != null && levelScale.Length > 0 ? levelScale[Mathf.Clamp(level - 1, 0, levelScale.Length - 1)] : 1f;
-            transform.localScale = Vector3.one * scale;
+            transform.localScale = Vector3.one * (elite ? eliteScale : scale);
+        }
+
+        /// <summary>Shows only the entry of <paramref name="parts"/> for <paramref name="path"/> (none for no path).</summary>
+        static void Toggle(GameObject[] parts, TD_TowerPath path) {
+            if (parts == null) return;
+            for (int i = 0; i < parts.Length; i++)
+                if (parts[i] != null) parts[i].SetActive(i == (int)path - 1);
         }
     }
 }

@@ -335,6 +335,18 @@ namespace Universes.UniverseData.tower_defense.Client {
             if (tower != null) Punch.Squash(tower, tuning.levelUpSquash);
         }
 
+        /// <summary>A level 3 tower took an elite form: a beam of the path's colour, a double shockwave, sparks and a fanfare.</summary>
+        public void Specialised(Transform tower, Vector3 pad, Color color) {
+            GameFx.Play(FxKind.BeaconBeam, pad, color, tuning.eliteBeamScale);
+            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * tuning.ringLift, color, tuning.levelUpScale * tuning.eliteBurstScale);
+            GameFx.Play(FxKind.ShockwaveRing, pad + Vector3.up * (tuning.ringLift + 0.6f), tuning.levelUpColor, tuning.levelUpScale);
+            GameFx.Play(FxKind.Sparks, pad + Vector3.up * tuning.levelUpSparkHeight, color, tuning.levelUpScale * tuning.eliteBurstScale);
+            GameSfx.PlayAt(SfxCue.LevelUp, pad);
+            GameSfx.PlayAt(SfxCue.Win, pad);
+            CameraShake.Kick(tuning.eliteShake);
+            if (tower != null) Punch.Squash(tower, tuning.levelUpSquash * 1.5f);
+        }
+
         public void Sold(Vector3 pad, int refund) {
             GameFx.Play(FxKind.DustPuff, pad, tuning.dustTint, tuning.buildDustScale);
             GameFx.Play(FxKind.CoinBurst, pad + Vector3.up, tuning.sellBurstScale);

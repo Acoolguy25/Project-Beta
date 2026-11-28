@@ -40,6 +40,8 @@ namespace Universes.UniverseData.tower_defense {
         public int kills;
         /// <summary>Damage it dealt this game (health and shield, rounded). Appended 2026-11-28.</summary>
         public int damage;
+        /// <summary>Its elite form (<see cref="TD_Elites"/>). Appended 2026-11-28 (elites); None from older servers.</summary>
+        public TD_TowerPath path;
     }
 
     public struct TD_Shot {
@@ -101,6 +103,8 @@ namespace Universes.UniverseData.tower_defense {
     public struct TD_BuildRequest : IBroadcast {
         public byte slot;
         public TD_TowerKind kind;
+        /// <summary>On a level 3 tower: the elite form to specialise it into. Appended 2026-11-28 (elites); None from older clients.</summary>
+        public TD_TowerPath path;
     }
 
     public struct TD_StateRequest : IBroadcast {
@@ -122,7 +126,8 @@ namespace Universes.UniverseData.tower_defense {
         public bool fast;
     }
 
-    public enum TD_TowerEvent : byte { Built, Upgraded, Sold }
+    /// <summary>Specialised = a level 3 tower became an elite form (appended 2026-11-28).</summary>
+    public enum TD_TowerEvent : byte { Built, Upgraded, Sold, Specialised }
 
     /// <summary>A tower was built, upgraded or sold (sent to everyone, for effects and popups).</summary>
     public struct TD_TowerEventBroadcast : IBroadcast {
@@ -133,6 +138,10 @@ namespace Universes.UniverseData.tower_defense {
         public byte level;
         /// <summary>Cash spent (built, upgraded) or refunded (sold).</summary>
         public int amount;
+        /// <summary>The elite form chosen (Specialised). Appended 2026-11-28.</summary>
+        public TD_TowerPath path;
+        /// <summary>Who did it (Specialised: for everyone's toast). Appended 2026-11-28.</summary>
+        public string player;
     }
 
     /// <summary>The receiving player's saved tower defense record, sent when it loads and when a record falls.</summary>

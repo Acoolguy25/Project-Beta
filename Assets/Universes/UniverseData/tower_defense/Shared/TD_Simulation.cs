@@ -20,6 +20,10 @@ namespace Universes.UniverseData.tower_defense {
         public int kills;
         /// <summary>Health and shield it took off enemies this game (overkill not counted).</summary>
         public float damageDealt;
+        /// <summary>Its elite form once specialised at level 3 (<see cref="TD_Elites"/>).</summary>
+        public TD_TowerPath path;
+
+        public TD_EliteStats Elite => TD_Elites.Get(kind, path);
 
         public int Refund => Mathf.RoundToInt(spent * perks.refundRate);
     }
@@ -62,7 +66,14 @@ namespace Universes.UniverseData.tower_defense {
         }
     }
 
-    public enum TD_BuildResult : byte { Built, Upgraded, MaxLevel, NoCash, BadSlot }
+    /// <summary>What a build, upgrade or specialisation did (server side only; not on the wire).</summary>
+    public enum TD_BuildResult : byte {
+        Built, Upgraded, MaxLevel, NoCash, BadSlot,
+        /// <summary>A level 3 tower became an elite form.</summary>
+        Specialised,
+        /// <summary>The tower is at level 3: the next step is a specialisation, which needs a path.</summary>
+        NeedsPath,
+    }
 
     /// <summary>
     /// One game of tower defense without any networking: the purse, the base, the towers on their pads,
@@ -217,7 +228,7 @@ namespace Universes.UniverseData.tower_defense {
         /// re-freezing one enemy.
         /// </summary>
         TD_SimEnemy Target(TD_SimTower tower) {
-            float range = TD_Daily.Range(tower.kind, tower.level, Modifier);
+            float range = TD_Elites.Range(tower.kind, tower.level, tower.path, Modifier);
             Vector2 at = Flat(TD_Rules.Slots[tower.slot]);
             TD_SimEnemy target = null;
             float targetSqr = 0f;
@@ -254,18 +265,46 @@ namespace Universes.UniverseData.tower_defense {
             if (tower.cooldown > 0f) return;
             var target = Target(tower);
             if (target == null) { tower.cooldown = 0f; return; }
-            tower.cooldown = 1f / (TD_Daily.FireRate(tower.kind, tower.level, Modifier) * (1f + tower.perks.fireRateBonus));
+            tower.cooldown = 1f / (TD_Elites.FireRate(tower.kind, tower.level, tower.path, Modifier) * (1f + tower.perks.fireRateBonus));
             var stats = TD_Rules.Tower(tower.kind);
-            float raw = TD_Rules.Damage(tower.kind, tower.level) * tower.perks.damageScale;
+            var elite = tower.Elite;
+            float raw = TD_Elites.Damage(tower.kind, tower.level, tower.path) * tower.perks.damageScale;
             int shot = Events.shots.Count;
             Events.shots.Add(new TD_Shot { slot = tower.slot, enemy = target.id });
             if (stats.slow > 0f && !target.Shielded) {
                 target.slowUntil = Time + TD_Rules.SlowSeconds;
-                target.slowFactor = TD_Rules.SlowFactor(tower.kind, tower.level);
+                target.slowFactor = TD_Elites.SlowFactor(tower.kind, tower.level, tower.path);
+                if (elite.brittle) target.brittleUntil = target.slowUntil;
             }
-            if (stats.splash > 0f) Splash(tower, target, raw, stats.splash);
+            float splash = TD_Elites.Splash(tower.kind, tower.path);
+            if (splash > 0f) Splash(tower, target, raw, splash);
             else if (stats.chain > 0) Chain(tower, target, raw, shot);
-            else MarkBlocked(shot, Hit(tower.slot, tower.owner, target, raw, TD_Rules.Pierces(tower.kind)));
+            else {
+                bool flying = target.Flying;
+                Vector3 at = TD_Rules.EnemyPosition(target.kind, target.distance);
+                MarkBlocked(shot, HitAndStun(tower, target, flying ? raw * elite.airDamageScale : raw, TD_Rules.Pierces(tower.kind)));
+                if (flying && elite.airBurst > 0f) AirBurst(tower, target, at, raw * elite.airDamageScale, elite.airBurst);
+            }
+        }
+
+        /// <summary>A tower's hit plus its elite stun (on an enemy the hit did not destroy).</summary>
+        TD_HitResult HitAndStun(TD_SimTower tower, TD_SimEnemy e, float raw, bool pierce) {
+            var result = Hit(tower.slot, tower.owner, e, raw, pierce);
+            float stun = TD_Elites.Stun(tower.kind, tower.path, e.kind);
+            if (stun > 0f && result is TD_HitResult.Health or TD_HitResult.Shield or TD_HitResult.ShieldBroken)
+                e.stunUntil = Mathf.Max(e.stunUntil, Time + stun);
+            return result;
+        }
+
+        /// <summary>Flak: every other flyer within <paramref name="radius"/> of the burst takes the splash share of the hit.</summary>
+        void AirBurst(TD_SimTower tower, TD_SimEnemy target, Vector3 at, float raw, float radius) {
+            for (int i = Enemies.Count - 1; i >= 0; i--) {
+                if (i >= Enemies.Count) continue;
+                var e = Enemies[i];
+                if (e == target || !e.Flying) continue;
+                if ((TD_Rules.EnemyPosition(e.kind, e.distance) - at).sqrMagnitude <= radius * radius)
+                    Hit(tower.slot, tower.owner, e, raw * TD_Rules.SplashFalloff, false);
+            }
         }
 
         /// <summary>Flags shot <paramref name="index"/> as bounced off a shield, so the client can show that it did nothing.</summary>
@@ -282,19 +321,19 @@ namespace Universes.UniverseData.tower_defense {
                 if (i >= Enemies.Count) continue;
                 var e = Enemies[i];
                 if (!e.Flying && (TD_Rules.LaneTrack.Evaluate(e.distance) - centre).sqrMagnitude <= radius * radius)
-                    Hit(tower.slot, tower.owner, e, raw * (e == target ? 1f : TD_Rules.SplashFalloff), false);
+                    HitAndStun(tower, e, raw * (e == target ? 1f : TD_Rules.SplashFalloff), false);
             }
         }
 
         /// <summary>Hits the target, then jumps to the nearest enemy not hit yet, losing <see cref="TD_Rules.ChainFalloff"/> each jump.</summary>
         void Chain(TD_SimTower tower, TD_SimEnemy first, float raw, int shot) {
             chainHits.Clear();
-            int targets = TD_Rules.ChainTargets(tower.kind, tower.level);
+            int targets = TD_Elites.ChainTargets(tower.kind, tower.level, tower.path);
             var current = first;
             for (int jump = 0; jump < targets && current != null; jump++) {
                 chainHits.Add(current);
                 Vector3 at = TD_Rules.EnemyPosition(current.kind, current.distance);
-                MarkBlocked(shot, Hit(tower.slot, tower.owner, current, raw, false));
+                MarkBlocked(shot, HitAndStun(tower, current, raw, false));
                 raw *= TD_Rules.ChainFalloff;
                 if (jump + 1 >= targets) break;
                 TD_SimEnemy next = null;
@@ -316,6 +355,7 @@ namespace Universes.UniverseData.tower_defense {
         /// <summary>One hit, its reward, its shield break and, for a carrier, the drones it releases.</summary>
         TD_HitResult Hit(int slot, int owner, TD_SimEnemy e, float raw, bool pierce, bool ignoreBlock = false) {
             float distance = e.distance, before = e.health + e.shield;
+            if (Time < e.brittleUntil) raw *= 1f + TD_Elites.BrittleBonus;
             var result = TD_Battle.Strike(Enemies, e, raw, pierce, Events.killed, ignoreBlock);
             var tower = IsSlot(slot) ? Towers[slot] : null;
             if (tower != null) {
@@ -416,7 +456,7 @@ namespace Universes.UniverseData.tower_defense {
             if (!IsSlot(slot) || (int)kind >= TD_Rules.Towers.Length) return TD_BuildResult.BadSlot;
             var tower = Towers[slot];
             if (tower != null) {
-                if (tower.level >= TD_Rules.MaxLevel) return TD_BuildResult.MaxLevel;
+                if (tower.level >= TD_Rules.MaxLevel) return TD_Elites.IsElite(tower.path) ? TD_BuildResult.MaxLevel : TD_BuildResult.NeedsPath;
                 cost = TD_Rules.UpgradeCost(tower.kind, tower.level, perks.upgradeDiscount);
                 if (Cash < cost) return TD_BuildResult.NoCash;
                 Cash -= cost;
@@ -429,6 +469,25 @@ namespace Universes.UniverseData.tower_defense {
             Cash -= cost;
             Towers[slot] = new TD_SimTower { slot = (byte)slot, kind = kind, owner = owner, perks = perks, spent = cost, target = TD_Targeting.Default(kind) };
             return TD_BuildResult.Built;
+        }
+
+        /// <summary>
+        /// Turns the level 3 tower on <paramref name="slot"/> into its elite form <paramref name="path"/>
+        /// (<paramref name="perks"/>' discount is the buyer's). <paramref name="cost"/> is the price paid or needed.
+        /// Upgraded is never returned: below level 3 the tower must be upgraded first (<see cref="TD_BuildResult.Upgraded"/> is Build's).
+        /// </summary>
+        public TD_BuildResult Specialise(int slot, TD_TowerPath path, TD_TowerPerks perks, out int cost) {
+            cost = 0;
+            var tower = IsSlot(slot) ? Towers[slot] : null;
+            if (tower == null || !TD_Elites.IsElite(path)) return TD_BuildResult.BadSlot;
+            if (TD_Elites.IsElite(tower.path)) return TD_BuildResult.MaxLevel;
+            if (tower.level < TD_Elites.Level) return TD_BuildResult.BadSlot;
+            cost = TD_Elites.Cost(tower.kind, path, perks.upgradeDiscount);
+            if (Cash < cost) return TD_BuildResult.NoCash;
+            Cash -= cost;
+            tower.spent += cost;
+            tower.path = path;
+            return TD_BuildResult.Specialised;
         }
 
         /// <summary>Sells the tower on <paramref name="slot"/> for its refund; false when the pad is empty.</summary>

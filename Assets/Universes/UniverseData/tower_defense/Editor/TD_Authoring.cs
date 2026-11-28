@@ -229,6 +229,8 @@ namespace Universes.UniverseData.tower_defense.Editor {
             public Material[] trims;
             /// <summary>Painted (barely glowing) tower-colour plates under the turrets, per <see cref="TD_TowerKind"/>.</summary>
             public Material[] plinths;
+            /// <summary>Per elite path (index 0 = <see cref="TD_TowerPath.First"/>): glowing cores, foot ring and badge stars.</summary>
+            public Material[] eliteGlow, eliteRing, eliteStar;
         }
 
         static Materials BuildMaterials() {
@@ -255,8 +257,16 @@ namespace Universes.UniverseData.tower_defense.Editor {
                     .Select(k => Kit.Mat("Trim" + k, TD_Palette.Tower(k), emission: 0.6f, smoothness: 0.5f)).ToArray(),
                 plinths = System.Enum.GetValues(typeof(TD_TowerKind)).Cast<TD_TowerKind>()
                     .Select(k => Kit.Mat("Plinth" + k, TD_Palette.Tower(k), emission: 0.12f, smoothness: 0.35f)).ToArray(),
+                eliteGlow = ElitePaths.Select(p => Kit.Mat($"EliteCore{p}", TD_Palette.Elite(p), emission: 0.7f, smoothness: 0.7f)).ToArray(),
+                eliteRing = ElitePaths.Select(p => Unlit($"EliteRing{p}", TD_Palette.Elite(p), additive: true)).ToArray(),
+                eliteStar = ElitePaths.Select(p => Unlit($"EliteStar{p}", TD_Palette.Elite(p), TD_HudAuthoring.IconTexture("star"), transparent: true)).ToArray(),
             };
         }
+
+        static readonly TD_TowerPath[] ElitePaths = { TD_TowerPath.First, TD_TowerPath.Second };
+        /// <summary>Elite dressing: orbiting cores (count, size and orbit as a share of the pad) and the foot ring's radius.</summary>
+        const int EliteCores = 3;
+        const float EliteCoreSize = 0.7f, EliteOrbit = 0.52f, EliteFootRing = 0.46f;
 
         // ---------------------------------------------------------------- prefab pieces
         static GameObject IconQuad(string name, Transform parent, Vector3 position, float size, Material material) {
@@ -386,10 +396,48 @@ namespace Universes.UniverseData.tower_defense.Editor {
             for (int i = 0; i < TD_Rules.MaxLevel; i++)
                 view.levelStars[i] = IconQuad($"Star{i}", badge.transform, new Vector3((i - (TD_Rules.MaxLevel - 1) * 0.5f) * 0.85f, 0f, 0f), 0.8f, m.star);
 
+            Elites(view, root.transform, badge.transform, m);
+
             view.rangeRing = Ring(root.transform, m.rangeRing);
             view.nextRangeRing = Ring(root.transform, m.rangeRing, "NextRangeRing");
             view.nextRangeRing.widthMultiplier = 0.3f;
             return Kit.Save(root, "Towers", FileName(kind));
+        }
+
+        /// <summary>
+        /// The two elite forms' dressing on top of the level 3 model (the client shows one, see
+        /// <see cref="TD_TowerView.ShowLevel"/>): glowing cores in the path's colour that orbit the turret
+        /// (spun by the client), a glowing ring at its foot, and badge stars recoloured to the path. The
+        /// tower also grows to <see cref="TD_Elites.Scale"/>, so an elite reads as a step above level 3
+        /// from across the map, and its colour says which form it took.
+        /// </summary>
+        static void Elites(TD_TowerView view, Transform root, Transform badge, Materials m) {
+            float top = view.badgeHeight[TD_Elites.Level - 1] > 0f ? view.badgeHeight[TD_Elites.Level - 1] - BadgeGap : 3f;
+            view.eliteParts = new GameObject[ElitePaths.Length];
+            view.eliteStars = new GameObject[ElitePaths.Length];
+            view.eliteSpinners = new Transform[ElitePaths.Length];
+            for (int p = 0; p < ElitePaths.Length; p++) {
+                var parts = Empty($"Elite{ElitePaths[p]}", root);
+                var spinner = Empty("Cores", parts.transform, new Vector3(0f, top * 0.55f, 0f));
+                for (int i = 0; i < EliteCores; i++) {
+                    float a = i * Mathf.PI * 2f / EliteCores;
+                    var core = Primitive(PrimitiveType.Sphere, $"Core{i + 1}", spinner.transform,
+                        new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (PadSize * EliteOrbit), Vector3.one * EliteCoreSize, m.eliteGlow[p], false);
+                    NoShadows(core);
+                }
+                var ring = FlatRing("FootRing", parts.transform, PadSize * EliteFootRing, 0.14f, m.eliteRing[p], 56);
+                ring.widthMultiplier = 0.32f;
+                parts.SetActive(false);
+                view.eliteParts[p] = parts;
+                view.eliteSpinners[p] = spinner.transform;
+
+                var stars = Empty($"EliteStars{ElitePaths[p]}", badge);
+                for (int i = 0; i < TD_Rules.MaxLevel; i++)
+                    IconQuad($"Star{i}", stars.transform, new Vector3((i - (TD_Rules.MaxLevel - 1) * 0.5f) * 0.95f, 0f, 0f), 0.95f, m.eliteStar[p]);
+                stars.SetActive(false);
+                view.eliteStars[p] = stars;
+            }
+            view.eliteScale = TD_Elites.Scale;
         }
 
         /// <summary>
