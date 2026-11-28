@@ -34,6 +34,10 @@ namespace Universes.UniverseData.hide_and_seek {
         public int abilitiesUsed;
         /// <summary>Rounds the player left before they ended (each one is a loss).</summary>
         public int roundsLeft;
+        /// <summary>Empty closets this player shut that a seeker then opened (bluffs that worked).</summary>
+        public int bluffs;
+        /// <summary>Rooms and yards this player searched as a seeker (first visit to each in a round).</summary>
+        public int roomsSearched;
 
         public void RecordRound(bool survivedHiding) {
             roundsPlayed++;
@@ -83,6 +87,8 @@ namespace Universes.UniverseData.hide_and_seek {
             closeCalls = Math.Max(0, closeCalls);
             abilitiesUsed = Math.Max(0, abilitiesUsed);
             roundsLeft = Math.Max(0, roundsLeft);
+            bluffs = Math.Max(0, bluffs);
+            roomsSearched = Math.Max(0, roomsSearched);
         }
     }
 }

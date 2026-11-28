@@ -18,8 +18,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         // ---- hide-in spot sizes (plan metres)
         const float SpotHeight = 2.3f;
         const float PanelThickness = 0.08f;
-        /// <summary>How much of a spot's open side a half-closed door leaf covers.</summary>
-        const float LeafShare = 0.35f;
+        /// <summary>Gap left around a door leaf so it never scrapes the spot's sides as it swings.</summary>
+        const float DoorGap = 0.04f;
         /// <summary>Scale for dungeon bottles and candles set on tables and shelves.</summary>
         const float SmallDungeonScale = 0.5f;
 
@@ -49,8 +49,9 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         }
 
         /// <summary>
-        /// A walk-in hiding spot: back, two sides, a roof and a half-closed door leaf, open towards
-        /// <paramref name="facing"/>. Used for closets, lockers, outhouses and the like.
+        /// A walk-in hiding spot: back, two sides and a roof, open towards <paramref name="facing"/>, with a
+        /// hinged door across the opening (it stands open until a hider shuts it). Used for closets, lockers,
+        /// outhouses and the like.
         /// </summary>
         static void HideIn(string name, int level, float x, float z, Facing facing, float width = 1.5f, float depth = 1.1f,
             Surface surface = Surface.DarkPlanks, float height = SpotHeight) {
@@ -60,8 +61,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             Panel(name + "Side", level, c + t * (width * 0.5f - th * 0.5f), facing, th, depth, height, surface);
             Panel(name + "Side", level, c - t * (width * 0.5f - th * 0.5f), facing, th, depth, height, surface);
             Panel(name + "Roof", level, c, facing, width, depth, th, surface, bottom: height - th);
-            float leaf = width * LeafShare;
-            Panel(name + "Door", level, c + n * (depth * 0.5f - th * 0.5f) + t * (width * 0.5f - leaf * 0.5f), facing, leaf, th, height - 0.15f, surface);
+            // The door sits just outside the sides' front edges and is hinged at the +t side.
+            Vector3 n3 = new(n.x, 0f, n.y), t3 = new(t.x, 0f, t.y);
+            Vector2 hinge = c + n * (depth * 0.5f + th * 0.5f) + t * (width * 0.5f);
+            var interior = new Bounds(new Vector3(x, Floor(level) + height * 0.5f, z),
+                n.x != 0f ? new Vector3(depth - th * 2f, height, width - th * 2f) : new Vector3(width - th * 2f, height, depth - th * 2f));
+            doors.Add(new DoorSpec(name, new Vector3(hinge.x, Floor(level), hinge.y), -t3, n3, width - DoorGap, height - 0.15f, th, surface, interior));
         }
 
         /// <summary>A few small items scattered on a surface (non-solid, purely for detail).</summary>

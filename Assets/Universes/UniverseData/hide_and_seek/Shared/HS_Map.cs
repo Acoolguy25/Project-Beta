@@ -24,6 +24,8 @@ namespace Universes.UniverseData.hide_and_seek {
         public float killY = -30f;
         [Tooltip("Rooms first, then larger outdoor zones: the first area containing a point names it.")]
         public HS_MapArea[] areas;
+        [Tooltip("The doors of the walk-in hiding spots, in a fixed order (the network refers to them by index; at most 64).")]
+        public HS_HideDoor[] doors;
         [Header("Client presentation")]
         public GameObject pingPrefab;
         public GameObject clientPrefab;
@@ -52,6 +54,17 @@ namespace Universes.UniverseData.hide_and_seek {
         public Vector3 Scatter(Vector3 point) {
             Vector2 s = Random.insideUnitCircle * spawnScatter;
             return point + new Vector3(s.x, 0f, s.y);
+        }
+
+        /// <summary>The door with this index, or null for an index the map does not have.</summary>
+        public HS_HideDoor Door(int index) => doors != null && index >= 0 && index < doors.Length ? doors[index] : null;
+
+        /// <summary>The door whose spot <paramref name="position"/> is inside, or -1.</summary>
+        public int DoorAround(Vector3 position) {
+            if (doors == null) return -1;
+            for (int i = 0; i < doors.Length; i++)
+                if (doors[i] != null && doors[i].Contains(position)) return i;
+            return -1;
         }
 
         /// <summary>The name of the area containing <paramref name="position"/>, or an empty string.</summary>

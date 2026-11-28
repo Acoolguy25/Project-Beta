@@ -25,6 +25,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         readonly List<Vector3> propLights = new();
         /// <summary>Exterior windows, lit from inside by <see cref="LightWindows"/> once the props are placed.</summary>
         readonly List<(Vector3 center, Vector3 size, Vector3 outward)> exteriorWindows = new();
+        /// <summary>The hiding spots' doors, in <see cref="HS_ManorPlan.Doors"/> order, with their plan data for the world-space pass.</summary>
+        readonly List<(HS_HideDoor door, DoorSpec spec)> doors = new();
 
         /// <param name="scale">World units per plan metre.</param>
         public HS_ManorBuilder(HS_ManorMaterials materials, float scale, string name = "Manor") {
@@ -38,6 +40,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         public IReadOnlyList<Light> FlickerLights => flickerLights;
         /// <summary>The glow sprite of each flicker light, in the same order (valid after <see cref="Build"/>).</summary>
         public IReadOnlyList<Renderer> FlickerGlows => flickerGlows;
+        /// <summary>The hiding spots' doors, for <see cref="HS_Map.doors"/> (valid after <see cref="Build"/>).</summary>
+        public HS_HideDoor[] Doors => doors.Select(d => d.door).ToArray();
         /// <summary>Every light the manor got (valid after <see cref="Build"/>).</summary>
         public int LightCount => lighting.childCount;
 
@@ -55,11 +59,58 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
             BuildOutbuildingRoofs();
             BuildFence();
             foreach (var block in HS_ManorPlan.Blocks) Box(block.name, furniture, block.center, block.size, block.surface);
+            foreach (var door in HS_ManorPlan.Doors) BuildDoor(door);
             foreach (var prop in HS_ManorPlan.Props) PlaceProp(prop);
             LightWindows();
             root.localScale = Vector3.one * scale;
             foreach (var light in lighting.GetComponentsInChildren<Light>()) light.range *= scale;
+            PlaceDoorsInWorld();
             return root;
+        }
+
+        // ---------------------------------------------------------------- hiding-spot doors
+        /// <summary>Opening angle of a hiding spot's door (degrees past shut).</summary>
+        const float DoorOpenAngle = 100f;
+
+        /// <summary>
+        /// A hinge (moving, so not static) with the leaf and a knob under it, and its <see cref="HS_HideDoor"/>.
+        /// Built shut in the hinge's frame, then swung open: every door starts a round open.
+        /// </summary>
+        void BuildDoor(DoorSpec spec) {
+            var hinge = new GameObject("Door" + spec.name).transform;
+            hinge.SetParent(furniture, false);
+            hinge.localPosition = spec.hinge;
+            bool alongX = Mathf.Abs(spec.along.x) > 0.5f;
+            Vector3 leafSize = alongX ? new Vector3(spec.width, spec.height, spec.thickness) : new Vector3(spec.thickness, spec.height, spec.width);
+            Vector3 leafCentre = spec.along * (spec.width * 0.5f) + Vector3.up * (spec.height * 0.5f + 0.05f);
+            var leaf = Box(spec.name + "DoorLeaf", hinge, leafCentre, leafSize, spec.surface);
+            GameObjectUtility.SetStaticEditorFlags(leaf, 0);
+            // A dark knob near the free edge, on the outside face.
+            Vector3 knobAt = spec.along * (spec.width - 0.12f) + spec.outward * (spec.thickness * 0.5f + 0.03f) + Vector3.up * 1.0f;
+            var knob = Box(spec.name + "DoorKnob", hinge, knobAt, Vector3.one * 0.07f, Surface.DarkPlanks, collider: false, shadows: false);
+            GameObjectUtility.SetStaticEditorFlags(knob, 0);
+
+            var door = hinge.gameObject.AddComponent<HS_HideDoor>();
+            door.spotName = HS_Doors.Readable(spec.name);
+            door.closedYaw = 0f;
+            // Swing towards the outside: the turn that takes the leaf's direction onto the outward one.
+            float sign = Vector3.Dot(Quaternion.Euler(0f, 90f, 0f) * spec.along, spec.outward) > 0f ? 1f : -1f;
+            door.openYaw = sign * DoorOpenAngle;
+            hinge.localRotation = Quaternion.Euler(0f, door.openYaw, 0f);
+            doors.Add((door, spec));
+        }
+
+        /// <summary>After the root is scaled: each door's inside and shut-leaf line in world space.</summary>
+        void PlaceDoorsInWorld() {
+            foreach (var (door, spec) in doors) {
+                Vector3 min = root.TransformPoint(spec.interior.min), max = root.TransformPoint(spec.interior.max);
+                var interior = new Bounds();
+                interior.SetMinMax(Vector3.Min(min, max), Vector3.Max(min, max));
+                door.interior = interior;
+                door.closedFrom = root.TransformPoint(spec.hinge);
+                door.closedTo = root.TransformPoint(spec.hinge + spec.along * spec.width);
+                EditorUtility.SetDirty(door);
+            }
         }
 
         Transform Group(string name) {

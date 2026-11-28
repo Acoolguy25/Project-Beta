@@ -25,7 +25,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
     /// <para>
     /// The other parts of the runner live beside this file: role abilities
     /// (<c>HS_ServerRunner.Abilities.cs</c>), round points, MVP, streaks and the retention kit
-    /// (<c>HS_ServerRunner.Scoring.cs</c>), and mid-round map events (<c>HS_ServerRunner.Events.cs</c>).
+    /// (<c>HS_ServerRunner.Scoring.cs</c>), mid-round map events (<c>HS_ServerRunner.Events.cs</c>) and the
+    /// hiding spots' doors (<c>HS_ServerRunner.Doors.cs</c>).
     /// </para>
     /// </summary>
     public sealed partial class HS_ServerRunner : ServerRunner {
@@ -95,6 +96,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             abilityTuning.Validate();
             scoring.Validate();
             events.Validate();
+            doorTuning.Validate();
             retention = new RetentionService<HS_SaveData>(HS_Retention.Rules(retentionTuning), save => save.retention, () => Now);
             retention.Unlocked += OnUnlocked;
             retention.Ready += OnRetentionReady;
@@ -103,6 +105,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             server.RegisterBroadcast<HS_StateRequest>(OnStateRequest);
             server.RegisterBroadcast<HS_TauntRequest>(OnTauntRequest);
             server.RegisterBroadcast<HS_AbilityRequest>(OnAbilityRequest);
+            server.RegisterBroadcast<HS_DoorRequest>(OnDoorRequest);
             // A disconnect is reported before the player is despawned, while their document is still loaded.
             server.OnRemoteConnectionState += OnRemoteConnectionState;
         }
@@ -165,6 +168,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             tauntsThisRound.Remove(c);
             ForgetAbilities(c);
             ForgetScoring(c);
+            ForgetDoors(c);
             MarkDirty();
         }
 
@@ -214,6 +218,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             SetLeaderboardEnabled(TagsColumn, true);
             SetMusic(MusicSelection.GameMusic);
             ResetAbilities();
+            ResetDoors();
             foreach (var key in roles.Keys.ToList()) roles[key] = HS_Role.None;
             ApplyAll();
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
@@ -252,6 +257,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             lastTaunt.Clear();
             tauntsThisRound.Clear();
             ResetAbilities();
+            ResetDoors();
             BeginRoundScoring();
 
             // ---- hide
@@ -455,6 +461,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             phase = phase, round = round, secondsLeft = secondsLeft, phaseSeconds = phaseSeconds, hidersLeft = HidersLeft, hidersAtStart = hidersAtStart, headline = headline,
             roles = roles.Where(r => r.Key.IsActive).Select(r => new HS_PlayerRole { clientId = r.Key.ClientId, role = r.Value, name = NameOf(r.Key) }).ToArray(),
             activeEvent = activeEvent, eventSecondsLeft = EventSecondsLeft, featuredEvent = FeaturedToday,
+            closedDoors = ClosedDoors,
         };
 
         void BroadcastState() {
@@ -483,6 +490,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
                 server.UnregisterBroadcast<HS_StateRequest>(OnStateRequest);
                 server.UnregisterBroadcast<HS_TauntRequest>(OnTauntRequest);
                 server.UnregisterBroadcast<HS_AbilityRequest>(OnAbilityRequest);
+                server.UnregisterBroadcast<HS_DoorRequest>(OnDoorRequest);
                 server.OnRemoteConnectionState -= OnRemoteConnectionState;
             }
             if (retention != null) {

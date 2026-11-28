@@ -22,11 +22,12 @@ namespace Universes.UniverseData.hide_and_seek {
         /// <summary>Stat keys the server reports to the kit (<c>Count</c> unless noted).</summary>
         public static class Stats {
             public const string Rounds = "rounds", Survived = "survived", Tags = "tags", CloseCalls = "close_calls", BraveTaunts = "brave_taunts",
-                Abilities = "abilities", Wins = "wins", Mvp = "mvp", LastHider = "last_hider", HiddenSeconds = "hidden_seconds", FirstFind = "first_find";
+                Abilities = "abilities", Wins = "wins", Mvp = "mvp", LastHider = "last_hider", HiddenSeconds = "hidden_seconds", FirstFind = "first_find",
+                Bluffs = "bluffs", RoomsSearched = "rooms_searched";
             /// <summary>Reported with <c>Reach</c>: the player's points in one round.</summary>
             public const string RoundPoints = "round_points";
 
-            public static readonly string[] All = { Rounds, Survived, Tags, CloseCalls, BraveTaunts, Abilities, Wins, Mvp, LastHider, HiddenSeconds, FirstFind, RoundPoints };
+            public static readonly string[] All = { Rounds, Survived, Tags, CloseCalls, BraveTaunts, Abilities, Wins, Mvp, LastHider, HiddenSeconds, FirstFind, RoundPoints, Bluffs, RoomsSearched };
         }
 
         /// <summary>
@@ -77,6 +78,8 @@ namespace Universes.UniverseData.hide_and_seek {
             new("last_hider_1", Stats.LastHider, 1, 120, 30, "Be the last hider left") { shortText = "Last hider" },
             new("hidden_240", Stats.HiddenSeconds, 240, 100, 20, "Stay hidden for {target} seconds while seekers hunt") { shortText = "Hidden {target}s" },
             new("first_find_2", Stats.FirstFind, 2, 110, 25, "Find the first hider of a round {target} times") { shortText = "First finds x{target}" },
+            new("bluffs_2", Stats.Bluffs, 2, 120, 30, "Fool seekers with {target} empty closets") { shortText = "Closet bluffs x{target}" },
+            new("search_rooms_15", Stats.RoomsSearched, 15, 90, 20, "Search {target} rooms as a seeker") { shortText = "Rooms searched x{target}" },
         };
 
         static Dictionary<string, int> unlockLevels;

@@ -37,7 +37,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         // Icon names (Packages/com.ryan.ui/Runtime/UI/Theme/Icons/icon_<name>.png).
         const string HiderIcon = "directions_run", SeekerIcon = "search", CaughtIcon = "pan_tool", SpectatorIcon = "visibility",
             WaitingIcon = "groups", HidingIcon = "visibility_off", SeekingIcon = "search", ResultsIcon = "emoji_events",
-            PingIcon = "my_location", TagIcon = "pan_tool", InfoIcon = "timer", LocationIcon = "home", TimerIcon = "timer",
+            PingIcon = "my_location", TagIcon = "pan_tool", DoorIcon = "door_front", InfoIcon = "timer", LocationIcon = "home", TimerIcon = "timer",
             TauntIcon = "campaign", PointsIcon = "star", LockIcon = "lock", BlackoutIcon = "candle", FrenzyIcon = "siren", ShuffleIcon = "run";
 
         const string AudioFolder = HS_Authoring.Root + "/Audio";
@@ -57,6 +57,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             BuildRoleCard(canvas, hud);
             BuildTagPrompt(canvas, hud);
             BuildTauntPrompt(canvas, hud);
+            BuildDoorPrompt(canvas, hud);
             BuildFeed(canvas, hud);
             BuildToast(canvas, hud);
             BuildAlert(canvas, hud);
@@ -126,6 +127,9 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.pointsSound = Sound(KitAudioFolder, 0.55f, 1f, 0.1f, 0f, 0f, "coin");
             hud.eventSound = Sound(KitAudioFolder, 0.8f, 0f, 0.5f, 0f, 0f, "horn");
             hud.recordSound = Sound(KitAudioFolder, 0.8f, 0f, 0.5f, 0f, 0f, "level_up");
+            // Closet doors: a creak you can place from the next room, and a wooden bang when one shuts.
+            hud.doorOpenSound = Sound(0.9f, 1.5f, 0.1f, 10f, 90f, "door_creak_1", "door_creak_2");
+            hud.doorCloseSound = Sound(KitAudioFolder, 0.8f, 1.5f, 0.1f, 10f, 90f, "build_1", "build_2", "build_3");
         }
 
         /// <summary>Ability sounds from the kit's library; 3D ones carry about a room or two (world units).</summary>
@@ -190,8 +194,9 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             AudioSource wind = Loop(canvas, "Wind", "wind_loop", 0.5f, 0f);
             // The clock is heard through the foyer and the rooms beside it (world units).
             AudioSource clock = Loop(canvas, "Clock", "clock_loop", 0.7f, 1f, 8f, 70f);
+            // Door creaks belong to the real closet doors now, so the house's random creaks never fake one.
             Wire(ambience, ("controller", hud), ("wind", wind), ("clock", clock),
-                ("creaks", Sound(0.55f, 2f, 1f, 6f, 60f, "creak_1", "creak_2", "creak_3", "door_creak_1", "door_creak_2")));
+                ("creaks", Sound(0.55f, 2f, 1f, 6f, 60f, "creak_1", "creak_2", "creak_3")));
         }
 
         static void BuildFootsteps(RectTransform canvas, HS_ClientController hud) {
@@ -351,6 +356,23 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             fill.fillAmount = 1f;
             hud.tauntFill = fill;
             hud.tauntPrompt = Fader(layer, false);
+        }
+
+        /// <summary>
+        /// The closet-door prompt: neutral, with a door icon, and a row above the tag and taunt prompts so a hider
+        /// sees "R Taunt" and "E Shut yourself in" together.
+        /// </summary>
+        static void BuildDoorPrompt(RectTransform canvas, HS_ClientController hud) {
+            RectTransform layer = Layer(canvas, "Door");
+            RectTransform prompt = Pinned(layer, "DoorPrompt", new Vector2(0.5f, 0f), new Vector2(0f, 212f), new Vector2(380f, 48f));
+            Shadow(prompt, 20f, 6f, 0.4f);
+            Rounded(prompt, UIColorRole.Overlay, 24f, raycast: false);
+            Row(prompt.gameObject, 10f, Pad(16, 0), TextAnchor.MiddleCenter);
+            KeyHint(prompt, "E", UIColorRole.TextPrimary);
+            Icon(prompt, DoorIcon, 22f, UIColorRole.Accent);
+            hud.doorLabel = Text(prompt, "Label", "Shut the door", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.MidlineLeft);
+            hud.doorLabel.fontSize = 17f;
+            hud.doorPrompt = Fader(layer, false);
         }
 
         static void BuildFeed(RectTransform canvas, HS_ClientController hud) {
@@ -664,6 +686,11 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             hud.blindCountdown.fontSize = 150f;
             Label(blind, "Explain", "The hiders are hiding. You'll be released when the count reaches zero.", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center, new Vector2(0f, 0.32f), new Vector2(1f, 0.37f)).fontSize = 20f;
             hud.blindMapName = Label(blind, "MapName", "", UIText.Caption, UIColorRole.Accent, TextAlignmentOptions.Center, new Vector2(0f, 0.26f), new Vector2(1f, 0.3f));
+            // The 30 s a seeker waits is the best time to read what today is about: the twist, the next unlock, a challenge.
+            hud.blindToday = Label(blind, "Today", "", UIText.Body, UIColorRole.TextSecondary, TextAlignmentOptions.Center, new Vector2(0.2f, 0.08f), new Vector2(0.8f, 0.24f));
+            hud.blindToday.fontSize = 18f;
+            hud.blindToday.textWrappingMode = TextWrappingModes.Normal;
+            hud.blindToday.overflowMode = TextOverflowModes.Overflow;
             blind.gameObject.SetActive(false);
         }
 #endif

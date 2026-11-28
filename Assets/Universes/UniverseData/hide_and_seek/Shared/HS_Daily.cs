@@ -4,7 +4,8 @@ using RyanAssets.Retention;
 namespace Universes.UniverseData.hide_and_seek {
     /// <summary>
     /// The day's twist: one map event is featured each UTC day (<see cref="RetentionDay"/>, the daily
-    /// challenges' calendar, so every server agrees). It comes every round that day and pays
+    /// challenges' calendar, so every server agrees). It comes in most rounds that day
+    /// (<see cref="HS_EventTuning.featuredShare"/>) and pays
     /// <see cref="HS_EventTuning.featuredPayMultiplier"/> times the points for its play, so tomorrow's
     /// rounds play differently from today's and not only the challenge list changes. Days walk through
     /// the three events in a shuffled order, never the same one two days running. Shared: the server
@@ -45,9 +46,9 @@ namespace Universes.UniverseData.hide_and_seek {
             _ => "",
         };
 
-        /// <summary>"Blackout Night: a blackout every round, tags in the dark pay double."</summary>
+        /// <summary>"Blackout Night: a blackout most rounds, tags in the dark pay double."</summary>
         public static string Describe(HS_RoundEvent kind) =>
-            kind == HS_RoundEvent.None ? "" : $"{Title(kind)}: a {kind.ToString().ToLowerInvariant()} every round, {Bonus(kind)}.";
+            kind == HS_RoundEvent.None ? "" : $"{Title(kind)}: a {kind.ToString().ToLowerInvariant()} most rounds, {Bonus(kind)}.";
 
         /// <summary>
         /// Points for a play that belongs to <paramref name="play"/>'s event: multiplied while that event runs

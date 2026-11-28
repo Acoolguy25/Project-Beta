@@ -12,7 +12,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
     /// Mid-round map events, so no two rounds play the same: a Blackout (the house goes dark on every
     /// client), a seekers' Frenzy (they run faster) or a Shuffle (hiders must reach another room in time
     /// or the seekers get a fix on them). At most one per round, never the same kind twice in a row,
-    /// except today's featured event (<see cref="HS_Daily"/>), which comes every round and pays double for its play.
+    /// except today's featured event (<see cref="HS_Daily"/>), which comes most rounds and pays double for its play.
     /// </summary>
     public sealed partial class HS_ServerRunner {
         [Header("Map events")]

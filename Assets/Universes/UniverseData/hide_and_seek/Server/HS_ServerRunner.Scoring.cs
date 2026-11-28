@@ -29,6 +29,8 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         readonly HS_RoundLedger<NetworkConnection> ledger = new();
         readonly Dictionary<NetworkConnection, HS_CloseCall> closeCalls = new();
         readonly Dictionary<NetworkConnection, float> hiddenSeconds = new();
+        /// <summary>Rooms each seeker has searched this round (<see cref="HS_SearchLog"/>).</summary>
+        readonly Dictionary<NetworkConnection, HS_SearchLog> searches = new();
         /// <summary>Everyone dealt into this round (late joiners too: they seek).</summary>
         readonly HashSet<NetworkConnection> participants = new();
         /// <summary>The share of the seek phase gone when each participant joined (0 for everyone dealt in at the start).</summary>
@@ -50,6 +52,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             ledger.Clear();
             closeCalls.Clear();
             hiddenSeconds.Clear();
+            searches.Clear();
             participants.Clear();
             joinedAt.Clear();
             roundTags.Clear();
@@ -104,6 +107,7 @@ namespace Universes.UniverseData.hide_and_seek.Server {
         void ForgetScoring(NetworkConnection c) {
             closeCalls.Remove(c);
             hiddenSeconds.Remove(c);
+            searches.Remove(c);
             participants.Remove(c);
             joinedAt.Remove(c);
             roundTags.Remove(c);
@@ -124,9 +128,13 @@ namespace Universes.UniverseData.hide_and_seek.Server {
             InstanceFinder.ServerManager.Broadcast(c, new HS_PointsBroadcast { points = points, total = total, reason = reason, highlight = highlight });
         }
 
-        /// <summary>Seek-phase bookkeeping: time hidden pays survival points, and seekers who came close and left pay close calls.</summary>
+        /// <summary>
+        /// Seek-phase bookkeeping: time hidden pays survival points, seekers who came close and left pay close
+        /// calls, and seekers pay for every new room they search.
+        /// </summary>
         void TickScoring(float dt) {
             if (dt <= 0f) return;
+            TickSearches();
             scoringScratch.Clear();
             foreach (var pair in roles) if (pair.Value == HS_Role.Hider && pair.Key.IsActive) scoringScratch.Add(pair.Key);
             foreach (NetworkConnection hider in scoringScratch) {
@@ -141,6 +149,26 @@ namespace Universes.UniverseData.hide_and_seek.Server {
                 AddFeaturedPoints(hider, scoring.closeCallPoints, HS_RoundEvent.Frenzy, "Close call", "Frenzy close call");
                 retention.Count(hider, HS_Retention.Stats.CloseCalls);
                 PlayerProgress.Modify<HS_SaveData>(hider, save => save.closeCalls++);
+            }
+        }
+
+        void TickSearches() {
+            scoringScratch.Clear();
+            foreach (var pair in roles) {
+                if (!Seeks(pair.Value) || !participants.Contains(pair.Key) || !TryGetLiveCharacter(pair.Key, out LocalCharacter seeker)) continue;
+                if (!searches.TryGetValue(pair.Key, out HS_SearchLog log)) searches[pair.Key] = log = new HS_SearchLog();
+                string area = map.AreaAt(seeker.transform.position);
+                if (!log.Visit(area, scoring.searchesPerRound)) continue;
+                scoringScratch.Add(pair.Key);
+            }
+            // Paid after the walk: paying updates the leaderboard, which must not change roles mid-iteration.
+            for (int i = scoringScratch.Count - 1; i >= 0; i--) {
+                NetworkConnection c = scoringScratch[i];
+                scoringScratch.RemoveAt(i);
+                string area = TryGetLiveCharacter(c, out LocalCharacter seeker) ? map.AreaAt(seeker.transform.position) : "";
+                AddPoints(c, scoring.searchPoints, area.Length > 0 ? $"Searched the {area}" : "Searched a room", true);
+                retention.Count(c, HS_Retention.Stats.RoomsSearched);
+                PlayerProgress.Modify<HS_SaveData>(c, save => save.roomsSearched++);
             }
         }
 

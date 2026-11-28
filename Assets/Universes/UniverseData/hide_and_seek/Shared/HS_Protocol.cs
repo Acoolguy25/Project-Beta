@@ -25,8 +25,10 @@ namespace Universes.UniverseData.hide_and_seek {
         public HS_RoundEvent activeEvent;
         /// <summary>Seconds the active event has left.</summary>
         public int eventSecondsLeft;
-        /// <summary>Today's featured event (<see cref="HS_Daily"/>): it comes every round today and pays double for its play.</summary>
+        /// <summary>Today's featured event (<see cref="HS_Daily"/>): it comes most rounds today and pays double for its play.</summary>
         public HS_RoundEvent featuredEvent;
+        /// <summary>Which hiding-spot doors are shut (bit i = <see cref="HS_Map.doors"/>[i]), so a late joiner's doors match.</summary>
+        public ulong closedDoors;
     }
 
     /// <summary>A seeker tries to tag whoever is closest in front of them.</summary>
@@ -193,5 +195,25 @@ namespace Universes.UniverseData.hide_and_seek {
         public HS_RoundEvent kind;
         public bool started;
         public int seconds;
+    }
+
+    // ---------------------------------------------------------------- closet doors (2026-11-28)
+
+    /// <summary>A player asks to open or shut a hiding spot's door (<see cref="HS_Doors"/> decides).</summary>
+    public struct HS_DoorRequest : IBroadcast {
+        public int round;
+        /// <summary>Index into <see cref="HS_Map.doors"/>.</summary>
+        public int door;
+        /// <summary>The state asked for, so a request that crossed someone else's is not a toggle back.</summary>
+        public bool open;
+    }
+
+    /// <summary>Server -> everyone: a door was opened or shut, by whom, and whether a seeker found someone behind it.</summary>
+    public struct HS_DoorBroadcast : IBroadcast {
+        public int door;
+        public bool open;
+        public int clientId;
+        /// <summary>A seeker opened it with a hider inside.</summary>
+        public bool found;
     }
 }

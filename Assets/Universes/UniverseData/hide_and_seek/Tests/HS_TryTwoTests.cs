@@ -111,12 +111,33 @@ namespace Universes.UniverseData.hide_and_seek.Tests {
         }
 
         [Test]
-        public void TheFeaturedEventComesEveryRound() {
-            var tuning = new HS_EventTuning { chance = 0f };
+        public void TheFeaturedEventComesMostRoundsAndTheOthersStillHappen() {
+            var tuning = new HS_EventTuning { chance = 1f, featuredShare = 0.6f };
             var random = new System.Random(1);
+            var counts = new Dictionary<HS_RoundEvent, int>();
+            HS_RoundEvent previous = HS_RoundEvent.None;
+            const int rounds = 4000;
+            for (int i = 0; i < rounds; i++) {
+                HS_RoundEvent picked = HS_RoundEvents.Pick(random, tuning, previous, HS_RoundEvent.Blackout);
+                counts[picked] = (counts.TryGetValue(picked, out int n) ? n : 0) + 1;
+                previous = picked;
+            }
+            Assert.That(counts[HS_RoundEvent.Blackout] / (float)rounds, Is.EqualTo(0.6f).Within(0.03f), "the twist comes in most rounds");
+            Assert.That(counts.GetValueOrDefault(HS_RoundEvent.Frenzy), Is.GreaterThan(rounds / 10), "frenzy still comes");
+            Assert.That(counts.GetValueOrDefault(HS_RoundEvent.Shuffle), Is.GreaterThan(rounds / 10), "shuffle still comes");
+            Assert.That(counts.GetValueOrDefault(HS_RoundEvent.None), Is.Zero, "chance 1 always gives an event");
+        }
+
+        [Test]
+        public void TheFeaturedShareAndChanceAreRespectedAtTheirEnds() {
+            var random = new System.Random(2);
+            var always = new HS_EventTuning { chance = 0f, featuredShare = 1f };
             for (int i = 0; i < 20; i++)
-                Assert.That(HS_RoundEvents.Pick(random, tuning, HS_RoundEvent.Shuffle, HS_RoundEvent.Shuffle), Is.EqualTo(HS_RoundEvent.Shuffle));
-            Assert.That(HS_RoundEvents.Pick(random, tuning, HS_RoundEvent.None), Is.EqualTo(HS_RoundEvent.None), "no twist: the chance applies");
+                Assert.That(HS_RoundEvents.Pick(random, always, HS_RoundEvent.Shuffle, HS_RoundEvent.Shuffle), Is.EqualTo(HS_RoundEvent.Shuffle), "share 1: every round");
+            var never = new HS_EventTuning { chance = 0f, featuredShare = 0f };
+            for (int i = 0; i < 20; i++)
+                Assert.That(HS_RoundEvents.Pick(random, never, HS_RoundEvent.None, HS_RoundEvent.Shuffle), Is.EqualTo(HS_RoundEvent.None), "share 0 and chance 0: nothing");
+            Assert.That(HS_RoundEvents.Pick(random, new HS_EventTuning { chance = 0f }, HS_RoundEvent.None), Is.EqualTo(HS_RoundEvent.None), "no twist: the chance applies");
         }
 
         [Test]

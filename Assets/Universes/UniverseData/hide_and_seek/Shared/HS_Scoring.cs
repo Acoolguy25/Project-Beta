@@ -45,6 +45,11 @@ namespace Universes.UniverseData.hide_and_seek {
         [Min(0f)] public float flashAssistGrace = 3f;
         [Tooltip("Paid at the end to the starting seekers when everyone was found.")]
         [Min(0)] public int seekerWinPoints = 30;
+        [Tooltip("A seeker searched a room or yard they had not been in this round (where they start or were found is free), so a hunt " +
+                 "that finds nobody still pays for the ground covered.")]
+        [Min(0)] public int searchPoints = 4;
+        [Tooltip("Rooms one seeker can be paid for in a round.")]
+        [Min(0)] public int searchesPerRound = 8;
 
         [Header("End of round")]
         [Tooltip("XP for everyone who played the round, win or lose, so a round never ends at +0 (a seeker who found nobody).")]
@@ -73,6 +78,26 @@ namespace Universes.UniverseData.hide_and_seek {
             closeCallsPerRound = Mathf.Max(1, closeCallsPerRound);
             winStreakCap = Mathf.Max(1, winStreakCap);
             xpPerPoint = Mathf.Max(0f, float.IsNaN(xpPerPoint) ? 1f : xpPerPoint);
+        }
+    }
+
+    /// <summary>
+    /// The rooms a seeker has searched this round. The first area they are seen in (where they start, or
+    /// where they were found) is free; each new one after that pays, up to a cap. One per seeker per round.
+    /// </summary>
+    public sealed class HS_SearchLog {
+        readonly HashSet<string> seen = new();
+
+        /// <summary>Rooms paid for so far.</summary>
+        public int Paid { get; private set; }
+
+        /// <summary>The seeker is in <paramref name="area"/> now; true when that visit pays.</summary>
+        public bool Visit(string area, int cap) {
+            if (string.IsNullOrEmpty(area)) return false;
+            bool first = seen.Count == 0;
+            if (!seen.Add(area) || first || Paid >= cap) return false;
+            Paid++;
+            return true;
         }
     }
 
@@ -162,8 +187,11 @@ namespace Universes.UniverseData.hide_and_seek {
         [Min(5)] public int shuffleSeconds = 20;
         [Tooltip("Relative weights of Blackout, Frenzy and Shuffle.")]
         public Vector3 weights = new(1f, 1f, 1f);
-        [Tooltip("Today's featured event (HS_Daily) comes every round and multiplies the points for its play by this.")]
+        [Tooltip("Today's featured event (HS_Daily) multiplies the points for its play by this.")]
         [Min(1)] public int featuredPayMultiplier = 2;
+        [Tooltip("Share of today's rounds that get the featured event. The rest roll an ordinary event among the other two " +
+                 "(with Chance), so the day has a theme but its rounds still differ.")]
+        [Range(0f, 1f)] public float featuredShare = 0.6f;
 
         public int SecondsOf(HS_RoundEvent kind) => kind switch {
             HS_RoundEvent.Blackout => blackoutSeconds,
@@ -178,6 +206,7 @@ namespace Universes.UniverseData.hide_and_seek {
             startWindow = new Vector2(a, b);
             weights = Vector3.Max(weights, Vector3.zero);
             featuredPayMultiplier = Mathf.Max(1, featuredPayMultiplier);
+            featuredShare = Mathf.Clamp01(featuredShare);
         }
     }
 
@@ -186,31 +215,32 @@ namespace Universes.UniverseData.hide_and_seek {
         static readonly HS_RoundEvent[] Kinds = { HS_RoundEvent.Blackout, HS_RoundEvent.Frenzy, HS_RoundEvent.Shuffle };
 
         /// <summary>
-        /// This round's event (or None), never the same as <paramref name="previous"/> when another one can
-        /// be picked, so back-to-back rounds feel different. Today's <paramref name="featured"/> event
-        /// (<see cref="HS_Daily"/>) is certain instead: it is the day's twist.
+        /// This round's event (or None). Today's <paramref name="featured"/> event (<see cref="HS_Daily"/>) comes in
+        /// <see cref="HS_EventTuning.featuredShare"/> of the rounds, whatever came before: it is the day's twist.
+        /// Otherwise an ordinary event is rolled with <see cref="HS_EventTuning.chance"/> among the others, never
+        /// the same as <paramref name="previous"/> when another one can be picked, so back-to-back rounds feel different.
         /// </summary>
         public static HS_RoundEvent Pick(System.Random random, HS_EventTuning tuning, HS_RoundEvent previous, HS_RoundEvent featured = HS_RoundEvent.None) {
-            if (featured != HS_RoundEvent.None) return featured;
+            if (featured != HS_RoundEvent.None && random.NextDouble() < tuning.featuredShare) return featured;
             if (random.NextDouble() >= tuning.chance) return HS_RoundEvent.None;
             float total = 0f;
-            foreach (HS_RoundEvent kind in Kinds) total += Weight(tuning, kind, previous);
+            foreach (HS_RoundEvent kind in Kinds) total += Weight(tuning, kind, previous, featured);
             if (total <= 0f) {
                 // Only the previous event has weight: allow a repeat rather than nothing.
-                foreach (HS_RoundEvent kind in Kinds) total += Weight(tuning, kind, HS_RoundEvent.None);
                 previous = HS_RoundEvent.None;
-                if (total <= 0f) return HS_RoundEvent.None;
+                foreach (HS_RoundEvent kind in Kinds) total += Weight(tuning, kind, previous, featured);
+                if (total <= 0f) return featured;
             }
             double roll = random.NextDouble() * total;
             foreach (HS_RoundEvent kind in Kinds) {
-                roll -= Weight(tuning, kind, previous);
+                roll -= Weight(tuning, kind, previous, featured);
                 if (roll < 0d) return kind;
             }
             return HS_RoundEvent.None;
         }
 
-        static float Weight(HS_EventTuning tuning, HS_RoundEvent kind, HS_RoundEvent previous) {
-            if (kind == previous) return 0f;
+        static float Weight(HS_EventTuning tuning, HS_RoundEvent kind, HS_RoundEvent previous, HS_RoundEvent featured) {
+            if (kind == previous || kind == featured) return 0f;
             return kind switch {
                 HS_RoundEvent.Blackout => tuning.weights.x,
                 HS_RoundEvent.Frenzy => tuning.weights.y,

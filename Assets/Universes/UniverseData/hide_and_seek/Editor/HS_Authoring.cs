@@ -106,11 +106,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
         static GameObject BuildDecoyMarker() {
             var root = new GameObject("DecoyMarker");
             var glow = Kit.Mat("DecoyGlow", new Color(1f, 0.72f, 0.2f), emission: 3f);
-            var beamMat = Kit.Mat("DecoyBeam", new Color(1f, 0.72f, 0.2f), emission: 2f, alpha: 0.3f);
-            var body = Empty("Body", root.transform, new Vector3(0f, 0.9f, 0f));
-            NoShadows(Primitive(PrimitiveType.Sphere, "Speaker", body.transform, Vector3.zero, Vector3.one * 1.1f, glow, false));
-            NoShadows(Primitive(PrimitiveType.Cylinder, "Horn", body.transform, new Vector3(0f, 0.75f, 0f), new Vector3(0.35f, 0.35f, 0.35f), glow, false));
-            NoShadows(Primitive(PrimitiveType.Cylinder, "Beam", root.transform, new Vector3(0f, 8f, 0f), new Vector3(0.25f, 8f, 0.25f), beamMat, false));
+            var beamMat = Kit.Mat("DecoyBeam", new Color(1f, 0.72f, 0.2f), emission: 2f, alpha: 0.18f);
+            // Small and slim: it marks a spot for its thrower, it must not fill their view (with Decoy Pair there are two).
+            var body = Empty("Body", root.transform, new Vector3(0f, 0.7f, 0f));
+            NoShadows(Primitive(PrimitiveType.Sphere, "Speaker", body.transform, Vector3.zero, Vector3.one * 0.7f, glow, false));
+            NoShadows(Primitive(PrimitiveType.Cylinder, "Horn", body.transform, new Vector3(0f, 0.48f, 0f), new Vector3(0.22f, 0.22f, 0.22f), glow, false));
+            NoShadows(Primitive(PrimitiveType.Cylinder, "Beam", root.transform, new Vector3(0f, 8.5f, 0f), new Vector3(0.08f, 7.5f, 0.08f), beamMat, false));
             // A thin glowing band on the ground (a hollow ring, soft on both edges) that pulses out like a taunt's sound.
             var ring = new GameObject("Ring", typeof(MeshFilter), typeof(MeshRenderer));
             ring.transform.SetParent(root.transform, false);
@@ -260,6 +261,8 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
             var map = mapGo.AddComponent<HS_Map>();
             map.mapName = HS_ManorPlan.MapName;
             map.areas = builder.Areas();
+            map.doors = builder.Doors;
+            if (map.doors.Length > 64) throw new System.InvalidOperationException($"[HideAndSeek] {map.doors.Length} hiding-spot doors; the round state carries at most 64.");
             Vector3 seeker = HS_ManorPlan.SeekerSpawn * MapScale, lobby = HS_ManorPlan.LobbySpawn * MapScale;
             var candidates = ProbeFloors(manor, PlotBounds(), MapScale * 1.4f);
             map.hidePoints = Spread(candidates, HidePointCount, seeker, minSpacing: MapScale * 1.6f).ToArray();
@@ -281,7 +284,7 @@ namespace Universes.UniverseData.hide_and_seek.Editor {
                 throw new System.InvalidOperationException($"[HideAndSeek] {reach} lights reach {busiest}; URP draws at most {HS_ManorLighting.MaxLightsPerObject} per object. Shorten ranges in HS_ManorLighting or split that surface.");
             map.clockPosition = HS_ManorPlan.ClockAt * MapScale;
             EditorUtility.SetDirty(map);
-            Debug.Log($"[HideAndSeek] {HS_ManorPlan.MapName}: scale {MapScale:0.##}, {candidates.Count} floor points, {map.hidePoints.Length} hide points, {map.areas.Length} areas, {builder.LightCount} lights ({map.flickerLights.Length} flicker), at most {reach} reach one surface ({busiest}).");
+            Debug.Log($"[HideAndSeek] {HS_ManorPlan.MapName}: scale {MapScale:0.##}, {candidates.Count} floor points, {map.hidePoints.Length} hide points, {map.areas.Length} areas, {map.doors.Length} doors, {builder.LightCount} lights ({map.flickerLights.Length} flicker), at most {reach} reach one surface ({busiest}).");
             Kit.SaveActiveScene(Kit.StartScene(Universe));
         }
 

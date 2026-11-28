@@ -97,6 +97,27 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
     }
 
     /// <summary>
+    /// The hinged door of a walk-in hiding spot (<see cref="HS_HideDoor"/>). The leaf runs from the hinge along
+    /// <see cref="along"/> when shut and swings out towards <see cref="outward"/> when open.
+    /// </summary>
+    public readonly struct DoorSpec {
+        public readonly string name;
+        /// <summary>The hinge on the floor (plan metres).</summary>
+        public readonly Vector3 hinge;
+        /// <summary>Unit directions on the floor: along the shut leaf, and out of the spot.</summary>
+        public readonly Vector3 along, outward;
+        public readonly float width, height, thickness;
+        public readonly Surface surface;
+        /// <summary>The inside of the spot (plan metres).</summary>
+        public readonly Bounds interior;
+
+        public DoorSpec(string name, Vector3 hinge, Vector3 along, Vector3 outward, float width, float height, float thickness, Surface surface, Bounds interior) {
+            this.name = name; this.hinge = hinge; this.along = along; this.outward = outward;
+            this.width = width; this.height = height; this.thickness = thickness; this.surface = surface; this.interior = interior;
+        }
+    }
+
+    /// <summary>
     /// "Pumpkin Hollow Manor": the Hide and Seek map, as data. Everything is in plan metres (a person is
     /// about 1.8 m tall; <see cref="HS_ManorBuilder"/> scales the whole plan to the game's character),
     /// x runs west to east, z south to north, and the front door faces south.
@@ -236,9 +257,12 @@ namespace Universes.UniverseData.hide_and_seek.Editor.Manor {
         // ---------------------------------------------------------------- props
         static readonly List<PropSpec> props = new();
         static readonly List<BlockSpec> blocks = new();
+        static readonly List<DoorSpec> doors = new();
 
         public static IReadOnlyList<PropSpec> Props { get { EnsureFurnished(); return props; } }
         public static IReadOnlyList<BlockSpec> Blocks { get { EnsureFurnished(); return blocks; } }
+        /// <summary>The hiding spots' doors, in a fixed order: the game refers to them by index.</summary>
+        public static IReadOnlyList<DoorSpec> Doors { get { EnsureFurnished(); return doors; } }
 
         static float Floor(int level) => level * StoreyHeight;
 

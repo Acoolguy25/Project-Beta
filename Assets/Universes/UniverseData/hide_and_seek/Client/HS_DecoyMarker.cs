@@ -16,9 +16,13 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         [SerializeField, Min(1f)] float pulseScale = 2.4f;
         [SerializeField, Min(0f)] float bobHeight = 0.35f;
         [SerializeField, Min(0.05f)] float shrinkSeconds = 0.35f;
+        [Tooltip("The noise maker and its beam hide while the camera is this close (world units), so a decoy at your feet never fills the view; the ring stays.")]
+        [SerializeField, Min(0f)] float hideWithin = 9f;
 
         static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         Renderer ringRenderer;
+        Renderer[] bodyRenderers = System.Array.Empty<Renderer>();
+        bool bodyShown = true;
         MaterialPropertyBlock block;
         Vector3 ringScale, bodyPosition;
         Color ringColor;
@@ -33,6 +37,16 @@ namespace Universes.UniverseData.hide_and_seek.Client {
                 if (ringRenderer != null) ringColor = ringRenderer.sharedMaterial.GetColor(BaseColor);
             }
             if (body != null) bodyPosition = body.localPosition;
+            bodyRenderers = System.Array.FindAll(GetComponentsInChildren<Renderer>(true), r => r != ringRenderer);
+        }
+
+        /// <summary>Hides the noise maker and beam while the camera is right on top of them.</summary>
+        void FadeNearCamera() {
+            Camera cam = Camera.main;
+            bool show = cam == null || (cam.transform.position - transform.position).sqrMagnitude > hideWithin * hideWithin;
+            if (show == bodyShown) return;
+            bodyShown = show;
+            foreach (Renderer r in bodyRenderers) if (r != null) r.enabled = show;
         }
 
         /// <summary>Puts the marker on the decoy's spot for <paramref name="seconds"/>.</summary>
@@ -59,6 +73,7 @@ namespace Universes.UniverseData.hide_and_seek.Client {
                 }
                 transform.localScale = Vector3.one * (1f - t);
             }
+            FadeNearCamera();
             float phase = Mathf.Repeat(now / pulseSeconds, 1f);
             if (ring != null) {
                 ring.localScale = Vector3.Scale(ringScale, new Vector3(Mathf.Lerp(1f, pulseScale, phase), 1f, Mathf.Lerp(1f, pulseScale, phase)));

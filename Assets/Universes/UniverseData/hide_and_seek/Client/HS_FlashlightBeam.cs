@@ -1,3 +1,4 @@
+using RyanAssets.Characters.Shared;
 using UnityEngine;
 
 namespace Universes.UniverseData.hide_and_seek.Client {
@@ -29,11 +30,16 @@ namespace Universes.UniverseData.hide_and_seek.Client {
         MaterialPropertyBlock block;
         float firedAt = -1f;
 
-        /// <summary>Points the beam from <paramref name="origin"/> along <paramref name="direction"/> and starts it.</summary>
+        /// <summary>
+        /// Points the beam from <paramref name="origin"/> along <paramref name="direction"/> and starts it. The
+        /// cone and its light stop at the first wall or prop on the beam's axis, as the server's sight test does,
+        /// so a beam never shows through a wall.
+        /// </summary>
         public void Fire(Vector3 origin, Vector3 direction, float range, float angleDegrees) {
             if (direction.sqrMagnitude < 1e-6f) direction = Vector3.forward;
-            transform.SetPositionAndRotation(origin, Quaternion.LookRotation(direction.normalized));
-            range = Mathf.Max(1f, range);
+            direction.Normalize();
+            transform.SetPositionAndRotation(origin, Quaternion.LookRotation(direction));
+            range = Mathf.Max(1f, ClipToWorld(origin, direction, range));
             angleDegrees = Mathf.Clamp(angleDegrees, 1f, 160f);
             float radius = range * Mathf.Tan(angleDegrees * 0.5f * Mathf.Deg2Rad);
             if (cone != null) cone.localScale = new Vector3(radius, radius, range);
@@ -46,6 +52,19 @@ namespace Universes.UniverseData.hide_and_seek.Client {
             }
             firedAt = Time.unscaledTime;
             Apply(1f);
+        }
+
+        static readonly RaycastHit[] Hits = new RaycastHit[16];
+
+        /// <summary>Distance to the nearest world hit along the axis within <paramref name="range"/> (characters do not stop it).</summary>
+        static float ClipToWorld(Vector3 origin, Vector3 direction, float range) {
+            int count = Physics.RaycastNonAlloc(origin, direction, Hits, range, ~0, QueryTriggerInteraction.Ignore);
+            float nearest = range;
+            for (int i = 0; i < count; i++) {
+                if (Hits[i].distance >= nearest || Hits[i].collider.GetComponentInParent<LocalCharacter>() != null) continue;
+                nearest = Hits[i].distance;
+            }
+            return nearest;
         }
 
         void Update() {
