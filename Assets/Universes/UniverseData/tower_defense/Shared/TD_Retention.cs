@@ -23,8 +23,11 @@ namespace Universes.UniverseData.tower_defense {
         public const string GoldUnlock = "gold_trim";
         public const string SupplyUnlock = "supply_drop";
         public const string ReloadUnlock = "rapid_reload";
+        public const string EliteUnlock = "elite_towers";
 
         public const int EndlessLevel = 5;
+        /// <summary>The level that unlocks elite specialisations (<see cref="EliteUnlock"/>).</summary>
+        public const int EliteLevel = 8;
 
         /// <summary>Team cash each player with War Chest adds at the start of a game.</summary>
         public const int WarChestCash = 60;
@@ -46,6 +49,7 @@ namespace Universes.UniverseData.tower_defense {
             new(EndlessLevel, EndlessUnlock, "Endless Mode", "Vote for Endless: the waves never stop. Set a record.", "hourglass_bottom"),
             new(6, MortarUnlock, "Artillery", "New tower: huge range and big blasts on the ground army.", "my_location"),
             new(7, SalvageUnlock, "Salvage Crew", "Your towers sell back for 85% instead of 70%.", "refresh"),
+            new(EliteLevel, EliteUnlock, "Tower Specialists", "Upgrade a level 3 tower once more into one of two elite forms.", "emoji_events"),
             new(9, VeteranUnlock, "Veteran Crews", $"Towers you build deal 10% more damage: enough for level 3 Gunners to break shields.", "military_tech"),
             new(11, EmpUnlock, "EMP Blast", "Press V in a wave: stun every enemy and strip all shields.", "hub"),
             new(13, EngineersUnlock, "Field Engineers", "Your upgrades cost 15% less.", "trending_up"),

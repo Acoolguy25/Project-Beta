@@ -11,6 +11,8 @@ namespace Universes.UniverseData.tower_defense {
         public float shield, maxShield;
         /// <summary>Simulation time until which the enemy stands still (EMP).</summary>
         public float stunUntil;
+        /// <summary>Simulation time until which every hit on it does <see cref="TD_Elites.BrittleBonus"/> more (Brittle Ice).</summary>
+        public float brittleUntil;
         public bool Flying => TD_Rules.Enemy(kind).flying;
         public bool Shielded => shield > 0f;
         /// <summary>Current speed multiplier at simulation time <paramref name="now"/> (1 = not slowed, 0 = stunned).</summary>

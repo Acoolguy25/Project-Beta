@@ -494,7 +494,9 @@ namespace Universes.UniverseData.tower_defense.Server {
         // ---------------------------------------------------------------- requests
         void OnBuildRequest(NetworkConnection connection, TD_BuildRequest request, Channel channel) {
             if (!connection.IsAuthenticated || map == null) return;
-            string message = TryBuild(connection, request.slot, request.kind, out bool accepted);
+            string message = TD_Elites.IsElite(request.path) && TD_Simulation.IsSlot(request.slot) && sim.Towers[request.slot] != null
+                ? TrySpecialise(connection, request.slot, request.path, out bool accepted)
+                : TryBuild(connection, request.slot, request.kind, out accepted);
             Reply(connection, accepted, message);
         }
 
@@ -512,7 +514,11 @@ namespace Universes.UniverseData.tower_defense.Server {
             var perks = TD_Retention.PerksFor(id => retention.IsUnlocked(connection, id));
             switch (sim.Build(slot, kind, connection.ClientId, perks, out int cost)) {
                 case TD_BuildResult.MaxLevel:
-                    return $"{stats.name} is fully upgraded.";
+                    return $"{TD_Elites.Name(existing.kind, existing.path)} is fully upgraded.";
+                case TD_BuildResult.NeedsPath:
+                    return retention.IsUnlocked(connection, TD_Retention.EliteUnlock)
+                        ? $"Pick an elite form for the {stats.name} on its card."
+                        : $"Reach level {TD_Retention.EliteLevel} to specialise level 3 towers.";
                 case TD_BuildResult.NoCash:
                     return existing != null ? $"Upgrade costs ${cost}. Team has ${sim.Cash}." : $"{stats.name} costs ${cost}. Team has ${sim.Cash}.";
                 case TD_BuildResult.Upgraded: {
@@ -535,6 +541,38 @@ namespace Universes.UniverseData.tower_defense.Server {
                     MarkDirty();
                     return $"Built a {stats.name}!";
                 }
+                default:
+                    return "That is not a tower pad.";
+            }
+        }
+
+        /// <summary>Turns a level 3 tower into an elite form: same reach, phase and owner rules as an upgrade, and the buyer needs the unlock.</summary>
+        string TrySpecialise(NetworkConnection connection, int slot, TD_TowerPath path, out bool accepted) {
+            accepted = false;
+            if (phase is TD_Phase.Victory or TD_Phase.Defeat) return "The game is over. New game soon!";
+            if (phase is TD_Phase.Vote or TD_Phase.Waiting) return "Vote for a mode first: the game starts in a moment.";
+            var tower = sim.Towers[slot];
+            var stats = TD_Rules.Tower(tower.kind);
+            if (!LocalCharacter.Characters.TryGetValue(connection, out var character) || character == null || character.IsDead) return "Respawn first.";
+            if (!FocusPicker.InReach(character.transform.position, TD_Rules.Slots[slot], TD_Rules.PlaceReach, 2.5f)) return "Walk closer to that tower.";
+            if (!retention.IsUnlocked(connection, TD_Retention.EliteUnlock)) return $"Reach level {TD_Retention.EliteLevel} to specialise towers.";
+            if (tower.level < TD_Elites.Level) return $"Upgrade the {stats.name} to level {TD_Elites.Level} first.";
+            var perks = TD_Retention.PerksFor(id => retention.IsUnlocked(connection, id));
+            var elite = TD_Elites.Get(tower.kind, path);
+            switch (sim.Specialise(slot, path, perks, out int cost)) {
+                case TD_BuildResult.Specialised: {
+                    accepted = true;
+                    string player = PlayerData.GetPlayerName(connection);
+                    CountBuild(connection);
+                    PlayerProgress.Modify<TD_SaveData>(connection, save => save.elitesMade++);
+                    BroadcastTowerEvent(TD_TowerEvent.Specialised, tower, cost, player);
+                    MarkDirty();
+                    return $"{stats.name} is now a {elite.name}!";
+                }
+                case TD_BuildResult.MaxLevel:
+                    return $"That {stats.name} is already a {TD_Elites.Name(tower.kind, tower.path)}.";
+                case TD_BuildResult.NoCash:
+                    return $"{elite.name} costs ${cost}. Team has ${sim.Cash}.";
                 default:
                     return "That is not a tower pad.";
             }
@@ -708,7 +746,7 @@ namespace Universes.UniverseData.tower_defense.Server {
                     slot = t.slot, kind = t.kind, level = (byte)t.level, owner = ownerNames[t.slot] ?? "",
                     ownerId = TryOwner(t.owner, out _, out _) ? t.owner : -1,
                     refund = t.Refund, gold = t.perks.gold, veteran = t.perks.damageScale > 1f,
-                    target = t.target, kills = t.kills, damage = Mathf.RoundToInt(Mathf.Min(t.damageDealt, 2e9f)),
+                    target = t.target, kills = t.kills, damage = Mathf.RoundToInt(Mathf.Min(t.damageDealt, 2e9f)), path = t.path,
                 });
             }
             var votes = ModeVotes();
@@ -756,9 +794,9 @@ namespace Universes.UniverseData.tower_defense.Server {
             });
         }
 
-        void BroadcastTowerEvent(TD_TowerEvent kind, TD_SimTower tower, int amount) =>
+        void BroadcastTowerEvent(TD_TowerEvent kind, TD_SimTower tower, int amount, string player = "") =>
             InstanceFinder.ServerManager.Broadcast(new TD_TowerEventBroadcast {
-                kind = kind, slot = tower.slot, tower = tower.kind, level = (byte)tower.level, amount = amount
+                kind = kind, slot = tower.slot, tower = tower.kind, level = (byte)tower.level, amount = amount, path = tower.path, player = player ?? "",
             });
 
         static void Reply(NetworkConnection connection, bool accepted, string message) =>

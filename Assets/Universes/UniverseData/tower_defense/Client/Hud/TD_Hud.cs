@@ -117,7 +117,7 @@ namespace Universes.UniverseData.tower_defense.Client {
         [Min(0.1f)] public float bannerSeconds = 2.2f;
 
         // Key labels come from TD_ClientController (SetKeys), which reads the keys.
-        string readyKey = "R", fastForwardKey = "G", interactKey = "E", dropKey = "Q";
+        string readyKey = "R", fastForwardKey = "G", interactKey = "E", dropKey = "Q", eliteKey = "Z";
         readonly string[] abilityKeys = { "F", "V" };
 
         int shownCash = -1, shownBase = -1, shownBosses = -1, shownChipWave = -1, shownTitleWave = -1, myVote = -1;
@@ -163,6 +163,12 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         /// <summary>Key names shown in the pills and prompts, as the controller has them bound.</summary>
         public void SetDropKey(string key) => dropKey = key;
+
+        /// <summary>The key that picks a level 3 tower's second elite form (the action key picks the first).</summary>
+        public void SetEliteKey(string key) => eliteKey = key;
+
+        /// <summary>The action key's label (E), for the controller's own toasts.</summary>
+        public string InteractKey => interactKey;
 
         public void SetKeys(string ready, string fastForward, string interact) {
             readyKey = ready;
@@ -543,10 +549,18 @@ namespace Universes.UniverseData.tower_defense.Client {
 
         /// <param name="canSell">False for another player's tower: no sell offer, the card says who can sell it.</param>
         /// <param name="upgradeDiscount">The viewer's upgrade discount (Field Engineers): they pay the upgrade.</param>
-        public void ShowFocusTower(in TD_TowerSnap tower, int cash, string sellKey, string targetKey, bool canSell, float upgradeDiscount) {
+        /// <param name="eliteUnlocked">Whether the viewer may specialise level 3 towers (<see cref="TD_Retention.EliteUnlock"/>).</param>
+        public void ShowFocusTower(in TD_TowerSnap tower, int cash, string sellKey, string targetKey, bool canSell, float upgradeDiscount, bool eliteUnlocked = false) {
             int cost = TD_Rules.UpgradeCost(tower.kind, tower.level, upgradeDiscount);
-            info.ShowTower(tower, Portrait(tower.kind), cash, sellKey, targetKey, canSell, cost);
+            info.ShowTower(tower, Portrait(tower.kind), cash, sellKey, targetKey, canSell, cost, eliteUnlocked, upgradeDiscount, interactKey, eliteKey);
             string sell = canSell ? $"<b>{sellKey}</b>  Sell +${TD_InfoPanel.RefundOf(tower)}" : "";
+            if (TD_Elites.CanSpecialise(tower.level, tower.path)) {
+                string pick = eliteUnlocked
+                    ? $"<b>{interactKey}</b> / <b>{eliteKey}</b>  Choose an elite form"
+                    : $"<color=#B4BCC8>Elite forms unlock at level {TD_Retention.EliteLevel}</color>";
+                Prompt(canSell ? $"{pick}     <color=#B4BCC8>{sell}</color>" : pick);
+                return;
+            }
             if (tower.level >= TD_Rules.MaxLevel) {
                 Prompt(sell);
                 return;
