@@ -80,6 +80,8 @@ namespace Universes.UniverseData.obby {
         public float tierBest;
         /// <summary>The tier closed by <see cref="tierTime"/>.</summary>
         public OB_Tier tier;
+        /// <summary>Mechanics this player has cleared before (saved; <see cref="OB_StageHints"/>), so their hints stay hidden.</summary>
+        public ulong seenMechanics;
     }
 
     public struct OB_ResultEntry {

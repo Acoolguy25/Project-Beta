@@ -22,7 +22,8 @@
         "Unity.RenderPipelines.Universal.Runtime",
         "RyanAssets.Retention",
         "RyanAssets.Retention.Client",
-        "GUID:6c58dd73ce4085142b6d8732f7dee76c"
+        "GUID:6c58dd73ce4085142b6d8732f7dee76c",
+        "GUID:4307f53044263cf4b835bd812fc161a4"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

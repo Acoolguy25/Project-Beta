@@ -115,6 +115,16 @@ namespace Universes.UniverseData.obby.Client {
         public OB_Cue gainedPlaceSound = new(SfxCue.Pickup, 0.7f, 1.5f);
         public OB_Cue lostPlaceSound = new(SfxCue.Whoosh, 0.7f, 1.2f);
 
+        [Header("Moves (every racer's, heard where they are)")]
+        [Tooltip("A racer starts a dash.")]
+        public OB_Cue dashSound = new(SfxCue.Whoosh, 0.75f, 1.2f);
+        [Tooltip("A racer kicks off a wall.")]
+        public OB_Cue wallKickSound = new(SfxCue.Jump, 0.85f, 1.3f);
+        [Tooltip("A racer catches a wall and starts sliding down it.")]
+        public OB_Cue wallSlideSound = new(SfxCue.Land, 0.55f, 0.7f);
+        [Tooltip("Seconds between looks for new racers to listen to.")]
+        [Min(0.1f)] public float stanceScanSeconds = 1f;
+
         [Header("Hazards, falls and respawns")]
         public OB_Cue hazardSound = new(SfxCue.Hit, 1f, 0.9f);
         [Range(0f, 1f)] public float hazardShake = 0.45f;
@@ -136,6 +146,10 @@ namespace Universes.UniverseData.obby.Client {
         readonly List<float> pendulumAngles = new();
         readonly List<TimedToggleBlock> lasers = new();
         readonly List<bool> laserStates = new();
+        // Every racer's stance, so dashes and wall kicks are heard for remote players too.
+        readonly Dictionary<CharacterStance, System.Action<Stance, Stance>> stanceHandlers = new();
+        readonly List<CharacterStance> staleStances = new();
+        float nextStanceScan;
         bool onIce;
 
         /// <summary>Seconds a coin takes off the finish time on the current course (shown over coins).</summary>
@@ -199,6 +213,44 @@ namespace Universes.UniverseData.obby.Client {
             RisingLava.ChaseStarted -= OnLavaChase;
             WindVolume.Entered -= OnWind;
             StickyZone.Entered -= OnHoney;
+            foreach (var pair in stanceHandlers)
+                if (pair.Key != null) pair.Key.Changed -= pair.Value;
+            stanceHandlers.Clear();
+        }
+
+        /// <summary>Starts listening to racers that joined since the last scan, and forgets ones that left.</summary>
+        void ScanStances() {
+            if (Time.unscaledTime < nextStanceScan) return;
+            nextStanceScan = Time.unscaledTime + stanceScanSeconds;
+            staleStances.Clear();
+            foreach (var stance in stanceHandlers.Keys)
+                if (stance == null) staleStances.Add(stance);
+            foreach (var stance in staleStances) stanceHandlers.Remove(stance);
+            foreach (var character in LocalCharacter.Characters.Values) {
+                if (character == null || !character.TryGetComponent(out CharacterStance stance) || stanceHandlers.ContainsKey(stance)) continue;
+                Transform body = stance.transform;
+                System.Action<Stance, Stance> handler = (previous, next) => OnStance(body, previous, next);
+                stance.Changed += handler;
+                stanceHandlers.Add(stance, handler);
+            }
+        }
+
+        void OnStance(Transform body, Stance previous, Stance next) {
+            if (body == null) return;
+            Vector3 at = body.position;
+            switch (next) {
+                case Stance.Dash:
+                    dashSound.PlayAt(at);
+                    GameFx.Play(FxKind.DustPuff, at, OB_Palette.Cloud, 0.8f);
+                    break;
+                case Stance.WallKick:
+                    wallKickSound.PlayAt(at);
+                    GameFx.Play(FxKind.DustPuff, at + body.up * 1.5f, OB_Palette.Cloud, 0.6f);
+                    break;
+                case Stance.WallSlide when previous != Stance.WallKick:
+                    wallSlideSound.PlayAt(at);
+                    break;
+            }
         }
 
         void OnWind(WindVolume field) => windSound.Play();
@@ -282,6 +334,7 @@ namespace Universes.UniverseData.obby.Client {
 
         void Update() {
             UpdateIce();
+            ScanStances();
             double now = PlatformerClock.Now;
             for (int i = 0; i < pendulums.Count; i++) {
                 if (pendulums[i] == null) continue;

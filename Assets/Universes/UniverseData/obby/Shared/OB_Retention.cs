@@ -45,6 +45,12 @@ namespace Universes.UniverseData.obby {
         public const string GravityStat = "gravity_stages";
         public const string LavaStat = "lava_escapes";
         public const string PodiumStat = "podium";
+        /// <summary>Boost Rings stages cleared.</summary>
+        public const string RingsStat = "ring_chains";
+        /// <summary>Trapeze or Lift Shaft stages cleared.</summary>
+        public const string RidesStat = "sky_rides";
+        /// <summary>Ghost Path or Rope Bridge stages cleared (blocks that vanish under you).</summary>
+        public const string VanishStat = "vanishing_paths";
 
         /// <summary>The daily pool: one entry per stat key, so every day's three challenges ask for different things.</summary>
         public static readonly ChallengeDefinition[] Challenges = {
@@ -60,6 +66,9 @@ namespace Universes.UniverseData.obby {
             new("gravity_6", GravityStat, 6, 120, 30, "Clear {target} gravity stages"),
             new("lava_3", LavaStat, 3, 130, 35, "Outrun the rising lava {target} times"),
             new("podium_1", PodiumStat, 1, 150, 40, "Finish in the top three of a race"),
+            new("rings_2", RingsStat, 2, 120, 30, "Fly through {target} boost ring chains"),
+            new("rides_3", RidesStat, 3, 120, 30, "Cross {target} trapeze or lift stages"),
+            new("vanish_3", VanishStat, 3, 130, 35, "Cross {target} ghost paths or rope bridges"),
         };
 
         public static RetentionRules Rules(RetentionTuning tuning) => new(Universe, tuning, Unlocks, Challenges);

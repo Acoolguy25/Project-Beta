@@ -2,6 +2,7 @@ using RyanAssets.Characters.Client;
 using RyanAssets.Characters.Shared;
 using RyanAssets.GameFeel;
 using RyanAssets.Platformer;
+using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -20,6 +21,11 @@ namespace Universes.UniverseData.obby.Client {
         [Header("Post-processing")]
         [Tooltip("Turn on post-processing for the main camera while the obby is shown (its Volume does nothing otherwise).")]
         public bool enablePostProcessing = true;
+
+        [Header("Camera")]
+        [Tooltip("Pitch (degrees above the horizon) the follow camera starts at when the player's robot appears. The shared camera starts almost straight down, which hides the jumps ahead; an obby reads best from behind and a little above. Applied only while the camera is steeper than startPitchAbove, so a player's own choice is kept.")]
+        [Range(-10f, 85f)] public float startPitch = 24f;
+        [Range(0f, 90f)] public float startPitchAbove = 60f;
 
         [Header("Speed")]
         [Tooltip("Speeds (m/s) where the speed effects start and reach full strength. Start above the dash's top speed (walk x 1.9, 19 m/s): the dash brings its own FOV kick and speed lines, so only launches and long falls add these.")]
@@ -86,6 +92,7 @@ namespace Universes.UniverseData.obby.Client {
             if (local != player) {
                 player = local;
                 fallWarned = false;
+                if (player != null) FramePlayer();
             }
             if (player == null || player.Body == null) return;
             if (player.Grounded) {
@@ -94,6 +101,16 @@ namespace Universes.UniverseData.obby.Client {
                 fallWarned = true;
                 fallSound.Play();
             }
+        }
+
+        /// <summary>Tilts the follow camera from the shared top-down start to a view of the course ahead.</summary>
+        void FramePlayer() {
+            var orbit = FindAnyObjectByType<CinemachineOrbitalFollow>();
+            if (orbit == null) return;
+            InputAxis pitch = orbit.VerticalAxis;
+            if (pitch.Value <= startPitchAbove) return;
+            pitch.Value = pitch.ClampValue(startPitch);
+            orbit.VerticalAxis = pitch;
         }
 
         /// <summary>A respawn is not a landing: the kit must not shake the camera when the player arrives.</summary>

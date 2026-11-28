@@ -17,6 +17,19 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.AreEqual(30, save.bestStage);
         }
 
+        [Test] public void ClearedMechanicsAreRememberedSoTheirHintsShowOnce() {
+            var save = new OB_SaveData();
+            Assert.IsFalse(OB_StageHints.Has(save.seenMechanics, OB_StageKind.BoostRings), "a new player has seen nothing");
+            save.RecordSeen(new OB_Stage { kind = OB_StageKind.Hops, segments = new[] { OB_StageKind.BoostRings, OB_StageKind.Swings } });
+            save.RecordSeen(new OB_Stage { kind = OB_StageKind.GhostPath });
+            foreach (var kind in new[] { OB_StageKind.BoostRings, OB_StageKind.Swings, OB_StageKind.GhostPath })
+                Assert.IsTrue(OB_StageHints.Has(save.seenMechanics, kind), kind.ToString());
+            Assert.IsFalse(OB_StageHints.Has(save.seenMechanics, OB_StageKind.Hops), "a chained stage marks its segments, not its name kind");
+            ulong kept = save.seenMechanics;
+            save.Validate();
+            Assert.AreEqual(kept, save.seenMechanics, "Validate keeps the seen mask");
+        }
+
         [Test] public void OnlyTheTopThreeArePodiumsAndOnlyFirstIsAWin() {
             var save = new OB_SaveData();
             foreach (int place in new[] { 1, 2, 3, 4, 0 }) save.RecordPlace(place);

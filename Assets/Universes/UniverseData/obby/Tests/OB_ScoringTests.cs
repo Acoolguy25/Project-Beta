@@ -36,7 +36,7 @@ namespace Universes.UniverseData.obby.Tests {
 
         [Test] public void DefaultMedalTargetsAreOrderedAndBeatablePar() {
             var times = OB_MedalTimes.Default;
-            Assert.Greater(times.goldFactor, 1f, "gold allows a little slack over the generator's par");
+            Assert.GreaterOrEqual(times.goldFactor, 1f, "a clean walking run is about par, so gold is never faster than par");
             Assert.Less(times.goldFactor, times.silverFactor);
             Assert.Less(times.silverFactor, times.bronzeFactor);
         }

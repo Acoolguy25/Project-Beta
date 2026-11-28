@@ -10,12 +10,13 @@ namespace Universes.UniverseData.obby {
     /// the coin and star bonuses) beats.
     /// <para>
     /// Par is the time of a clean run at WALK speed (courses are fair at walk speed; see
-    /// <see cref="OB_CourseRules"/>), so a flawless walk lands near 1.0x par and the dash is how a player
-    /// beats it: gold sits just above par (5% slack), so it takes a clean run plus some well-placed dashes,
-    /// stars or coins; silver allows a few retries and bronze a steady, careful walk. The factors are first
-    /// estimates (the Unity phase re-measures them with a walking bot and a dashing bot). Bronze must stay
-    /// inside the race time: the shipped 24-stage course has a mean par of about 640 s against a 1500 s race
-    /// (605 to 675 s over seeds 1 to 100), so bronze at 1.6x par (about 1030 s) always fits.
+    /// <see cref="OB_CourseRules"/>). Round 3 measured it live with a control-level bot (real CharacterControls
+    /// input, walking, no dash): ten clean stage clears over three seeds took 0.78 to 1.19 x their par, mean 1.03.
+    /// So gold sits AT par: a clean walk with every coin lands just over it, and gold takes a clean run plus some
+    /// well-placed dashes or stars. A death costs about 10 to 20 s (respawn delay, the fall and the replayed part
+    /// of the stage), so silver (1.3x) allows roughly a dozen and bronze (1.75x) is a first medal for a careful
+    /// newcomer. Bronze must stay inside the race time: 24-stage pars run 620 to 702 s over seeds, so bronze is at
+    /// most about 1230 s of the 1500 s race.
     /// </para>
     /// </summary>
     [Serializable]
@@ -27,7 +28,7 @@ namespace Universes.UniverseData.obby {
         [Tooltip("Bronze: scored time at most this many times the course par.")]
         [Min(0.5f)] public float bronzeFactor;
 
-        public static OB_MedalTimes Default => new() { goldFactor = 1.05f, silverFactor = 1.3f, bronzeFactor = 1.6f };
+        public static OB_MedalTimes Default => new() { goldFactor = 1f, silverFactor = 1.3f, bronzeFactor = 1.75f };
 
         public float Factor(OB_Medal medal) => medal switch {
             OB_Medal.Gold => goldFactor,
