@@ -137,9 +137,13 @@ namespace Universes.UniverseData.classic_horror {
             return margin + (float)random.NextDouble() * (1f - 2f * margin);
         }
 
-        /// <summary>How warm a dial at <paramref name="angle"/> is for a ring whose true angle is <paramref name="target"/>.</summary>
-        public static float Warmth(float angle, float target, float warmRange) {
-            float cold = Mathf.Clamp01(CircularDistance(angle, target) / Mathf.Max(1f, warmRange));
+        /// <summary>
+        /// How warm a dial at <paramref name="angle"/> is for a ring whose true angle is <paramref name="target"/>: exactly 1
+        /// anywhere the ring would open (within <paramref name="tolerance"/>), so "hot" always means "set it now".
+        /// </summary>
+        public static float Warmth(float angle, float target, float warmRange, float tolerance = 0f) {
+            float over = Mathf.Max(0f, CircularDistance(angle, target) - tolerance);
+            float cold = Mathf.Clamp01(over / Mathf.Max(1f, warmRange - tolerance));
             return 1f - cold * cold;
         }
 
@@ -155,10 +159,21 @@ namespace Universes.UniverseData.classic_horror {
             int index = station.Progress;
             float speed = tuning.SweepSpeed(index), width = tuning.ZoneWidth(index), center = ZoneCenter(seed, index, width);
             float elapsed = now - sweepStart;
-            bool hit = Mathf.Abs(NeedleAt(elapsed, speed) - center) <= width * 0.5f
-                || Mathf.Abs(NeedleAt(elapsed - tuning.engineForgiveness, speed) - center) <= width * 0.5f;
+            bool hit = NeedleWasInZone(elapsed, speed, center, width);
             sweepStart = now;
             return hit ? Advance() : Miss(); // a miss costs a hit, and the needle starts again
+        }
+
+        /// <summary>
+        /// Whether the needle was in the zone at any moment of the forgiveness window ending <paramref name="elapsed"/> after
+        /// the sweep began. The whole span is tested, not just its two ends, so a pull on a narrow zone that the needle
+        /// crossed between them still counts for a laggy connection.
+        /// </summary>
+        bool NeedleWasInZone(float elapsed, float speed, float center, float width) {
+            const float Step = 0.01f;
+            for (float back = 0f; back <= tuning.engineForgiveness + 1e-4f; back += Step)
+                if (Mathf.Abs(NeedleAt(elapsed - back, speed) - center) <= width * 0.5f) return true;
+            return false;
         }
 
         /// <summary>Hymn: note <paramref name="note"/> is played.</summary>
@@ -173,7 +188,7 @@ namespace Universes.UniverseData.classic_horror {
         public CH_PuzzleStep Probe(float angle) {
             if (Kind != CH_PuzzleKind.BellLock || station.Done) return Describe(CH_PuzzleEvent.Closed, false);
             CH_PuzzleStep step = Describe(CH_PuzzleEvent.Warmth, false);
-            step.warmth = Warmth(angle, ringAngles[station.Progress], tuning.lockWarmRange);
+            step.warmth = Warmth(angle, ringAngles[station.Progress], tuning.lockWarmRange, tuning.lockTolerance);
             return step;
         }
 

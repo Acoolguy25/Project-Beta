@@ -367,7 +367,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             Color heat = Color.Lerp(coldDial, hotDial, warmth);
             heatImage.color = heat;
             needleImage.color = Time.unscaledTime < flashUntil ? flashColour : heat;
-            readout.text = warmth > 0.93f ? "HOT: set it (E)" : warmth > 0.7f ? "warm" : warmth > 0.35f ? "cool" : "cold";
+            readout.text = warmth >= 0.999f ? "HOT: set it (E)" : warmth > 0.7f ? "warm" : warmth > 0.35f ? "cool" : "cold";
             humSource.volume = warmth * warmth * 0.7f * volume;
             humSource.pitch = 0.75f + warmth * 0.9f;
         }

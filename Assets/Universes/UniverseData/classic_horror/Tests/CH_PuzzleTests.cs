@@ -84,6 +84,28 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.AreEqual(CH_PuzzleEvent.Progress, run.Strike(leftZoneAt + Tuning.engineForgiveness * 0.5f).evt);
         }
 
+        [Test] public void AStrikeStillCountsWhenTheNeedleCrossedAThinZoneInsideTheWindowButWasOutAtBothEnds() {
+            var station = Station(Night(CH_Phase.Stranded), CH_PuzzleKind.Engine);
+            station.Progress = 2; // the last, fastest and thinnest strike
+            var run = new CH_PuzzleRun(station, Seed, Tuning, 0f);
+            float width = Tuning.ZoneWidth(2), centre = CH_PuzzleRun.ZoneCenter(Seed, 2, width), speed = Tuning.SweepSpeed(2);
+            // The zone crosses the needle's path in width / speed seconds; pull when the needle's zone passage lies mid-window.
+            float crossing = width / speed;
+            Assert.Less(crossing, Tuning.engineForgiveness, "The case needs a zone thinner than the window.");
+            float centred = centre / speed;
+            float pull = centred + Tuning.engineForgiveness * 0.5f;
+            Assert.Greater(Mathf.Abs(CH_PuzzleRun.NeedleAt(pull, speed) - centre), width * 0.5f, "Out of the zone at the pull.");
+            Assert.Greater(Mathf.Abs(CH_PuzzleRun.NeedleAt(pull - Tuning.engineForgiveness, speed) - centre), width * 0.5f, "Out of the zone at the window's start.");
+            Assert.AreEqual(CH_PuzzleEvent.Solved, run.Strike(pull).evt);
+        }
+
+        [Test] public void HotMeansTheRingWouldOpenAndNothingElseDoes() {
+            float range = Tuning.lockWarmRange, tolerance = Tuning.lockTolerance;
+            Assert.AreEqual(1f, CH_PuzzleRun.Warmth(100f + tolerance, 100f, range, tolerance), 1e-5f, "Inside the tolerance is hot.");
+            Assert.Less(CH_PuzzleRun.Warmth(100f + tolerance + 4f, 100f, range, tolerance), 0.999f, "Just outside it is not hot.");
+            Assert.Less(CH_PuzzleRun.Warmth(129f, 100f, range, tolerance), 0.999f, "29 degrees off is not hot (it used to read HOT).");
+        }
+
         [Test] public void TheEngineGaugeTellsTheClientTheZoneButTheSweepRestartsEveryStrike() {
             var station = Station(Night(CH_Phase.Stranded), CH_PuzzleKind.Engine);
             var run = new CH_PuzzleRun(station, Seed, Tuning, 0f);

@@ -26,6 +26,7 @@ namespace Universes.UniverseData.classic_horror.Server {
             public CH_Night.Station station;
             public CH_PuzzleRun run;
             public float lastInput;
+            public CH_PuzzleAction lastAction;
         }
 
         readonly Dictionary<NetworkConnection, OpenStation> openStations = new();
@@ -72,8 +73,10 @@ namespace Universes.UniverseData.classic_horror.Server {
             if (request.action == CH_PuzzleAction.Open) { TryOpenStation(connection, character, night.GetStation(request.stationId)); return; }
             if (!openStations.TryGetValue(connection, out OpenStation open) || open.station.Id != request.stationId) return;
             if (request.action == CH_PuzzleAction.Close) { CloseStation(connection, CH_PuzzleEvent.Closed, ""); return; }
-            if (Time.unscaledTime - open.lastInput < puzzleTuning.inputGap) return;
+            // Only a repeat of the same action is rate-limited, so setting a lock right after a probe is never dropped.
+            if (request.action == open.lastAction && Time.unscaledTime - open.lastInput < puzzleTuning.inputGap) return;
             open.lastInput = Time.unscaledTime;
+            open.lastAction = request.action;
             CH_PuzzleStep step = request.action switch {
                 CH_PuzzleAction.Strike => open.run.Strike(Time.time),
                 CH_PuzzleAction.Press => open.run.Press(Mathf.RoundToInt(request.value)),
