@@ -32,7 +32,12 @@ no spawn-shield ring in Classic. A player who joins during the results gets that
   back (3 s between throws).
 - **Sheriff**: shoot the murderer. Shoot an innocent and the sheriff dies too, dropping the gun
   (`wrongShotPenalty`, MM2 rules; `Jam` instead jams the gun for 20 s).
-- **Innocent**: survive and collect coins. When the sheriff dies, their gun drops to the floor where they
+- **Innocent**: survive and collect coins. Press **E** to throw a **smoke bomb** (`MM_SmokeRules`): it costs
+  `smokeCoinCost` (6) coins from the bag, bursts into a grey cloud where you stand, and you run 1.5x as fast
+  for 2.5 s (`smokeBoostSeconds`, `smokeSpeedMultiplier`). NPC murderers lose sight of you for 3.5 s
+  (`smokeHideSeconds`), and a player murderer has to guess which way you ran. One every 18 s. The coins also
+  come off your lifetime total, so a bomb slows the way to your next knife skin, but a skin you have unlocked is
+  never taken back. The E prompt shows the price, the cooldown, or how many coins you still need. When the sheriff dies, their gun drops to the floor where they
   fell (snapped to the NavMesh), enlarged (4x), drawn in a glowing blue-white material and with a beam over it, and every living innocent
   gets a compass chip ("Sheriff's gun · 12 m" with an arrow). The first living, empty-handed innocent to
   touch it becomes the **Hero** (a sheriff in gold). Players get a head start (`npcHeroDelaySeconds`, 10 s);
@@ -98,14 +103,15 @@ does nothing in builds.
 | Moment | Feedback |
 |---|---|
 | Role reveal | The role card at the top of the screen (your character stays in view below it), a pizzicato sting and a flash in the role's colour; the camera swings behind your character at a low angle (`revealCameraPitch`, 16°; the shared camera default looks almost straight down). Again when you become the hero. |
-| Knife throw | A whoosh, the knife spinning along its line with a trail in the skin's colour; a thud, dust and sparks where it sticks in a wall, and a small light on the stuck knife so it reads in a dark room (`stuckGlow*`). |
+| Knife throw | A whoosh, the knife spinning along its line with a trail in the skin's colour; a thud, dust and sparks where it sticks in a wall, and a small light on the stuck knife so it reads in a dark room (`stuckGlow*`); a stuck knife is drawn at twice its flying size (`stuckScale`). |
 | Kill | Sparks, a shockwave ring under the victim and a kill sting where it happened, camera shake by distance (1.5x for the killer). Only players within earshot (`killAudibleDistance`, 45 m) are told. The victim gets a red flash and "YOU WERE KILLED". |
-| Coin | A spinning gold coin with a star on each face (shared coin prefab) that bursts on pickup, a coin sound that climbs in pitch while you pick them up in a row, a floating +1, the bag chip pops; "BAG FULL" when it is. |
+| Coin | A spinning gold coin with a star on each face (shared coin prefab) that bursts on pickup, a coin sound that climbs in pitch while you pick them up in a row, a floating +1 over your head (at the coin it was hidden behind your own character), the bag chip pops; "BAG FULL" when it is. |
+| Smoke bomb | A pop and a whoosh, a thick grey cloud (`MM_SmokeFx`: a poof, a ring and a column of the kit's smoke, topped up five times so it hangs about 3 s), a smoke trail behind the runner, speed lines on the thrower's screen for the burst. |
 | Sheriff down | A horn and alarm, a blue flash, "The sheriff is down" with what it means for you; the floating gun is shown larger with a blue glow (`Prefabs/MM_GunGlow.prefab`), a beam, and a compass chip for living innocents. |
 | Gun taken, last survivor, wrong shot | A banner at the top for everyone ("It's you" for the last survivor). Each banner stays at least `announcementMinSeconds` (2.5 s); one that arrives sooner waits its turn, and a waiting one older than `announcementMaxWaitSeconds` (6 s) is dropped. |
 | Final 10 s | A beep every second, higher for the last three. |
 | Murderer cooldowns | The dagger chip counts the kill cooldown down, the throw prompt counts the throw down; a beep when the knife is ready. |
-| After death | The camera follows the character you spectate at `spectateCameraPitch` (20°), set once per new target. |
+| After death | The camera follows the character you spectate at `spectateCameraPitch` (20°), set once per new target. The shared spectate bar (themed for every game, `SpectateBarAuthoring`) says "Spectating", the name in a softened team colour, the level for players, and health only when hurt. |
 | Results | The shared spectate bar is hidden under the results card (`ClientSpectate.SetBarHidden`). A win or lose sting, confetti over you when you win, "NEW KNIFE SKIN" when this round's coins unlocked one, your win streak ("3 wins in a row · new best!"). |
 
 The HUD also applies the kit's **WarmIndoor** post-processing mood while the game is open. Shot tracers,

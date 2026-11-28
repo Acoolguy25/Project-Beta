@@ -5357,6 +5357,7 @@ MonoBehaviour:
   survivorIcon: {fileID: 21300000, guid: dda250b22f224c4659006edf87fed717, type: 3}
   mistakeIcon: {fileID: 21300000, guid: fdcf668b188e9a31ca3fa06109a1f9e8, type: 3}
   endgameIcon: {fileID: 21300000, guid: 8f42f5b7a16559e4bb9e2acaf17ca15e, type: 3}
+  smokeIcon: {fileID: 21300000, guid: 6e59a9966034b12ad9679dc2ed6438f2, type: 3}
   innocentsWinIcon: {fileID: 21300000, guid: bb19096b8311f603896ec9022dd3b15a, type: 3}
   murdererWinsIcon: {fileID: 21300000, guid: 1e3ef70e4cf2526428d322b18b56f12a, type: 3}
   victoryIcon: {fileID: 21300000, guid: ddfc8f254feddd076afe515ee8cff9e6, type: 3}
@@ -5403,8 +5404,8 @@ MonoBehaviour:
   sheriffMistakeVolume: 0.7
   throwAimFallbackDistance: 90
   throwRequestGuardSeconds: 0.3
-  coinTextHeight: 2.5
-  coinTextSize: 0.7
+  coinTextHeight: 3.8
+  coinTextSize: 1.6
   coinBurstScale: 1.4
   coinPunchScale: 0.2
   coinPunchSeconds: 0.2

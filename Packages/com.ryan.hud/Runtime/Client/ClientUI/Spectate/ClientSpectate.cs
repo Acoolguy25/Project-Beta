@@ -20,6 +20,8 @@ namespace RyanAssets.Client.ClientUI.Spectate {
         Button leftArrow, rightArrow;
         [SerializeField]
         CanvasGroupController canvasGroupController;
+        [SerializeField, Range(0f, 1f), Tooltip("How far the watched character's team colour is blended towards white for the name.")]
+        float teamColorSoftening = 0.45f;
 
         CinemachineCamera cinemachineCamera;
         CameraController controller;
@@ -43,7 +45,8 @@ namespace RyanAssets.Client.ClientUI.Spectate {
 
         /// <summary>
         /// Lets a game hide the spectate bar while its own UI needs the bottom of the screen (a results card,
-        /// for example). The camera keeps following; only the bar is hidden. Cleared when the scene unloads.
+        /// for example). The camera keeps following; only the bar is hidden. Cleared when the spectate camera is destroyed;
+        /// a game that sets it also clears it when its own HUD goes away.
         /// </summary>
         public static void SetBarHidden(bool hidden) {
             if (barHidden == hidden)
@@ -190,33 +193,33 @@ namespace RyanAssets.Client.ClientUI.Spectate {
         }
 
         void UpdatePlayerLabel() {
-            if (currentCharacter == null) {
-                // playerName.text = "No Characters Found";
-                // playerName.color = Color.white;
-            } else {
-                playerName.text = (currentPlayer && currentPlayer.username.Value != currentCharacter.DisplayName) ?
-                        $"{currentCharacter.DisplayName} (@{currentPlayer.username.Value})"
-                        : currentCharacter.DisplayName;
-                playerName.color = currentCharacter.GetTeam().realTeamColor;
-            }
+            if (currentCharacter == null)
+                return;
+            playerName.text = (currentPlayer && currentPlayer.username.Value != currentCharacter.DisplayName) ?
+                    $"{currentCharacter.DisplayName} (@{currentPlayer.username.Value})"
+                    : currentCharacter.DisplayName;
+            // Team colours are tuned for name tags in the world; softened towards white they stay
+            // readable on the bar's dark glass.
+            playerName.color = Color.Lerp(currentCharacter.GetTeam().realTeamColor, Color.white, teamColorSoftening);
         }
+        /// <summary>Health only shows while the watched character is hurt: a full bar says nothing.</summary>
         void UpdatePlayerHealth() {
-            if (currentCharacter == null) {
-                // characterHealth.text = $"";
-            } else {
-                characterHealth.text = $"{currentCharacter.Health.Value}/{currentCharacter.MaxHealth.Value}";
-                characterHealth.color = Color.Lerp(Color.darkRed, Color.darkGreen, (currentCharacter.MaxHealth.Value == 0) ? 1f :
-                        currentCharacter.Health.Value / currentCharacter.MaxHealth.Value);
-            }
+            if (currentCharacter == null)
+                return;
+            long health = currentCharacter.Health.Value, max = currentCharacter.MaxHealth.Value;
+            bool hurt = max > 0 && health < max;
+            characterHealth.gameObject.SetActive(hurt);
+            if (hurt)
+                characterHealth.text = $"{health}/{max}";
         }
+        /// <summary>Players show their level; NPCs show nothing extra.</summary>
         void UpdatePlayerLevel() {
-            if (currentCharacter == null) {
-                // playerLevel.text = $"";
-            } else if (currentPlayer) {
-                playerLevel.text = $"Level {(currentPlayer ? LevelsCalc.GetRank(currentPlayer.xp.Value) : 67)}";
-            } else {
-                playerLevel.text = $"NPC";
-            }
+            if (currentCharacter == null)
+                return;
+            bool player = currentPlayer;
+            playerLevel.gameObject.SetActive(player);
+            if (player)
+                playerLevel.text = $"· Level {LevelsCalc.GetRank(currentPlayer.xp.Value)}";
         }
     }
 }

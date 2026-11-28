@@ -10,8 +10,8 @@ namespace Universes.murder_mystery.Server {
     public sealed class MM_SaveData : ProgressData {
         public const string Universe = "murder_mystery";
         // 2: MM2-style rounds. Coins, knife-throw kills, survivals and role luck were added; the meeting
-        // vote counter went with the meetings. 3: Classic win streaks.
-        public override int LatestVersion => 3;
+        // vote counter went with the meetings. 3: Classic win streaks. 4: smoke bombs (spending coins).
+        public override int LatestVersion => 4;
 
         /// <summary>Rounds of any mode the player was in when they started.</summary>
         public int roundsPlayed;
@@ -25,8 +25,13 @@ namespace Universes.murder_mystery.Server {
         public int murderersShot;
         /// <summary>Times a dead sheriff's gun was picked up, making this player the hero.</summary>
         public int gunsPickedUp;
-        /// <summary>Coins collected in murder mystery, ever. They unlock knife skins (<see cref="MM_KnifeSkins"/>).</summary>
+        /// <summary>
+        /// Coins collected in murder mystery, ever, less what was spent on smoke bombs. They unlock knife skins
+        /// (<see cref="MM_KnifeSkins"/>); spending never takes an unlocked skin back (<see cref="MM_SmokeRules.LifetimeAfterSpending"/>).
+        /// </summary>
         public int coinsCollected;
+        /// <summary>Smoke bombs thrown as an innocent.</summary>
+        public int smokeBombs;
         /// <summary>Rounds in a row without being dealt murderer / sheriff; each one raises the odds (<see cref="MM_RoleOdds"/>).</summary>
         public int murdererLuck, sheriffLuck;
         /// <summary>Classic rounds won and survived in a row (any role; anything else resets it), and the best streak ever.</summary>
@@ -70,6 +75,7 @@ namespace Universes.murder_mystery.Server {
             murderersShot = Math.Max(0, murderersShot);
             gunsPickedUp = Math.Max(0, gunsPickedUp);
             coinsCollected = Math.Max(0, coinsCollected);
+            smokeBombs = Math.Max(0, smokeBombs);
             murdererLuck = Math.Max(0, murdererLuck);
             sheriffLuck = Math.Max(0, sheriffLuck);
             winStreak = Math.Max(0, winStreak);

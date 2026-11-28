@@ -27,6 +27,9 @@ namespace Universes.murder_mystery.Server {
         private float chargeSpeed;
         private bool creeping;
 
+        /// <summary>Characters this NPC cannot see right now (an innocent inside a smoke bomb's cloud). Null = none.</summary>
+        public System.Func<GameCharacter, bool> TargetHidden;
+
         private LocalNPC localNPC;
         private GameCharacter gameCharacter;
         private MM_LocalNPC murderPolicy;
@@ -91,6 +94,9 @@ namespace Universes.murder_mystery.Server {
         }
 
         private float GetAttackRangeMultiplier(GameCharacter target) {
+            // A range of 0 drops a hidden target at the next retarget and keeps it from being picked.
+            if (TargetHidden != null && TargetHidden(target))
+                return 0f;
             return IsArmedSheriff(target) ? sheriffRangeMultiplier : 1f;
         }
 

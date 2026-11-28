@@ -16,6 +16,12 @@ namespace Universes.UniverseData.murder_mystery {
         [Tooltip("End-of-round reveal of every role.")]
         [Min(1)] public int resultsSeconds = 12;
 
+        [Header("Movement (players)")]
+        [Tooltip("Players' walking speed in Classic (m/s). NPC townsfolk walk at about 16.")]
+        [Min(1f)] public float walkSpeed = 16f;
+        [Tooltip("Players' sprint speed in Classic (m/s), while stamina lasts.")]
+        [Min(1f)] public float sprintSpeed = 21f;
+
         [Header("Who plays")]
         [Tooltip("NPC townsfolk fill the house up to this many characters (players + NPCs).")]
         [Min(2)] public int fillToCharacters = 18;
@@ -151,6 +157,19 @@ namespace Universes.UniverseData.murder_mystery {
         [Min(0.1f)] public float coinSpawnInterval = 0.8f;
         [Tooltip("Coins spawned at once when the round starts.")]
         [Min(0)] public int coinsAtStart = 30;
+
+        [Header("Smoke bomb (innocents)")]
+        [Tooltip("Coins a smoke bomb takes from the bag (and from the lifetime total towards the next knife skin; " +
+                 "an unlocked skin is never lost). 0 = free.")]
+        [Min(0)] public int smokeCoinCost = 6;
+        [Tooltip("Seconds between one innocent's smoke bombs.")]
+        [Min(0f)] public float smokeCooldownSeconds = 18f;
+        [Tooltip("How long the burst of speed lasts (seconds).")]
+        [Min(0f)] public float smokeBoostSeconds = 2.5f;
+        [Tooltip("Walk and sprint speed while the burst lasts, as a multiple of the normal speeds.")]
+        [Min(1f)] public float smokeSpeedMultiplier = 1.5f;
+        [Tooltip("NPC murderers lose track of the innocent for this long after the bomb goes off (seconds).")]
+        [Min(0f)] public float smokeHideSeconds = 3.5f;
 
         [Header("Rewards (XP)")]
         [Min(0)] public int xpPerKill = 10;

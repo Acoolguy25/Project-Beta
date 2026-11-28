@@ -103,10 +103,12 @@ namespace Universes.murder_mystery.Server {
             current = this;
             classic = new MM_ClassicRound(this, classicTuning);
             classic.EndgameStarted += OnClassicEndgame;
-            if (InstanceFinder.ServerManager != null)
+            if (InstanceFinder.ServerManager != null) {
                 InstanceFinder.ServerManager.RegisterBroadcast<MM_ThrowKnifeRequest>(classic.OnThrowRequest, true);
-            else
-                Debug.LogError("[MM] No ServerManager when the runner woke: knife throws from players will be ignored.", this);
+                InstanceFinder.ServerManager.RegisterBroadcast<MM_SmokeRequest>(classic.OnSmokeRequest, true);
+            } else {
+                Debug.LogError("[MM] No ServerManager when the runner woke: knife throws and smoke bombs from players will be ignored.", this);
+            }
             CoinShared.CanCollect = classic.CanCollectCoin;
             CoinShared.Collected += classic.OnCoinCollected;
             BroadcastStateLoop(destroyCancellationToken).Forget(exception => Debug.LogException(exception, this));
@@ -219,8 +221,7 @@ namespace Universes.murder_mystery.Server {
                     player.staminaCooldown.Value = 0.8f;
                     break;
             }
-            player.walkSpeed.Value = 16f;
-            player.sprintSpeed.Value = 21f;
+            ApplyPlayerSpeed(player, 1f);
         }
 
         protected override void OnPlayerAdded(PlayerData player) {
@@ -261,8 +262,7 @@ namespace Universes.murder_mystery.Server {
                     break;
                 // Classic roles are dealt once in SpawnPlayers; late joins cannot spawn mid-round.
             }
-            player.walkSpeed.Value = 16f;
-            player.sprintSpeed.Value = 21f;
+            ApplyPlayerSpeed(player, 1f);
         }
 
         protected override void OnCharacterAdded(LocalCharacter character) {
@@ -449,9 +449,12 @@ namespace Universes.murder_mystery.Server {
                     body.ThrowChancePerSecond = classicTuning.npcThrowChancePerSecond;
                     body.ThrowDistance = classicTuning.npcThrowDistance;
                     body.ThrowWindupSeconds = classicTuning.npcThrowWindupSeconds;
-                    npc.gameObject.AddComponent<MM_NPC>().ConfigureSheriffHunting(_ => classic.SheriffNoticeDistance(character),
+                    body.TargetHidden = classic.HiddenBySmoke;
+                    MM_NPC hunter = npc.gameObject.AddComponent<MM_NPC>();
+                    hunter.ConfigureSheriffHunting(_ => classic.SheriffNoticeDistance(character),
                         classicTuning.sheriffDetectionMultiplier, classicTuning.sheriffTargetPriority,
                         classicTuning.sheriffCreepDistance, classicTuning.sheriffCreepSpeed);
+                    hunter.TargetHidden = classic.HiddenBySmoke;
                     break;
                 case MM_Role.Sheriff:
                     ToolBaseShared gun = classic.ArmSheriff(character);
@@ -673,6 +676,21 @@ namespace Universes.murder_mystery.Server {
             await classic.RunResults(DebugTimerSpeedUp.Value ? 4 : classicTuning.resultsSeconds, token);
         }
 
+        /// <summary>Players' walk and sprint speeds from the tuning, times <paramref name="multiplier"/> (a smoke bomb's burst).</summary>
+        public void ApplyPlayerSpeed(PlayerData player, float multiplier) {
+            if (player == null)
+                return;
+            player.walkSpeed.Value = classicTuning.walkSpeed * multiplier;
+            player.sprintSpeed.Value = classicTuning.sprintSpeed * multiplier;
+        }
+
+        /// <summary>Sends one player their state now instead of at the next tick (after something they did changed it).</summary>
+        public void SendClassicState(PlayerData player) {
+            if (player == null || !player.Owner.IsActive || InstanceFinder.ServerManager == null || mode != MM_Mode.Classic || !gameInProgress)
+                return;
+            InstanceFinder.ServerManager.Broadcast(player.Owner, classic.BuildState(player, true));
+        }
+
         /// <summary>Tells each player the round phase, their own role and their part in it.</summary>
         async UniTask BroadcastStateLoop(CancellationToken token) {
             while (!token.IsCancellationRequested) {
@@ -731,8 +749,10 @@ namespace Universes.murder_mystery.Server {
         protected override void OnDestroy() {
             if (current == this)
                 current = null;
-            if (InstanceFinder.ServerManager != null && classic != null)
+            if (InstanceFinder.ServerManager != null && classic != null) {
                 InstanceFinder.ServerManager.UnregisterBroadcast<MM_ThrowKnifeRequest>(classic.OnThrowRequest);
+                InstanceFinder.ServerManager.UnregisterBroadcast<MM_SmokeRequest>(classic.OnSmokeRequest);
+            }
             if (classic != null) {
                 classic.EndgameStarted -= OnClassicEndgame;
                 if (CoinShared.CanCollect == classic.CanCollectCoin)

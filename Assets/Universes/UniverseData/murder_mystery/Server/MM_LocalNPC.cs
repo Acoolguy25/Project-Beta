@@ -46,6 +46,8 @@ namespace Universes.murder_mystery.Server {
 
         /// <summary>Chance per second to throw at the current target, the distances it throws from, and the wind-up.</summary>
         public float ThrowChancePerSecond;
+        /// <summary>Characters this murderer cannot aim at right now (inside a smoke bomb's cloud). Null = none.</summary>
+        public Func<GameCharacter, bool> TargetHidden;
         public Vector2 ThrowDistance;
         public float ThrowWindupSeconds;
 
@@ -161,13 +163,13 @@ namespace Universes.murder_mystery.Server {
                     return;
                 GameCharacter target = pendingThrowTarget;
                 pendingThrowTarget = null;
-                if (!target.IsDead && MM_Sight.HasLineOfSight(gameCharacter, target))
+                if (!target.IsDead && !Hidden(target) && MM_Sight.HasLineOfSight(gameCharacter, target))
                     ThrowKnife(gameCharacter, MM_Sight.Chest(target));
                 lastAttack = Time.time;
                 return;
             }
             GameCharacter current = localNPC.CurrentAttackTarget;
-            if (current == null || current.IsDead)
+            if (current == null || current.IsDead || Hidden(current))
                 return;
             float distance = Vector3.Distance(transform.position, current.transform.position);
             if (distance < ThrowDistance.x || distance > ThrowDistance.y)
@@ -181,6 +183,8 @@ namespace Universes.murder_mystery.Server {
             lastAttack = Time.time;
             gameCharacter.SwitchTool(sharedWeapon);
         }
+
+        bool Hidden(GameCharacter target) => TargetHidden != null && TargetHidden(target);
 
         /// <summary>
         /// Only an armed murderer holsters. While holstered it does not pick targets on its own, so it blends

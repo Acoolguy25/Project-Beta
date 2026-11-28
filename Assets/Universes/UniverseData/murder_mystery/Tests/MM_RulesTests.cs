@@ -332,4 +332,107 @@ namespace Universes.UniverseData.murder_mystery.Tests {
         public void ClockFormatsMinutesAndSeconds(int seconds, string expected) =>
             Assert.That(MM_Text.Clock(seconds), Is.EqualTo(expected));
     }
+
+    public sealed class MM_SmokeRulesTests {
+        const int Cost = 6;
+
+        [Test]
+        public void ALivingInnocentWithCoinsMayThrow() =>
+            Assert.That(MM_SmokeRules.Check(MM_Phase.Hunt, MM_Role.Innocent, false, true, Cost, Cost, 0f), Is.EqualTo(MM_SmokeCheck.Ok));
+
+        [TestCase(MM_Role.Murderer, false)]
+        [TestCase(MM_Role.Sheriff, false)]
+        [TestCase(MM_Role.Innocent, true)] // the hero carries the gun instead
+        [TestCase(MM_Role.Spectator, false)]
+        public void OnlyPlainInnocentsCarrySmoke(MM_Role role, bool hero) =>
+            Assert.That(MM_SmokeRules.Check(MM_Phase.Hunt, role, hero, true, 40, Cost, 0f), Is.EqualTo(MM_SmokeCheck.WrongRole));
+
+        [Test]
+        public void TheDeadCannotThrow() =>
+            Assert.That(MM_SmokeRules.Check(MM_Phase.Hunt, MM_Role.Innocent, false, false, 40, Cost, 0f), Is.EqualTo(MM_SmokeCheck.WrongRole));
+
+        [TestCase(MM_Phase.Lobby)]
+        [TestCase(MM_Phase.RoleReveal)]
+        [TestCase(MM_Phase.Results)]
+        public void OnlyDuringTheHunt(MM_Phase phase) =>
+            Assert.That(MM_SmokeRules.Check(phase, MM_Role.Innocent, false, true, 40, Cost, 0f), Is.EqualTo(MM_SmokeCheck.NotHunting));
+
+        [Test]
+        public void ABagShortOfThePriceIsRefused() =>
+            Assert.That(MM_SmokeRules.Check(MM_Phase.Hunt, MM_Role.Innocent, false, true, Cost - 1, Cost, 0f), Is.EqualTo(MM_SmokeCheck.NotEnoughCoins));
+
+        [Test]
+        public void TheCooldownIsReportedBeforeThePrice() =>
+            Assert.That(MM_SmokeRules.Check(MM_Phase.Hunt, MM_Role.Innocent, false, true, 0, Cost, 3f), Is.EqualTo(MM_SmokeCheck.Cooling));
+
+        [Test]
+        public void AFreeBombNeedsNoCoins() =>
+            Assert.That(MM_SmokeRules.Check(MM_Phase.Hunt, MM_Role.Innocent, false, true, 0, 0, 0f), Is.EqualTo(MM_SmokeCheck.Ok));
+
+        [Test]
+        public void SpendingComesOffTheLifetimeTotal() =>
+            Assert.That(MM_SmokeRules.LifetimeAfterSpending(100, Cost), Is.EqualTo(94));
+
+        [Test]
+        public void SpendingNeverLocksAnUnlockedSkin() {
+            int crimson = MM_KnifeSkins.All[1].coins;
+            Assert.That(MM_SmokeRules.LifetimeAfterSpending(crimson + 2, Cost), Is.EqualTo(crimson));
+            Assert.That(MM_KnifeSkins.Unlocked(MM_SmokeRules.LifetimeAfterSpending(crimson, Cost)), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ANewPlayerCannotGoBelowZero() =>
+            Assert.That(MM_SmokeRules.LifetimeAfterSpending(3, Cost), Is.EqualTo(0));
+    }
+
+    public sealed class MM_BannerQueueTests {
+        [Test]
+        public void TheFirstBannerShowsAtOnce() {
+            MM_BannerQueue<string> queue = new(2.5f, 6f);
+            Assert.That(queue.Offer("a", 0f, false), Is.True);
+        }
+
+        [Test]
+        public void ASecondBannerWaitsForTheFirstsMinimumTime() {
+            MM_BannerQueue<string> queue = new(2.5f, 6f);
+            queue.Offer("mistake", 10f, false);
+            Assert.That(queue.Offer("players out", 11f, true), Is.False);
+            Assert.That(queue.TryNext(12f, true, out _), Is.False);
+            Assert.That(queue.TryNext(12.5f, true, out string next), Is.True);
+            Assert.That(next, Is.EqualTo("players out"));
+        }
+
+        [Test]
+        public void ABannerThatWaitedTooLongIsDropped() {
+            MM_BannerQueue<string> queue = new(2.5f, 6f);
+            queue.Offer("a", 0f, false);
+            queue.Offer("stale", 1f, true);
+            queue.Offer("fresh", 6f, true);
+            Assert.That(queue.TryNext(7.5f, true, out string next), Is.True);
+            Assert.That(next, Is.EqualTo("fresh"));
+            Assert.That(queue.Waiting, Is.Zero);
+        }
+
+        [Test]
+        public void WaitingBannersKeepTheirOrder() {
+            MM_BannerQueue<string> queue = new(2.5f, 6f);
+            queue.Offer("a", 0f, false);
+            queue.Offer("b", 0.5f, true);
+            // The banner has gone, but "c" still queues behind "b".
+            Assert.That(queue.Offer("c", 1f, false), Is.False);
+            Assert.That(queue.TryNext(1f, false, out string first), Is.True);
+            Assert.That(first, Is.EqualTo("b"));
+            Assert.That(queue.TryNext(3.6f, true, out string second), Is.True);
+            Assert.That(second, Is.EqualTo("c"));
+        }
+
+        [Test]
+        public void ClearForgetsWaitingBanners() {
+            MM_BannerQueue<string> queue = new(2.5f, 6f);
+            queue.Offer("a", 0f, false);
+            queue.Offer("b", 1f, true);
+            queue.Clear();
+            Assert.That(queue.TryNext(10f, false, out _), Is.False);
+        }
+    }
 }

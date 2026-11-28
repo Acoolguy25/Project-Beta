@@ -643,7 +643,8 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 material.name = "MM_KnifeSkin_" + skin.name;
                 material.SetColor("_BaseColor", Color.Lerp(Color.white, skin.tint, SkinBaseTint));
                 material.EnableKeyword("_EMISSION");
-                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                // URP's material validation strips _EMISSION from a material whose GI flags say it does not emit.
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
                 material.SetTexture("_EmissionMap", mask);
                 material.SetColor("_EmissionColor", skin.tint.linear * (SkinBladeGlow + skin.glow * SkinGlowPerLevel));
                 EditorUtility.SetDirty(material);
@@ -699,13 +700,15 @@ namespace Universes.UniverseData.murder_mystery.Editor {
                 if (material.HasProperty(texture))
                     material.SetTexture(texture, null);
             material.shaderKeywords = System.Array.Empty<string>();
-            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            // URP's material validation strips _EMISSION from a material whose GI flags say it does not emit.
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             return material;
         }
 
         static void Emissive(Material material, Color emission, Texture map = null) {
             material.EnableKeyword("_EMISSION");
-            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            // URP's material validation strips _EMISSION from a material whose GI flags say it does not emit.
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             material.SetTexture("_EmissionMap", map);
             material.SetColor("_EmissionColor", emission);
         }
@@ -989,6 +992,7 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             hud.survivorIcon = HudKit.Icon("person");
             hud.mistakeIcon = HudKit.Icon("warning");
             hud.endgameIcon = HudKit.Icon("hourglass_bottom");
+            hud.smokeIcon = HudKit.Icon("visibility_off");
             hud.innocentsWinIcon = HudKit.Icon("laurels_trophy");
             hud.murdererWinsIcon = HudKit.Icon("crowned_skull");
             hud.victoryIcon = HudKit.Icon("trophy");
@@ -1101,7 +1105,10 @@ namespace Universes.UniverseData.murder_mystery.Editor {
             hud.roleChip = HudKit.Popup(chip, false);
         }
 
-        /// <summary>Lower centre, murderers only: [E] Throw your knife (or when it will be ready).</summary>
+        /// <summary>
+        /// Lower centre: the E action. Murderers: [E] Throw your knife (or when it will be ready); innocents: the
+        /// smoke bomb (MM_ClientHUD swaps the dagger icon for <see cref="MM_ClientHUD.smokeIcon"/>).
+        /// </summary>
         static void BuildThrowPrompt(RectTransform root, MM_ClientHUD hud) {
             RectTransform prompt = HudKit.KeyPrompt(root, "ThrowPrompt", "E", "Throw your knife", RoleColor(MM_Role.Murderer), out hud.throwText, out hud.throwKey, 48f);
             prompt.anchorMin = prompt.anchorMax = prompt.pivot = new Vector2(0.5f, 0f);

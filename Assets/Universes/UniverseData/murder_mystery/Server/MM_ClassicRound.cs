@@ -55,6 +55,10 @@ namespace Universes.murder_mystery.Server {
         readonly Dictionary<int, byte> toolSkins = new();
         readonly List<NetworkObject> coins = new();
         readonly Dictionary<GameCharacter, int> manhuntRanks = new();
+        // Smoke bombs: when each innocent may throw again, who NPC murderers cannot see, and players running fast.
+        readonly Dictionary<GameCharacter, float> nextSmokeAt = new();
+        readonly Dictionary<GameCharacter, float> smokedUntil = new();
+        readonly Dictionary<PlayerData, float> boostedUntil = new();
         Dictionary<PlayerData, (byte murderer, byte sheriff)> odds = new();
         int oddsPlayerCount = -1;
         MM_KillClock killClock;
@@ -112,6 +116,9 @@ namespace Universes.murder_mystery.Server {
             toolSkins.Clear();
             coins.Clear();
             throws.Clear();
+            nextSmokeAt.Clear();
+            smokedUntil.Clear();
+            EndAllBoosts();
             droppedGun = null;
             StopGunSeeker();
             gunSeekersTried.Clear();
@@ -340,6 +347,7 @@ namespace Universes.murder_mystery.Server {
             if (!Active)
                 return;
             throws.Tick(deltaTime);
+            TickBoosts();
             if (Phase != MM_Phase.Hunt)
                 return;
             if (Time.time >= nextCoinAt) {
@@ -385,6 +393,75 @@ namespace Universes.murder_mystery.Server {
             InstanceFinder.ServerManager.Broadcast(conn, new MM_CoinBroadcast {
                 position = position, coins = p.coins, coinCap = tuning.coinBagSize,
             });
+        }
+
+        // ---------- smoke bombs ----------
+
+        public void OnSmokeRequest(NetworkConnection conn, MM_SmokeRequest request, Channel channel) {
+            if (!Active || !TryGetLivingCharacter(conn, out GameCharacter character)
+                || !byCharacter.TryGetValue(character, out Participant p))
+                return;
+            if (MM_SmokeRules.Check(Phase, p.role, p.hero, p.Alive, p.coins, tuning.smokeCoinCost, SmokeCooldown(character)) != MM_SmokeCheck.Ok)
+                return;
+            float now = Time.time;
+            nextSmokeAt[character] = now + tuning.smokeCooldownSeconds;
+            smokedUntil[character] = now + tuning.smokeHideSeconds;
+            p.coins -= tuning.smokeCoinCost;
+            if (p.player != null) {
+                int cost = tuning.smokeCoinCost;
+                PlayerProgress.Modify<MM_SaveData>(p.player, save => {
+                    save.coinsCollected = MM_SmokeRules.LifetimeAfterSpending(save.coinsCollected, cost);
+                    save.smokeBombs++;
+                });
+                Boost(p.player, now + tuning.smokeBoostSeconds);
+            }
+            MM_SmokeBroadcast message = new() {
+                position = character.transform.position,
+                characterObjectId = character.NetworkObject.ObjectId,
+                boostSeconds = tuning.smokeBoostSeconds,
+            };
+            InstanceFinder.ServerManager.BroadcastExcept(conn, message);
+            message.yours = true;
+            InstanceFinder.ServerManager.Broadcast(conn, message);
+            // The bag chip shows the coins going.
+            runner.SendClassicState(p.player);
+        }
+
+        /// <summary>Seconds until this innocent may throw another smoke bomb.</summary>
+        float SmokeCooldown(GameCharacter character) =>
+            nextSmokeAt.TryGetValue(character, out float at) ? Mathf.Max(0f, at - Time.time) : 0f;
+
+        /// <summary>Whether a smoke bomb hides this character from NPC murderers right now.</summary>
+        public bool HiddenBySmoke(GameCharacter character) =>
+            character != null && smokedUntil.TryGetValue(character, out float until) && Time.time < until;
+
+        void Boost(PlayerData player, float until) {
+            boostedUntil[player] = until;
+            runner.ApplyPlayerSpeed(player, tuning.smokeSpeedMultiplier);
+        }
+
+        void TickBoosts() {
+            if (boostedUntil.Count == 0)
+                return;
+            float now = Time.time;
+            List<PlayerData> ended = null;
+            foreach (KeyValuePair<PlayerData, float> boost in boostedUntil)
+                if (boost.Key == null || now >= boost.Value)
+                    (ended ??= new List<PlayerData>()).Add(boost.Key);
+            if (ended == null)
+                return;
+            foreach (PlayerData player in ended) {
+                boostedUntil.Remove(player);
+                if (player != null)
+                    runner.ApplyPlayerSpeed(player, 1f);
+            }
+        }
+
+        void EndAllBoosts() {
+            foreach (PlayerData player in boostedUntil.Keys)
+                if (player != null)
+                    runner.ApplyPlayerSpeed(player, 1f);
+            boostedUntil.Clear();
         }
 
         // ---------- deaths ----------
@@ -803,6 +880,10 @@ namespace Universes.murder_mystery.Server {
                 return state;
             state.hero = me.hero;
             state.coins = me.coins;
+            if (me.role == MM_Role.Innocent && !me.hero && me.Alive) {
+                state.smokeCost = tuning.smokeCoinCost;
+                state.smokeCooldown = SmokeCooldown(me.character);
+            }
             if (me.role == MM_Role.Murderer && me.Alive && killClock.Running) {
                 state.killCooldown = Mathf.CeilToInt(killClock.SecondsUntilReady(KillerId(me.character), Time.time));
                 state.throwCooldown = ThrowCooldown(me.character);

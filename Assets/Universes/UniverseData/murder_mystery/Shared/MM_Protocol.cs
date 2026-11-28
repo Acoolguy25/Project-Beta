@@ -46,11 +46,28 @@ namespace Universes.UniverseData.murder_mystery {
         public byte murdererChance, sheriffChance;
         /// <summary>Coins this player has collected in murder mystery, ever (knife-skin progress between rounds).</summary>
         public int lifetimeCoins;
+        /// <summary>Innocents: what a smoke bomb costs, and seconds until the next one may be thrown (0 = ready).</summary>
+        public int smokeCost;
+        public float smokeCooldown;
     }
 
     /// <summary>Client (a murderer holding the knife) asks to throw it at a point in the world.</summary>
     public struct MM_ThrowKnifeRequest : IBroadcast {
         public Vector3 target;
+    }
+
+    /// <summary>Client (a living innocent) asks to throw a smoke bomb where they stand.</summary>
+    public struct MM_SmokeRequest : IBroadcast { }
+
+    /// <summary>A smoke bomb went off. Sent to everyone near enough to see it; the thrower also gets <see cref="yours"/>.</summary>
+    public struct MM_SmokeBroadcast : IBroadcast {
+        public Vector3 position;
+        /// <summary>The thrower's character, so the cloud can follow the first steps of the dash.</summary>
+        public int characterObjectId;
+        /// <summary>True only in the copy sent to the thrower.</summary>
+        public bool yours;
+        /// <summary>How long the thrower runs faster (seconds).</summary>
+        public float boostSeconds;
     }
 
     /// <summary>A knife left someone's hand. Sent to everyone; the flight is simulated by the server.</summary>
