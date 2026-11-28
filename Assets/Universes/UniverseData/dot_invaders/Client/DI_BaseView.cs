@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 #if !UNITY_SERVER
 using RyanAssets.GameFeel;
@@ -82,6 +82,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [SerializeField, Range(1, 10)] int superMeterSegments = 5;
         [Tooltip("Meter colour while charging; it whitens as the charge fills.")]
         [SerializeField] Color superChargingColor = new(1f, 0.72f, 0.22f);
+        [Tooltip("Super meter colour while it is paused (the base is sending or under attack): a dim grey instead of a PAUSED word, which ran into neighbouring bases.")]
+        [SerializeField] Color superPausedColor = new(0.55f, 0.58f, 0.64f);
         [Tooltip("Base units between the troop count and the role/meter labels above and below it; clears the role marks.")]
         [SerializeField, Min(0f)] float labelSpacing = 4.4f;
 
@@ -335,17 +337,16 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 BuildSuperText(filled, status);
                 productionLabel.SetText(meterText);
             }
-            productionLabel.color = Color.Lerp(superChargingColor, Color.white, charge);
+            productionLabel.color = status == MeterPaused ? superPausedColor : Color.Lerp(superChargingColor, Color.white, charge);
         }
 
         void BuildSuperText(int filled, int status) {
             // Digits and '/' only: the board's label font has no bar or dash glyphs.
             meterText.Clear().Append("SUPER ").Append(filled).Append('/').Append(superMeterSegments);
             // One line only: a second line ran into neighbouring bases and the drag arrow.
+            // A paused meter is shown by colour alone (see superPausedColor), keeping the label short.
             if (status == MeterFull)
                 meterText.Append(" FULL");
-            else if (status == MeterPaused)
-                meterText.Append(" PAUSED");
         }
 
         public void SetInteraction(bool isSelected, bool isNeighbor, bool isHovered) {

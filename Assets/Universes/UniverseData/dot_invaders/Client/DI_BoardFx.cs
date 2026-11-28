@@ -110,6 +110,19 @@ namespace Universes.UniverseData.dot_invaders.Client {
         [Tooltip("A loss gets a dark flash and the lose cue only; the match-over panel is the caption.")]
         [SerializeField, Min(0.01f)] float defeatFlashSeconds = 0.8f;
 
+        [Header("Overdrive")]
+        [Tooltip("A ring on each base of a team that fires Overdrive.")]
+        [SerializeField, Min(0f)] float overdriveRingScale = 7f;
+        [SerializeField, Range(0f, 1f)] float overdriveRingWhiten = 0.35f;
+        [SerializeField, Min(0)] int maxOverdriveRings = 12;
+        [SerializeField, Range(0f, 1f)] float otherOverdriveVolume = 0.35f;
+        [SerializeField] Color overdriveFlash = new(1f, 0.75f, 0.2f, 0.18f);
+        [SerializeField, Min(0.01f)] float overdriveFlashSeconds = 0.35f;
+        [SerializeField] string overdriveText = "OVERDRIVE!";
+        [SerializeField, Range(0.1f, 1f)] float overdriveTextSize = 0.3f;
+        [SerializeField, Min(0.1f)] float overdriveTextSeconds = 1.4f;
+        [SerializeField] Color overdriveTextColor = new(1f, 0.82f, 0.3f);
+
         [Header("Placement")]
         [Tooltip("Height above the board effects play at, so they sit over roads and bases.")]
         [SerializeField, Min(0f)] float effectHeight = 0.6f;
@@ -141,6 +154,7 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 PresentArrivals(previous, next, views);
                 PresentCaptures(previous, next, views, teamColor);
                 PresentEliminations(previous, next, teamColor);
+                PresentOverdrive(previous, next, teamColor);
             }
             if (previous.basePositions != null && !previous.matchEnded && next.matchEnded)
                 PresentMatchEnd(next);
@@ -261,6 +275,30 @@ namespace Universes.UniverseData.dot_invaders.Client {
                         localEliminationTextSeconds, localEliminationTextSize);
                 } else {
                     GameSfx.Play(eliminationSound, otherEliminationVolume);
+                }
+            }
+        }
+
+        /// <summary>A team that just fired Overdrive: rings on its bases and a horn; your own also gets a caption.</summary>
+        void PresentOverdrive(in DI_StateBroadcast previous, in DI_StateBroadcast next, Func<int, Color> teamColor) {
+            if (next.overdriveTeams == null)
+                return;
+            foreach (int team in next.overdriveTeams) {
+                if (previous.overdriveTeams != null && Array.IndexOf(previous.overdriveTeams, team) >= 0)
+                    continue;
+                Color ring = Color.Lerp(teamColor(team), Color.white, overdriveRingWhiten);
+                for (int i = 0, rings = 0; i < next.baseTeams.Length && rings < maxOverdriveRings; i++) {
+                    if (next.baseTeams[i] != team)
+                        continue;
+                    GameFx.Play(FxKind.ShockwaveRing, World(next.basePositions[i]), ring, overdriveRingScale);
+                    rings++;
+                }
+                if (team == next.yourTeamId) {
+                    GameSfx.Play(SfxCue.Horn);
+                    ScreenFx.Flash(overdriveFlash, overdriveFlashSeconds);
+                    ScreenFx.ShowText(overdriveText, overdriveTextColor, overdriveTextSeconds, overdriveTextSize);
+                } else {
+                    GameSfx.Play(SfxCue.Horn, otherOverdriveVolume);
                 }
             }
         }

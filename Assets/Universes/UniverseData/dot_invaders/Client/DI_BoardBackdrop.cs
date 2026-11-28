@@ -9,7 +9,8 @@ namespace Universes.UniverseData.dot_invaders.Client {
     public sealed class DI_BoardBackdrop : MonoBehaviour {
 #if !UNITY_SERVER
         /// <summary>Must match DI_MAX_TERRITORY in DI_Backdrop.shader.</summary>
-        public const int MaxBases = 64;
+        // Matches the backdrop shader's site arrays and the board generator's cap (DI_Arena.MaxBases).
+        public const int MaxBases = DI_Arena.MaxBases;
 
         static readonly int BasesId = Shader.PropertyToID("_DI_TerritoryBases");
         static readonly int ColorsId = Shader.PropertyToID("_DI_TerritoryColors");

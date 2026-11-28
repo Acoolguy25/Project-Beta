@@ -12,7 +12,13 @@
         "RyanAssets.UI",
         "RyanAssets.GameFeel",
         "Unity.RenderPipelines.Core.Runtime",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Client",
+        "RyanAssets.Client.ClientUI.Vote",
+        "RyanAssets.Shared.Global",
+        "RyanAssets.Shared.Requests",
+        "RyanAssets.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

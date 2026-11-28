@@ -111,8 +111,11 @@ namespace Universes.UniverseData.dot_invaders.Client {
             runtimeRoot.SetParent(transform, false);
             boardTitle = transform.Find("Title")?.GetComponent<TextMeshPro>();
             homeBaseTeleporter = GetComponent<DI_HomeBaseTeleporter>();
-            if (hudPrefab != null)
+            if (hudPrefab != null) {
                 hud = Instantiate(hudPrefab, transform);
+                hud.AbilityPressed += SendAbility;
+                hud.LoadoutRequested += SendLoadout;
+            }
             if (boardTitle != null)
                 boardTitle.text = "DOT INVADERS";
 
@@ -157,8 +160,17 @@ namespace Universes.UniverseData.dot_invaders.Client {
                 return;
 
             InstanceFinder.ClientManager.RegisterBroadcast<DI_StateBroadcast>(OnState);
+            InstanceFinder.ClientManager.RegisterBroadcast<DI_ProfileBroadcast>(OnProfile);
             registered = true;
         }
+
+        void OnProfile(DI_ProfileBroadcast profile, Channel channel) => hud?.SetProfile(profile);
+
+        static void SendAbility() =>
+            InstanceFinder.ClientManager?.Broadcast(new DI_AbilityRequest { ability = DI_AbilityRequest.Overdrive });
+
+        static void SendLoadout(string[] perks) =>
+            InstanceFinder.ClientManager?.Broadcast(new DI_PerkRequest { perks = perks });
 
         void OnState(DI_StateBroadcast next, Channel channel) {
             if (!IsValidState(next))
@@ -349,9 +361,12 @@ namespace Universes.UniverseData.dot_invaders.Client {
             }
         }
 
-        static string GetTeamName(int teamId) {
+        /// <summary>"Cyan team" for players; "Red (Veteran NPC)" for bots, with the tier they play at this match.</summary>
+        string GetTeamName(int teamId) {
             string name = DI_Rules.GetTeamColor(teamId).ToString();
-            return teamId >= 100 ? $"{name} (NPC)" : $"{name} team";
+            if (teamId < 100)
+                return $"{name} team";
+            return string.IsNullOrEmpty(state.npcTierName) ? $"{name} (NPC)" : $"{name} ({state.npcTierName} NPC)";
         }
 
         void ResizeViews<T>(List<T> views, int count, GameObject prefab) where T : Component {
@@ -745,8 +760,14 @@ namespace Universes.UniverseData.dot_invaders.Client {
         }
 
         void OnDestroy() {
-            if (registered && InstanceFinder.ClientManager != null)
+            if (hud != null) {
+                hud.AbilityPressed -= SendAbility;
+                hud.LoadoutRequested -= SendLoadout;
+            }
+            if (registered && InstanceFinder.ClientManager != null) {
                 InstanceFinder.ClientManager.UnregisterBroadcast<DI_StateBroadcast>(OnState);
+                InstanceFinder.ClientManager.UnregisterBroadcast<DI_ProfileBroadcast>(OnProfile);
+            }
         }
 #endif
     }

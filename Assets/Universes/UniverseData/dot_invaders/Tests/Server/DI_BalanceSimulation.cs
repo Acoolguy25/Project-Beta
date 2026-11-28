@@ -16,7 +16,8 @@ namespace Universes.UniverseData.dot_invaders.Tests {
     [Explicit("Balance harness: plays full simulated matches; run on demand.")]
     public class DI_BalanceSimulation {
         const BindingFlags Members = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-        // The live server scene runs 20-minute matches (dot_invaders_server.unity overrides the prefab).
+        // The live server scene caps matches at 20 minutes (dot_invaders_server.unity overrides the prefab);
+        // the harness plays to that cap so a slow board still finishes.
         const int MatchSeconds = 1200;
         const int MatchesPerCase = 5;
         const int SampleEverySeconds = 60;
@@ -47,7 +48,9 @@ namespace Universes.UniverseData.dot_invaders.Tests {
             int factoryHolderWon = 0, sampled = 0, decided = 0;
 
             for (int match = 1; match <= MatchesPerCase; match++) {
-                StartBoard();
+                // Each match on the next board in the table, so the harness covers every layout.
+                DI_BoardLayout layout = DI_BoardLayouts.All[(match - 1) % DI_BoardLayouts.All.Count];
+                StartBoard(layout, match);
                 IList bases = (IList)Get("bases");
                 List<int> factories = Indexes(bases, "isFactory"), fortresses = Indexes(bases, "isFortress");
                 var timeline = new StringBuilder();
@@ -75,7 +78,7 @@ namespace Universes.UniverseData.dot_invaders.Tests {
                             factoryHolderWon++;
                     }
                 }
-                report.Append($"Match {match}: winner team {winner} by {(eliminated ? "elimination" : "time")} after " +
+                report.Append($"Match {match} on {layout.id}: winner team {winner} by {(eliminated ? "elimination" : "time")} after " +
                               $"{elapsedSteps * step / 60f:0.0} min; factories {Join(factories)}, fortresses {Join(fortresses)}\n")
                       .Append(timeline);
             }
@@ -84,19 +87,14 @@ namespace Universes.UniverseData.dot_invaders.Tests {
             Assert.That(decided, Is.GreaterThan(0), "No match produced a winner.");
         }
 
-        void StartBoard() {
+        void StartBoard(DI_BoardLayout layout, int seed) {
             Set("matchDurationSeconds", MatchSeconds);
             foreach (string list in new[] { "bases", "links", "dots", "npcTeams", "dotInvadersTeams", "clashPositions" })
                 Get(list).GetType().GetMethod("Clear").Invoke(Get(list), null);
             Set("nextTeamId", 0);
             Set("winningTeamId", -1);
-            Call("GenerateBases");
-            Call("GenerateLinks");
-            Call("AssignTurrets");
-            Call("AssignSuperBases");
-            Call("AssignSpeedBases");
-            Call("AssignFactoriesAndFortresses");
-            Call("SpawnNpcTeams");
+            Call("BuildBoard", layout, seed);
+            Call("SpawnNpcTeams", layout.npcTeams);
             Set("initialized", true);
             Set("matchInProgress", true);
         }

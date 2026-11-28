@@ -52,7 +52,15 @@ namespace Universes.UniverseData.dot_invaders {
             FloatCommand("FactoryMultiplier", "Sets how many times faster a factory base trains troops.", "Multiplier",
                 DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier),
             FloatCommand("FortressMultiplier", "Sets how many attackers a fortress base needs per defender.", "Multiplier",
-                DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier)
+                DI_Rules.MinSpecialBaseMultiplier, DI_Rules.MaxSpecialBaseMultiplier),
+            IntCommand("NPCTier", "Forces the NPC tier (0 = easiest) or -1 to pick it from the players' ratings; the running match becomes unrated.",
+                "Tier", -1, 16),
+            new CommandConfig {
+                commandType = "Dot Invaders",
+                commandName = "NextBoard",
+                description = "Sets the board the next match is played on (open_field, archipelago, halo, three_lanes, honeycomb, skirmish, grand_frontier).",
+                arguments = new[] { new CommandArgumentConfig { name = "Board", type = CommandArgumentType.String } }
+            },
         };
 
         static DI_ServerRunner runner;
@@ -77,6 +85,29 @@ namespace Universes.UniverseData.dot_invaders {
             ServerCommandService.RegisterCommand(Commands[15], SetPlayerBuff, (caller, args) => ReadPlayerBuff(caller, args, false));
             ServerCommandService.RegisterCommand(Commands[16], SetFactoryMultiplier, (_, _) => runner.FactoryMultiplier);
             ServerCommandService.RegisterCommand(Commands[17], SetFortressMultiplier, (_, _) => runner.FortressMultiplier);
+            ServerCommandService.RegisterCommand(Commands[18], SetNpcTier, (_, _) => runner.ForcedNpcTier);
+            ServerCommandService.RegisterCommand(Commands[19], SetNextBoard);
+        }
+
+        static void SetNpcTier(NetworkConnection caller, string commandName, string[] args) {
+            int value = int.Parse(args[0], NumberStyles.Integer, CultureInfo.InvariantCulture);
+            runner.SetNpcTier(value);
+            ServerChat.SendSystemMessage(new SystemMessageBroadcast(
+                value < 0 ? $"NPC tier now follows the players' ratings ({runner.NpcTierName} this match)."
+                    : $"NPC tier forced to {runner.NpcTierName}.", SystemMessageSource.CustomMessage));
+        }
+
+        static void SetNextBoard(NetworkConnection caller, string commandName, string[] args) {
+            string id = args.Length > 0 ? args[0].Trim().ToLowerInvariant() : string.Empty;
+            string reply = runner.SetNextBoard(id)
+                ? $"The next match is played on {DI_BoardLayouts.Find(id).title}."
+                : $"Unknown board '{id}'. Boards: {string.Join(", ", BoardIds())}.";
+            ServerChat.SendSystemMessage(caller, new SystemMessageBroadcast(reply, SystemMessageSource.CustomMessage));
+        }
+
+        static IEnumerable<string> BoardIds() {
+            foreach (DI_BoardLayout layout in DI_BoardLayouts.All)
+                yield return layout.id;
         }
 
         internal static void Unregister() {
@@ -168,6 +199,7 @@ namespace Universes.UniverseData.dot_invaders {
             // One interpolated string: concatenation would drop the FormattableString.
             string report = FormattableString.Invariant(
                 $@"Dot Invaders settings
+Board {runner.Layout.title} | NPC tier {runner.NpcTierName}
 NPCIntelligence {runner.NPCIntelligence} | NPCAggression {runner.NpcAggression}
 MoveSpeed {runner.MoveSpeedMultiplier}x ({runner.MoveSpeed} board units/s) | SpeedBaseBonus {runner.SpeedBaseBonus}
 SendInterval {runner.SendIntervalMultiplier}x ({runner.SendInterval} seconds)

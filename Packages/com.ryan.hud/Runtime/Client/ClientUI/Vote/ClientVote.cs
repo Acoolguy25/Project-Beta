@@ -1,3 +1,4 @@
+using System;
 using FishNet;
 using FishNet.Object.Synchronizing;
 using RyanAssets.Client.ClientCore;
@@ -13,6 +14,16 @@ using UnityEngine.UI;
 
 namespace RyanAssets.Client.ClientUI.Vote {
     public class ClientVote : ListGridUI<ClientVoteOption> {
+        /// <summary>
+        /// Lets a game draw its own panel for a dynamic vote: return true for a vote the game presents
+        /// itself and this shared panel stays hidden while it runs. Votes still go through
+        /// <see cref="VoteRequest"/>, so the server side does not change.
+        /// </summary>
+        public static Predicate<SharedDynamicVote> CustomDynamicVote;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => CustomDynamicVote = null;
+
         CanvasGroup canvasGroup;
         [SerializeField]
         TextMeshProUGUI titleText, descriptionText, timerText;
@@ -127,8 +138,17 @@ namespace RyanAssets.Client.ClientUI.Vote {
         void OnSkipVoteCountChanged(int previous, int next, bool asServer) => UpdateVoteCounts();
 
         void OnDynamicVoteChanged(SharedDynamicVote previous, SharedDynamicVote next, bool asServer) {
-            if (displayedVote && displayedHeader.voteId == VoteEnum.Dynamic)
+            // Also refreshes a hidden panel: the new vote may be one no game draws itself.
+            if (SharedGlobalEvents.isVoting)
                 Refresh();
+        }
+
+        /// <summary>True while the running vote is a dynamic one that a game presents itself.</summary>
+        static bool PresentedByGame() {
+            Predicate<SharedDynamicVote> custom = CustomDynamicVote;
+            SharedGlobalEvents events = SharedGlobalEvents.Instance;
+            return custom != null && events != null && events.SharedVoteHeader.Value.voteId == VoteEnum.Dynamic &&
+                custom(events.DynamicVote.Value);
         }
 
         /// <summary>Presentation data for the running vote: declared in the prefab, or sent by the server for dynamic votes.</summary>
@@ -169,7 +189,7 @@ namespace RyanAssets.Client.ClientUI.Vote {
                 return;
 
             Subscribe();
-            bool visible = SharedGlobalEvents.isVoting && VoteDeclarations.Instance != null;
+            bool visible = SharedGlobalEvents.isVoting && VoteDeclarations.Instance != null && !PresentedByGame();
             displayedVote = visible;
             SetVisible(visible);
             if (!visible)

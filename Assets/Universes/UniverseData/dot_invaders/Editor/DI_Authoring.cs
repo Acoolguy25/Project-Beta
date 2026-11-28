@@ -1,4 +1,6 @@
-﻿using RyanAssets.UI;
+﻿using RyanAssets.Retention.Client;
+using RyanAssets.Retention.Editor;
+using RyanAssets.UI;
 using RyanAssets.UI.Editor;
 using RyanAssets.UI.GameHud;
 using TMPro;
@@ -38,6 +40,22 @@ namespace Universes.UniverseData.dot_invaders.Editor {
         // Below the kit's moods (20), so a MoodVolume.Apply still takes over.
         const float NeonVolumePriority = 5f;
         static readonly Color Muted = new(0.71f, 0.74f, 0.78f);
+        // Commander cluster (rank, perks, Overdrive), bottom right: clear of the kit's level chip
+        // (bottom left), the controls hint (bottom centre) and the kit's toasts (top right).
+        static readonly Vector2 CommanderAnchor = new(1f, 0f);
+        static readonly Vector2 CommanderOffset = new(-16f, 16f);
+        const float CommanderChipHeight = 40f;
+        const float PerkPanelWidth = 480f;
+        const float PerkStatusWidth = 104f;
+        // Above the commander cluster: two chip rows and their spacing.
+        static readonly Vector2 PerkPanelOffset = new(-16f, 120f);
+        const float PerkRowHeight = 60f;
+        // Board vote: tile width (picture plus padding), tagline box and the card's place, a little above centre.
+        const float BoardVoteTileWidth = 240f;
+        const float BoardVoteTaglineHeight = 34f;
+        static readonly Vector2 BoardVoteOffset = new(0f, 20f);
+        static readonly Color PerkAccent = new(0.5f, 0.85f, 1f);
+        static readonly Color OverdriveColor = new(1f, 0.82f, 0.25f);
 
         // Role marks, in DI_Base local units (the body's radius is 2.25, its ring's 2.7).
         const int GearTeeth = 8;
@@ -444,6 +462,8 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Divider(strip);
             HudChip bases = Bare(HudKit.Chip(strip, "Bases", "castle", "0", Muted, 34f));
             HudChip troops = Bare(HudKit.Chip(strip, "Troops", "meeple_army", "0", Muted, 34f));
+            Divider(strip);
+            HudChip board = Bare(HudKit.Chip(strip, "Board", "explore", "Open Field", Muted, 34f));
 
             DI_PowerBar power = BuildPowerBar(root);
 
@@ -458,15 +478,26 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Hint(controls, "Esc", "Cancel");
             Hint(controls, "Gear", "Factory trains faster");
             Hint(controls, "Walls", "Fortress needs more attackers");
+            Hint(controls, "P", "Perks");
             HudPopup controlsPopup = HudKit.Popup(controls, true);
 
             HudBanner banner = HudKit.Banner(root, "MatchEnd", new Vector2(0.5f, 0.5f), new Vector2(0f, 60f), 560f, "laurels_trophy", Color.cyan, 88f, "Match over");
+            // The result line colours the rating change.
+            if (banner.subtitle != null)
+                banner.subtitle.richText = true;
+
+            BuildCommander(root, hud);
+            Set(hud, "perkPanel", BuildPerkPanel(root));
+            BuildBoardVote(root, banner);
+            // The kit's level chip, challenges, toasts and summary card, at the kit's default placements.
+            Set(hud, "retention", RetentionHudAuthoring.AddTo(root));
 
             Set(hud, "teamDisc", teamDisc);
             Set(hud, "teamName", teamName);
             Set(hud, "clock", clock);
             Set(hud, "bases", bases);
             Set(hud, "troops", troops);
+            Set(hud, "board", board);
             Set(hud, "powerBar", power);
             Set(hud, "controls", controlsPopup);
             Set(hud, "banner", banner);
@@ -475,6 +506,183 @@ namespace Universes.UniverseData.dot_invaders.Editor {
             Set(hud, "drawIcon", HudKit.Icon("crossed_swords"));
             UseTruncateOverflow(root);
             return UIKit.SavePrefab(root.gameObject, HudPath).GetComponent<DI_HUD>();
+        }
+
+        /// <summary>Bottom right: the Overdrive prompt (X) over the perks button (P) and the rank chip.</summary>
+        static void BuildCommander(RectTransform root, DI_HUD hud) {
+            RectTransform commander = UIKit.Pinned(root, "Commander", CommanderAnchor, CommanderOffset, new Vector2(320f, 90f));
+            UIKit.Column(commander.gameObject, 8f, null, TextAnchor.LowerRight).childForceExpandWidth = false;
+            UIKit.FitContent(commander.gameObject, true, true);
+
+            RectTransform ability = HudKit.KeyPrompt(commander, "Overdrive", "X", "Overdrive ready", OverdriveColor,
+                out TMP_Text abilityLabel, out Image abilityKey, CommanderChipHeight);
+            ability.GetComponent<Image>().raycastTarget = true;
+            Button abilityButton = UIKit.Clickable(ability, CommanderChipHeight * 0.5f);
+            HudPopup abilityPopup = HudKit.Popup(ability, false);
+
+            RectTransform profile = UIKit.Node(commander, "Profile");
+            UIKit.Row(profile.gameObject, 8f, null, TextAnchor.MiddleRight);
+            UIKit.FitContent(profile.gameObject, true, false);
+            HudChip perks = HudKit.Chip(profile, "Perks", "star_medal", "Perks 0/1", PerkAccent, CommanderChipHeight);
+            perks.background.raycastTarget = true;
+            HudKit.KeyCap(perks.transform, "P");
+            Button perksButton = UIKit.Clickable((RectTransform)perks.transform, CommanderChipHeight * 0.5f);
+            HudChip rank = HudKit.Chip(profile, "Rank", "military_tech", "Bronze III  1000", Color.white, CommanderChipHeight);
+            rank.label.richText = true;
+
+            Set(hud, "commander", commander);
+            Set(hud, "ability", abilityPopup);
+            Set(hud, "abilityButton", abilityButton);
+            Set(hud, "abilityKey", abilityKey);
+            Set(hud, "abilityLabel", abilityLabel);
+            Set(hud, "perks", perks);
+            Set(hud, "perksButton", perksButton);
+            Set(hud, "rank", rank);
+        }
+
+        /// <summary>The perk picker: a card above the commander cluster with one template row, cloned per perk at runtime.</summary>
+        // --- Board vote -----------------------------------------------------------------------
+
+        /// <summary>
+        /// The between-match board vote: a centred card with one tile per board (picture, name, tagline,
+        /// numbers, votes). DI_BoardVote sits on the HUD root, which stays active while the card is hidden.
+        /// </summary>
+        static void BuildBoardVote(RectTransform root, HudBanner banner) {
+            RectTransform card = HudKit.Card(root, "BoardVote", new Vector2(0.5f, 0.5f), BoardVoteOffset, new Vector2(BoardVoteTileWidth * 3f, 420f));
+            UIKit.Column(card.gameObject, 12f, new RectOffset(18, 18, 14, 16));
+            UIKit.FitContent(card.gameObject, true, true);
+            HudKit.AccentStripe(card, PerkAccent);
+
+            RectTransform header = UIKit.Node(card, "Header");
+            UIKit.Row(header.gameObject, 10f, null, TextAnchor.MiddleLeft);
+            HudKit.Icon(header, "explore", 26f, PerkAccent);
+            TextMeshProUGUI title = UIKit.Text(header, "Title", DI_BoardLayouts.VoteTitle, UIText.Title);
+            UIKit.Size(title, -1f, -1f, 1f);
+            HudChip timer = HudKit.Chip(header, "Timer", "timer", "12s", PerkAccent);
+
+            RectTransform tiles = UIKit.Node(card, "Tiles");
+            UIKit.Row(tiles.gameObject, 12f, null, TextAnchor.UpperCenter);
+            DI_BoardVoteTile template = BuildBoardVoteTile(tiles);
+
+            TextMeshProUGUI hint = UIKit.Text(card, "Hint", "Click a board to vote.", UIText.Small, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
+
+            DI_BoardVote vote = root.gameObject.AddComponent<DI_BoardVote>();
+            Set(vote, "popup", card.GetComponent<HudPopup>());
+            Set(vote, "tileTemplate", template);
+            Set(vote, "timerText", timer.label);
+            Set(vote, "hintText", hint);
+            Set(vote, "resultBanner", banner);
+        }
+
+        static DI_BoardVoteTile BuildBoardVoteTile(RectTransform parent) {
+            RectTransform rect = UIKit.Node(parent, "BoardTemplate");
+            UIKit.Size(rect, BoardVoteTileWidth);
+            UIKit.Rounded(rect, UIColorRole.SurfaceInset, 12f);
+            UIKit.Column(rect.gameObject, 4f, new RectOffset(8, 8, 8, 10), TextAnchor.UpperLeft);
+
+            RectTransform frame = UIKit.Fill(rect, "Selected");
+            frame.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            Image selected = UIKit.Rounded(frame, UIColorRole.Accent, 12f, 0.22f, raycast: false);
+            Object.DestroyImmediate(selected.GetComponent<UIThemeColor>());
+            selected.color = new Color(PerkAccent.r, PerkAccent.g, PerkAccent.b, 0.22f);
+            Image leader = HudKit.AccentStripe(rect, PerkAccent);
+
+            RectTransform picture = UIKit.Node(rect, "Preview");
+            float pictureWidth = BoardVoteTileWidth - 16f;
+            HudKit.Fixed(picture, pictureWidth, Mathf.Round(pictureWidth * DI_Arena.HalfHeight / DI_Arena.HalfWidth));
+            RawImage preview = picture.gameObject.AddComponent<RawImage>();
+            preview.raycastTarget = false;
+
+            TextMeshProUGUI name = UIKit.Text(rect, "Title", "Board", UIText.Strong);
+            TextMeshProUGUI tagline = UIKit.Text(rect, "Tagline", "What the board is like.", UIText.Small, UIColorRole.TextSecondary);
+            tagline.textWrappingMode = TextWrappingModes.Normal;
+            // Two lines for every tagline, so the tiles line up.
+            UIKit.Size(tagline, -1f, BoardVoteTaglineHeight);
+            TextMeshProUGUI stats = UIKit.Text(rect, "Stats", "32 bases, 8 min, 4 bot teams", UIText.Caption, UIColorRole.TextMuted);
+            TextMeshProUGUI votes = UIKit.Text(rect, "Votes", "0 votes", UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.MidlineRight);
+            Object.DestroyImmediate(votes.GetComponent<UIThemeColor>());
+            votes.color = PerkAccent;
+            Button button = UIKit.Clickable(rect, 12f);
+
+            DI_BoardVoteTile tile = rect.gameObject.AddComponent<DI_BoardVoteTile>();
+            Set(tile, "button", button);
+            Set(tile, "preview", preview);
+            Set(tile, "title", name);
+            Set(tile, "tagline", tagline);
+            Set(tile, "stats", stats);
+            Set(tile, "votes", votes);
+            Set(tile, "selectedFrame", selected);
+            Set(tile, "leaderMark", leader);
+            return tile;
+        }
+
+        static DI_PerkPanel BuildPerkPanel(RectTransform root) {
+            RectTransform card = HudKit.Card(root, "PerkPanel", CommanderAnchor, PerkPanelOffset, new Vector2(PerkPanelWidth, 480f));
+            UIKit.Column(card.gameObject, 8f, new RectOffset(18, 18, 14, 16));
+            UIKit.FitContent(card.gameObject, false, true);
+            HudKit.AccentStripe(card, PerkAccent);
+
+            RectTransform header = UIKit.Node(card, "Header");
+            UIKit.Row(header.gameObject, 10f, null, TextAnchor.MiddleLeft);
+            HudKit.Icon(header, "star_medal", 24f, PerkAccent);
+            TextMeshProUGUI title = UIKit.Text(header, "Title", "Commander perks", UIText.Title);
+            UIKit.Size(title, -1f, -1f, 1f);
+            HudKit.KeyCap(header, "P");
+            TextMeshProUGUI slots = UIKit.Text(card, "Slots", "1 / 1 slots", UIText.Small, UIColorRole.TextSecondary);
+            slots.textWrappingMode = TextWrappingModes.Normal;
+
+            RectTransform rows = UIKit.Node(card, "Rows");
+            UIKit.Column(rows.gameObject, 6f);
+            DI_PerkRow template = BuildPerkRow(rows);
+
+            DI_PerkPanel panel = card.gameObject.AddComponent<DI_PerkPanel>();
+            Set(panel, "popup", card.GetComponent<HudPopup>());
+            Set(panel, "frame", card);
+            Set(panel, "rowTemplate", template);
+            Set(panel, "slotsText", slots);
+            var serialized = new SerializedObject(panel);
+            SerializedProperty icons = serialized.FindProperty("icons");
+            icons.ClearArray();
+            foreach (DI_PerkDefinition perk in DI_Perks.All) {
+                icons.InsertArrayElementAtIndex(icons.arraySize);
+                SerializedProperty entry = icons.GetArrayElementAtIndex(icons.arraySize - 1);
+                entry.FindPropertyRelative("id").stringValue = perk.Id;
+                entry.FindPropertyRelative("sprite").objectReferenceValue = HudKit.Icon(perk.Icon);
+            }
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return panel;
+        }
+
+        static DI_PerkRow BuildPerkRow(RectTransform parent) {
+            RectTransform rect = UIKit.Node(parent, "PerkTemplate");
+            // A minimum height only: a long description wraps and the row grows with it.
+            rect.gameObject.AddComponent<LayoutElement>().minHeight = PerkRowHeight;
+            UIKit.Rounded(rect, UIColorRole.SurfaceInset, 10f);
+            UIKit.Row(rect.gameObject, 12f, new RectOffset(14, 12, 6, 6), TextAnchor.MiddleLeft);
+            CanvasGroup group = rect.gameObject.AddComponent<CanvasGroup>();
+            Image mark = HudKit.AccentStripe(rect, PerkAccent, 4f, left: true);
+
+            Image icon = HudKit.Icon(rect, "bolt", 30f, PerkAccent);
+            RectTransform text = UIKit.Node(rect, "Text");
+            UIKit.Column(text.gameObject, 2f, null, TextAnchor.MiddleLeft);
+            UIKit.Size(text, -1f, -1f, 1f);
+            TextMeshProUGUI title = UIKit.Text(text, "Title", "Perk", UIText.Strong);
+            TextMeshProUGUI description = UIKit.Text(text, "Description", "What it does.", UIText.Small, UIColorRole.TextSecondary);
+            description.textWrappingMode = TextWrappingModes.Normal;
+            TextMeshProUGUI status = UIKit.Text(rect, "Status", "Level 2", UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.MidlineRight);
+            Object.DestroyImmediate(status.GetComponent<UIThemeColor>());
+            UIKit.Size(status, PerkStatusWidth);
+            Button button = UIKit.Clickable(rect, 10f);
+
+            DI_PerkRow row = rect.gameObject.AddComponent<DI_PerkRow>();
+            Set(row, "button", button);
+            Set(row, "icon", icon);
+            Set(row, "title", title);
+            Set(row, "description", description);
+            Set(row, "status", status);
+            Set(row, "equippedMark", mark);
+            Set(row, "group", group);
+            return row;
         }
 
         /// <summary>

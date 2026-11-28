@@ -6,7 +6,11 @@
         "Universes.UniverseData.dot_invaders.Server",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "RyanAssets.Server.ServerFeatures"
+        "RyanAssets.Server.ServerFeatures",
+        "RyanAssets.Retention",
+        "RyanAssets.Retention.Server",
+        "RyanAssets.Progress",
+        "UniTask"
     ],
     "includePlatforms": [
         "Editor"

@@ -445,6 +445,16 @@ MonoBehaviour:
   victoryFlashSeconds: 0.4
   defeatFlash: {r: 0.05, g: 0.02, b: 0.08, a: 0.45}
   defeatFlashSeconds: 0.8
+  overdriveRingScale: 7
+  overdriveRingWhiten: 0.35
+  maxOverdriveRings: 12
+  otherOverdriveVolume: 0.35
+  overdriveFlash: {r: 1, g: 0.75, b: 0.2, a: 0.18}
+  overdriveFlashSeconds: 0.35
+  overdriveText: OVERDRIVE!
+  overdriveTextSize: 0.3
+  overdriveTextSeconds: 1.4
+  overdriveTextColor: {r: 1, g: 0.82, b: 0.3, a: 1}
   effectHeight: 0.6
 --- !u!1 &5060468652190620228
 GameObject:

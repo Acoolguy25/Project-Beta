@@ -53,12 +53,16 @@ namespace Universes.UniverseData.dot_invaders {
             matchRecords.TryGetValue(clientId, out MatchRecord record);
             record.mostBasesHeld = Mathf.Max(record.mostBasesHeld, 1);
             matchRecords[clientId] = record;
-            if (matchInProgress)
+            EnterRating(player.Owner, teamId);
+            ApplyLoadout(player.Owner, teamId);
+            if (matchInProgress) {
+                retention?.BeginMatch(player.Owner);
                 BroadcastState();
+            }
         }
 
-        void SpawnNpcTeams() {
-            for (int teamIndex = 0; teamIndex < NpcTeamCount; teamIndex++) {
+        void SpawnNpcTeams(int count) {
+            for (int teamIndex = 0; teamIndex < Mathf.Clamp(count, 0, DI_Arena.MaxNpcTeams); teamIndex++) {
                 var npcTeam = new NpcTeamState {
                     ownerClientId = -2 - teamIndex,
                     teamId = NpcTeamIdStart + teamIndex,
@@ -86,25 +90,30 @@ namespace Universes.UniverseData.dot_invaders {
             }
         }
 
+        /// <summary>
+        /// The free plain base furthest from every held base. The first team on an empty board starts
+        /// as far from the middle as possible, so no team starts in a core. -1 when none is free.
+        /// </summary>
         int FindSpawnBase() {
             int best = -1;
             float bestDistance = float.MinValue;
+            bool anyHeld = false;
+            foreach (BaseState state in bases)
+                anyHeld |= state.teamId >= 0;
 
             for (int i = 0; i < bases.Count; i++) {
-                // Nobody starts on a special base.
-                if (bases[i].teamId >= 0 || IsSpecial(bases[i]))
+                // Nobody starts on a special base, a core or a middle island.
+                if (bases[i].teamId >= 0 || IsSpecial(bases[i]) || !bases[i].spawnable)
                     continue;
 
-                float nearestOwnedDistance = float.MaxValue;
-                for (int j = 0; j < bases.Count; j++) {
-                    if (bases[j].teamId >= 0) {
-                        nearestOwnedDistance = Mathf.Min(nearestOwnedDistance,
-                            (bases[i].position - bases[j].position).sqrMagnitude);
-                    }
-                }
+                float score = anyHeld ? float.MaxValue : bases[i].position.sqrMagnitude;
+                if (anyHeld)
+                    for (int j = 0; j < bases.Count; j++)
+                        if (bases[j].teamId >= 0)
+                            score = Mathf.Min(score, (bases[i].position - bases[j].position).sqrMagnitude);
 
-                if (nearestOwnedDistance > bestDistance) {
-                    bestDistance = nearestOwnedDistance;
+                if (score > bestDistance) {
+                    bestDistance = score;
                     best = i;
                 }
             }
@@ -117,7 +126,13 @@ namespace Universes.UniverseData.dot_invaders {
                 return;
 
             int clientId = player.Owner.ClientId;
+            // A player who leaves a running match is out: rated as eliminated now, behind every team still in.
+            if (matchInProgress && playerTeams.TryGetValue(clientId, out int leavingTeam) && dotInvadersTeams.Contains(leavingTeam)) {
+                RecordElimination(leavingTeam);
+                RateLeavingPlayer(player.Owner, leavingTeam);
+            }
             RecordLeavingPlayerProgress(player);
+            ForgetPlayerProgression(clientId);
             playerTeams.Remove(clientId);
             playerDamageMultipliers.Remove(clientId);
             playerProductionMultipliers.Remove(clientId);
