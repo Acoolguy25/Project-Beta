@@ -16,7 +16,9 @@ namespace Universes.UniverseData.obby {
         // Added in phase B of the overhaul.
         Ice, Wind,
         // Added in round 2 (2026-11-25).
-        OutOfBounds, Ghost, Honey, Ring, Swing, Plank
+        OutOfBounds, Ghost, Honey, Ring, Swing, Plank,
+        // Added in round 4 (2026-11-28).
+        PowerBlock
     }
 
     /// <summary>
@@ -76,6 +78,10 @@ namespace Universes.UniverseData.obby {
     /// pivot at <c>position</c>, <c>size</c> = (platform width, rope length, platform depth), <c>vector</c> = (amplitude in
     /// degrees, platform thickness, 0), <c>period</c>, <c>phase</c>; it swings along the stage's forward axis. Plank = a scaled box
     /// like Crumble: <c>speed</c> = fuse, <c>period</c> = regrow. Lift Shaft lifts are ordinary Mover pieces travelling up or down.
+    /// </para>
+    /// <para>
+    /// Round-4 kinds: PowerBlock = a "?" block floating over a checkpoint pad, <c>position</c> = block centre, <c>size</c> = the
+    /// block, <c>group</c> = the <see cref="OB_PowerUp"/> it gives when bumped from below (once per racer per race).
     /// </para>
     /// </summary>
     [Serializable]

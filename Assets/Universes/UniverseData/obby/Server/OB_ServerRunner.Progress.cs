@@ -40,6 +40,7 @@ namespace Universes.UniverseData.obby.Server {
             for (int s = 0; s < layout.StageCount; s++) lavaByStage.Add(new List<LavaZone>());
             foreach (var piece in layout.pieces)
                 if (piece.kind == OB_PieceKind.RisingLava && piece.stage < layout.StageCount) lavaByStage[piece.stage].Add(new LavaZone(piece));
+            IndexPowerBlocks();
         }
 
         // ---------------------------------------------------------------- pickups

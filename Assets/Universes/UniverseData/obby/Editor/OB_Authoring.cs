@@ -577,6 +577,8 @@ namespace Universes.UniverseData.obby.Editor {
             public Material beatSolidA, beatGhostA, beatSolidB, beatGhostB;
             /// <summary>The overhaul's mechanics (OB_Authoring.Mechanics.cs).</summary>
             public MechanicPrefabs mechanics;
+            /// <summary>The round-4 "?" block (OB_Authoring.PowerUps.cs).</summary>
+            public GameObject powerBlock;
         }
 
         // ---------------------------------------------------------------- pieces
@@ -793,6 +795,7 @@ namespace Universes.UniverseData.obby.Editor {
                 p.lobby = Save(root, "Lobby");
             }
             p.mechanics = BuildMechanics(fx, lavaMat);
+            p.powerBlock = BuildPowerBlock(font);
             return p;
         }
 
@@ -1083,6 +1086,8 @@ namespace Universes.UniverseData.obby.Editor {
                 var dot = Box("RacerDot", track, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.one * 12f);
                 strip.racerDotTemplate = Panel(dot, OB_Palette.Paper, 6f);
             }
+            // Power-ups from "?" blocks: a pill under the stage card while one is held (OB_Authoring.PowerUps.cs).
+            AddPowerUps(root, hud, bold, panel, shadow, StageCardTop + 112f + 14f);
             {   // Dash, bottom centre: a captioned charge bar that shows while the dash is spent and says when it is ready
                 // (it replaces the kit's thin unlabelled stamina strip along the bottom edge).
                 var bottom = new Vector2(0.5f, 0f);
@@ -1274,6 +1279,7 @@ namespace Universes.UniverseData.obby.Editor {
                 course.conveyor = p.conveyor; course.crumble = p.crumble; course.beat = p.beat; course.wallJumpWall = p.wallJumpWall;
                 course.mover = p.mover; course.spinnerBar = p.spinnerBar; course.spinnerCross = p.spinnerCross; course.coin = p.coin;
                 AssignMechanics(course, p.mechanics);
+                course.powerBlock = p.powerBlock;
                 course.tierPlatforms = p.tierPlatforms;
                 course.beatSolidA = p.beatSolidA; course.beatGhostA = p.beatGhostA; course.beatSolidB = p.beatSolidB; course.beatGhostB = p.beatGhostB;
                 course.clientPrefab = client;

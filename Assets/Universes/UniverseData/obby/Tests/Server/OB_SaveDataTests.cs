@@ -62,8 +62,20 @@ namespace Universes.UniverseData.obby.Tests {
             Assert.AreEqual(OB_Tiers.Count, old.tierBestStars.Length);
             Assert.AreEqual((2, 1, 0), (old.tierBestStars[0], old.tierBestStars[1], old.tierBestStars[2]), "existing entries are kept");
             Assert.AreEqual(0, old.totalStars);
-            Assert.AreEqual(3, new OB_SaveData().LatestVersion);
+            Assert.AreEqual(4, new OB_SaveData().LatestVersion);
             Assert.AreEqual(0UL, old.seenMechanics, "an old save has seen no mechanic yet, so every hint shows once");
+        }
+
+        [Test] public void VersionThreeSavesGainAnEmptyPowerUpRecord() {
+            var old = new OB_SaveData { powerUps = null, shieldSaves = -2 };
+            old.Validate();
+            Assert.AreEqual(4, old.powerUps.Length);
+            Assert.AreEqual((0, 0), (old.TotalPowerUps, old.shieldSaves));
+            old.RecordPowerUp(OB_PowerUp.Shield);
+            old.RecordPowerUp(OB_PowerUp.Rush);
+            old.RecordPowerUp(OB_PowerUp.Rush);
+            old.RecordPowerUp(OB_PowerUp.None);
+            Assert.AreEqual((1, 2, 3), (old.powerUps[(int)OB_PowerUp.Shield], old.powerUps[(int)OB_PowerUp.Rush], old.TotalPowerUps));
         }
 
         [Test] public void TierRecordsKeepTheFastestAndReportThePreviousBest() {

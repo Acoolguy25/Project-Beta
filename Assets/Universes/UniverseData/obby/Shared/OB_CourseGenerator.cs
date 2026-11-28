@@ -355,6 +355,7 @@ namespace Universes.UniverseData.obby {
             layout.finishTop = World(finishTop);
             layout.finish = new Bounds(layout.finishTop + Vector3.up * 2f, new Vector3(FinishSize, 4f, FinishSize));
             FuseCrumbles();
+            PlacePowerBlocks();
             return layout;
         }
 

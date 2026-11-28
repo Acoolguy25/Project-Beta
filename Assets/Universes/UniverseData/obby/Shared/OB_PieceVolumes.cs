@@ -99,6 +99,9 @@ namespace Universes.UniverseData.obby {
                         ? new OB_Volume(piece.position + Vector3.up * (SwitchPadVolume.y * 0.5f), SwitchPadVolume, piece.yaw)
                         : new OB_Volume(piece.position, SwitchBlockVolume, piece.yaw);
                     return true;
+                case OB_PieceKind.PowerBlock:
+                    volume = new OB_Volume(piece.position, piece.size, piece.yaw);
+                    return true;
                 case OB_PieceKind.Pendulum: {
                     // Pivot at the top; the head sweeps sideways through the whole swing.
                     float length = piece.size.y, reach = length * Mathf.Sin(Mathf.Min(90f, piece.vector.x) * Mathf.Deg2Rad);

@@ -127,4 +127,22 @@ namespace Universes.UniverseData.obby {
         public int seed;
         public OB_Standing[] racers;
     }
+
+    /// <summary>
+    /// One racer's power-ups, sent to everyone when they change (so every client can draw the bubble and the rainbow),
+    /// and to a joining client for every racer.
+    /// </summary>
+    public struct OB_PowerBroadcast : IBroadcast {
+        public int seed;
+        public int clientId;
+        public OB_PowerEvent evt;
+        /// <summary>The power just gained (<see cref="OB_PowerEvent.Got"/>), else None.</summary>
+        public OB_PowerUp gained;
+        /// <summary>Stage whose block was bumped (<see cref="OB_PowerEvent.Got"/>), else -1.</summary>
+        public int stage;
+        public bool shield;
+        public float bootsLeft, rushLeft;
+        /// <summary>Stages whose block this racer has used, one bit per stage.</summary>
+        public ulong usedBlocks;
+    }
 }

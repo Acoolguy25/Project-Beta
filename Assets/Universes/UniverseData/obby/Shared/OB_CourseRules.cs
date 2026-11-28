@@ -60,6 +60,8 @@ namespace Universes.UniverseData.obby {
         [Range(0f, 1f)] public float proDashShare = 0.7f;
         [Tooltip("A crumbling piece holds at least this many seconds longer than crossing its longest side at walk speed takes, so it can always be run across.")]
         [Min(0f)] public float crumbleCrossMargin = 0.3f;
+        [Tooltip("\"?\" blocks over checkpoint pads and the power-ups they give.")]
+        public OB_PowerUpRules powerUps = new();
 
         public static OB_CourseRules Default => new();
 
@@ -96,6 +98,8 @@ namespace Universes.UniverseData.obby {
                 throw new ArgumentException("The Basic tier must introduce at least one mechanic.");
             if (mechanics == null) throw new ArgumentException("OB_CourseRules needs its mechanic rules.");
             mechanics.Validate();
+            if (powerUps == null) throw new ArgumentException("OB_CourseRules needs its power-up rules.");
+            powerUps.Validate();
         }
 
         /// <summary>

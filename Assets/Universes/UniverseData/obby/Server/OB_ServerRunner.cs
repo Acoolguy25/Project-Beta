@@ -138,6 +138,8 @@ namespace Universes.UniverseData.obby.Server {
             /// <summary>Where this runner was when the speed window opened (sampleTime 0: no window yet).</summary>
             public Vector3 samplePosition;
             public float sampleTime;
+            /// <summary>Power-ups from "?" blocks: the shield held, Cloud Boots and Rainbow Rush timers, blocks used.</summary>
+            public readonly OB_PowerState power = new();
         }
 
         readonly Dictionary<NetworkConnection, Runner> runners = new();
@@ -224,6 +226,7 @@ namespace Universes.UniverseData.obby.Server {
             added.graceUntil = Time.time + teleportGrace;
             // A new character appears at the spawn: the speed check starts a fresh window there.
             added.sampleTime = 0f;
+            added.power.ForgetHead();
             if (PlayerData.TryGetPlayerData(character.Owner, out var player)) PreparePlayer(player);
         }
 
@@ -279,6 +282,7 @@ namespace Universes.UniverseData.obby.Server {
             InstanceFinder.ServerManager.Broadcast(MakeCourse());
             ServerPlayerCharacter.Instance.SpawnAllPlayerCharacters();
             foreach (var connection in runners.Keys) SendProgress(connection, OB_ProgressReason.Sync);
+            BroadcastPowerStates();
             SendStandings();
 
             phase = OB_Phase.Countdown;
@@ -368,11 +372,15 @@ namespace Universes.UniverseData.obby.Server {
                     }
                     if (layout.finish.Contains(centre)) Finish(pair.Key, runner);
                     CollectPickups(pair.Key, runner, centre);
+                    CheckPowerBlocks(pair.Key, runner, bounds);
                 }
 
                 PlatformerQuery.GetBox(body, HazardSkin, out Vector3 boxCenter, out Vector3 halfExtents, out Quaternion orientation);
-                if (TouchesHazard(scene, pair.Key, boxCenter, halfExtents, orientation) || InRisingLava(runner, bounds)) {
-                    SendBack(character, runner, OB_ProgressReason.Hazard);
+                if (!runner.power.Protects(Time.time)
+                    && (TouchesHazard(scene, pair.Key, boxCenter, halfExtents, orientation) || InRisingLava(runner, bounds))) {
+                    // A bubble shield takes the hit instead (and a moment of grace to get clear of the hazard).
+                    if (runner.power.TryAbsorb(Time.time, PowerRules)) ShieldPopped(pair.Key, runner);
+                    else SendBack(character, runner, OB_ProgressReason.Hazard);
                     continue;
                 }
                 // Falls are judged by the reached stage the player is physically over, so going back for a
@@ -489,6 +497,7 @@ namespace Universes.UniverseData.obby.Server {
             runner.lavaStart = -1f;
             runner.graceUntil = Time.time + teleportGrace;
             runner.sampleTime = 0f;
+            runner.power.ForgetHead();
             character.TeleportTo(SpawnPosition(character.Owner));
         }
 
@@ -508,6 +517,7 @@ namespace Universes.UniverseData.obby.Server {
             runner.medal = OB_Medal.None;
             runner.personalBest = false;
             runner.place = 0;
+            runner.power.Clear();
         }
 
         /// <summary>A racer's standing; the name is only filled for the server's own ordering (clients have the names).</summary>
@@ -534,6 +544,7 @@ namespace Universes.UniverseData.obby.Server {
             if (layout == null || connection == null || !connection.IsActive) return;
             InstanceFinder.ServerManager.Broadcast(connection, MakeCourse());
             SendProgress(connection, OB_ProgressReason.Sync);
+            SendPowerStates(connection);
         }
 
         void OnCourseRequest(NetworkConnection connection, OB_CourseRequest request, Channel channel) {

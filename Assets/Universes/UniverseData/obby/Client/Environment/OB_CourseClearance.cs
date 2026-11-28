@@ -115,10 +115,11 @@ namespace Universes.UniverseData.obby.Client {
                     Bounds box = Sweep(piece, PieceBounds(piece, settings.defaultPieceSize));
                     if (IsWide(piece)) AddZone(Widen(box, settings.turnedGravityMargin), float.NegativeInfinity, i, false, Grow(box));
                     else AddZone(Grow(box), box.min.y, i, false);
-                    if (piece.kind == OB_PieceKind.Wind) {
-                        var wind = zones[zones.Count - 1];
-                        wind.soft = true;
-                        zones[zones.Count - 1] = wind;
+                    // Wind is invisible air, and a "?" block floats over its own pad: arches framing the pad may pass them.
+                    if (piece.kind is OB_PieceKind.Wind or OB_PieceKind.PowerBlock) {
+                        var passable = zones[zones.Count - 1];
+                        passable.soft = true;
+                        zones[zones.Count - 1] = passable;
                     }
                     if (IsRouteSurface(piece.kind)) {
                         int stage = Mathf.Clamp(piece.stage, 0, layout.StageCount - 1);
@@ -205,7 +206,7 @@ namespace Universes.UniverseData.obby.Client {
             or OB_PieceKind.Crumble or OB_PieceKind.Beat or OB_PieceKind.WallJumpWall or OB_PieceKind.Mover
             or OB_PieceKind.Beam or OB_PieceKind.OnOffBlock or OB_PieceKind.Laser or OB_PieceKind.RollingLog
             or OB_PieceKind.Crusher or OB_PieceKind.GravityFlip or OB_PieceKind.RisingLava or OB_PieceKind.Ice
-            or OB_PieceKind.Wind or OB_PieceKind.Ghost or OB_PieceKind.Honey or OB_PieceKind.Plank;
+            or OB_PieceKind.Wind or OB_PieceKind.Ghost or OB_PieceKind.Honey or OB_PieceKind.Plank or OB_PieceKind.PowerBlock;
 
         /// <summary>Pieces whose origin is their box centre (the generator's Box helper); others sit on their origin.</summary>
         static bool HasBoxOrigin(OB_PieceKind kind) => kind is not (OB_PieceKind.Spring or OB_PieceKind.Boost or OB_PieceKind.Coin
@@ -216,7 +217,7 @@ namespace Universes.UniverseData.obby.Client {
             or OB_PieceKind.Lava or OB_PieceKind.RisingLava or OB_PieceKind.WallJumpWall or OB_PieceKind.SpinnerBar
             or OB_PieceKind.SpinnerCross or OB_PieceKind.Pendulum or OB_PieceKind.Crusher or OB_PieceKind.Laser
             or OB_PieceKind.OnOffSwitch or OB_PieceKind.GravityFlip or OB_PieceKind.Wind or OB_PieceKind.OutOfBounds
-            or OB_PieceKind.Honey or OB_PieceKind.Swing or OB_PieceKind.Ring);
+            or OB_PieceKind.Honey or OB_PieceKind.Swing or OB_PieceKind.Ring or OB_PieceKind.PowerBlock);
 
         bool IsWide(in OB_Piece piece) {
             // Pieces that turn gravity turn the player (and the chase camera) onto walls and ceilings.

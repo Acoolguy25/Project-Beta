@@ -6,8 +6,8 @@ namespace Universes.UniverseData.obby.Server {
     /// <summary>What Sky Obby remembers about a player between sessions. Written only by the server.</summary>
     public sealed class OB_SaveData : ProgressData {
         public const string Universe = OB_Retention.Universe;
-        /// <summary>2: retention block, stars, tier bests. 3: mechanics seen (hints shown once).</summary>
-        public override int LatestVersion => 3;
+        /// <summary>2: retention block, stars, tier bests. 3: mechanics seen (hints shown once). 4: power-ups.</summary>
+        public override int LatestVersion => 4;
 
         /// <summary>Fastest finish in seconds (clock time, before the coin bonus); 0 until the first finish.</summary>
         public float bestFinishTime;
@@ -45,6 +45,30 @@ namespace Universes.UniverseData.obby.Server {
         /// mechanic's how-to hint only until it is in here, so a returning player is not taught the same thing every race.
         /// </summary>
         public ulong seenMechanics;
+
+        // Version 4.
+        /// <summary>"?" blocks bumped, by power-up (indexed by <see cref="OB_PowerUp"/>; None stays 0).</summary>
+        public int[] powerUps = new int[PowerUpKinds];
+        /// <summary>Hazards a Bubble Shield blocked.</summary>
+        public int shieldSaves;
+
+        const int PowerUpKinds = 4;
+
+        /// <summary>Records a bumped "?" block.</summary>
+        public void RecordPowerUp(OB_PowerUp power) {
+            int i = (int)power;
+            if (i <= 0 || i >= PowerUpKinds) return;
+            powerUps[i]++;
+        }
+
+        /// <summary>"?" blocks bumped over every race.</summary>
+        public int TotalPowerUps {
+            get {
+                int total = 0;
+                foreach (int count in powerUps) total += count;
+                return total;
+            }
+        }
 
         /// <summary>Marks every mechanic of <paramref name="stage"/> as seen.</summary>
         public void RecordSeen(OB_Stage stage) {
@@ -124,6 +148,15 @@ namespace Universes.UniverseData.obby.Server {
             for (int i = 0; i < tierBestStars.Length; i++) tierBestStars[i] = Math.Max(0, tierBestStars[i]);
             cleanTiers = Math.Max(0, cleanTiers);
             perfectTiers = Math.Max(0, perfectTiers);
+            // Version 3 saves have no power-up record; it starts empty.
+            if (powerUps == null || powerUps.Length != PowerUpKinds) {
+                var fitted = new int[PowerUpKinds];
+                if (powerUps != null) Array.Copy(powerUps, fitted, Math.Min(powerUps.Length, PowerUpKinds));
+                powerUps = fitted;
+            }
+            for (int i = 0; i < powerUps.Length; i++) powerUps[i] = Math.Max(0, powerUps[i]);
+            powerUps[0] = 0;
+            shieldSaves = Math.Max(0, shieldSaves);
         }
 
         /// <summary>An array of one entry per tier, keeping what <paramref name="values"/> already holds.</summary>

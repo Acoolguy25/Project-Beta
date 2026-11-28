@@ -757,8 +757,8 @@ namespace Universes.UniverseData.obby.Client {
             }
         }
 
-        /// <summary>Shows a short message in the toast pill.</summary>
-        void Toast(string message, Color accent, float seconds = -1f) {
+        /// <summary>Shows a short message in the toast pill (other obby HUD parts, such as power-ups, announce through it too).</summary>
+        public void Toast(string message, Color accent, float seconds = -1f) {
             toastLabel.text = message;
             toastBackground.color = accent.WithAlpha(toastOpacity);
             toastLabel.color = accent.grayscale > 0.55f ? OB_Palette.Ink : OB_Palette.Paper;

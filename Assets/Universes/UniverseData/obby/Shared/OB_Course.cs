@@ -34,6 +34,8 @@ namespace Universes.UniverseData.obby {
         public GameObject ice, wind;
         [Tooltip("Round-2 mechanics (OB_Authoring assigns them).")]
         public GameObject ghost, honey, ring, swing, plank;
+        [Tooltip("Round-4 \"?\" block (OB_Authoring assigns it): a unit cube OB_Course scales to the rules' block size.")]
+        public GameObject powerBlock;
 
         [Header("Presentation")]
         [Tooltip("Platform materials per difficulty tier (indexed by OB_Tier), cycled per stage inside the tier.")]
@@ -81,7 +83,7 @@ namespace Universes.UniverseData.obby {
             && onOffSwitchBlock != null && pendulum != null && crusher != null && laser != null && rollingLog != null
             && turntable != null && cannon != null && mushroom != null && gravityFlipPad != null && gravityFlipOrb != null
             && risingLava != null && star != null && ice != null && wind != null && ghost != null && honey != null && ring != null
-            && swing != null && plank != null;
+            && swing != null && plank != null && powerBlock != null;
 
         /// <summary>The movement the course is designed around, with the sprint speed the server applies.</summary>
         public OB_Movement DesignMovement {
@@ -156,6 +158,7 @@ namespace Universes.UniverseData.obby {
             OB_PieceKind.Ring => ring,
             OB_PieceKind.Swing => swing,
             OB_PieceKind.Plank => plank,
+            OB_PieceKind.PowerBlock => powerBlock,
             _ => null
         };
 
@@ -168,7 +171,8 @@ namespace Universes.UniverseData.obby {
         static bool IsScaledBox(OB_PieceKind kind) => kind is OB_PieceKind.Platform or OB_PieceKind.Lava or OB_PieceKind.GravityZone
             or OB_PieceKind.Conveyor or OB_PieceKind.Crumble or OB_PieceKind.Beat or OB_PieceKind.WallJumpWall or OB_PieceKind.Mover
             or OB_PieceKind.Beam or OB_PieceKind.OnOffBlock or OB_PieceKind.Laser or OB_PieceKind.Crusher or OB_PieceKind.RisingLava
-            or OB_PieceKind.Ice or OB_PieceKind.Ghost or OB_PieceKind.Honey or OB_PieceKind.Plank;
+            or OB_PieceKind.Ice or OB_PieceKind.Ghost or OB_PieceKind.Honey or OB_PieceKind.Plank
+            or OB_PieceKind.PowerBlock;
 
         /// <summary>Limits walking input in the flight after a launcher (the client's FlightControl does the work).</summary>
         static void AddFlightControl(GameObject launcher, float seconds, float share) {
@@ -347,6 +351,9 @@ namespace Universes.UniverseData.obby {
                     break;
                 case OB_PieceKind.Plank:
                     Tile(go, piece.size);
+                    break;
+                case OB_PieceKind.PowerBlock:
+                    if (go.TryGetComponent(out OB_PowerBlock prize)) prize.Configure((OB_PowerUp)piece.group);
                     break;
                 case OB_PieceKind.RisingLava:
                     if (go.TryGetComponent(out RisingLava rising))

@@ -51,6 +51,10 @@ namespace Universes.UniverseData.obby {
         public const string RidesStat = "sky_rides";
         /// <summary>Ghost Path or Rope Bridge stages cleared (blocks that vanish under you).</summary>
         public const string VanishStat = "vanishing_paths";
+        /// <summary>"?" blocks bumped (power-ups collected).</summary>
+        public const string PowerUpsStat = "power_ups";
+        /// <summary>Hazards a Bubble Shield blocked.</summary>
+        public const string ShieldSavesStat = "shield_saves";
 
         /// <summary>The daily pool: one entry per stat key, so every day's three challenges ask for different things.</summary>
         public static readonly ChallengeDefinition[] Challenges = {
@@ -69,6 +73,8 @@ namespace Universes.UniverseData.obby {
             new("rings_2", RingsStat, 2, 120, 30, "Fly through {target} boost ring chains"),
             new("rides_3", RidesStat, 3, 120, 30, "Cross {target} trapeze or lift stages"),
             new("vanish_3", VanishStat, 3, 130, 35, "Cross {target} ghost paths or rope bridges"),
+            new("power_ups_4", PowerUpsStat, 4, 110, 30, "Bump {target} ? blocks"),
+            new("shield_saves_2", ShieldSavesStat, 2, 130, 35, "Let a Bubble Shield save you {target} times"),
         };
 
         public static RetentionRules Rules(RetentionTuning tuning) => new(Universe, tuning, Unlocks, Challenges);
