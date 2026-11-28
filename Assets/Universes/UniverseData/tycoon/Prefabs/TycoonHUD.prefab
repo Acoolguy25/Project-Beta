@@ -17449,6 +17449,10 @@ MonoBehaviour:
   rocketTrailScale: 3
   rocketAwaySeconds: 1.6
   rocketShakeRadius: 70
+  rocketPlumePuffs: 14
+  rocketPlumeRadius: 4.5
+  rocketLandingSeconds: 3.2
+  rocketLandingHeight: 40
   chestColor: {r: 1, g: 0.85, b: 0.3, a: 1}
   chestBurstScale: 2.2
   chestConfettiScale: 2
@@ -33458,6 +33462,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 8495150057594646530}
     m_Modifications:
+    - target: {fileID: 1274371442628044353, guid: c58071569a1de6064a369e800a0ba210, type: 3}
+      propertyPath: streakNoneFormat
+      value: Play 3 min or open your chest to start a streak (+{0} XP)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1274371442628044353, guid: c58071569a1de6064a369e800a0ba210, type: 3}
+      propertyPath: streakPendingFormat
+      value: 'Day {0} streak: play 3 min or open your chest (+{1} XP)'
+      objectReference: {fileID: 0}
     - target: {fileID: 2128243958237386646, guid: c58071569a1de6064a369e800a0ba210, type: 3}
       propertyPath: m_Pivot.x
       value: 0

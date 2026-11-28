@@ -26,6 +26,8 @@ namespace Universes.UniverseData.tycoon.Tests {
         sealed class PacingRun {
             public readonly List<(int rebirth, double minute, int level)> rebirths = new();
             public readonly Dictionary<int, (int day, double minute)> levelReached = new();
+            /// <summary>The day and minute each landmark (by catalog index) was built.</summary>
+            public readonly Dictionary<int, (int day, double minute)> landmarkBuilt = new();
             public double coinCash, factoryCash;
             public double coinCashLate, factoryCashLate;
             public string log;
@@ -167,6 +169,7 @@ namespace Universes.UniverseData.tycoon.Tests {
                         Earn(SecondsPerRebirth, day);
                     } else {
                         purchased |= 1ul << next;
+                        if (TY_Catalog.Items[next].kind == TY_ItemKind.Landmark) run.landmarkBuilt[next] = (day, minutes);
                         Earn(SecondsPerPurchase, day);
                     }
                 }
@@ -195,6 +198,23 @@ namespace Universes.UniverseData.tycoon.Tests {
             Assert.That(l25.day, Is.InRange(4, 10), $"level 25 should take several days of play: {text}");
             Assert.IsTrue(run.levelReached.TryGetValue(10, out var l10) && l10.minute >= 30, $"level 10 takes a full first session: {text}");
             Assert.IsTrue(run.levelReached.TryGetValue(15, out var l15) && l15.day >= 2, $"level 15 is not a first-day level: {text}");
+        }
+
+        [Test]
+        public void LandmarksArriveOverDaysNotOneSitting() {
+            // The plot should keep changing after the first session: a few landmarks on day 1, the rest
+            // spread over the next days, with the Brick Rocket as the end of the first week.
+            PacingRun run = Simulate(14);
+            string built = string.Join(", ", run.landmarkBuilt.OrderBy(b => b.Key).Select(b => $"{TY_Catalog.Items[b.Key].name} day {b.Value.day} ({b.Value.minute:0} min)"));
+            Report($"landmarks: {built}");
+            Assert.AreEqual(TY_Catalog.LandmarkCount, run.landmarkBuilt.Count, $"all landmarks within two weeks: {built}");
+            int firstDay = run.landmarkBuilt.Values.Count(b => b.day == 1);
+            Assert.That(firstDay, Is.InRange(1, 3), $"day 1 builds only the first landmarks: {built}");
+            int rocket = Array.FindIndex(TY_Catalog.Items, i => i.name == "Brick Rocket");
+            Assert.IsTrue(run.landmarkBuilt.TryGetValue(rocket, out var launch), built);
+            Assert.That(launch.day, Is.InRange(4, 9), $"the Brick Rocket caps the first week or so: {built}");
+            // A live bot ran faster than this model through the first rebirths (it walks less and catches more
+            // coins), so real players may get there a day or so earlier.
         }
 
         [Test]

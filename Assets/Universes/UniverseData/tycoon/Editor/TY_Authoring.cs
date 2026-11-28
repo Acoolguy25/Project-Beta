@@ -204,11 +204,12 @@ namespace Universes.UniverseData.tycoon.Editor {
             p.items[Index("Auto-Collector")] = AutoCollector(p);
             p.items[Index("Bank Tower")] = Building(p, "BankTower", "building_E");
             // Landmarks: each base is the catalog's footprint (TY_Item.size), so they never overlap (tested).
+            // The solar panels turn their blue faces towards the gate, where the owner spawns and players pass.
             p.items[Index("Solar Farm")] = Landmark(p, mats, "Solar Farm",
-                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(-1.15f, 0f, -1.15f), 0f),
-                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(1.15f, 0f, -1.15f), 0f),
-                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(-1.15f, 0f, 1.15f), 0f),
-                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(1.15f, 0f, 1.15f), 0f));
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(-1.15f, 0f, -1.15f), 180f),
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(1.15f, 0f, -1.15f), 180f),
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(-1.15f, 0f, 1.15f), 180f),
+                new LandmarkPart(Pack.Space, "solarpanel", 2.2f, new Vector3(1.15f, 0f, 1.15f), 180f));
             // A warehouse with containers waiting at its door.
             p.items[Index("Cargo Port")] = Landmark(p, mats, "Cargo Port",
                 new LandmarkPart(Pack.Space, "cargodepot_B", 3.4f, new Vector3(-0.5f, 0f, -0.6f), 180f),
@@ -553,8 +554,10 @@ namespace Universes.UniverseData.tycoon.Editor {
         /// <summary>The landmark's colour on its plate: bright, like the ready chest's sign.</summary>
         static Color PlateColor => Color.Lerp(TY_Lanes.Color(TY_ItemKind.Landmark), Color.white, 0.15f);
 
-        static void LandmarkPlate(Transform root, in TY_Item item, float top) {
-            Transform sign = DarkSign(root, new Vector3(0f, top + 0.75f, 0f), PlateSize, TY_Lanes.Color(TY_ItemKind.Landmark));
+        /// <param name="top">Height of the models the plate floats over.</param>
+        /// <param name="x">Where the plate hangs on the base (x and z in the landmark's space); centred by default.</param>
+        static void LandmarkPlate(Transform root, in TY_Item item, float top, float x = 0f, float z = 0f) {
+            Transform sign = DarkSign(root, new Vector3(x, top + 0.75f, z), PlateSize, TY_Lanes.Color(TY_ItemKind.Landmark));
             var text = WorldText("Label", sign, new Vector3(0f, -0.03f, -0.02f), $"{item.name.ToUpperInvariant()}  <size=80%>x{item.value:0.##}</size>", 2.4f,
                 PlateColor, new Vector2(PlateSize.x - 0.2f, PlateSize.y - 0.1f));
             text.textWrappingMode = TextWrappingModes.NoWrap;
@@ -566,6 +569,8 @@ namespace Universes.UniverseData.tycoon.Editor {
 
         const string RocketModel = "Assets/CartoonMilitaryModelPack/OriginalMeshes&Materials/CustomPart/Missiles/ICBM/ICBM_01.fbx";
         const string RocketMaterial = "Assets/CartoonMilitaryModelPack/OriginalMeshes&Materials/CustomPart/Missiles/ICBM/Materials/ICBM_01_BodyTexture.mat";
+        /// <summary>Where the launch gantry stands on the Brick Rocket's base (its name plate hangs over it).</summary>
+        static readonly Vector3 GantryOffset = new(1.55f, 0f, -1.2f);
         /// <summary>Height of the Brick Rocket: the capstone landmark is the tallest thing on the plot.</summary>
         const float RocketHeight = 8.5f;
 
@@ -574,21 +579,36 @@ namespace Universes.UniverseData.tycoon.Editor {
         /// rocket is its own child (TY_RocketView), so clients can launch it when it is built.
         /// </summary>
         static GameObject BrickRocket(Prefabs p, Mats m) {
-            var (root, _) = LandmarkBody(p, m, "Brick Rocket",
+            var (root, gantryTop) = LandmarkBody(p, m, "Brick Rocket",
                 new LandmarkPart(Pack.Space, "landingpad_small", 3.2f, new Vector3(-0.3f, 0f, 0.2f), 0f),
-                new LandmarkPart(Pack.Space, "structure_tall", 3.6f, new Vector3(1.55f, 0f, -1.2f), 90f));
+                new LandmarkPart(Pack.Space, "structure_tall", 3.6f, GantryOffset, 90f));
             var view = root.AddComponent<TY_RocketView>();
             var holder = Empty("Rocket", root.transform, new Vector3(-0.3f, LandmarkBaseHeight + 0.25f, 0.2f));
             var model = Model(RocketModel, holder.transform, RocketHeight);
             if (model == null) throw new FileNotFoundException("Rocket model missing: " + RocketModel);
             StandUp(model, holder.transform);
-            var material = AssetDatabase.LoadAssetAtPath<Material>(RocketMaterial);
+            var material = RocketBody();
             if (material != null) foreach (var r in model.GetComponentsInChildren<Renderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => material).ToArray();
             view.rocket = holder.transform;
             view.nozzle = Empty("Nozzle", holder.transform, new Vector3(0f, 0.2f, 0f)).transform;
-            float top = RendererBounds(root).max.y - root.transform.position.y;
-            LandmarkPlate(root.transform, TY_Catalog.Items[Index("Brick Rocket")], top);
+            // The plate hangs at the gantry's height, not over the rocket's nose: up there it sat on the HUD's
+            // player list from the spawn camera.
+            LandmarkPlate(root.transform, TY_Catalog.Items[Index("Brick Rocket")], gantryTop, GantryOffset.x, GantryOffset.z);
             return Kit.Save(root, "Items", root.name);
+        }
+
+        /// <summary>Brick red, so the Brick Rocket reads as the tycoon's own rocket against the white gantry.</summary>
+        static readonly Color RocketRed = new(0.86f, 0.36f, 0.26f);
+
+        /// <summary>
+        /// The rocket's body: the military pack's painted texture tinted brick red (its white hull took the
+        /// colour; the dark details stay dark), in the tycoon's own Materials folder so the pack stays as it is.
+        /// </summary>
+        static Material RocketBody() {
+            var source = AssetDatabase.LoadAssetAtPath<Material>(RocketMaterial);
+            if (source == null) throw new FileNotFoundException("Rocket material missing: " + RocketMaterial);
+            Texture texture = source.HasProperty("_BaseMap") ? source.GetTexture("_BaseMap") : source.mainTexture;
+            return Kit.Mat("BrickRocketBody", RocketRed, texture as Texture2D, smoothness: 0.45f, metallic: 0.1f);
         }
 
         /// <summary>Turns a model whose long side lies flat so it stands on <paramref name="holder"/>'s origin, pointing up.</summary>

@@ -77,7 +77,7 @@ namespace Universes.UniverseData.tycoon {
 
         /// <summary>The prize text from its parts (clients get the parts in the wallet).</summary>
         public static string PrizeText(int minutes, int tokens) {
-            string cash = $"{Math.Max(0, minutes)} min of income";
+            string cash = $"{Math.Max(0, minutes)} min of best income";
             return tokens > 0 ? $"{cash}, +{tokens} perk token{(tokens == 1 ? "" : "s")}" : cash;
         }
 

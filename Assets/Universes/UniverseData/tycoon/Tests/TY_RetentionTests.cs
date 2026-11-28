@@ -59,7 +59,7 @@ namespace Universes.UniverseData.tycoon.Tests {
             // A veteran's save (everything built, many rebirths) skips the goals already behind them.
             var veteran = new TY_GoalStats {
                 purchased = TY_Catalog.AllButRebirth, collects = 1000, coins = 1000, lifetime = 10_000_000_000,
-                income = 1_000_000, rebirths = 12, perkLevels = 10,
+                income = 1_000_000, rebirths = 25, perkLevels = 10,
             };
             int start = TY_Goals.FirstUnmet(veteran);
             Assert.GreaterOrEqual(start, TY_Goals.AuthoredCount, "a finished veteran starts in the tail");
@@ -178,11 +178,13 @@ namespace Universes.UniverseData.tycoon.Tests {
 
         [Test]
         public void LaterRunsStayShortWithTheLandmarks() {
-            // The greedy player of FirstRebirthTakesMinutesNotHours, through many rebirths, buying each
-            // landmark as it opens. Every run (rebirth to rebirth) should stay a session-sized chunk.
+            // The greedy player of FirstRebirthTakesMinutesNotHours (no perks, levels or coins), through its
+            // first eleven rebirths, buying each landmark as it opens. Every run (rebirth to rebirth) should stay
+            // a session-sized chunk; later runs lean on perks and levels (TY_PacingTests models those).
+            const int Runs = 11;
             ulong purchased = TY_Catalog.StarterMask;
             var runs = new List<double>();
-            for (int rebirths = 0; rebirths < 12; rebirths++) {
+            for (int rebirths = 0; rebirths < Runs; rebirths++) {
                 double cash = 0, seconds = 0;
                 while (true) {
                     int next = TY_Catalog.AvailableItems(purchased, rebirths).OrderBy(i => TY_Catalog.Price(i, rebirths)).First();
@@ -197,7 +199,11 @@ namespace Universes.UniverseData.tycoon.Tests {
                 purchased = TY_Catalog.RebirthKeeps(purchased, false);
             }
             string log = string.Join(", ", runs.Select(s => $"{s / 60:0.0}"));
-            Assert.AreEqual(TY_Catalog.LandmarkMask, purchased & TY_Catalog.LandmarkMask, $"every landmark gets built ({log} min)");
+            ulong opened = 0;
+            for (int i = 0; i < TY_Catalog.Count; i++)
+                if (TY_Catalog.Items[i].kind == TY_ItemKind.Landmark && TY_Catalog.Items[i].rebirths < Runs) opened |= 1ul << i;
+            Assert.AreNotEqual(0ul, opened);
+            Assert.AreEqual(opened, purchased & TY_Catalog.LandmarkMask, $"every landmark open by rebirth {Runs - 1} gets built ({log} min)");
             foreach (double run in runs) Assert.That(run, Is.InRange(60, 30 * 60), $"runs in minutes: {log}");
         }
 
@@ -293,9 +299,9 @@ namespace Universes.UniverseData.tycoon.Tests {
             Assert.AreEqual(chest.weekTokens, chest.Tokens(chest.week * 2), "every week of the streak");
             Assert.AreEqual(chest.midWeekDay, chest.NextTokenDay(1));
             Assert.AreEqual(chest.week, chest.NextTokenDay(chest.midWeekDay + 1));
-            Assert.AreEqual("5 min of income", TY_DailyChest.PrizeText(5, 0));
-            Assert.AreEqual("8 min of income, +1 perk token", TY_DailyChest.PrizeText(8, 1));
-            Assert.AreEqual("20 min of income, +2 perk tokens", TY_DailyChest.PrizeText(20, 2));
+            Assert.AreEqual("5 min of best income", TY_DailyChest.PrizeText(5, 0));
+            Assert.AreEqual("8 min of best income, +1 perk token", TY_DailyChest.PrizeText(8, 1));
+            Assert.AreEqual("20 min of best income, +2 perk tokens", TY_DailyChest.PrizeText(20, 2));
             Assert.AreEqual(TY_DailyChest.PrizeText(chest.Minutes(3), chest.Tokens(3)), chest.Prize(3), "the sign and the server name the same prize");
         }
 

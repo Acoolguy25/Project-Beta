@@ -85,6 +85,8 @@ namespace Universes.UniverseData.tycoon.Server {
             public readonly TY_HeldMessage<TY_EventBroadcast> welcome = new();
             /// <summary>Investment levels bought (saved; each adds income, kept through rebirths).</summary>
             public int invested;
+            /// <summary>The best income (rush hours left out) this player's plot has reached, saved: the daily chest pays from it.</summary>
+            public double peakIncome;
             /// <summary>Goal stats of this frame (<see cref="statsFrame"/>), so a tick computes them once; -1 = stale.</summary>
             public TY_GoalStats stats;
             public int statsFrame = -1;
@@ -414,10 +416,15 @@ namespace Universes.UniverseData.tycoon.Server {
                 Event(connection, TY_EventKind.Bought, t.plot, index, price, text);
                 retention.Count(connection, TY_Retention.StatBuilds);
             }
+            NotePeakIncome(connection, t, plot);
             plotsDirty = true;
             if (PlayerData.TryGetPlayerData(connection, out var player)) WriteLeaderboard(player);
             SendWallet(connection);
         }
+
+        /// <summary>Raises the player's saved best income to what their plot earns now (after every purchase), and returns it.</summary>
+        double NotePeakIncome(NetworkConnection connection, Tycooner t, Plot plot) =>
+            t.peakIncome = Math.Max(t.peakIncome, BaseIncomeOf(plot.purchased, t, connection));
 
         // ---------------------------------------------------------------- messages
         /// <summary>

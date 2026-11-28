@@ -178,7 +178,9 @@ namespace Universes.UniverseData.tycoon.Server {
             t.chestDay = RetentionDay.Of(now);
             // The chest is the daily check-in: it also claims today's streak (if a few minutes on the plot have not already).
             if (!t.streakClaimed) ClaimStreak(connection, t);
-            long cash = chest.Cash(BaseIncomeOf(plot.purchased, t, connection), day);
+            // From the best income reached, not the build standing now: opening it right after a rebirth
+            // pays as much as opening it with the factory complete.
+            long cash = chest.Cash(NotePeakIncome(connection, t, plot), day);
             int tokens = chest.Tokens(day);
             Pay(connection, t, cash);
             t.tokens += tokens;

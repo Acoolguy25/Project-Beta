@@ -171,14 +171,15 @@ namespace Universes.UniverseData.tycoon {
 
             /*22*/ new("REBIRTH", 50000, -1, TY_ItemKind.Rebirth, 0, 0, Vector3.zero),
 
-            // Landmarks: one opens at each rebirth milestone; built ones are kept through every rebirth. They
-            // stand in the two yards either side of the gate walkway, clear of the pads and each other (a
-            // test checks the footprints).
+            // Landmarks: one opens at each rebirth milestone; built ones are kept through every rebirth. The
+            // milestones spread out (1, 3, 8, 13, 18) so the plot keeps changing over days of play, not one
+            // sitting. They stand in the two yards either side of the gate walkway, clear of the pads and each
+            // other (a test checks the footprints).
             /*23*/ new("Solar Farm", 25_000, -1, TY_ItemKind.Landmark, 1.25, 0, Lot(-8.6f, 11.9f), rebirths: 1, size: 4.8f),
-            /*24*/ new("Cargo Port", 100_000, 23, TY_ItemKind.Landmark, 1.35, 0, Lot(8.1f, 11.9f), rebirths: 2, size: 4.8f),
-            /*25*/ new("Truck Depot", 300_000, 24, TY_ItemKind.Landmark, 1.5, 0, Lot(-8.6f, 16.8f), rebirths: 4, size: 4.6f),
-            /*26*/ new("Landing Pad", 1_000_000, 25, TY_ItemKind.Landmark, 1.75, 0, Lot(12.8f, 11.9f), rebirths: 6, size: 4.2f),
-            /*27*/ new("Brick Rocket", 5_000_000, 26, TY_ItemKind.Landmark, 2, 0, Lot(9.9f, 16.8f), rebirths: 9, size: 4.4f),
+            /*24*/ new("Cargo Port", 180_000, 23, TY_ItemKind.Landmark, 1.35, 0, Lot(8.1f, 11.9f), rebirths: 3, size: 4.8f),
+            /*25*/ new("Truck Depot", 2_500_000, 24, TY_ItemKind.Landmark, 1.5, 0, Lot(-8.6f, 16.8f), rebirths: 8, size: 4.6f),
+            /*26*/ new("Landing Pad", 45_000_000, 25, TY_ItemKind.Landmark, 1.75, 0, Lot(12.8f, 11.9f), rebirths: 13, size: 4.2f),
+            /*27*/ new("Brick Rocket", 700_000_000, 26, TY_ItemKind.Landmark, 2, 0, Lot(9.9f, 16.8f), rebirths: 18, size: 4.4f),
 
             // Bought again and again once the factory is complete: a use for late cash (see InvestPrice).
             /*28*/ new("INVEST", 0, -1, TY_ItemKind.Invest, 0.05, 0, Vector3.zero),
@@ -303,7 +304,10 @@ namespace Universes.UniverseData.tycoon {
 
         /// <summary>Each investment level costs this many times the one before.</summary>
         public const double InvestPriceGrowth = 1.8;
-        /// <summary>The first investment of a run costs this share of the next rebirth's price.</summary>
+        /// <summary>
+        /// The first investment level costs this share of the owner's next rebirth. Levels are never reset, so a
+        /// later level's price follows both the level and the rebirth count.
+        /// </summary>
         public const double InvestRebirthShare = 0.5;
 
         /// <summary>

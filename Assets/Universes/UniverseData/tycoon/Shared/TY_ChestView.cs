@@ -34,7 +34,7 @@ namespace Universes.UniverseData.tycoon {
         bool hasShown;
 
         /// <param name="day">Streak day of the chest the sign names (today's while ready, else the next one's).</param>
-        /// <param name="prize">What that chest holds ("10 min of income, +1 perk token").</param>
+        /// <param name="prize">What that chest holds ("10 min of best income, +1 perk token").</param>
         /// <param name="secondsLeft">Seconds until the next chest (ignored while ready).</param>
         public void Show(bool ready, float secondsLeft, int day, string prize) {
             // Minutes are enough for a countdown that runs for hours; rewrite only when the text changes.

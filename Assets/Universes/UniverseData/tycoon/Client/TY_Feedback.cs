@@ -135,9 +135,15 @@ namespace Universes.UniverseData.tycoon.Client {
         [Min(5f)] public float rocketHeight = 90f;
         public Color rocketFlame = new(1f, 0.55f, 0.15f);
         [Min(0f)] public float rocketTrailScale = 3f;
-        [Tooltip("Seconds the rocket is away before it lands back on its pad.")]
+        [Tooltip("Seconds the rocket is away before it comes back down.")]
         [Min(0f)] public float rocketAwaySeconds = 1.6f;
         [Min(1f)] public float rocketShakeRadius = 70f;
+        [Tooltip("Smoke puffs that billow out over the pad while the rocket clears it, and how far they spread (metres).")]
+        [Range(0, 40)] public int rocketPlumePuffs = 14;
+        [Min(0f)] public float rocketPlumeRadius = 4.5f;
+        [Tooltip("Seconds of the powered landing, and the height (metres) it starts from.")]
+        [Min(0.5f)] public float rocketLandingSeconds = 3.2f;
+        [Min(2f)] public float rocketLandingHeight = 40f;
 
         public Color chestColor = new(1f, 0.85f, 0.3f);
         [Min(0f)] public float chestBurstScale = 2.2f;
@@ -454,8 +460,20 @@ namespace Universes.UniverseData.tycoon.Client {
             CameraShake.Explosion(pad, rocketShakeRadius, 0.9f, 1.2f);
             FxHandle trail = GameFx.Attach(FxKind.Trail, nozzle, Vector3.zero, rocketFlame, rocketTrailScale);
             Vector3 up = rocket.parent != null ? rocket.parent.InverseTransformDirection(Vector3.up) : Vector3.up;
+            // The plume: puffs roll out across the pad while the rocket is still low (the first third of the climb).
+            float plumeEnd = rocketClimbSeconds * 0.35f, nextPuff = 0f;
+            int puffs = 0;
+            float elapsed = 0f;
             for (float t = 0f; t < 1f; t += Time.deltaTime / rocketClimbSeconds) {
                 if (rocket == null) { trail.Stop(); yield break; }
+                elapsed += Time.deltaTime;
+                if (puffs < rocketPlumePuffs && elapsed >= nextPuff && elapsed < plumeEnd) {
+                    float spread = rocketPlumeRadius * Mathf.Lerp(0.35f, 1f, elapsed / plumeEnd);
+                    Vector2 o = Random.insideUnitCircle.normalized * spread * Random.Range(0.6f, 1f);
+                    GameFx.Play(FxKind.Smoke, pad + new Vector3(o.x, 0.3f, o.y), teardownSmokeColor, Random.Range(2.2f, 3.4f));
+                    puffs++;
+                    nextPuff = plumeEnd * puffs / Mathf.Max(1, rocketPlumePuffs);
+                }
                 // Slow off the pad, then faster and faster, with a slight wobble.
                 float wobble = Mathf.Sin(t * 40f) * 0.04f * (1f - t);
                 rocket.localPosition = rest + up * (rocketHeight * t * t * t);
@@ -473,9 +491,47 @@ namespace Universes.UniverseData.tycoon.Client {
             rocket.localRotation = Quaternion.identity;
             yield return new WaitForSeconds(rocketAwaySeconds);
             if (rocket == null) yield break;
-            rocket.localPosition = rest;
+            yield return LandRocket(rocket, nozzle, rest, pad, up);
+        }
+
+        /// <summary>
+        /// The rocket comes back tail first on its engine: fast from high up, braking hard near the pad, then
+        /// a puff of smoke, a ring and a thud as it touches down where it stood.
+        /// </summary>
+        IEnumerator LandRocket(Transform rocket, Transform nozzle, Vector3 rest, Vector3 pad, Vector3 up) {
+            rocket.localRotation = Quaternion.identity;
+            rocket.localPosition = rest + up * rocketLandingHeight;
             rocket.gameObject.SetActive(true);
-            DropIn(rocket, rest, 0f, true);
+            FxHandle flame = GameFx.Attach(FxKind.Trail, nozzle, Vector3.zero, rocketFlame, rocketTrailScale * 0.6f);
+            GameSfx.PlayAt(SfxCue.Whoosh, pad);
+            bool braked = false;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / rocketLandingSeconds) {
+                if (rocket == null) { flame.Stop(); yield break; }
+                // Ease out: most of the height goes in the first half, the last metres are slow.
+                float k = 1f - t;
+                float height = rocketLandingHeight * k * k * k;
+                rocket.localPosition = rest + up * height;
+                float sway = Mathf.Sin(t * 25f) * 0.6f * k;
+                rocket.localRotation = Quaternion.Euler(sway, 0f, sway * 0.7f);
+                if (!braked && height < 6f) {
+                    // The landing burn kicks up dust off the pad.
+                    braked = true;
+                    for (int i = 0; i < 5; i++) {
+                        Vector2 o = Random.insideUnitCircle.normalized * rocketPlumeRadius * 0.5f;
+                        GameFx.Play(FxKind.Smoke, pad + new Vector3(o.x, 0.2f, o.y), teardownSmokeColor, 1.8f);
+                    }
+                }
+                yield return null;
+            }
+            flame.Stop();
+            if (rocket == null) yield break;
+            rocket.localPosition = rest;
+            rocket.localRotation = Quaternion.identity;
+            GameFx.Play(FxKind.DustPuff, pad, teardownSmokeColor, 3f);
+            GameFx.Play(FxKind.ShockwaveRing, pad, landmarkColor, shockwaveScale * 0.5f);
+            GameSfx.PlayAt(SfxCue.Land, pad);
+            CameraShake.Explosion(pad, landingShakeRadius, landmarkShake * 0.6f);
+            Punch.Squash(rocket, 0.08f);
         }
 
         // ---------------------------------------------------------------- goals, chest, welcome back

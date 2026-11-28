@@ -247,10 +247,22 @@ namespace Universes.UniverseData.tycoon.Editor {
             // Script changes to a nested prefab instance are only kept when recorded as overrides.
             PrefabUtility.RecordPrefabInstancePropertyModifications(kit);
             RecordRect(kit.GetComponentInChildren<RetentionLevelChip>(true));
-            RecordRect(kit.GetComponentInChildren<RetentionChallengesPanel>(true));
+            RetentionChallengesPanel panel = kit.GetComponentInChildren<RetentionChallengesPanel>(true);
+            RecordRect(panel);
+            StreakTexts(panel);
             RecordRect(kit.GetComponentInChildren<HudToastFeed>(true));
             RecordRect(kit.GetComponentInChildren<RetentionSummaryCard>(true));
         }
+
+        /// <summary>A tycoon has no matches: the streak line names what does count (minutes on the plot, or the chest).</summary>
+        static void StreakTexts(RetentionChallengesPanel panel) {
+            panel.streakPendingFormat = StreakPendingText;
+            panel.streakNoneFormat = StreakNoneText;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(panel);
+        }
+
+        public const string StreakPendingText = "Day {0} streak: play 3 min or open your chest (+{1} XP)";
+        public const string StreakNoneText = "Play 3 min or open your chest to start a streak (+{0} XP)";
 
         static void RecordRect(Component part) {
             if (part == null) throw new FileNotFoundException("The retention HUD prefab is missing a part; rebuild it (Ryan > Retention > Rebuild HUD).");

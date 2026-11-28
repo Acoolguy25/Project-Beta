@@ -35,13 +35,16 @@ namespace Universes.UniverseData.tycoon.Server {
         public long lastSeenUnix;
         /// <summary>Investment levels bought (each adds income for good, kept through rebirths).</summary>
         public int invested;
+        /// <summary>The best income per second (rush hours left out) the player's plot has reached; the daily chest pays from it.</summary>
+        public double peakIncome;
 
         /// <summary>Levels, daily challenges and the play streak (retention kit).</summary>
         public RetentionSave retention = new();
 
         /// <summary>True for a player who has never earned or built anything (nothing to restore).</summary>
         public bool IsEmpty => cash <= 0 && lifetime <= 0 && rebirths == 0 && tokens == 0 && built == 0 && perks.Equals(default(TY_PerkLevels))
-            && goalIndex <= 0 && coins == 0 && collects == 0 && chestDay == RetentionDay.None && invested == 0;
+            && goalIndex <= 0 && coins == 0 && collects == 0 && chestDay == RetentionDay.None && invested == 0
+            && peakIncome <= 0;
 
         public override void Validate() {
             cash = Finite(cash);
@@ -58,6 +61,7 @@ namespace Universes.UniverseData.tycoon.Server {
             chestDay = Math.Max(RetentionDay.None, chestDay);
             lastSeenUnix = Math.Max(0L, lastSeenUnix);
             invested = Math.Max(0, invested);
+            peakIncome = Finite(peakIncome);
             retention = RetentionSave.Repair(retention);
         }
 
