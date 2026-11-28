@@ -85,9 +85,14 @@ namespace Universes.UniverseData.classic_horror.Server {
                 _ => default
             };
             if (step.total == 0) return;
+            if (step.evt == CH_PuzzleEvent.Mistake) {
+                // The card says whether he heard it, so "He heard that." is never shown when he did not.
+                bool heard = OnPuzzleMistake(open);
+                Send(open, step, heard ? CH_Story.MistakeHeard : CH_Story.MistakeUnheard);
+                return;
+            }
             Send(open, step);
-            if (step.evt == CH_PuzzleEvent.Mistake) OnPuzzleMistake(open);
-            else if (step.evt == CH_PuzzleEvent.Solved) OnStationSolved(open);
+            if (step.evt == CH_PuzzleEvent.Solved) OnStationSolved(open);
         }
 
         void TryOpenStation(NetworkConnection connection, LocalCharacter character, CH_Night.Station station) {
@@ -141,14 +146,14 @@ namespace Universes.UniverseData.classic_horror.Server {
         // ---- What a station does to the night ---------------------------------------------------------------------------------
 
         /// <summary>A missed strike, a wrong note, a wrong lock: he hears it if he is in earshot, and every further mistake carries further.</summary>
-        void OnPuzzleMistake(OpenStation open) {
+        bool OnPuzzleMistake(OpenStation open) {
             CH_Night.Station station = open.station;
             float baseNoise = station.Kind switch {
                 CH_PuzzleKind.Engine => puzzleTuning.engineMissNoise,
                 CH_PuzzleKind.Hymn => puzzleTuning.hymnWrongNoise,
                 _ => puzzleTuning.lockClankNoise
             };
-            float noise = baseNoise * (1f + 0.5f * Mathf.Max(0, open.run.Mistakes - 1));
+            float noise = baseNoise * (1f + puzzleTuning.mistakeNoiseGrowth * Mathf.Max(0, open.run.Mistakes - 1));
             Vector3 at = station.Position;
             var scare = station.Kind switch {
                 CH_PuzzleKind.Engine => CH_AmbientScare.DoorSlam,
@@ -161,18 +166,18 @@ namespace Universes.UniverseData.classic_horror.Server {
             PlayerProgress.Modify<CH_SaveData>(open.connection, save => save.mistakesMade++);
             bool heard = monster != null && Vector3.Distance(monster.transform.position, at) <= noise;
             Debug.Log($"[Drowned Choir] {station.Kind} mistake #{open.run.Mistakes} by client {open.connection.ClientId}: noise {noise:0}m, {(heard ? "he heard it" : "out of earshot")}");
-            if (!heard) return;
+            if (!heard) return false;
             monster.Investigate(at, puzzleTuning.noiseSearchSeconds);
-            if (open.run.Mistakes >= 2) SpeakFromMonster(CH_Story.LineCraneHears);
+            if (open.run.Mistakes >= puzzleTuning.mistakesBeforeHeSpeaks) SpeakFromMonster(CH_Story.LineCraneHears);
+            return true;
         }
 
         void OnStationSolved(OpenStation open) {
             CH_Night.Station station = open.station;
             Debug.Log($"[Drowned Choir] {station.Kind}{(station.Singer >= 0 ? " of " + CH_Story.SingerName(station.Singer) : "")} done by client {open.connection.ClientId} after {open.run.Mistakes} mistakes at {NightSeconds}s");
             Award(open.connection, deliveryXPReward, deliveryCreditReward, "finishing a minigame");
-            int mistakes = open.run.Mistakes;
             PlayerProgress.Modify<CH_SaveData>(open.connection, save => {
-                save.RecordPuzzle(station.Kind, mistakes);
+                save.RecordPuzzle(station.Kind);
                 if (station.Kind == CH_PuzzleKind.Hymn && station.Singer >= 0) save.singersMet |= 1 << station.Singer;
             });
             switch (station.Kind) {
@@ -222,8 +227,8 @@ namespace Universes.UniverseData.classic_horror.Server {
         /// <summary>The Hush: now and then the choir stops, the lamps gutter, and for a few seconds he hears everything.</summary>
         void UpdateHush() {
             if (!ambientScares || !nightReleased || night.Phase is not (CH_Phase.Choir or CH_Phase.Sermon) || Time.time < nextHush) return;
-            if (nextHush == 0f) { nextHush = Time.time + RandomRange(puzzleTuning.hushInterval) * 0.6f; return; }
-            if (monster != null && monster.IsChasing) { nextHush = Time.time + 8f; return; }
+            if (nextHush == 0f) { nextHush = Time.time + RandomRange(puzzleTuning.hushInterval) * puzzleTuning.firstHushShare; return; }
+            if (monster != null && monster.IsChasing) { nextHush = Time.time + puzzleTuning.hushRetrySeconds; return; }
             hushUntil = Time.time + puzzleTuning.hushSeconds;
             nextHush = hushUntil + RandomRange(puzzleTuning.hushInterval);
             InstanceFinder.ServerManager.Broadcast(new CH_AmbientScareBroadcast {

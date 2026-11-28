@@ -18,6 +18,10 @@ namespace Universes.UniverseData.classic_horror.Client {
         [Tooltip("Gauge: the needle and green zone of the engine, the dial marker of the locks.")]
         public GameObject gaugeRoot;
         public RectTransform gauge, zone, needle;
+        [Tooltip("The lock's dial: a round face (turns a full circle without a jump) and the needle that turns on it.")]
+        public GameObject dialRoot;
+        public RectTransform dialNeedle;
+        public Image dialNeedleImage;
         public Image needleImage, zoneImage;
         [Tooltip("The lock's heat bar.")]
         public GameObject heatRoot;
@@ -50,6 +54,17 @@ namespace Universes.UniverseData.classic_horror.Client {
         [SerializeField, Min(0.03f)] float probeInterval = 0.1f;
         [SerializeField, Min(0f)] float resultSeconds = 1.4f;
         [SerializeField, Range(0f, 1f)] float volume = 0.8f;
+        [Tooltip("Seconds the dial must have been still before the readout may say HOT: the heat arrives a round trip after the turn that earned it.")]
+        [SerializeField, Min(0f)] float settleSeconds = 0.3f;
+        [Tooltip("Warmth at which the lock reads warm and cool (HOT is exactly where the ring would open: CH_PuzzleRun.HotWarmth).")]
+        [SerializeField, Range(0f, 1f)] float warmAt = 0.7f, coolAt = 0.35f;
+        [Tooltip("Seconds the panel waits for the server to open a station before it asks again.")]
+        [SerializeField, Min(0.5f)] float pendingSeconds = 1.5f;
+        [Tooltip("Seconds a refusal (\"Move closer.\") stays on the prompt.")]
+        [SerializeField, Min(0.5f)] float refusalSeconds = 2.5f;
+        [Tooltip("How loud the lock's hum gets at full heat, and how far its pitch rises (a share, then a pitch).")]
+        [SerializeField, Range(0f, 1f)] float humLoudness = 0.7f;
+        [SerializeField] Vector2 humPitch = new(0.75f, 1.65f);
 
         Func<CH_PuzzleAction, int, float, bool> send;
         AudioSource sound, humSource;
@@ -63,7 +78,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         float playNextAt, replayAt = -1f, litUntil;
         int litTile = -1;
         // Lock.
-        float dialAngle, nextProbe, lastProbedAngle = -1000f, warmth;
+        float dialAngle, nextProbe, lastProbedAngle = -1000f, warmth, externalTurn, lastTurnAt;
         float flashUntil;
         Color flashColour;
         readonly InputAction[] keys = new InputAction[4];
@@ -96,8 +111,7 @@ namespace Universes.UniverseData.classic_horror.Client {
             humSource.loop = true;
             humSource.spatialBlend = 0f;
             for (int i = 0; i < keys.Length; i++) {
-                keys[i] = new InputAction($"Choir note {i + 1}", InputActionType.Button, $"<Keyboard>/{i + 1}");
-                keys[i].AddBinding($"<Keyboard>/numpad{i + 1}");
+                keys[i] = new InputAction($"Choir note {i + 1}", InputActionType.Button, $"<Keyboard>/{CH_Story.HymnKeys[i].ToLowerInvariant()}");
                 keys[i].Enable();
             }
             turnLeft = new InputAction("Dial left", InputActionType.Value, "<Keyboard>/a");
@@ -121,7 +135,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         public void Request(int station) {
             if (send == null || IsOpen) return;
             pendingStation = station;
-            pendingUntil = Time.unscaledTime + 1.5f;
+            pendingUntil = Time.unscaledTime + pendingSeconds;
             send(CH_PuzzleAction.Open, station, 0f);
         }
 
@@ -145,6 +159,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         /// <summary>The night changed under the panel (a new night, a cutscene): close it without a word.</summary>
         public void ForceClose() {
             IsOpen = false;
+            externalTurn = 0f;
             pendingStation = -1;
             humSource.Stop();
             SetVisible(false);
@@ -173,10 +188,12 @@ namespace Universes.UniverseData.classic_horror.Client {
                     Sync(message);
                     Flash(bad, 0.5f);
                     SetPips(message.progress, message.total);
+                    bool heard = message.message != CH_Story.MistakeUnheard;
+                    string tail = heard ? " He heard that." : " Nothing stirred.";
                     status.text = message.kind switch {
-                        CH_PuzzleKind.Engine => "Flooded! He heard that.",
-                        CH_PuzzleKind.Hymn => "Wrong note. He heard that.",
-                        _ => "The chain clanked. He heard that."
+                        CH_PuzzleKind.Engine => "Flooded!" + tail,
+                        CH_PuzzleKind.Hymn => "Wrong note." + tail,
+                        _ => "The chain clanked." + tail
                     };
                     if (message.kind == CH_PuzzleKind.Hymn) replayAt = Time.unscaledTime + replayAfterMistake;
                     else Play(CH_Tones.Chain(), 1f);
@@ -199,7 +216,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                     break;
                 default:
                     if (pendingStation >= 0) pendingStation = -1;
-                    if (!IsOpen) { feedback = message.message; feedbackUntil = Time.unscaledTime + 2.5f; }
+                    if (!IsOpen) { feedback = message.message; feedbackUntil = Time.unscaledTime + refusalSeconds; }
                     End(0f);
                     break;
             }
@@ -215,11 +232,12 @@ namespace Universes.UniverseData.classic_horror.Client {
         void Layout(CH_PuzzleBroadcast message) {
             title.text = CH_Story.StationTitle(message.kind, StationSingerOf(message));
             hint.text = CH_Story.StationHint(message.kind);
-            gaugeRoot.SetActive(message.kind != CH_PuzzleKind.Hymn);
+            gaugeRoot.SetActive(message.kind == CH_PuzzleKind.Engine);
+            dialRoot.SetActive(message.kind == CH_PuzzleKind.BellLock);
             tilesRoot.SetActive(message.kind == CH_PuzzleKind.Hymn);
             heatRoot.SetActive(message.kind == CH_PuzzleKind.BellLock);
-            zone.gameObject.SetActive(message.kind == CH_PuzzleKind.Engine);
             readout.text = "";
+            for (int i = 0; i < tileKeys.Length; i++) tileKeys[i].text = CH_Story.HymnKeys[i];
             status.text = message.kind switch { CH_PuzzleKind.Engine => "Wait for the needle...", CH_PuzzleKind.Hymn => "Listen...", _ => "Turn the dial" };
             SetPips(message.progress, message.total);
             warmth = 0f;
@@ -256,15 +274,16 @@ namespace Universes.UniverseData.classic_horror.Client {
             }
         }
 
+        /// <summary>The card is shown by fading it, never by deactivating it, so its timeouts keep running while it is hidden.</summary>
         void SetVisible(bool visible) {
             group.alpha = visible ? 1f : 0f;
             group.blocksRaycasts = false;
             gameObject.SetActive(true);
-            group.gameObject.SetActive(visible);
         }
 
         void End(float after) {
             IsOpen = false;
+            externalTurn = 0f;
             pendingStation = -1;
             humSource.Stop();
             resultUntil = Time.unscaledTime + after;
@@ -285,7 +304,7 @@ namespace Universes.UniverseData.classic_horror.Client {
         void Update() {
             if (pendingStation >= 0 && Time.unscaledTime > pendingUntil) pendingStation = -1;
             if (!IsOpen) {
-                if (group.gameObject.activeSelf && Time.unscaledTime >= resultUntil) SetVisible(false);
+                if (group.alpha > 0f && Time.unscaledTime >= resultUntil) SetVisible(false);
                 return;
             }
             switch (current.kind) {
@@ -321,7 +340,7 @@ namespace Universes.UniverseData.classic_horror.Client {
                 if (playPos >= playing.Length) {
                     playPos = -1;
                     litTile = -1;
-                    status.text = "Your turn. Keys 1 2 3 4";
+                    status.text = $"Your turn: {string.Join(" ", CH_Story.HymnKeys)}";
                 } else {
                     LightTile(playing[playPos], noteSeconds * 0.8f);
                     playPos++;
@@ -332,11 +351,25 @@ namespace Universes.UniverseData.classic_horror.Client {
             for (int i = 0; i < tiles.Length; i++) tiles[i].color = i == litTile ? lit : (Time.unscaledTime < flashUntil ? Color.Lerp(idle, flashColour, 0.5f) : idle);
             if (listening || replayAt > 0f) return;
             for (int i = 0; i < keys.Length; i++) {
-                if (!keys[i].WasPressedThisFrame()) continue;
-                LightTile(i, 0.3f);
-                send(CH_PuzzleAction.Press, stationId, i);
+                if (keys[i].WasPressedThisFrame()) Sing(i);
             }
         }
+
+        /// <summary>The lock readout says HOT: the answer to the last probe is the ring's open range and the dial has been still long enough for that answer to be about where it stopped.</summary>
+        public bool ReadsHot => IsOpen && warmth >= CH_PuzzleRun.HotWarmth && Time.unscaledTime - lastTurnAt >= settleSeconds;
+
+        /// <summary>The hymn is being played to the player (or about to be again after a mistake): notes are ignored until it ends.</summary>
+        public bool Listening => playPos >= 0 || replayAt > 0f;
+
+        /// <summary>Sings one note of the hymn (what a press of its key does). Bots and tests use it where no keyboard can reach the window.</summary>
+        public void Sing(int tile) {
+            if (!IsOpen || Listening || tile < 0 || tile >= tiles.Length) return;
+            LightTile(tile, 0.3f);
+            send(CH_PuzzleAction.Press, stationId, tile);
+        }
+
+        /// <summary>Holds the dial's turn input: -1 left (A), 1 right (D), 0 let go. It adds to the keys, and is let go when the station closes.</summary>
+        public void TurnDial(float direction) => externalTurn = Mathf.Clamp(direction, -1f, 1f);
 
         void StartPlayback(int[] sequence, float delay) {
             playing = sequence ?? Array.Empty<int>();
@@ -353,23 +386,23 @@ namespace Universes.UniverseData.classic_horror.Client {
         }
 
         void UpdateLock() {
-            float turn = (turnRight.ReadValue<float>() - turnLeft.ReadValue<float>()) * dialSpeed * Time.unscaledDeltaTime;
+            float turn = Mathf.Clamp(turnRight.ReadValue<float>() - turnLeft.ReadValue<float>() + externalTurn, -1f, 1f) * dialSpeed * Time.unscaledDeltaTime;
             dialAngle = Mathf.Repeat(dialAngle + turn, 360f);
+            if (turn != 0f) lastTurnAt = Time.unscaledTime;
             if (Time.unscaledTime >= nextProbe && Mathf.Abs(Mathf.DeltaAngle(dialAngle, lastProbedAngle)) > 0.4f) {
                 nextProbe = Time.unscaledTime + probeInterval;
                 lastProbedAngle = dialAngle;
                 send(CH_PuzzleAction.Probe, stationId, dialAngle);
             }
-            needle.anchorMin = needle.anchorMax = new Vector2(dialAngle / 360f, 0.5f);
-            needle.anchoredPosition = Vector2.zero;
+            dialNeedle.localRotation = Quaternion.Euler(0f, 0f, -dialAngle); // clockwise, and 359 to 0 is a small step
             heatFill.anchorMax = new Vector2(Mathf.Clamp01(warmth), 1f);
             heatFill.offsetMax = Vector2.zero;
             Color heat = Color.Lerp(coldDial, hotDial, warmth);
             heatImage.color = heat;
-            needleImage.color = Time.unscaledTime < flashUntil ? flashColour : heat;
-            readout.text = warmth >= 0.999f ? "HOT: set it (E)" : warmth > 0.7f ? "warm" : warmth > 0.35f ? "cool" : "cold";
-            humSource.volume = warmth * warmth * 0.7f * volume;
-            humSource.pitch = 0.75f + warmth * 0.9f;
+            dialNeedleImage.color = Time.unscaledTime < flashUntil ? flashColour : heat;
+            readout.text = ReadsHot ? "HOT: set it (E)" : warmth > warmAt ? "warm" : warmth > coolAt ? "cool" : "cold";
+            humSource.volume = warmth * warmth * humLoudness * volume;
+            humSource.pitch = Mathf.Lerp(humPitch.x, humPitch.y, warmth);
         }
     }
 }

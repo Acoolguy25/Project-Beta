@@ -8,26 +8,31 @@ using Universes.UniverseData.classic_horror.Client;
 namespace Universes.UniverseData.classic_horror.Editor {
     public static partial class CH_Authoring {
         // Where each part of the minigame card sits, as fractions of its height (bottom, top).
-        static readonly Vector2 PuzzleTitleBand = new(0.86f, 0.98f), PuzzleHintBand = new(0.74f, 0.86f), PuzzleStageBand = new(0.42f, 0.72f),
-            PuzzleHeatBand = new(0.355f, 0.395f), PuzzleReadoutBand = new(0.27f, 0.35f), PuzzlePipBand = new(0.17f, 0.25f), PuzzleStatusBand = new(0.03f, 0.16f);
+        static readonly Vector2 PuzzleTitleBand = new(0.87f, 0.99f), PuzzleHintBand = new(0.7f, 0.87f), PuzzleStageBand = new(0.38f, 0.69f),
+            PuzzleHeatBand = new(0.325f, 0.365f), PuzzleReadoutBand = new(0.25f, 0.325f), PuzzlePipBand = new(0.16f, 0.24f), PuzzleStatusBand = new(0.03f, 0.15f);
+        // The card sits in the lower third (the world above it stays clear: you can look up and see him coming); the dial is round.
+        static readonly Vector2 PuzzleCardAnchor = new(0.5f, 0.2f), PuzzleCardSize = new(780f, 380f);
+        const float PuzzleDialSize = 132f, PuzzleDialTickRadius = 56f, PuzzleDialNeedleLength = 54f;
+        const int PuzzleDialTicks = 12;
         const int PuzzleTiles = 4, PuzzlePips = 5;
         static readonly Color PuzzleTrack = new(0.07f, 0.065f, 0.06f, 0.96f), PuzzleZone = new(0.5f, 0.85f, 0.5f, 0.75f), PuzzleNeedle = new(0.98f, 0.8f, 0.45f);
 
         /// <summary>
-        /// The minigame card: low on the screen so the world stays visible above it (you can look up and see him coming).
+        /// The minigame card: in the lower third of the screen so the world stays visible above it.
         /// One layout serves all three games (a gauge, four keys, or a dial with a heat bar); <see cref="CH_PuzzlePanel"/>
         /// shows what each needs.
         /// </summary>
         static void BuildPuzzle(RectTransform gameplay, CH_ClientController client) {
-            RectTransform card = HudKit.Card(gameplay, "Minigame", new Vector2(0.5f, 0.5f), new Vector2(0f, -150f), new Vector2(820f, 360f), popup: false);
+            RectTransform card = HudKit.Card(gameplay, "Minigame", PuzzleCardAnchor, Vector2.zero, PuzzleCardSize, popup: false);
             HudKit.AccentStripe(card, Amber, 4f);
             var panel = card.gameObject.AddComponent<CH_PuzzlePanel>();
             panel.group = card.gameObject.AddComponent<CanvasGroup>();
             panel.group.blocksRaycasts = false;
+            panel.group.alpha = 0f; // shown by fading, never by deactivating, so the panel's timeouts keep running
             client.puzzle = panel;
 
             panel.title = PuzzleText(card, "Title", PuzzleTitleBand, UIText.Title, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
-            panel.hint = PuzzleText(card, "Hint", PuzzleHintBand, UIText.Caption, UIColorRole.TextMuted, TextAlignmentOptions.Center);
+            panel.hint = PuzzleText(card, "Hint", PuzzleHintBand, UIText.Body, UIColorRole.TextMuted, TextAlignmentOptions.Center);
             panel.readout = PuzzleText(card, "Readout", PuzzleReadoutBand, UIText.Strong, UIColorRole.TextPrimary, TextAlignmentOptions.Center);
             panel.readout.color = Amber;
             panel.status = PuzzleText(card, "Status", PuzzleStatusBand, UIText.Strong, UIColorRole.TextSecondary, TextAlignmentOptions.Center);
@@ -44,6 +49,26 @@ namespace Universes.UniverseData.classic_horror.Editor {
             panel.needleImage = Panel("Needle", gauge, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), PuzzleNeedle);
             panel.needle = panel.needleImage.rectTransform;
             panel.needle.sizeDelta = new Vector2(10f, 96f);
+
+            // The lock's dial: a round face, a ring of ticks and a needle that turns on it.
+            RectTransform dial = Rect("Dial", card, new Vector2(0.06f, PuzzleStageBand.x), new Vector2(0.94f, PuzzleStageBand.y), Vector2.zero, Vector2.zero);
+            panel.dialRoot = dial.gameObject;
+            Image face = Panel("Face", dial, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), PuzzleTrack);
+            face.sprite = UnityEditor.AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+            face.rectTransform.sizeDelta = new Vector2(PuzzleDialSize, PuzzleDialSize);
+            for (int tick = 0; tick < PuzzleDialTicks; tick++) {
+                RectTransform spoke = Rect($"Tick {tick}", face.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+                spoke.localEulerAngles = new Vector3(0f, 0f, -tick * 360f / PuzzleDialTicks);
+                Image mark = Panel("Mark", spoke, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), tick == 0 ? PuzzleNeedle : new Color(1f, 1f, 1f, 0.3f));
+                mark.rectTransform.sizeDelta = new Vector2(tick == 0 ? 5f : 3f, tick == 0 ? 11f : 8f);
+                mark.rectTransform.anchoredPosition = new Vector2(0f, PuzzleDialTickRadius);
+            }
+            panel.dialNeedleImage = Panel("Needle", face.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), PuzzleNeedle);
+            panel.dialNeedle = panel.dialNeedleImage.rectTransform;
+            panel.dialNeedle.pivot = new Vector2(0.5f, 0f);
+            panel.dialNeedle.sizeDelta = new Vector2(6f, PuzzleDialNeedleLength);
+            panel.dialNeedle.anchoredPosition = Vector2.zero;
+            Panel("Hub", face.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), PuzzleNeedle).rectTransform.sizeDelta = new Vector2(12f, 12f);
 
             // The lock's heat bar.
             RectTransform heat = Rect("Heat", card, new Vector2(0.06f, PuzzleHeatBand.x), new Vector2(0.94f, PuzzleHeatBand.y), Vector2.zero, Vector2.zero);
@@ -79,7 +104,6 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 pip.rectTransform.sizeDelta = new Vector2(34f, 14f);
                 panel.pips[i] = pip;
             }
-            card.gameObject.SetActive(false);
         }
 
         static TMP_Text PuzzleText(RectTransform card, string name, Vector2 band, UIText style, UIColorRole role, TextAlignmentOptions align) {

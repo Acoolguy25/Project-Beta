@@ -181,7 +181,6 @@ namespace Universes.UniverseData.classic_horror {
         public CH_ItemView[] items;
         public CH_SlotView[] slots;
         public CH_HideView[] hides;
-        public CH_StationView[] stations;
         public int progress, progressTotal;
         /// <summary>Seconds left on the boarding call, or 0.</summary>
         public int countdown;
@@ -194,6 +193,8 @@ namespace Universes.UniverseData.classic_horror {
         public int escapes;
         /// <summary>Seconds until the next night begins, on the ending card.</summary>
         public int nextNightSeconds;
+        /// <summary>The minigame stations (appended last, so the older fields keep their place on the wire).</summary>
+        public CH_StationView[] stations;
     }
 
     /// <summary>A spoken line from <see cref="CH_VoiceBank"/>.</summary>

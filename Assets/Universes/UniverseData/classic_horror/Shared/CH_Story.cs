@@ -45,7 +45,7 @@ namespace Universes.UniverseData.classic_horror {
         /// <summary>The minigames' names as the prompt and the panel title them.</summary>
         public static string StationTitle(CH_PuzzleKind kind, int singer) => kind switch {
             CH_PuzzleKind.Engine => "The ferry's engine",
-            CH_PuzzleKind.Hymn => $"{SingerName(singer)}'s hymn",
+            CH_PuzzleKind.Hymn => singer >= 0 ? $"{SingerName(singer)}'s hymn" : "The drowned choir's hymn",
             _ => "The bell's locks"
         };
 
@@ -59,19 +59,25 @@ namespace Universes.UniverseData.classic_horror {
         /// <summary>The panel's one-line instruction for each minigame.</summary>
         public static string StationHint(CH_PuzzleKind kind) => kind switch {
             CH_PuzzleKind.Engine => "Pull the cord (E) as the needle crosses the green. A miss roars across the water.",
-            CH_PuzzleKind.Hymn => "Listen to the hymn, then sing it back: keys 1 2 3 4. A wrong note wails.",
+            CH_PuzzleKind.Hymn => "Listen to the hymn, then sing it back: keys G H J K. A wrong note wails.",
             _ => "Turn the dial (A / D) until it runs hot, then set the lock (E). A wrong lock clanks the chain."
         };
 
+        /// <summary>Carried by a mistake's message: whether Crane was in earshot of it.</summary>
+        public const string MistakeHeard = "heard", MistakeUnheard = "quiet";
+
         public const string LineEngineTip = "engine_tip", LineEngineMiss = "engine_miss", LineEngineStarts = "engine_starts";
         public const string LineHymnListen = "hymn_listen", LineHymnWrong = "hymn_wrong";
-        public const string LineLockTip = "lock_tip", LineLockOpen = "lock_open", LineLockClank = "lock_clank";
+        public const string LineLockTip = "lock_tip", LineLockOpen = "lock_open";
         public const string LineCraneHears = "crane_hears";
         public static readonly string[] HushLines = { "hush_1", "hush_2" };
 
         public static string ItemName(CH_ItemKind kind) => ItemNames[(int)kind];
 
         public static string ItemInSentence(CH_ItemKind kind) => ItemsInSentence[(int)kind];
+
+        /// <summary>The four keys that sing the hymn: not the number row, which selects the hotbar.</summary>
+        public static readonly string[] HymnKeys = { "G", "H", "J", "K" };
 
         public static string SingerName(int singer) => singer >= 0 && singer < Singers.Length ? Singers[singer] : "the drowned";
 

@@ -131,11 +131,14 @@ namespace Universes.UniverseData.classic_horror {
         public static float NeedleAt(float elapsed, float speed) => Mathf.PingPong(Mathf.Max(0f, elapsed) * speed, 1f);
 
         /// <summary>Where strike <paramref name="index"/>'s green zone sits, away from the gauge's ends.</summary>
-        public static float ZoneCenter(int seed, int index, float width) {
+        public static float ZoneCenter(int seed, int index, float width, float edgeMargin = 0.08f) {
             var random = new System.Random(unchecked(seed * 31 + index * 977 + 5));
-            float margin = 0.08f + width * 0.5f;
+            float margin = edgeMargin + width * 0.5f;
             return margin + (float)random.NextDouble() * (1f - 2f * margin);
         }
+
+        /// <summary>The warmth that means the ring would open. <see cref="Warmth"/> is exactly this anywhere inside the tolerance and below it everywhere else, so a threshold under 1 would call HOT a few degrees too early.</summary>
+        public const float HotWarmth = 1f;
 
         /// <summary>
         /// How warm a dial at <paramref name="angle"/> is for a ring whose true angle is <paramref name="target"/>: exactly 1
@@ -157,7 +160,7 @@ namespace Universes.UniverseData.classic_horror {
         public CH_PuzzleStep Strike(float now) {
             if (Kind != CH_PuzzleKind.Engine || station.Done) return Describe(CH_PuzzleEvent.Closed, false);
             int index = station.Progress;
-            float speed = tuning.SweepSpeed(index), width = tuning.ZoneWidth(index), center = ZoneCenter(seed, index, width);
+            float speed = tuning.SweepSpeed(index), width = tuning.ZoneWidth(index), center = ZoneCenter(seed, index, width, tuning.engineZoneMargin);
             float elapsed = now - sweepStart;
             bool hit = NeedleWasInZone(elapsed, speed, center, width);
             sweepStart = now;
@@ -220,7 +223,7 @@ namespace Universes.UniverseData.classic_horror {
                 int index = Mathf.Min(station.Progress, Total - 1);
                 step.sweepSpeed = tuning.SweepSpeed(index);
                 step.zoneWidth = tuning.ZoneWidth(index);
-                step.zoneCenter = ZoneCenter(seed, index, step.zoneWidth);
+                step.zoneCenter = ZoneCenter(seed, index, step.zoneWidth, tuning.engineZoneMargin);
             }
             return step;
         }

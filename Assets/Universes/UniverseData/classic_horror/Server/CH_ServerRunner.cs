@@ -1294,7 +1294,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                     break;
                 case CH_Phase.Choir:
                     objective = "Free the drowned choir";
-                    detail = night.RelicsLaid > night.SingersFreed ? "Sing the hymn back at the grave: listen, then play the notes (1 2 3 4)."
+                    detail = night.RelicsLaid > night.SingersFreed ? "Sing the hymn back at the grave: listen, then play the notes (G H J K)."
                         : "Lay each singer's belonging on their grave by the chapel, then sing their hymn.";
                     progress = night.SingersFreed; total = CH_Story.SingersPerNight;
                     break;
@@ -1306,7 +1306,7 @@ namespace Universes.UniverseData.classic_horror.Server {
                         : "The bell is chained to the altar. Turn each dial until it runs hot, then set the lock. Every clank carries.";
                     break;
                 case CH_Phase.Boarding:
-                    objective = "GET TO THE BOAT";
+                    objective = "Board the ferry";
                     detail = "Anyone left ashore stays with the choir.";
                     break;
                 case CH_Phase.Complete:

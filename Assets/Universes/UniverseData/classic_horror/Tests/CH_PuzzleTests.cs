@@ -99,9 +99,24 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.AreEqual(CH_PuzzleEvent.Solved, run.Strike(pull).evt);
         }
 
+        [Test] public void APullDeadOnTheCentreIsAHitForAnyDelayInsideTheWindowOnEveryStrike() {
+            for (int strike = 0; strike < Tuning.engineStrikes; strike++) {
+                float width = Tuning.ZoneWidth(strike), centre = CH_PuzzleRun.ZoneCenter(Seed, strike, width, Tuning.engineZoneMargin), speed = Tuning.SweepSpeed(strike);
+                for (float delay = 0f; delay <= Tuning.engineForgiveness + 1e-3f; delay += 0.01f) {
+                    var station = Station(Night(CH_Phase.Stranded), CH_PuzzleKind.Engine);
+                    station.Progress = strike;
+                    var run = new CH_PuzzleRun(station, Seed, Tuning, 0f);
+                    CH_PuzzleStep step = run.Strike(centre / speed + delay);
+                    Assert.AreNotEqual(CH_PuzzleEvent.Mistake, step.evt, $"Strike {strike + 1}, {delay * 1000f:0} ms after the needle crossed the zone's centre.");
+                }
+            }
+        }
+
         [Test] public void HotMeansTheRingWouldOpenAndNothingElseDoes() {
             float range = Tuning.lockWarmRange, tolerance = Tuning.lockTolerance;
             Assert.AreEqual(1f, CH_PuzzleRun.Warmth(100f + tolerance, 100f, range, tolerance), 1e-5f, "Inside the tolerance is hot.");
+            Assert.GreaterOrEqual(CH_PuzzleRun.Warmth(100f + tolerance, 100f, range, tolerance), CH_PuzzleRun.HotWarmth, "The edge of the tolerance reads HOT.");
+            Assert.Less(CH_PuzzleRun.Warmth(100f + tolerance + 1f, 100f, range, tolerance), CH_PuzzleRun.HotWarmth, "One degree outside it does not (a live night set a ring 'HOT' while it was still refused).");
             Assert.Less(CH_PuzzleRun.Warmth(100f + tolerance + 4f, 100f, range, tolerance), 0.999f, "Just outside it is not hot.");
             Assert.Less(CH_PuzzleRun.Warmth(129f, 100f, range, tolerance), 0.999f, "29 degrees off is not hot (it used to read HOT).");
         }
@@ -255,17 +270,19 @@ namespace Universes.UniverseData.classic_horror.Tests {
             Assert.AreEqual(1, second.Progress, "A new run picks up where the station was left.");
         }
 
-        [Test] public void SavedRecordCountsMinigamesAndMistakesAndNeverGoesNegative() {
+        [Test] public void SavedRecordCountsMinigamesAndNeverGoesNegative() {
             var save = new CH_SaveData();
-            save.RecordPuzzle(CH_PuzzleKind.Hymn, 2);
-            save.RecordPuzzle(CH_PuzzleKind.Engine, 0);
-            save.RecordPuzzle(CH_PuzzleKind.BellLock, -5);
+            save.RecordPuzzle(CH_PuzzleKind.Hymn);
+            save.RecordPuzzle(CH_PuzzleKind.Engine);
+            save.RecordPuzzle(CH_PuzzleKind.BellLock);
             Assert.AreEqual(3, save.puzzlesSolved);
             Assert.AreEqual(1, save.hymnsSung);
-            Assert.AreEqual(2, save.mistakesMade);
+            Assert.AreEqual(0, save.mistakesMade, "Mistakes are counted as they are made, not again when a minigame is solved.");
+            save.mistakesMade = -4;
             save.hymnsSung = 99;
             save.Validate();
             Assert.AreEqual(3, save.hymnsSung, "No more hymns than minigames.");
+            Assert.AreEqual(0, save.mistakesMade);
             Assert.AreEqual(3, save.ToBroadcast().puzzlesSolved);
         }
 

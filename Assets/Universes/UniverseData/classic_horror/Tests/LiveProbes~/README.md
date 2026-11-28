@@ -31,7 +31,7 @@ private fields by reflection to set up a moment, and never ships.
 | `srv_board.cs` | server | Opens the boarding countdown now, shortened to 30 s. |
 | `srv_scene.tpl PHASE` | server | Replays a cutscene through the runner's own `PlayCutscene`. |
 | `srv_hold.cs` / `srv_release.cs` | server | Suspends Crane where he stands (he can hang mid-stride) and lets him go. |
-| `srv_lives.cs`, `srv_state.cs` | server | Tops lives up to 9; prints the phase, items, Crane and players. |
+| `srv_lives.tpl LIVES=n`, `srv_state.cs` | server | Tops lives up to `n`; prints the phase, items, Crane and players. |
 
 | `cli_engine_bot.cs` | client | Opens the engine and pulls the cord as the needle crosses the green, using the panel's own state. |
 | `cli_hymn_bot.cs`, `cli_wrong.cs` | client | Sings the hymn the panel was sent (or a wrong note on purpose). |
@@ -41,3 +41,12 @@ private fields by reflection to set up a moment, and never ships.
 | `srv_place_seen.tpl`, `srv_place_unseen.tpl` | server | Places Crane so he does or does not see the investigator climb in, for the hiding trace. |
 
 `corner_chase.sh` replays the try-9 sight-break run end to end.
+
+## The night bot (try 11)
+
+| Probe | Editor | What it does |
+| --- | --- | --- |
+| `cli_night_bot.tpl LOG MISS_STRIKE MISS_NOTE MISS_LOCK HIDE_RANGE HIDE_SEARCH` | client | Plays a whole night with no server-side staging: walks the NavMesh through the movement controls, aims by turning the first-person yaw and pitch, presses E through the controller's own Interact, hides when Crane comes within `HIDE_RANGE` m, and works the minigames on a **virtual keyboard**: G H J K for the hymn, A / D to turn the dial, E for the cord and the lock's Set. It reads only the server's broadcast. `MISS_*` make that many deliberate mistakes first (a missed strike, a wrong note, a wrong lock). |
+| `cli_prep.cs` | client | Draws the client camera into a tiny texture (not needed on a headless client). |
+
+The graphical client Editor is OOM-killed beside the server in this container, so the client is the ParrelSync clone started with `-batchmode -nographics`; the bot does not need a screen. Its walking and aiming write the controls directly (a keyboard would need a focused window), and everything inside a minigame goes through keyboard events the panel's own `InputAction`s read.

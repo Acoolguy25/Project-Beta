@@ -45,11 +45,10 @@ namespace Universes.UniverseData.classic_horror {
             if (nightSeconds > 0 && (fastestEscapeSeconds == 0 || nightSeconds < fastestEscapeSeconds)) fastestEscapeSeconds = nightSeconds;
         }
 
-        /// <summary>A minigame the player finished: <paramref name="kind"/> and their mistakes while they worked it.</summary>
-        public void RecordPuzzle(CH_PuzzleKind kind, int mistakes) {
+        /// <summary>A minigame the player finished. Its mistakes were counted as they were made.</summary>
+        public void RecordPuzzle(CH_PuzzleKind kind) {
             puzzlesSolved++;
             if (kind == CH_PuzzleKind.Hymn) hymnsSung++;
-            mistakesMade += Math.Max(0, mistakes);
         }
 
         /// <summary>The record as the ending card shows it.</summary>

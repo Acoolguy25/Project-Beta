@@ -17,19 +17,21 @@ namespace Universes.UniverseData.classic_horror {
 
         [Header("Engine: turn her over")]
         [Tooltip("Hits needed to start the engine.")]
-        [Range(1, 6)] public int engineStrikes = 3;
+        [Range(1, 3)] public int engineStrikes = 3;
         [Tooltip("How fast the needle sweeps the gauge on each strike (full sweeps per second).")]
         public Vector3 engineSweepSpeeds = new(0.85f, 1.15f, 1.5f);
         [Tooltip("How wide the green zone is on each strike (fraction of the gauge).")]
         public Vector3 engineZoneWidths = new(0.24f, 0.17f, 0.12f);
         [Tooltip("The needle position is read this far back (seconds), so a laggy connection is not punished.")]
         [Min(0f)] public float engineForgiveness = 0.15f;
+        [Tooltip("The green zone never starts closer to either end of the gauge than this (fraction).")]
+        [Range(0f, 0.3f)] public float engineZoneMargin = 0.08f;
 
         [Header("Hymns: sing it back")]
         [Tooltip("Notes in the first hymn of a night; each further singer's hymn is one note longer.")]
-        [Range(2, 8)] public int hymnBaseLength = 3;
+        [Range(2, 3)] public int hymnBaseLength = 3;
         [Tooltip("Different notes on the choir's keyboard.")]
-        [Range(2, 6)] public int hymnNotes = 4;
+        [Range(4, 4)] public int hymnNotes = 4;
 
         [Header("Bell: three locks")]
         [Range(1, 5)] public int lockRings = 3;
@@ -53,11 +55,19 @@ namespace Universes.UniverseData.classic_horror {
         [Min(0f)] public float lockClankNoise = 50f;
         [Tooltip("Seconds he searches the spot a noise came from.")]
         [Min(1f)] public float noiseSearchSeconds = 12f;
+        [Tooltip("Each mistake after the first carries this much further (a share of the base noise).")]
+        [Min(0f)] public float mistakeNoiseGrowth = 0.5f;
+        [Tooltip("He says he heard it after this many mistakes at one station.")]
+        [Range(1, 6)] public int mistakesBeforeHeSpeaks = 2;
 
         [Header("The Hush")]
         [Tooltip("Seconds between Hushes in Acts II and III (a random time in this range).")]
         public Vector2 hushInterval = new(75f, 130f);
         [Min(1f)] public float hushSeconds = 9f;
+        [Tooltip("The first Hush of a night comes after this share of the usual wait.")]
+        [Range(0.1f, 1f)] public float firstHushShare = 0.6f;
+        [Tooltip("A Hush that would start in a chase waits this long (seconds) and tries again.")]
+        [Min(1f)] public float hushRetrySeconds = 8f;
         [Tooltip("During a Hush he hears a walker this far, and someone standing still this far (metres).")]
         [Min(0f)] public float hushWalkHearing = 24f;
         [Min(0f)] public float hushStillHearing = 9f;

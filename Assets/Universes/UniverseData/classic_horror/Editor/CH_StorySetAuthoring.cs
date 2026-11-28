@@ -24,6 +24,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
         const string JettyPrefab = Pack + "Buildings/Structures1/Struct_Docking_A.prefab";
         const string WardrobePrefab = Pack + "Props/Prop_Cabinet_A.prefab";
         const string CupboardPrefab = Pack + "Props/Prop_Cabinet_B.prefab";
+        /// <summary>Outdoor cover: a wooden outhouse, the pack's own, rather than an indoor wardrobe standing in the grass.</summary>
+        const string OuthousePrefab = Pack + "Buildings/Cabins/Outhouse_A.prefab";
+        static readonly Vector3 OuthouseHalfExtents = new(0.95f, 0.95f, 1.05f), WardrobeHalfExtents = new(0.7f, 0.95f, 0.6f);
         const string AltarPrefab = Pack + "Props/Prop_SmallTable_A.prefab";
         const string MarkerStonePrefab = Pack + "Props/Prop_Gravestone_E.prefab";
         const string SetName = "Story Set";
@@ -41,7 +44,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         /// Cover is kept this far from the jetty's boarding point, where the arrival and prologue cutscenes are filmed, so a
         /// cabinet never stands in a shot. The locker beside the engine (which is on the ferry) is allowed closer.
         /// </summary>
-        const float CutsceneStageClearance = 11f, EngineCoverStageClearance = 4f, EngineCoverMaximumDistance = 26f;
+        const float CutsceneStageClearance = 11f, EngineCoverStageClearance = 3f, EngineCoverMaximumDistance = 30f;
         static readonly (Vector3 position, float yaw)[] ChapelWardrobes = { (new(641.2f, 17.5f, 509.6f), 90f), (new(655.8f, 17.5f, 509.6f), -90f) };
         // Bedrooms where Lily's music box can turn up, off the routes the acts send you along.
         static readonly (Vector3 position, string label)[] MusicBoxHints = {
@@ -507,9 +510,9 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 furniture.Add((added.transform, "vestry cabinet"));
             }
             // Cover beside each minigame: the engine at the jetty, the hymns in the graveyard, the locks in the chapel.
-                        PlaceCover(group, furniture, map.arrival.position, WardrobePrefab, "ferryman's locker", 1, map.boardingPoint.position, CutsceneStageClearance);
-            PlaceCover(group, furniture, map.engineStation.position, WardrobePrefab, "boatman's locker", 1, map.boardingPoint.position, EngineCoverStageClearance, EngineCoverMaximumDistance);
-            foreach (Transform grave in map.graves) PlaceCover(group, furniture, grave.position, CupboardPrefab, "gravedigger's cupboard", 1);
+                        PlaceCover(group, furniture, map.arrival.position, OuthousePrefab, "outhouse", 1, map.boardingPoint.position, CutsceneStageClearance);
+            PlaceCover(group, furniture, map.engineStation.position, OuthousePrefab, "outhouse", 1, map.boardingPoint.position, EngineCoverStageClearance, EngineCoverMaximumDistance);
+            foreach (Transform grave in map.graves) PlaceCover(group, furniture, grave.position, OuthousePrefab, "outhouse", 1);
             PlaceCover(group, furniture, map.bellLockStation.position, CupboardPrefab, "choir cupboard", 1);
             Physics.SyncTransforms();
             var spots = new List<CH_HidingSpot>();
@@ -548,6 +551,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         /// rebuild puts them in the same places.
         /// </summary>
         static void PlaceCover(Transform group, List<(Transform body, string label)> furniture, Vector3 around, string prefab, string label, int count, Vector3? stage = null, float stageClearance = 0f, float maximumDistance = CoverMaximumDistance) {
+            Vector3 room = prefab == OuthousePrefab ? OuthouseHalfExtents : WardrobeHalfExtents;
             int placed = 0;
             for (int attempt = 0; attempt < 90 && placed < count; attempt++) {
                 float angle = attempt * 137.5f * Mathf.Deg2Rad;
@@ -559,7 +563,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
                 if (stage.HasValue && Vector3.ProjectOnPlane(spot - stage.Value, Vector3.up).magnitude < stageClearance) continue;
                 Quaternion facing = Quaternion.LookRotation(Vector3.ProjectOnPlane(around - spot, Vector3.up));
                 // Room for the body, with nothing standing in it.
-                if (Physics.CheckBox(spot + Vector3.up * 1f, new Vector3(0.7f, 0.95f, 0.6f), facing, mask, QueryTriggerInteraction.Ignore)) continue;
+                if (Physics.CheckBox(spot + Vector3.up * 1f, room, facing, mask, QueryTriggerInteraction.Ignore)) continue;
                 bool crowded = false;
                 foreach (var (other, _) in furniture) if (Vector3.Distance(other.position, spot) < 3.5f) { crowded = true; break; }
                 if (crowded) continue;
@@ -978,7 +982,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
         /// The ferry's wake: foam puffs per metre sailed, how long each lasts, how wide it starts and spreads, and how fast
         /// the two arms of the V drift outward from the hull (metres per second).
         /// </summary>
-        const float WakePerMetre = 4f, WakeSeconds = 9f, WakeStartSize = 1f, WakeSpreadSize = 3.6f, WakeAlpha = 0.5f, WakeArmSpeed = 0.9f;
+        const float WakePerMetre = 4f, WakeSeconds = 9f, WakeStartSize = 1f, WakeSpreadSize = 3.6f, WakeAlpha = 0.22f, WakeArmSpeed = 0.9f;
 
         /// <summary>
         /// Foam that the ferry leaves behind when a scene sails it: emitted at the stern by distance travelled (so a moored
@@ -1011,7 +1015,7 @@ namespace Universes.UniverseData.classic_horror.Editor {
             main.startSpeed = 0f;
             main.startSize = new ParticleSystem.MinMaxCurve(WakeStartSize * 0.7f, WakeStartSize * 1.3f);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-            main.startColor = new Color(1f, 1f, 1f, WakeAlpha * alphaScale * 2f);
+            main.startColor = new Color(0.72f, 0.82f, 0.88f, WakeAlpha * alphaScale * 2f);
             main.maxParticles = 600;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             var emission = particles.emission;
